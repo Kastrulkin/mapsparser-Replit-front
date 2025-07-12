@@ -40,6 +40,14 @@
         {% if card.overview %}
         <table>
             <tr><th>Название</th><td>{{ card.overview.title | default('') }}</td></tr>
+            <tr><th>Рейтинг</th><td>{{ card.overview.rating | default('') }}</td></tr>
+            <tr><th>Количество оценок</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
+            <tr><th>Ближайшее метро</th>
+                <td>{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}</td>
+            </tr>
+            <tr><th>Ближайшая остановка</th>
+                <td>{{ card.nearest_stop.name }}{% if card.nearest_stop.distance %} ({{ card.nearest_stop.distance }}){% endif %}</td>
+            </tr>
             <tr><th>Адрес</th><td>{{ card.overview.address | default('') }}</td></tr>
             <tr><th>Телефон</th><td>{{ card.overview.phone | default('') }}</td></tr>
             <tr><th>Сайт</th><td><a href="{{ card.overview.site | default('#') }}">{{ card.overview.site | default('Нет сайта') }}</a></td></tr>
