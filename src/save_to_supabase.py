@@ -27,5 +27,7 @@ def save_card_to_supabase(card_data):
         "news": card_data.get("news"),
         "photos": card_data.get("photos"),
         "reviews": card_data.get("reviews"),
+        "hours": card_data.get("overview", {}).get("hours"),
+        "hours_full": card_data.get("overview", {}).get("hours_full"),
     }
     supabase.table("Cards").insert(data).execute() 

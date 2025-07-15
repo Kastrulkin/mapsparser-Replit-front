@@ -78,8 +78,12 @@ def parse_yandex_card(url: str) -> dict:
             data['phone'] = ''
         # Сайт
         try:
-            site = page.query_selector("a.business-urls-view__text")
-            data['site'] = site.get_attribute('href') if site else ''
+            site_a = page.query_selector("a.business-urls-view__text")
+            if site_a:
+                data['site'] = site_a.get_attribute('href')
+            else:
+                site_span = page.query_selector("span.business-urls-view__text")
+                data['site'] = site_span.inner_text().strip() if site_span else ''
         except Exception:
             data['site'] = ''
         # Часы работы
@@ -88,6 +92,20 @@ def parse_yandex_card(url: str) -> dict:
             data['hours'] = hours.inner_text() if hours else ''
         except Exception:
             data['hours'] = ''
+        # Полный график работы
+        try:
+            intervals = page.query_selector_all("div.business-working-intervals-view__item")
+            full_schedule = []
+            for interval in intervals:
+                day_el = interval.query_selector("div.business-working-intervals-view__day")
+                time_el = interval.query_selector("div.business-working-intervals-view__interval")
+                day = day_el.inner_text().strip() if day_el else ''
+                work_time = time_el.inner_text().strip() if time_el else ''
+                if day and work_time:
+                    full_schedule.append(f"{day}: {work_time}")
+            data['hours_full'] = full_schedule
+        except Exception:
+            data['hours_full'] = []
         # Категории
         try:
             cats = page.query_selector_all("[class*='business-card-title-view__categories'] span")
@@ -124,10 +142,17 @@ def parse_yandex_card(url: str) -> dict:
             data['photos_count'] = len(imgs)
         except Exception:
             data['photos_count'] = 0
-        # Соцсети
+        # Соцсети (иконки)
         try:
-            socials = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com']")
-            data['social_links'] = [s.get_attribute('href') for s in socials]
+            social_icons = page.query_selector_all("span.business-contacts-view__social-icon")
+            social_links = []
+            for icon in social_icons:
+                parent_a = icon.evaluate_handle('el => el.closest("a")')
+                if parent_a:
+                    href = parent_a.get_attribute('href')
+                    if href:
+                        social_links.append(href)
+            data['social_links'] = social_links
         except Exception:
             data['social_links'] = []
         # Ближайшая станция метро
@@ -179,16 +204,28 @@ def parse_yandex_card(url: str) -> dict:
                 items = []
                 item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
                 for item in item_blocks:
+                    # Пробуем сначала фото-товары
                     name_el = item.query_selector('div.related-item-photo-view__title')
-                    name = name_el.inner_text().strip() if name_el else ''
                     desc_el = item.query_selector('div.related-item-photo-view__description')
-                    description = desc_el.inner_text().strip() if desc_el else ''
                     price_el = item.query_selector('span.related-product-view__price')
-                    price = price_el.inner_text().strip() if price_el else ''
                     duration_el = item.query_selector('span.related-product-view__volume')
-                    duration = duration_el.inner_text().strip() if duration_el else ''
                     photo_el = item.query_selector('img.image__img')
+
+                    # Если не найдено, пробуем текстовые услуги (related-item-list-view)
+                    if not name_el:
+                        name_el = item.query_selector('div.related-item-list-view__title')
+                    if not price_el:
+                        price_el = item.query_selector('div.related-item-list-view__price')
+                    if not desc_el:
+                        desc_el = item.query_selector('div.related-item-list-view__subtitle')
+                    # Фото для таких услуг обычно нет
+
+                    name = name_el.inner_text().strip() if name_el else ''
+                    description = desc_el.inner_text().strip() if desc_el else ''
+                    price = price_el.inner_text().strip() if price_el else ''
+                    duration = duration_el.inner_text().strip() if duration_el else ''
                     photo = photo_el.get_attribute('src') if photo_el else ''
+
                     items.append({
                         'name': name,
                         'description': description,
@@ -429,10 +466,17 @@ def parse_yandex_card(url: str) -> dict:
 
         data['url'] = url
         browser.close()
+        # --- Перед формированием overview явно присваиваю актуальное значение reviews_count ---
+        if 'reviews_count' in data:
+            data['reviews_count'] = data['reviews_count']
+        else:
+            data['reviews_count'] = ''
         # Формируем overview для отчёта
         overview_keys = [
             'title', 'address', 'phone', 'site', 'description',
-            'categories', 'hours', 'rating', 'reviews_count'
+            'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
         ]
         data['overview'] = {k: data.get(k, '') for k in overview_keys}
+        # Явно дублирую reviews_count в overview (на случай, если где-то выше оно не попало)
+        data['overview']['reviews_count'] = data.get('reviews_count', '')
         return data 

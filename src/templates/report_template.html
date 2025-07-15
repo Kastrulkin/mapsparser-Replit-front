@@ -42,7 +42,7 @@
             <tr><th>Название</th><td>{{ card.overview.title | default('') }}</td></tr>
             <tr><th>Рейтинг</th><td>{{ card.overview.rating | default('') }}</td></tr>
             <tr><th>Количество оценок</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
-            <tr><th>Количество отзывов</th><td>{{ card.reviews_count | default('') }}</td></tr>
+            <tr><th>Количество отзывов</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
             <tr><th>Ближайшее метро</th>
                 <td>{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}</td>
             </tr>
@@ -51,10 +51,42 @@
             </tr>
             <tr><th>Адрес</th><td>{{ card.overview.address | default('') }}</td></tr>
             <tr><th>Телефон</th><td>{{ card.overview.phone | default('') }}</td></tr>
-            <tr><th>Сайт</th><td><a href="{{ card.overview.site | default('#') }}">{{ card.overview.site | default('Нет сайта') }}</a></td></tr>
-            <tr><th>Описание</th><td>{{ card.overview.description | default('') }}</td></tr>
-            <tr><th>Категории</th><td>{{ card.overview.categories|join(', ') if card.overview.categories else '' }}</td></tr>
-            <tr><th>Часы работы</th><td>{{ card.overview.hours | default('') }}</td></tr>
+            <tr><th>Сайт</th><td>{% if card.overview.site and '://' in card.overview.site %}<a href="{{ card.overview.site }}">{{ card.overview.site }}</a>{% elif card.overview.site %}{{ card.overview.site }}{% else %}Нет сайта{% endif %}</td></tr>
+            <tr><th>Часы работы</th>
+                <td>
+                    {% if card.overview.hours %}{{ card.overview.hours }}<br>{% endif %}
+                    {% if card.overview.hours_full and card.overview.hours_full|length > 0 %}
+                        <ul>
+                            {% for h in card.overview.hours_full %}
+                                <li>{{ h }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr><th>Соцсети</th>
+                <td>
+                    {% if card.overview.social_links %}
+                        {% for link in card.overview.social_links %}
+                            {% set name = '' %}
+                            {% if 'vk.com' in link %}
+                                {% set name = 'ВКонтакте' %}
+                            {% elif 't.me' in link or 'telegram.me' in link or 'telegram.org' in link %}
+                                {% set name = 'Telegram' %}
+                            {% elif 'instagram.com' in link %}
+                                {% set name = 'Instagram' %}
+                            {% elif 'facebook.com' in link %}
+                                {% set name = 'Facebook' %}
+                            {% else %}
+                                {% set name = 'Соцсеть' %}
+                            {% endif %}
+                            <b>{{ name }}:</b> <a href="{{ link }}" target="_blank">{{ link }}</a><br>
+                        {% endfor %}
+                    {% else %}
+                        Нет ссылок
+                    {% endif %}
+                </td>
+            </tr>
         </table>
         {% else %}<p>Нет данных</p>{% endif %}
     </div>

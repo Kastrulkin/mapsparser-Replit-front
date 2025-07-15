@@ -14,6 +14,7 @@ def main():
     url = input().strip()
     print("Парсинг страницы...")
     card_data = parse_yandex_card(url)
+    print('DEBUG overview:', card_data.get('overview'))
     save_card_to_supabase(card_data)
     print("Результат парсинга:")
     import pprint
