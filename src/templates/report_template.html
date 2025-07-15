@@ -58,33 +58,59 @@
         {% else %}<p>Нет данных</p>{% endif %}
     </div>
     <div class="section">
-        <h2>Товары и услуги</h2>
-        {% if card.services %}
-        <table>
-            <tr><th>Категория</th><th>Название</th><th>Описание</th><th>Цена</th><th>Фото</th></tr>
-            {% for s in card.services %}
-            <tr>
-                <td>{{ s.category | default('') }}</td>
-                <td>{{ s.name | default('') }}</td>
-                <td>{{ s.description | default('') }}</td>
-                <td>{{ s.price | default('') }}</td>
-                <td>{% if s.photo %}<img src="{{ s.photo }}" class="photo-thumb">{% endif %}</td>
-            </tr>
+        <h2>Категории товаров и услуг</h2>
+        {% if card.product_categories and card.product_categories|length > 0 %}
+        <ul>
+            {% for cat in card.product_categories %}
+            <li>{{ cat }}</li>
             {% endfor %}
-        </table>
+        </ul>
+        {% else %}<p>Нет данных</p>{% endif %}
+    </div>
+    <div class="section">
+        <h2>Товары и услуги</h2>
+        {% if card.products and card.products|length > 0 %}
+            {% for cat in card.products %}
+                <h3>{{ cat["category"] }}</h3>
+                {% if cat["items"] and cat["items"]|length > 0 %}
+                <table>
+                    <tr>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Цена</th>
+                        <th>Длительность</th>
+                        <th>Фото</th>
+                    </tr>
+                    {% for item in cat["items"] %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.description }}</td>
+                        <td>{{ item.price }}</td>
+                        <td>{{ item.duration }}</td>
+                        <td>{% if item.photo %}<img src="{{ item.photo }}" alt="{{ item.name }}" style="max-width:80px;max-height:80px;"/>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                {% else %}<p>Нет товаров в категории</p>{% endif %}
+            {% endfor %}
         {% else %}<p>Нет данных</p>{% endif %}
     </div>
     <div class="section">
         <h2>Новости</h2>
-        {% if card.news %}
+        {% if card.news and card.news|length > 0 %}
         <table>
-            <tr><th>Заголовок</th><th>Текст</th><th>Дата</th><th>Фото</th></tr>
+            <tr><th>Дата</th><th>Текст</th><th>Фото</th></tr>
             {% for n in card.news %}
             <tr>
-                <td>{{ n.title | default('') }}</td>
-                <td>{{ n.text | default('') }}</td>
-                <td>{{ n.date | default('') }}</td>
-                <td>{% if n.photo %}<img src="{{ n.photo }}" class="photo-thumb">{% endif %}</td>
+                <td>{{ n.date }}</td>
+                <td>{{ n.text }}</td>
+                <td>
+                    {% if n.photos and n.photos|length > 0 %}
+                        {% for photo in n.photos %}
+                            <img src="{{ photo }}" style="max-width:80px;max-height:80px;"/>
+                        {% endfor %}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </table>
@@ -92,11 +118,11 @@
     </div>
     <div class="section">
         <h2>Фото</h2>
-        {% if card.photos and card.photos.photos %}
-            {% for p in card.photos.photos %}
+        {% if card.photos and card.photos|length > 0 %}
+            {% for p in card.photos %}
                 <img src="{{ p }}" class="photo-thumb">
             {% endfor %}
-            <p>Всего фото: {{ card.photos.photos_count }}</p>
+            <p>Всего фото: {{ card.photos|length }}</p>
         {% else %}<p>Нет фото</p>{% endif %}
     </div>
     <div class="section">
@@ -106,7 +132,7 @@
             {% if card.reviews.items %}
             <table>
                 <tr><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
-                {% for r in card.reviews.items %}
+                {% for r in card.reviews["items"] %}
                 <tr>
                     <td>{{ r.author | default('') }}</td>
                     <td>{{ r.date | default('') }}</td>
@@ -123,17 +149,46 @@
     </div>
     <div class="section">
         <h2>Особенности</h2>
-        {% if card.features %}
-        <table>
-            <tr><th>Параметр</th><th>Значение</th></tr>
-            {% for f in card.features %}
-            <tr>
-                <td>{{ f.name | default('') }}</td>
-                <td>{{ f.value | default('') }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% else %}<p>Нет данных</p>{% endif %}
+        {% set f = card.features_full %}
+        {% if f %}
+            <h3>Булевые особенности (галочки):</h3>
+            {% if f.bool and f.bool|length > 0 %}
+            <ul>
+                {% for b in f.bool %}
+                <li>{{ b.text }}{% if b.defined %} <b>(особая)</b>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% else %}<p>Нет булевых особенностей</p>{% endif %}
+
+            <h3>Ценностные особенности (категории услуг):</h3>
+            {% if f.valued and f.valued|length > 0 %}
+            <ul>
+                {% for v in f.valued %}
+                <li><b>{{ v.title }}:</b> {{ v.value }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}<p>Нет ценностных особенностей</p>{% endif %}
+
+            <h3>Цены:</h3>
+            {% if f.prices and f.prices|length > 0 %}
+            <ul>
+                {% for p in f.prices %}
+                <li><b>{{ p.title }}:</b> {{ p.value }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}<p>Нет цен</p>{% endif %}
+
+            <h3>Категории (из блока «Особенности»):</h3>
+            {% if f.categories and f.categories|length > 0 %}
+            <ul>
+                {% for cat in f.categories %}
+                <li>{{ cat }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}<p>Нет категорий</p>{% endif %}
+        {% else %}
+            <p>Нет данных</p>
+        {% endif %}
     </div>
 </body>
 </html> 

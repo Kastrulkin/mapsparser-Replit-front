@@ -5,12 +5,16 @@ import sys
 from parser import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
+from bs4 import BeautifulSoup
+import re
+from save_to_supabase import save_card_to_supabase
 
 def main():
     print("Введите ссылку на карточку Яндекс.Карт:")
     url = input().strip()
     print("Парсинг страницы...")
     card_data = parse_yandex_card(url)
+    save_card_to_supabase(card_data)
     print("Результат парсинга:")
     import pprint
     pprint.pprint(card_data)

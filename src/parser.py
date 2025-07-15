@@ -14,13 +14,21 @@ def parse_yandex_card(url: str) -> dict:
         page = browser.new_page()
         page.goto(url, timeout=60000)
         page.wait_for_timeout(4000)  # Дать странице прогрузиться
-        # Скроллим вниз для подгрузки фото и отзывов
+        # --- ПЕРЕХОД НА ВКЛАДКУ 'Обзор' ---
+        overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
+        if overview_tab:
+            overview_tab.click()
+            print("Клик по вкладке 'Обзор'")
+            page.wait_for_timeout(1500)
+        else:
+            print("Вкладка 'Обзор' не найдена!")
+        # Скроллим вниз для подгрузки фото и отзывов (если нужно)
         page.mouse.wheel(0, 2000)
         time.sleep(2)
         # Дополнительная пауза для полной загрузки страницы
         time.sleep(2)
         data = {}
-        # --- СБОР ДАННЫХ ТОЛЬКО С "ОБЗОРА" ---
+        # --- СБОР ДАННЫХ С "ОБЗОРА" ---
         # Название
         try:
             data['title'] = page.query_selector("h1").inner_text()
@@ -153,19 +161,230 @@ def parse_yandex_card(url: str) -> dict:
                 data['nearest_stop'] = {'name': '', 'distance': ''}
         except Exception:
             data['nearest_stop'] = {'name': '', 'distance': ''}
-        # --- ТОЛЬКО ПОСЛЕ ЭТОГО переходим на вкладку "Новости" ---
+        # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
+        products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
+        if products_tab:
+            products_tab.click()
+            print("Клик по вкладке 'Товары и услуги'")
+            page.wait_for_timeout(1500)
+        # --- ПАРСИНГ ТОВАРОВ И УСЛУГ ПО КАТЕГОРИЯМ ---
         try:
-            news_tab = page.query_selector("button:has-text('Лента'), button:has-text('Новости'), div[role='tab']:has-text('Лента'), div[role='tab']:has-text('Новости')")
-            if news_tab:
-                news_tab.click()
-                page.wait_for_timeout(1500)
-                # Лента/новости (ищем после клика)
-                posts = page.query_selector_all("[class*='feed-post-view__title']")
-                data['news_count'] = len(posts)
-            else:
-                data['news_count'] = 0
+            products = []
+            product_categories = []  # Новый список для названий категорий
+            category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
+            for cat_block in category_blocks:
+                # Название категории
+                cat_title_el = cat_block.query_selector('div.business-full-items-grouped-view__title')
+                category = cat_title_el.inner_text().strip() if cat_title_el else ''
+                if category:
+                    product_categories.append(category)
+                # Все услуги/товары в категории
+                items = []
+                item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
+                for item in item_blocks:
+                    name_el = item.query_selector('div.related-item-photo-view__title')
+                    name = name_el.inner_text().strip() if name_el else ''
+                    desc_el = item.query_selector('div.related-item-photo-view__description')
+                    description = desc_el.inner_text().strip() if desc_el else ''
+                    price_el = item.query_selector('span.related-product-view__price')
+                    price = price_el.inner_text().strip() if price_el else ''
+                    duration_el = item.query_selector('span.related-product-view__volume')
+                    duration = duration_el.inner_text().strip() if duration_el else ''
+                    photo_el = item.query_selector('img.image__img')
+                    photo = photo_el.get_attribute('src') if photo_el else ''
+                    items.append({
+                        'name': name,
+                        'description': description,
+                        'price': price,
+                        'duration': duration,
+                        'photo': photo
+                    })
+                products.append({
+                    'category': category,
+                    'items': items
+                })
+            data['products'] = products
+            data['product_categories'] = product_categories  # Сохраняем список категорий
         except Exception:
-            data['news_count'] = 0
+            data['products'] = []
+            data['product_categories'] = []
+        # --- ПЕРЕХОД НА ВКЛАДКУ "Новости" ---
+        news_tab = page.query_selector("div.tabs-select-view__title._name_posts, div[role='tab']:has-text('Новости'), button:has-text('Новости')")
+        if news_tab:
+            news_tab.click()
+            print("Клик по вкладке 'Новости'")
+            page.wait_for_timeout(1500)
+        # --- ПАРСИНГ НОВОСТЕЙ ---
+        try:
+            news = []
+            news_blocks = page.query_selector_all('div.business-posts-list-post-view')
+            for block in news_blocks:
+                date_el = block.query_selector('div.business-posts-list-post-view__date')
+                date = date_el.inner_text().strip() if date_el else ''
+                text_el = block.query_selector('div.business-posts-list-post-view__text')
+                text = text_el.inner_text().strip() if text_el else ''
+                photo_els = block.query_selector_all('img.image__img')
+                photos = [el.get_attribute('src') for el in photo_els if el.get_attribute('src')]
+                news.append({
+                    'date': date,
+                    'text': text,
+                    'photos': photos
+                })
+            data['news'] = news
+        except Exception:
+            data['news'] = []
+        # --- ПЕРЕХОД НА ВКЛАДКУ "Фото" ---
+        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
+        if photos_tab:
+            photos_tab.click()
+            print("Клик по вкладке 'Фото'")
+            page.wait_for_timeout(1500)
+        # --- ПАРСИНГ ФОТО ---
+        try:
+            photos = []
+            img_elems = page.query_selector_all("img.image__img, img[src*='avatars.mds.yandex.net']")
+            for img in img_elems:
+                src = img.get_attribute('src')
+                if src and src not in photos:
+                    photos.append(src)
+            data['photos'] = photos
+            data['photos_count'] = len(photos)
+        except Exception:
+            data['photos'] = []
+            data['photos_count'] = 0
+        # --- ПЕРЕХОД НА ВКЛАДКУ "Отзывы" ---
+        reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews, div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
+        if reviews_tab:
+            reviews_tab.click()
+            print("Клик по вкладке 'Отзывы'")
+            page.wait_for_timeout(2000)
+        else:
+            print("Вкладка 'Отзывы' не найдена!")
+        # Скроллим вниз для подгрузки отзывов, как на вкладке 'Обзор', но делаем это поэтапно
+        for i in range(20):  # 20 раз по чуть-чуть
+            page.mouse.wheel(0, 1000)
+            time.sleep(1.5)  # Дать время на подгрузку
+        time.sleep(2)  # Финальная пауза
+        review_blocks = page.query_selector_all("div.business-reviews-card-view__review")
+        print("ФИНАЛЬНО wheel-скроллом отзывов найдено:", len(review_blocks))
+        reviews = []
+        for i, block in enumerate(review_blocks):
+            print(f"Парсим отзыв №{i+1}")
+            # Автор
+            author_el = block.query_selector("div.business-review-view__author-name span[itemprop='name']")
+            author = author_el.inner_text().strip() if author_el else ''
+            # Дата
+            date_el = block.query_selector("span.business-review-view__date span")
+            date = date_el.inner_text().strip() if date_el else ''
+            # Оценка
+            score_el = block.query_selector("div.business-review-view__rating meta[itemprop='ratingValue']")
+            score = score_el.get_attribute('content').strip() if score_el else ''
+            # Текст отзыва
+            text_el = block.query_selector("div.business-review-view__body .spoiler-view__text-container")
+            if not text_el:
+                text_el = block.query_selector("div.business-review-view__body")
+            text = text_el.inner_text().strip() if text_el else ''
+            # Ответ организации (если есть)
+            org_reply = ''
+            try:
+                reply_btn = block.query_selector("div.business-review-view__comment-expand[aria-label='Посмотреть ответ организации']")
+                if reply_btn and reply_btn.is_visible():
+                    reply_btn.click()
+                    for _ in range(10):
+                        reply_el = block.query_selector("div.business-review-comment-content__bubble")
+                        if reply_el:
+                            org_reply = reply_el.inner_text().strip()
+                            break
+                        page.wait_for_timeout(200)
+            except Exception:
+                pass
+            reviews.append({
+                'author': author,
+                'date': date,
+                'score': score,
+                'text': text,
+                'org_reply': org_reply
+            })
+
+        data['reviews'] = {
+            'items': reviews,
+            'rating': data.get('rating', ''),
+            'reviews_count': data.get('reviews_count', len(reviews))
+        }
+        # --- ПЕРЕХОД НА ВКЛАДКУ "Особенности" ---
+        features_tab = page.query_selector("div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
+        if features_tab:
+            features_tab.click()
+            print("Клик по вкладке 'Особенности'")
+            page.wait_for_timeout(1500)
+        else:
+            print("Вкладка 'Особенности' не найдена!")
+        # --- ПАРСИНГ ОСОБЕННОСТЕЙ ---
+        features = []
+        feature_blocks = page.query_selector_all("[class*='features-view__item']")
+        for block in feature_blocks:
+            name_el = block.query_selector("[class*='features-view__item-title']")
+            value_el = block.query_selector("[class*='features-view__item-value']")
+            name = name_el.inner_text().strip() if name_el else ''
+            value = value_el.inner_text().strip() if value_el else ''
+            if name or value:
+                features.append({"name": name, "value": value})
+        data['features'] = features
+
+        # --- ПАРСИНГ БУЛЕВЫХ ОСОБЕННОСТЕЙ (галочки с типом) ---
+        features_bool = []
+        bool_items = page.query_selector_all("div.business-features-view__bool-item")
+        for item in bool_items:
+            text_el = item.query_selector("div.business-features-view__bool-text")
+            icon_el = item.query_selector("div.business-features-view__bool-icon")
+            text = text_el.inner_text().strip() if text_el else ''
+            is_defined = False
+            if icon_el and '_defined' in (icon_el.get_attribute('class') or ''):
+                is_defined = True
+            if text:
+                features_bool.append({"text": text, "defined": is_defined})
+        # --- ДОПОЛНИТЕЛЬНО: отдельные business-features-view__bool-text без обёртки ---
+        all_bool_texts = page.query_selector_all("div.business-features-view__bool-text")
+        for text_el in all_bool_texts:
+            text = text_el.inner_text().strip()
+            if text and not any(fb['text'] == text for fb in features_bool):
+                features_bool.append({"text": text, "defined": False})
+
+        # --- ПАРСИНГ ЦЕННОСТНЫХ ОСОБЕННОСТЕЙ (категории услуг) ---
+        features_valued = []
+        valued_blocks = page.query_selector_all("div.business-features-view__valued")
+        for block in valued_blocks:
+            title_el = block.query_selector("span.business-features-view__valued-title")
+            value_el = block.query_selector("span.business-features-view__valued-value")
+            title = title_el.inner_text().strip(':').strip() if title_el else ''
+            value = value_el.inner_text().strip() if value_el else ''
+            if title or value:
+                features_valued.append({"title": title, "value": value})
+        data['features_valued'] = features_valued
+
+        # --- ВЫДЕЛЕНИЕ ЦЕН ИЗ features_valued ---
+        features_prices = []
+        for item in features_valued:
+            if 'цена' in item['title'].lower() or '₽' in item['value']:
+                features_prices.append(item)
+        data['features_prices'] = features_prices
+
+        # --- ПАРСИНГ КАТЕГОРИЙ ИЗ БЛОКА orgpage-categories-info-view ---
+        categories_full = []
+        cat_block = page.query_selector("div.orgpage-categories-info-view")
+        if cat_block:
+            cat_spans = cat_block.query_selector_all("span.button__text")
+            categories_full = [span.inner_text().strip() for span in cat_spans if span.inner_text()]
+        data['categories_full'] = categories_full
+
+        # --- СОБИРАЕМ ВСЕ ОСОБЕННОСТИ В features_full ---
+        data['features_full'] = {
+            "bool": features_bool,
+            "valued": features_valued,
+            "prices": features_prices,
+            "categories": categories_full
+        }
+
         data['url'] = url
         browser.close()
         # Формируем overview для отчёта
