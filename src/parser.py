@@ -4,6 +4,7 @@ parser.py — Модуль для парсинга публичной стран
 from playwright.sync_api import sync_playwright
 import time
 import re
+import random
 
 def parse_yandex_card(url: str) -> dict:
     """
@@ -95,26 +96,22 @@ def parse_yandex_card(url: str) -> dict:
             data['categories'] = []
         # Рейтинг
         try:
-            rating = page.query_selector("[class*='business-rating-badge-view__rating']")
-            if rating:
-                rating_text = rating.inner_text()
-                match = re.search(r'([\d,.]+)', rating_text)
-                data['rating'] = match.group(1).replace(',', '.') if match else ''
-            else:
-                data['rating'] = ''
+            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
+            data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
         except Exception:
             data['rating'] = ''
-        # Количество оценок
+        # Количество оценок (всех)
         try:
-            reviews_count_elem = page.query_selector("div.business-header-rating-view__text._clickable")
-            if reviews_count_elem:
-                text = reviews_count_elem.inner_text()
-                match = re.search(r'(\d+)', text.replace('\xa0', ' '))
-                data['reviews_count'] = match.group(1) if match else ''
+            ratings_count_el = page.query_selector("div.business-header-rating-view__text._clickable")
+            if ratings_count_el:
+                import re
+                text = ratings_count_el.inner_text()
+                match = re.search(r"(\d+)", text.replace('\xa0', ' '))
+                data['ratings_count'] = match.group(1) if match else ''
             else:
-                data['reviews_count'] = ''
+                data['ratings_count'] = ''
         except Exception:
-            data['reviews_count'] = ''
+            data['ratings_count'] = ''
         # Описание
         try:
             desc = page.query_selector("[class*='card-about-view__description-text']")
@@ -214,6 +211,10 @@ def parse_yandex_card(url: str) -> dict:
             news_tab.click()
             print("Клик по вкладке 'Новости'")
             page.wait_for_timeout(1500)
+            # --- СКРОЛЛ ДЛЯ НОВОСТЕЙ ---
+            for i in range(20):
+                page.mouse.wheel(0, 1000)
+                time.sleep(1.5)
         # --- ПАРСИНГ НОВОСТЕЙ ---
         try:
             news = []
@@ -239,6 +240,10 @@ def parse_yandex_card(url: str) -> dict:
             photos_tab.click()
             print("Клик по вкладке 'Фото'")
             page.wait_for_timeout(1500)
+            # --- СКРОЛЛ ДЛЯ ФОТО ---
+            for i in range(20):
+                page.mouse.wheel(0, 1000)
+                time.sleep(1.5)
         # --- ПАРСИНГ ФОТО ---
         try:
             photos = []
@@ -260,10 +265,47 @@ def parse_yandex_card(url: str) -> dict:
             page.wait_for_timeout(2000)
         else:
             print("Вкладка 'Отзывы' не найдена!")
-        # Скроллим вниз для подгрузки отзывов, как на вкладке 'Обзор', но делаем это поэтапно
-        for i in range(20):  # 20 раз по чуть-чуть
-            page.mouse.wheel(0, 1000)
-            time.sleep(1.5)  # Дать время на подгрузку
+        # Парсим количество отзывов с вкладки
+        try:
+            reviews_count_elem = page.query_selector("h2.card-section-header__title._wide")
+            if reviews_count_elem:
+                import re
+                text = reviews_count_elem.inner_text()
+                match = re.search(r"(\d+)", text.replace('\xa0', ' '))
+                data['reviews_count'] = match.group(1) if match else ''
+            else:
+                data['reviews_count'] = ''
+        except Exception:
+            data['reviews_count'] = ''
+        # Человекообразный скролл отзывов: wheel, mousemove, случайные паузы, иногда вверх, иногда клик по вкладке
+        max_loops = 500
+        patience = 100  # Было 30, стало 100
+        last_count = 0
+        same_count = 0
+        for i in range(max_loops):
+            # Иногда двигаем мышь по области отзывов
+            if i % 7 == 0:
+                page.mouse.move(random.randint(200, 600), random.randint(400, 800))
+            # Иногда кликаем по вкладке 'Отзывы'
+            if i % 25 == 0 and reviews_tab:
+                reviews_tab.click()
+                time.sleep(0.5)
+            # Иногда прокручиваем немного вверх
+            if i % 30 == 0 and i > 0:
+                page.mouse.wheel(0, -500)
+                time.sleep(0.7)
+            # Wheel-скролл вниз
+            page.mouse.wheel(0, random.randint(800, 1200))
+            time.sleep(random.uniform(1.0, 1.7))
+            review_blocks = page.query_selector_all("div.business-reviews-card-view__review")
+            current_count = len(review_blocks)
+            if current_count == last_count:
+                same_count += 1
+            else:
+                same_count = 0
+            if same_count >= patience:
+                break
+            last_count = current_count
         time.sleep(2)  # Финальная пауза
         review_blocks = page.query_selector_all("div.business-reviews-card-view__review")
         print("ФИНАЛЬНО wheel-скроллом отзывов найдено:", len(review_blocks))

@@ -13,6 +13,7 @@ def save_card_to_supabase(card_data):
         "phone": card_data.get("overview", {}).get("phone"),
         "site": card_data.get("overview", {}).get("site"),
         "rating": float(card_data.get("overview", {}).get("rating") or 0),
+        "ratings_count": int(card_data.get("overview", {}).get("ratings_count") or 0),
         "reviews_count": int(card_data.get("overview", {}).get("reviews_count") or 0),
         # Сохраняем product_categories в поле categories
         "categories": card_data.get("product_categories"),

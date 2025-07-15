@@ -41,7 +41,8 @@
         <table>
             <tr><th>Название</th><td>{{ card.overview.title | default('') }}</td></tr>
             <tr><th>Рейтинг</th><td>{{ card.overview.rating | default('') }}</td></tr>
-            <tr><th>Количество оценок</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
+            <tr><th>Количество оценок</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
+            <tr><th>Количество отзывов</th><td>{{ card.reviews_count | default('') }}</td></tr>
             <tr><th>Ближайшее метро</th>
                 <td>{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}</td>
             </tr>
@@ -127,13 +128,18 @@
     </div>
     <div class="section">
         <h2>Отзывы</h2>
+        <div style="color:#c62828; font-size:1em; margin-bottom:10px;">
+            <b>Внимание:</b> В отчёте отображаются не все отзывы. Яндекс ограничивает количество отзывов, доступных для автоматического сбора через интерфейс. Обычно удаётся получить только часть отзывов (40–120), даже если на карточке указано больше.
+        </div>
         {% if card.reviews %}
             <p>Средняя оценка: <b>{{ card.reviews.rating | default('') }}</b> | Количество отзывов: <b>{{ card.reviews.reviews_count | default('') }}</b></p>
             {% if card.reviews.items %}
+            <p><b>Всего спарсилось отзывов: {{ card.reviews["items"]|length }}</b></p>
             <table>
-                <tr><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
+                <tr><th>№</th><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
                 {% for r in card.reviews["items"] %}
                 <tr>
+                    <td>{{ loop.index }}</td>
                     <td>{{ r.author | default('') }}</td>
                     <td>{{ r.date | default('') }}</td>
                     <td>{{ r.score | default('') }}</td>
