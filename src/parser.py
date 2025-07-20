@@ -81,28 +81,32 @@ def parse_yandex_card(url: str) -> dict:
             page.set_extra_http_headers({
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             })
-        page.goto(url, timeout=60000)
+            
+            page.goto(url, timeout=60000)
         page.wait_for_timeout(4000)  # Дать странице прогрузиться
-        # --- ПЕРЕХОД НА ВКЛАДКУ 'Обзор' ---
-        overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
-        if overview_tab:
-            overview_tab.click()
-            print("Клик по вкладке 'Обзор'")
-            page.wait_for_timeout(1500)
-        else:
-            print("Вкладка 'Обзор' не найдена!")
-        # Скроллим вниз для подгрузки фото и отзывов (если нужно)
-        page.mouse.wheel(0, 2000)
-        time.sleep(2)
-        # Дополнительная пауза для полной загрузки страницы
-        time.sleep(2)
-        data = {}
-        # --- СБОР ДАННЫХ С "ОБЗОРА" ---
-        # Название
-        try:
-            data['title'] = page.query_selector("h1").inner_text()
-        except Exception:
-            data['title'] = ''
+            
+            # --- ПЕРЕХОД НА ВКЛАДКУ 'Обзор' ---
+            overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
+            if overview_tab:
+                overview_tab.click()
+                print("Клик по вкладке 'Обзор'")
+                page.wait_for_timeout(1500)
+            else:
+                print("Вкладка 'Обзор' не найдена!")
+            
+            # Скроллим вниз для подгрузки фото и отзывов (если нужно)
+            page.mouse.wheel(0, 2000)
+            time.sleep(2)
+            # Дополнительная пауза для полной загрузки страницы
+            time.sleep(2)
+            
+            data = {}
+            # --- СБОР ДАННЫХ С "ОБЗОРА" ---
+            # Название
+            try:
+                data['title'] = page.query_selector("h1").inner_text()
+            except Exception:
+                data['title'] = ''
         # Адрес
         try:
             addr_block = page.query_selector("a.orgpage-header-view__address")
@@ -642,24 +646,24 @@ def parse_yandex_card(url: str) -> dict:
             print(f"Ошибка при парсинге конкурентов: {e}")
 
         data['competitors'] = competitors
-        data['url'] = url
-        browser.close()
-        
-        # Отладочная информация
-        print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
-        print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
-        print(f"DEBUG: hours = '{data.get('hours', '')}'")
-        print(f"DEBUG: competitors found = {len(competitors)}")
-        
-        # Формируем overview для отчёта
-        overview_keys = [
-            'title', 'address', 'phone', 'site', 'description',
-            'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
-        ]
-        data['overview'] = {k: data.get(k, '') for k in overview_keys}
-        
-        print("Парсинг завершён успешно")
-        return data
+            data['url'] = url
+            
+            # Отладочная информация
+            print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
+            print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
+            print(f"DEBUG: hours = '{data.get('hours', '')}'")
+            print(f"DEBUG: competitors found = {len(competitors)}")
+            
+            # Формируем overview для отчёта
+            overview_keys = [
+                'title', 'address', 'phone', 'site', 'description',
+                'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
+            ]
+            data['overview'] = {k: data.get(k, '') for k in overview_keys}
+            
+            browser.close()
+            print("Парсинг завершён успешно")
+            return data
         
     except Exception as e:
         print(f"Ошибка при парсинге через Playwright: {type(e).__name__}: {str(e)}")

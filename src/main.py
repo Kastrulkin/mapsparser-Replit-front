@@ -21,8 +21,8 @@ def main():
         print("Парсинг основной страницы...")
         card_data = parse_yandex_card(url)
         print('DEBUG overview:', card_data.get('overview'))
-    
-    # Сохраняем основную карточку
+        
+        # Сохраняем основную карточку
         from save_to_supabase import save_card_to_supabase, get_next_available_competitor, save_competitor_to_supabase
         main_card_id = save_card_to_supabase(card_data)
         
