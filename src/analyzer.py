@@ -111,7 +111,13 @@ def analyze_card(card_data: dict) -> dict:
     else:
         recommendations.append('Заполните подробное описание компании (не менее 100 символов).')
     # Фото
-    if card_data.get('photos_count', 0) >= 5:
+    photos_count = card_data.get('photos_count', 0)
+    try:
+        photos_count = int(photos_count) if photos_count else 0
+    except (ValueError, TypeError):
+        photos_count = 0
+    
+    if photos_count >= 5:
         score += 1
     else:
         recommendations.append('Добавьте не менее 5 фотографий (интерьер, услуги, сотрудники).')
