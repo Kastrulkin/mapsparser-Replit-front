@@ -57,9 +57,24 @@ def parse_yandex_card_fallback(url: str) -> dict:
         'reviews': {'items': [], 'rating': '', 'reviews_count': ''},
         'features': [],
         'features_full': {"bool": [], "valued": [], "prices": [], "categories": []},
-        'competitors': [],
-        'overview': {}
+        'competitors': []
     })
+    
+    # Формируем overview для отчёта
+    data['overview'] = {
+        'title': data.get('title', ''),
+        'address': data.get('address', ''),
+        'phone': data.get('phone', ''),
+        'site': data.get('site', ''),
+        'description': data.get('description', ''),
+        'categories': data.get('categories', []),
+        'hours': data.get('hours', ''),
+        'hours_full': data.get('hours_full', []),
+        'rating': data.get('rating', ''),
+        'ratings_count': data.get('ratings_count', ''),
+        'reviews_count': data.get('reviews_count', ''),
+        'social_links': data.get('social_links', [])
+    }
     
     return data
 
