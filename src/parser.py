@@ -5,6 +5,63 @@ from playwright.sync_api import sync_playwright
 import time
 import re
 import random
+import requests
+from bs4 import BeautifulSoup
+
+def parse_yandex_card_fallback(url: str) -> dict:
+    """
+    Упрощенный парсинг через requests + BeautifulSoup (fallback)
+    """
+    print("Используем fallback-метод через requests...")
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    response = requests.get(url, headers=headers, timeout=30)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    data = {}
+    data['url'] = url
+    
+    # Базовая информация
+    title_el = soup.find('h1')
+    data['title'] = title_el.get_text().strip() if title_el else ''
+    
+    # Адрес (упрощенно)
+    addr_el = soup.find('a', {'class': lambda x: x and 'address' in x})
+    data['address'] = addr_el.get_text().strip() if addr_el else ''
+    
+    # Телефон (упрощенно)
+    phone_el = soup.find('a', href=lambda x: x and x.startswith('tel:'))
+    data['phone'] = phone_el.get_text().strip() if phone_el else ''
+    
+    # Заполняем пустые поля
+    data.update({
+        'site': '',
+        'hours': '',
+        'hours_full': [],
+        'categories': [],
+        'rating': '',
+        'ratings_count': '',
+        'reviews_count': '',
+        'description': '',
+        'photos_count': 0,
+        'social_links': [],
+        'nearest_metro': {'name': '', 'distance': ''},
+        'nearest_stop': {'name': '', 'distance': ''},
+        'products': [],
+        'product_categories': [],
+        'news': [],
+        'photos': [],
+        'reviews': {'items': [], 'rating': '', 'reviews_count': ''},
+        'features': [],
+        'features_full': {"bool": [], "valued": [], "prices": [], "categories": []},
+        'competitors': [],
+        'overview': {}
+    })
+    
+    return data
 
 def parse_yandex_card(url: str) -> dict:
     """
@@ -17,7 +74,7 @@ def parse_yandex_card(url: str) -> dict:
             raise ValueError(f"Некорректная ссылка: {url}")
             
         with sync_playwright() as p:
-            browser = p.webkit.launch(headless=True)  # headless=True для скрытого режима
+            browser = p.chromium.launch(headless=True)  # Пробуем Chromium
             page = browser.new_page()
             
             # Устанавливаем User-Agent
@@ -605,5 +662,11 @@ def parse_yandex_card(url: str) -> dict:
         return data
         
     except Exception as e:
-        print(f"Ошибка при парсинге: {type(e).__name__}: {str(e)}")
-        raise 
+        print(f"Ошибка при парсинге через Playwright: {type(e).__name__}: {str(e)}")
+        print("Пробуем fallback-метод...")
+        
+        try:
+            return parse_yandex_card_fallback(url)
+        except Exception as fallback_error:
+            print(f"Fallback также не сработал: {fallback_error}")
+            raise e 
