@@ -83,7 +83,7 @@ def parse_yandex_card(url: str) -> dict:
             })
             
             page.goto(url, timeout=60000)
-        page.wait_for_timeout(4000)  # Дать странице прогрузиться
+            page.wait_for_timeout(4000)  # Дать странице прогрузиться
             
             # --- ПЕРЕХОД НА ВКЛАДКУ 'Обзор' ---
             overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
@@ -108,103 +108,103 @@ def parse_yandex_card(url: str) -> dict:
             except Exception:
                 data['title'] = ''
         # Адрес
-        try:
-            addr_block = page.query_selector("a.orgpage-header-view__address")
-            if addr_block:
-                spans = addr_block.query_selector_all("span")
-                address_parts = [s.inner_text() for s in spans if s.inner_text()]
-                data['address'] = ', '.join(address_parts)
-            else:
+            try:
+                addr_block = page.query_selector("a.orgpage-header-view__address")
+                if addr_block:
+                    spans = addr_block.query_selector_all("span")
+                    address_parts = [s.inner_text() for s in spans if s.inner_text()]
+                    data['address'] = ', '.join(address_parts)
+                else:
+                    data['address'] = ''
+            except Exception:
                 data['address'] = ''
-        except Exception:
-            data['address'] = ''
         # Клик по кнопке 'Показать телефон' (если есть)
-        try:
-            show_phone_btn = page.query_selector("button:has-text('Показать телефон')")
-            if show_phone_btn:
-                show_phone_btn.click()
-                page.wait_for_timeout(1000)
-        except Exception:
-            pass
-        # Телефон
-        try:
-            # Клик по кнопке "Показать телефон", если есть
-            show_phone_btn = page.query_selector("button:has-text('Показать телефон'), div.card-phones-view__more, div.orgpage-phones-view__more")
-            if show_phone_btn:
-                show_phone_btn.click()
-                page.wait_for_timeout(1000)
-            # Пробуем разные варианты селекторов
-            phone = None
-            for selector in [
-                "a[href^='tel:']",
-                "span[itemprop='telephone']",
-                "div.orgpage-phones-view__phone-number",
-                "div.card-phones-view__number"
-            ]:
-                el = page.query_selector(selector)
-                if el:
-                    phone = el.inner_text()
-                    break
-            data['phone'] = phone if phone else ''
-        except Exception:
-            data['phone'] = ''
+            try:
+                show_phone_btn = page.query_selector("button:has-text('Показать телефон')")
+                if show_phone_btn:
+                    show_phone_btn.click()
+                    page.wait_for_timeout(1000)
+            except Exception:
+                pass
+            # Телефон
+            try:
+                # Клик по кнопке "Показать телефон", если есть
+                show_phone_btn = page.query_selector("button:has-text('Показать телефон'), div.card-phones-view__more, div.orgpage-phones-view__more")
+                if show_phone_btn:
+                    show_phone_btn.click()
+                    page.wait_for_timeout(1000)
+                # Пробуем разные варианты селекторов
+                phone = None
+                for selector in [
+                    "a[href^='tel:']",
+                    "span[itemprop='telephone']",
+                    "div.orgpage-phones-view__phone-number",
+                    "div.card-phones-view__number"
+                ]:
+                    el = page.query_selector(selector)
+                    if el:
+                        phone = el.inner_text()
+                        break
+                data['phone'] = phone if phone else ''
+            except Exception:
+                data['phone'] = ''
         # Сайт
-        try:
-            site_a = page.query_selector("a.business-urls-view__text")
-            if site_a:
-                data['site'] = site_a.get_attribute('href')
-            else:
-                site_span = page.query_selector("span.business-urls-view__text")
-                data['site'] = site_span.inner_text().strip() if site_span else ''
-        except Exception:
-            data['site'] = ''
-        # Часы работы
-        try:
-            hours = None
-            # Пробуем несколько селекторов для часов работы
-            selectors = [
-                "[class*='business-working-status-view__text']",
-                "div.business-working-status-view__text",
-                "span.business-working-status-view__text",
-                "[class*='working-status-view']",
-                "[class*='business-hours']"
-            ]
-            
-            for selector in selectors:
-                hours = page.query_selector(selector)
-                if hours:
-                    break
-            
-            data['hours'] = hours.inner_text().strip() if hours else ''
-        except Exception as e:
-            print(f"Ошибка при парсинге часов работы: {e}")
-            data['hours'] = ''
+            try:
+                site_a = page.query_selector("a.business-urls-view__text")
+                if site_a:
+                    data['site'] = site_a.get_attribute('href')
+                else:
+                    site_span = page.query_selector("span.business-urls-view__text")
+                    data['site'] = site_span.inner_text().strip() if site_span else ''
+            except Exception:
+                data['site'] = ''
+            # Часы работы
+            try:
+                hours = None
+                # Пробуем несколько селекторов для часов работы
+                selectors = [
+                    "[class*='business-working-status-view__text']",
+                    "div.business-working-status-view__text",
+                    "span.business-working-status-view__text",
+                    "[class*='working-status-view']",
+                    "[class*='business-hours']"
+                ]
+                
+                for selector in selectors:
+                    hours = page.query_selector(selector)
+                    if hours:
+                        break
+                
+                data['hours'] = hours.inner_text().strip() if hours else ''
+            except Exception as e:
+                print(f"Ошибка при парсинге часов работы: {e}")
+                data['hours'] = ''
         # Полный график работы
-        try:
-            intervals = page.query_selector_all("div.business-working-intervals-view__item")
-            full_schedule = []
-            for interval in intervals:
-                day_el = interval.query_selector("div.business-working-intervals-view__day")
-                time_el = interval.query_selector("div.business-working-intervals-view__interval")
-                day = day_el.inner_text().strip() if day_el else ''
-                work_time = time_el.inner_text().strip() if time_el else ''
-                if day and work_time:
-                    full_schedule.append(f"{day}: {work_time}")
-            data['hours_full'] = full_schedule
-        except Exception:
-            data['hours_full'] = []
-        # Категории
-        try:
-            cats = page.query_selector_all("[class*='business-card-title-view__categories'] span")
-            data['categories'] = [c.inner_text() for c in cats if c.inner_text()]
-        except Exception:
-            data['categories'] = []
-        # Рейтинг
-        try:
-            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-            data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
-        except Exception:
-            data['rating'] = ''
+            try:
+                intervals = page.query_selector_all("div.business-working-intervals-view__item")
+                full_schedule = []
+                for interval in intervals:
+                    day_el = interval.query_selector("div.business-working-intervals-view__day")
+                    time_el = interval.query_selector("div.business-working-intervals-view__interval")
+                    day = day_el.inner_text().strip() if day_el else ''
+                    work_time = time_el.inner_text().strip() if time_el else ''
+                    if day and work_time:
+                        full_schedule.append(f"{day}: {work_time}")
+                data['hours_full'] = full_schedule
+            except Exception:
+                data['hours_full'] = []
+            # Категории
+            try:
+                cats = page.query_selector_all("[class*='business-card-title-view__categories'] span")
+                data['categories'] = [c.inner_text() for c in cats if c.inner_text()]
+            except Exception:
+                data['categories'] = []
+            # Рейтинг
+            try:
+                rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
+                data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+            except Exception:
+                data['rating'] = ''
         # Количество оценок (всех)
         try:
             ratings_count_el = None
