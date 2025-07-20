@@ -21,7 +21,7 @@ def parse_yandex_card(url: str) -> dict:
     
     with sync_playwright() as p:
         try:
-            # Устанавливаем переменные окружения для Replit
+            # Правильные переменные окружения для Replit
             os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/home/runner/.cache/ms-playwright'
             
             browser = None
@@ -88,25 +88,7 @@ def parse_yandex_card(url: str) -> dict:
                         browser_name = "WebKit"
                         print("Используем WebKit")
                     except Exception as e3:
-                        # Если и WebKit не работает, пробуем установить браузеры
-                        print("Устанавливаем браузеры...")
-                        os.system('playwright install chromium')
-                        
-                        # Повторная попытка с Chromium
-                        try:
-                            browser = p.chromium.launch(
-                                headless=True,
-                                args=[
-                                    '--no-sandbox',
-                                    '--disable-setuid-sandbox',
-                                    '--disable-dev-shm-usage',
-                                    '--disable-gpu'
-                                ]
-                            )
-                            browser_name = "Chromium (установлен)"
-                            print("Используем установленный Chromium")
-                        except Exception as e4:
-                            raise Exception(f"Все браузеры недоступны: Chromium={e}, Firefox={e2}, WebKit={e3}, Chromium-retry={e4}")
+                        raise Exception(f"Все браузеры недоступны: Chromium={e}, Firefox={e2}, WebKit={e3}")
             
             if not browser:
                 raise Exception("Не удалось запустить ни один браузер")
