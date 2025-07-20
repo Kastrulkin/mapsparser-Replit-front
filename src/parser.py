@@ -10,9 +10,20 @@ def parse_yandex_card(url: str) -> dict:
     """
     Парсит публичную страницу Яндекс.Карт и возвращает данные в виде словаря.
     """
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # headless=True для скрытого режима
-        page = browser.new_page()
+    try:
+        print(f"Начинаем парсинг: {url}")
+        
+        if not url or not url.startswith(('http://', 'https://')):
+            raise ValueError(f"Некорректная ссылка: {url}")
+            
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)  # headless=True для скрытого режима
+            page = browser.new_page()
+            
+            # Устанавливаем User-Agent
+            page.set_extra_http_headers({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
         page.goto(url, timeout=60000)
         page.wait_for_timeout(4000)  # Дать странице прогрузиться
         # --- ПЕРЕХОД НА ВКЛАДКУ 'Обзор' ---
@@ -590,4 +601,9 @@ def parse_yandex_card(url: str) -> dict:
         ]
         data['overview'] = {k: data.get(k, '') for k in overview_keys}
         
-        return data 
+        print("Парсинг завершён успешно")
+        return data
+        
+    except Exception as e:
+        print(f"Ошибка при парсинге: {type(e).__name__}: {str(e)}")
+        raise 

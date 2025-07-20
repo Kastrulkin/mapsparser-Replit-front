@@ -22,35 +22,53 @@ def get_next_available_competitor(competitors):
     return None
 
 def save_card_to_supabase(card_data):
-    data = {
-        "url": card_data.get("url"),
-        "title": card_data.get("overview", {}).get("title"),
-        "address": card_data.get("overview", {}).get("address"),
-        "phone": card_data.get("overview", {}).get("phone"),
-        "site": card_data.get("overview", {}).get("site"),
-        "rating": float(card_data.get("overview", {}).get("rating") or 0),
-        "ratings_count": int(card_data.get("overview", {}).get("ratings_count") or 0),
-        "reviews_count": int(card_data.get("overview", {}).get("reviews_count") or 0),
-        # Сохраняем product_categories в поле categories
-        "categories": card_data.get("product_categories"),
-        "categories_full": card_data.get("categories_full"),
-        "features_bool": card_data.get("features_bool"),
-        "features_valued": card_data.get("features_valued"),
-        "features_prices": card_data.get("features_prices"),
-        "features_full": card_data.get("features_full"),  # Новое поле для Supabase
-        "overview": card_data.get("overview"),
-        "products": card_data.get("products"),
-        "news": card_data.get("news"),
-        "photos": card_data.get("photos"),
-        "reviews": card_data.get("reviews"),
-        "hours": card_data.get("overview", {}).get("hours"),
-        "hours_full": card_data.get("overview", {}).get("hours_full"),
-        "competitors": card_data.get("competitors", []),
-        "main_card_url": None,  # Для основных карточек это поле пустое
-    }
-    
-    result = supabase.table("Cards").insert(data).execute()
-    return result.data[0]['id'] if result.data else None
+    try:
+        from supabase import create_client, Client
+        import os
+
+        # Получаем переменные окружения
+        url = os.getenv('SUPABASE_URL')
+        key = os.getenv('SUPABASE_KEY')
+
+        if not url or not key:
+            print("Предупреждение: Переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
+            print("Данные не будут сохранены в базу данных")
+            return None
+
+        data = {
+            "url": card_data.get("url"),
+            "title": card_data.get("overview", {}).get("title"),
+            "address": card_data.get("overview", {}).get("address"),
+            "phone": card_data.get("overview", {}).get("phone"),
+            "site": card_data.get("overview", {}).get("site"),
+            "rating": float(card_data.get("overview", {}).get("rating") or 0),
+            "ratings_count": int(card_data.get("overview", {}).get("ratings_count") or 0),
+            "reviews_count": int(card_data.get("overview", {}).get("reviews_count") or 0),
+            # Сохраняем product_categories в поле categories
+            "categories": card_data.get("product_categories"),
+            "categories_full": card_data.get("categories_full"),
+            "features_bool": card_data.get("features_bool"),
+            "features_valued": card_data.get("features_valued"),
+            "features_prices": card_data.get("features_prices"),
+            "features_full": card_data.get("features_full"),  # Новое поле для Supabase
+            "overview": card_data.get("overview"),
+            "products": card_data.get("products"),
+            "news": card_data.get("news"),
+            "photos": card_data.get("photos"),
+            "reviews": card_data.get("reviews"),
+            "hours": card_data.get("overview", {}).get("hours"),
+            "hours_full": card_data.get("overview", {}).get("hours_full"),
+            "competitors": card_data.get("competitors", []),
+            "main_card_url": None,  # Для основных карточек это поле пустое
+        }
+
+        result = supabase.table("Cards").insert(data).execute()
+        print(f"Карточка сохранена с ID: {result.data[0]['id']}")
+        return result.data[0]['id']
+
+    except Exception as e:
+        print(f"Ошибка при сохранении в Supabase: {type(e).__name__}: {str(e)}")
+        return None
 
 def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
     """Сохраняет данные конкурента с привязкой к основной карточке"""
@@ -79,6 +97,6 @@ def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
         "competitors": [],
         "main_card_url": main_card_url,  # Привязка к основной карточке
     }
-    
+
     result = supabase.table("Cards").insert(data).execute()
-    return result.data[0]['id'] if result.data else None 
+    return result.data[0]['id'] if result.data else None

@@ -3,3 +3,15 @@ modules = ["web", "python-3.12"]
 [nix]
 channel = "stable-24_05"
 packages = ["geckodriver", "gitFull", "glibcLocales", "playwright-driver", "xcodebuild", "zlib"]
+
+[workflows]
+runButton = "Запуск парсера"
+
+[[workflows.workflow]]
+name = "Запуск парсера"
+author = 18583526
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd src && python main.py"

@@ -10,10 +10,16 @@ import re
 from save_to_supabase import save_card_to_supabase
 
 def main():
-    print("Введите ссылку на карточку Яндекс.Карт:")
-    url = input().strip()
-    print("Парсинг основной страницы...")
-    card_data = parse_yandex_card(url)
+    try:
+        print("Введите ссылку на карточку Яндекс.Карт:")
+        url = input().strip()
+        
+        if not url:
+            print("Ошибка: Пустая ссылка")
+            return
+            
+        print("Парсинг основной страницы...")
+        card_data = parse_yandex_card(url)
     print('DEBUG overview:', card_data.get('overview'))
     
     # Сохраняем основную карточку
@@ -66,6 +72,18 @@ def main():
     # Передаём данные конкурента в отчёт
     report_path = generate_html_report(card_data, analysis, competitor_data)
     print(f"Готово! Отчёт сохранён: {report_path}")
+    
+    except KeyboardInterrupt:
+        print("\nОперация прервана пользователем")
+    except Exception as e:
+        print(f"Произошла ошибка: {type(e).__name__}: {str(e)}")
+        import traceback
+        print("Детальная информация об ошибке:")
+        traceback.print_exc()
+        print("\nЕсли ошибка повторяется, попробуйте:")
+        print("1. Проверить правильность ссылки на Яндекс.Карты")
+        print("2. Убедиться, что страница загружается в браузере")
+        print("3. Попробовать другую карточку")
 
 if __name__ == "__main__":
     main() 
