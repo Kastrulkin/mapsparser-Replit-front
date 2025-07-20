@@ -4,62 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отчёты парсера Яндекс.Карт</title>
+    <title>SEO Анализатор Яндекс.Карт</title>
+    <meta http-equiv="refresh" content="5">
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            max-width: 800px; 
-            margin: 0 auto; 
-            padding: 20px; 
-            background: #f5f5f5; 
-        }
-        .header { 
-            background: #fff; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin-bottom: 20px; 
-            text-align: center; 
-        }
-        .reports { 
-            background: #fff; 
-            padding: 20px; 
-            border-radius: 8px; 
-        }
-        .report-item { 
-            display: block; 
-            padding: 15px; 
-            margin: 10px 0; 
-            background: #f8f9fa; 
-            border: 1px solid #dee2e6; 
-            border-radius: 5px; 
-            text-decoration: none; 
-            color: #333; 
-            transition: background-color 0.2s; 
-        }
-        .report-item:hover { 
-            background: #e9ecef; 
-        }
-        .report-title { 
-            font-weight: bold; 
-            font-size: 1.1em; 
-        }
-        .report-desc { 
-            color: #666; 
-            margin-top: 5px; 
-        }
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; }
+        h1 { color: #2d3a4a; }
+        .report-list { background: #fff; padding: 20px; border-radius: 8px; }
+        .report-item { margin: 10px 0; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; }
+        .report-item a { text-decoration: none; color: #1976d2; font-weight: bold; }
+        .report-item a:hover { text-decoration: underline; }
+        .no-reports { color: #666; font-style: italic; }
+        .refresh-info { color: #666; font-size: 0.9em; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📊 Отчёты парсера Яндекс.Карт</h1>
-        <p>Выберите отчёт для просмотра</p>
+    <h1>SEO Анализатор Яндекс.Карт</h1>
+    <div class="report-list">
+        <h2>Отчеты</h2>
+        <div class="report-item"><a href="data/report_Feniks.html" target="_blank">Feniks</a></div>
     </div>
-    
-    <div class="reports">
-        <a href="data/report_Feniks.html" class="report-item">
-            <div class="report-title">🔥 Feniks</div>
-            <div class="report-desc">SEO анализ карточки Яндекс.Карт</div>
-        </a>
+    <div class="refresh-info">
+        Страница автоматически обновляется каждые 5 секунд
     </div>
 </body>
 </html>
