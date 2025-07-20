@@ -99,7 +99,7 @@ def update_index_periodically():
         time.sleep(5)
 
 if __name__ == "__main__":
-    PORT = 5000
+    PORT = 8000
     
     # Создаем начальную главную страницу
     create_index_html()
