@@ -50,7 +50,8 @@ def parse_yandex_card(url: str) -> dict:
             page.wait_for_timeout(3000)
 
             # Проверяем на captcha
-            if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower():
+            if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower() or "Подтвердите, что запросы отправляли вы" in page.title():
+                browser.close()
                 print("⚠️  Обнаружена captcha! Попробуйте:")
                 print("1. Открыть ссылку в браузере и пройти captcha")
                 print("2. Попробовать позже")
@@ -265,6 +266,15 @@ def parse_yandex_card(url: str) -> dict:
 
             # Ждем загрузки контента
             time.sleep(random.uniform(3, 5))
+
+            # Проверяем на captcha сразу после загрузки
+            if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower() or "Подтвердите, что запросы отправляли вы" in page.title():
+                browser.close()
+                print("⚠️  Обнаружена captcha! Попробуйте:")
+                print("1. Открыть ссылку в браузере и пройти captcha")
+                print("2. Попробовать позже")
+                print("3. Использовать другую ссылку")
+                return {"error": "captcha_detected", "url": url}
 
             # Переход на вкладку 'Обзор'
             try:
