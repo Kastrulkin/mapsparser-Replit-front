@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчёты парсера Яндекс.Карт</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5; 
+        }
+        .header { 
+            background: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            text-align: center; 
+        }
+        .reports { 
+            background: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+        }
+        .report-item { 
+            display: block; 
+            padding: 15px; 
+            margin: 10px 0; 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            border-radius: 5px; 
+            text-decoration: none; 
+            color: #333; 
+            transition: background-color 0.2s; 
+        }
+        .report-item:hover { 
+            background: #e9ecef; 
+        }
+        .report-title { 
+            font-weight: bold; 
+            font-size: 1.1em; 
+        }
+        .report-desc { 
+            color: #666; 
+            margin-top: 5px; 
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Отчёты парсера Яндекс.Карт</h1>
+        <p>Выберите отчёт для просмотра</p>
+    </div>
+    
+    <div class="reports">
+        <a href="data/report_AlexAuto.html" class="report-item">
+            <div class="report-title">🚗 AlexAuto</div>
+            <div class="report-desc">Автосервис - SEO анализ карточки</div>
+        </a>
+        
+        <a href="data/report_Britva.html" class="report-item">
+            <div class="report-title">✂️ Britva</div>
+            <div class="report-desc">Барбershop - SEO анализ карточки</div>
+        </a>
+        
+        <a href="data/report_Fit Service.html" class="report-item">
+            <div class="report-title">🔧 Fit Service</div>
+            <div class="report-desc">Автосервис - SEO анализ карточки</div>
+        </a>
+        
+        <a href="data/report_Севкабель Порт.html" class="report-item">
+            <div class="report-title">🏢 Севкабель Порт</div>
+            <div class="report-desc">Бизнес-центр - SEO анализ карточки</div>
+        </a>
+        
+        <a href="data/report_Феникс Анны.html" class="report-item">
+            <div class="report-title">🏪 Феникс Анны</div>
+            <div class="report-desc">Последний созданный отчёт</div>
+        </a>
+    </div>
+</body>
+</html>

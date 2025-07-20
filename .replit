@@ -15,3 +15,12 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd src && python main.py"
+
+[[workflows.workflow]]
+name = "Веб-сервер"
+author = 18583526
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -m http.server 5000"
