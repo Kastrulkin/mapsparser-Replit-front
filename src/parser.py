@@ -1,4 +1,3 @@
-
 """
 parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Playwright
 """
@@ -7,6 +6,104 @@ import time
 import re
 import random
 import os
+
+def parse_reviews_from_main_page(page):
+    """Парсинг отзывов с главной страницы, если вкладка не найдена"""
+    reviews = {
+        "rating": "",
+        "reviews_count": 0,
+        "items": []
+    }
+
+    # Средняя оценка и количество отзывов
+    try:
+        rating_elem = page.query_selector("[class*='business-rating-badge-view__rating'], .business-summary-rating-badge-view__rating")
+        if rating_elem:
+            reviews["rating"] = rating_elem.inner_text().strip()
+
+        count_elem = page.query_selector("[class*='business-rating-badge-view__reviews-count'], .business-summary-rating-badge-view__reviews-count")
+        if count_elem:
+            count_text = count_elem.inner_text()
+            try:
+                reviews["reviews_count"] = int(''.join(filter(str.isdigit, count_text)))
+            except:
+                reviews["reviews_count"] = 0
+    except Exception as e:
+        print(f"Ошибка при парсинге рейтинга с главной: {e}")
+
+    return reviews
+
+def parse_yandex_card(url: str) -> dict:
+    """Основная функция парсинга карточки Яндекс.Карт"""
+    with sync_playwright() as p:
+        # Используем Firefox вместо Chromium
+        print("Используем Firefox")
+        browser = p.firefox.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
+
+        try:
+            print("Переходим на страницу...")
+            page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            page.wait_for_timeout(3000)
+
+            # Проверяем на captcha
+            if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower():
+                print("⚠️  Обнаружена captcha! Попробуйте:")
+                print("1. Открыть ссылку в браузере и пройти captcha")
+                print("2. Попробовать позже")
+                print("3. Использовать другую ссылку")
+                return {"error": "captcha_detected", "url": url}
+
+def parse_reviews(page):
+    """Парсинг отзывов"""
+    reviews = {
+        "rating": "",
+        "reviews_count": 0,
+        "items": []
+    }
+
+    # Проверяем, не попали ли мы на страницу captcha
+    if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower():
+        print("Обнаружена captcha! Пропускаем парсинг отзывов.")
+        return reviews
+
+    # Клик по вкладке "Отзывы" - улучшенный поиск
+    try:
+        # Множественные селекторы для поиска вкладки отзывы
+        reviews_tab_selectors = [
+            "div[role='tab']:has-text('Отзывы')",
+            "button:has-text('Отзывы')", 
+            "[data-tab='reviews']",
+            "div.tabs-select-view__tab:has-text('Отзывы')",
+            "a:has-text('Отзывы')",
+            ".tabs-menu-view__tab:has-text('Отзывы')",
+            "span:has-text('Отзывы')"
+        ]
+
+        reviews_tab = None
+        for selector in reviews_tab_selectors:
+            try:
+                reviews_tab = page.query_selector(selector)
+                if reviews_tab:
+                    print(f"Найдена вкладка 'Отзывы' с селектором: {selector}")
+                    break
+            except:
+                continue
+
+        if reviews_tab:
+            reviews_tab.click()
+            page.wait_for_timeout(2000)
+        else:
+            print("Вкладка 'Отзывы' не найдена ни одним селектором!")
+            # Пробуем найти отзывы на главной странице
+            return parse_reviews_from_main_page(page)
+
+    except Exception as e:
+        print(f"Ошибка при клике на вкладку 'Отзывы': {e}")
+        return parse_reviews_from_main_page(page)
 
 def parse_yandex_card(url: str) -> dict:
     """
@@ -261,7 +358,7 @@ def parse_overview_data(page):
             "div[class*='phone'] span",
             "[data-bem*='phone'] span"
         ]
-        
+
         data['phone'] = ''
         for selector in phone_selectors:
             phone_elem = page.query_selector(selector)
@@ -359,7 +456,7 @@ def parse_overview_data(page):
             "div[class*='working-hours'] span",
             "[data-bem*='hours'] span"
         ]
-        
+
         data['hours'] = ''
         for selector in hours_selectors:
             hours_el = page.query_selector(selector)
@@ -374,7 +471,7 @@ def parse_overview_data(page):
     # Полное расписание - улучшенный парсинг
     try:
         full_schedule = []
-        
+
         # Клик по часам работы для раскрытия полного расписания
         hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
         if hours_click:
@@ -386,7 +483,7 @@ def parse_overview_data(page):
             "div[class*='schedule-day']", 
             "div[class*='hours-day']"
         ]
-        
+
         for selector in schedule_selectors:
             schedule_items = page.query_selector_all(selector)
             for item in schedule_items:
@@ -399,10 +496,10 @@ def parse_overview_data(page):
                         full_schedule.append(f"{day}: {work_time}")
                 except Exception:
                     continue
-            
+
             if full_schedule:
                 break
-        
+
         data['hours_full'] = full_schedule
     except Exception:
         data['hours_full'] = []
@@ -426,31 +523,31 @@ def parse_overview_data(page):
             products_tab.click()
             print("Клик по вкладке 'Товары и услуги'")
             page.wait_for_timeout(1500)
-            
+
             # Скроллим для загрузки услуг
             for i in range(10):
                 page.mouse.wheel(0, 1000)
                 time.sleep(1)
-            
+
             products = []
             product_categories = []
-            
+
             # Ищем категории услуг - из рабочего кода
             category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
-            
+
             for cat_block in category_blocks:
                 try:
                     # Название категории
                     category_el = cat_block.query_selector('div.business-full-items-grouped-view__category-title')
                     category = category_el.inner_text().strip() if category_el else "Без категории"
-                    
+
                     if category not in product_categories:
                         product_categories.append(category)
-                    
+
                     # Товары/услуги в категории
                     items = []
                     item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
-                    
+
                     for item in item_blocks:
                         try:
                             # Пробуем сначала фото-товары
@@ -471,7 +568,7 @@ def parse_overview_data(page):
                             price = price_el.inner_text().strip() if price_el else ""
                             duration = duration_el.inner_text().strip() if duration_el else ""
                             photo = photo_el.get_attribute('src') if photo_el else ""
-                            
+
                             if name:
                                 items.append({
                                     "name": name,
@@ -482,7 +579,7 @@ def parse_overview_data(page):
                                 })
                         except Exception:
                             continue
-                    
+
                     if items:
                         products.append({
                             "category": category,
@@ -490,7 +587,7 @@ def parse_overview_data(page):
                         })
                 except Exception:
                     continue
-            
+
             data['products'] = products
             data['product_categories'] = product_categories
         else:
@@ -526,7 +623,7 @@ def parse_reviews(page):
                 "div.business-reviews-card-view__header h2",
                 "h2:has-text('отзыв')"
             ]
-            
+
             for selector in count_selectors:
                 count_el = page.query_selector(selector)
                 if count_el:
@@ -586,7 +683,7 @@ def parse_reviews(page):
                         "[class*='author-name']",
                         "[data-bem*='author'] span"
                     ]
-                    
+
                     for selector in author_selectors:
                         author_elem = block.query_selector(selector)
                         if author_elem:
@@ -603,7 +700,7 @@ def parse_reviews(page):
                     rating = 0
                     rating_els = block.query_selector_all("span.business-rating-view__star._fill, span[class*='star-fill'], span[class*='rating-star'][class*='fill']")
                     rating = len(rating_els)
-                    
+
                     # Если не нашли звёзды, ищем текстовый рейтинг
                     if rating == 0:
                         rating_text_elem = block.query_selector("span[class*='rating-text'], div[class*='score']")
@@ -686,168 +783,4 @@ def get_photos_count(page):
         photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
         if photos_tab:
             try:
-                counter = photos_tab.query_selector("div.tabs-select-view__counter")
-                return int(counter.inner_text().strip())
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return 0
-
-def parse_photos(page):
-    """Парсит фотографии"""
-    try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
-        if photos_tab:
-            photos_tab.click()
-            print("Клик по вкладке 'Фото'")
-            page.wait_for_timeout(2000)
-
-            # Скролл для загрузки фото
-            for i in range(30):
-                page.mouse.wheel(0, 1500)
-                time.sleep(2)
-
-        photos = []
-        # Расширенный поиск изображений
-        img_selectors = [
-            "img.image__img",
-            "img[src*='avatars.mds.yandex.net']",
-            "img[src*='yandex.ru']",
-            "img[src*='maps-photo']", 
-            "div.photo-card img",
-            "div.gallery-item img",
-            "div[class*='photo'] img",
-            "div[class*='image'] img"
-        ]
-        
-        for selector in img_selectors:
-            img_elems = page.query_selector_all(selector)
-            for img in img_elems:
-                src = img.get_attribute('src')
-                if src and src not in photos and ('avatars.mds.yandex' in src or 'yandex.ru' in src):
-                    # Увеличиваем размер изображения если возможно
-                    if '/L/' in src:
-                        src = src.replace('/L/', '/XL/')
-                    elif '/M/' in src:
-                        src = src.replace('/M/', '/XL/')
-                    elif '/S/' in src:
-                        src = src.replace('/S/', '/XL/')
-                    photos.append(src)
-        
-        return photos
-    except Exception:
-        return []
-
-def parse_features(page):
-    """Парсит особенности"""
-    try:
-        features_tab = page.query_selector("div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
-        if features_tab:
-            features_tab.click()
-            print("Клик по вкладке 'Особенности'")
-            page.wait_for_timeout(1500)
-
-        features_data = {"bool": [], "valued": [], "prices": [], "categories": []}
-
-        # Булевые особенности
-        try:
-            bool_blocks = page.query_selector_all("div.business-features-view__item._feature, div[class*='feature-bool']")
-            for block in bool_blocks:
-                try:
-                    text_el = block.query_selector("span, div")
-                    if text_el:
-                        text = text_el.inner_text().strip()
-                        defined = "feature_defined" in block.get_attribute("class") or ""
-                        features_data['bool'].append({
-                            "text": text,
-                            "defined": defined
-                        })
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        # Ценностные особенности
-        try:
-            valued_blocks = page.query_selector_all("div.business-features-view__item._category, div[class*='feature-valued']")
-            for block in valued_blocks:
-                try:
-                    title_el = block.query_selector("div.business-features-view__category-name, span[class*='title']")
-                    value_el = block.query_selector("div.business-features-view__category-value, span[class*='value']")
-
-                    if title_el and value_el:
-                        features_data['valued'].append({
-                            "title": title_el.inner_text().strip(),
-                            "value": value_el.inner_text().strip()
-                        })
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return features_data
-    except Exception:
-        return {"bool": [], "valued": [], "prices": [], "categories": []}
-
-def parse_competitors(page):
-    """Парсит конкурентов из раздела 'Похожие места рядом'"""
-    try:
-        # Возвращаемся на вкладку "Обзор" для поиска конкурентов
-        overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
-        if overview_tab:
-            overview_tab.click()
-            page.wait_for_timeout(2000)
-
-        # Скроллим вниз для поиска секции конкурентов
-        for i in range(10):
-            page.mouse.wheel(0, 1000)
-            time.sleep(1)
-
-        # Ищем секцию с конкурентами
-        similar_selectors = [
-            "div.card-similar-carousel-wide",
-            "div[class*='similar']", 
-            "section[class*='similar']",
-            "div:has-text('Похожие места рядом')",
-            "div.card-section:has(h2:has-text('Похожие'))"
-        ]
-
-        similar_section = None
-        for selector in similar_selectors:
-            similar_section = page.query_selector(selector)
-            if similar_section:
-                print(f"Найдена секция конкурентов: {selector}")
-                break
-
-        if not similar_section:
-            print("Секция 'Похожие места рядом' не найдена")
-            return []
-
-        competitors = []
-        competitor_blocks = similar_section.query_selector_all("a[href*='/org/']")
-
-        for block in competitor_blocks[:5]:
-            try:
-                href = block.get_attribute('href')
-                if href and not href.startswith('http'):
-                    href = f"https://yandex.ru{href}"
-
-                title_el = block.query_selector("div.card-title-view__title, h3, h4, span")
-                title = title_el.inner_text().strip() if title_el else ""
-
-                if title and href:
-                    competitors.append({
-                        "title": title,
-                        "url": href
-                    })
-                    print(f"Найден конкурент: {title}")
-            except Exception as e:
-                print(f"Ошибка при парсинге конкурента: {e}")
-                continue
-
-        print(f"Всего найдено конкурентов: {len(competitors)}")
-        return competitors
-    except Exception as e:
-        print(f"Ошибка при поиске конкурентов: {e}")
-        return []
+                counter = photos_tab.

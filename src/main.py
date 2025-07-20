@@ -20,6 +20,13 @@ def main():
 
         print("Парсинг основной страницы...")
         card_data = parse_yandex_card(url)
+        
+        # Проверяем на ошибку captcha
+        if card_data.get('error') == 'captcha_detected':
+            print("❌ Парсинг остановлен из-за captcha")
+            print("Попробуйте использовать другую ссылку или повторить позже")
+            return
+            
         print('DEBUG overview:', card_data.get('overview'))
 
         # Сохраняем основную карточку
