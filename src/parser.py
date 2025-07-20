@@ -1,3 +1,4 @@
+
 """
 parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью requests и BeautifulSoup
 """
@@ -7,17 +8,27 @@ import random
 import requests
 from bs4 import BeautifulSoup
 
-def parse_yandex_card_fallback(url: str) -> dict:
+def parse_yandex_card(url: str) -> dict:
     """
-    Упрощенный парсинг через requests + BeautifulSoup (fallback)
+    Парсит публичную страницу Яндекс.Карт и возвращает данные в виде словаря.
     """
-    print("Используем fallback-метод через requests...")
+    print(f"Начинаем парсинг: {url}")
+    
+    if not url or not url.startswith(('http://', 'https://')):
+        raise ValueError(f"Некорректная ссылка: {url}")
+    
+    print("Используем парсинг через requests + BeautifulSoup...")
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
-    response = requests.get(url, headers=headers, timeout=30)
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise Exception(f"Ошибка при загрузке страницы: {e}")
+    
     soup = BeautifulSoup(response.content, 'html.parser')
     
     data = {}
@@ -27,21 +38,29 @@ def parse_yandex_card_fallback(url: str) -> dict:
     title_el = soup.find('h1')
     data['title'] = title_el.get_text().strip() if title_el else ''
     
-    # Адрес (упрощенно)
-    addr_el = soup.find('a', {'class': lambda x: x and 'address' in x})
+    # Адрес
+    addr_el = soup.find('a', {'class': lambda x: x and 'address' in str(x).lower()})
+    if not addr_el:
+        addr_el = soup.find('span', {'class': lambda x: x and 'address' in str(x).lower()})
     data['address'] = addr_el.get_text().strip() if addr_el else ''
     
-    # Телефон (упрощенно)
+    # Телефон
     phone_el = soup.find('a', href=lambda x: x and x.startswith('tel:'))
     data['phone'] = phone_el.get_text().strip() if phone_el else ''
     
-    # Заполняем пустые поля
+    # Попытка найти рейтинг
+    rating_el = soup.find('span', {'class': lambda x: x and 'rating' in str(x).lower()})
+    data['rating'] = rating_el.get_text().strip() if rating_el else ''
+    
+    # Попытка найти сайт
+    site_el = soup.find('a', href=lambda x: x and ('http' in str(x) and 'yandex' not in str(x)))
+    data['site'] = site_el.get('href', '') if site_el else ''
+    
+    # Заполняем пустые поля стандартной структурой
     data.update({
-        'site': '',
         'hours': '',
         'hours_full': [],
         'categories': [],
-        'rating': '',
         'ratings_count': '',
         'reviews_count': '',
         'description': '',
@@ -75,17 +94,5 @@ def parse_yandex_card_fallback(url: str) -> dict:
         'social_links': data.get('social_links', [])
     }
     
+    print(f"Парсинг завершен. Найдено: название='{data['title']}', адрес='{data['address']}'")
     return data
-
-def parse_yandex_card(url: str) -> dict:
-    """
-    Парсит публичную страницу Яндекс.Карт и возвращает данные в виде словаря.
-    """
-    print(f"Начинаем парсинг: {url}")
-    
-    if not url or not url.startswith(('http://', 'https://')):
-        raise ValueError(f"Некорректная ссылка: {url}")
-    
-    # Используем requests как основной метод парсинга
-    return parse_yandex_card_fallback(url)
-             
