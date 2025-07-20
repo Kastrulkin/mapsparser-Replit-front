@@ -56,6 +56,13 @@ def parse_yandex_card(url: str) -> dict:
                 print("2. Попробовать позже")
                 print("3. Использовать другую ссылку")
                 return {"error": "captcha_detected", "url": url}
+                
+        except Exception as e:
+            print(f"Ошибка при парсинге: {e}")
+            return {"error": str(e), "url": url}
+        finally:
+            if browser:
+                browser.close()
 
 def parse_reviews(page):
     """Парсинг отзывов"""
