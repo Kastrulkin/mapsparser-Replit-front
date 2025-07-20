@@ -4,10 +4,12 @@ parser.py — Модуль для парсинга публичной стран
 """
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
 import random
@@ -23,17 +25,38 @@ def parse_yandex_card(url: str) -> dict:
     
     print("Используем парсинг через Selenium...")
     
-    # Настройка Chrome в headless режиме
+    # Настройка Chrome в headless режиме для Replit
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--disable-setuid-sandbox")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
     chrome_options.add_argument("--accept-lang=ru-RU,ru;q=0.9,en;q=0.8")
     
-    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        # Используем WebDriverManager для автоматической установки ChromeDriver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        print(f"Ошибка при инициализации Chrome: {e}")
+        # Пробуем использовать системный chromium
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        try:
+            service = Service(ChromeDriverManager(chrome_type='chromium').install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e2:
+            print(f"Ошибка при инициализации Chromium: {e2}")
+            raise Exception(f"Не удалось запустить браузер: {e}, {e2}")
     
     try:
         driver.get(url)
