@@ -193,7 +193,7 @@
             {% if f.bool and f.bool|length > 0 %}
             <ul>
                 {% for b in f.bool %}
-                <li>{{ b.text }}{% if b.defined %} <b>(особая)</b>{% endif %}</li>
+                <li>{% if b.text %}{{ b.text }}{% else %}{{ b }}{% endif %}{% if b.defined %} <b>(особая)</b>{% endif %}</li>
                 {% endfor %}
             </ul>
             {% else %}<p>Нет булевых особенностей</p>{% endif %}
