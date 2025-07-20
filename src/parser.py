@@ -381,9 +381,83 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Инициализируем товары и услуги
-    data['products'] = []
-    data['product_categories'] = []
+    # Парсим товары и услуги
+    try:
+        # Переходим на вкладку "Услуги" или "Меню"
+        services_tab = page.query_selector("div.tabs-select-view__title._name_services, div[role='tab']:has-text('Услуги'), button:has-text('Услуги'), div[role='tab']:has-text('Меню'), button:has-text('Меню')")
+        if services_tab:
+            services_tab.click()
+            print("Клик по вкладке 'Услуги/Меню'")
+            page.wait_for_timeout(2000)
+            
+            # Скроллим для загрузки услуг
+            for i in range(10):
+                page.mouse.wheel(0, 1000)
+                time.sleep(1)
+            
+            products = []
+            product_categories = []
+            
+            # Ищем категории услуг
+            category_blocks = page.query_selector_all("div.services-list-category-view, div[class*='service-category'], div[class*='menu-category']")
+            
+            for cat_block in category_blocks:
+                try:
+                    # Название категории
+                    cat_name_elem = cat_block.query_selector("h3, h4, div.services-list-category-view__title, span[class*='category-title']")
+                    cat_name = cat_name_elem.inner_text().strip() if cat_name_elem else "Без категории"
+                    
+                    if cat_name not in product_categories:
+                        product_categories.append(cat_name)
+                    
+                    # Товары/услуги в категории
+                    items = []
+                    service_items = cat_block.query_selector_all("div.services-list-item-view, div[class*='service-item'], div[class*='menu-item']")
+                    
+                    for item in service_items:
+                        try:
+                            name_elem = item.query_selector("div.services-list-item-view__title, span[class*='item-title'], h5")
+                            name = name_elem.inner_text().strip() if name_elem else ""
+                            
+                            desc_elem = item.query_selector("div.services-list-item-view__description, span[class*='description']")
+                            description = desc_elem.inner_text().strip() if desc_elem else ""
+                            
+                            price_elem = item.query_selector("div.services-list-item-view__price, span[class*='price']")
+                            price = price_elem.inner_text().strip() if price_elem else ""
+                            
+                            duration_elem = item.query_selector("div.services-list-item-view__duration, span[class*='duration']")
+                            duration = duration_elem.inner_text().strip() if duration_elem else ""
+                            
+                            photo_elem = item.query_selector("img")
+                            photo = photo_elem.get_attribute('src') if photo_elem else ""
+                            
+                            if name:
+                                items.append({
+                                    "name": name,
+                                    "description": description,
+                                    "price": price,
+                                    "duration": duration,
+                                    "photo": photo
+                                })
+                        except Exception:
+                            continue
+                    
+                    if items:
+                        products.append({
+                            "category": cat_name,
+                            "items": items
+                        })
+                except Exception:
+                    continue
+            
+            data['products'] = products
+            data['product_categories'] = product_categories
+        else:
+            data['products'] = []
+            data['product_categories'] = []
+    except Exception:
+        data['products'] = []
+        data['product_categories'] = []
 
     return data
 
@@ -454,17 +528,34 @@ def parse_reviews(page):
                 try:
                     # Имя автора
                     author = ""
-                    author_elem = block.query_selector("div.business-review-view__author span, span[class*='author'], div[class*='username']")
+                    author_elem = block.query_selector("div.business-review-view__author span, span.business-review-view__author-name, div.business-review-view__author")
                     if author_elem:
                         author = author_elem.inner_text().strip()
+                    
+                    if not author:
+                        # Альтернативный селектор для имени
+                        author_elem = block.query_selector("span[class*='author'], div[class*='username'], [data-bem*='author']")
+                        if author_elem:
+                            author = author_elem.inner_text().strip()
 
                     # Дата
-                    date_el = block.query_selector("div.business-review-view__date, span[class*='date']")
+                    date_el = block.query_selector("div.business-review-view__date, span.business-review-view__date, span[class*='date']")
                     date = date_el.inner_text().strip() if date_el else ""
 
-                    # Рейтинг
-                    rating_els = block.query_selector_all("span.business-rating-view__star._fill, span[class*='star-fill']")
+                    # Рейтинг (звёзды)
+                    rating = 0
+                    rating_els = block.query_selector_all("span.business-rating-view__star._fill, span[class*='star-fill'], span[class*='rating-star'][class*='fill']")
                     rating = len(rating_els)
+                    
+                    # Если не нашли звёзды, ищем текстовый рейтинг
+                    if rating == 0:
+                        rating_text_elem = block.query_selector("span[class*='rating-text'], div[class*='score']")
+                        if rating_text_elem:
+                            rating_text = rating_text_elem.inner_text().strip()
+                            try:
+                                rating = int(float(rating_text.replace(',', '.')))
+                            except:
+                                rating = 0
 
                     # Текст отзыва
                     text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
@@ -553,19 +644,40 @@ def parse_photos(page):
         if photos_tab:
             photos_tab.click()
             print("Клик по вкладке 'Фото'")
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(2000)
 
             # Скролл для загрузки фото
-            for i in range(20):
-                page.mouse.wheel(0, 1000)
-                time.sleep(1.5)
+            for i in range(30):
+                page.mouse.wheel(0, 1500)
+                time.sleep(2)
 
         photos = []
-        img_elems = page.query_selector_all("img.image__img, img[src*='avatars.mds.yandex.net'], img[src*='yandex.ru']")
-        for img in img_elems:
-            src = img.get_attribute('src')
-            if src and src not in photos:
-                photos.append(src)
+        # Расширенный поиск изображений
+        img_selectors = [
+            "img.image__img",
+            "img[src*='avatars.mds.yandex.net']",
+            "img[src*='yandex.ru']",
+            "img[src*='maps-photo']", 
+            "div.photo-card img",
+            "div.gallery-item img",
+            "div[class*='photo'] img",
+            "div[class*='image'] img"
+        ]
+        
+        for selector in img_selectors:
+            img_elems = page.query_selector_all(selector)
+            for img in img_elems:
+                src = img.get_attribute('src')
+                if src and src not in photos and ('avatars.mds.yandex' in src or 'yandex.ru' in src):
+                    # Увеличиваем размер изображения если возможно
+                    if '/L/' in src:
+                        src = src.replace('/L/', '/XL/')
+                    elif '/M/' in src:
+                        src = src.replace('/M/', '/XL/')
+                    elif '/S/' in src:
+                        src = src.replace('/S/', '/XL/')
+                    photos.append(src)
+        
         return photos
     except Exception:
         return []
