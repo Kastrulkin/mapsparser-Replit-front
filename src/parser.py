@@ -646,24 +646,24 @@ def parse_yandex_card(url: str) -> dict:
             print(f"Ошибка при парсинге конкурентов: {e}")
 
         data['competitors'] = competitors
-            data['url'] = url
-            
-            # Отладочная информация
-            print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
-            print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
-            print(f"DEBUG: hours = '{data.get('hours', '')}'")
-            print(f"DEBUG: competitors found = {len(competitors)}")
-            
-            # Формируем overview для отчёта
-            overview_keys = [
-                'title', 'address', 'phone', 'site', 'description',
-                'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
-            ]
-            data['overview'] = {k: data.get(k, '') for k in overview_keys}
-            
-            browser.close()
-            print("Парсинг завершён успешно")
-            return data
+        data['url'] = url
+        
+        # Отладочная информация
+        print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
+        print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
+        print(f"DEBUG: hours = '{data.get('hours', '')}'")
+        print(f"DEBUG: competitors found = {len(competitors)}")
+        
+        # Формируем overview для отчёта
+        overview_keys = [
+            'title', 'address', 'phone', 'site', 'description',
+            'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
+        ]
+        data['overview'] = {k: data.get(k, '') for k in overview_keys}
+        
+        browser.close()
+        print("Парсинг завершён успешно")
+        return data
         
     except Exception as e:
         print(f"Ошибка при парсинге через Playwright: {type(e).__name__}: {str(e)}")
