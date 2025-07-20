@@ -5,7 +5,7 @@ channel = "stable-24_05"
 packages = ["geckodriver", "gitFull", "glibcLocales", "playwright-driver", "xcodebuild", "zlib"]
 
 [workflows]
-runButton = "Запуск парсера"
+runButton = "Автообновляемый веб-сервер"
 
 [[workflows.workflow]]
 name = "Запуск парсера"
@@ -24,6 +24,15 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python -m http.server 5000"
+
+[[workflows.workflow]]
+name = "Автообновляемый веб-сервер"
+author = 18583526
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_server.py"
 
 [[ports]]
 localPort = 5000
