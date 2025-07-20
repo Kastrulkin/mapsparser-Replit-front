@@ -649,17 +649,32 @@ def parse_yandex_card(url: str) -> dict:
         data['url'] = url
         
         # Отладочная информация
+        print(f"DEBUG: title = '{data.get('title', '')}'")
+        print(f"DEBUG: address = '{data.get('address', '')}'")
+        print(f"DEBUG: phone = '{data.get('phone', '')}'")
+        print(f"DEBUG: site = '{data.get('site', '')}'")
+        print(f"DEBUG: rating = '{data.get('rating', '')}'")
         print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
         print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
         print(f"DEBUG: hours = '{data.get('hours', '')}'")
         print(f"DEBUG: competitors found = {len(competitors)}")
+        print(f"DEBUG: overview = {data.get('overview', {})}")
         
-        # Формируем overview для отчёта
-        overview_keys = [
-            'title', 'address', 'phone', 'site', 'description',
-            'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
-        ]
-        data['overview'] = {k: data.get(k, '') for k in overview_keys}
+        # Формируем overview для отчёта - копируем все основные данные
+        data['overview'] = {
+            'title': data.get('title', ''),
+            'address': data.get('address', ''),
+            'phone': data.get('phone', ''),
+            'site': data.get('site', ''),
+            'description': data.get('description', ''),
+            'categories': data.get('categories', []),
+            'hours': data.get('hours', ''),
+            'hours_full': data.get('hours_full', []),
+            'rating': data.get('rating', ''),
+            'ratings_count': data.get('ratings_count', ''),
+            'reviews_count': data.get('reviews_count', ''),
+            'social_links': data.get('social_links', [])
+        }
         
         browser.close()
         print("Парсинг завершён успешно")
