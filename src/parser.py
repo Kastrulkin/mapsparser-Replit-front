@@ -23,6 +23,7 @@ def parse_yandex_card(url: str) -> dict:
         try:
             # Правильные переменные окружения для Replit
             os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/home/runner/.cache/ms-playwright'
+            os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '0'
             
             browser = None
             browser_name = ""
