@@ -1,12 +1,11 @@
 
 """
-parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью requests и BeautifulSoup
+parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Playwright
 """
+from playwright.sync_api import sync_playwright
 import time
 import re
 import random
-import requests
-from bs4 import BeautifulSoup
 
 def parse_yandex_card(url: str) -> dict:
     """
@@ -17,82 +16,381 @@ def parse_yandex_card(url: str) -> dict:
     if not url or not url.startswith(('http://', 'https://')):
         raise ValueError(f"Некорректная ссылка: {url}")
     
-    print("Используем парсинг через requests + BeautifulSoup...")
+    print("Используем парсинг через Playwright...")
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        raise Exception(f"Ошибка при загрузке страницы: {e}")
-    
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)  # Запуск в скрытом режиме
+        page = browser.new_page()
+        
+        # Устанавливаем русский язык
+        page.set_extra_http_headers({
+            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
+        })
+        
+        try:
+            page.goto(url, timeout=60000)
+            page.wait_for_timeout(4000)  # Дать странице прогрузиться
+            
+            # Переход на вкладку 'Обзор'
+            overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
+            if overview_tab:
+                overview_tab.click()
+                print("Клик по вкладке 'Обзор'")
+                page.wait_for_timeout(1500)
+            
+            # Скроллим для подгрузки контента
+            page.mouse.wheel(0, 2000)
+            time.sleep(2)
+            
+            data = parse_overview_data(page)
+            data['url'] = url
+            
+            # Дополнительные данные
+            data['photos_count'] = get_photos_count(page)
+            data['news'] = parse_news(page)
+            data['reviews'] = parse_reviews(page)
+            data['features_full'] = parse_features(page)
+            data['competitors'] = parse_competitors(page)
+            
+            # Создаем overview для отчета
+            data['overview'] = {
+                'title': data.get('title', ''),
+                'address': data.get('address', ''),
+                'phone': data.get('phone', ''),
+                'site': data.get('site', ''),
+                'description': data.get('description', ''),
+                'categories': data.get('categories', []),
+                'hours': data.get('hours', ''),
+                'hours_full': data.get('hours_full', []),
+                'rating': data.get('rating', ''),
+                'ratings_count': data.get('ratings_count', ''),
+                'reviews_count': data.get('reviews_count', ''),
+                'social_links': data.get('social_links', [])
+            }
+            
+            browser.close()
+            print(f"Парсинг завершен. Найдено: название='{data['title']}', адрес='{data['address']}'")
+            return data
+            
+        except Exception as e:
+            browser.close()
+            raise Exception(f"Ошибка при парсинге: {e}")
+
+def parse_overview_data(page):
+    """Парсит основные данные с вкладки Обзор"""
     data = {}
-    data['url'] = url
     
-    # Базовая информация
-    title_el = soup.find('h1')
-    data['title'] = title_el.get_text().strip() if title_el else ''
+    # Название
+    try:
+        title_el = page.query_selector("h1")
+        data['title'] = title_el.inner_text().strip() if title_el else ''
+    except Exception:
+        data['title'] = ''
     
-    # Адрес
-    addr_el = soup.find('a', {'class': lambda x: x and 'address' in str(x).lower()})
-    if not addr_el:
-        addr_el = soup.find('span', {'class': lambda x: x and 'address' in str(x).lower()})
-    data['address'] = addr_el.get_text().strip() if addr_el else ''
+    # Адрес (на русском языке)
+    try:
+        addr_el = page.query_selector("[class*='business-contacts-view__address'] span")
+        data['address'] = addr_el.inner_text().strip() if addr_el else ''
+    except Exception:
+        data['address'] = ''
+    
+    # Клик по кнопке "Показать телефон"
+    try:
+        show_phone_btn = page.query_selector("button:has-text('Показать телефон')")
+        if show_phone_btn:
+            show_phone_btn.click()
+            page.wait_for_timeout(1000)
+    except Exception:
+        pass
     
     # Телефон
-    phone_el = soup.find('a', href=lambda x: x and x.startswith('tel:'))
-    data['phone'] = phone_el.get_text().strip() if phone_el else ''
+    try:
+        phone_el = page.query_selector("a[href^='tel:']")
+        data['phone'] = phone_el.inner_text().strip() if phone_el else ''
+    except Exception:
+        data['phone'] = ''
     
-    # Попытка найти рейтинг
-    rating_el = soup.find('span', {'class': lambda x: x and 'rating' in str(x).lower()})
-    data['rating'] = rating_el.get_text().strip() if rating_el else ''
+    # Сайт
+    try:
+        site_el = page.query_selector("a.business-urls-view__text")
+        data['site'] = site_el.get_attribute('href') if site_el else ''
+    except Exception:
+        data['site'] = ''
     
-    # Попытка найти сайт
-    site_el = soup.find('a', href=lambda x: x and ('http' in str(x) and 'yandex' not in str(x)))
-    data['site'] = site_el.get('href', '') if site_el else ''
+    # Описание
+    try:
+        desc_el = page.query_selector("[class*='card-about-view__description-text']")
+        data['description'] = desc_el.inner_text().strip() if desc_el else ''
+    except Exception:
+        data['description'] = ''
     
-    # Заполняем пустые поля стандартной структурой
-    data.update({
-        'hours': '',
-        'hours_full': [],
-        'categories': [],
-        'ratings_count': '',
-        'reviews_count': '',
-        'description': '',
-        'photos_count': 0,
-        'social_links': [],
-        'nearest_metro': {'name': '', 'distance': ''},
-        'nearest_stop': {'name': '', 'distance': ''},
-        'products': [],
-        'product_categories': [],
-        'news': [],
-        'photos': [],
-        'reviews': {'items': [], 'rating': '', 'reviews_count': ''},
-        'features': [],
-        'features_full': {"bool": [], "valued": [], "prices": [], "categories": []},
-        'competitors': []
-    })
+    # Категории
+    try:
+        cats = page.query_selector_all("[class*='business-card-title-view__categories'] span")
+        data['categories'] = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
+    except Exception:
+        data['categories'] = []
     
-    # Формируем overview для отчёта
-    data['overview'] = {
-        'title': data.get('title', ''),
-        'address': data.get('address', ''),
-        'phone': data.get('phone', ''),
-        'site': data.get('site', ''),
-        'description': data.get('description', ''),
-        'categories': data.get('categories', []),
-        'hours': data.get('hours', ''),
-        'hours_full': data.get('hours_full', []),
-        'rating': data.get('rating', ''),
-        'ratings_count': data.get('ratings_count', ''),
-        'reviews_count': data.get('reviews_count', ''),
-        'social_links': data.get('social_links', [])
-    }
+    # Рейтинг
+    try:
+        rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
+        data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+    except Exception:
+        data['rating'] = ''
     
-    print(f"Парсинг завершен. Найдено: название='{data['title']}', адрес='{data['address']}'")
+    # Количество оценок
+    try:
+        ratings_count_el = page.query_selector("div.business-header-rating-view__text._clickable")
+        if ratings_count_el:
+            text = ratings_count_el.inner_text()
+            match = re.search(r"(\d+)", text.replace('\xa0', ' '))
+            data['ratings_count'] = match.group(1) if match else ''
+        else:
+            data['ratings_count'] = ''
+    except Exception:
+        data['ratings_count'] = ''
+    
+    # Количество отзывов
+    try:
+        reviews_count_el = page.query_selector("span:has-text('отзыв')")
+        if reviews_count_el:
+            text = reviews_count_el.inner_text()
+            match = re.search(r"(\d+)", text)
+            data['reviews_count'] = match.group(1) if match else ''
+        else:
+            data['reviews_count'] = ''
+    except Exception:
+        data['reviews_count'] = ''
+    
+    # Часы работы (краткие)
+    try:
+        hours_el = page.query_selector("[class*='business-hours-text']")
+        data['hours'] = hours_el.inner_text().strip() if hours_el else ''
+    except Exception:
+        data['hours'] = ''
+    
+    # Полное расписание
+    try:
+        full_schedule = []
+        schedule_items = page.query_selector_all("[class*='business-hours-view__day']")
+        for item in schedule_items:
+            day_el = item.query_selector("[class*='business-hours-view__day-name']")
+            time_el = item.query_selector("[class*='business-hours-view__hours']")
+            day = day_el.inner_text().strip() if day_el else ''
+            work_time = time_el.inner_text().strip() if time_el else ''
+            if day and work_time:
+                full_schedule.append(f"{day}: {work_time}")
+        data['hours_full'] = full_schedule
+    except Exception:
+        data['hours_full'] = []
+    
+    # Ближайшее метро
+    try:
+        metro_el = page.query_selector("[class*='metro-station']")
+        if metro_el:
+            metro_name = metro_el.inner_text().strip()
+            distance_el = metro_el.query_selector("[class*='distance']")
+            distance = distance_el.inner_text().strip() if distance_el else ''
+            data['nearest_metro'] = {'name': metro_name, 'distance': distance}
+        else:
+            data['nearest_metro'] = {'name': '', 'distance': ''}
+    except Exception:
+        data['nearest_metro'] = {'name': '', 'distance': ''}
+    
+    # Ближайшая остановка
+    try:
+        stop_el = page.query_selector("[class*='transport-stop']")
+        if stop_el:
+            stop_name = stop_el.inner_text().strip()
+            distance_el = stop_el.query_selector("[class*='distance']")
+            distance = distance_el.inner_text().strip() if distance_el else ''
+            data['nearest_stop'] = {'name': stop_name, 'distance': distance}
+        else:
+            data['nearest_stop'] = {'name': '', 'distance': ''}
+    except Exception:
+        data['nearest_stop'] = {'name': '', 'distance': ''}
+    
+    # Социальные сети
+    try:
+        social_links = []
+        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru']")
+        for el in social_els:
+            href = el.get_attribute('href')
+            if href:
+                social_links.append(href)
+        data['social_links'] = social_links
+    except Exception:
+        data['social_links'] = []
+    
+    # Товары и услуги
+    data['products'] = []
+    data['product_categories'] = []
+    
     return data
+
+def get_photos_count(page):
+    """Получает количество фотографий"""
+    try:
+        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
+        if photos_tab:
+            counter = photos_tab.query_selector("div.tabs-select-view__counter")
+            if counter:
+                return int(counter.inner_text().strip())
+    except Exception:
+        pass
+    return 0
+
+def parse_news(page):
+    """Парсит новости"""
+    try:
+        news_tab = page.query_selector("div[role='tab']:has-text('Лента'), button:has-text('Лента')")
+        if news_tab:
+            news_tab.click()
+            page.wait_for_timeout(1500)
+        
+        news = []
+        news_blocks = page.query_selector_all("[class*='feed-post-view']")
+        for block in news_blocks:
+            try:
+                title_elem = block.query_selector("[class*='feed-post-view__title']")
+                title = title_elem.inner_text() if title_elem else ""
+                
+                text_elem = block.query_selector("[class*='feed-post-view__text']")
+                text = text_elem.inner_text() if text_elem else ""
+                
+                date_elem = block.query_selector("[class*='feed-post-view__date']")
+                date = date_elem.inner_text() if date_elem else ""
+                
+                photo_elem = block.query_selector("img")
+                photo = photo_elem.get_attribute('src') if photo_elem else ""
+                
+                news.append({
+                    "title": title,
+                    "text": text,
+                    "date": date,
+                    "photo": photo
+                })
+            except Exception:
+                continue
+        return news
+    except Exception:
+        return []
+
+def parse_reviews(page):
+    """Парсит отзывы"""
+    try:
+        reviews_tab = page.query_selector("div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
+        if reviews_tab:
+            reviews_tab.click()
+            page.wait_for_timeout(2000)
+        
+        reviews_data = {"items": [], "rating": "", "reviews_count": ""}
+        
+        # Рейтинг и количество отзывов
+        try:
+            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
+            reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+            
+            count_el = page.query_selector("span:has-text('отзыв')")
+            if count_el:
+                text = count_el.inner_text()
+                match = re.search(r"(\d+)", text)
+                reviews_data['reviews_count'] = match.group(1) if match else ''
+        except Exception:
+            pass
+        
+        # Отзывы
+        review_blocks = page.query_selector_all("[class*='business-review-view']")
+        for i, block in enumerate(review_blocks[:50]):  # Ограничиваем 50 отзывами
+            try:
+                author_el = block.query_selector("[class*='business-review-view__author']")
+                author = author_el.inner_text().strip() if author_el else f"Автор {i+1}"
+                
+                date_el = block.query_selector("[class*='business-review-view__date']")
+                date = date_el.inner_text().strip() if date_el else ""
+                
+                rating_el = block.query_selector("[class*='business-review-view__rating']")
+                rating = len(rating_el.query_selector_all("[class*='star-fill']")) if rating_el else 0
+                
+                text_el = block.query_selector("[class*='business-review-view__body']")
+                text = text_el.inner_text().strip() if text_el else ""
+                
+                reply_el = block.query_selector("[class*='business-review-view__reply']")
+                reply = reply_el.inner_text().strip() if reply_el else ""
+                
+                reviews_data['items'].append({
+                    "author": author,
+                    "date": date,
+                    "rating": rating,
+                    "text": text,
+                    "reply": reply
+                })
+            except Exception:
+                continue
+        
+        return reviews_data
+    except Exception:
+        return {"items": [], "rating": "", "reviews_count": ""}
+
+def parse_features(page):
+    """Парсит особенности"""
+    try:
+        features_tab = page.query_selector("div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
+        if features_tab:
+            features_tab.click()
+            page.wait_for_timeout(1500)
+        
+        features_data = {"bool": [], "valued": [], "prices": [], "categories": []}
+        
+        feature_blocks = page.query_selector_all("[class*='features-view__item']")
+        for block in feature_blocks:
+            try:
+                name_el = block.query_selector("[class*='features-view__name']")
+                name = name_el.inner_text().strip() if name_el else ""
+                
+                value_el = block.query_selector("[class*='features-view__value']")
+                value = value_el.inner_text().strip() if value_el else ""
+                
+                if name:
+                    if value:
+                        features_data['valued'].append(f"{name}: {value}")
+                    else:
+                        features_data['bool'].append(name)
+            except Exception:
+                continue
+        
+        return features_data
+    except Exception:
+        return {"bool": [], "valued": [], "prices": [], "categories": []}
+
+def parse_competitors(page):
+    """Парсит конкурентов из раздела 'Похожие места рядом'"""
+    try:
+        # Ищем блок с похожими местами
+        similar_section = page.query_selector("[class*='card-similar'], [class*='similar-places']")
+        if not similar_section:
+            return []
+        
+        competitors = []
+        competitor_blocks = similar_section.query_selector_all("a[href*='/org/']")
+        
+        for block in competitor_blocks[:5]:  # Ограничиваем 5 конкурентами
+            try:
+                href = block.get_attribute('href')
+                if href and not href.startswith('http'):
+                    href = f"https://yandex.ru{href}"
+                
+                title_el = block.query_selector("[class*='title'], h3, h4")
+                title = title_el.inner_text().strip() if title_el else ""
+                
+                if title and href:
+                    competitors.append({
+                        "title": title,
+                        "url": href
+                    })
+            except Exception:
+                continue
+        
+        return competitors
+    except Exception:
+        return []
