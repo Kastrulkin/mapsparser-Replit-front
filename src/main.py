@@ -66,6 +66,26 @@ def main():
         print("Анализ данных...")
         analysis = analyze_card(card_data)
 
+        # Обновляем количество отзывов из секции отзывов
+        if card_data.get('reviews', {}).get('reviews_count'):
+            card_data['reviews_count'] = card_data['reviews']['reviews_count']
+
+        # Создаем overview для отчета
+        card_data['overview'] = {
+            'title': card_data.get('title', ''),
+            'address': card_data.get('address', ''),
+            'phone': card_data.get('phone', ''),
+            'site': card_data.get('site', ''),
+            'description': card_data.get('description', ''),
+            'categories': card_data.get('categories', []),
+            'hours': card_data.get('hours', ''),
+            'hours_full': card_data.get('hours_full', []),
+            'rating': card_data.get('rating', ''),
+            'ratings_count': card_data.get('ratings_count', ''),
+            'reviews_count': card_data.get('reviews_count', ''),
+            'social_links': card_data.get('social_links', [])
+        }
+
         print("Генерация отчёта...")
         # Передаём данные конкурента в отчёт
         report_path = generate_html_report(card_data, analysis, competitor_data)
