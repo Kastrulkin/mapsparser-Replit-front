@@ -2,10 +2,11 @@
 """
 parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Playwright
 """
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
 import re
 import random
+import os
 
 def parse_yandex_card(url: str) -> dict:
     """
@@ -20,75 +21,177 @@ def parse_yandex_card(url: str) -> dict:
     
     with sync_playwright() as p:
         try:
-            # Пробуем разные браузеры в порядке предпочтения
+            # Устанавливаем переменные окружения для Replit
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/home/runner/.cache/ms-playwright'
+            
             browser = None
             browser_name = ""
             
-            # Сначала пробуем Firefox
+            # Попытка запуска Chromium (наиболее стабильный в Replit)
             try:
-                browser = p.firefox.launch(
+                browser = p.chromium.launch(
                     headless=True,
                     args=[
                         '--no-sandbox',
-                        '--disable-dev-shm-usage'
-                    ]
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-web-security',
+                        '--disable-features=VizDisplayCompositor',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-extensions',
+                        '--disable-plugins',
+                        '--disable-sync',
+                        '--disable-translate',
+                        '--disable-notifications',
+                        '--disable-permissions-api',
+                        '--disable-default-apps',
+                        '--no-first-run',
+                        '--no-default-browser-check',
+                        '--disable-background-networking'
+                    ],
+                    ignore_default_args=['--enable-automation'],
+                    chromium_sandbox=False
                 )
-                browser_name = "Firefox"
-                print("Используем Firefox")
+                browser_name = "Chromium"
+                print("Используем Chromium")
             except Exception as e:
-                print(f"Firefox недоступен: {e}")
+                print(f"Chromium недоступен: {e}")
                 
-                # Пробуем Chromium
+                # Если Chromium не работает, пробуем Firefox
                 try:
-                    browser = p.chromium.launch(
+                    browser = p.firefox.launch(
                         headless=True,
                         args=[
                             '--no-sandbox',
                             '--disable-dev-shm-usage',
-                            '--disable-gpu',
-                            '--disable-features=VizDisplayCompositor'
-                        ]
+                            '--disable-gpu'
+                        ],
+                        firefox_user_prefs={
+                            'dom.webdriver.enabled': False,
+                            'useAutomationExtension': False
+                        }
                     )
-                    browser_name = "Chromium"
-                    print("Используем Chromium")
+                    browser_name = "Firefox"
+                    print("Используем Firefox")
                 except Exception as e2:
-                    print(f"Chromium недоступен: {e2}")
+                    print(f"Firefox недоступен: {e2}")
                     
                     # В крайнем случае пробуем WebKit
                     try:
-                        browser = p.webkit.launch(headless=True)
+                        browser = p.webkit.launch(
+                            headless=True,
+                            args=['--no-sandbox']
+                        )
                         browser_name = "WebKit"
                         print("Используем WebKit")
                     except Exception as e3:
-                        raise Exception(f"Все браузеры недоступны: Firefox={e}, Chromium={e2}, WebKit={e3}")
+                        # Если и WebKit не работает, пробуем установить браузеры
+                        print("Устанавливаем браузеры...")
+                        os.system('playwright install chromium')
+                        
+                        # Повторная попытка с Chromium
+                        try:
+                            browser = p.chromium.launch(
+                                headless=True,
+                                args=[
+                                    '--no-sandbox',
+                                    '--disable-setuid-sandbox',
+                                    '--disable-dev-shm-usage',
+                                    '--disable-gpu'
+                                ]
+                            )
+                            browser_name = "Chromium (установлен)"
+                            print("Используем установленный Chromium")
+                        except Exception as e4:
+                            raise Exception(f"Все браузеры недоступны: Chromium={e}, Firefox={e2}, WebKit={e3}, Chromium-retry={e4}")
             
             if not browser:
                 raise Exception("Не удалось запустить ни один браузер")
                 
+            # Создаем контекст с антидетектом
             context = browser.new_context(
                 user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 locale='ru-RU',
-                timezone_id='Europe/Moscow'
+                timezone_id='Europe/Moscow',
+                viewport={'width': 1920, 'height': 1080},
+                screen={'width': 1920, 'height': 1080},
+                device_scale_factor=1,
+                is_mobile=False,
+                has_touch=False,
+                color_scheme='light',
+                reduced_motion='no-preference',
+                forced_colors='none',
+                extra_http_headers={
+                    'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-User': '?1',
+                    'Sec-Fetch-Dest': 'document'
+                }
             )
+            
+            # Добавляем JavaScript для скрытия автоматизации
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                });
+                
+                delete navigator.__proto__.webdriver;
+                
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5],
+                });
+                
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['ru-RU', 'ru', 'en'],
+                });
+                
+                window.chrome = {
+                    runtime: {}
+                };
+                
+                Object.defineProperty(navigator, 'permissions', {
+                    get: () => ({
+                        query: () => Promise.resolve({ state: 'granted' }),
+                    }),
+                });
+            """)
             
             page = context.new_page()
             
-            # Переходим на страницу
-            page.goto(url, wait_until='networkidle', timeout=30000)
-            time.sleep(3)
+            # Устанавливаем дополнительные заголовки
+            page.set_extra_http_headers({
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            })
+            
+            # Переходим на страницу с увеличенным таймаутом
+            print("Переходим на страницу...")
+            page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            
+            # Ждем загрузки контента
+            time.sleep(random.uniform(3, 5))
             
             # Переход на вкладку 'Обзор'
             try:
+                page.wait_for_selector("body", timeout=10000)
                 overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
                 if overview_tab:
                     overview_tab.click()
                     print("Клик по вкладке 'Обзор'")
-                    page.wait_for_timeout(1500)
-            except Exception:
-                print("Вкладка 'Обзор' не найдена, продолжаем")
+                    page.wait_for_timeout(2000)
+            except Exception as e:
+                print(f"Вкладка 'Обзор' не найдена: {e}")
             
             # Скроллим для подгрузки контента
-            page.mouse.wheel(0, 2000)
+            page.mouse.wheel(0, 1000)
+            time.sleep(2)
+            page.mouse.wheel(0, 1000)
             time.sleep(2)
             
             data = parse_overview_data(page)
@@ -121,6 +224,10 @@ def parse_yandex_card(url: str) -> dict:
             print(f"Парсинг завершен ({browser_name}). Найдено: название='{data['title']}', адрес='{data['address']}'")
             return data
             
+        except PlaywrightTimeoutError as e:
+            if browser:
+                browser.close()
+            raise Exception(f"Тайм-аут при загрузке страницы: {e}")
         except Exception as e:
             if browser:
                 browser.close()
