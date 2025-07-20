@@ -1,4 +1,42 @@
-modules = ["web", "python-3.12"]
+
+modules = ["python-3.12"]
 
 [nix]
 channel = "stable-24_05"
+
+[[workflows.workflow]]
+name = "Запуск парсера"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd src && python3.12 main.py"
+
+[[workflows.workflow]]
+name = "Веб-сервер"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3.12 -m http.server 5000"
+
+[[workflows.workflow]]
+name = "Автообновляемый веб-сервер"
+author = "agent"
+runButton = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3.12 web_server.py"
+
+[[workflows.workflow]]
+name = "Установка Playwright"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd src && python3.12 -m playwright install"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
