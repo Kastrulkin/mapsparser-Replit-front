@@ -1,8 +1,13 @@
 
 """
-parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Playwright
+parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Selenium
 """
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import re
 import random
@@ -16,210 +21,225 @@ def parse_yandex_card(url: str) -> dict:
     if not url or not url.startswith(('http://', 'https://')):
         raise ValueError(f"Некорректная ссылка: {url}")
     
-    print("Используем парсинг через Playwright...")
+    print("Используем парсинг через Selenium...")
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Запуск в скрытом режиме
-        page = browser.new_page()
+    # Настройка Chrome в headless режиме
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    chrome_options.add_argument("--accept-lang=ru-RU,ru;q=0.9,en;q=0.8")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    try:
+        driver.get(url)
+        time.sleep(4)  # Дать странице прогрузиться
         
-        # Устанавливаем русский язык
-        page.set_extra_http_headers({
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
-        })
-        
+        # Переход на вкладку 'Обзор'
         try:
-            page.goto(url, timeout=60000)
-            page.wait_for_timeout(4000)  # Дать странице прогрузиться
-            
-            # Переход на вкладку 'Обзор'
-            overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
-            if overview_tab:
-                overview_tab.click()
-                print("Клик по вкладке 'Обзор'")
-                page.wait_for_timeout(1500)
-            
-            # Скроллим для подгрузки контента
-            page.mouse.wheel(0, 2000)
-            time.sleep(2)
-            
-            data = parse_overview_data(page)
-            data['url'] = url
-            
-            # Дополнительные данные
-            data['photos_count'] = get_photos_count(page)
-            data['news'] = parse_news(page)
-            data['reviews'] = parse_reviews(page)
-            data['features_full'] = parse_features(page)
-            data['competitors'] = parse_competitors(page)
-            
-            # Создаем overview для отчета
-            data['overview'] = {
-                'title': data.get('title', ''),
-                'address': data.get('address', ''),
-                'phone': data.get('phone', ''),
-                'site': data.get('site', ''),
-                'description': data.get('description', ''),
-                'categories': data.get('categories', []),
-                'hours': data.get('hours', ''),
-                'hours_full': data.get('hours_full', []),
-                'rating': data.get('rating', ''),
-                'ratings_count': data.get('ratings_count', ''),
-                'reviews_count': data.get('reviews_count', ''),
-                'social_links': data.get('social_links', [])
-            }
-            
-            browser.close()
-            print(f"Парсинг завершен. Найдено: название='{data['title']}', адрес='{data['address']}'")
-            return data
-            
-        except Exception as e:
-            browser.close()
-            raise Exception(f"Ошибка при парсинге: {e}")
+            overview_tab = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'tabs-select-view__title') and contains(@class, '_name_overview')] | //div[@role='tab' and contains(text(), 'Обзор')] | //button[contains(text(), 'Обзор')]"))
+            )
+            overview_tab.click()
+            print("Клик по вкладке 'Обзор'")
+            time.sleep(1.5)
+        except TimeoutException:
+            print("Вкладка 'Обзор' не найдена, продолжаем без клика")
+        
+        # Скроллим для подгрузки контента
+        driver.execute_script("window.scrollTo(0, 2000);")
+        time.sleep(2)
+        
+        data = parse_overview_data(driver)
+        data['url'] = url
+        
+        # Дополнительные данные
+        data['photos_count'] = get_photos_count(driver)
+        data['news'] = parse_news(driver)
+        data['reviews'] = parse_reviews(driver)
+        data['features_full'] = parse_features(driver)
+        data['competitors'] = parse_competitors(driver)
+        
+        # Создаем overview для отчета
+        data['overview'] = {
+            'title': data.get('title', ''),
+            'address': data.get('address', ''),
+            'phone': data.get('phone', ''),
+            'site': data.get('site', ''),
+            'description': data.get('description', ''),
+            'categories': data.get('categories', []),
+            'hours': data.get('hours', ''),
+            'hours_full': data.get('hours_full', []),
+            'rating': data.get('rating', ''),
+            'ratings_count': data.get('ratings_count', ''),
+            'reviews_count': data.get('reviews_count', ''),
+            'social_links': data.get('social_links', [])
+        }
+        
+        driver.quit()
+        print(f"Парсинг завершен. Найдено: название='{data['title']}', адрес='{data['address']}'")
+        return data
+        
+    except Exception as e:
+        driver.quit()
+        raise Exception(f"Ошибка при парсинге: {e}")
 
-def parse_overview_data(page):
+def parse_overview_data(driver):
     """Парсит основные данные с вкладки Обзор"""
     data = {}
     
     # Название
     try:
-        title_el = page.query_selector("h1")
-        data['title'] = title_el.inner_text().strip() if title_el else ''
-    except Exception:
+        title_el = driver.find_element(By.TAG_NAME, "h1")
+        data['title'] = title_el.text.strip() if title_el else ''
+    except NoSuchElementException:
         data['title'] = ''
     
     # Адрес (на русском языке)
     try:
-        addr_el = page.query_selector("[class*='business-contacts-view__address'] span")
-        data['address'] = addr_el.inner_text().strip() if addr_el else ''
-    except Exception:
+        addr_el = driver.find_element(By.CSS_SELECTOR, "[class*='business-contacts-view__address'] span")
+        data['address'] = addr_el.text.strip() if addr_el else ''
+    except NoSuchElementException:
         data['address'] = ''
     
     # Клик по кнопке "Показать телефон"
     try:
-        show_phone_btn = page.query_selector("button:has-text('Показать телефон')")
-        if show_phone_btn:
-            show_phone_btn.click()
-            page.wait_for_timeout(1000)
-    except Exception:
+        show_phone_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Показать телефон')]")
+        show_phone_btn.click()
+        time.sleep(1)
+    except NoSuchElementException:
         pass
     
     # Телефон
     try:
-        phone_el = page.query_selector("a[href^='tel:']")
-        data['phone'] = phone_el.inner_text().strip() if phone_el else ''
-    except Exception:
+        phone_el = driver.find_element(By.CSS_SELECTOR, "a[href^='tel:']")
+        data['phone'] = phone_el.text.strip() if phone_el else ''
+    except NoSuchElementException:
         data['phone'] = ''
     
     # Сайт
     try:
-        site_el = page.query_selector("a.business-urls-view__text")
+        site_el = driver.find_element(By.CSS_SELECTOR, "a.business-urls-view__text")
         data['site'] = site_el.get_attribute('href') if site_el else ''
-    except Exception:
+    except NoSuchElementException:
         data['site'] = ''
     
     # Описание
     try:
-        desc_el = page.query_selector("[class*='card-about-view__description-text']")
-        data['description'] = desc_el.inner_text().strip() if desc_el else ''
-    except Exception:
+        desc_el = driver.find_element(By.CSS_SELECTOR, "[class*='card-about-view__description-text']")
+        data['description'] = desc_el.text.strip() if desc_el else ''
+    except NoSuchElementException:
         data['description'] = ''
     
     # Категории
     try:
-        cats = page.query_selector_all("[class*='business-card-title-view__categories'] span")
-        data['categories'] = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
-    except Exception:
+        cats = driver.find_elements(By.CSS_SELECTOR, "[class*='business-card-title-view__categories'] span")
+        data['categories'] = [c.text.strip() for c in cats if c.text.strip()]
+    except NoSuchElementException:
         data['categories'] = []
     
     # Рейтинг
     try:
-        rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-        data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
-    except Exception:
+        rating_el = driver.find_element(By.CSS_SELECTOR, "span.business-rating-badge-view__rating-text")
+        data['rating'] = rating_el.text.replace(',', '.').strip() if rating_el else ''
+    except NoSuchElementException:
         data['rating'] = ''
     
     # Количество оценок
     try:
-        ratings_count_el = page.query_selector("div.business-header-rating-view__text._clickable")
+        ratings_count_el = driver.find_element(By.CSS_SELECTOR, "div.business-header-rating-view__text._clickable")
         if ratings_count_el:
-            text = ratings_count_el.inner_text()
+            text = ratings_count_el.text
             match = re.search(r"(\d+)", text.replace('\xa0', ' '))
             data['ratings_count'] = match.group(1) if match else ''
         else:
             data['ratings_count'] = ''
-    except Exception:
+    except NoSuchElementException:
         data['ratings_count'] = ''
     
     # Количество отзывов
     try:
-        reviews_count_el = page.query_selector("span:has-text('отзыв')")
+        reviews_count_el = driver.find_element(By.XPATH, "//span[contains(text(), 'отзыв')]")
         if reviews_count_el:
-            text = reviews_count_el.inner_text()
+            text = reviews_count_el.text
             match = re.search(r"(\d+)", text)
             data['reviews_count'] = match.group(1) if match else ''
         else:
             data['reviews_count'] = ''
-    except Exception:
+    except NoSuchElementException:
         data['reviews_count'] = ''
     
     # Часы работы (краткие)
     try:
-        hours_el = page.query_selector("[class*='business-hours-text']")
-        data['hours'] = hours_el.inner_text().strip() if hours_el else ''
-    except Exception:
+        hours_el = driver.find_element(By.CSS_SELECTOR, "[class*='business-hours-text']")
+        data['hours'] = hours_el.text.strip() if hours_el else ''
+    except NoSuchElementException:
         data['hours'] = ''
     
     # Полное расписание
     try:
         full_schedule = []
-        schedule_items = page.query_selector_all("[class*='business-hours-view__day']")
+        schedule_items = driver.find_elements(By.CSS_SELECTOR, "[class*='business-hours-view__day']")
         for item in schedule_items:
-            day_el = item.query_selector("[class*='business-hours-view__day-name']")
-            time_el = item.query_selector("[class*='business-hours-view__hours']")
-            day = day_el.inner_text().strip() if day_el else ''
-            work_time = time_el.inner_text().strip() if time_el else ''
-            if day and work_time:
-                full_schedule.append(f"{day}: {work_time}")
+            try:
+                day_el = item.find_element(By.CSS_SELECTOR, "[class*='business-hours-view__day-name']")
+                time_el = item.find_element(By.CSS_SELECTOR, "[class*='business-hours-view__hours']")
+                day = day_el.text.strip() if day_el else ''
+                work_time = time_el.text.strip() if time_el else ''
+                if day and work_time:
+                    full_schedule.append(f"{day}: {work_time}")
+            except NoSuchElementException:
+                continue
         data['hours_full'] = full_schedule
-    except Exception:
+    except NoSuchElementException:
         data['hours_full'] = []
     
     # Ближайшее метро
     try:
-        metro_el = page.query_selector("[class*='metro-station']")
+        metro_el = driver.find_element(By.CSS_SELECTOR, "[class*='metro-station']")
         if metro_el:
-            metro_name = metro_el.inner_text().strip()
-            distance_el = metro_el.query_selector("[class*='distance']")
-            distance = distance_el.inner_text().strip() if distance_el else ''
+            metro_name = metro_el.text.strip()
+            try:
+                distance_el = metro_el.find_element(By.CSS_SELECTOR, "[class*='distance']")
+                distance = distance_el.text.strip() if distance_el else ''
+            except NoSuchElementException:
+                distance = ''
             data['nearest_metro'] = {'name': metro_name, 'distance': distance}
         else:
             data['nearest_metro'] = {'name': '', 'distance': ''}
-    except Exception:
+    except NoSuchElementException:
         data['nearest_metro'] = {'name': '', 'distance': ''}
     
     # Ближайшая остановка
     try:
-        stop_el = page.query_selector("[class*='transport-stop']")
+        stop_el = driver.find_element(By.CSS_SELECTOR, "[class*='transport-stop']")
         if stop_el:
-            stop_name = stop_el.inner_text().strip()
-            distance_el = stop_el.query_selector("[class*='distance']")
-            distance = distance_el.inner_text().strip() if distance_el else ''
+            stop_name = stop_el.text.strip()
+            try:
+                distance_el = stop_el.find_element(By.CSS_SELECTOR, "[class*='distance']")
+                distance = distance_el.text.strip() if distance_el else ''
+            except NoSuchElementException:
+                distance = ''
             data['nearest_stop'] = {'name': stop_name, 'distance': distance}
         else:
             data['nearest_stop'] = {'name': '', 'distance': ''}
-    except Exception:
+    except NoSuchElementException:
         data['nearest_stop'] = {'name': '', 'distance': ''}
     
     # Социальные сети
     try:
         social_links = []
-        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru']")
+        social_els = driver.find_elements(By.CSS_SELECTOR, "a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru']")
         for el in social_els:
             href = el.get_attribute('href')
             if href:
                 social_links.append(href)
         data['social_links'] = social_links
-    except Exception:
+    except NoSuchElementException:
         data['social_links'] = []
     
     # Товары и услуги
@@ -228,40 +248,41 @@ def parse_overview_data(page):
     
     return data
 
-def get_photos_count(page):
+def get_photos_count(driver):
     """Получает количество фотографий"""
     try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
+        photos_tab = driver.find_element(By.CSS_SELECTOR, "div.tabs-select-view__title._name_gallery")
         if photos_tab:
-            counter = photos_tab.query_selector("div.tabs-select-view__counter")
-            if counter:
-                return int(counter.inner_text().strip())
-    except Exception:
+            try:
+                counter = photos_tab.find_element(By.CSS_SELECTOR, "div.tabs-select-view__counter")
+                return int(counter.text.strip())
+            except NoSuchElementException:
+                pass
+    except NoSuchElementException:
         pass
     return 0
 
-def parse_news(page):
+def parse_news(driver):
     """Парсит новости"""
     try:
-        news_tab = page.query_selector("div[role='tab']:has-text('Лента'), button:has-text('Лента')")
-        if news_tab:
-            news_tab.click()
-            page.wait_for_timeout(1500)
+        news_tab = driver.find_element(By.XPATH, "//div[@role='tab' and contains(text(), 'Лента')] | //button[contains(text(), 'Лента')]")
+        news_tab.click()
+        time.sleep(1.5)
         
         news = []
-        news_blocks = page.query_selector_all("[class*='feed-post-view']")
+        news_blocks = driver.find_elements(By.CSS_SELECTOR, "[class*='feed-post-view']")
         for block in news_blocks:
             try:
-                title_elem = block.query_selector("[class*='feed-post-view__title']")
-                title = title_elem.inner_text() if title_elem else ""
+                title_elem = block.find_element(By.CSS_SELECTOR, "[class*='feed-post-view__title']")
+                title = title_elem.text if title_elem else ""
                 
-                text_elem = block.query_selector("[class*='feed-post-view__text']")
-                text = text_elem.inner_text() if text_elem else ""
+                text_elem = block.find_element(By.CSS_SELECTOR, "[class*='feed-post-view__text']")
+                text = text_elem.text if text_elem else ""
                 
-                date_elem = block.query_selector("[class*='feed-post-view__date']")
-                date = date_elem.inner_text() if date_elem else ""
+                date_elem = block.find_element(By.CSS_SELECTOR, "[class*='feed-post-view__date']")
+                date = date_elem.text if date_elem else ""
                 
-                photo_elem = block.query_selector("img")
+                photo_elem = block.find_element(By.TAG_NAME, "img")
                 photo = photo_elem.get_attribute('src') if photo_elem else ""
                 
                 news.append({
@@ -270,53 +291,52 @@ def parse_news(page):
                     "date": date,
                     "photo": photo
                 })
-            except Exception:
+            except NoSuchElementException:
                 continue
         return news
-    except Exception:
+    except NoSuchElementException:
         return []
 
-def parse_reviews(page):
+def parse_reviews(driver):
     """Парсит отзывы"""
     try:
-        reviews_tab = page.query_selector("div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
-        if reviews_tab:
-            reviews_tab.click()
-            page.wait_for_timeout(2000)
+        reviews_tab = driver.find_element(By.XPATH, "//div[@role='tab' and contains(text(), 'Отзывы')] | //button[contains(text(), 'Отзывы')]")
+        reviews_tab.click()
+        time.sleep(2)
         
         reviews_data = {"items": [], "rating": "", "reviews_count": ""}
         
         # Рейтинг и количество отзывов
         try:
-            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-            reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+            rating_el = driver.find_element(By.CSS_SELECTOR, "span.business-rating-badge-view__rating-text")
+            reviews_data['rating'] = rating_el.text.replace(',', '.').strip() if rating_el else ''
             
-            count_el = page.query_selector("span:has-text('отзыв')")
+            count_el = driver.find_element(By.XPATH, "//span[contains(text(), 'отзыв')]")
             if count_el:
-                text = count_el.inner_text()
+                text = count_el.text
                 match = re.search(r"(\d+)", text)
                 reviews_data['reviews_count'] = match.group(1) if match else ''
-        except Exception:
+        except NoSuchElementException:
             pass
         
         # Отзывы
-        review_blocks = page.query_selector_all("[class*='business-review-view']")
+        review_blocks = driver.find_elements(By.CSS_SELECTOR, "[class*='business-review-view']")
         for i, block in enumerate(review_blocks[:50]):  # Ограничиваем 50 отзывами
             try:
-                author_el = block.query_selector("[class*='business-review-view__author']")
-                author = author_el.inner_text().strip() if author_el else f"Автор {i+1}"
+                author_el = block.find_element(By.CSS_SELECTOR, "[class*='business-review-view__author']")
+                author = author_el.text.strip() if author_el else f"Автор {i+1}"
                 
-                date_el = block.query_selector("[class*='business-review-view__date']")
-                date = date_el.inner_text().strip() if date_el else ""
+                date_el = block.find_element(By.CSS_SELECTOR, "[class*='business-review-view__date']")
+                date = date_el.text.strip() if date_el else ""
                 
-                rating_el = block.query_selector("[class*='business-review-view__rating']")
-                rating = len(rating_el.query_selector_all("[class*='star-fill']")) if rating_el else 0
+                rating_els = block.find_elements(By.CSS_SELECTOR, "[class*='star-fill']")
+                rating = len(rating_els)
                 
-                text_el = block.query_selector("[class*='business-review-view__body']")
-                text = text_el.inner_text().strip() if text_el else ""
+                text_el = block.find_element(By.CSS_SELECTOR, "[class*='business-review-view__body']")
+                text = text_el.text.strip() if text_el else ""
                 
-                reply_el = block.query_selector("[class*='business-review-view__reply']")
-                reply = reply_el.inner_text().strip() if reply_el else ""
+                reply_el = block.find_element(By.CSS_SELECTOR, "[class*='business-review-view__reply']")
+                reply = reply_el.text.strip() if reply_el else ""
                 
                 reviews_data['items'].append({
                     "author": author,
@@ -325,54 +345,53 @@ def parse_reviews(page):
                     "text": text,
                     "reply": reply
                 })
-            except Exception:
+            except NoSuchElementException:
                 continue
         
         return reviews_data
-    except Exception:
+    except NoSuchElementException:
         return {"items": [], "rating": "", "reviews_count": ""}
 
-def parse_features(page):
+def parse_features(driver):
     """Парсит особенности"""
     try:
-        features_tab = page.query_selector("div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
-        if features_tab:
-            features_tab.click()
-            page.wait_for_timeout(1500)
+        features_tab = driver.find_element(By.XPATH, "//div[@role='tab' and contains(text(), 'Особенности')] | //button[contains(text(), 'Особенности')]")
+        features_tab.click()
+        time.sleep(1.5)
         
         features_data = {"bool": [], "valued": [], "prices": [], "categories": []}
         
-        feature_blocks = page.query_selector_all("[class*='features-view__item']")
+        feature_blocks = driver.find_elements(By.CSS_SELECTOR, "[class*='features-view__item']")
         for block in feature_blocks:
             try:
-                name_el = block.query_selector("[class*='features-view__name']")
-                name = name_el.inner_text().strip() if name_el else ""
+                name_el = block.find_element(By.CSS_SELECTOR, "[class*='features-view__name']")
+                name = name_el.text.strip() if name_el else ""
                 
-                value_el = block.query_selector("[class*='features-view__value']")
-                value = value_el.inner_text().strip() if value_el else ""
+                value_el = block.find_element(By.CSS_SELECTOR, "[class*='features-view__value']")
+                value = value_el.text.strip() if value_el else ""
                 
                 if name:
                     if value:
                         features_data['valued'].append(f"{name}: {value}")
                     else:
                         features_data['bool'].append(name)
-            except Exception:
+            except NoSuchElementException:
                 continue
         
         return features_data
-    except Exception:
+    except NoSuchElementException:
         return {"bool": [], "valued": [], "prices": [], "categories": []}
 
-def parse_competitors(page):
+def parse_competitors(driver):
     """Парсит конкурентов из раздела 'Похожие места рядом'"""
     try:
         # Ищем блок с похожими местами
-        similar_section = page.query_selector("[class*='card-similar'], [class*='similar-places']")
+        similar_section = driver.find_element(By.CSS_SELECTOR, "[class*='card-similar'], [class*='similar-places']")
         if not similar_section:
             return []
         
         competitors = []
-        competitor_blocks = similar_section.query_selector_all("a[href*='/org/']")
+        competitor_blocks = similar_section.find_elements(By.CSS_SELECTOR, "a[href*='/org/']")
         
         for block in competitor_blocks[:5]:  # Ограничиваем 5 конкурентами
             try:
@@ -380,17 +399,17 @@ def parse_competitors(page):
                 if href and not href.startswith('http'):
                     href = f"https://yandex.ru{href}"
                 
-                title_el = block.query_selector("[class*='title'], h3, h4")
-                title = title_el.inner_text().strip() if title_el else ""
+                title_el = block.find_element(By.CSS_SELECTOR, "[class*='title'], h3, h4")
+                title = title_el.text.strip() if title_el else ""
                 
                 if title and href:
                     competitors.append({
                         "title": title,
                         "url": href
                     })
-            except Exception:
+            except NoSuchElementException:
                 continue
         
         return competitors
-    except Exception:
+    except NoSuchElementException:
         return []
