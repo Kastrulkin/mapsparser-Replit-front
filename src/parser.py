@@ -17,7 +17,7 @@ def parse_yandex_card(url: str) -> dict:
             raise ValueError(f"Некорректная ссылка: {url}")
             
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)  # headless=True для скрытого режима
+            browser = p.chromium.launch(headless=True)  # headless=True для скрытого режима
             page = browser.new_page()
             
             # Устанавливаем User-Agent
