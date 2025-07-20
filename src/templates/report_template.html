@@ -228,5 +228,111 @@
             <p>Нет данных</p>
         {% endif %}
     </div>
+
+    {% if competitor %}
+    <div class="section competitor-section" style="border-top: 3px solid #e74c3c; margin-top: 30px; padding-top: 20px;">
+        <h1 style="color: #e74c3c;">АНАЛИЗ КОНКУРЕНТА</h1>
+        
+        <div class="section">
+            <h2>Основная информация конкурента</h2>
+            <table>
+                <tr><th>Параметр</th><th>Значение</th></tr>
+                <tr><td>Название</td><td>{{ competitor.overview.title or 'Не указано' }}</td></tr>
+                <tr><td>Адрес</td><td>{{ competitor.overview.address or 'Не указан' }}</td></tr>
+                <tr><td>Телефон</td><td>{{ competitor.overview.phone or 'Не указан' }}</td></tr>
+                <tr><td>Сайт</td><td>{{ competitor.overview.site or 'Не указан' }}</td></tr>
+                <tr><td>Рейтинг</td><td>{{ competitor.overview.rating or 'Не указан' }}</td></tr>
+                <tr><td>Количество оценок</td><td>{{ competitor.overview.ratings_count or 'Не указано' }}</td></tr>
+                <tr><td>Количество отзывов</td><td>{{ competitor.overview.reviews_count or 'Не указано' }}</td></tr>
+                <tr><td>Часы работы</td><td>{{ competitor.overview.hours or 'Не указаны' }}</td></tr>
+                <tr><td>Описание</td><td>{{ competitor.overview.description or 'Не указано' }}</td></tr>
+            </table>
+        </div>
+
+        {% if competitor.products %}
+        <div class="section">
+            <h2>Товары и услуги конкурента</h2>
+            {% for category in competitor.products %}
+            <h3>{{ category.category }}</h3>
+            <table>
+                <tr><th>Название</th><th>Описание</th><th>Цена</th><th>Длительность</th><th>Фото</th></tr>
+                {% for item in category.items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.description }}</td>
+                    <td>{{ item.price }}</td>
+                    <td>{{ item.duration }}</td>
+                    <td>{% if item.photo %}<img src="{{ item.photo }}" style="max-width:80px;max-height:80px;">{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if competitor.reviews.items %}
+        <div class="section">
+            <h2>Отзывы конкурента</h2>
+            <p>Средняя оценка: <b>{{ competitor.reviews.rating }}</b> | Количество отзывов: <b>{{ competitor.reviews.reviews_count }}</b></p>
+            <p><b>Всего спарсилось отзывов: {{ competitor.reviews.items|length }}</b></p>
+            
+            <table>
+                <tr><th>№</th><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
+                {% for review in competitor.reviews.items[:10] %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ review.author }}</td>
+                    <td>{{ review.date }}</td>
+                    <td>{{ review.score }}</td>
+                    <td>{{ review.text }}</td>
+                    <td>{{ review.org_reply }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% if competitor.reviews.items|length > 10 %}
+            <p><i>Показаны первые 10 отзывов из {{ competitor.reviews.items|length }}</i></p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="section">
+            <h2>Сравнение с основной карточкой</h2>
+            <table>
+                <tr><th>Параметр</th><th>Основная карточка</th><th>Конкурент</th></tr>
+                <tr>
+                    <td>Рейтинг</td>
+                    <td>{{ card.overview.rating or 'Не указан' }}</td>
+                    <td>{{ competitor.overview.rating or 'Не указан' }}</td>
+                </tr>
+                <tr>
+                    <td>Количество оценок</td>
+                    <td>{{ card.overview.ratings_count or 'Не указано' }}</td>
+                    <td>{{ competitor.overview.ratings_count or 'Не указано' }}</td>
+                </tr>
+                <tr>
+                    <td>Количество отзывов</td>
+                    <td>{{ card.overview.reviews_count or 'Не указано' }}</td>
+                    <td>{{ competitor.overview.reviews_count or 'Не указано' }}</td>
+                </tr>
+                <tr>
+                    <td>Количество фото</td>
+                    <td>{{ card.photos_count or 0 }}</td>
+                    <td>{{ competitor.photos_count or 0 }}</td>
+                </tr>
+                <tr>
+                    <td>Наличие сайта</td>
+                    <td>{% if card.overview.site %}Есть{% else %}Нет{% endif %}</td>
+                    <td>{% if competitor.overview.site %}Есть{% else %}Нет{% endif %}</td>
+                </tr>
+                <tr>
+                    <td>Наличие телефона</td>
+                    <td>{% if card.overview.phone %}Есть{% else %}Нет{% endif %}</td>
+                    <td>{% if competitor.overview.phone %}Есть{% else %}Нет{% endif %}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
 </body>
 </html> 

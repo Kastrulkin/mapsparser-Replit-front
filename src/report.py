@@ -14,4 +14,4 @@ def generate_html_report(card_data: dict, analysis: dict) -> str:
     output_path = os.path.join('data', f"report_{card_data.get('overview', {}).get('title', 'card')}.html")
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    return output_path 
+    return output_path

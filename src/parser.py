@@ -518,6 +518,62 @@ def parse_yandex_card(url: str) -> dict:
             "categories": categories_full
         }
 
+        # --- ПАРСИНГ КОНКУРЕНТОВ ИЗ РАЗДЕЛА "ПОХОЖИЕ МЕСТА РЯДОМ" ---
+        # Возвращаемся на вкладку Обзор для поиска конкурентов
+        overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
+        if overview_tab:
+            overview_tab.click()
+            page.wait_for_timeout(1500)
+
+        competitors = []
+        try:
+            # Ищем блок "Похожие места рядом"
+            similar_carousel = page.query_selector("div.card-similar-carousel")
+            if similar_carousel:
+                # Получаем все ссылки на конкурентов
+                competitor_links = similar_carousel.query_selector_all("a.link-wrapper")
+                print(f"Найдено конкурентов в карусели: {len(competitor_links)}")
+                
+                for i, link in enumerate(competitor_links[:3]):  # Берём только первых 3-х конкурентов
+                    try:
+                        competitor_url = link.get_attribute('href')
+                        if competitor_url and not competitor_url.startswith('http'):
+                            competitor_url = 'https://yandex.ru' + competitor_url
+                        
+                        # Получаем базовую информацию о конкуренте из карусели
+                        competitor_title_el = link.query_selector("div.orgpage-similar-item__title")
+                        competitor_title = competitor_title_el.inner_text().strip() if competitor_title_el else ''
+                        
+                        competitor_rubric_el = link.query_selector("div.orgpage-similar-item__rubrics")
+                        competitor_rubric = competitor_rubric_el.inner_text().strip() if competitor_rubric_el else ''
+                        
+                        competitor_rating_el = link.query_selector("div.business-rating-badge-view__stars")
+                        competitor_rating = ''
+                        if competitor_rating_el:
+                            # Подсчитываем количество заполненных звёзд
+                            filled_stars = len(competitor_rating_el.query_selector_all("span._full"))
+                            competitor_rating = str(filled_stars) if filled_stars > 0 else ''
+                        
+                        competitors.append({
+                            'title': competitor_title,
+                            'url': competitor_url,
+                            'rubric': competitor_rubric,
+                            'rating': competitor_rating,
+                            'source': 'similar_places'
+                        })
+                        
+                        print(f"Конкурент {i+1}: {competitor_title} - {competitor_url}")
+                        
+                    except Exception as e:
+                        print(f"Ошибка при обработке конкурента {i+1}: {e}")
+                        continue
+            else:
+                print("Блок 'Похожие места рядом' не найден")
+                
+        except Exception as e:
+            print(f"Ошибка при парсинге конкурентов: {e}")
+
+        data['competitors'] = competitors
         data['url'] = url
         browser.close()
         
@@ -525,6 +581,7 @@ def parse_yandex_card(url: str) -> dict:
         print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
         print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
         print(f"DEBUG: hours = '{data.get('hours', '')}'")
+        print(f"DEBUG: competitors found = {len(competitors)}")
         
         # Формируем overview для отчёта
         overview_keys = [
