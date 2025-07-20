@@ -2,7 +2,7 @@ modules = ["web", "python-3.12"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["geckodriver", "gitFull", "glibcLocales", "playwright-driver", "xcodebuild", "zlib"]
+packages = ["geckodriver", "gitFull", "glibcLocales", "playwright-driver", "xcodebuild", "zlib", "chromium", "firefox", "nss", "nspr", "atk", "cups", "gtk3", "gdk-pixbuf", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libXrender", "xorg.libxcb", "xorg.libXi", "xorg.libXtst", "xorg.libXss", "libdrm", "mesa", "dbus", "expat", "alsa-lib"]
 
 [workflows]
 runButton = "Run Parser"

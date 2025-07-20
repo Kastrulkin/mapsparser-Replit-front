@@ -28,13 +28,14 @@ def parse_yandex_card(url: str) -> dict:
             browser = None
             browser_name = ""
             
-            # Попытка запуска Chromium (наиболее стабильный в Replit)
+            # Попытка запуска Chromium (используем системный из Nix)
             try:
                 browser = p.chromium.launch(
+                    executable_path='/nix/store/.../bin/chromium',  # Путь к системному Chromium
                     headless=True,
                     args=[
                         '--no-sandbox',
-                        '--disable-setuid-sandbox',
+                        '--disable-setuid-sandbox', 
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
                         '--disable-web-security',
@@ -51,7 +52,9 @@ def parse_yandex_card(url: str) -> dict:
                         '--disable-default-apps',
                         '--no-first-run',
                         '--no-default-browser-check',
-                        '--disable-background-networking'
+                        '--disable-background-networking',
+                        '--single-process',
+                        '--disable-zygote'
                     ],
                     ignore_default_args=['--enable-automation'],
                     chromium_sandbox=False
