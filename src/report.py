@@ -14,7 +14,12 @@ def generate_html_report(card_data: dict, analysis: dict, competitor_data: dict 
     
     # Получаем название из overview или title для имени файла
     title = card_data.get('overview', {}).get('title') or card_data.get('title', 'card')
-    output_path = os.path.join('data', f"report_{title}.html")
+    
+    # Создаём директорию data, если её нет
+    data_dir = 'data'
+    os.makedirs(data_dir, exist_ok=True)
+    
+    output_path = os.path.join(data_dir, f"report_{title}.html")
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)
