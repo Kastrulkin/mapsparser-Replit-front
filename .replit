@@ -3,6 +3,7 @@ modules = ["python-3.12"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["geckodriver", "gitFull", "glibcLocales", "playwright-driver", "xcodebuild", "zlib"]
 
 [[workflows.workflow]]
 name = "Запуск парсера"
