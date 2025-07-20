@@ -15,3 +15,16 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd src && python main.py"
+
+[[workflows.workflow]]
+name = "Web Server"
+author = 18583526
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python web_server.py"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
