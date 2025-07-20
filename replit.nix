@@ -1,5 +1,7 @@
 { pkgs }: {
   deps = [
+    pkgs.python312
+    pkgs.python312Packages.pip
     pkgs.chromium
     pkgs.xvfb-run
     pkgs.nspr
