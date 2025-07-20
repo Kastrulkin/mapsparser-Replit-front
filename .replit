@@ -19,7 +19,7 @@ args = "cd src && python main.py"
 [[workflows.workflow]]
 name = "Web Server"
 author = 18583526
-mode = "sequential"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
