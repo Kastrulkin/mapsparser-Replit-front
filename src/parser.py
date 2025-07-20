@@ -790,4 +790,90 @@ def get_photos_count(page):
         photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
         if photos_tab:
             try:
-                counter = photos_tab.
+                counter = photos_tab.query_selector("div.tabs-select-view__counter")
+                if counter:
+                    return counter.inner_text().strip()
+            except Exception:
+                pass
+        return "0"
+    except Exception:
+        return "0"
+
+def parse_photos(page):
+    """Парсинг фотографий"""
+    try:
+        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
+        if photos_tab:
+            photos_tab.click()
+            print("Клик по вкладке 'Фото'")
+            page.wait_for_timeout(1500)
+            
+            # Скролл для загрузки фото
+            for i in range(20):
+                page.mouse.wheel(0, 1000)
+                time.sleep(1.5)
+
+        photos = []
+        img_elems = page.query_selector_all("img.image__img, img[src*='avatars.mds.yandex.net']")
+        for img in img_elems:
+            src = img.get_attribute('src')
+            if src and src not in photos:
+                photos.append(src)
+        return photos
+    except Exception:
+        return []
+
+def parse_features(page):
+    """Парсинг особенностей"""
+    try:
+        features = []
+        feature_elems = page.query_selector_all("div.business-features-view__item, div[class*='feature']")
+        for elem in feature_elems:
+            text = elem.inner_text().strip()
+            if text:
+                features.append(text)
+        return features
+    except Exception:
+        return []
+
+def parse_competitors(page):
+    """Парсинг конкурентов из секции 'Похожие места рядом'"""
+    try:
+        competitors = []
+        
+        # Ищем секцию с похожими местами
+        similar_section = page.query_selector("div.card-similar-carousel-wide")
+        if similar_section:
+            competitor_links = similar_section.query_selector_all("a[href*='/maps/org/']")
+            
+            for link in competitor_links:
+                try:
+                    url = link.get_attribute('href')
+                    if url and not url.startswith('http'):
+                        url = 'https://yandex.ru' + url
+                    
+                    # Название конкурента
+                    title_elem = link.query_selector("div.search-business-snippet-view__title, span.business-snippet-view__title")
+                    title = title_elem.inner_text().strip() if title_elem else ''
+                    
+                    # Категория
+                    category_elem = link.query_selector("div.search-business-snippet-view__category")
+                    category = category_elem.inner_text().strip() if category_elem else ''
+                    
+                    # Рейтинг
+                    rating_elem = link.query_selector("span.business-rating-badge-view__rating-text")
+                    rating = rating_elem.inner_text().strip() if rating_elem else ''
+                    
+                    if title and url:
+                        competitors.append({
+                            'title': title,
+                            'url': url,
+                            'category': category,
+                            'rating': rating
+                        })
+                except Exception:
+                    continue
+                    
+        return competitors[:5]  # Ограничиваем 5 конкурентами
+    except Exception:
+        return []
