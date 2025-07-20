@@ -34,6 +34,15 @@ mode = "sequential"
 task = "shell.exec"
 args = "python3 web_server.py"
 
+[[workflows.workflow]]
+name = "Установка Playwright"
+author = 18583526
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd src && python3 -m playwright install"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
