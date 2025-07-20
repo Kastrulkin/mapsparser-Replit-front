@@ -88,9 +88,24 @@ def parse_yandex_card(url: str) -> dict:
             data['site'] = ''
         # Часы работы
         try:
-            hours = page.query_selector("[class*='business-working-status-view__text']")
-            data['hours'] = hours.inner_text() if hours else ''
-        except Exception:
+            hours = None
+            # Пробуем несколько селекторов для часов работы
+            selectors = [
+                "[class*='business-working-status-view__text']",
+                "div.business-working-status-view__text",
+                "span.business-working-status-view__text",
+                "[class*='working-status-view']",
+                "[class*='business-hours']"
+            ]
+            
+            for selector in selectors:
+                hours = page.query_selector(selector)
+                if hours:
+                    break
+            
+            data['hours'] = hours.inner_text().strip() if hours else ''
+        except Exception as e:
+            print(f"Ошибка при парсинге часов работы: {e}")
             data['hours'] = ''
         # Полный график работы
         try:
@@ -120,15 +135,31 @@ def parse_yandex_card(url: str) -> dict:
             data['rating'] = ''
         # Количество оценок (всех)
         try:
-            ratings_count_el = page.query_selector("div.business-header-rating-view__text._clickable")
+            ratings_count_el = None
+            # Пробуем несколько селекторов для количества оценок
+            selectors = [
+                "div.business-header-rating-view__text._clickable",
+                "span.business-rating-badge-view__reviews-count",
+                "div.business-rating-badge-view__text",
+                "[class*='rating-badge-view__reviews-count']",
+                "[class*='header-rating-view__text']"
+            ]
+            
+            for selector in selectors:
+                ratings_count_el = page.query_selector(selector)
+                if ratings_count_el:
+                    break
+            
             if ratings_count_el:
                 import re
                 text = ratings_count_el.inner_text()
-                match = re.search(r"(\d+)", text.replace('\xa0', ' '))
+                # Ищем числа в тексте, убираем неразрывные пробелы
+                match = re.search(r"(\d+)", text.replace('\xa0', ' ').replace(' ', ''))
                 data['ratings_count'] = match.group(1) if match else ''
             else:
                 data['ratings_count'] = ''
-        except Exception:
+        except Exception as e:
+            print(f"Ошибка при парсинге количества оценок: {e}")
             data['ratings_count'] = ''
         # Описание
         try:
@@ -304,16 +335,39 @@ def parse_yandex_card(url: str) -> dict:
             print("Вкладка 'Отзывы' не найдена!")
         # Парсим количество отзывов с вкладки
         try:
-            reviews_count_elem = page.query_selector("h2.card-section-header__title._wide")
+            reviews_count_elem = None
+            # Пробуем несколько селекторов для количества отзывов
+            selectors = [
+                "h2.card-section-header__title._wide",
+                "h2[class*='card-section-header__title']",
+                "[class*='reviews-count']",
+                "div.business-reviews-view__header",
+                "[class*='section-header__title']"
+            ]
+            
+            for selector in selectors:
+                reviews_count_elem = page.query_selector(selector)
+                if reviews_count_elem:
+                    break
+            
             if reviews_count_elem:
                 import re
                 text = reviews_count_elem.inner_text()
-                match = re.search(r"(\d+)", text.replace('\xa0', ' '))
-                data['reviews_count'] = match.group(1) if match else ''
-            else:
-                data['reviews_count'] = ''
-        except Exception:
-            data['reviews_count'] = ''
+                # Ищем числа в тексте
+                match = re.search(r"(\d+)", text.replace('\xa0', ' ').replace(' ', ''))
+                reviews_count_from_tab = match.group(1) if match else ''
+                # Используем количество отзывов с вкладки, если оно найдено
+                if reviews_count_from_tab:
+                    data['reviews_count'] = reviews_count_from_tab
+            
+            # Если не нашли на вкладке, оставляем то что было найдено ранее
+            if not data.get('reviews_count'):
+                data['reviews_count'] = str(len(review_blocks)) if review_blocks else ''
+                
+        except Exception as e:
+            print(f"Ошибка при парсинге количества отзывов: {e}")
+            # Fallback - считаем реально спарсенные отзывы
+            data['reviews_count'] = str(len(review_blocks)) if 'review_blocks' in locals() else ''
         # Человекообразный скролл отзывов: wheel, mousemove, случайные паузы, иногда вверх, иногда клик по вкладке
         max_loops = 500
         patience = 100  # Было 30, стало 100
@@ -466,17 +520,17 @@ def parse_yandex_card(url: str) -> dict:
 
         data['url'] = url
         browser.close()
-        # --- Перед формированием overview явно присваиваю актуальное значение reviews_count ---
-        if 'reviews_count' in data:
-            data['reviews_count'] = data['reviews_count']
-        else:
-            data['reviews_count'] = ''
+        
+        # Отладочная информация
+        print(f"DEBUG: ratings_count = '{data.get('ratings_count', '')}'")
+        print(f"DEBUG: reviews_count = '{data.get('reviews_count', '')}'") 
+        print(f"DEBUG: hours = '{data.get('hours', '')}'")
+        
         # Формируем overview для отчёта
         overview_keys = [
             'title', 'address', 'phone', 'site', 'description',
             'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
         ]
         data['overview'] = {k: data.get(k, '') for k in overview_keys}
-        # Явно дублирую reviews_count в overview (на случай, если где-то выше оно не попало)
-        data['overview']['reviews_count'] = data.get('reviews_count', '')
+        
         return data 
