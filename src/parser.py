@@ -3,13 +3,13 @@
 parser.py — Модуль для парсинга публичной страницы Яндекс.Карт с помощью Selenium
 """
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 import time
 import re
 import random
@@ -23,40 +23,31 @@ def parse_yandex_card(url: str) -> dict:
     if not url or not url.startswith(('http://', 'https://')):
         raise ValueError(f"Некорректная ссылка: {url}")
     
-    print("Используем парсинг через Selenium...")
+    print("Используем парсинг через Selenium с Firefox...")
     
-    # Настройка Chrome в headless режиме для Replit
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-web-security")
-    chrome_options.add_argument("--allow-running-insecure-content")
-    chrome_options.add_argument("--disable-setuid-sandbox")
-    chrome_options.add_argument("--disable-background-timer-throttling")
-    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-    chrome_options.add_argument("--disable-renderer-backgrounding")
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    chrome_options.add_argument("--accept-lang=ru-RU,ru;q=0.9,en;q=0.8")
+    # Настройка Firefox в headless режиме для Replit
+    firefox_options = Options()
+    firefox_options.add_argument("--headless")
+    firefox_options.add_argument("--no-sandbox")
+    firefox_options.add_argument("--disable-dev-shm-usage")
+    firefox_options.add_argument("--disable-gpu")
+    firefox_options.add_argument("--window-size=1920,1080")
+    firefox_options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/91.0")
+    firefox_options.set_preference("intl.accept_languages", "ru-RU,ru,en")
     
     try:
-        # Используем WebDriverManager для автоматической установки ChromeDriver
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-    except Exception as e:
-        print(f"Ошибка при инициализации Chrome: {e}")
-        # Пробуем использовать системный chromium
-        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        # Сначала пробуем использовать предустановленный geckodriver
         try:
-            service = Service(ChromeDriverManager(chrome_type='chromium').install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-        except Exception as e2:
-            print(f"Ошибка при инициализации Chromium: {e2}")
-            raise Exception(f"Не удалось запустить браузер: {e}, {e2}")
+            driver = webdriver.Firefox(options=firefox_options)
+            print("Используем системный Firefox/geckodriver")
+        except Exception:
+            # Если не получилось, используем WebDriverManager
+            service = Service(GeckoDriverManager().install())
+            driver = webdriver.Firefox(service=service, options=firefox_options)
+            print("Используем geckodriver через WebDriverManager")
+    except Exception as e:
+        print(f"Ошибка при инициализации Firefox: {e}")
+        raise Exception(f"Не удалось запустить Firefox: {e}")
     
     try:
         driver.get(url)
