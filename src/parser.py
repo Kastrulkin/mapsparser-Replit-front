@@ -824,8 +824,29 @@ def parse_overview_data(page):
             data['products'] = products
             data['product_categories'] = product_categories
             
-            # Категории товаров/услуг - РАБОЧИЙ КОД
-            data['categories'] = product_categories[:]  # Копируем список категорий товаров
+            # Собираем ВСЕ категории товаров и услуг
+            all_categories = set()
+            
+            # Добавляем категории из product_categories
+            all_categories.update(product_categories)
+            
+            # Добавляем категории из products
+            for product_group in products:
+                category_name = product_group.get('category', '')
+                if category_name:
+                    all_categories.add(category_name)
+            
+            # Дополнительно ищем категории в рубрикаторе
+            try:
+                rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
+                for cat_elem in rubricator_categories:
+                    cat_text = cat_elem.inner_text().strip()
+                    if cat_text:
+                        all_categories.add(cat_text)
+            except Exception:
+                pass
+            
+            data['categories'] = list(all_categories)
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
             print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
