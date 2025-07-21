@@ -57,7 +57,7 @@ def parse_yandex_card(url: str) -> dict:
                 print("2. Попробовать позже")
                 print("3. Использовать другую ссылку")
                 return {"error": "captcha_detected", "url": url}
-                
+
         except Exception as e:
             print(f"Ошибка при парсинге: {e}")
             return {"error": str(e), "url": url}
@@ -356,7 +356,7 @@ def parse_overview_data(page):
     except Exception:
         data['address'] = ''
 
-    # Клик по кнопке "Показать телефон" перед парсингом - улучшенный поиск
+    # Клик по кнопке "Показать телефон" перед парсингом
     try:
         phone_btn_selectors = [
             "button:has-text('Показать телефон')",
@@ -365,7 +365,7 @@ def parse_overview_data(page):
             "span:has-text('Показать телефон')",
             "[aria-label*='телефон'] button"
         ]
-        
+
         for selector in phone_btn_selectors:
             show_phone_btn = page.query_selector(selector)
             if show_phone_btn:
@@ -375,7 +375,7 @@ def parse_overview_data(page):
     except Exception:
         pass
 
-    # Телефон - расширенный парсинг
+    # Телефон - улучшенный парсинг
     try:
         phone_selectors = [
             "span.business-phones-view__text",
@@ -402,7 +402,7 @@ def parse_overview_data(page):
                     if len(phone_cleaned) >= 7:  # Минимальная длина телефона
                         data['phone'] = phone_cleaned
                         break
-                
+
                 # Также проверяем атрибут title
                 title_attr = phone_elem.get_attribute('title')
                 if title_attr and re.search(r'[\d+\-\(\)\s]{7,}', title_attr):
@@ -459,36 +459,21 @@ def parse_overview_data(page):
 
     # Категории товаров и услуг
     try:
-        categories = []
-        
-        # Сначала ищем основные категории в заголовке
-        cats = page.query_selector_all("div.business-card-title-view__categories span, span[class*='category']")
-        for c in cats:
-            text = c.inner_text().strip()
-            if text:
-                categories.append(text)
-        
-        # Затем ищем категории товаров в рубрикаторе
-        rubricator_cats = page.query_selector_all("div.business-related-items-rubricator__category")
-        for cat in rubricator_cats:
-            text = cat.inner_text().strip()
-            if text and text not in categories:
-                categories.append(text)
-        
-        # Если есть кнопка "Показать все категории", кликаем по ней
-        show_all_btn = page.query_selector("div.business-related-items-rubricator__toggle")
-        if show_all_btn:
-            show_all_btn.click()
-            page.wait_for_timeout(1000)
-            
-            # Парсим дополнительные категории после раскрытия
-            additional_cats = page.query_selector_all("div.business-related-items-rubricator__category")
-            for cat in additional_cats:
-                text = cat.inner_text().strip()
-                if text and text not in categories:
-                    categories.append(text)
-        
-        data['categories'] = categories
+        # Основные селекторы для категорий
+        category_selectors = [
+            "div.business-related-items-rubricator__category",
+            "div.business-card-title-view__categories span", 
+            "span[class*='category']"
+        ]
+
+        data['categories'] = []
+        for selector in category_selectors:
+            cats = page.query_selector_all(selector)
+            if cats:
+                categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
+                if categories:
+                    data['categories'] = categories
+                    break
     except Exception:
         data['categories'] = []
 
@@ -500,7 +485,7 @@ def parse_overview_data(page):
             "span[class*='rating-text']",
             "span.business-summary-rating-badge-view__rating-text"
         ]
-        
+
         data['rating'] = ''
         for selector in rating_selectors:
             rating_el = page.query_selector(selector)
@@ -610,7 +595,7 @@ def parse_overview_data(page):
             try:
                 category_tabs = page.query_selector_all("div.business-related-items-rubricator__category")
                 print(f"Найдено категорий в рубрикаторе: {len(category_tabs)}")
-                
+
                 # Кликаем по каждой категории для загрузки товаров
                 for i, cat_tab in enumerate(category_tabs[:10]):  # Ограничиваем 10 категориями
                     try:
@@ -643,14 +628,14 @@ def parse_overview_data(page):
                         'h3.business-full-items-grouped-view__category-title',
                         'div.business-full-items-grouped-view__title'
                     ]
-                    
+
                     category = ""
                     for sel in category_selectors:
                         category_el = cat_block.query_selector(sel)
                         if category_el:
                             category = category_el.inner_text().strip()
                             break
-                    
+
                     if not category:
                         category = "Основные услуги"
 
@@ -667,7 +652,7 @@ def parse_overview_data(page):
                             'div.related-item-photo-view',
                             'div.related-item-view'
                         ]
-                        
+
                         item_blocks = []
                         for sel in item_selectors:
                             items_found = cat_block.query_selector_all(sel)
@@ -682,7 +667,7 @@ def parse_overview_data(page):
                                     'div.related-item-list-view__title',
                                     'span.related-product-view__title'
                                 ]
-                                
+
                                 name = ""
                                 for sel in name_selectors:
                                     name_el = item.query_selector(sel)
@@ -697,7 +682,7 @@ def parse_overview_data(page):
                                     'div.related-item-list-view__subtitle',
                                     'span.related-product-view__description'
                                 ]
-                                
+
                                 description = ""
                                 for sel in desc_selectors:
                                     desc_el = item.query_selector(sel)
@@ -712,7 +697,7 @@ def parse_overview_data(page):
                                     'div.related-item-list-view__price',
                                     'span[class*="price"]'
                                 ]
-                                
+
                                 price = ""
                                 for sel in price_selectors:
                                     price_el = item.query_selector(sel)
@@ -962,7 +947,7 @@ def parse_photos(page):
             photos_tab.click()
             print("Клик по вкладке 'Фото'")
             page.wait_for_timeout(1500)
-            
+
             # Скролл для загрузки фото
             for i in range(20):
                 page.mouse.wheel(0, 1000)
@@ -995,61 +980,61 @@ def parse_competitors(page):
     """Парсинг конкурентов из секции 'Похожие места рядом'"""
     try:
         competitors = []
-        
+
         # Ищем секцию с похожими местами - обновленные селекторы
         similar_selectors = [
             "div.card-similar-carousel-wide",
             "div[class*='carousel']",
             "div[role='presentation'][class*='carousel']"
         ]
-        
+
         similar_section = None
         for selector in similar_selectors:
             similar_section = page.query_selector(selector)
             if similar_section:
                 break
-        
+
         if similar_section:
             # Ищем ссылки на конкурентов
             competitor_links = similar_section.query_selector_all("a[href*='/maps/org/']")
-            
+
             for link in competitor_links:
                 try:
                     url = link.get_attribute('href')
                     if url and not url.startswith('http'):
                         url = 'https://yandex.ru' + url
-                    
+
                     # Название конкурента - обновленные селекторы
                     title_selectors = [
                         "div.orgpage-similar-item__title",
                         "div.search-business-snippet-view__title",
                         "span.business-snippet-view__title"
                     ]
-                    
+
                     title = ''
                     for selector in title_selectors:
                         title_elem = link.query_selector(selector)
                         if title_elem:
                             title = title_elem.inner_text().strip()
                             break
-                    
+
                     # Категория - обновленные селекторы
                     category_selectors = [
                         "div.orgpage-similar-item__rubrics",
                         "div.search-business-snippet-view__category"
                     ]
-                    
+
                     category = ''
                     for selector in category_selectors:
                         category_elem = link.query_selector(selector)
                         if category_elem:
                             category = category_elem.inner_text().strip()
                             break
-                    
+
                     # Рейтинг
                     rating_elem = link.query_selector("span.business-rating-badge-view__rating-text")
                     rating = rating_elem.inner_text().strip() if rating_elem else ''
-                    
+
                     if title and url:
                         competitors.append({
                             'title': title,
@@ -1061,9 +1046,11 @@ def parse_competitors(page):
                 except Exception as e:
                     print(f"Ошибка при парсинге конкурента: {e}")
                     continue
-                    
+
         print(f"Всего найдено конкурентов: {len(competitors)}")
         return competitors[:5]  # Ограничиваем 5 конкурентами
     except Exception as e:
         print(f"Ошибка при поиске конкурентов: {e}")
         return []
+
+# This code parses Yandex Maps public pages to extract information like title, address, phone, etc.
