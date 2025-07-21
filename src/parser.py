@@ -824,37 +824,14 @@ def parse_overview_data(page):
             data['products'] = products
             data['product_categories'] = product_categories
             
-            # ИСПРАВЛЕННЫЙ парсинг категорий - только реальные категории товаров/услуг
-            categories_set = set()
-            
-            # 1. Категории из рубрикатора (это основные категории услуг)
-            try:
-                rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
-                for cat in rubricator_categories:
-                    cat_text = cat.inner_text().strip()
-                    # Фильтруем - только если это похоже на категорию услуг
-                    if cat_text and len(cat_text) < 100 and not any(x in cat_text.lower() for x in ['отзыв', '₽', 'положительный', 'мин', 'посмотреть', 'подписаться', 'исправить']):
-                        categories_set.add(cat_text)
-            except:
-                pass
-            
-            # 2. Категории из групп товаров
-            for product_cat in product_categories:
-                if product_cat and len(product_cat) < 100:
-                    categories_set.add(product_cat)
-            
-            # 3. Категории из особенностей (если есть)
-            if hasattr(data, 'features_full') and data.get('features_full', {}).get('categories'):
-                for cat in data['features_full']['categories']:
-                    if cat and len(cat) < 100:
-                        categories_set.add(cat)
-                        
-            data['categories'] = list(categories_set)
+            # Категории товаров/услуг - РАБОЧИЙ КОД
+            data['categories'] = product_categories[:]  # Копируем список категорий товаров
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
-            print(f"ИСПРАВЛЕННЫЕ категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
+            print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
+            data['categories'] = []
             data['categories'] = []
     except Exception:
         data['products'] = []
