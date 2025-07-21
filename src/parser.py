@@ -796,9 +796,7 @@ def parse_reviews(page):
             print("Клик по вкладке 'Отзывы'")
             page.wait_for_timeout(2000)
         else:
-            print("Вкладка 'Отзывы' не найдена!")
-
-        reviews_data = {"items": [], "rating": "", "reviews_count": ""}
+            print("Вкладка 'Отзывы' не найдена!")        reviews_data = {"items": [], "rating": "", "reviews_count": ""}
 
         # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
         try:
