@@ -21,11 +21,6 @@ def main():
         print("Парсинг основной страницы...")
         card_data = parse_yandex_card(url)
         
-        # Проверяем результат парсинга
-        if not card_data:
-            print("❌ Ошибка: Парсинг вернул пустой результат")
-            return
-            
         # Проверяем на ошибку captcha
         if card_data.get('error') == 'captcha_detected':
             print("❌ Парсинг остановлен из-за captcha")
@@ -84,8 +79,8 @@ def main():
         print("Анализ данных...")
         analysis = analyze_card(card_data)
 
-        # Обновляем количество отзывов из секции отзывов  
-        if card_data and isinstance(card_data, dict) and card_data.get('reviews') and isinstance(card_data.get('reviews'), dict) and card_data.get('reviews', {}).get('reviews_count'):
+        # Обновляем количество отзывов из секции отзывов
+        if card_data.get('reviews', {}).get('reviews_count'):
             card_data['reviews_count'] = card_data['reviews']['reviews_count']
 
         # Создаем overview для отчета
@@ -101,7 +96,7 @@ def main():
             'hours_full': card_data.get('hours_full', []),
             'rating': card_data.get('rating', ''),
             'ratings_count': card_data.get('ratings_count', ''),
-            'reviews_count': card_data.get('reviews_count', '') or (card_data.get('reviews') or {}).get('reviews_count', ''),
+            'reviews_count': card_data.get('reviews_count', '') or card_data.get('reviews', {}).get('reviews_count', ''),
             'social_links': card_data.get('social_links', [])
         }
 
