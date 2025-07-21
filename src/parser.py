@@ -669,7 +669,7 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Парсим товары и услуги - ПОЛНАЯ ВЕРСИЯ
+    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
     try:
         products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
         if products_tab:
@@ -824,39 +824,42 @@ def parse_overview_data(page):
             data['products'] = products
             data['product_categories'] = product_categories
             
-            # Дополнительно ищем все категории как в рабочем коде
-            all_categories = set(product_categories)
+            # ИСПРАВЛЕННЫЙ парсинг категорий - только реальные категории товаров/услуг
+            categories_set = set()
             
-            # Ищем категории в рубрикаторе
+            # 1. Категории из рубрикатора (это основные категории услуг)
             try:
                 rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
                 for cat in rubricator_categories:
                     cat_text = cat.inner_text().strip()
-                    if cat_text:
-                        all_categories.add(cat_text)
+                    # Фильтруем - только если это похоже на категорию услуг
+                    if cat_text and len(cat_text) < 100 and not any(x in cat_text.lower() for x in ['отзыв', '₽', 'положительный', 'мин', 'посмотреть', 'подписаться', 'исправить']):
+                        categories_set.add(cat_text)
             except:
                 pass
-                
-            # Ищем категории в других местах
-            try:
-                other_cats = page.query_selector_all("span.button__text, div[class*='category'] span")
-                for cat in other_cats:
-                    cat_text = cat.inner_text().strip()
-                    if cat_text and len(cat_text) < 50:  # Исключаем слишком длинные тексты
-                        all_categories.add(cat_text)
-            except:
-                pass
-                
-            # Категории товаров/услуг сохраняем в categories
-            data['categories'] = list(all_categories)
+            
+            # 2. Категории из групп товаров
+            for product_cat in product_categories:
+                if product_cat and len(product_cat) < 100:
+                    categories_set.add(product_cat)
+            
+            # 3. Категории из особенностей (если есть)
+            if hasattr(data, 'features_full') and data.get('features_full', {}).get('categories'):
+                for cat in data['features_full']['categories']:
+                    if cat and len(cat) < 100:
+                        categories_set.add(cat)
+                        
+            data['categories'] = list(categories_set)
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
-            print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
+            print(f"ИСПРАВЛЕННЫЕ категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
+            data['categories'] = []
     except Exception:
         data['products'] = []
         data['product_categories'] = []
+        data['categories'] = []
 
     return data
 
