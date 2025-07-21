@@ -778,6 +778,9 @@ def parse_overview_data(page):
 
             data['products'] = products
             data['product_categories'] = product_categories
+            # Для совместимости с отчетом - используем product_categories как основные categories
+            if not data.get('categories'):
+                data['categories'] = product_categories
         else:
             data['products'] = []
             data['product_categories'] = []
@@ -822,7 +825,8 @@ def parse_reviews(page):
                 count_el = page.query_selector(selector)
                 if count_el:
                     text = count_el.inner_text().strip()
-                    # Извлекаем числа из текста типа "125 отзывов" или "1 отзыв"
+                    # Извлекаем числа из текста типа "125 отзывов" или "1 отзыв"  
+                    import re
                     match = re.search(r"(\d+(?:\s*\d+)*)", text.replace('\xa0', ' ').replace(' ', ''))
                     if match:
                         # Очищаем от пробелов и берем только цифры
@@ -874,21 +878,6 @@ def parse_reviews(page):
             review_blocks = page.query_selector_all("div.business-review-view")
             print(f"Найдено блоков отзывов: {len(review_blocks)}")
             
-            # Сначала кликаем по всем кнопкам "Показать ответ организации"
-            try:
-                reply_buttons = page.query_selector_all("button:has-text('Показать ответ организации'), span:has-text('Показать ответ организации'), div:has-text('Показать ответ организации')")
-                print(f"Найдено кнопок ответов организации: {len(reply_buttons)}")
-                for i, btn in enumerate(reply_buttons):
-                    try:
-                        if btn.is_visible():
-                            btn.click()
-                            page.wait_for_timeout(300)  # Небольшая пауза между кликами
-                            print(f"Кликнули по кнопке ответа №{i+1}")
-                    except Exception:
-                        continue
-            except Exception as e:
-                print(f"Ошибка при клике по кнопкам ответов: {e}")
-
             for block in review_blocks:
                 try:
                     # Имя автора - УЛУЧШЕННЫЙ парсинг
@@ -969,9 +958,18 @@ def parse_reviews(page):
                     text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
                     text = text_el.inner_text().strip() if text_el else ""
 
-                    # Ответ организации
-                    reply_el = block.query_selector("div.business-review-view__reply, div[class*='reply']")
-                    reply = reply_el.inner_text().strip() if reply_el else ""
+                    # Ответ организации - как в рабочем коде
+                    reply = ""
+                    try:
+                        reply_btn = block.query_selector("div.business-review-view__comment-expand[aria-label='Посмотреть ответ организации']")
+                        if reply_btn and reply_btn.is_visible():
+                            reply_btn.click()
+                            page.wait_for_timeout(500)
+                            reply_el = block.query_selector("div.business-review-comment-content__bubble")
+                            if reply_el:
+                                reply = reply_el.inner_text().strip()
+                    except Exception:
+                        pass
 
                     reviews_data['items'].append({
                         "author": author,
@@ -1133,57 +1131,9 @@ def parse_news(page):
                 print(f"Ошибка при парсинге отдельной новости: {e}")
                 continue
         
-        # Улучшенная группировка новостей - объединяем фото и текст
-        grouped_news = []
-        processed_indices = set()
-        
-        for i, item in enumerate(news):
-            if i in processed_indices:
-                continue
-                
-            current_item = item.copy()
-            
-            # Ищем следующие элементы, которые могут быть частью той же новости
-            for j in range(i + 1, min(i + 3, len(news))):  # Проверяем следующие 2 элемента
-                if j in processed_indices:
-                    continue
-                    
-                next_item = news[j]
-                
-                # Если у текущего элемента нет текста, а у следующего есть
-                if not current_item.get('text') and next_item.get('text'):
-                    current_item['text'] = next_item['text']
-                    if not current_item.get('title') and next_item.get('title'):
-                        current_item['title'] = next_item['title']
-                    processed_indices.add(j)
-                    
-                # Если у текущего элемента нет фото, а у следующего есть
-                elif not current_item.get('photos') and next_item.get('photos'):
-                    current_item['photos'] = next_item['photos']
-                    processed_indices.add(j)
-                    
-                # Если заголовки очень похожи (первые 30 символов)
-                elif (current_item.get('title', '')[:30] == next_item.get('title', '')[:30] 
-                      and len(current_item.get('title', '')) > 10):
-                    # Объединяем фото
-                    if next_item.get('photos'):
-                        current_photos = current_item.get('photos', [])
-                        current_photos.extend(next_item['photos'])
-                        current_item['photos'] = list(set(current_photos))  # Убираем дубли
-                    
-                    # Объединяем текст если нужно
-                    if not current_item.get('text') and next_item.get('text'):
-                        current_item['text'] = next_item['text']
-                    
-                    processed_indices.add(j)
-            
-            # Добавляем только если есть содержимое
-            if (current_item.get('title') or current_item.get('text') or 
-                current_item.get('photos')):
-                grouped_news.append(current_item)
-        
-        print(f"Спарсено новостей после группировки: {len(grouped_news)}")
-        return grouped_news
+        # Простая группировка новостей - как в рабочем коде
+        print(f"Спарсено новостей: {len(news)}")
+        return news
     except Exception as e:
         print(f"Ошибка при парсинге новостей: {e}")
         return []
