@@ -884,20 +884,57 @@ def parse_reviews(page):
                     date_el = block.query_selector("div.business-review-view__date, span.business-review-view__date, span[class*='date']")
                     date = date_el.inner_text().strip() if date_el else ""
 
-                    # Рейтинг (звёзды)
+                    # Рейтинг (звёзды) - улучшенный парсинг
                     rating = 0
-                    rating_els = block.query_selector_all("span.business-rating-view__star._fill, span[class*='star-fill'], span[class*='rating-star'][class*='fill']")
-                    rating = len(rating_els)
-
-                    # Если не нашли звёзды, ищем текстовый рейтинг
+                    
+                    # Расширенные селекторы для звёзд
+                    star_selectors = [
+                        "span.business-rating-view__star._fill",
+                        "span[class*='star-fill']", 
+                        "span[class*='rating-star'][class*='fill']",
+                        "div.business-rating-view__stars span._fill",
+                        "span.business-review-view__rating-star._fill",
+                        "div[class*='stars'] span[class*='fill']",
+                        "span[class*='star'][class*='active']"
+                    ]
+                    
+                    for selector in star_selectors:
+                        rating_els = block.query_selector_all(selector)
+                        if rating_els and len(rating_els) > 0:
+                            rating = len(rating_els)
+                            break
+                    
+                    # Если не нашли звёзды, ищем атрибут с рейтингом
                     if rating == 0:
-                        rating_text_elem = block.query_selector("span[class*='rating-text'], div[class*='score']")
-                        if rating_text_elem:
-                            rating_text = rating_text_elem.inner_text().strip()
+                        rating_meta = block.query_selector("meta[itemprop='ratingValue']")
+                        if rating_meta:
                             try:
-                                rating = int(float(rating_text.replace(',', '.')))
+                                rating = int(float(rating_meta.get_attribute('content')))
                             except:
-                                rating = 0
+                                pass
+                    
+                    # Если всё ещё не нашли, ищем текстовый рейтинг
+                    if rating == 0:
+                        rating_text_selectors = [
+                            "span[class*='rating-text']",
+                            "div[class*='score']",
+                            "div.business-review-view__rating",
+                            "span[class*='review-rating']"
+                        ]
+                        
+                        for selector in rating_text_selectors:
+                            rating_text_elem = block.query_selector(selector)
+                            if rating_text_elem:
+                                rating_text = rating_text_elem.inner_text().strip()
+                                # Ищем число в тексте (например "5 из 5", "4.5")
+                                import re
+                                match = re.search(r'(\d+(?:\.\d+)?)', rating_text)
+                                if match:
+                                    try:
+                                        rating = int(float(match.group(1)))
+                                        break
+                                    except:
+                                        continue
 
                     # Текст отзыва
                     text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
@@ -1067,18 +1104,57 @@ def parse_news(page):
                 print(f"Ошибка при парсинге отдельной новости: {e}")
                 continue
         
-        # Убираем дубликаты новостей
-        unique_news = []
-        seen_titles = set()
+        # Улучшенная группировка новостей - объединяем фото и текст
+        grouped_news = []
+        processed_indices = set()
         
-        for item in news:
-            title = item.get('title', '')
-            if title and title not in seen_titles:
-                unique_news.append(item)
-                seen_titles.add(title)
+        for i, item in enumerate(news):
+            if i in processed_indices:
+                continue
+                
+            current_item = item.copy()
+            
+            # Ищем следующие элементы, которые могут быть частью той же новости
+            for j in range(i + 1, min(i + 3, len(news))):  # Проверяем следующие 2 элемента
+                if j in processed_indices:
+                    continue
+                    
+                next_item = news[j]
+                
+                # Если у текущего элемента нет текста, а у следующего есть
+                if not current_item.get('text') and next_item.get('text'):
+                    current_item['text'] = next_item['text']
+                    if not current_item.get('title') and next_item.get('title'):
+                        current_item['title'] = next_item['title']
+                    processed_indices.add(j)
+                    
+                # Если у текущего элемента нет фото, а у следующего есть
+                elif not current_item.get('photos') and next_item.get('photos'):
+                    current_item['photos'] = next_item['photos']
+                    processed_indices.add(j)
+                    
+                # Если заголовки очень похожи (первые 30 символов)
+                elif (current_item.get('title', '')[:30] == next_item.get('title', '')[:30] 
+                      and len(current_item.get('title', '')) > 10):
+                    # Объединяем фото
+                    if next_item.get('photos'):
+                        current_photos = current_item.get('photos', [])
+                        current_photos.extend(next_item['photos'])
+                        current_item['photos'] = list(set(current_photos))  # Убираем дубли
+                    
+                    # Объединяем текст если нужно
+                    if not current_item.get('text') and next_item.get('text'):
+                        current_item['text'] = next_item['text']
+                    
+                    processed_indices.add(j)
+            
+            # Добавляем только если есть содержимое
+            if (current_item.get('title') or current_item.get('text') or 
+                current_item.get('photos')):
+                grouped_news.append(current_item)
         
-        print(f"Спарсено уникальных новостей: {len(unique_news)}")
-        return unique_news
+        print(f"Спарсено новостей после группировки: {len(grouped_news)}")
+        return grouped_news
     except Exception as e:
         print(f"Ошибка при парсинге новостей: {e}")
         return []
@@ -1125,13 +1201,42 @@ def parse_photos(page):
 def parse_features(page):
     """Парсинг особенностей"""
     try:
+        # Клик по вкладке "Особенности"
+        features_tab_selectors = [
+            "div.tabs-select-view__title._name_features",
+            "div[role='tab']:has-text('Особенности')",
+            "button:has-text('Особенности')",
+            "a[href*='tab=features']"
+        ]
+        
+        features_tab_found = False
+        for selector in features_tab_selectors:
+            features_tab = page.query_selector(selector)
+            if features_tab:
+                try:
+                    features_tab.click()
+                    print(f"Клик по вкладке 'Особенности': {selector}")
+                    page.wait_for_timeout(2000)
+                    features_tab_found = True
+                    break
+                except Exception:
+                    continue
+        
+        if not features_tab_found:
+            print("Вкладка 'Особенности' не найдена")
+            return []
+        
         features = []
         
-        # Ищем особенности в основном блоке
+        # Расширенные селекторы для особенностей
         feature_selectors = [
             "div.business-features-view__item",
+            "div.business-features-view__feature",
+            "span.business-features-view__feature-text",
             "div[class*='feature-item']",
-            "span.business-feature-view__text"
+            "span.business-feature-view__text",
+            "div.card-feature-view__item",
+            "span[class*='feature']"
         ]
         
         processed_features = set()  # Для избежания дублей
@@ -1146,8 +1251,10 @@ def parse_features(page):
                         features.append(text)
                         processed_features.add(text)
         
+        print(f"Найдено особенностей: {len(features)}")
         return list(set(features))  # Убираем дубли
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка при парсинге особенностей: {e}")
         return []
 
 def parse_competitors(page):
