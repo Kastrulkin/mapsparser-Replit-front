@@ -680,186 +680,67 @@ def parse_overview_data(page):
     except Exception:
         data['hours_full'] = []
 
-    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
+    # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
+    products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
+    if products_tab:
+        products_tab.click()
+        print("Клик по вкладке 'Товары и услуги'")
+        page.wait_for_timeout(1500)
+    # --- ПАРСИНГ ТОВАРОВ И УСЛУГ ПО КАТЕГОРИЯМ ---
     try:
-        products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
-        if products_tab:
-            products_tab.click()
-            print("Клик по вкладке 'Товары и услуги'")
-            page.wait_for_timeout(1500)
+        products = []
+        product_categories = []  # Новый список для названий категорий
+        category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
+        for cat_block in category_blocks:
+            # Название категории
+            cat_title_el = cat_block.query_selector('div.business-full-items-grouped-view__title')
+            category = cat_title_el.inner_text().strip() if cat_title_el else ''
+            if category:
+                product_categories.append(category)
+            # Все услуги/товары в категории
+            items = []
+            item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
+            for item in item_blocks:
+                # Пробуем сначала фото-товары
+                name_el = item.query_selector('div.related-item-photo-view__title')
+                desc_el = item.query_selector('div.related-item-photo-view__description')
+                price_el = item.query_selector('span.related-product-view__price')
+                duration_el = item.query_selector('span.related-product-view__volume')
+                photo_el = item.query_selector('img.image__img')
 
-            # Сначала кликаем по категориям в рубрикаторе, если они есть
-            try:
-                category_tabs = page.query_selector_all("div.business-related-items-rubricator__category")
-                print(f"Найдено категорий в рубрикаторе: {len(category_tabs)}")
+                # Если не найдено, пробуем текстовые услуги (related-item-list-view)
+                if not name_el:
+                    name_el = item.query_selector('div.related-item-list-view__title')
+                if not price_el:
+                    price_el = item.query_selector('div.related-item-list-view__price')
+                if not desc_el:
+                    desc_el = item.query_selector('div.related-item-list-view__subtitle')
+                # Фото для таких услуг обычно нет
 
-                # Кликаем по каждой категории для загрузки товаров
-                for i, cat_tab in enumerate(category_tabs[:25]):  # Увеличиваем до 25 категорий
-                    try:
-                        cat_name = cat_tab.inner_text().strip()
-                        print(f"Кликаем по категории: {cat_name}")
-                        cat_tab.click()
-                        page.wait_for_timeout(1200)  # Увеличиваем время ожидания
-                    except Exception:
-                        continue
-            except Exception:
-                pass
+                name = name_el.inner_text().strip() if name_el else ''
+                description = desc_el.inner_text().strip() if desc_el else ''
+                price = price_el.inner_text().strip() if price_el else ''
+                duration = duration_el.inner_text().strip() if duration_el else ''
+                photo = photo_el.get_attribute('src') if photo_el else ''
 
-            # Дополнительное время для загрузки после всех кликов
-            page.wait_for_timeout(3000)
-
-            # Скроллим для загрузки всех услуг
-            for i in range(15):
-                page.mouse.wheel(0, 1000)
-                time.sleep(0.8)
-
-            # ВАЖНО: Ищем категории ПОСЛЕ всех кликов и скроллинга
-            products = []
-            product_categories = []
-            processed_categories = set()
-
-            # Повторный поиск категорий услуг после изменения DOM - обновленные селекторы
-            category_blocks_selectors = [
-                'div.business-full-items-grouped-view__category',
-                'div.business-related-items-view__category', 
-                'div[class*="category-group"]',
-                'div[class*="items-grouped"]'
-            ]
-            
-            category_blocks = []
-            for selector in category_blocks_selectors:
-                found_blocks = page.query_selector_all(selector)
-                if found_blocks:
-                    category_blocks = found_blocks
-                    print(f"Найдены категории товаров с селектором: {selector} ({len(found_blocks)} шт.)")
-                    break
-
-            for cat_block in category_blocks:
-                try:
-                    # Название категории - несколько вариантов селекторов
-                    category_selectors = [
-                        'div.business-full-items-grouped-view__category-title',
-                        'h3.business-full-items-grouped-view__category-title',
-                        'div.business-full-items-grouped-view__title'
-                    ]
-
-                    category = ""
-                    for sel in category_selectors:
-                        category_el = cat_block.query_selector(sel)
-                        if category_el:
-                            category = category_el.inner_text().strip()
-                            break
-
-                    if not category:
-                        category = "Основные услуги"
-
-                    # Избегаем дубликатов категорий
-                    if category not in processed_categories:
-                        processed_categories.add(category)
-                        if category not in product_categories:
-                            product_categories.append(category)
-
-                        # Товары/услуги в категории
-                        items = []
-                        item_selectors = [
-                            'div.business-full-items-grouped-view__item',
-                            'div.related-item-photo-view',
-                            'div.related-item-view'
-                        ]
-
-                        item_blocks = []
-                        for sel in item_selectors:
-                            items_found = cat_block.query_selector_all(sel)
-                            item_blocks.extend(items_found)
-
-                        for item in item_blocks:
-                            try:
-                                # Множественные селекторы для названия
-                                name_selectors = [
-                                    'div.related-item-photo-view__title',
-                                    'div.related-item-view__title',
-                                    'div.related-item-list-view__title',
-                                    'span.related-product-view__title'
-                                ]
-
-                                name = ""
-                                for sel in name_selectors:
-                                    name_el = item.query_selector(sel)
-                                    if name_el:
-                                        name = name_el.inner_text().strip()
-                                        break
-
-                                # Множественные селекторы для описания
-                                desc_selectors = [
-                                    'div.related-item-photo-view__description',
-                                    'div.related-item-view__description',
-                                    'div.related-item-list-view__subtitle',
-                                    'span.related-product-view__description'
-                                ]
-
-                                description = ""
-                                for sel in desc_selectors:
-                                    desc_el = item.query_selector(sel)
-                                    if desc_el:
-                                        description = desc_el.inner_text().strip()
-                                        break
-
-                                # Множественные селекторы для цены
-                                price_selectors = [
-                                    'span.related-product-view__price',
-                                    'span.related-item-view__price',
-                                    'div.related-item-list-view__price',
-                                    'span[class*="price"]'
-                                ]
-
-                                price = ""
-                                for sel in price_selectors:
-                                    price_el = item.query_selector(sel)
-                                    if price_el:
-                                        price = price_el.inner_text().strip()
-                                        break
-
-                                # Продолжительность
-                                duration_el = item.query_selector('span.related-product-view__volume')
-                                duration = duration_el.inner_text().strip() if duration_el else ""
-
-                                # Фото
-                                photo_el = item.query_selector('img.image__img')
-                                photo = photo_el.get_attribute('src') if photo_el else ""
-
-                                if name:
-                                    items.append({
-                                        "name": name,
-                                        "description": description,
-                                        "price": price,
-                                        "duration": duration,
-                                        "photo": photo
-                                    })
-                            except Exception:
-                                continue
-
-                        if items:
-                            products.append({
-                                "category": category,
-                                "items": items
-                            })
-                except Exception:
-                    continue
-
-            data['products'] = products
-            data['product_categories'] = product_categories
-            data['categories'] = product_categories  # Категории товаров/услуг для отчета как в рабочем коде
-
-            print(f"Собрано категорий товаров: {len(product_categories)}")
-            print(f"Собрано групп товаров: {len(products)}")
-            print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
-            print(f"Категории товаров/услуг ({len(product_categories)}): {product_categories}")
-        else:
-            data['products'] = []
-            data['product_categories'] = []
+                items.append({
+                    'name': name,
+                    'description': description,
+                    'price': price,
+                    'duration': duration,
+                    'photo': photo
+                })
+            products.append({
+                'category': category,
+                'items': items
+            })
+        data['products'] = products
+        data['product_categories'] = product_categories  # Сохраняем список категорий
+        data['categories'] = product_categories  # Категории товаров/услуг для отчета
     except Exception:
         data['products'] = []
         data['product_categories'] = []
+        data['categories'] = []
 
     # Возвращаемся на вкладку "Обзор" для парсинга часов работы
     try:
