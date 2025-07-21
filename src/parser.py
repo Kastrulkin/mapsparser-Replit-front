@@ -778,9 +778,11 @@ def parse_overview_data(page):
 
             data['products'] = products
             data['product_categories'] = product_categories
-            # Для совместимости с отчетом - используем product_categories как основные categories
-            if not data.get('categories'):
+            # Только если основные категории бизнеса пусты, используем категории товаров
+            if not data.get('categories') or len(data.get('categories', [])) == 0:
                 data['categories'] = product_categories
+            else:
+                print(f"Сохраняем основные категории бизнеса: {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
