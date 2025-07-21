@@ -569,25 +569,7 @@ def parse_overview_data(page):
     try:
         full_schedule = []
 
-        # Ищем и кликаем по кнопке "График"
-        try:
-            schedule_button_selectors = [
-                "div.card-feature-view__value:has-text('График')",
-                "div:has-text('График')",
-                "button:has-text('График')"
-            ]
-            
-            for selector in schedule_button_selectors:
-                schedule_btn = page.query_selector(selector)
-                if schedule_btn and schedule_btn.is_visible():
-                    print("Кликаем по кнопке 'График'")
-                    schedule_btn.click()
-                    page.wait_for_timeout(1000)
-                    break
-        except Exception:
-            pass
-
-        # Клик по часам работы для раскрытия полного расписания (старый код)
+        # Клик по часам работы для раскрытия полного расписания
         hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
         if hours_click:
             hours_click.click()
@@ -786,7 +768,33 @@ def parse_overview_data(page):
             data['products'] = products
             data['product_categories'] = product_categories
             
-            data['categories'] = product_categories
+            # Дополнительно ищем все категории как в рабочем коде
+            all_categories = set(product_categories)
+            
+            # Ищем категории в рубрикаторе
+            try:
+                rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
+                for cat in rubricator_categories:
+                    cat_text = cat.inner_text().strip()
+                    if cat_text:
+                        all_categories.add(cat_text)
+            except:
+                pass
+                
+            # Ищем категории в других местах
+            try:
+                other_cats = page.query_selector_all("span.button__text, div[class*='category'] span")
+                for cat in other_cats:
+                    cat_text = cat.inner_text().strip()
+                    if cat_text and len(cat_text) < 50:  # Исключаем слишком длинные тексты
+                        all_categories.add(cat_text)
+            except:
+                pass
+                
+            # Категории товаров/услуг сохраняем в categories
+            data['categories'] = list(all_categories)
+            print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
+            print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
