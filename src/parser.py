@@ -356,22 +356,35 @@ def parse_overview_data(page):
     except Exception:
         data['address'] = ''
 
-    # Клик по кнопке "Показать телефон" перед парсингом
+    # Клик по кнопке "Показать телефон" перед парсингом - улучшенная версия
     try:
+        # Ждем появления кнопки телефона
+        page.wait_for_timeout(2000)
+        
         phone_btn_selectors = [
             "button:has-text('Показать телефон')",
-            "button[class*='phone']",
             "div.business-contacts-view__phone button",
             "span:has-text('Показать телефон')",
-            "[aria-label*='телефон'] button"
+            "button[class*='phone']",
+            "[aria-label*='телефон'] button",
+            "div.business-phones-view button"
         ]
 
+        phone_clicked = False
         for selector in phone_btn_selectors:
-            show_phone_btn = page.query_selector(selector)
-            if show_phone_btn:
-                show_phone_btn.click()
-                page.wait_for_timeout(1500)
-                break
+            try:
+                show_phone_btn = page.query_selector(selector)
+                if show_phone_btn and show_phone_btn.is_visible():
+                    print(f"Кликаем по кнопке телефона: {selector}")
+                    show_phone_btn.click()
+                    page.wait_for_timeout(2000)
+                    phone_clicked = True
+                    break
+            except Exception:
+                continue
+        
+        if not phone_clicked:
+            print("Кнопка 'Показать телефон' не найдена")
     except Exception:
         pass
 
@@ -457,23 +470,44 @@ def parse_overview_data(page):
     except Exception:
         data['description'] = ''
 
-    # Категории товаров и услуг
+    # Категории бизнеса (основные)
     try:
-        # Основные селекторы для категорий
-        category_selectors = [
-            "div.business-related-items-rubricator__category",
-            "div.business-card-title-view__categories span", 
-            "span[class*='category']"
+        # Сначала ищем основные категории бизнеса
+        business_category_selectors = [
+            "div.business-card-title-view__categories span",
+            "div.business-summary-view__categories span",
+            "span.business-card-title-view__category",
+            "div.card-title-view__categories span",
+            "[class*='business-card'] [class*='categories'] span",
+            "div[class*='category'] span"
         ]
 
         data['categories'] = []
-        for selector in category_selectors:
+        for selector in business_category_selectors:
             cats = page.query_selector_all(selector)
             if cats:
                 categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
                 if categories:
                     data['categories'] = categories
+                    print(f"Найдены основные категории бизнеса: {categories}")
                     break
+        
+        # Если основные категории не найдены, пробуем категории товаров/услуг
+        if not data['categories']:
+            service_category_selectors = [
+                "div.business-related-items-rubricator__category",
+                "span[class*='category']"
+            ]
+            
+            for selector in service_category_selectors:
+                cats = page.query_selector_all(selector)
+                if cats:
+                    categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
+                    if categories:
+                        # Берем только первые 5 категорий, чтобы не было слишком много
+                        data['categories'] = categories[:5]
+                        print(f"Найдены категории услуг: {data['categories']}")
+                        break
     except Exception:
         data['categories'] = []
 
@@ -885,43 +919,124 @@ def parse_reviews(page):
 def parse_news(page):
     """Парсит новости"""
     try:
-        news_tab = page.query_selector("div.tabs-select-view__title._name_feed, div[role='tab']:has-text('Лента'), button:has-text('Лента')")
-        if news_tab:
-            news_tab.click()
-            print("Клик по вкладке 'Лента'")
-            page.wait_for_timeout(1500)
+        # Расширенный поиск вкладки новостей/ленты
+        news_tab_selectors = [
+            "div.tabs-select-view__title._name_feed",
+            "div[role='tab']:has-text('Лента')",
+            "button:has-text('Лента')",
+            "div[role='tab']:has-text('Новости')",
+            "button:has-text('Новости')",
+            "div.tabs-select-view__tab:has-text('Лента')",
+            "div.tabs-select-view__tab:has-text('Новости')"
+        ]
+        
+        news_tab_found = False
+        for selector in news_tab_selectors:
+            news_tab = page.query_selector(selector)
+            if news_tab:
+                try:
+                    news_tab.click()
+                    print(f"Клик по вкладке новостей: {selector}")
+                    page.wait_for_timeout(2000)
+                    news_tab_found = True
+                    break
+                except Exception:
+                    continue
+        
+        if not news_tab_found:
+            print("Вкладка 'Лента/Новости' не найдена")
 
         news = []
-        news_blocks = page.query_selector_all("div.feed-post-view, div[class*='news-item']")
+        
+        # Расширенные селекторы для новостей
+        news_block_selectors = [
+            "div.feed-post-view",
+            "div[class*='news-item']",
+            "div[class*='feed-item']",
+            "div[class*='post-view']"
+        ]
+        
+        news_blocks = []
+        for selector in news_block_selectors:
+            blocks = page.query_selector_all(selector)
+            if blocks:
+                news_blocks.extend(blocks)
+                break
+        
+        print(f"Найдено блоков новостей: {len(news_blocks)}")
+        
         for block in news_blocks:
             try:
-                title_elem = block.query_selector("div.feed-post-view__title, h3, h4")
-                title = title_elem.inner_text() if title_elem else ""
+                # Заголовок
+                title_selectors = [
+                    "div.feed-post-view__title",
+                    "h3", "h4", "h5",
+                    "div[class*='title']",
+                    "span[class*='title']"
+                ]
+                
+                title = ""
+                for sel in title_selectors:
+                    title_elem = block.query_selector(sel)
+                    if title_elem:
+                        title = title_elem.inner_text().strip()
+                        if title:
+                            break
 
-                text_elem = block.query_selector("div.feed-post-view__text, div[class*='text']")
-                text = text_elem.inner_text() if text_elem else ""
+                # Текст
+                text_selectors = [
+                    "div.feed-post-view__text",
+                    "div[class*='text']",
+                    "div[class*='content']",
+                    "p"
+                ]
+                
+                text = ""
+                for sel in text_selectors:
+                    text_elem = block.query_selector(sel)
+                    if text_elem:
+                        text = text_elem.inner_text().strip()
+                        if text:
+                            break
 
-                date_elem = block.query_selector("div.feed-post-view__date, span[class*='date']")
-                date = date_elem.inner_text() if date_elem else ""
+                # Дата
+                date_selectors = [
+                    "div.feed-post-view__date",
+                    "span[class*='date']",
+                    "time",
+                    "div[class*='time']"
+                ]
+                
+                date = ""
+                for sel in date_selectors:
+                    date_elem = block.query_selector(sel)
+                    if date_elem:
+                        date = date_elem.inner_text().strip()
+                        if date:
+                            break
 
                 # Парсим фото
                 photos = []
                 photo_elems = block.query_selector_all("img")
                 for img in photo_elems:
                     src = img.get_attribute('src')
-                    if src:
+                    if src and 'avatar' in src:  # Только релевантные изображения
                         photos.append(src)
 
-                news.append({
-                    "title": title,
-                    "text": text,
-                    "date": date,
-                    "photos": photos
-                })
+                if title or text:  # Добавляем только если есть контент
+                    news.append({
+                        "title": title,
+                        "text": text,
+                        "date": date,
+                        "photos": photos
+                    })
             except Exception:
                 continue
+        
+        print(f"Спарсено новостей: {len(news)}")
         return news
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка при парсинге новостей: {e}")
         return []
 
 def get_photos_count(page):
