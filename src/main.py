@@ -48,13 +48,19 @@ def main():
                 print(f"Парсинг конкурента: {competitor_title} - {competitor_url}")
                 try:
                     competitor_data = parse_yandex_card(competitor_url)
-                    competitor_data['is_competitor'] = True
-                    competitor_data['competitor_info'] = competitors[0]
+                    
+                    # Проверяем на captcha у конкурента
+                    if competitor_data.get('error') == 'captcha_detected':
+                        print(f"❌ Captcha при парсинге конкурента {competitor_title}, пропускаем")
+                        competitor_data = None
+                    else:
+                        competitor_data['is_competitor'] = True
+                        competitor_data['competitor_info'] = competitors[0]
 
-                    # Сохраняем конкурента с привязкой к основной карточке
-                    save_competitor_to_supabase(competitor_data, main_card_id, url)
+                        # Сохраняем конкурента с привязкой к основной карточке
+                        save_competitor_to_supabase(competitor_data, main_card_id, url)
 
-                    print(f"Конкурент '{competitor_title}' успешно спарсен")
+                        print(f"Конкурент '{competitor_title}' успешно спарсен")
 
                 except Exception as e:
                     print(f"Ошибка при парсинге конкурента: {e}")

@@ -442,8 +442,21 @@ def parse_overview_data(page):
 
     # Рейтинг
     try:
-        rating_el = page.query_selector("span.business-rating-badge-view__rating-text, span[class*='rating']")
-        data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+        rating_selectors = [
+            "span.business-rating-badge-view__rating-text",
+            "div.business-header-rating-view__rating span",
+            "span[class*='rating-text']",
+            "span.business-summary-rating-badge-view__rating-text"
+        ]
+        
+        data['rating'] = ''
+        for selector in rating_selectors:
+            rating_el = page.query_selector(selector)
+            if rating_el:
+                rating_text = rating_el.inner_text().replace(',', '.').strip()
+                if rating_text and rating_text != '':
+                    data['rating'] = rating_text
+                    break
     except Exception:
         data['rating'] = ''
 
@@ -533,7 +546,7 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Парсим товары и услуги - УЛУЧШЕННАЯ ВЕРСИЯ
+    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
     try:
         products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
         if products_tab:
@@ -548,60 +561,64 @@ def parse_overview_data(page):
 
             products = []
             product_categories = []
+            processed_categories = set()  # Для избежания дубликатов
 
-            # Ищем категории услуг - из рабочего кода
+            # Ищем категории услуг
             category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
 
             for cat_block in category_blocks:
                 try:
                     # Название категории
                     category_el = cat_block.query_selector('div.business-full-items-grouped-view__category-title')
-                    category = category_el.inner_text().strip() if category_el else "Без категории"
+                    category = category_el.inner_text().strip() if category_el else "Основные услуги"
 
-                    if category not in product_categories:
-                        product_categories.append(category)
+                    # Избегаем дубликатов категорий
+                    if category not in processed_categories:
+                        processed_categories.add(category)
+                        if category not in product_categories:
+                            product_categories.append(category)
 
-                    # Товары/услуги в категории
-                    items = []
-                    item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
+                        # Товары/услуги в категории
+                        items = []
+                        item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
 
-                    for item in item_blocks:
-                        try:
-                            # Пробуем сначала фото-товары
-                            name_el = item.query_selector('div.related-item-photo-view__title')
-                            desc_el = item.query_selector('div.related-item-photo-view__description')
-                            price_el = item.query_selector('span.related-product-view__price')
-                            duration_el = item.query_selector('span.related-product-view__volume')
-                            photo_el = item.query_selector('img.image__img')
+                        for item in item_blocks:
+                            try:
+                                # Пробуем сначала фото-товары
+                                name_el = item.query_selector('div.related-item-photo-view__title')
+                                desc_el = item.query_selector('div.related-item-photo-view__description')
+                                price_el = item.query_selector('span.related-product-view__price')
+                                duration_el = item.query_selector('span.related-product-view__volume')
+                                photo_el = item.query_selector('img.image__img')
 
-                            # Если не найдено, пробуем текстовые услуги
-                            if not name_el:
-                                name_el = item.query_selector('div.related-item-view__title')
-                                desc_el = item.query_selector('div.related-item-view__description')
-                                price_el = item.query_selector('span.related-item-view__price')
+                                # Если не найдено, пробуем текстовые услуги
+                                if not name_el:
+                                    name_el = item.query_selector('div.related-item-view__title')
+                                    desc_el = item.query_selector('div.related-item-view__description')
+                                    price_el = item.query_selector('span.related-item-view__price')
 
-                            name = name_el.inner_text().strip() if name_el else ""
-                            description = desc_el.inner_text().strip() if desc_el else ""
-                            price = price_el.inner_text().strip() if price_el else ""
-                            duration = duration_el.inner_text().strip() if duration_el else ""
-                            photo = photo_el.get_attribute('src') if photo_el else ""
+                                name = name_el.inner_text().strip() if name_el else ""
+                                description = desc_el.inner_text().strip() if desc_el else ""
+                                price = price_el.inner_text().strip() if price_el else ""
+                                duration = duration_el.inner_text().strip() if duration_el else ""
+                                photo = photo_el.get_attribute('src') if photo_el else ""
 
-                            if name:
-                                items.append({
-                                    "name": name,
-                                    "description": description,
-                                    "price": price,
-                                    "duration": duration,
-                                    "photo": photo
-                                })
-                        except Exception:
-                            continue
+                                if name:
+                                    items.append({
+                                        "name": name,
+                                        "description": description,
+                                        "price": price,
+                                        "duration": duration,
+                                        "photo": photo
+                                    })
+                            except Exception:
+                                continue
 
-                    if items:
-                        products.append({
-                            "category": category,
-                            "items": items
-                        })
+                        if items:
+                            products.append({
+                                "category": category,
+                                "items": items
+                            })
                 except Exception:
                     continue
 
@@ -851,9 +868,21 @@ def parse_competitors(page):
     try:
         competitors = []
         
-        # Ищем секцию с похожими местами
-        similar_section = page.query_selector("div.card-similar-carousel-wide")
+        # Ищем секцию с похожими местами - обновленные селекторы
+        similar_selectors = [
+            "div.card-similar-carousel-wide",
+            "div[class*='carousel']",
+            "div[role='presentation'][class*='carousel']"
+        ]
+        
+        similar_section = None
+        for selector in similar_selectors:
+            similar_section = page.query_selector(selector)
+            if similar_section:
+                break
+        
         if similar_section:
+            # Ищем ссылки на конкурентов
             competitor_links = similar_section.query_selector_all("a[href*='/maps/org/']")
             
             for link in competitor_links:
@@ -862,13 +891,32 @@ def parse_competitors(page):
                     if url and not url.startswith('http'):
                         url = 'https://yandex.ru' + url
                     
-                    # Название конкурента
-                    title_elem = link.query_selector("div.search-business-snippet-view__title, span.business-snippet-view__title")
-                    title = title_elem.inner_text().strip() if title_elem else ''
+                    # Название конкурента - обновленные селекторы
+                    title_selectors = [
+                        "div.orgpage-similar-item__title",
+                        "div.search-business-snippet-view__title",
+                        "span.business-snippet-view__title"
+                    ]
                     
-                    # Категория
-                    category_elem = link.query_selector("div.search-business-snippet-view__category")
-                    category = category_elem.inner_text().strip() if category_elem else ''
+                    title = ''
+                    for selector in title_selectors:
+                        title_elem = link.query_selector(selector)
+                        if title_elem:
+                            title = title_elem.inner_text().strip()
+                            break
+                    
+                    # Категория - обновленные селекторы
+                    category_selectors = [
+                        "div.orgpage-similar-item__rubrics",
+                        "div.search-business-snippet-view__category"
+                    ]
+                    
+                    category = ''
+                    for selector in category_selectors:
+                        category_elem = link.query_selector(selector)
+                        if category_elem:
+                            category = category_elem.inner_text().strip()
+                            break
                     
                     # Рейтинг
                     rating_elem = link.query_selector("span.business-rating-badge-view__rating-text")
@@ -881,9 +929,13 @@ def parse_competitors(page):
                             'category': category,
                             'rating': rating
                         })
-                except Exception:
+                        print(f"Найден конкурент: {title} - {rating}")
+                except Exception as e:
+                    print(f"Ошибка при парсинге конкурента: {e}")
                     continue
                     
+        print(f"Всего найдено конкурентов: {len(competitors)}")
         return competitors[:5]  # Ограничиваем 5 конкурентами
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка при поиске конкурентов: {e}")
         return []
