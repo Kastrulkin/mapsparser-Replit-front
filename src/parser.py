@@ -919,15 +919,16 @@ def parse_reviews(page):
 def parse_news(page):
     """Парсит новости"""
     try:
-        # Расширенный поиск вкладки новостей/ленты
+        # Обновленные селекторы для вкладки новостей
         news_tab_selectors = [
-            "div.tabs-select-view__title._name_feed",
-            "div[role='tab']:has-text('Лента')",
-            "button:has-text('Лента')",
+            "div.tabs-select-view__title._name_posts",
+            "div.tabs-select-view__title._name_feed", 
             "div[role='tab']:has-text('Новости')",
             "button:has-text('Новости')",
-            "div.tabs-select-view__tab:has-text('Лента')",
-            "div.tabs-select-view__tab:has-text('Новости')"
+            "div[role='tab']:has-text('Лента')",
+            "button:has-text('Лента')",
+            "div.tabs-select-view__tab:has-text('Новости')",
+            "div.tabs-select-view__tab:has-text('Лента')"
         ]
         
         news_tab_found = False
@@ -944,16 +945,23 @@ def parse_news(page):
                     continue
         
         if not news_tab_found:
-            print("Вкладка 'Лента/Новости' не найдена")
+            print("Вкладка 'Новости/Лента' не найдена")
 
         news = []
         
-        # Расширенные селекторы для новостей
+        # Скролл для загрузки всех новостей
+        for i in range(10):
+            page.mouse.wheel(0, 1000)
+            time.sleep(1)
+        
+        # Обновленные селекторы для новостей
         news_block_selectors = [
+            "div.business-post-carousel-view",
+            "div.business-posts-list-post-view",
             "div.feed-post-view",
-            "div[class*='news-item']",
-            "div[class*='feed-item']",
-            "div[class*='post-view']"
+            "div.business-post-photo-view",
+            "div[class*='post-view']",
+            "div[class*='news-item']"
         ]
         
         news_blocks = []
@@ -961,14 +969,15 @@ def parse_news(page):
             blocks = page.query_selector_all(selector)
             if blocks:
                 news_blocks.extend(blocks)
-                break
+                print(f"Найдено блоков новостей с селектором {selector}: {len(blocks)}")
         
-        print(f"Найдено блоков новостей: {len(news_blocks)}")
+        print(f"Всего найдено блоков новостей: {len(news_blocks)}")
         
         for block in news_blocks:
             try:
-                # Заголовок
+                # Заголовок - расширенные селекторы
                 title_selectors = [
+                    "div.business-posts-list-post-view__title",
                     "div.feed-post-view__title",
                     "h3", "h4", "h5",
                     "div[class*='title']",
@@ -983,9 +992,11 @@ def parse_news(page):
                         if title:
                             break
 
-                # Текст
+                # Текст поста
                 text_selectors = [
+                    "div.business-posts-list-post-view__text",
                     "div.feed-post-view__text",
+                    "div[class*='post-text']",
                     "div[class*='text']",
                     "div[class*='content']",
                     "p"
@@ -999,8 +1010,9 @@ def parse_news(page):
                         if text:
                             break
 
-                # Дата
+                # Дата публикации
                 date_selectors = [
+                    "div.business-posts-list-post-view__date",
                     "div.feed-post-view__date",
                     "span[class*='date']",
                     "time",
@@ -1015,22 +1027,37 @@ def parse_news(page):
                         if date:
                             break
 
-                # Парсим фото
+                # Парсим фотографии
                 photos = []
-                photo_elems = block.query_selector_all("img")
-                for img in photo_elems:
-                    src = img.get_attribute('src')
-                    if src and 'avatar' in src:  # Только релевантные изображения
-                        photos.append(src)
+                photo_selectors = [
+                    "img.image__img",
+                    "img[src*='avatars.mds.yandex.net']",
+                    "img[src*='get-sprav-posts']"
+                ]
+                
+                for sel in photo_selectors:
+                    photo_elems = block.query_selector_all(sel)
+                    for img in photo_elems:
+                        src = img.get_attribute('src')
+                        if src and src not in photos:
+                            photos.append(src)
 
-                if title or text:  # Добавляем только если есть контент
+                # Если это фото-пост без текста, создаем заголовок
+                if not title and not text and photos:
+                    title = f"Фото-пост ({len(photos)} фото)"
+                elif not title and text:
+                    title = text[:50] + "..." if len(text) > 50 else text
+
+                # Добавляем новость если есть контент
+                if title or text or photos:
                     news.append({
                         "title": title,
                         "text": text,
                         "date": date,
                         "photos": photos
                     })
-            except Exception:
+            except Exception as e:
+                print(f"Ошибка при парсинге отдельной новости: {e}")
                 continue
         
         print(f"Спарсено новостей: {len(news)}")
