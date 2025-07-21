@@ -33,6 +33,60 @@ def parse_reviews_from_main_page(page):
 
     return reviews
 
+def parse_news(page):
+    """Парсинг новостей"""
+    return []
+
+def get_photos_count(page):
+    """Получение количества фотографий"""
+    try:
+        photos_count_el = page.query_selector("div.business-images-view__more span")
+        if photos_count_el:
+            text = photos_count_el.inner_text()
+            match = re.search(r"(\d+)", text)
+            return int(match.group(1)) if match else 0
+        return 0
+    except:
+        return 0
+
+def parse_photos(page):
+    """Парсинг фотографий"""
+    return []
+
+def parse_features(page):
+    """Парсинг особенностей"""
+    return []
+
+def parse_competitors(page):
+    """Парсинг конкурентов"""
+    competitors = []
+    try:
+        # Ищем блок с конкурентами
+        similar_block = page.query_selector("div.card-similar-carousel-wide")
+        if similar_block:
+            competitor_items = similar_block.query_selector_all("div.card-similar-item-view")
+            for item in competitor_items:
+                try:
+                    title_el = item.query_selector("div.card-similar-item-view__title")
+                    link_el = item.query_selector("a")
+                    
+                    if title_el and link_el:
+                        title = title_el.inner_text().strip()
+                        url = link_el.get_attribute('href')
+                        if url and not url.startswith('http'):
+                            url = 'https://yandex.ru' + url
+                        
+                        competitors.append({
+                            'title': title,
+                            'url': url
+                        })
+                except:
+                    continue
+    except:
+        pass
+    
+    return competitors
+
 def parse_yandex_card(url: str) -> dict:
     """Основная функция парсинга карточки Яндекс.Карт"""
     with sync_playwright() as p:
