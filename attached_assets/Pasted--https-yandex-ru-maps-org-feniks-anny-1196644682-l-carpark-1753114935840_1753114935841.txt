@@ -1,0 +1,111 @@
+Введите ссылку на карточку Яндекс.Карт:
+https://yandex.ru/maps/org/feniks_anny/1196644682/?l=carparks&ll=30.303885%2C59.863378&z=17.14
+Парсинг основной страницы...
+Начинаем парсинг: https://yandex.ru/maps/org/feniks_anny/1196644682/?l=carparks&ll=30.303885%2C59.863378&z=17.14
+Используем парсинг через Playwright...
+Chromium недоступен: BrowserType.launch: 
+╔══════════════════════════════════════════════════════╗
+║ Host system is missing dependencies to run browsers. ║
+║ Please install them with the following command:      ║
+║                                                      ║
+║     sudo playwright install-deps                     ║
+║                                                      ║
+║ Alternatively, use apt:                              ║
+║     sudo apt-get install libxkbcommon0               ║
+║                                                      ║
+║ <3 Playwright Team                                   ║
+╚══════════════════════════════════════════════════════╝
+Используем Firefox
+Клик по вкладке 'Обзор'.
+Кликаем по кнопке телефона: span:has-text('Показать телефон')
+Найден телефон: +7 (921) 771-70-66
+Найдены основные категории бизнеса: ['Салон красоты', 'Ногтевая студия']
+Клик по вкладке 'Товары и услуги'
+Найдено категорий в рубрикаторе: 15
+Кликаем по категории: барбер
+Кликаем по категории: Барбер (Доп. услуги)
+Кликаем по категории: Депиляция воск
+Кликаем по категории: Депиляция сахар/воск
+Кликаем по категории: Депиляция Сахар/воск
+Кликаем по категории: Детская стрижка ( до 10 лет ) девочки
+Кликаем по категории: Коррекция & окрашивание бровей
+Кликаем по категории: Косметолог ( пилинг)
+Кликаем по категории: Маникюр " ведущий мастер"
+Кликаем по категории: Массаж
+Кликаем по категории: Окантовка волос
+Кликаем по категории: Окрашивавние волос
+Кликаем по категории: ОКРАШИВАНИЕ ХНОЙ
+Кликаем по категории: Педикюр " ведущий мастер"
+Кликаем по категории: Стрижка волос (длинные волосы)
+Найдены категории товаров с селектором: div.business-full-items-grouped-view__category (1 шт.)
+Собрано категорий товаров: 1
+Собрано групп товаров: 1
+Рубрика (основные категории бизнеса): ['Салон красоты', 'Ногтевая студия']
+Категории товаров/услуг (1): ['барбер']
+Возвращаемся на вкладку 'Обзор' для парсинга часов работы
+Найдена вкладка 'Отзывы' с селектором: div[role='tab']:has-text('Отзывы')
+Парсинг завершен (Firefox). Найдено: название='Феникс Анны', адрес='Санкт-Петербург, Новоизмайловский просп., 13, корп. 2этаж 2'
+DEBUG overview: {'title': 'Феникс Анны', 'address': 'Санкт-Петербург, Новоизмайловский просп., 13, корп. 2этаж 2', 'phone': '+7 (921) 771-70-66', 'site': 'https://yandex.com/maps/', 'description': 'Модельная женская стрижка', 'categories': ['барбер'], 'hours': '', 'hours_full': [], 'rating': '4.6', 'ratings_count': '75', 'reviews_count': '', 'social_links': ['https://vk.com/club20089532', 'https://vk.com/yandex.maps', 'https://t.me/mapsyandex']}
+Предупреждение: Переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены
+Данные не будут сохранены в базу данных
+Конкуренты не найдены в разделе 'Похожие места рядом'
+Результат парсинга основной карточки:
+{'address': 'Санкт-Петербург, Новоизмайловский просп., 13, корп. 2этаж 2',
+ 'categories': ['барбер'],
+ 'competitors': [],
+ 'description': 'Модельная женская стрижка',
+ 'features_full': [],
+ 'hours': '',
+ 'hours_full': [],
+ 'nearest_metro': {'distance': '1,27\xa0км', 'name': 'Парк Победы (закрыта)'},
+ 'nearest_stop': {'distance': '174\xa0м',
+                  'name': 'Новоизмайловский проспект / Бассейная улица'},
+ 'news': [],
+ 'overview': {'address': 'Санкт-Петербург, Новоизмайловский просп., 13, корп. '
+                         '2этаж 2',
+              'categories': ['барбер'],
+              'description': 'Модельная женская стрижка',
+              'hours': '',
+              'hours_full': [],
+              'phone': '+7 (921) 771-70-66',
+              'rating': '4.6',
+              'ratings_count': '75',
+              'reviews_count': '',
+              'site': 'https://yandex.com/maps/',
+              'social_links': ['https://vk.com/club20089532',
+                               'https://vk.com/yandex.maps',
+                               'https://t.me/mapsyandex'],
+              'title': 'Феникс Анны'},
+ 'phone': '+7 (921) 771-70-66',
+ 'photos': [],
+ 'photos_count': 0,
+ 'product_categories': ['барбер'],
+ 'products': [{'category': 'барбер',
+               'items': [{'description': 'Удаление волос из ушей у мужчин',
+                          'duration': '15 мин',
+                          'name': 'Шугаринг ушей',
+                          'photo': 'https://avatars.mds.yandex.net/get-sprav-products/2790747/2a00000193446aedbbfd0c15efdd6d798932/M_height',
+                          'price': '600 ₽'},
+                         {'description': 'Удаление волос из ушей у мужчин',
+                          'duration': '15 мин',
+                          'name': 'Шугаринг ушей',
+                          'photo': 'https://avatars.mds.yandex.net/get-sprav-products/2790747/2a00000193446aedbbfd0c15efdd6d798932/M_height',
+                          'price': '600 ₽'}]}],
+ 'rating': '4.6',
+ 'ratings_count': '75',
+ 'reviews_count': '',
+ 'rubric': ['Салон красоты', 'Ногтевая студия'],
+ 'site': 'https://yandex.com/maps/',
+ 'social_links': ['https://vk.com/club20089532',
+                  'https://vk.com/yandex.maps',
+                  'https://t.me/mapsyandex'],
+ 'title': 'Феникс Анны',
+ 'url': 'https://yandex.ru/maps/org/feniks_anny/1196644682/?l=carparks&ll=30.303885%2C59.863378&z=17.14'}
+Анализ данных...
+Произошла ошибка: AttributeError: 'NoneType' object has no attribute 'get'
+Детальная информация об ошибке:
+Traceback (most recent call last):
+  File "/home/runner/workspace/src/main.py", line 104, in main
+    'reviews_count': card_data.get('reviews_count', '') or card_data.get('reviews', {}).get('reviews_count', ''),
+                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'get'
