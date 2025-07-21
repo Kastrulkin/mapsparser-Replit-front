@@ -809,18 +809,30 @@ def parse_reviews(page):
             count_selectors = [
                 "h2.card-section-header__title._wide",
                 "div.business-reviews-card-view__header h2",
-                "h2:has-text('отзыв')"
+                "h2:has-text('отзыв')",
+                "span.business-rating-badge-view__reviews-count",
+                "div.business-header-rating-view__text._clickable",
+                "div[class*='reviews-count']",
+                "span:has-text('отзыв')",
+                "[class*='rating-badge'] [class*='count']"
             ]
 
+            reviews_data['reviews_count'] = ''
             for selector in count_selectors:
                 count_el = page.query_selector(selector)
                 if count_el:
-                    text = count_el.inner_text()
-                    match = re.search(r"(\d+)", text.replace('\xa0', ' '))
+                    text = count_el.inner_text().strip()
+                    # Извлекаем числа из текста типа "125 отзывов" или "1 отзыв"
+                    match = re.search(r"(\d+(?:\s*\d+)*)", text.replace('\xa0', ' ').replace(' ', ''))
                     if match:
-                        reviews_data['reviews_count'] = match.group(1)
-                        break
-        except Exception:
+                        # Очищаем от пробелов и берем только цифры
+                        number_str = re.sub(r'\D', '', match.group(1))
+                        if number_str:
+                            reviews_data['reviews_count'] = number_str
+                            print(f"Найдено количество отзывов: {reviews_data['reviews_count']}")
+                            break
+        except Exception as e:
+            print(f"Ошибка при подсчете отзывов: {e}")
             pass
 
         # Скролл для загрузки отзывов
@@ -860,6 +872,23 @@ def parse_reviews(page):
         # Парсим отзывы с ИМЕНАМИ авторов
         try:
             review_blocks = page.query_selector_all("div.business-review-view")
+            print(f"Найдено блоков отзывов: {len(review_blocks)}")
+            
+            # Сначала кликаем по всем кнопкам "Показать ответ организации"
+            try:
+                reply_buttons = page.query_selector_all("button:has-text('Показать ответ организации'), span:has-text('Показать ответ организации'), div:has-text('Показать ответ организации')")
+                print(f"Найдено кнопок ответов организации: {len(reply_buttons)}")
+                for i, btn in enumerate(reply_buttons):
+                    try:
+                        if btn.is_visible():
+                            btn.click()
+                            page.wait_for_timeout(300)  # Небольшая пауза между кликами
+                            print(f"Кликнули по кнопке ответа №{i+1}")
+                    except Exception:
+                        continue
+            except Exception as e:
+                print(f"Ошибка при клике по кнопкам ответов: {e}")
+
             for block in review_blocks:
                 try:
                     # Имя автора - УЛУЧШЕННЫЙ парсинг
