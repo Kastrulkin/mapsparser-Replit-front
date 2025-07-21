@@ -400,13 +400,16 @@ def parse_overview_data(page):
             "div[class*='phone'] span",
             "[data-bem*='phone'] span",
             "div.business-contacts-view span[title*='+7']",
-            "span[title^='+7']"
+            "span[title^='+7']",
+            "div.business-phones-view span",
+            "span:has-text('+7')",
+            "div:has-text('Показать телефон')"
         ]
 
         data['phone'] = ''
         for selector in phone_selectors:
-            phone_elem = page.query_selector(selector)
-            if phone_elem:
+            phone_elems = page.query_selector_all(selector)
+            for phone_elem in phone_elems:
                 phone_text = phone_elem.inner_text().strip()
                 # Проверяем на наличие цифр и символов телефона
                 if re.search(r'[\d+\-\(\)\s]{7,}', phone_text):
@@ -414,6 +417,7 @@ def parse_overview_data(page):
                     phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', phone_text).strip()
                     if len(phone_cleaned) >= 7:  # Минимальная длина телефона
                         data['phone'] = phone_cleaned
+                        print(f"Найден телефон: {data['phone']}")
                         break
 
                 # Также проверяем атрибут title
@@ -422,7 +426,11 @@ def parse_overview_data(page):
                     phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', title_attr).strip()
                     if len(phone_cleaned) >= 7:
                         data['phone'] = phone_cleaned
+                        print(f"Найден телефон в title: {data['phone']}")
                         break
+            
+            if data['phone']:
+                break
     except Exception:
         data['phone'] = ''
 
@@ -495,8 +503,7 @@ def parse_overview_data(page):
         # Если основные категории не найдены, пробуем категории товаров/услуг
         if not data['categories']:
             service_category_selectors = [
-                "div.business-related-items-rubricator__category",
-                "span[class*='category']"
+                "div.business-related-items-rubricator__category"
             ]
             
             for selector in service_category_selectors:
@@ -504,9 +511,9 @@ def parse_overview_data(page):
                 if cats:
                     categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
                     if categories:
-                        # Берем только первые 5 категорий, чтобы не было слишком много
-                        data['categories'] = categories[:5]
-                        print(f"Найдены категории услуг: {data['categories']}")
+                        # Берем ВСЕ категории товаров и услуг
+                        data['categories'] = categories
+                        print(f"Найдены ВСЕ категории услуг ({len(categories)}): {categories[:5]}..." if len(categories) > 5 else f"Найдены категории услуг: {categories}")
                         break
     except Exception:
         data['categories'] = []
@@ -1060,8 +1067,18 @@ def parse_news(page):
                 print(f"Ошибка при парсинге отдельной новости: {e}")
                 continue
         
-        print(f"Спарсено новостей: {len(news)}")
-        return news
+        # Убираем дубликаты новостей
+        unique_news = []
+        seen_titles = set()
+        
+        for item in news:
+            title = item.get('title', '')
+            if title and title not in seen_titles:
+                unique_news.append(item)
+                seen_titles.add(title)
+        
+        print(f"Спарсено уникальных новостей: {len(unique_news)}")
+        return unique_news
     except Exception as e:
         print(f"Ошибка при парсинге новостей: {e}")
         return []
@@ -1109,12 +1126,27 @@ def parse_features(page):
     """Парсинг особенностей"""
     try:
         features = []
-        feature_elems = page.query_selector_all("div.business-features-view__item, div[class*='feature']")
-        for elem in feature_elems:
-            text = elem.inner_text().strip()
-            if text:
-                features.append(text)
-        return features
+        
+        # Ищем особенности в основном блоке
+        feature_selectors = [
+            "div.business-features-view__item",
+            "div[class*='feature-item']",
+            "span.business-feature-view__text"
+        ]
+        
+        processed_features = set()  # Для избежания дублей
+        
+        for selector in feature_selectors:
+            feature_elems = page.query_selector_all(selector)
+            for elem in feature_elems:
+                text = elem.inner_text().strip()
+                if text and len(text) < 100 and text not in processed_features:  # Фильтруем слишком длинные тексты
+                    # Исключаем служебные тексты
+                    if not any(skip_word in text.lower() for skip_word in ['показать', 'график', 'подробнее', 'владелец', 'рейтинг', 'маршрут']):
+                        features.append(text)
+                        processed_features.add(text)
+        
+        return list(set(features))  # Убираем дубли
     except Exception:
         return []
 
