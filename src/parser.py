@@ -360,7 +360,7 @@ def parse_overview_data(page):
     try:
         # Ждем появления кнопки телефона
         page.wait_for_timeout(2000)
-        
+
         phone_btn_selectors = [
             "button:has-text('Показать телефон')",
             "div.business-contacts-view__phone button",
@@ -382,7 +382,7 @@ def parse_overview_data(page):
                     break
             except Exception:
                 continue
-        
+
         if not phone_clicked:
             print("Кнопка 'Показать телефон' не найдена")
     except Exception:
@@ -428,7 +428,7 @@ def parse_overview_data(page):
                         data['phone'] = phone_cleaned
                         print(f"Найден телефон в title: {data['phone']}")
                         break
-            
+
             if data['phone']:
                 break
     except Exception:
@@ -499,13 +499,13 @@ def parse_overview_data(page):
                     data['categories'] = categories
                     print(f"Найдены основные категории бизнеса: {categories}")
                     break
-        
+
         # Если основные категории не найдены, пробуем категории товаров/услуг
         if not data['categories']:
             service_category_selectors = [
                 "div.business-related-items-rubricator__category"
             ]
-            
+
             for selector in service_category_selectors:
                 cats = page.query_selector_all(selector)
                 if cats:
@@ -778,11 +778,6 @@ def parse_overview_data(page):
 
             data['products'] = products
             data['product_categories'] = product_categories
-            # Только если основные категории бизнеса пусты, используем категории товаров
-            if not data.get('categories') or len(data.get('categories', [])) == 0:
-                data['categories'] = product_categories
-            else:
-                print(f"Сохраняем основные категории бизнеса: {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
@@ -879,7 +874,7 @@ def parse_reviews(page):
         try:
             review_blocks = page.query_selector_all("div.business-review-view")
             print(f"Найдено блоков отзывов: {len(review_blocks)}")
-            
+
             for block in review_blocks:
                 try:
                     # Имя автора - УЛУЧШЕННЫЙ парсинг
@@ -906,7 +901,7 @@ def parse_reviews(page):
 
                     # Рейтинг (звёзды) - улучшенный парсинг
                     rating = 0
-                    
+
                     # Расширенные селекторы для звёзд
                     star_selectors = [
                         "span.business-rating-view__star._fill",
@@ -917,13 +912,13 @@ def parse_reviews(page):
                         "div[class*='stars'] span[class*='fill']",
                         "span[class*='star'][class*='active']"
                     ]
-                    
+
                     for selector in star_selectors:
                         rating_els = block.query_selector_all(selector)
                         if rating_els and len(rating_els) > 0:
                             rating = len(rating_els)
                             break
-                    
+
                     # Если не нашли звёзды, ищем атрибут с рейтингом
                     if rating == 0:
                         rating_meta = block.query_selector("meta[itemprop='ratingValue']")
@@ -932,7 +927,7 @@ def parse_reviews(page):
                                 rating = int(float(rating_meta.get_attribute('content')))
                             except:
                                 pass
-                    
+
                     # Если всё ещё не нашли, ищем текстовый рейтинг
                     if rating == 0:
                         rating_text_selectors = [
@@ -941,7 +936,7 @@ def parse_reviews(page):
                             "div.business-review-view__rating",
                             "span[class*='review-rating']"
                         ]
-                        
+
                         for selector in rating_text_selectors:
                             rating_text_elem = block.query_selector(selector)
                             if rating_text_elem:
@@ -1013,13 +1008,13 @@ def parse_news(page):
             try:
                 date_el = block.query_selector('div.business-posts-list-post-view__date')
                 date = date_el.inner_text().strip() if date_el else ''
-                
+
                 text_el = block.query_selector('div.business-posts-list-post-view__text')
                 text = text_el.inner_text().strip() if text_el else ''
-                
+
                 photo_els = block.query_selector_all('img.image__img')
                 photos = [el.get_attribute('src') for el in photo_els if el.get_attribute('src')]
-                
+
                 news.append({
                     'date': date,
                     'text': text,
@@ -1027,7 +1022,7 @@ def parse_news(page):
                 })
             except Exception:
                 continue
-        
+
         print(f"Спарсено новостей: {len(news)}")
         return news
     except Exception as e:
