@@ -545,7 +545,19 @@ def parse_overview_data(page):
     except Exception:
         data['reviews_count'] = ''
 
-    # Часы работы - улучшенный парсинг
+    # Социальные сети
+    try:
+        social_links = []
+        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me']")
+        for el in social_els:
+            href = el.get_attribute('href')
+            if href:
+                social_links.append(href)
+        data['social_links'] = social_links
+    except Exception:
+        data['social_links'] = []
+
+    # Часы работы - ВАЖНО: парсим ДО перехода на другие вкладки
     try:
         hours_selectors = [
             "div.business-working-hours-view span",
@@ -559,23 +571,60 @@ def parse_overview_data(page):
             hours_el = page.query_selector(selector)
             if hours_el:
                 hours_text = hours_el.inner_text().strip()
-                if hours_text and 'круглосуточно' in hours_text.lower() or 'открыт' in hours_text.lower() or 'закрыт' in hours_text.lower() or ':' in hours_text:
+                if hours_text and ('круглосуточно' in hours_text.lower() or 'открыт' in hours_text.lower() or 'закрыт' in hours_text.lower() or ':' in hours_text):
                     data['hours'] = hours_text
                     break
     except Exception:
         data['hours'] = ''
 
-    # Социальные сети
+    # Полное расписание - ВАЖНО: парсим ДО перехода на другие вкладки
     try:
-        social_links = []
-        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me']")
-        for el in social_els:
-            href = el.get_attribute('href')
-            if href:
-                social_links.append(href)
-        data['social_links'] = social_links
+        full_schedule = []
+
+        # Клик по часам работы для раскрытия полного расписания - улучшенная версия
+        hours_selectors_for_click = [
+            "div.business-working-hours-view",
+            "div[class*='working-hours']",
+            "div.business-hours-view",
+            "span.business-hours-view__current-status"
+        ]
+
+        for selector in hours_selectors_for_click:
+            hours_click = page.query_selector(selector)
+            if hours_click:
+                try:
+                    hours_click.click()
+                    page.wait_for_timeout(800)
+                    break
+                except:
+                    continue
+
+        schedule_selectors = [
+            "div.business-hours-view__day",
+            "div[class*='schedule-day']", 
+            "div[class*='hours-day']",
+            "div.business-working-intervals-view__item"
+        ]
+
+        for selector in schedule_selectors:
+            schedule_items = page.query_selector_all(selector)
+            for item in schedule_items:
+                try:
+                    day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
+                    time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
+                    day = day_el.inner_text().strip() if day_el else ''
+                    work_time = time_el.inner_text().strip() if time_el else ''
+                    if day and work_time:
+                        full_schedule.append(f"{day}: {work_time}")
+                except Exception:
+                    continue
+
+            if full_schedule:
+                break
+
+        data['hours_full'] = full_schedule
     except Exception:
-        data['social_links'] = []
+        data['hours_full'] = []
 
     # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
     try:
@@ -748,504 +797,3 @@ def parse_overview_data(page):
         if overview_tab:
             overview_tab.click()
             print("Возвращаемся на вкладку 'Обзор' для парсинга часов работы")
-            page.wait_for_timeout(1500)
-    except Exception:
-        pass
-
-    # Полное расписание - парсинг в конце для стабильности
-    try:
-        full_schedule = []
-
-        # Клик по часам работы для раскрытия полного расписания - улучшенная версия
-        hours_selectors_for_click = [
-            "div.business-working-hours-view",
-            "div[class*='working-hours']",
-            "div.business-hours-view",
-            "span.business-hours-view__current-status"
-        ]
-        
-        for selector in hours_selectors_for_click:
-            hours_click = page.query_selector(selector)
-            if hours_click:
-                try:
-                    hours_click.click()
-                    page.wait_for_timeout(800)
-                    break
-                except:
-                    continue
-
-        schedule_selectors = [
-            "div.business-hours-view__day",
-            "div[class*='schedule-day']", 
-            "div[class*='hours-day']",
-            "div.business-working-intervals-view__item"
-        ]
-
-        for selector in schedule_selectors:
-            schedule_items = page.query_selector_all(selector)
-            for item in schedule_items:
-                try:
-                    day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
-                    time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
-                    day = day_el.inner_text().strip() if day_el else ''
-                    work_time = time_el.inner_text().strip() if time_el else ''
-                    if day and work_time:
-                        full_schedule.append(f"{day}: {work_time}")
-                except Exception:
-                    continue
-
-            if full_schedule:
-                break
-
-        data['hours_full'] = full_schedule
-        print(f"Найдено часов работы: {len(full_schedule)}")
-    except Exception:
-        data['hours_full'] = []
-
-    return data
-
-def parse_reviews(page):
-    """Парсит отзывы с правильным подсчетом"""
-    try:
-        reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews, div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
-        if reviews_tab:
-            reviews_tab.click()
-            print("Клик по вкладке 'Отзывы'")
-            page.wait_for_timeout(2000)
-        else:
-            print("Вкладка 'Отзывы' не найдена!")
-
-        reviews_data = {"items": [], "rating": "", "reviews_count": ""}
-
-        # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
-        try:
-            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-            reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
-
-            # Правильный подсчет количества отзывов из заголовка секции
-            count_selectors = [
-                "h2.card-section-header__title._wide",
-                "div.business-reviews-card-view__header h2",
-                "h2:has-text('отзыв')",
-                "span.business-rating-badge-view__reviews-count",
-                "div.business-header-rating-view__text._clickable",
-                "div[class*='reviews-count']",
-                "span:has-text('отзыв')",
-                "[class*='rating-badge'] [class*='count']"
-            ]
-
-            reviews_data['reviews_count'] = ''
-            for selector in count_selectors:
-                count_el = page.query_selector(selector)
-                if count_el:
-                    text = count_el.inner_text().strip()
-                    # Извлекаем числа из текста типа "125 отзывов" или "1 отзыв"  
-                    import re
-                    match = re.search(r"(\d+(?:\s*\d+)*)", text.replace('\xa0', ' ').replace(' ', ''))
-                    if match:
-                        # Очищаем от пробелов и берем только цифры
-                        number_str = re.sub(r'\D', '', match.group(1))
-                        if number_str:
-                            reviews_data['reviews_count'] = number_str
-                            print(f"Найдено количество отзывов: {reviews_data['reviews_count']}")
-                            break
-        except Exception as e:
-            print(f"Ошибка при подсчете отзывов: {e}")
-            pass
-
-        # Скролл для загрузки отзывов
-        max_loops = 100
-        patience = 30
-        last_count = 0
-        same_count = 0
-
-        for i in range(max_loops):
-            # Иногда двигаем мышь
-            if i % 7 == 0:
-                page.mouse.move(random.randint(200, 600), random.randint(400, 800))
-
-            # Иногда кликаем по вкладке 'Отзывы'
-            if i % 25 == 0 and reviews_tab:
-                reviews_tab.click()
-                time.sleep(0.5)
-
-            # Прокручиваем вниз
-            page.mouse.wheel(0, 1000)
-            time.sleep(random.uniform(1.5, 2.5))
-
-            # Проверяем количество загруженных отзывов
-            current_reviews = page.query_selector_all("div.business-review-view, div[class*='review-item']")
-            current_count = len(current_reviews)
-
-            if current_count == last_count:
-                same_count += 1
-                if same_count >= patience:
-                    print(f"Отзывы перестали загружаться после {i} итераций. Найдено {current_count} отзывов")
-                    break
-            else:
-                same_count = 0
-                last_count = current_count
-                print(f"Загружено отзывов: {current_count}")
-
-        # Парсим отзывы с ИМЕНАМИ авторов
-        try:
-            review_blocks = page.query_selector_all("div.business-review-view")
-            print(f"Найдено блоков отзывов: {len(review_blocks)}")
-
-            for block in review_blocks:
-                try:
-                    # Имя автора - УЛУЧШЕННЫЙ парсинг
-                    author = ""
-                    author_selectors = [
-                        "span.business-review-view__author-name",
-                        "div.business-review-view__author span",
-                        "div.business-review-view__author",
-                        "[class*='author-name']",
-                        "[data-bem*='author'] span"
-                    ]
-
-                    for selector in author_selectors:
-                        author_elem = block.query_selector(selector)
-                        if author_elem:
-                            author_text = author_elem.inner_text().strip()
-                            if author_text and not author_text.isspace():
-                                author = author_text
-                                break
-
-                    # Дата
-                    date_el = block.query_selector("div.business-review-view__date, span.business-review-view__date, span[class*='date']")
-                    date = date_el.inner_text().strip() if date_el else ""
-
-                    # Рейтинг (звёзды) - улучшенный парсинг
-                    rating = 0
-
-                    # Расширенные селекторы для звёзд
-                    star_selectors = [
-                        "span.business-rating-view__star._fill",
-                        "span[class*='star-fill']", 
-                        "span[class*='rating-star'][class*='fill']",
-                        "div.business-rating-view__stars span._fill",
-                        "span.business-review-view__rating-star._fill",
-                        "div[class*='stars'] span[class*='fill']",
-                        "span[class*='star'][class*='active']"
-                    ]
-
-                    for selector in star_selectors:
-                        rating_els = block.query_selector_all(selector)
-                        if rating_els and len(rating_els) > 0:
-                            rating = len(rating_els)
-                            break
-
-                    # Если не нашли звёзды, ищем атрибут с рейтингом
-                    if rating == 0:
-                        rating_meta = block.query_selector("meta[itemprop='ratingValue']")
-                        if rating_meta:
-                            try:
-                                rating = int(float(rating_meta.get_attribute('content')))
-                            except:
-                                pass
-
-                    # Если всё ещё не нашли, ищем текстовый рейтинг
-                    if rating == 0:
-                        rating_text_selectors = [
-                            "span[class*='rating-text']",
-                            "div[class*='score']",
-                            "div.business-review-view__rating",
-                            "span[class*='review-rating']"
-                        ]
-
-                        for selector in rating_text_selectors:
-                            rating_text_elem = block.query_selector(selector)
-                            if rating_text_elem:
-                                rating_text = rating_text_elem.inner_text().strip()
-                                # Ищем число в тексте (например "5 из 5", "4.5")
-                                import re
-                                match = re.search(r'(\d+(?:\.\d+)?)', rating_text)
-                                if match:
-                                    try:
-                                        rating = int(float(match.group(1)))
-                                        break
-                                    except:
-                                        continue
-
-                    # Текст отзыва
-                    text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
-                    text = text_el.inner_text().strip() if text_el else ""
-
-                    # Ответ организации - как в рабочем коде
-                    reply = ""
-                    try:
-                        reply_btn = block.query_selector("div.business-review-view__comment-expand[aria-label='Посмотреть ответ организации']")
-                        if reply_btn and reply_btn.is_visible():
-                            reply_btn.click()
-                            page.wait_for_timeout(500)
-                            reply_el = block.query_selector("div.business-review-comment-content__bubble")
-                            if reply_el:
-                                reply = reply_el.inner_text().strip()
-                    except Exception:
-                        pass
-
-                    reviews_data['items'].append({
-                        "author": author,
-                        "date": date,
-                        "score": rating,
-                        "text": text,
-                        "org_reply": reply
-                    })
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return reviews_data
-    except Exception:
-        return {"items": [], "rating": "", "reviews_count": ""}
-
-def parse_news(page):
-    """Парсит новости"""
-    try:
-        # Переход на вкладку "Новости"
-        news_tab = page.query_selector("div.tabs-select-view__title._name_posts, div[role='tab']:has-text('Новости'), button:has-text('Новости')")
-        if news_tab:
-            news_tab.click()
-            print("Клик по вкладке 'Новости'")
-            page.wait_for_timeout(1500)
-            # Скролл для новостей
-            for i in range(20):
-                page.mouse.wheel(0, 1000)
-                time.sleep(1.5)
-        else:
-            print("Вкладка 'Новости' не найдена")
-            return []
-
-        # Парсинг новостей - как в рабочем коде
-        news = []
-        news_blocks = page.query_selector_all('div.business-posts-list-post-view')
-        for block in news_blocks:
-            try:
-                date_el = block.query_selector('div.business-posts-list-post-view__date')
-                date = date_el.inner_text().strip() if date_el else ''
-
-                text_el = block.query_selector('div.business-posts-list-post-view__text')
-                text = text_el.inner_text().strip() if text_el else ''
-
-                photo_els = block.query_selector_all('img.image__img')
-                photos = [el.get_attribute('src') for el in photo_els if el.get_attribute('src')]
-
-                news.append({
-                    'date': date,
-                    'text': text,
-                    'photos': photos
-                })
-            except Exception:
-                continue
-
-        print(f"Спарсено новостей: {len(news)}")
-        return news
-    except Exception as e:
-        print(f"Ошибка при парсинге новостей: {e}")
-        return []
-
-def get_photos_count(page):
-    """Получает количество фотографий"""
-    try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
-        if photos_tab:
-            try:
-                counter = photos_tab.query_selector("div.tabs-select-view__counter")
-                if counter:
-                    return counter.inner_text().strip()
-            except Exception:
-                pass
-        return "0"
-    except Exception:
-        return "0"
-
-def parse_photos(page):
-    """Парсинг фотографий"""
-    try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
-        if photos_tab:
-            photos_tab.click()
-            print("Клик по вкладке 'Фото'")
-            page.wait_for_timeout(1500)
-
-            # Скролл для загрузки фото
-            for i in range(20):
-                page.mouse.wheel(0, 1000)
-                time.sleep(1.5)
-
-        photos = []
-        img_elems = page.query_selector_all("img.image__img, img[src*='avatars.mds.yandex.net']")
-        for img in img_elems:
-            src = img.get_attribute('src')
-            if src and src not in photos:
-                photos.append(src)
-        return photos
-    except Exception:
-        return []
-
-def parse_features(page):
-    """Парсинг особенностей"""
-    try:
-        # Переход на вкладку "Особенности"
-        features_tab = page.query_selector("div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
-        if features_tab:
-            features_tab.click()
-            print("Клик по вкладке 'Особенности'")
-            page.wait_for_timeout(1500)
-        else:
-            print("Вкладка 'Особенности' не найдена!")
-
-        # Парсинг особенностей - как в рабочем коде
-        features = []
-        feature_blocks = page.query_selector_all("[class*='features-view__item']")
-        for block in feature_blocks:
-            name_el = block.query_selector("[class*='features-view__item-title']")
-            value_el = block.query_selector("[class*='features-view__item-value']")
-            name = name_el.inner_text().strip() if name_el else ''
-            value = value_el.inner_text().strip() if value_el else ''
-            if name or value:
-                features.append({"name": name, "value": value})
-
-        # Парсинг булевых особенностей (галочки с типом)
-        features_bool = []
-        bool_items = page.query_selector_all("div.business-features-view__bool-item")
-        for item in bool_items:
-            text_el = item.query_selector("div.business-features-view__bool-text")
-            icon_el = item.query_selector("div.business-features-view__bool-icon")
-            text = text_el.inner_text().strip() if text_el else ''
-            is_defined = False
-            if icon_el and '_defined' in (icon_el.get_attribute('class') or ''):
-                is_defined = True
-            if text:
-                features_bool.append({"text": text, "defined": is_defined})
-
-        # Дополнительно: отдельные business-features-view__bool-text без обёртки
-        all_bool_texts = page.query_selector_all("div.business-features-view__bool-text")
-        for text_el in all_bool_texts:
-            text = text_el.inner_text().strip()
-            if text and not any(fb['text'] == text for fb in features_bool):
-                features_bool.append({"text": text, "defined": False})
-
-        # Парсинг ценностных особенностей (категории услуг)
-        features_valued = []
-        valued_blocks = page.query_selector_all("div.business-features-view__valued")
-        for block in valued_blocks:
-            title_el = block.query_selector("span.business-features-view__valued-title")
-            value_el = block.query_selector("span.business-features-view__valued-value")
-            title = title_el.inner_text().strip(':').strip() if title_el else ''
-            value = value_el.inner_text().strip() if value_el else ''
-            if title or value:
-                features_valued.append({"title": title, "value": value})
-
-        # Выделение цен из features_valued
-        features_prices = []
-        for item in features_valued:
-            if 'цена' in item['title'].lower() or '₽' in item['value']:
-                features_prices.append(item)
-
-        # Парсинг категорий из блока orgpage-categories-info-view
-        categories_full = []
-        cat_block = page.query_selector("div.orgpage-categories-info-view")
-        if cat_block:
-            cat_spans = cat_block.query_selector_all("span.button__text")
-            categories_full = [span.inner_text().strip() for span in cat_spans if span.inner_text()]
-
-        # Собираем все особенности в features_full
-        features_full = {
-            "bool": features_bool,
-            "valued": features_valued,
-            "prices": features_prices,
-            "categories": categories_full
-        }
-
-        print(f"Найдено особенностей: bool={len(features_bool)}, valued={len(features_valued)}, prices={len(features_prices)}, categories={len(categories_full)}")
-        return features_full
-    except Exception as e:
-        print(f"Ошибка при парсинге особенностей: {e}")
-        return {
-            "bool": [],
-            "valued": [],
-            "prices": [],
-            "categories": []
-        }
-
-def parse_competitors(page):
-    """Парсинг конкурентов из секции 'Похожие места рядом'"""
-    try:
-        competitors = []
-
-        # Ищем секцию с похожими местами - обновленные селекторы
-        similar_selectors = [
-            "div.card-similar-carousel-wide",
-            "div[class*='carousel']",
-            "div[role='presentation'][class*='carousel']"
-        ]
-
-        similar_section = None
-        for selector in similar_selectors:
-            similar_section = page.query_selector(selector)
-            if similar_section:
-                break
-
-        if similar_section:
-            # Ищем ссылки на конкурентов
-            competitor_links = similar_section.query_selector_all("a[href*='/maps/org/']")
-
-            for link in competitor_links:
-                try:
-                    url = link.get_attribute('href')
-                    if url and not url.startswith('http'):
-                        url = 'https://yandex.ru' + url
-
-                    # Название конкурента - обновленные селекторы
-                    title_selectors = [
-                        "div.orgpage-similar-item__title",
-                        "div.search-business-snippet-view__title",
-                        "span.business-snippet-view__title"
-                    ]
-
-                    title = ''
-                    for selector in title_selectors:
-                        title_elem = link.query_selector(selector)
-                        if title_elem:
-                            title = title_elem.inner_text().strip()
-                            break
-
-                    # Категория - обновленные селекторы
-                    category_selectors = [
-                        "div.orgpage-similar-item__rubrics",
-                        "div.search-business-snippet-view__category"
-                    ]
-
-                    category = ''
-                    for selector in category_selectors:
-                        category_elem = link.query_selector(selector)
-                        if category_elem:
-                            category = category_elem.inner_text().strip()
-                            break
-
-                    # Рейтинг
-                    rating_elem = link.query_selector("span.business-rating-badge-view__rating-text")
-                    rating = rating_elem.inner_text().strip() if rating_elem else ''
-
-                    if title and url:
-                        competitors.append({
-                            'title': title,
-                            'url': url,
-                            'category': category,
-                            'rating': rating
-                        })
-                        print(f"Найден конкурент: {title} - {rating}")
-                except Exception as e:
-                    print(f"Ошибка при парсинге конкурента: {e}")
-                    continue
-
-        print(f"Всего найдено конкурентов: {len(competitors)}")
-        return competitors[:5]  # Ограничиваем 5 конкурентами
-    except Exception as e:
-        print(f"Ошибка при поиске конкурентов: {e}")
-        return []
-
-# This code parses Yandex Maps public pages to extract information like title, address, phone, etc.
