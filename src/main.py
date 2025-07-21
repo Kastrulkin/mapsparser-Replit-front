@@ -21,6 +21,11 @@ def main():
         print("Парсинг основной страницы...")
         card_data = parse_yandex_card(url)
         
+        # Проверяем результат парсинга
+        if not card_data:
+            print("❌ Ошибка: Парсинг вернул пустой результат")
+            return
+            
         # Проверяем на ошибку captcha
         if card_data.get('error') == 'captcha_detected':
             print("❌ Парсинг остановлен из-за captcha")
@@ -80,7 +85,7 @@ def main():
         analysis = analyze_card(card_data)
 
         # Обновляем количество отзывов из секции отзывов
-        if card_data.get('reviews', {}).get('reviews_count'):
+        if card_data and card_data.get('reviews', {}).get('reviews_count'):
             card_data['reviews_count'] = card_data['reviews']['reviews_count']
 
         # Создаем overview для отчета
