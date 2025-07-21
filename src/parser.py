@@ -565,95 +565,39 @@ def parse_overview_data(page):
     except Exception:
         data['hours'] = ''
 
-    # Полное расписание - улучшенный парсинг через кнопку "График"
+    # Полное расписание - улучшенный парсинг
     try:
         full_schedule = []
 
-        # Ищем и кликаем по кнопке "График" для раскрытия полного расписания
-        schedule_button_selectors = [
-            "div.card-feature-view__value:has-text('График')",
-            "div[class*='card-feature-view']:has-text('График')",
-            "button:has-text('График')"
+        # Клик по часам работы для раскрытия полного расписания
+        hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
+        if hours_click:
+            hours_click.click()
+            page.wait_for_timeout(500)
+
+        schedule_selectors = [
+            "div.business-hours-view__day",
+            "div[class*='schedule-day']", 
+            "div[class*='hours-day']"
         ]
 
-        schedule_clicked = False
-        for selector in schedule_button_selectors:
-            try:
-                schedule_btn = page.query_selector(selector)
-                if schedule_btn and schedule_btn.is_visible():
-                    print(f"Кликаем по кнопке График: {selector}")
-                    # Кликаем по родительскому элементу, который содержит интерактивность
-                    parent_btn = schedule_btn.query_selector("xpath=ancestor::*[@role='button' or contains(@class, '_interactive')]")
-                    if parent_btn:
-                        parent_btn.click()
-                    else:
-                        schedule_btn.click()
-                    page.wait_for_timeout(1000)
-                    schedule_clicked = True
-                    break
-            except Exception:
-                continue
-
-        if schedule_clicked:
-            # Парсим раскрытое расписание из новой структуры
-            schedule_items = page.query_selector_all("div.business-working-intervals-view__item")
+        for selector in schedule_selectors:
+            schedule_items = page.query_selector_all(selector)
             for item in schedule_items:
                 try:
-                    day_el = item.query_selector("div.business-working-intervals-view__day")
-                    intervals_el = item.query_selector("div.business-working-intervals-view__intervals")
-                    
+                    day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
+                    time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
                     day = day_el.inner_text().strip() if day_el else ''
-                    
-                    # Собираем все интервалы для дня
-                    if intervals_el:
-                        interval_elements = intervals_el.query_selector_all("div.business-working-intervals-view__interval")
-                        intervals = []
-                        for interval_el in interval_elements:
-                            interval_text = interval_el.inner_text().strip()
-                            if interval_text:
-                                intervals.append(interval_text)
-                        work_time = ", ".join(intervals) if intervals else ''
-                    else:
-                        work_time = ''
-                    
+                    work_time = time_el.inner_text().strip() if time_el else ''
                     if day and work_time:
                         full_schedule.append(f"{day}: {work_time}")
-                        print(f"Найден день: {day}: {work_time}")
                 except Exception:
                     continue
-        
-        # Если через новый способ не получилось, пробуем старый
-        if not full_schedule:
-            # Клик по часам работы для раскрытия полного расписания (старый способ)
-            hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
-            if hours_click:
-                hours_click.click()
-                page.wait_for_timeout(500)
 
-            schedule_selectors = [
-                "div.business-hours-view__day",
-                "div[class*='schedule-day']", 
-                "div[class*='hours-day']"
-            ]
-
-            for selector in schedule_selectors:
-                schedule_items = page.query_selector_all(selector)
-                for item in schedule_items:
-                    try:
-                        day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
-                        time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
-                        day = day_el.inner_text().strip() if day_el else ''
-                        work_time = time_el.inner_text().strip() if time_el else ''
-                        if day and work_time:
-                            full_schedule.append(f"{day}: {work_time}")
-                    except Exception:
-                        continue
-
-                if full_schedule:
-                    break
+            if full_schedule:
+                break
 
         data['hours_full'] = full_schedule
-        print(f"Найдено расписание ({len(full_schedule)} дней): {full_schedule}")
     except Exception:
         data['hours_full'] = []
 
@@ -669,7 +613,7 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
+    # Парсим товары и услуги - ПОЛНАЯ ВЕРСИЯ
     try:
         products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
         if products_tab:
@@ -824,40 +768,39 @@ def parse_overview_data(page):
             data['products'] = products
             data['product_categories'] = product_categories
             
-            # Собираем ВСЕ категории товаров и услуг
-            all_categories = set()
+            # Дополнительно ищем все категории как в рабочем коде
+            all_categories = set(product_categories)
             
-            # Добавляем категории из product_categories
-            all_categories.update(product_categories)
-            
-            # Добавляем категории из products
-            for product_group in products:
-                category_name = product_group.get('category', '')
-                if category_name:
-                    all_categories.add(category_name)
-            
-            # Дополнительно ищем категории в рубрикаторе
+            # Ищем категории в рубрикаторе
             try:
                 rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
-                for cat_elem in rubricator_categories:
-                    cat_text = cat_elem.inner_text().strip()
+                for cat in rubricator_categories:
+                    cat_text = cat.inner_text().strip()
                     if cat_text:
                         all_categories.add(cat_text)
-            except Exception:
+            except:
                 pass
-            
+                
+            # Ищем категории в других местах
+            try:
+                other_cats = page.query_selector_all("span.button__text, div[class*='category'] span")
+                for cat in other_cats:
+                    cat_text = cat.inner_text().strip()
+                    if cat_text and len(cat_text) < 50:  # Исключаем слишком длинные тексты
+                        all_categories.add(cat_text)
+            except:
+                pass
+                
+            # Категории товаров/услуг сохраняем в categories
             data['categories'] = list(all_categories)
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
             print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
-            data['categories'] = []
-            data['categories'] = []
     except Exception:
         data['products'] = []
         data['product_categories'] = []
-        data['categories'] = []
 
     return data
 
