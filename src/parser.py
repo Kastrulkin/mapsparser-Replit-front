@@ -767,10 +767,34 @@ def parse_overview_data(page):
 
             data['products'] = products
             data['product_categories'] = product_categories
+            
+            # Дополнительно ищем все категории как в рабочем коде
+            all_categories = set(product_categories)
+            
+            # Ищем категории в рубрикаторе
+            try:
+                rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
+                for cat in rubricator_categories:
+                    cat_text = cat.inner_text().strip()
+                    if cat_text:
+                        all_categories.add(cat_text)
+            except:
+                pass
+                
+            # Ищем категории в других местах
+            try:
+                other_cats = page.query_selector_all("span.button__text, div[class*='category'] span")
+                for cat in other_cats:
+                    cat_text = cat.inner_text().strip()
+                    if cat_text and len(cat_text) < 50:  # Исключаем слишком длинные тексты
+                        all_categories.add(cat_text)
+            except:
+                pass
+                
             # Категории товаров/услуг сохраняем в categories
-            data['categories'] = product_categories
+            data['categories'] = list(all_categories)
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
-            print(f"Категории товаров/услуг ({len(product_categories)}): {product_categories}")
+            print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
         else:
             data['products'] = []
             data['product_categories'] = []
@@ -796,7 +820,7 @@ def parse_reviews(page):
         # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
         try:
             rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-            reviews_data['rating'] = ratingel.inner_text().replace(',', '.').strip() if rating_el else ''
+            reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
 
             # Правильный подсчет количества отзывов из заголовка секции
             count_selectors = [

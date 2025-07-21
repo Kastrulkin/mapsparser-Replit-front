@@ -96,7 +96,7 @@ def main():
             'hours_full': card_data.get('hours_full', []),
             'rating': card_data.get('rating', ''),
             'ratings_count': card_data.get('ratings_count', ''),
-            'reviews_count': card_data.get('reviews_count', ''),
+            'reviews_count': card_data.get('reviews_count', '') or card_data.get('reviews', {}).get('reviews_count', ''),
             'social_links': card_data.get('social_links', [])
         }
 
