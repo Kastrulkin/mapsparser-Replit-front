@@ -569,16 +569,29 @@ def parse_overview_data(page):
     try:
         full_schedule = []
 
-        # Клик по часам работы для раскрытия полного расписания
-        hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
-        if hours_click:
-            hours_click.click()
-            page.wait_for_timeout(500)
+        # Клик по часам работы для раскрытия полного расписания - улучшенная версия
+        hours_selectors_for_click = [
+            "div.business-working-hours-view",
+            "div[class*='working-hours']",
+            "div.business-hours-view",
+            "span.business-hours-view__current-status"
+        ]
+        
+        for selector in hours_selectors_for_click:
+            hours_click = page.query_selector(selector)
+            if hours_click:
+                try:
+                    hours_click.click()
+                    page.wait_for_timeout(800)
+                    break
+                except:
+                    continue
 
         schedule_selectors = [
             "div.business-hours-view__day",
             "div[class*='schedule-day']", 
-            "div[class*='hours-day']"
+            "div[class*='hours-day']",
+            "div.business-working-intervals-view__item"
         ]
 
         for selector in schedule_selectors:
@@ -763,7 +776,8 @@ def parse_overview_data(page):
                     continue
 
             data['products'] = products
-            data['product_categories'] = product_categories  # Сохраняем список категорий как в рабочем коде
+            data['product_categories'] = product_categories
+            data['categories'] = product_categories  # Категории товаров/услуг для отчета как в рабочем коде
 
             print(f"Собрано категорий товаров: {len(product_categories)}")
             print(f"Собрано групп товаров: {len(products)}")
