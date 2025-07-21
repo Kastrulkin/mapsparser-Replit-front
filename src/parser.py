@@ -565,55 +565,6 @@ def parse_overview_data(page):
     except Exception:
         data['hours'] = ''
 
-    # Полное расписание - улучшенный парсинг
-    try:
-        full_schedule = []
-
-        # Клик по часам работы для раскрытия полного расписания - улучшенная версия
-        hours_selectors_for_click = [
-            "div.business-working-hours-view",
-            "div[class*='working-hours']",
-            "div.business-hours-view",
-            "span.business-hours-view__current-status"
-        ]
-        
-        for selector in hours_selectors_for_click:
-            hours_click = page.query_selector(selector)
-            if hours_click:
-                try:
-                    hours_click.click()
-                    page.wait_for_timeout(800)
-                    break
-                except:
-                    continue
-
-        schedule_selectors = [
-            "div.business-hours-view__day",
-            "div[class*='schedule-day']", 
-            "div[class*='hours-day']",
-            "div.business-working-intervals-view__item"
-        ]
-
-        for selector in schedule_selectors:
-            schedule_items = page.query_selector_all(selector)
-            for item in schedule_items:
-                try:
-                    day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
-                    time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
-                    day = day_el.inner_text().strip() if day_el else ''
-                    work_time = time_el.inner_text().strip() if time_el else ''
-                    if day and work_time:
-                        full_schedule.append(f"{day}: {work_time}")
-                except Exception:
-                    continue
-
-            if full_schedule:
-                break
-
-        data['hours_full'] = full_schedule
-    except Exception:
-        data['hours_full'] = []
-
     # Социальные сети
     try:
         social_links = []
@@ -626,7 +577,7 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Парсим товары и услуги - ПОЛНАЯ ВЕРСИЯ
+    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
     try:
         products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
         if products_tab:
@@ -656,11 +607,12 @@ def parse_overview_data(page):
                 page.mouse.wheel(0, 1000)
                 time.sleep(0.8)
 
+            # ВАЖНО: Ищем категории ПОСЛЕ всех кликов и скроллинга
             products = []
             product_categories = []
             processed_categories = set()
 
-            # Ищем категории услуг в основном контейнере
+            # Повторный поиск категорий услуг после изменения DOM
             category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
 
             for cat_block in category_blocks:
@@ -789,6 +741,66 @@ def parse_overview_data(page):
     except Exception:
         data['products'] = []
         data['product_categories'] = []
+
+    # Возвращаемся на вкладку "Обзор" для парсинга часов работы
+    try:
+        overview_tab = page.query_selector("div.tabs-select-view__title._name_overview, div[role='tab']:has-text('Обзор'), button:has-text('Обзор')")
+        if overview_tab:
+            overview_tab.click()
+            print("Возвращаемся на вкладку 'Обзор' для парсинга часов работы")
+            page.wait_for_timeout(1500)
+    except Exception:
+        pass
+
+    # Полное расписание - парсинг в конце для стабильности
+    try:
+        full_schedule = []
+
+        # Клик по часам работы для раскрытия полного расписания - улучшенная версия
+        hours_selectors_for_click = [
+            "div.business-working-hours-view",
+            "div[class*='working-hours']",
+            "div.business-hours-view",
+            "span.business-hours-view__current-status"
+        ]
+        
+        for selector in hours_selectors_for_click:
+            hours_click = page.query_selector(selector)
+            if hours_click:
+                try:
+                    hours_click.click()
+                    page.wait_for_timeout(800)
+                    break
+                except:
+                    continue
+
+        schedule_selectors = [
+            "div.business-hours-view__day",
+            "div[class*='schedule-day']", 
+            "div[class*='hours-day']",
+            "div.business-working-intervals-view__item"
+        ]
+
+        for selector in schedule_selectors:
+            schedule_items = page.query_selector_all(selector)
+            for item in schedule_items:
+                try:
+                    day_el = item.query_selector("div.business-hours-view__day-name, span[class*='day']")
+                    time_el = item.query_selector("div.business-hours-view__hours, span[class*='time']")
+                    day = day_el.inner_text().strip() if day_el else ''
+                    work_time = time_el.inner_text().strip() if time_el else ''
+                    if day and work_time:
+                        full_schedule.append(f"{day}: {work_time}")
+                except Exception:
+                    continue
+
+            if full_schedule:
+                break
+
+        data['hours_full'] = full_schedule
+        print(f"Найдено часов работы: {len(full_schedule)}")
+    except Exception:
+        data['hours_full'] = []
 
     return data
 
