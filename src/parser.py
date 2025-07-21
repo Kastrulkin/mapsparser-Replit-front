@@ -990,148 +990,42 @@ def parse_reviews(page):
 def parse_news(page):
     """Парсит новости"""
     try:
-        # Обновленные селекторы для вкладки новостей
-        news_tab_selectors = [
-            "div.tabs-select-view__title._name_posts",
-            "div.tabs-select-view__title._name_feed", 
-            "div[role='tab']:has-text('Новости')",
-            "button:has-text('Новости')",
-            "div[role='tab']:has-text('Лента')",
-            "button:has-text('Лента')",
-            "div.tabs-select-view__tab:has-text('Новости')",
-            "div.tabs-select-view__tab:has-text('Лента')"
-        ]
-        
-        news_tab_found = False
-        for selector in news_tab_selectors:
-            news_tab = page.query_selector(selector)
-            if news_tab:
-                try:
-                    news_tab.click()
-                    print(f"Клик по вкладке новостей: {selector}")
-                    page.wait_for_timeout(2000)
-                    news_tab_found = True
-                    break
-                except Exception:
-                    continue
-        
-        if not news_tab_found:
-            print("Вкладка 'Новости/Лента' не найдена")
+        # Переход на вкладку "Новости"
+        news_tab = page.query_selector("div.tabs-select-view__title._name_posts, div[role='tab']:has-text('Новости'), button:has-text('Новости')")
+        if news_tab:
+            news_tab.click()
+            print("Клик по вкладке 'Новости'")
+            page.wait_for_timeout(1500)
+            # Скролл для новостей
+            for i in range(20):
+                page.mouse.wheel(0, 1000)
+                time.sleep(1.5)
+        else:
+            print("Вкладка 'Новости' не найдена")
+            return []
 
+        # Парсинг новостей - как в рабочем коде
         news = []
-        
-        # Скролл для загрузки всех новостей
-        for i in range(10):
-            page.mouse.wheel(0, 1000)
-            time.sleep(1)
-        
-        # Обновленные селекторы для новостей
-        news_block_selectors = [
-            "div.business-post-carousel-view",
-            "div.business-posts-list-post-view",
-            "div.feed-post-view",
-            "div.business-post-photo-view",
-            "div[class*='post-view']",
-            "div[class*='news-item']"
-        ]
-        
-        news_blocks = []
-        for selector in news_block_selectors:
-            blocks = page.query_selector_all(selector)
-            if blocks:
-                news_blocks.extend(blocks)
-                print(f"Найдено блоков новостей с селектором {selector}: {len(blocks)}")
-        
-        print(f"Всего найдено блоков новостей: {len(news_blocks)}")
-        
+        news_blocks = page.query_selector_all('div.business-posts-list-post-view')
         for block in news_blocks:
             try:
-                # Заголовок - расширенные селекторы
-                title_selectors = [
-                    "div.business-posts-list-post-view__title",
-                    "div.feed-post-view__title",
-                    "h3", "h4", "h5",
-                    "div[class*='title']",
-                    "span[class*='title']"
-                ]
+                date_el = block.query_selector('div.business-posts-list-post-view__date')
+                date = date_el.inner_text().strip() if date_el else ''
                 
-                title = ""
-                for sel in title_selectors:
-                    title_elem = block.query_selector(sel)
-                    if title_elem:
-                        title = title_elem.inner_text().strip()
-                        if title:
-                            break
-
-                # Текст поста
-                text_selectors = [
-                    "div.business-posts-list-post-view__text",
-                    "div.feed-post-view__text",
-                    "div[class*='post-text']",
-                    "div[class*='text']",
-                    "div[class*='content']",
-                    "p"
-                ]
+                text_el = block.query_selector('div.business-posts-list-post-view__text')
+                text = text_el.inner_text().strip() if text_el else ''
                 
-                text = ""
-                for sel in text_selectors:
-                    text_elem = block.query_selector(sel)
-                    if text_elem:
-                        text = text_elem.inner_text().strip()
-                        if text:
-                            break
-
-                # Дата публикации
-                date_selectors = [
-                    "div.business-posts-list-post-view__date",
-                    "div.feed-post-view__date",
-                    "span[class*='date']",
-                    "time",
-                    "div[class*='time']"
-                ]
+                photo_els = block.query_selector_all('img.image__img')
+                photos = [el.get_attribute('src') for el in photo_els if el.get_attribute('src')]
                 
-                date = ""
-                for sel in date_selectors:
-                    date_elem = block.query_selector(sel)
-                    if date_elem:
-                        date = date_elem.inner_text().strip()
-                        if date:
-                            break
-
-                # Парсим фотографии
-                photos = []
-                photo_selectors = [
-                    "img.image__img",
-                    "img[src*='avatars.mds.yandex.net']",
-                    "img[src*='get-sprav-posts']"
-                ]
-                
-                for sel in photo_selectors:
-                    photo_elems = block.query_selector_all(sel)
-                    for img in photo_elems:
-                        src = img.get_attribute('src')
-                        if src and src not in photos:
-                            photos.append(src)
-
-                # Если это фото-пост без текста, создаем заголовок
-                if not title and not text and photos:
-                    title = f"Фото-пост ({len(photos)} фото)"
-                elif not title and text:
-                    title = text[:50] + "..." if len(text) > 50 else text
-
-                # Добавляем новость если есть контент
-                if title or text or photos:
-                    news.append({
-                        "title": title,
-                        "text": text,
-                        "date": date,
-                        "photos": photos
-                    })
-            except Exception as e:
-                print(f"Ошибка при парсинге отдельной новости: {e}")
+                news.append({
+                    'date': date,
+                    'text': text,
+                    'photos': photos
+                })
+            except Exception:
                 continue
         
-        # Простая группировка новостей - как в рабочем коде
         print(f"Спарсено новостей: {len(news)}")
         return news
     except Exception as e:
@@ -1180,61 +1074,88 @@ def parse_photos(page):
 def parse_features(page):
     """Парсинг особенностей"""
     try:
-        # Клик по вкладке "Особенности"
-        features_tab_selectors = [
-            "div.tabs-select-view__title._name_features",
-            "div[role='tab']:has-text('Особенности')",
-            "button:has-text('Особенности')",
-            "a[href*='tab=features']"
-        ]
-        
-        features_tab_found = False
-        for selector in features_tab_selectors:
-            features_tab = page.query_selector(selector)
-            if features_tab:
-                try:
-                    features_tab.click()
-                    print(f"Клик по вкладке 'Особенности': {selector}")
-                    page.wait_for_timeout(2000)
-                    features_tab_found = True
-                    break
-                except Exception:
-                    continue
-        
-        if not features_tab_found:
-            print("Вкладка 'Особенности' не найдена")
-            return []
-        
+        # Переход на вкладку "Особенности"
+        features_tab = page.query_selector("div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
+        if features_tab:
+            features_tab.click()
+            print("Клик по вкладке 'Особенности'")
+            page.wait_for_timeout(1500)
+        else:
+            print("Вкладка 'Особенности' не найдена!")
+
+        # Парсинг особенностей - как в рабочем коде
         features = []
-        
-        # Расширенные селекторы для особенностей
-        feature_selectors = [
-            "div.business-features-view__item",
-            "div.business-features-view__feature",
-            "span.business-features-view__feature-text",
-            "div[class*='feature-item']",
-            "span.business-feature-view__text",
-            "div.card-feature-view__item",
-            "span[class*='feature']"
-        ]
-        
-        processed_features = set()  # Для избежания дублей
-        
-        for selector in feature_selectors:
-            feature_elems = page.query_selector_all(selector)
-            for elem in feature_elems:
-                text = elem.inner_text().strip()
-                if text and len(text) < 100 and text not in processed_features:  # Фильтруем слишком длинные тексты
-                    # Исключаем служебные тексты
-                    if not any(skip_word in text.lower() for skip_word in ['показать', 'график', 'подробнее', 'владелец', 'рейтинг', 'маршрут']):
-                        features.append(text)
-                        processed_features.add(text)
-        
-        print(f"Найдено особенностей: {len(features)}")
-        return list(set(features))  # Убираем дубли
+        feature_blocks = page.query_selector_all("[class*='features-view__item']")
+        for block in feature_blocks:
+            name_el = block.query_selector("[class*='features-view__item-title']")
+            value_el = block.query_selector("[class*='features-view__item-value']")
+            name = name_el.inner_text().strip() if name_el else ''
+            value = value_el.inner_text().strip() if value_el else ''
+            if name or value:
+                features.append({"name": name, "value": value})
+
+        # Парсинг булевых особенностей (галочки с типом)
+        features_bool = []
+        bool_items = page.query_selector_all("div.business-features-view__bool-item")
+        for item in bool_items:
+            text_el = item.query_selector("div.business-features-view__bool-text")
+            icon_el = item.query_selector("div.business-features-view__bool-icon")
+            text = text_el.inner_text().strip() if text_el else ''
+            is_defined = False
+            if icon_el and '_defined' in (icon_el.get_attribute('class') or ''):
+                is_defined = True
+            if text:
+                features_bool.append({"text": text, "defined": is_defined})
+
+        # Дополнительно: отдельные business-features-view__bool-text без обёртки
+        all_bool_texts = page.query_selector_all("div.business-features-view__bool-text")
+        for text_el in all_bool_texts:
+            text = text_el.inner_text().strip()
+            if text and not any(fb['text'] == text for fb in features_bool):
+                features_bool.append({"text": text, "defined": False})
+
+        # Парсинг ценностных особенностей (категории услуг)
+        features_valued = []
+        valued_blocks = page.query_selector_all("div.business-features-view__valued")
+        for block in valued_blocks:
+            title_el = block.query_selector("span.business-features-view__valued-title")
+            value_el = block.query_selector("span.business-features-view__valued-value")
+            title = title_el.inner_text().strip(':').strip() if title_el else ''
+            value = value_el.inner_text().strip() if value_el else ''
+            if title or value:
+                features_valued.append({"title": title, "value": value})
+
+        # Выделение цен из features_valued
+        features_prices = []
+        for item in features_valued:
+            if 'цена' in item['title'].lower() or '₽' in item['value']:
+                features_prices.append(item)
+
+        # Парсинг категорий из блока orgpage-categories-info-view
+        categories_full = []
+        cat_block = page.query_selector("div.orgpage-categories-info-view")
+        if cat_block:
+            cat_spans = cat_block.query_selector_all("span.button__text")
+            categories_full = [span.inner_text().strip() for span in cat_spans if span.inner_text()]
+
+        # Собираем все особенности в features_full
+        features_full = {
+            "bool": features_bool,
+            "valued": features_valued,
+            "prices": features_prices,
+            "categories": categories_full
+        }
+
+        print(f"Найдено особенностей: bool={len(features_bool)}, valued={len(features_valued)}, prices={len(features_prices)}, categories={len(categories_full)}")
+        return features_full
     except Exception as e:
         print(f"Ошибка при парсинге особенностей: {e}")
-        return []
+        return {
+            "bool": [],
+            "valued": [],
+            "prices": [],
+            "categories": []
+        }
 
 def parse_competitors(page):
     """Парсинг конкурентов из секции 'Похожие места рядом'"""
