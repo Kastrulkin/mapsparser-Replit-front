@@ -90,6 +90,7 @@ def main():
             'phone': card_data.get('phone', ''),
             'site': card_data.get('site', ''),
             'description': card_data.get('description', ''),
+            'rubric': card_data.get('rubric', []),
             'categories': card_data.get('categories', []),
             'hours': card_data.get('hours', ''),
             'hours_full': card_data.get('hours_full', []),

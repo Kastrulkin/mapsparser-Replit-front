@@ -490,31 +490,20 @@ def parse_overview_data(page):
             "div[class*='category'] span"
         ]
 
-        data['categories'] = []
+        rubric = []
         for selector in business_category_selectors:
             cats = page.query_selector_all(selector)
             if cats:
                 categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
                 if categories:
-                    data['categories'] = categories
+                    rubric = categories
                     print(f"Найдены основные категории бизнеса: {categories}")
                     break
+        data['rubric'] = rubric
 
         # Если основные категории не найдены, пробуем категории товаров/услуг
-        if not data['categories']:
-            service_category_selectors = [
-                "div.business-related-items-rubricator__category"
-            ]
+        data['categories'] = []
 
-            for selector in service_category_selectors:
-                cats = page.query_selector_all(selector)
-                if cats:
-                    categories = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
-                    if categories:
-                        # Берем ВСЕ категории товаров и услуг
-                        data['categories'] = categories
-                        print(f"Найдены ВСЕ категории услуг ({len(categories)}): {categories[:5]}..." if len(categories) > 5 else f"Найдены категории услуг: {categories}")
-                        break
     except Exception:
         data['categories'] = []
 
@@ -778,6 +767,10 @@ def parse_overview_data(page):
 
             data['products'] = products
             data['product_categories'] = product_categories
+            # Категории товаров/услуг сохраняем в categories
+            data['categories'] = product_categories
+            print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
+            print(f"Категории товаров/услуг ({len(product_categories)}): {product_categories}")
         else:
             data['products'] = []
             data['product_categories'] = []
@@ -801,7 +794,7 @@ def parse_reviews(page):
         # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
         try:
             rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
-            reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
+            reviews_data['rating'] = ratingel.inner_text().replace(',', '.').strip() if rating_el else ''
 
             # Правильный подсчет количества отзывов из заголовка секции
             count_selectors = [
