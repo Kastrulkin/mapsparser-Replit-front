@@ -569,7 +569,25 @@ def parse_overview_data(page):
     try:
         full_schedule = []
 
-        # Клик по часам работы для раскрытия полного расписания
+        # Ищем и кликаем по кнопке "График"
+        try:
+            schedule_button_selectors = [
+                "div.card-feature-view__value:has-text('График')",
+                "div:has-text('График')",
+                "button:has-text('График')"
+            ]
+            
+            for selector in schedule_button_selectors:
+                schedule_btn = page.query_selector(selector)
+                if schedule_btn and schedule_btn.is_visible():
+                    print("Кликаем по кнопке 'График'")
+                    schedule_btn.click()
+                    page.wait_for_timeout(1000)
+                    break
+        except Exception:
+            pass
+
+        # Клик по часам работы для раскрытия полного расписания (старый код)
         hours_click = page.query_selector("div.business-working-hours-view, div[class*='working-hours']")
         if hours_click:
             hours_click.click()
