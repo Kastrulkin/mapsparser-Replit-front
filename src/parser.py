@@ -762,39 +762,13 @@ def parse_overview_data(page):
                 except Exception:
                     continue
 
+            data['products'] = products
+            data['product_categories'] = product_categories  # Сохраняем список категорий как в рабочем коде
+
             print(f"Собрано категорий товаров: {len(product_categories)}")
             print(f"Собрано групп товаров: {len(products)}")
-
-            data['products'] = products
-            data['product_categories'] = product_categories
-            
-            # Дополнительно ищем все категории как в рабочем коде
-            all_categories = set(product_categories)
-            
-            # Ищем категории в рубрикаторе
-            try:
-                rubricator_categories = page.query_selector_all("div.business-related-items-rubricator__category")
-                for cat in rubricator_categories:
-                    cat_text = cat.inner_text().strip()
-                    if cat_text:
-                        all_categories.add(cat_text)
-            except:
-                pass
-                
-            # Ищем категории в других местах
-            try:
-                other_cats = page.query_selector_all("span.button__text, div[class*='category'] span")
-                for cat in other_cats:
-                    cat_text = cat.inner_text().strip()
-                    if cat_text and len(cat_text) < 50:  # Исключаем слишком длинные тексты
-                        all_categories.add(cat_text)
-            except:
-                pass
-                
-            # Категории товаров/услуг сохраняем в categories
-            data['categories'] = list(all_categories)
             print(f"Рубрика (основные категории бизнеса): {data.get('rubric', [])}")
-            print(f"Категории товаров/услуг ({len(data['categories'])}): {data['categories']}")
+            print(f"Категории товаров/услуг ({len(product_categories)}): {product_categories}")
         else:
             data['products'] = []
             data['product_categories'] = []
@@ -814,12 +788,13 @@ def parse_reviews(page):
             page.wait_for_timeout(2000)
         else:
             print("Вкладка 'Отзывы' не найдена!")
-        
+
         reviews_data = {"items": [], "rating": "", "reviews_count": ""}
 
         # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
         try:
-            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
+            rating_el = page.query_selector("span.business-rating-badge-view__rating-This code restores the exact category handling logic from the working code as requested.
+text")
             reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
 
             # Правильный подсчет количества отзывов из заголовка секции
