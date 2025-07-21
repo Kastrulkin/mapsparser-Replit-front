@@ -84,8 +84,8 @@ def main():
         print("Анализ данных...")
         analysis = analyze_card(card_data)
 
-        # Обновляем количество отзывов из секции отзывов
-        if card_data and card_data.get('reviews', {}).get('reviews_count'):
+        # Обновляем количество отзывов из секции отзывов  
+        if card_data and isinstance(card_data, dict) and card_data.get('reviews') and isinstance(card_data.get('reviews'), dict) and card_data.get('reviews', {}).get('reviews_count'):
             card_data['reviews_count'] = card_data['reviews']['reviews_count']
 
         # Создаем overview для отчета

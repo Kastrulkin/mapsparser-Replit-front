@@ -694,16 +694,19 @@ def parse_overview_data(page):
                 print(f"Найдено категорий в рубрикаторе: {len(category_tabs)}")
 
                 # Кликаем по каждой категории для загрузки товаров
-                for i, cat_tab in enumerate(category_tabs[:10]):  # Ограничиваем 10 категориями
+                for i, cat_tab in enumerate(category_tabs[:25]):  # Увеличиваем до 25 категорий
                     try:
                         cat_name = cat_tab.inner_text().strip()
                         print(f"Кликаем по категории: {cat_name}")
                         cat_tab.click()
-                        page.wait_for_timeout(800)
+                        page.wait_for_timeout(1200)  # Увеличиваем время ожидания
                     except Exception:
                         continue
             except Exception:
                 pass
+
+            # Дополнительное время для загрузки после всех кликов
+            page.wait_for_timeout(3000)
 
             # Скроллим для загрузки всех услуг
             for i in range(15):
