@@ -718,8 +718,21 @@ def parse_overview_data(page):
             product_categories = []
             processed_categories = set()
 
-            # Повторный поиск категорий услуг после изменения DOM
-            category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
+            # Повторный поиск категорий услуг после изменения DOM - обновленные селекторы
+            category_blocks_selectors = [
+                'div.business-full-items-grouped-view__category',
+                'div.business-related-items-view__category', 
+                'div[class*="category-group"]',
+                'div[class*="items-grouped"]'
+            ]
+            
+            category_blocks = []
+            for selector in category_blocks_selectors:
+                found_blocks = page.query_selector_all(selector)
+                if found_blocks:
+                    category_blocks = found_blocks
+                    print(f"Найдены категории товаров с селектором: {selector} ({len(found_blocks)} шт.)")
+                    break
 
             for cat_block in category_blocks:
                 try:
