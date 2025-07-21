@@ -356,24 +356,38 @@ def parse_overview_data(page):
     except Exception:
         data['address'] = ''
 
-    # Клик по кнопке "Показать телефон" перед парсингом
+    # Клик по кнопке "Показать телефон" перед парсингом - улучшенный поиск
     try:
-        show_phone_btn = page.query_selector("button:has-text('Показать телефон'), button[class*='phone']")
-        if show_phone_btn:
-            show_phone_btn.click()
-            page.wait_for_timeout(1000)
+        phone_btn_selectors = [
+            "button:has-text('Показать телефон')",
+            "button[class*='phone']",
+            "div.business-contacts-view__phone button",
+            "span:has-text('Показать телефон')",
+            "[aria-label*='телефон'] button"
+        ]
+        
+        for selector in phone_btn_selectors:
+            show_phone_btn = page.query_selector(selector)
+            if show_phone_btn:
+                show_phone_btn.click()
+                page.wait_for_timeout(1500)
+                break
     except Exception:
         pass
 
-    # Телефон - улучшенный парсинг
+    # Телефон - расширенный парсинг
     try:
         phone_selectors = [
             "span.business-phones-view__text",
             "div.business-contacts-view__phone-number span",
+            "div.business-contacts-view__phone span",
+            "span[class*='phone-text']",
             "span[class*='phone']", 
             "a[href^='tel:']",
             "div[class*='phone'] span",
-            "[data-bem*='phone'] span"
+            "[data-bem*='phone'] span",
+            "div.business-contacts-view span[title*='+7']",
+            "span[title^='+7']"
         ]
 
         data['phone'] = ''
@@ -381,11 +395,21 @@ def parse_overview_data(page):
             phone_elem = page.query_selector(selector)
             if phone_elem:
                 phone_text = phone_elem.inner_text().strip()
-                # Очищаем от лишних символов
-                phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', phone_text)
-                if len(phone_cleaned) > 5:  # Проверяем что это похоже на телефон
-                    data['phone'] = phone_cleaned
-                    break
+                # Проверяем на наличие цифр и символов телефона
+                if re.search(r'[\d+\-\(\)\s]{7,}', phone_text):
+                    # Очищаем от лишних символов, оставляя только цифры, +, -, (, ), пробелы
+                    phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', phone_text).strip()
+                    if len(phone_cleaned) >= 7:  # Минимальная длина телефона
+                        data['phone'] = phone_cleaned
+                        break
+                
+                # Также проверяем атрибут title
+                title_attr = phone_elem.get_attribute('title')
+                if title_attr and re.search(r'[\d+\-\(\)\s]{7,}', title_attr):
+                    phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', title_attr).strip()
+                    if len(phone_cleaned) >= 7:
+                        data['phone'] = phone_cleaned
+                        break
     except Exception:
         data['phone'] = ''
 
@@ -433,10 +457,38 @@ def parse_overview_data(page):
     except Exception:
         data['description'] = ''
 
-    # Категории
+    # Категории товаров и услуг
     try:
+        categories = []
+        
+        # Сначала ищем основные категории в заголовке
         cats = page.query_selector_all("div.business-card-title-view__categories span, span[class*='category']")
-        data['categories'] = [c.inner_text().strip() for c in cats if c.inner_text().strip()]
+        for c in cats:
+            text = c.inner_text().strip()
+            if text:
+                categories.append(text)
+        
+        # Затем ищем категории товаров в рубрикаторе
+        rubricator_cats = page.query_selector_all("div.business-related-items-rubricator__category")
+        for cat in rubricator_cats:
+            text = cat.inner_text().strip()
+            if text and text not in categories:
+                categories.append(text)
+        
+        # Если есть кнопка "Показать все категории", кликаем по ней
+        show_all_btn = page.query_selector("div.business-related-items-rubricator__toggle")
+        if show_all_btn:
+            show_all_btn.click()
+            page.wait_for_timeout(1000)
+            
+            # Парсим дополнительные категории после раскрытия
+            additional_cats = page.query_selector_all("div.business-related-items-rubricator__category")
+            for cat in additional_cats:
+                text = cat.inner_text().strip()
+                if text and text not in categories:
+                    categories.append(text)
+        
+        data['categories'] = categories
     except Exception:
         data['categories'] = []
 
@@ -546,7 +598,7 @@ def parse_overview_data(page):
     except Exception:
         data['social_links'] = []
 
-    # Парсим товары и услуги - ИСПРАВЛЕННАЯ ВЕРСИЯ
+    # Парсим товары и услуги - ПОЛНАЯ ВЕРСИЯ
     try:
         products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
         if products_tab:
@@ -554,23 +606,53 @@ def parse_overview_data(page):
             print("Клик по вкладке 'Товары и услуги'")
             page.wait_for_timeout(1500)
 
-            # Скроллим для загрузки услуг
-            for i in range(10):
+            # Сначала кликаем по категориям в рубрикаторе, если они есть
+            try:
+                category_tabs = page.query_selector_all("div.business-related-items-rubricator__category")
+                print(f"Найдено категорий в рубрикаторе: {len(category_tabs)}")
+                
+                # Кликаем по каждой категории для загрузки товаров
+                for i, cat_tab in enumerate(category_tabs[:10]):  # Ограничиваем 10 категориями
+                    try:
+                        cat_name = cat_tab.inner_text().strip()
+                        print(f"Кликаем по категории: {cat_name}")
+                        cat_tab.click()
+                        page.wait_for_timeout(800)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # Скроллим для загрузки всех услуг
+            for i in range(15):
                 page.mouse.wheel(0, 1000)
-                time.sleep(1)
+                time.sleep(0.8)
 
             products = []
             product_categories = []
-            processed_categories = set()  # Для избежания дубликатов
+            processed_categories = set()
 
-            # Ищем категории услуг
+            # Ищем категории услуг в основном контейнере
             category_blocks = page.query_selector_all('div.business-full-items-grouped-view__category')
 
             for cat_block in category_blocks:
                 try:
-                    # Название категории
-                    category_el = cat_block.query_selector('div.business-full-items-grouped-view__category-title')
-                    category = category_el.inner_text().strip() if category_el else "Основные услуги"
+                    # Название категории - несколько вариантов селекторов
+                    category_selectors = [
+                        'div.business-full-items-grouped-view__category-title',
+                        'h3.business-full-items-grouped-view__category-title',
+                        'div.business-full-items-grouped-view__title'
+                    ]
+                    
+                    category = ""
+                    for sel in category_selectors:
+                        category_el = cat_block.query_selector(sel)
+                        if category_el:
+                            category = category_el.inner_text().strip()
+                            break
+                    
+                    if not category:
+                        category = "Основные услуги"
 
                     # Избегаем дубликатов категорий
                     if category not in processed_categories:
@@ -580,27 +662,70 @@ def parse_overview_data(page):
 
                         # Товары/услуги в категории
                         items = []
-                        item_blocks = cat_block.query_selector_all('div.business-full-items-grouped-view__item')
+                        item_selectors = [
+                            'div.business-full-items-grouped-view__item',
+                            'div.related-item-photo-view',
+                            'div.related-item-view'
+                        ]
+                        
+                        item_blocks = []
+                        for sel in item_selectors:
+                            items_found = cat_block.query_selector_all(sel)
+                            item_blocks.extend(items_found)
 
                         for item in item_blocks:
                             try:
-                                # Пробуем сначала фото-товары
-                                name_el = item.query_selector('div.related-item-photo-view__title')
-                                desc_el = item.query_selector('div.related-item-photo-view__description')
-                                price_el = item.query_selector('span.related-product-view__price')
+                                # Множественные селекторы для названия
+                                name_selectors = [
+                                    'div.related-item-photo-view__title',
+                                    'div.related-item-view__title',
+                                    'div.related-item-list-view__title',
+                                    'span.related-product-view__title'
+                                ]
+                                
+                                name = ""
+                                for sel in name_selectors:
+                                    name_el = item.query_selector(sel)
+                                    if name_el:
+                                        name = name_el.inner_text().strip()
+                                        break
+
+                                # Множественные селекторы для описания
+                                desc_selectors = [
+                                    'div.related-item-photo-view__description',
+                                    'div.related-item-view__description',
+                                    'div.related-item-list-view__subtitle',
+                                    'span.related-product-view__description'
+                                ]
+                                
+                                description = ""
+                                for sel in desc_selectors:
+                                    desc_el = item.query_selector(sel)
+                                    if desc_el:
+                                        description = desc_el.inner_text().strip()
+                                        break
+
+                                # Множественные селекторы для цены
+                                price_selectors = [
+                                    'span.related-product-view__price',
+                                    'span.related-item-view__price',
+                                    'div.related-item-list-view__price',
+                                    'span[class*="price"]'
+                                ]
+                                
+                                price = ""
+                                for sel in price_selectors:
+                                    price_el = item.query_selector(sel)
+                                    if price_el:
+                                        price = price_el.inner_text().strip()
+                                        break
+
+                                # Продолжительность
                                 duration_el = item.query_selector('span.related-product-view__volume')
-                                photo_el = item.query_selector('img.image__img')
-
-                                # Если не найдено, пробуем текстовые услуги
-                                if not name_el:
-                                    name_el = item.query_selector('div.related-item-view__title')
-                                    desc_el = item.query_selector('div.related-item-view__description')
-                                    price_el = item.query_selector('span.related-item-view__price')
-
-                                name = name_el.inner_text().strip() if name_el else ""
-                                description = desc_el.inner_text().strip() if desc_el else ""
-                                price = price_el.inner_text().strip() if price_el else ""
                                 duration = duration_el.inner_text().strip() if duration_el else ""
+
+                                # Фото
+                                photo_el = item.query_selector('img.image__img')
                                 photo = photo_el.get_attribute('src') if photo_el else ""
 
                                 if name:
@@ -621,6 +746,9 @@ def parse_overview_data(page):
                             })
                 except Exception:
                     continue
+
+            print(f"Собрано категорий товаров: {len(product_categories)}")
+            print(f"Собрано групп товаров: {len(products)}")
 
             data['products'] = products
             data['product_categories'] = product_categories
