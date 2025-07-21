@@ -793,8 +793,7 @@ def parse_reviews(page):
 
         # Рейтинг и количество отзывов - ПРАВИЛЬНЫЙ подсчет
         try:
-            rating_el = page.query_selector("span.business-rating-badge-view__rating-This code restores the exact category handling logic from the working code as requested.
-text")
+            rating_el = page.query_selector("span.business-rating-badge-view__rating-text")
             reviews_data['rating'] = rating_el.inner_text().replace(',', '.').strip() if rating_el else ''
 
             # Правильный подсчет количества отзывов из заголовка секции
