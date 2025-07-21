@@ -797,3 +797,8 @@ def parse_overview_data(page):
         if overview_tab:
             overview_tab.click()
             print("Возвращаемся на вкладку 'Обзор' для парсинга часов работы")
+            page.wait_for_timeout(2000)
+    except Exception as e:
+        print(f"Ошибка при возврате на вкладку Обзор: {e}")
+
+    return data
