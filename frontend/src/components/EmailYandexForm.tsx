@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useNavigate } from 'react-router-dom';
+
+function generateRandomPassword(length = 12) {
+  return Math.random().toString(36).slice(-length);
+}
 
 const EmailYandexForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,20 +13,54 @@ const EmailYandexForm: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setSuccess(null);
     setError(null);
-    const { error } = await supabase.from('Cards').insert({ email, url: yandexUrl });
-    setLoading(false);
-    if (error) {
-      setError('Ошибка при сохранении. Попробуйте ещё раз.');
+
+    let userId: string | null = null;
+    // 1. Проверяем, есть ли пользователь
+    let { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      userId = existingUser.id;
     } else {
-      setSuccess('Данные успешно отправлены!');
-      setEmail('');
-      setYandexUrl('');
+      // 2. Создаём пользователя с временным паролем
+      const tempPassword = generateRandomPassword();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: tempPassword,
+      });
+      if (signUpError || !data?.user) {
+        setError('Ошибка при создании пользователя');
+        setLoading(false);
+        return;
+      }
+      userId = data.user.id;
+      // Сохраняем временный пароль для последующей смены
+      localStorage.setItem('tempPassword', tempPassword);
     }
+
+    // 3. Сохраняем заявку на отчёт
+    const { error: insertError } = await supabase
+      .from('Cards')
+      .insert({ email, url: yandexUrl, user_id: userId });
+
+    if (insertError) {
+      setError('Ошибка при сохранении заявки');
+      setLoading(false);
+      return;
+    }
+
+    // 4. Перенаправляем на страницу установки пароля
+    navigate('/set-password', { state: { email } });
   };
 
   return (
