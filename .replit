@@ -14,7 +14,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python src/main.py"
+args = "python -m src.main"
 
 [[workflows.workflow]]
 name = "Web Server"
