@@ -16,7 +16,8 @@ def generate_html_report(card_data: dict, analysis: dict, competitor_data: dict 
     title = card_data.get('overview', {}).get('title') or card_data.get('title', 'card')
     
     # Создаём директорию data в корне проекта, если её нет
-    data_dir = os.path.join('..', 'data')  # Выходим из src в корень проекта
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(base_dir, 'data')
     os.makedirs(data_dir, exist_ok=True)
     
     output_path = os.path.join(data_dir, f"report_{title}.html")

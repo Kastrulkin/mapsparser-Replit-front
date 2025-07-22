@@ -1,8 +1,9 @@
 """
 analyzer.py — Модуль для анализа данных карточки и формирования рекомендаций по SEO
 """
-from playwright.sync_api import sync_playwright
+
 import time
+from playwright.sync_api import sync_playwright
 
 def parse_overview(page):
     data = {}
@@ -272,11 +273,7 @@ def parse_photos(page):
     }
 
 def parse_reviews(page):
-    reviews = {
-        "rating": "",
-        "reviews_count": 0,
-        "items": []
-    }
+    reviews = []
     # Клик по вкладке "Отзывы"
     try:
         reviews_tab = page.query_selector("div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
@@ -334,7 +331,7 @@ def parse_reviews(page):
                 reply_elem = block.query_selector("[class*='business-review-view__answer-text']")
                 if reply_elem:
                     org_reply = reply_elem.inner_text()
-                reviews["items"].append({
+                reviews.append({
                     "author": author,
                     "date": date,
                     "score": score,

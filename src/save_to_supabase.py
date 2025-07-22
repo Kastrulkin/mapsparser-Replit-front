@@ -1,14 +1,19 @@
 from supabase import create_client, Client
 import os
 
-# Удаляю строки:
-# SUPABASE_URL = ...
-# SUPABASE_KEY = ...
-# supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Удаляю захардкоженные ключи SUPABASE_URL и SUPABASE_KEY, убираю глобальный supabase
 
 def check_competitor_exists(competitor_url):
     """Проверяет, существует ли конкурент в базе данных"""
     try:
+        from supabase import create_client, Client
+        import os
+        url = os.getenv('SUPABASE_URL')
+        key = os.getenv('SUPABASE_KEY')
+        if not url or not key:
+            print("Предупреждение: переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
+            return False
+        supabase: Client = create_client(url, key)
         result = supabase.table("Cards").select("id").eq("url", competitor_url).execute()
         return len(result.data) > 0
     except Exception as e:
@@ -26,16 +31,13 @@ def save_card_to_supabase(card_data):
     try:
         from supabase import create_client, Client
         import os
-
-        # Получаем переменные окружения
         url = os.getenv('SUPABASE_URL')
         key = os.getenv('SUPABASE_KEY')
-
         if not url or not key:
             print("Предупреждение: Переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
             print("Данные не будут сохранены в базу данных")
             return None
-
+        supabase: Client = create_client(url, key)
         data = {
             "url": card_data.get("url"),
             "title": card_data.get("overview", {}).get("title"),
@@ -51,7 +53,7 @@ def save_card_to_supabase(card_data):
             "features_bool": card_data.get("features_bool"),
             "features_valued": card_data.get("features_valued"),
             "features_prices": card_data.get("features_prices"),
-            "features_full": card_data.get("features_full"),  # Новое поле для Supabase
+            "features_full": card_data.get("features_full"),
             "overview": card_data.get("overview"),
             "products": card_data.get("products"),
             "news": card_data.get("news"),
@@ -60,19 +62,25 @@ def save_card_to_supabase(card_data):
             "hours": card_data.get("overview", {}).get("hours"),
             "hours_full": card_data.get("overview", {}).get("hours_full"),
             "competitors": card_data.get("competitors", []),
-            "main_card_url": None,  # Для основных карточек это поле пустое
+            "main_card_url": None,
         }
-
         result = supabase.table("Cards").insert(data).execute()
         print(f"Карточка сохранена с ID: {result.data[0]['id']}")
         return result.data[0]['id']
-
     except Exception as e:
         print(f"Ошибка при сохранении в Supabase: {type(e).__name__}: {str(e)}")
         return None
 
 def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
     """Сохраняет данные конкурента с привязкой к основной карточке"""
+    from supabase import create_client, Client
+    import os
+    url = os.getenv('SUPABASE_URL')
+    key = os.getenv('SUPABASE_KEY')
+    if not url or not key:
+        print("Предупреждение: переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
+        return None
+    supabase: Client = create_client(url, key)
     data = {
         "url": competitor_data.get("url"),
         "title": competitor_data.get("overview", {}).get("title"),
@@ -98,6 +106,5 @@ def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
         "competitors": [],
         "main_card_url": main_card_url,  # Привязка к основной карточке
     }
-
     result = supabase.table("Cards").insert(data).execute()
     return result.data[0]['id'] if result.data else None
