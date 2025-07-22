@@ -1,0 +1,21 @@
+# Python
+venv/
+*.pyc
+__pycache__/
+
+# Node.js
+node_modules/
+
+# Env files
+.env
+.env.*
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+# Other
+*.sqlite3
+*.db 
