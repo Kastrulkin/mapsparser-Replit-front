@@ -34,86 +34,6 @@ def parse_reviews_from_main_page(page):
     return reviews
 
 def parse_yandex_card(url: str) -> dict:
-    """Основная функция парсинга карточки Яндекс.Карт"""
-    with sync_playwright() as p:
-        # Используем Firefox вместо Chromium
-        print("Используем Firefox")
-        browser = p.firefox.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-
-        try:
-            print("Переходим на страницу...")
-            page.goto(url, wait_until='domcontentloaded', timeout=30000)
-            page.wait_for_timeout(3000)
-
-            # Проверяем на captcha
-            if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower() or "Подтвердите, что запросы отправляли вы" in page.title():
-                browser.close()
-                print("⚠️  Обнаружена captcha! Попробуйте:")
-                print("1. Открыть ссылку в браузере и пройти captcha")
-                print("2. Попробовать позже")
-                print("3. Использовать другую ссылку")
-                return {"error": "captcha_detected", "url": url}
-
-        except Exception as e:
-            print(f"Ошибка при парсинге: {e}")
-            return {"error": str(e), "url": url}
-        finally:
-            if browser:
-                browser.close()
-
-def parse_reviews(page):
-    """Парсинг отзывов"""
-    reviews = {
-        "rating": "",
-        "reviews_count": 0,
-        "items": []
-    }
-
-    # Проверяем, не попали ли мы на страницу captcha
-    if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower():
-        print("Обнаружена captcha! Пропускаем парсинг отзывов.")
-        return reviews
-
-    # Клик по вкладке "Отзывы" - улучшенный поиск
-    try:
-        # Множественные селекторы для поиска вкладки отзывы
-        reviews_tab_selectors = [
-            "div[role='tab']:has-text('Отзывы')",
-            "button:has-text('Отзывы')", 
-            "[data-tab='reviews']",
-            "div.tabs-select-view__tab:has-text('Отзывы')",
-            "a:has-text('Отзывы')",
-            ".tabs-menu-view__tab:has-text('Отзывы')",
-            "span:has-text('Отзывы')"
-        ]
-
-        reviews_tab = None
-        for selector in reviews_tab_selectors:
-            try:
-                reviews_tab = page.query_selector(selector)
-                if reviews_tab:
-                    print(f"Найдена вкладка 'Отзывы' с селектором: {selector}")
-                    break
-            except:
-                continue
-
-        if reviews_tab:
-            reviews_tab.click()
-            page.wait_for_timeout(2000)
-        else:
-            print("Вкладка 'Отзывы' не найдена ни одним селектором!")
-            # Пробуем найти отзывы на главной странице
-            return parse_reviews_from_main_page(page)
-
-    except Exception as e:
-        print(f"Ошибка при клике на вкладку 'Отзывы': {e}")
-        return parse_reviews_from_main_page(page)
-
-def parse_yandex_card(url: str) -> dict:
     """
     Парсит публичную страницу Яндекс.Карт и возвращает данные в виде словаря.
     """
@@ -305,20 +225,12 @@ def parse_yandex_card(url: str) -> dict:
             data['competitors'] = parse_competitors(page)
 
             # Создаем overview для отчета
-            data['overview'] = {
-                'title': data.get('title', ''),
-                'address': data.get('address', ''),
-                'phone': data.get('phone', ''),
-                'site': data.get('site', ''),
-                'description': data.get('description', ''),
-                'categories': data.get('categories', []),
-                'hours': data.get('hours', ''),
-                'hours_full': data.get('hours_full', []),
-                'rating': data.get('rating', ''),
-                'ratings_count': data.get('ratings_count', ''),
-                'reviews_count': data.get('reviews_count', ''),
-                'social_links': data.get('social_links', [])
-            }
+            overview_keys = [
+                'title', 'address', 'phone', 'site', 'description',
+                'rubric', 'categories', 'hours', 'hours_full', 'rating', 'ratings_count', 'reviews_count', 'social_links'
+            ]
+            data['overview'] = {k: data.get(k, '') for k in overview_keys}
+            data['overview']['reviews_count'] = data.get('reviews_count', '')
 
             browser.close()
             print(f"Парсинг завершен ({browser_name}). Найдено: название='{data['title']}', адрес='{data['address']}'")

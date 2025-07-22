@@ -40,6 +40,7 @@
         {% if card.overview %}
         <table>
             <tr><th>Название</th><td>{{ card.overview.title | default('') }}</td></tr>
+            <tr><th>Рубрики</th><td>{% if card.overview.rubric and card.overview.rubric|length > 0 %}{{ card.overview.rubric|join(', ') }}{% else %}—{% endif %}</td></tr>
             <tr><th>Рейтинг</th><td>{{ card.overview.rating | default('') }}</td></tr>
             <tr><th>Количество оценок</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
             <tr><th>Количество отзывов</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
