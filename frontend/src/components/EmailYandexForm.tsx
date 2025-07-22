@@ -46,6 +46,11 @@ const EmailYandexForm: React.FC = () => {
       userId = data.user.id;
       // Сохраняем временный пароль для последующей смены
       localStorage.setItem('tempPassword', tempPassword);
+      // Вставляем профиль в Users вручную
+      await supabase.from('users').upsert({
+        id: userId,
+        email: email,
+      });
     }
 
     // 3. Сохраняем заявку на отчёт в ParseQueue
@@ -53,12 +58,14 @@ const EmailYandexForm: React.FC = () => {
       .from('ParseQueue')
       .insert({ user_id: userId, url: yandexUrl });
 
+    setLoading(false);
+
     if (insertError) {
       setError('Ошибка при сохранении заявки');
-      setLoading(false);
       return;
     }
 
+    setSuccess('Заявка успешно отправлена! Задайте пароль для входа.');
     // 4. Перенаправляем на страницу установки пароля
     navigate('/set-password', { state: { email } });
   };
