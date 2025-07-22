@@ -31,7 +31,7 @@ const Hero = () => {
                 const mod = await import('@/lib/supabase');
                 await mod.supabase.from('Cards').insert({ email, url: yandexUrl });
                 form.reset();
-                alert('Данные отправлены!');
+                // alert('Данные отправлены!') удалён для устранения дублирования
               }}
               className="mb-8 flex flex-col gap-4"
               id="hero-form"

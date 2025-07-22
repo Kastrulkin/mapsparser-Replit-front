@@ -48,10 +48,10 @@ const EmailYandexForm: React.FC = () => {
       localStorage.setItem('tempPassword', tempPassword);
     }
 
-    // 3. Сохраняем заявку на отчёт
+    // 3. Сохраняем заявку на отчёт в ParseQueue
     const { error: insertError } = await supabase
-      .from('Cards')
-      .insert({ email, url: yandexUrl, user_id: userId });
+      .from('ParseQueue')
+      .insert({ user_id: userId, url: yandexUrl });
 
     if (insertError) {
       setError('Ошибка при сохранении заявки');

@@ -2,7 +2,7 @@ from supabase import create_client, Client
 import os
 
 SUPABASE_URL = "https://bvhpvzcvcuswiozhyqlk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2aHB2emN2Y3Vzd2lvemh5cWxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTk4NTksImV4cCI6MjA2ODA3NTg1OX0.WN6Yig4ruyDmSDwX12vlZlzRaCOsekXC_WNdtwpeXqE"
+# SUPABASE_KEY удалён из соображений безопасности
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def save_card_to_supabase(card_data):
