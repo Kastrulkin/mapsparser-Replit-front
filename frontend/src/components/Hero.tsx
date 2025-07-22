@@ -29,7 +29,8 @@ const Hero = () => {
                 const email = (form.elements.namedItem('email') as HTMLInputElement).value;
                 const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
                 const mod = await import('@/lib/supabase');
-                await mod.supabase.from('Cards').insert({ email, url: yandexUrl });
+                // Вместо Cards теперь ParseQueue, email убран
+                await mod.supabase.from('ParseQueue').insert({ user_id: undefined, url: yandexUrl });
                 form.reset();
                 // alert('Данные отправлены!') удалён для устранения дублирования
               }}
