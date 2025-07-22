@@ -29,10 +29,44 @@ const Hero = () => {
                 const email = (form.elements.namedItem('email') as HTMLInputElement).value;
                 const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
                 const mod = await import('@/lib/supabase');
-                // Вместо Cards теперь ParseQueue, email убран
-                await mod.supabase.from('ParseQueue').insert({ user_id: undefined, url: yandexUrl });
+                let userId: string | null = null;
+                // 1. Проверяем, есть ли пользователь
+                let { data: existingUser } = await mod.supabase
+                  .from('users')
+                  .select('id')
+                  .eq('email', email)
+                  .single();
+                if (existingUser) {
+                  userId = existingUser.id;
+                } else {
+                  // 2. Создаём пользователя с временным паролем
+                  const tempPassword = Math.random().toString(36).slice(-12);
+                  const { data, error: signUpError } = await mod.supabase.auth.signUp({
+                    email,
+                    password: tempPassword,
+                  });
+                  if (signUpError || !data?.user) {
+                    alert('Ошибка при создании пользователя');
+                    return;
+                  }
+                  userId = data.user.id;
+                  localStorage.setItem('tempPassword', tempPassword);
+                  await mod.supabase.from('users').upsert({
+                    id: userId,
+                    email: email,
+                  });
+                }
+                // 3. Сохраняем заявку на отчёт в ParseQueue
+                const { error: insertError } = await mod.supabase
+                  .from('ParseQueue')
+                  .insert({ user_id: userId, url: yandexUrl });
+                if (insertError) {
+                  alert('Ошибка при сохранении заявки');
+                  return;
+                }
                 form.reset();
-                // alert('Данные отправлены!') удалён для устранения дублирования
+                alert('Заявка успешно отправлена! Задайте пароль для входа.');
+                // Можно добавить редирект на страницу установки пароля, если нужно
               }}
               className="mb-8 flex flex-col gap-4"
               id="hero-form"
