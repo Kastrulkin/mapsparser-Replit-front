@@ -24,7 +24,7 @@ const EmailYandexForm: React.FC = () => {
     let userId: string | null = null;
     // 1. Проверяем, есть ли пользователь
     let { data: existingUser } = await supabase
-      .from('users')
+      .from('Users')
       .select('id')
       .eq('email', email)
       .single();
@@ -47,7 +47,7 @@ const EmailYandexForm: React.FC = () => {
       // Сохраняем временный пароль для последующей смены
       localStorage.setItem('tempPassword', tempPassword);
       // Вставляем профиль в Users вручную
-      await supabase.from('users').upsert({
+      await supabase.from('Users').upsert({
         id: userId,
         email: email,
       });

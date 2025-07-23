@@ -52,7 +52,7 @@ const Login = () => {
       return;
     }
     // Сохраняем профиль в users
-    await supabase.from('users').upsert({
+    await supabase.from('Users').upsert({
       id: data.user.id,
       email: registerForm.email,
       phone: registerForm.phone,

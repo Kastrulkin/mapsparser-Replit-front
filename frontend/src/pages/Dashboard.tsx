@@ -41,7 +41,7 @@ const Dashboard = () => {
       setUser(user);
       if (user) {
         const { data: profileData } = await supabase
-          .from("users")
+          .from("Users")
           .select("*")
           .eq("id", user.id)
           .single();
@@ -85,7 +85,7 @@ const Dashboard = () => {
     setError(null);
     setSuccess(null);
     const { error } = await supabase
-      .from("users")
+      .from("Users")
       .update({
         email: form.email,
         phone: form.phone,
@@ -103,7 +103,7 @@ const Dashboard = () => {
 
   const handleDelete = async () => {
     if (!window.confirm("Вы уверены, что хотите удалить аккаунт? Это действие необратимо.")) return;
-    await supabase.from("users").delete().eq("id", user.id);
+    await supabase.from("Users").delete().eq("id", user.id);
     await supabase.auth.signOut();
     window.location.href = "/";
   };

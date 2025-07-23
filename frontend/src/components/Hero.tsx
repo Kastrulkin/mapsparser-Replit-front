@@ -32,7 +32,7 @@ const Hero = () => {
                 let userId: string | null = null;
                 // 1. Проверяем, есть ли пользователь
                 let { data: existingUser } = await mod.supabase
-                  .from('users')
+                  .from('Users')
                   .select('id')
                   .eq('email', email)
                   .single();
@@ -51,7 +51,7 @@ const Hero = () => {
                   }
                   userId = data.user.id;
                   localStorage.setItem('tempPassword', tempPassword);
-                  await mod.supabase.from('users').upsert({
+                  await mod.supabase.from('Users').upsert({
                     id: userId,
                     email: email,
                   });
@@ -96,11 +96,6 @@ const Hero = () => {
                 className="text-lg px-8 py-6"
                 type="submit"
                 form="hero-form"
-                onClick={(e) => {
-                  // На случай если кнопка вне формы, форсим submit
-                  const form = document.querySelector('form');
-                  if (form) form.requestSubmit();
-                }}
               >
                 Отчёт бесплатно
               </Button>
