@@ -33,6 +33,7 @@ const Dashboard = () => {
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [timer, setTimer] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
+  const [invites, setInvites] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -76,6 +77,18 @@ const Dashboard = () => {
     const interval = setInterval(update, 60000);
     return () => clearInterval(interval);
   }, [reports]);
+
+  useEffect(() => {
+    const fetchInvites = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("Invites")
+        .select("*")
+        .eq("inviter_id", user.id);
+      setInvites(data || []);
+    };
+    fetchInvites();
+  }, [user, inviteSuccess]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -218,6 +231,21 @@ const Dashboard = () => {
                 <Button variant="destructive" onClick={handleDelete} className="flex-1">Удалить аккаунт</Button>
               </div>
             </div>
+          )}
+        </div>
+        {/* Invites List */}
+        <div className="bg-card/80 rounded-3xl shadow-xl border p-8 mb-8">
+          <h2 className="text-2xl font-bold mb-4">Мои приглашённые</h2>
+          {invites.length === 0 ? (
+            <div>Пока нет приглашённых.</div>
+          ) : (
+            <ul>
+              {invites.map(invite => (
+                <li key={invite.id}>
+                  {invite.friend_email} — {invite.used ? "Принято" : "Ожидает"}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         {/* Report Generation и Contact Us теперь друг под другом */}

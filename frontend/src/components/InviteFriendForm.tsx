@@ -24,7 +24,7 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
 
     // Вставляем приглашение
     const { error: insertError } = await supabase
-      .from("invites")
+      .from("Invites")
       .insert({
         inviter_id: user.id,
         friend_email: email,
