@@ -74,9 +74,7 @@ def parse_yandex_card(url: str) -> dict:
     ]
     with sync_playwright() as p:
         try:
-            # Правильные переменные окружения для Replit
-            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/home/runner/.cache/ms-playwright'
-            os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '0'
+            # Удалены переменные окружения для Replit, теперь Playwright использует стандартные пути к браузерам на VPS
 
             browser = None
             browser_name = ""
