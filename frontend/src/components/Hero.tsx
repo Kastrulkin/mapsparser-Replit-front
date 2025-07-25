@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Play, Users, Calendar, TrendingUp, Heart } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
+import { useNavigate } from 'react-router-dom';
 
 const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="relative overflow-hidden bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -65,8 +67,7 @@ const Hero = () => {
                   return;
                 }
                 form.reset();
-                alert('Заявка успешно отправлена! Задайте пароль для входа.');
-                // Можно добавить редирект на страницу установки пароля, если нужно
+                navigate('/set-password', { state: { email } });
               }}
               className="mb-8 flex flex-col gap-4"
               id="hero-form"
