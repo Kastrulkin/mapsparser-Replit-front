@@ -1,6 +1,8 @@
 import time
 from supabase import create_client, Client
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from parser import parse_yandex_card
 
 url = os.getenv('SUPABASE_URL')
