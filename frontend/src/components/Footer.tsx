@@ -40,7 +40,7 @@ const Footer = () => {
 
         <div className="mt-12 pt-8 border-t border-border">
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            © 2024 BeautyBot. Все права защищены.
+            © 2025 BeautyBot. Все права защищены.
           </div>
         </div>
       </div>

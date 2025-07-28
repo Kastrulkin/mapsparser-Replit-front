@@ -15,37 +15,81 @@ const SetPassword: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Получаем временный пароль из localStorage
-    const tempPassword = localStorage.getItem('tempPassword');
-    if (!tempPassword || !email) {
-      setError('Не удалось найти временный пароль или email. Попробуйте войти заново.');
-      setLoading(false);
-      return;
-    }
+    try {
+      // Получаем временный пароль и ID из localStorage
+      const tempPassword = localStorage.getItem('tempPassword');
+      const tempUserId = localStorage.getItem('tempUserId');
+      
+      if (!tempPassword || !email) {
+        setError('Не удалось найти временный пароль или email. Попробуйте войти заново.');
+        setLoading(false);
+        return;
+      }
 
-    // Входим с временным паролем
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: tempPassword,
-    });
-    if (signInError) {
-      setError('Ошибка входа. Попробуйте ещё раз.');
-      setLoading(false);
-      return;
-    }
+      // Пытаемся войти с временным паролем
+      let { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: tempPassword,
+      });
 
-    // Обновляем пароль
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    if (updateError) {
-      setError('Ошибка при установке пароля');
-      setLoading(false);
-      return;
-    }
+      // Если не удалось войти, возможно пользователь ещё не подтверждён
+      if (signInError) {
+        console.log('Ошибка входа с временным паролем:', signInError);
+        
+        // Пытаемся создать пользователя заново (если он не был создан)
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password: tempPassword,
+        });
+        
+        if (signUpError) {
+          setError('Ошибка при создании пользователя: ' + signUpError.message);
+          setLoading(false);
+          return;
+        }
+        
+        // Если пользователь создан, но требует подтверждения email
+        if (signUpData.user && !signUpData.user.email_confirmed_at) {
+          setError('Проверьте почту и подтвердите email для завершения регистрации.');
+          setLoading(false);
+          return;
+        }
+        
+        // Если пользователь создан и подтверждён, пытаемся войти снова
+        if (signUpData.user) {
+          const { error: retrySignInError } = await supabase.auth.signInWithPassword({
+            email,
+            password: tempPassword,
+          });
+          
+          if (retrySignInError) {
+            setError('Ошибка входа после создания пользователя: ' + retrySignInError.message);
+            setLoading(false);
+            return;
+          }
+        }
+      }
 
-    // Очищаем временный пароль
-    localStorage.removeItem('tempPassword');
-    // Редирект в личный кабинет
-    navigate('/dashboard');
+      // Обновляем пароль
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError('Ошибка при установке пароля: ' + updateError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Очищаем временные данные
+      localStorage.removeItem('tempPassword');
+      localStorage.removeItem('tempUserId');
+      
+      // Редирект в личный кабинет
+      navigate('/dashboard');
+      
+    } catch (error) {
+      console.error('Общая ошибка в SetPassword:', error);
+      setError('Произошла ошибка. Попробуйте ещё раз.');
+      setLoading(false);
+    }
   };
 
   return (

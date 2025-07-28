@@ -48,7 +48,6 @@
             <tr><th>Адрес</th><td>{{ card.overview.address | default('') }}</td></tr>
             <tr><th>Телефон</th><td>{{ card.overview.phone | default('') }}</td></tr>
             <tr><th>Сайт</th><td>{{ card.overview.site | default('') }}</td></tr>
-            <tr><th>Описание</th><td>{{ card.overview.description | default('') }}</td></tr>
             <tr><th>Часы работы</th><td>{{ card.overview.hours | default('') }}</td></tr>
         </table>
         {% else %}<p>Нет данных</p>{% endif %}
@@ -224,7 +223,6 @@
                     <tr><td>Количество оценок</td><td>{{ competitor.overview.ratings_count or 'Не указано' }}</td></tr>
                     <tr><td>Количество отзывов</td><td>{{ competitor.overview.reviews_count or 'Не указано' }}</td></tr>
                     <tr><td>Часы работы</td><td>{{ competitor.overview.hours or 'Не указаны' }}</td></tr>
-                    <tr><td>Описание</td><td>{{ competitor.overview.description or 'Не указано' }}</td></tr>
                 </table>
             </div>
             {% if competitor.products %}

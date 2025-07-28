@@ -305,7 +305,9 @@ def parse_overview_data(page):
             "span:has-text('Показать телефон')",
             "button[class*='phone']",
             "[aria-label*='телефон'] button",
-            "div.business-phones-view button"
+            "div.business-phones-view button",
+            # Альтернативный селектор по примеру пользователя
+            "div.card-feature-view__content > div > div > div > div > div > div"
         ]
 
         phone_clicked = False
@@ -315,15 +317,19 @@ def parse_overview_data(page):
                 if show_phone_btn and show_phone_btn.is_visible():
                     print(f"Кликаем по кнопке телефона: {selector}")
                     show_phone_btn.click()
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(2500)
                     phone_clicked = True
                     break
-            except Exception:
+                else:
+                    print(f"Кнопка не найдена или не видна: {selector}")
+            except Exception as e:
+                print(f"Ошибка при поиске/клике по селектору {selector}: {e}")
                 continue
 
         if not phone_clicked:
-            print("Кнопка 'Показать телефон' не найдена")
-    except Exception:
+            print("Кнопка 'Показать телефон' не найдена ни по одному селектору")
+    except Exception as e:
+        print(f"Ошибка при попытке кликнуть по кнопке телефона: {e}")
         pass
 
     # Телефон - улучшенный парсинг
@@ -341,21 +347,25 @@ def parse_overview_data(page):
             "span[title^='+7']",
             "div.business-phones-view span",
             "span:has-text('+7')",
-            "div:has-text('Показать телефон')"
+            "div:has-text('Показать телефон')",
+            # Альтернативный селектор по примеру пользователя
+            "div.card-feature-view__content > div > div > div"
         ]
 
         data['phone'] = ''
         for selector in phone_selectors:
             phone_elems = page.query_selector_all(selector)
+            print(f"Пробуем селектор телефона: {selector}, найдено элементов: {len(phone_elems)}")
             for phone_elem in phone_elems:
                 phone_text = phone_elem.inner_text().strip()
+                print(f"  Кандидат на телефон: '{phone_text}' (селектор: {selector})")
                 # Проверяем на наличие цифр и символов телефона
                 if re.search(r'[\d+\-\(\)\s]{7,}', phone_text):
                     # Очищаем от лишних символов, оставляя только цифры, +, -, (, ), пробелы
                     phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', phone_text).strip()
                     if len(phone_cleaned) >= 7:  # Минимальная длина телефона
                         data['phone'] = phone_cleaned
-                        print(f"Найден телефон: {data['phone']}")
+                        print(f"  Найден телефон: {data['phone']} (селектор: {selector})")
                         break
 
                 # Также проверяем атрибут title
@@ -364,12 +374,14 @@ def parse_overview_data(page):
                     phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', title_attr).strip()
                     if len(phone_cleaned) >= 7:
                         data['phone'] = phone_cleaned
-                        print(f"Найден телефон в title: {data['phone']}")
+                        print(f"  Найден телефон в title: {data['phone']} (селектор: {selector})")
                         break
 
             if data['phone']:
                 break
-    except Exception:
+        print(f"Итоговый телефон: {data['phone']}")
+    except Exception as e:
+        print(f"Ошибка при парсинге телефона: {e}")
         data['phone'] = ''
 
     # Ближайшее метро
@@ -496,28 +508,59 @@ def parse_overview_data(page):
     except Exception:
         data['reviews_count'] = ''
 
-    # --- ЧАСЫ РАБОТЫ ---
+    # Краткое время работы (на главной)
     try:
-        # Ищем таблицу с расписанием
-        intervals_table = page.query_selector("div.business-working-intervals-view")
+        short_hours_el = page.query_selector("div.card-feature-view__wrapper")
+        if short_hours_el:
+            short_hours = short_hours_el.inner_text().strip()
+            print(f"Краткое время работы: {short_hours}")
+            data['hours_short'] = short_hours
+        else:
+            data['hours_short'] = ''
+    except Exception as e:
+        print(f"Ошибка при парсинге краткого времени работы: {e}")
+        data['hours_short'] = ''
+
+    # Клик по кнопке "График" для полного расписания
+    try:
+        schedule_btn = page.query_selector("div.card-feature-view__additional, div.card-feature-view__value")
+        if schedule_btn and schedule_btn.is_visible():
+            print("Кликаем по кнопке 'График' для полного расписания")
+            schedule_btn.click()
+            page.wait_for_timeout(1500)
+        else:
+            print("Кнопка 'График' не найдена или не видна")
+    except Exception as e:
+        print(f"Ошибка при попытке кликнуть по кнопке 'График': {e}")
+
+    # После клика ищем полное расписание (альтернативный селектор)
+    try:
+        intervals_table = page.query_selector("div.business-working-intervals-view._wide._card, div.business-working-intervals-view")
         hours_full = []
         if intervals_table:
             rows = intervals_table.query_selector_all("div.business-working-intervals-view__item")
+            print(f"Найдено строк расписания: {len(rows)}")
             for row in rows:
                 day_el = row.query_selector("div.business-working-intervals-view__day")
                 interval_el = row.query_selector("div.business-working-intervals-view__interval")
                 day = day_el.inner_text().strip() if day_el else ''
                 interval = interval_el.inner_text().strip() if interval_el else ''
+                print(f"  День: '{day}', часы: '{interval}'")
                 if day and interval:
                     hours_full.append(f"{day}: {interval}")
+        else:
+            print("Таблица полного расписания не найдена!")
         data['hours_full'] = hours_full
         # Краткая форма: если все дни одинаковые, выводим "Пн-Вс: 10:00–00:00"
         if hours_full and len(set([h.split(': ')[1] for h in hours_full])) == 1:
             interval = hours_full[0].split(': ')[1]
             data['hours'] = f"Пн-Вс: {interval}"
+            print(f"Все дни одинаковые, краткая форма: {data['hours']}")
         else:
             data['hours'] = '; '.join(hours_full)
-    except Exception:
+            print(f"Часы работы по дням: {data['hours']}")
+    except Exception as e:
+        print(f"Ошибка при парсинге полного расписания: {e}")
         data['hours'] = ''
         data['hours_full'] = []
 

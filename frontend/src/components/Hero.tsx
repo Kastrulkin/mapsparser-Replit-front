@@ -1,10 +1,13 @@
 import { Button } from "@/components/ui/button";
-import { Play, Users, Calendar, TrendingUp, Heart } from "lucide-react";
+import { Play, Users, Calendar, TrendingUp, Heart, Loader2 } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 
 const Hero = () => {
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   return (
     <section className="relative overflow-hidden bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -27,47 +30,84 @@ const Hero = () => {
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                
+                // Защита от двойного клика
+                if (isSubmitting) {
+                  return;
+                }
+                
+                setIsSubmitting(true);
+                
                 const form = e.target as HTMLFormElement;
                 const email = (form.elements.namedItem('email') as HTMLInputElement).value;
                 const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
                 const mod = await import('@/lib/supabase');
-                let userId: string | null = null;
-                // 1. Проверяем, есть ли пользователь
-                let { data: existingUser } = await mod.supabase
-                  .from('Users')
-                  .select('id')
-                  .eq('email', email)
-                  .single();
-                if (existingUser) {
-                  userId = existingUser.id;
-                } else {
-                  // 2. Создаём пользователя с временным паролем
+                
+                try {
+                  // 1. Проверяем, есть ли пользователь
+                  let { data: existingUser } = await mod.supabase
+                    .from('Users')
+                    .select('id')
+                    .eq('email', email)
+                    .single();
+                  
+                  if (existingUser) {
+                    alert('Пользователь с таким email уже зарегистрирован. Войдите в личный кабинет или воспользуйтесь восстановлением пароля.');
+                    navigate('/login', { state: { email } });
+                    return;
+                  }
+                  
+                  // 2. Генерируем временный ID для пользователя
+                  const tempUserId = crypto.randomUUID();
+                  
+                  // 3. Создаём запись в Users без авторизации
+                  const { error: userError } = await mod.supabase
+                    .from('Users')
+                    .insert({
+                      id: tempUserId,
+                      email: email,
+                    });
+                    
+                  if (userError) {
+                    console.error('Ошибка создания пользователя:', userError);
+                    alert('Ошибка при создании пользователя: ' + userError.message);
+                    return;
+                  }
+                  
+                  // 4. Сохраняем заявку на отчёт в ParseQueue
+                  const { error: queueError } = await mod.supabase
+                    .from('ParseQueue')
+                    .insert({ 
+                      user_id: tempUserId, 
+                      url: yandexUrl 
+                    });
+                    
+                  if (queueError) {
+                    console.error('Ошибка сохранения заявки:', queueError);
+                    alert('Ошибка при сохранении заявки: ' + queueError.message);
+                    return;
+                  }
+                  
+                  // 5. Генерируем временный пароль и сохраняем для последующей авторизации
                   const tempPassword = Math.random().toString(36).slice(-12);
-                  const { data, error: signUpError } = await mod.supabase.auth.signUp({
+                  localStorage.setItem('tempPassword', tempPassword);
+                  localStorage.setItem('tempUserId', tempUserId);
+                  
+                  // 6. Создаём пользователя в Auth (но не ждём подтверждения)
+                  await mod.supabase.auth.signUp({
                     email,
                     password: tempPassword,
                   });
-                  if (signUpError || !data?.user) {
-                    alert('Ошибка при создании пользователя');
-                    return;
-                  }
-                  userId = data.user.id;
-                  localStorage.setItem('tempPassword', tempPassword);
-                  await mod.supabase.from('Users').upsert({
-                    id: userId,
-                    email: email,
-                  });
+                  
+                  form.reset();
+                  navigate('/set-password', { state: { email } });
+                  
+                } catch (error) {
+                  console.error('Общая ошибка:', error);
+                  alert('Произошла ошибка. Попробуйте ещё раз.');
+                } finally {
+                  setIsSubmitting(false);
                 }
-                // 3. Сохраняем заявку на отчёт в ParseQueue
-                const { error: insertError } = await mod.supabase
-                  .from('ParseQueue')
-                  .insert({ user_id: userId, url: yandexUrl });
-                if (insertError) {
-                  alert('Ошибка при сохранении заявки');
-                  return;
-                }
-                form.reset();
-                navigate('/set-password', { state: { email } });
               }}
               className="mb-8 flex flex-col gap-4"
               id="hero-form"
@@ -97,8 +137,16 @@ const Hero = () => {
                 className="text-lg px-8 py-6"
                 type="submit"
                 form="hero-form"
+                disabled={isSubmitting}
               >
-                Отчёт бесплатно
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Отправка...
+                  </>
+                ) : (
+                  'Отчёт бесплатно'
+                )}
               </Button>
               <Button variant="outline" size="lg" className="text-lg px-8 py-6">
                 <Play className="w-5 h-5 mr-2" />

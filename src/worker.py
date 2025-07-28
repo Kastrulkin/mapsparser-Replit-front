@@ -15,6 +15,10 @@ def process_queue():
         print("Обрабатываю заявку:", row)
         try:
             card_data = parse_yandex_card(row["url"])
+            if card_data.get("error") == "captcha_detected":
+                print("Обнаружена капча! Останавливаю парсинг на 5 минут...")
+                time.sleep(300)
+                return  # Прерываем обработку очереди, чтобы не парсить другие заявки
             # Сохраняем результат в Cards (только нужные поля)
             supabase.table("Cards").insert({
                 "user_id": row["user_id"],
