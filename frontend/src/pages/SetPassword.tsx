@@ -26,7 +26,7 @@ const SetPassword: React.FC = () => {
       if (error) {
         setError('Ошибка при отправке письма для восстановления пароля: ' + error.message);
       } else {
-        setInfo('Письмо для восстановления пароля отправлено на вашу почту.');
+        setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
       }
     } catch (error) {
       setError('Произошла ошибка при отправке письма.');
@@ -45,7 +45,7 @@ const SetPassword: React.FC = () => {
       const tempPassword = localStorage.getItem('tempPassword');
       
       if (!tempPassword || !email) {
-        setError('Не удалось найти временный пароль или email. Попробуйте войти заново.');
+        setError('Не удалось найти данные для установки пароля. Попробуйте войти заново.');
         setLoading(false);
         return;
       }
@@ -60,14 +60,7 @@ const SetPassword: React.FC = () => {
         console.log('Ошибка входа с временным паролем:', signInError);
         
         // Если не удалось войти, предлагаем восстановление пароля
-        if (signInError.message.includes('Invalid login credentials')) {
-          setError('Неверный временный пароль. Попробуйте восстановить пароль через email.');
-          setLoading(false);
-          return;
-        }
-        
-        // Для других ошибок показываем общую ошибку
-        setError('Ошибка входа: ' + signInError.message);
+        setError('Не удалось войти с временным паролем. Попробуйте восстановить пароль через email.');
         setLoading(false);
         return;
       }
@@ -118,7 +111,7 @@ const SetPassword: React.FC = () => {
       
       <div className="border-t pt-4">
         <p className="text-sm text-gray-600 mb-3">
-          Не получается войти с временным паролем?
+          Не получается установить пароль?
         </p>
         <button
           onClick={handleResetPassword}
