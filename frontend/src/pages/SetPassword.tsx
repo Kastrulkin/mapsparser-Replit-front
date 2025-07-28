@@ -7,37 +7,43 @@ const SetPassword: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [isEmailConfirmed, setIsEmailConfirmed] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email;
 
-  // Проверяем подтверждение email при загрузке
+  // Автоматическая авторизация с временным паролем при загрузке
   useEffect(() => {
-    const checkEmailConfirmation = async () => {
+    const autoLogin = async () => {
       if (!email) return;
       
+      const tempPassword = localStorage.getItem('tempPassword');
+      if (!tempPassword) {
+        setError('Не удалось найти временный пароль. Попробуйте войти заново.');
+        return;
+      }
+
       try {
-        // Пытаемся получить текущего пользователя
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user && user.email === email) {
-          // Если пользователь авторизован и email совпадает, проверяем подтверждение
-          setIsEmailConfirmed(!!user.email_confirmed_at);
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: tempPassword,
+        });
+
+        if (signInError) {
+          console.log('Ошибка автоматической авторизации:', signInError);
+          
+          // Если не удалось войти, предлагаем восстановление пароля
+          setError('Не удалось войти с временным паролем. Попробуйте восстановить пароль через email.');
         } else {
-          // Если пользователь не авторизован, показываем сообщение о необходимости подтверждения
-          setIsEmailConfirmed(false);
+          setIsAuthorized(true);
         }
       } catch (error) {
-        console.error('Ошибка проверки email:', error);
-        setIsEmailConfirmed(false);
-      } finally {
-        setIsChecking(false);
+        console.error('Ошибка автоматической авторизации:', error);
+        setError('Произошла ошибка при авторизации.');
       }
     };
 
-    checkEmailConfirmation();
+    autoLogin();
   }, [email]);
 
   const handleResetPassword = async () => {
@@ -70,24 +76,13 @@ const SetPassword: React.FC = () => {
     setError(null);
 
     try {
-      // Если email не подтвержден, отправляем письмо для восстановления пароля
-      if (!isEmailConfirmed) {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/set-password'
-        });
-        
-        if (resetError) {
-          setError('Ошибка при отправке письма для восстановления пароля: ' + resetError.message);
-          setLoading(false);
-          return;
-        }
-        
-        setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+      if (!isAuthorized) {
+        setError('Не удалось авторизоваться. Попробуйте восстановить пароль через email.');
         setLoading(false);
         return;
       }
 
-      // Если email подтвержден, обновляем пароль напрямую
+      // Обновляем пароль
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         setError('Ошибка при установке пароля: ' + updateError.message);
@@ -99,8 +94,8 @@ const SetPassword: React.FC = () => {
       localStorage.removeItem('tempPassword');
       localStorage.removeItem('tempUserId');
       
-      // Показываем сообщение о необходимости подтверждения email
-      alert('Пароль успешно установлен! Теперь подтвердите email, чтобы завершить регистрацию. Не забудьте проверить папку СПАМ.');
+      // Показываем сообщение об успехе
+      alert('Пароль успешно установлен! Теперь вы можете войти в личный кабинет.');
       
       // Редирект в личный кабинет
       navigate('/dashboard');
@@ -116,30 +111,14 @@ const SetPassword: React.FC = () => {
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md flex flex-col gap-4 mt-12">
       <h2 className="text-2xl font-bold mb-2">Установите пароль для входа</h2>
       
-      {isChecking && (
+      {!isAuthorized && !error && (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-sm text-gray-600">Проверка подтверждения email...</p>
+          <p className="text-sm text-gray-600">Авторизация...</p>
         </div>
       )}
 
-      {!isChecking && !isEmailConfirmed && (
-        <div className="text-center py-4">
-          <p className="text-sm text-gray-600 mb-4">
-            Ваш email не подтвержден. Для установки пароля, пожалуйста, подтвердите ваш email.
-            Мы отправили письмо для подтверждения на вашу почту.
-          </p>
-          <button
-            onClick={handleResetPassword}
-            disabled={loading}
-            className="w-full text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
-          >
-            Отправить письмо подтверждения повторно
-          </button>
-        </div>
-      )}
-
-      {!isChecking && isEmailConfirmed && (
+      {isAuthorized && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
             type="password"

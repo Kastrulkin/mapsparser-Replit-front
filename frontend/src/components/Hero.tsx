@@ -93,19 +93,30 @@ const Hero = () => {
                   localStorage.setItem('tempPassword', tempPassword);
                   localStorage.setItem('tempUserId', tempUserId);
                   
-                  // 6. Создаём пользователя в Auth
-                  await mod.supabase.auth.signUp({
+                  // 6. Создаём пользователя в Auth без email подтверждения
+                  const { data: signUpData, error: signUpError } = await mod.supabase.auth.signUp({
                     email,
                     password: tempPassword,
                     options: {
-                      emailRedirectTo: window.location.origin + '/set-password'
+                      emailRedirectTo: window.location.origin + '/set-password',
+                      data: {
+                        email_confirmed: true // Помечаем email как подтверждённый
+                      }
                     }
                   });
                   
+                  if (signUpError) {
+                    console.error('Ошибка создания пользователя в Auth:', signUpError);
+                    alert('Ошибка при создании пользователя: ' + signUpError.message);
+                    return;
+                  }
+                  
                   form.reset();
                   
-                  // Показываем уведомление о письме
-                  alert('Письмо с подтверждением отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+                  // Показываем уведомление о письме (если оно отправляется)
+                  if (signUpData.user && !signUpData.user.email_confirmed_at) {
+                    alert('Письмо с подтверждением отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+                  }
                   
                   navigate('/set-password', { state: { email } });
                   
