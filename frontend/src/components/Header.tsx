@@ -95,7 +95,10 @@ const Header = () => {
                 </Link>
               </>
             ) : (
-              <Button variant="ghost" onClick={handleLogout}>Выход</Button>
+              <>
+                <Link to="/dashboard"><Button variant="ghost">Личный кабинет</Button></Link>
+                <Button variant="ghost" onClick={handleLogout}>Выход</Button>
+              </>
             )}
           </div>
 
@@ -155,7 +158,12 @@ const Header = () => {
                     </Link>
                   </>
                 ) : (
-                  <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>Выход</Button>
+                  <>
+                    <Link to="/dashboard" className="w-full block">
+                      <Button variant="ghost" className="w-full justify-start">Личный кабинет</Button>
+                    </Link>
+                    <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>Выход</Button>
+                  </>
                 )}
               </div>
             </div>

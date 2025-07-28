@@ -97,6 +97,9 @@ const Hero = () => {
                   await mod.supabase.auth.signUp({
                     email,
                     password: tempPassword,
+                    options: {
+                      emailRedirectTo: window.location.origin + '/set-password'
+                    }
                   });
                   
                   form.reset();
