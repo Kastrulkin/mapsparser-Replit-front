@@ -77,6 +77,9 @@ const SetPassword: React.FC = () => {
       localStorage.removeItem('tempPassword');
       localStorage.removeItem('tempUserId');
       
+      // Показываем сообщение о необходимости подтверждения email
+      alert('Пароль успешно установлен! Теперь подтвердите email, чтобы завершить регистрацию. Не забудьте проверить папку СПАМ.');
+      
       // Редирект в личный кабинет
       navigate('/dashboard');
       

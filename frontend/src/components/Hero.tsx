@@ -93,7 +93,7 @@ const Hero = () => {
                   localStorage.setItem('tempPassword', tempPassword);
                   localStorage.setItem('tempUserId', tempUserId);
                   
-                  // 6. Создаём пользователя в Auth (но не ждём подтверждения)
+                  // 6. Создаём пользователя в Auth
                   await mod.supabase.auth.signUp({
                     email,
                     password: tempPassword,
