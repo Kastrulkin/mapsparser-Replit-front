@@ -1,8 +1,9 @@
 import { useState } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { Button } from "../components/ui/button";
+import { supabase } from "../lib/supabase";
+import { auth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
@@ -20,15 +21,32 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginForm.email,
-      password: loginForm.password,
-    });
-    setLoading(false);
-    if (error) {
-      setError('Неверная почта или пароль');
-    } else {
-      navigate('/dashboard');
+    
+    try {
+      // Сначала пробуем через нашу простую систему аутентификации
+      const { user, error: simpleAuthError } = await auth.signIn(loginForm.email, loginForm.password);
+      
+      if (user) {
+        navigate('/dashboard');
+        setLoading(false);
+        return;
+      }
+
+      // Если не получилось, пробуем через Supabase Auth
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginForm.email,
+        password: loginForm.password,
+      });
+      
+      if (error) {
+        setError('Неверная почта или пароль');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      setError('Ошибка входа: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 

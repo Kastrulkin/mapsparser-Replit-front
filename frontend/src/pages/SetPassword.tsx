@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
+import { auth } from '../lib/auth';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const SetPassword: React.FC = () => {
@@ -29,12 +30,22 @@ const SetPassword: React.FC = () => {
       console.log('Пытаемся авторизоваться с:', { email, tempPassword: tempPassword.substring(0, 3) + '...' });
 
       try {
+        // Сначала пробуем через нашу простую систему аутентификации
+        const { user, error: simpleAuthError } = await auth.signIn(email, tempPassword);
+        
+        if (user) {
+          console.log('Авторизация через SimpleAuth успешна!');
+          setIsAuthorized(true);
+          return;
+        }
+
+        // Если не получилось, пробуем через Supabase Auth
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: tempPassword,
         });
 
-        console.log('Результат авторизации:', { data, error: signInError });
+        console.log('Результат авторизации Supabase:', { data, error: signInError });
 
         if (signInError) {
           console.log('Ошибка автоматической авторизации:', signInError);
@@ -42,7 +53,7 @@ const SetPassword: React.FC = () => {
           // Если не удалось войти, предлагаем восстановление пароля
           setError(`Не удалось войти с временным паролем: ${signInError.message}. Попробуйте восстановить пароль через email.`);
         } else {
-          console.log('Авторизация успешна!');
+          console.log('Авторизация Supabase успешна!');
           setIsAuthorized(true);
         }
       } catch (error) {
@@ -93,11 +104,20 @@ const SetPassword: React.FC = () => {
       }
 
       // Обновляем пароль
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setError('Ошибка при установке пароля: ' + updateError.message);
-        setLoading(false);
-        return;
+      try {
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) {
+          console.warn('Ошибка обновления пароля в Supabase Auth:', updateError);
+          // Продолжаем с нашей системой аутентификации
+        }
+      } catch (error) {
+        console.warn('Ошибка обновления пароля в Supabase Auth:', error);
+      }
+
+      // Обновляем пароль в нашей системе аутентификации
+      const currentUser = auth.getCurrentUser();
+      if (currentUser) {
+        localStorage.setItem(`user_${currentUser.id}_password`, password);
       }
 
       // Очищаем временные данные
