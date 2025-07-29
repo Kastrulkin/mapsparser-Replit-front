@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SupabaseDebug } from '../lib/supabaseDebug';
+import { AuthTester } from '../lib/authTest';
 import { supabase } from '../lib/supabase';
 
 const Debug: React.FC = () => {
@@ -25,9 +26,7 @@ const Debug: React.FC = () => {
   const testSignUp = async () => {
     setLoading(true);
     try {
-      const testEmail = `test-${Date.now()}@example.com`;
-      const testPassword = 'testpassword123';
-      const result = await SupabaseDebug.testSignUp(testEmail, testPassword);
+      const result = await AuthTester.testSignUp();
       addResult('Test SignUp', result);
     } catch (error) {
       addResult('Test SignUp Error', error);
@@ -39,10 +38,10 @@ const Debug: React.FC = () => {
   const testEmailSettings = async () => {
     setLoading(true);
     try {
-      await SupabaseDebug.checkEmailSettings();
-      addResult('Email Settings', 'Check console for details');
+      const result = await AuthTester.checkSupabaseConfig();
+      addResult('Supabase Config', result);
     } catch (error) {
-      addResult('Email Settings Error', error);
+      addResult('Supabase Config Error', error);
     } finally {
       setLoading(false);
     }
@@ -59,6 +58,42 @@ const Debug: React.FC = () => {
       addResult('Database Test', { data, error });
     } catch (error) {
       addResult('Database Test Error', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testPasswordReset = async () => {
+    setLoading(true);
+    try {
+      const result = await AuthTester.testPasswordReset('demyanovp@yandex.ru');
+      addResult('Password Reset Test', result);
+    } catch (error) {
+      addResult('Password Reset Error', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testRateLimit = async () => {
+    setLoading(true);
+    try {
+      const results = await AuthTester.testRateLimit(2);
+      addResult('Rate Limit Test', results);
+    } catch (error) {
+      addResult('Rate Limit Error', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runFullAuthTest = async () => {
+    setLoading(true);
+    try {
+      const results = await AuthTester.runFullAuthTest();
+      addResult('Full Auth Test Suite', results);
+    } catch (error) {
+      addResult('Full Auth Test Error', error);
     } finally {
       setLoading(false);
     }
@@ -94,7 +129,7 @@ const Debug: React.FC = () => {
           disabled={loading}
           className="bg-yellow-500 text-white p-3 rounded disabled:opacity-50"
         >
-          Test Email Settings
+          Supabase Config
         </button>
         
         <button
@@ -103,6 +138,30 @@ const Debug: React.FC = () => {
           className="bg-purple-500 text-white p-3 rounded disabled:opacity-50"
         >
           Test Database
+        </button>
+
+        <button
+          onClick={testPasswordReset}
+          disabled={loading}
+          className="bg-orange-500 text-white p-3 rounded disabled:opacity-50"
+        >
+          Test Password Reset
+        </button>
+
+        <button
+          onClick={testRateLimit}
+          disabled={loading}
+          className="bg-red-500 text-white p-3 rounded disabled:opacity-50"
+        >
+          Test Rate Limit
+        </button>
+
+        <button
+          onClick={runFullAuthTest}
+          disabled={loading}
+          className="bg-indigo-500 text-white p-3 rounded disabled:opacity-50 col-span-2"
+        >
+          🚀 Run Full Auth Test Suite
         </button>
       </div>
 
