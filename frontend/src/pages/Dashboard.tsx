@@ -148,8 +148,7 @@ const Dashboard = () => {
         .from("Cards")
         .insert({
           user_id: user.id,
-          url: createReportForm.yandexUrl,
-          status: 'pending'
+          url: createReportForm.yandexUrl
         })
         .select()
         .single();
