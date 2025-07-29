@@ -41,6 +41,13 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
+      console.log('Отправка приглашения:', {
+        friendEmail: email,
+        friendUrl: url,
+        inviterEmail: currentUser?.email || user.email,
+        supabaseUrl: supabase.supabaseUrl
+      });
+      
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/send-invite`, {
         method: 'POST',
         headers: {
@@ -54,11 +61,19 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         })
       });
 
+      console.log('Ответ Edge Function:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (!response.ok) {
-        console.warn('Ошибка отправки email приглашения:', response.statusText);
+        const errorText = await response.text();
+        console.warn('Ошибка отправки email приглашения:', response.statusText, errorText);
         // Не критично, продолжаем
       } else {
-        console.log('Email приглашения отправлен успешно');
+        const result = await response.json();
+        console.log('Email приглашения отправлен успешно:', result);
       }
     } catch (emailError) {
       console.warn('Ошибка отправки email приглашения:', emailError);

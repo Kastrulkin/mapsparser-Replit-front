@@ -138,6 +138,10 @@ serve(async (req) => {
       </html>
     `
 
+    // Log for debugging
+    console.log('Sending email to:', friendEmail);
+    console.log('SITE_URL:', Deno.env.get('SITE_URL'));
+    
     // Send email using Supabase Auth API
     const { data, error } = await supabaseClient.auth.admin.sendRawEmail({
       to: friendEmail,
@@ -147,8 +151,11 @@ serve(async (req) => {
     })
 
     if (error) {
+      console.error('Email sending error:', error);
       throw error
     }
+
+    console.log('Email sent successfully:', data);
 
     return new Response(
       JSON.stringify({ success: true, message: 'Invitation email sent successfully' }),
