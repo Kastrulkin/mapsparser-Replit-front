@@ -204,7 +204,7 @@ const Dashboard = () => {
         .update({ yandex_url: createReportForm.yandexUrl })
         .eq("id", user.id);
 
-      setSuccess("Запрос на создание отчёта отправлен! Обработка займёт несколько минут.");
+      setSuccess("Запрос на создание отчёта отправлен! Обработка займёт в среднем около дня, т.к. все отчёты проверяются человеком.");
       setShowCreateReport(false);
       
       // Обновляем список отчётов (готовые отчёты из Cards)
@@ -573,7 +573,7 @@ const Dashboard = () => {
                       </>
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        Обработка займёт несколько минут...
+                        Обработка займёт в среднем около дня, т.к. все отчёты проверяются человеком
                       </span>
                     )}
                   </div>
