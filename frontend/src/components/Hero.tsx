@@ -119,9 +119,9 @@ const Hero = () => {
                   form.reset();
                   
                   // Показываем успешное сообщение
-                  alert('Заявка успешно отправлена! Переходим к настройке пароля.');
+                  alert('Заявка успешно отправлена! Проверьте почту для подтверждения email.');
                   
-                  navigate('/set-password', { state: { email } });
+                  navigate('/email-confirmation', { state: { email } });
                   
                 } catch (error) {
                   console.error('Общая ошибка:', error);

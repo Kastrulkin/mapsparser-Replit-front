@@ -131,9 +131,9 @@ const EmailYandexForm: React.FC = () => {
         return;
       }
 
-      setSuccess('Заявка успешно отправлена! Задайте пароль для входа.');
-      // 4. Перенаправляем на страницу установки пароля
-      navigate('/set-password', { state: { email } });
+      setSuccess('Заявка успешно отправлена! Проверьте почту для подтверждения email.');
+      // 4. Перенаправляем на страницу подтверждения email
+      navigate('/email-confirmation', { state: { email } });
       
     } catch (error) {
       console.error('Общая ошибка:', error);

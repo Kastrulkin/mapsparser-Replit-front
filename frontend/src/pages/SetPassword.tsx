@@ -13,56 +13,38 @@ const SetPassword: React.FC = () => {
   const location = useLocation();
   const email = location.state?.email;
 
-  // Автоматическая авторизация с временным паролем при загрузке
+  // Проверяем, что пользователь пришел с подтвержденным email
   useEffect(() => {
-    const autoLogin = async () => {
+    const checkUser = async () => {
       if (!email) {
         setError('Email не найден. Попробуйте войти заново.');
         return;
       }
-      
-      const tempPassword = localStorage.getItem('tempPassword');
-      if (!tempPassword) {
-        setError('Не удалось найти временный пароль. Попробуйте войти заново.');
-        return;
-      }
-
-      console.log('Пытаемся авторизоваться с:', { email, tempPassword: tempPassword.substring(0, 3) + '...' });
 
       try {
-        // Сначала пробуем через нашу простую систему аутентификации
-        const { user, error: simpleAuthError } = await auth.signIn(email, tempPassword);
+        // Проверяем, есть ли авторизованный пользователь
+        const { data: { user }, error } = await supabase.auth.getUser();
         
-        if (user) {
-          console.log('Авторизация через SimpleAuth успешна!');
-          setIsAuthorized(true);
+        if (error) {
+          console.log('Ошибка получения пользователя:', error);
+          setError('Не удалось получить данные пользователя. Попробуйте войти заново.');
           return;
         }
 
-        // Если не получилось, пробуем через Supabase Auth
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password: tempPassword,
-        });
-
-        console.log('Результат авторизации Supabase:', { data, error: signInError });
-
-        if (signInError) {
-          console.log('Ошибка автоматической авторизации:', signInError);
-          
-          // Если не удалось войти, предлагаем восстановление пароля
-          setError(`Не удалось войти с временным паролем: ${signInError.message}. Попробуйте восстановить пароль через email.`);
-        } else {
-          console.log('Авторизация Supabase успешна!');
+        if (user && user.email === email) {
+          console.log('Пользователь авторизован:', user.email);
           setIsAuthorized(true);
+        } else {
+          console.log('Пользователь не авторизован или email не совпадает');
+          setError('Пользователь не авторизован. Пожалуйста, подтвердите email и попробуйте снова.');
         }
       } catch (error) {
-        console.error('Ошибка автоматической авторизации:', error);
-        setError('Произошла ошибка при авторизации: ' + (error as Error).message);
+        console.error('Ошибка проверки пользователя:', error);
+        setError('Произошла ошибка при проверке пользователя: ' + (error as Error).message);
       }
     };
 
-    autoLogin();
+    checkUser();
   }, [email]);
 
   const handleResetPassword = async () => {

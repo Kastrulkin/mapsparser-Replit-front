@@ -10,6 +10,7 @@ import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import SetPassword from "./pages/SetPassword";
+import EmailConfirmation from "./pages/EmailConfirmation";
 import Debug from "./pages/Debug";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/email-confirmation" element={<EmailConfirmation />} />
           <Route path="/debug" element={<Debug />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
