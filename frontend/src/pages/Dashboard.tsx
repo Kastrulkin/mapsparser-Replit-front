@@ -34,6 +34,9 @@ const Dashboard = () => {
   const [timer, setTimer] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
   const [invites, setInvites] = useState<any[]>([]);
+  const [showCreateReport, setShowCreateReport] = useState(false);
+  const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
+  const [creatingReport, setCreatingReport] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,6 +54,10 @@ const Dashboard = () => {
           email: profileData?.email || user.email || "",
           phone: profileData?.phone || "",
           name: profileData?.name || "",
+          yandexUrl: profileData?.yandex_url || ""
+        });
+        // Автозаполняем форму создания отчёта
+        setCreateReportForm({
           yandexUrl: profileData?.yandex_url || ""
         });
         const { data: reportsData } = await supabase
@@ -119,6 +126,60 @@ const Dashboard = () => {
     await supabase.from("Users").delete().eq("id", user.id);
     await supabase.auth.signOut();
     window.location.href = "/";
+  };
+
+  const handleCreateReportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCreateReportForm({ ...createReportForm, [e.target.name]: e.target.value });
+  };
+
+  const handleCreateReport = async () => {
+    if (!createReportForm.yandexUrl) {
+      setError("Пожалуйста, укажите ссылку на бизнес");
+      return;
+    }
+
+    setCreatingReport(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Создаём новую запись в таблице Cards
+      const { data: cardData, error: cardError } = await supabase
+        .from("Cards")
+        .insert({
+          user_id: user.id,
+          url: createReportForm.yandexUrl,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (cardError) {
+        throw cardError;
+      }
+
+      // Обновляем профиль пользователя с новой ссылкой
+      await supabase
+        .from("Users")
+        .update({ yandex_url: createReportForm.yandexUrl })
+        .eq("id", user.id);
+
+      setSuccess("Отчёт успешно создан! Обработка займёт несколько минут.");
+      setShowCreateReport(false);
+      
+      // Обновляем список отчётов
+      const { data: reportsData } = await supabase
+        .from("Cards")
+        .select("id, url, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      setReports(reportsData || []);
+
+    } catch (error: any) {
+      setError(error.message || "Ошибка при создании отчёта");
+    } finally {
+      setCreatingReport(false);
+    }
   };
 
   const canCreateReport = !reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports));
@@ -285,7 +346,7 @@ const Dashboard = () => {
                   </span>
                 </div>
               </div>
-              {/* Create Report Button - When Available */}
+              {/* Create Report Form - When Available */}
               {canCreateReport && (
                 <div className="text-center p-6 bg-gradient-to-br from-green-500/10 to-green-600/20 rounded-2xl border border-green-500/20">
                   <div className="w-16 h-16 bg-green-500/20 rounded-2xl mx-auto mb-4 flex items-center justify-center">
@@ -295,9 +356,52 @@ const Dashboard = () => {
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">Отчёт доступен</h3>
                   <p className="text-muted-foreground mb-4">Вы можете сформировать новый SEO отчёт</p>
-                  <Button size="lg" className="w-full animate-pulse">
-                    Сформировать новый отчёт
-                  </Button>
+                  
+                  {!showCreateReport ? (
+                    <Button 
+                      size="lg" 
+                      className="w-full animate-pulse"
+                      onClick={() => setShowCreateReport(true)}
+                    >
+                      Сформировать новый отчёт
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2 text-left">
+                          Ссылка на бизнес (Яндекс.Карты)
+                        </label>
+                        <input 
+                          type="url" 
+                          name="yandexUrl" 
+                          value={createReportForm.yandexUrl} 
+                          onChange={handleCreateReportChange} 
+                          placeholder="https://yandex.ru/maps/org/..."
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
+                        />
+                      </div>
+                      {error && <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-lg">{error}</div>}
+                      {success && <div className="text-green-600 text-sm bg-green-50 px-4 py-2 rounded-lg">{success}</div>}
+                      <div className="flex gap-3">
+                        <Button 
+                          size="lg" 
+                          className="flex-1"
+                          onClick={handleCreateReport}
+                          disabled={creatingReport}
+                        >
+                          {creatingReport ? 'Создание...' : 'Создать отчёт'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="lg"
+                          onClick={() => setShowCreateReport(false)}
+                          disabled={creatingReport}
+                        >
+                          Отмена
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {/* Invite Friend Form - When Timer is Running */}
