@@ -1,7 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Target, Lightbulb, Award, Heart, Globe } from "lucide-react";
-import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useNavigate } from "react-router-dom";
 
@@ -9,7 +8,6 @@ const About = () => {
   const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-background">
-      <Header />
       
       {/* Hero Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">

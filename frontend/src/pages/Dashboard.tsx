@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Header from "@/components/Header";
+
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
@@ -127,7 +127,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <Header />
       {/* Hero Section */}
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/5 opacity-30" />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import Header from "../components/Header";
+
 import Footer from "../components/Footer";
 import { Button } from "../components/ui/button";
 import { supabase } from "../lib/supabase";
@@ -99,7 +99,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header />
       <main className="flex-1 flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-lg bg-card rounded-2xl shadow-xl p-8 border border-border">
           <div className="flex mb-8">
