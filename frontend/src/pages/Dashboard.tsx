@@ -60,12 +60,27 @@ const Dashboard = () => {
         setCreateReportForm({
           yandexUrl: profileData?.yandex_url || ""
         });
+        // Получаем готовые отчёты из Cards
         const { data: reportsData } = await supabase
           .from("Cards")
           .select("id, url, created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
-        setReports(reportsData || []);
+        
+        // Получаем отчёты в обработке из ParseQueue
+        const { data: queueData } = await supabase
+          .from("ParseQueue")
+          .select("id, url, created_at, status")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        
+        // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
+        const allReports = [
+          ...(reportsData || []).map(report => ({ ...report, status: 'completed', source: 'cards' })),
+          ...(queueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
+        ];
+        
+        setReports(allReports);
       }
       setLoading(false);
     };
@@ -491,27 +506,52 @@ const Dashboard = () => {
                 <div key={report.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 bg-muted/5 rounded-2xl border border-border/20 hover:bg-muted/10 transition-all duration-200">
                   <div className="space-y-2">
                     <h4 className="font-semibold text-foreground">{report.url}</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Создан: {new Date(report.created_at).toLocaleDateString('ru-RU', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        Создан: {new Date(report.created_at).toLocaleDateString('ru-RU', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                      {report.status === 'pending' && (
+                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                          В очереди
+                        </span>
+                      )}
+                      {report.status === 'processing' && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                          Обрабатывается
+                        </span>
+                      )}
+                      {report.status === 'completed' && (
+                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                          Готов
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-2 mt-4 sm:mt-0">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setViewingReport(viewingReport === report.id ? null : report.id)}
-                    >
-                      {viewingReport === report.id ? 'Закрыть' : 'Просмотр'}
-                    </Button>
-                    <Button variant="default" size="sm">
-                      Скачать
-                    </Button>
+                    {report.status === 'completed' ? (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setViewingReport(viewingReport === report.id ? null : report.id)}
+                        >
+                          {viewingReport === report.id ? 'Закрыть' : 'Просмотр'}
+                        </Button>
+                        <Button variant="default" size="sm">
+                          Скачать
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Обработка займёт несколько минут...
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
