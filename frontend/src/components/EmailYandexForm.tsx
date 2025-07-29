@@ -60,60 +60,21 @@ const EmailYandexForm: React.FC = () => {
           .select('id')
           .single();
           
-              if (userError) {
-        console.error('Ошибка создания пользователя в таблице:', userError);
-        if (userError.message?.includes('rate limit')) {
-          setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
-        } else {
-          setError('Ошибка при создании пользователя: ' + userError.message);
+        if (userError) {
+          console.error('Ошибка создания пользователя в таблице:', userError);
+          if (userError.message?.includes('rate limit')) {
+            setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
+          } else {
+            setError('Ошибка при создании пользователя: ' + userError.message);
+          }
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
-      }
         
         userId = userData.id;
         
-        // Затем пытаемся создать пользователя в Auth с retry механизмом
-        try {
-          const { data, error: signUpError } = await SupabaseWithRetry.signUp(
-            email,
-            tempPassword,
-            {
-              emailRedirectTo: window.location.origin + '/set-password',
-              data: {
-                email_confirmed: true,
-                user_id: userId
-              }
-            },
-            { maxRetries: 3, baseDelay: 2000, maxDelay: 10000 }
-          );
-          
-          if (signUpError) {
-            console.warn('Предупреждение: не удалось создать пользователя в Auth:', signUpError);
-            console.log('Error details:', {
-              message: signUpError.message,
-              status: signUpError.status,
-              name: signUpError.name
-            });
-            
-            if (signUpError.message?.includes('rate limit')) {
-              setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
-              setLoading(false);
-              return;
-            }
-            
-            if (signUpError.message?.includes('already registered')) {
-              console.log('Пользователь уже зарегистрирован, продолжаем...');
-              // Это не критично, продолжаем работу
-            } else {
-              console.warn('Неизвестная ошибка Auth:', signUpError);
-              // Это не критично, продолжаем работу
-            }
-          }
-        } catch (authError) {
-          console.warn('Предупреждение: ошибка Auth:', authError);
-          // Продолжаем работу без Auth
-        }
+        // Пропускаем создание пользователя в Auth из-за rate limit
+        console.log('Пропускаем создание пользователя в Auth из-за rate limit');
         
         // Сохраняем временный пароль для последующей смены
         localStorage.setItem('tempPassword', tempPassword);
@@ -131,9 +92,9 @@ const EmailYandexForm: React.FC = () => {
         return;
       }
 
-      setSuccess('Заявка успешно отправлена! Проверьте почту для подтверждения email.');
-      // 4. Перенаправляем на страницу подтверждения email
-      navigate('/email-confirmation', { state: { email } });
+      setSuccess('Заявка успешно отправлена! Переходим к настройке пароля.');
+      // 4. Перенаправляем сразу на страницу установки пароля (без email-подтверждения)
+      navigate('/set-password', { state: { email, skipEmailConfirmation: true } });
       
     } catch (error) {
       console.error('Общая ошибка:', error);

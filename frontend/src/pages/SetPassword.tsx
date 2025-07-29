@@ -13,11 +13,20 @@ const SetPassword: React.FC = () => {
   const location = useLocation();
   const email = location.state?.email;
 
-  // Проверяем, что пользователь пришел с подтвержденным email
+  // Проверяем, что пользователь пришел с подтвержденным email или пропускаем проверку
   useEffect(() => {
     const checkUser = async () => {
       if (!email) {
         setError('Email не найден. Попробуйте войти заново.');
+        return;
+      }
+
+      const skipEmailConfirmation = location.state?.skipEmailConfirmation;
+      
+      if (skipEmailConfirmation) {
+        // Пропускаем проверку email-подтверждения
+        console.log('Пропускаем проверку email-подтверждения');
+        setIsAuthorized(true);
         return;
       }
 
@@ -45,7 +54,7 @@ const SetPassword: React.FC = () => {
     };
 
     checkUser();
-  }, [email]);
+  }, [email, location.state]);
 
   const handleResetPassword = async () => {
     if (!email) {
@@ -85,21 +94,23 @@ const SetPassword: React.FC = () => {
         return;
       }
 
-      // Обновляем пароль
+      // Обновляем пароль в нашей системе аутентификации
+      const tempUserId = localStorage.getItem('tempUserId');
+      if (tempUserId) {
+        localStorage.setItem(`user_${tempUserId}_password`, password);
+        console.log('Пароль сохранен в локальной системе аутентификации');
+      }
+
+      // Пытаемся обновить пароль в Supabase Auth (но не критично)
       try {
         const { error: updateError } = await supabase.auth.updateUser({ password });
         if (updateError) {
           console.warn('Ошибка обновления пароля в Supabase Auth:', updateError);
-          // Продолжаем с нашей системой аутентификации
+        } else {
+          console.log('Пароль обновлен в Supabase Auth');
         }
       } catch (error) {
         console.warn('Ошибка обновления пароля в Supabase Auth:', error);
-      }
-
-      // Обновляем пароль в нашей системе аутентификации
-      const currentUser = auth.getCurrentUser();
-      if (currentUser) {
-        localStorage.setItem(`user_${currentUser.id}_password`, password);
       }
 
       // Очищаем временные данные
