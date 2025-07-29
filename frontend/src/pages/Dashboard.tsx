@@ -143,18 +143,20 @@ const Dashboard = () => {
     setSuccess(null);
 
     try {
-      // Создаём новую запись в таблице Cards
-      const { data: cardData, error: cardError } = await supabase
-        .from("Cards")
+      // Создаём новую запись в таблице ParseQueue для обработки
+      const { data: queueData, error: queueError } = await supabase
+        .from("ParseQueue")
         .insert({
           user_id: user.id,
-          url: createReportForm.yandexUrl
+          url: createReportForm.yandexUrl,
+          email: user.email,
+          status: 'pending'
         })
         .select()
         .single();
 
-      if (cardError) {
-        throw cardError;
+      if (queueError) {
+        throw queueError;
       }
 
       // Обновляем профиль пользователя с новой ссылкой
@@ -163,10 +165,10 @@ const Dashboard = () => {
         .update({ yandex_url: createReportForm.yandexUrl })
         .eq("id", user.id);
 
-      setSuccess("Отчёт успешно создан! Обработка займёт несколько минут.");
+      setSuccess("Запрос на создание отчёта отправлен! Обработка займёт несколько минут.");
       setShowCreateReport(false);
       
-      // Обновляем список отчётов
+      // Обновляем список отчётов (готовые отчёты из Cards)
       const { data: reportsData } = await supabase
         .from("Cards")
         .select("id, url, created_at")
