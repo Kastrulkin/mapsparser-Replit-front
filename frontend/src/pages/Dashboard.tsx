@@ -166,17 +166,33 @@ const Dashboard = () => {
     setSuccess(null);
 
     try {
+      console.log('Создание отчёта:', {
+        user_id: user?.id,
+        url: createReportForm.yandexUrl,
+        email: user?.email
+      });
+
+      // Проверяем авторизацию
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        throw new Error('Пользователь не авторизован');
+      }
+
+      console.log('Пользователь авторизован:', currentUser.id);
+
       // Создаём новую запись в таблице ParseQueue для обработки
       const { data: queueData, error: queueError } = await supabase
         .from("ParseQueue")
         .insert({
-          user_id: user.id,
+          user_id: currentUser.id,
           url: createReportForm.yandexUrl,
-          email: user.email,
+          email: currentUser.email,
           status: 'pending'
         })
         .select()
         .single();
+
+      console.log('Результат создания записи:', { queueData, queueError });
 
       if (queueError) {
         throw queueError;
