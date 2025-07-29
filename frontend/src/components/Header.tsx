@@ -11,10 +11,15 @@ const Header = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Упрощенная проверка - по умолчанию не авторизован
+    setIsAuth(false);
+    
     // Проверяем аутентификацию через Supabase Auth
     supabase.auth.getUser().then(({ data }) => {
       console.log('Supabase Auth check:', !!data.user);
-      setIsAuth(!!data.user);
+      if (data.user) {
+        setIsAuth(true);
+      }
     });
     
     // Проверяем аутентификацию через нашу систему
@@ -101,6 +106,9 @@ const Header = () => {
 
           <div className="hidden md:flex items-center space-x-4">
             {console.log('Header render - isAuth:', isAuth)}
+            {/* Принудительно показываем кнопку Вход для отладки */}
+            <Link to="/login"><Button variant="ghost">Вход (Отладка)</Button></Link>
+            
             {!isAuth ? (
               <>
                 <Link to="/login"><Button variant="ghost">Вход</Button></Link>
