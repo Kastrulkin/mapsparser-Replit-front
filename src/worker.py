@@ -94,7 +94,7 @@ def process_queue():
             print(f"Ошибка при обработке заявки {row['id']}: {e}")
 
 if __name__ == "__main__":
-    print("Worker запущен. Проверка очереди каждую минуту...")
+    print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         process_queue()
-        time.sleep(60) 
+        time.sleep(300)  # 5 минут = 300 секунд 

@@ -1,0 +1,15 @@
+[Unit]
+Description=SEO Download Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/mapsparser-Replit-front
+Environment=PATH=/root/mapsparser-Replit-front/venv/bin
+ExecStart=/root/mapsparser-Replit-front/venv/bin/python /root/mapsparser-Replit-front/src/download_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 
