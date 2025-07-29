@@ -22,20 +22,63 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
       return;
     }
 
-    // Вставляем приглашение
-    const { error: insertError } = await supabase
+    console.log('Проверка существующих приглашений для:', { inviter_id: user.id, friend_email: email });
+
+    // Проверяем, не приглашали ли мы уже этого человека
+    const { data: existingInvite, error: checkError } = await supabase
       .from("Invites")
-      .insert({
+      .select("id")
+      .eq("inviter_id", user.id)
+      .eq("friend_email", email)
+      .single();
+
+    console.log('Результат проверки:', { existingInvite, checkError });
+
+    if (existingInvite) {
+      // Обновляем существующее приглашение с новым URL
+      const { error: updateError } = await supabase
+        .from("Invites")
+        .update({ friend_url: url })
+        .eq("id", existingInvite.id);
+
+      if (updateError) {
+        console.error('Ошибка обновления приглашения:', updateError);
+        setError("Ошибка при обновлении приглашения.");
+        setLoading(false);
+        return;
+      }
+
+      console.log('Существующее приглашение обновлено');
+    } else {
+      console.log('Создание нового приглашения:', {
         inviter_id: user.id,
         friend_email: email,
-        friend_url: url,
+        friend_url: url
       });
 
-    if (insertError) {
-      setError("Ошибка при сохранении приглашения.");
-      setLoading(false);
-      return;
+      // Вставляем новое приглашение
+      const { data: insertData, error: insertError } = await supabase
+        .from("Invites")
+        .insert({
+          inviter_id: user.id,
+          friend_email: email,
+          friend_url: url,
+        })
+        .select();
+
+      console.log('Результат вставки:', { insertData, insertError });
+
+      if (insertError) {
+        console.error('Ошибка вставки приглашения:', insertError);
+        setError("Ошибка при сохранении приглашения.");
+        setLoading(false);
+        return;
+      }
+
+      console.log('Новое приглашение создано');
     }
+
+
 
     // Отправляем красивый email с приглашением через Edge Function
     try {

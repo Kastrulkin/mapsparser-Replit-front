@@ -155,6 +155,42 @@ const Dashboard = () => {
     setTimeout(() => setHasRecentInvite(false), 60 * 60 * 1000);
   };
 
+  const handleDownloadReport = async (reportId: string) => {
+    try {
+      // Получаем информацию об отчёте
+      const { data: reportData, error } = await supabase
+        .from("Cards")
+        .select("report_path, title")
+        .eq("id", reportId)
+        .single();
+
+      if (error || !reportData) {
+        setError("Отчёт не найден");
+        return;
+      }
+
+      if (!reportData.report_path) {
+        setError("Отчёт ещё не сгенерирован");
+        return;
+      }
+
+      // Создаём ссылку для скачивания
+      const downloadUrl = `${window.location.origin}/api/download-report/${reportId}`;
+      
+      // Создаём временную ссылку и скачиваем файл
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `seo_report_${reportData.title || reportId}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess("Отчёт скачивается...");
+    } catch (error: any) {
+      setError("Ошибка при скачивании отчёта: " + error.message);
+    }
+  };
+
   const handleCreateReport = async () => {
     if (!createReportForm.yandexUrl) {
       setError("Пожалуйста, укажите ссылку на бизнес");
@@ -567,7 +603,11 @@ const Dashboard = () => {
                         >
                           {viewingReport === report.id ? 'Закрыть' : 'Просмотр'}
                         </Button>
-                        <Button variant="default" size="sm">
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleDownloadReport(report.id)}
+                        >
                           Скачать
                         </Button>
                       </>

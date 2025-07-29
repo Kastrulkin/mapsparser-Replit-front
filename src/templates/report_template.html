@@ -29,6 +29,12 @@
     </div>
     <div class="recommendations">
         <h2>Рекомендации по улучшению</h2>
+        {% if analysis.ai_analysis and analysis.ai_analysis.generated_text %}
+        <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <h3>🤖 ИИ-анализ:</h3>
+            <p>{{ analysis.ai_analysis.generated_text }}</p>
+        </div>
+        {% endif %}
         <ul>
             {% for rec in analysis.recommendations %}
             <li>{{ rec }}</li>

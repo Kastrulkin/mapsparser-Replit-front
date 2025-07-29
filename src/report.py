@@ -4,10 +4,18 @@ report.py — Модуль для генерации HTML-отчёта по ре
 from jinja2 import Environment, FileSystemLoader
 import os
 
-def generate_html_report(card_data: dict, analysis: dict, competitor_data: dict = None) -> str:
+def generate_html_report(card_data: dict, analysis: dict = None, competitor_data: dict = None) -> str:
     """
     Генерирует HTML-отчёт и возвращает путь к файлу.
     """
+    # Если анализ не передан, используем данные из card_data
+    if analysis is None:
+        analysis = {
+            'score': card_data.get('seo_score', 50),
+            'recommendations': card_data.get('recommendations', []),
+            'ai_analysis': card_data.get('ai_analysis', {})
+        }
+    
     env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
     template = env.get_template('report_template.html')
     html = template.render(card=card_data, analysis=analysis, competitor=competitor_data)
