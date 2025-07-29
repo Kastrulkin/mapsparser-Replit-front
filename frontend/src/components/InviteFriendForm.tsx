@@ -65,7 +65,7 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         />
       </div>
       {error && <div className="text-red-600">{error}</div>}
-      {success && <div className="text-green-600">Приглашение отправлено! Таймер сброшен.</div>}
+      {success && <div className="text-green-600">Спасибо! Можете сформировать отчёт вне очереди!</div>}
       <button
         type="submit"
         className="bg-primary text-white px-6 py-2 rounded"

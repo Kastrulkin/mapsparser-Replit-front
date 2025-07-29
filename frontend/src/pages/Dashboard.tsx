@@ -37,6 +37,7 @@ const Dashboard = () => {
   const [showCreateReport, setShowCreateReport] = useState(false);
   const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
   const [creatingReport, setCreatingReport] = useState(false);
+  const [hasRecentInvite, setHasRecentInvite] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -147,6 +148,13 @@ const Dashboard = () => {
     setCreateReportForm({ ...createReportForm, [e.target.name]: e.target.value });
   };
 
+  const handleInviteSuccess = () => {
+    setHasRecentInvite(true);
+    setInviteSuccess(s => !s);
+    // Сбрасываем флаг через 1 час
+    setTimeout(() => setHasRecentInvite(false), 60 * 60 * 1000);
+  };
+
   const handleCreateReport = async () => {
     if (!createReportForm.yandexUrl) {
       setError("Пожалуйста, укажите ссылку на бизнес");
@@ -198,7 +206,7 @@ const Dashboard = () => {
     }
   };
 
-  const canCreateReport = !reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports));
+  const canCreateReport = !reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports)) || hasRecentInvite;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Загрузка...</div>;
 
@@ -434,7 +442,7 @@ const Dashboard = () => {
                       Пригласите друга и получите возможность создать отчёт досрочно
                     </p>
                   </div>
-                  <InviteFriendForm onSuccess={() => setInviteSuccess(s => !s)} />
+                  <InviteFriendForm onSuccess={handleInviteSuccess} />
                 </div>
               )}
             </div>
