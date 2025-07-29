@@ -1,8 +1,9 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../lib/supabase";
+import { auth } from "../lib/auth";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -10,10 +11,21 @@ const Header = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Проверяем аутентификацию через Supabase Auth
     supabase.auth.getUser().then(({ data }) => {
+      console.log('Supabase Auth check:', !!data.user);
       setIsAuth(!!data.user);
     });
+    
+    // Проверяем аутентификацию через нашу систему
+    const currentUser = auth.getCurrentUser();
+    console.log('Local Auth check:', !!currentUser);
+    if (currentUser) {
+      setIsAuth(true);
+    }
+    
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, !!session?.user);
       setIsAuth(!!session?.user);
     });
     return () => { listener?.subscription.unsubscribe(); };
@@ -21,6 +33,7 @@ const Header = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    await auth.signOut();
     setIsAuth(false);
     navigate("/");
   };
@@ -87,6 +100,7 @@ const Header = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
+            {console.log('Header render - isAuth:', isAuth)}
             {!isAuth ? (
               <>
                 <Link to="/login"><Button variant="ghost">Вход</Button></Link>
