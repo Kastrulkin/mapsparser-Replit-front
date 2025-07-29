@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import SetPassword from "./pages/SetPassword";
 import EmailConfirmation from "./pages/EmailConfirmation";
 import Debug from "./pages/Debug";
+import Invite from "./pages/Invite";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/email-confirmation" element={<EmailConfirmation />} />
           <Route path="/debug" element={<Debug />} />
+          <Route path="/invite" element={<Invite />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

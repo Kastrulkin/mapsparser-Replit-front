@@ -32,13 +32,43 @@ const InviteFriendForm = ({ onSuccess }: { onSuccess?: () => void }) => {
       });
 
     if (insertError) {
-      setError("Ошибка при отправке приглашения.");
-    } else {
-      setSuccess(true);
-      setEmail("");
-      setUrl("");
-      if (onSuccess) onSuccess();
+      setError("Ошибка при сохранении приглашения.");
+      setLoading(false);
+      return;
     }
+
+    // Отправляем красивый email с приглашением через Edge Function
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/send-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+        },
+        body: JSON.stringify({
+          friendEmail: email,
+          friendUrl: url,
+          inviterEmail: currentUser?.email || user.email
+        })
+      });
+
+      if (!response.ok) {
+        console.warn('Ошибка отправки email приглашения:', response.statusText);
+        // Не критично, продолжаем
+      } else {
+        console.log('Email приглашения отправлен успешно');
+      }
+    } catch (emailError) {
+      console.warn('Ошибка отправки email приглашения:', emailError);
+      // Не критично, продолжаем
+    }
+
+    setSuccess(true);
+    setEmail("");
+    setUrl("");
+    if (onSuccess) onSuccess();
     setLoading(false);
   };
 
