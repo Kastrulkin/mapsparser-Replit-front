@@ -61,9 +61,16 @@ def process_queue():
         try:
             card_data = parse_yandex_card(row["url"])
             if card_data.get("error") == "captcha_detected":
-                print("Обнаружена капча! Останавливаю парсинг на 5 минут...")
-                time.sleep(300)
-                return  # Прерываем обработку очереди, чтобы не парсить другие заявки
+                print(f"Обнаружена капча для заявки {row['id']}! Помечаю как требующую ручной обработки...")
+                
+                # Обновляем статус заявки в ParseQueue
+                supabase.table("ParseQueue").update({
+                    "status": "captcha_required",
+                    "error_message": "Обнаружена капча. Требуется ручная обработка."
+                }).eq("id", row["id"]).execute()
+                
+                print(f"Заявка {row['id']} помечена как требующая ручной обработки капчи.")
+                continue  # Переходим к следующей заявке
             # Сохраняем результат в Cards (только нужные поля)
             card_insert_result = supabase.table("Cards").insert({
                 "user_id": row["user_id"],
@@ -136,6 +143,16 @@ def process_queue():
             print(f"Заявка {row['id']} обработана и удалена из очереди.")
         except Exception as e:
             print(f"Ошибка при обработке заявки {row['id']}: {e}")
+            
+            # Обновляем статус заявки в ParseQueue при ошибке
+            try:
+                supabase.table("ParseQueue").update({
+                    "status": "error",
+                    "error_message": str(e)
+                }).eq("id", row["id"]).execute()
+                print(f"Заявка {row['id']} помечена как ошибка.")
+            except Exception as update_error:
+                print(f"Не удалось обновить статус заявки {row['id']}: {update_error}")
 
 if __name__ == "__main__":
     print("Worker запущен. Проверка очереди каждые 5 минут...")
