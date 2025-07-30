@@ -22,7 +22,7 @@ def init_supabase():
     url = os.getenv('SUPABASE_URL')
     key = os.getenv('SUPABASE_KEY')
     if not url or not key:
-        print("ERROR: SUPABASE_URL или SUPABASE_KEY не найдены!")
+        print("ERROR: SUPABASE_URL or SUPABASE_KEY not found!")
         return None
     return create_client(url, key)
 
@@ -57,7 +57,7 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
     
     def do_OPTIONS(self):
-        """Обработка CORS preflight запросов"""
+        """Handle CORS preflight requests"""
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -65,20 +65,20 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
     
     def handle_download_report(self):
-        """Обработка скачивания отчёта"""
+        """Handle report download"""
         try:
-            # Извлекаем ID отчёта из URL
+            # Extract report ID from URL
             report_id = self.path.split('/')[-1]
             
-            # Получаем информацию об отчёте из базы данных
+            # Get report information from database
             if not supabase:
-                self.send_error(500, "Supabase не инициализирован")
+                self.send_error(500, "Supabase not initialized")
                 return
                 
             result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
             
             if not result.data:
-                self.send_error(404, "Отчёт не найден")
+                self.send_error(404, "Report not found")
                 return
                 
             report_data = result.data[0]
@@ -86,7 +86,7 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             title = report_data.get('title', 'report')
             
             if not report_path or not os.path.exists(report_path):
-                self.send_error(404, "Файл отчёта не найден")
+                self.send_error(404, "Report file not found")
                 return
             
             # Отправляем файл
@@ -99,34 +99,34 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
                 
         except Exception as e:
-            print(f"Ошибка при скачивании отчёта: {e}")
-            self.send_error(500, f"Ошибка сервера: {str(e)}")
+            print(f"Error downloading report: {e}")
+            self.send_error(500, f"Server error: {str(e)}")
     
     def handle_report_content(self):
-        """Обработка получения содержимого отчёта для просмотра"""
+        """Handle getting report content for viewing"""
         try:
-            # Извлекаем ID отчёта из URL
+            # Extract report ID from URL
             report_id = self.path.split('/')[-1]
             
-            # Получаем информацию об отчёте из базы данных
+            # Get report information from database
             if not supabase:
-                self.send_error(500, "Supabase не инициализирован")
+                self.send_error(500, "Supabase not initialized")
                 return
                 
             result = supabase.table("Cards").select("report_path").eq("id", report_id).execute()
             
             if not result.data:
-                self.send_error(404, "Отчёт не найден")
+                self.send_error(404, "Report not found")
                 return
                 
             report_data = result.data[0]
             report_path = report_data.get('report_path')
             
             if not report_path or not os.path.exists(report_path):
-                self.send_error(404, "Файл отчёта не найден")
+                self.send_error(404, "Report file not found")
                 return
             
-            # Отправляем содержимое файла
+            # Send file content
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -136,11 +136,11 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
                 
         except Exception as e:
-            print(f"Ошибка при получении содержимого отчёта: {e}")
-            self.send_error(500, f"Ошибка сервера: {str(e)}")
+            print(f"Error getting report content: {e}")
+            self.send_error(500, f"Server error: {str(e)}")
 
 def watch_files():
-    """Мониторинг изменений в папке data"""
+    """Monitor changes in data folder"""
     data_dir = Path('data')
     if not data_dir.exists():
         data_dir.mkdir(exist_ok=True)
@@ -154,7 +154,7 @@ def watch_files():
                 if str(file_path) not in last_modified:
                     last_modified[str(file_path)] = current_mtime
                 elif current_mtime > last_modified[str(file_path)]:
-                    print(f"Обновлен файл: {file_path.name}")
+                    print(f"Updated file: {file_path.name}")
                     last_modified[str(file_path)] = current_mtime
         except Exception as e:
             pass
@@ -162,7 +162,7 @@ def watch_files():
         time.sleep(1)
 
 def create_index_html():
-    """Создает главную страницу со списком отчетов"""
+    """Creates main page with list of reports"""
     data_dir = Path('data')
     reports = list(data_dir.glob('*.html')) if data_dir.exists() else []
     
@@ -172,7 +172,7 @@ def create_index_html():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SEO Анализатор Яндекс.Карт</title>
+    <title>SEO Analyzer Yandex Maps</title>
     <meta http-equiv="refresh" content="5">
     <style>
         body {{ font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; }}
@@ -186,18 +186,18 @@ def create_index_html():
     </style>
 </head>
 <body>
-    <h1>SEO Анализатор Яндекс.Карт</h1>
+    <h1>SEO Analyzer Yandex Maps</h1>
     <div class="report-list">
-        <h2>Отчеты</h2>
+        <h2>Reports</h2>
         {
             ''.join([
                 f'<div class="report-item"><a href="data/{report.name}" target="_blank">{report.stem.replace("report_", "")}</a></div>'
                 for report in reports
-            ]) if reports else '<div class="no-reports">Отчеты еще не созданы</div>'
+            ]) if reports else '<div class="no-reports">Reports not created yet</div>'
         }
     </div>
     <div class="refresh-info">
-        Страница автоматически обновляется каждые 5 секунд
+        Page automatically refreshes every 5 seconds
     </div>
 </body>
 </html>
@@ -207,7 +207,7 @@ def create_index_html():
         f.write(html_content)
 
 def update_index_periodically():
-    """Периодически обновляет главную страницу"""
+    """Periodically updates main page"""
     while True:
         create_index_html()
         time.sleep(5)
@@ -215,22 +215,22 @@ def update_index_periodically():
 if __name__ == "__main__":
     PORT = 8001
     
-    # Создаем начальную главную страницу
+    # Create initial main page
     create_index_html()
     
-    # Запускаем мониторинг файлов в отдельном потоке
+    # Start file monitoring in separate thread
     file_watcher = threading.Thread(target=watch_files, daemon=True)
     file_watcher.start()
     
-    # Запускаем обновление индексной страницы в отдельном потоке
+    # Start index page updates in separate thread
     index_updater = threading.Thread(target=update_index_periodically, daemon=True)
     index_updater.start()
     
-    # Запускаем веб-сервер
+    # Start web server
     with socketserver.TCPServer(("0.0.0.0", PORT), AutoRefreshHandler) as httpd:
-        print(f"Сервер запущен на http://0.0.0.0:{PORT}")
-        print("Файлы будут автоматически обновляться!")
+        print(f"Server running at http://0.0.0.0:{PORT}")
+        print("Files will be automatically updated!")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\nСервер остановлен")
+            print("\nServer stopped")
