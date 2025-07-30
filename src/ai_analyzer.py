@@ -7,7 +7,7 @@ from model_config import get_model_config, get_prompt
 
 # Инициализация Supabase
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+supabase_key = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(supabase_url, supabase_key)
 
 # Hugging Face API
