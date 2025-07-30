@@ -33,6 +33,8 @@ const Dashboard = () => {
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [timer, setTimer] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
+  const [reportContent, setReportContent] = useState<string>("");
+  const [loadingReport, setLoadingReport] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [showCreateReport, setShowCreateReport] = useState(false);
   const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
@@ -188,6 +190,32 @@ const Dashboard = () => {
       setSuccess("Отчёт скачивается...");
     } catch (error: any) {
       setError("Ошибка при скачивании отчёта: " + error.message);
+    }
+  };
+
+  const handleViewReport = async (reportId: string) => {
+    if (viewingReport === reportId) {
+      setViewingReport(null);
+      setReportContent("");
+      return;
+    }
+
+    setLoadingReport(true);
+    try {
+      // Получаем содержимое отчёта
+      const response = await fetch(`${window.location.origin}/api/report-content/${reportId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const content = await response.text();
+      setReportContent(content);
+      setViewingReport(reportId);
+    } catch (error: any) {
+      setError("Ошибка при загрузке отчёта: " + error.message);
+    } finally {
+      setLoadingReport(false);
     }
   };
 
@@ -599,9 +627,10 @@ const Dashboard = () => {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => setViewingReport(viewingReport === report.id ? null : report.id)}
+                          onClick={() => handleViewReport(report.id)}
+                          disabled={loadingReport}
                         >
-                          {viewingReport === report.id ? 'Закрыть' : 'Просмотр'}
+                          {loadingReport ? 'Загрузка...' : (viewingReport === report.id ? 'Закрыть' : 'Просмотр')}
                         </Button>
                         <Button 
                           variant="default" 
@@ -637,9 +666,16 @@ const Dashboard = () => {
                 </Button>
               </div>
               <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
-                <div className="text-center text-muted-foreground">
-                  Здесь будет отображаться HTML отчёт
-                </div>
+                {reportContent ? (
+                  <div 
+                    dangerouslySetInnerHTML={{ __html: reportContent }}
+                    className="prose prose-sm max-w-none"
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground">
+                    Загрузка отчёта...
+                  </div>
+                )}
               </div>
             </div>
           </div>

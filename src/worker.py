@@ -140,7 +140,14 @@ def process_queue():
                             updated_card = supabase.table("Cards").select("*").eq("id", card_id).execute()
                             
                             if updated_card.data:
-                                report_path = generate_html_report(updated_card.data[0])
+                                # Подготавливаем данные для отчёта
+                                card_data = updated_card.data[0]
+                                analysis_data = {
+                                    'score': card_data.get('seo_score', 50),
+                                    'recommendations': card_data.get('recommendations', []),
+                                    'ai_analysis': card_data.get('ai_analysis', {})
+                                }
+                                report_path = generate_html_report(card_data, analysis_data)
                                 print(f"HTML отчёт сгенерирован: {report_path}")
                                 
                                 # Сохраняем путь к отчёту в базу данных

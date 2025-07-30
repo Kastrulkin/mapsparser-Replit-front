@@ -1,14 +1,32 @@
 
 #!/usr/bin/env python3
 """
-Веб-сервер с автоматическим обновлением файлов
+Веб-сервер с автоматическим обновлением файлов и API для отчётов
 """
 import http.server
 import socketserver
 import os
 import threading
 import time
+import json
+import urllib.parse
 from pathlib import Path
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Инициализация Supabase
+def init_supabase():
+    url = os.getenv('SUPABASE_URL')
+    key = os.getenv('SUPABASE_KEY')
+    if not url or not key:
+        print("ERROR: SUPABASE_URL или SUPABASE_KEY не найдены!")
+        return None
+    return create_client(url, key)
+
+supabase: Client = init_supabase()
 
 class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -21,9 +39,94 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
     
     def do_GET(self):
+        # API endpoint для скачивания отчёта
+        if self.path.startswith('/api/download-report/'):
+            self.handle_download_report()
+            return
+        
+        # API endpoint для получения содержимого отчёта
+        if self.path.startswith('/api/report-content/'):
+            self.handle_report_content()
+            return
+            
         if self.path == '/':
             self.path = '/index.html'
         return super().do_GET()
+    
+    def handle_download_report(self):
+        """Обработка скачивания отчёта"""
+        try:
+            # Извлекаем ID отчёта из URL
+            report_id = self.path.split('/')[-1]
+            
+            # Получаем информацию об отчёте из базы данных
+            if not supabase:
+                self.send_error(500, "Supabase не инициализирован")
+                return
+                
+            result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
+            
+            if not result.data:
+                self.send_error(404, "Отчёт не найден")
+                return
+                
+            report_data = result.data[0]
+            report_path = report_data.get('report_path')
+            title = report_data.get('title', 'report')
+            
+            if not report_path or not os.path.exists(report_path):
+                self.send_error(404, "Файл отчёта не найден")
+                return
+            
+            # Отправляем файл
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Disposition', f'attachment; filename="seo_report_{title}.html"')
+            self.end_headers()
+            
+            with open(report_path, 'rb') as f:
+                self.wfile.write(f.read())
+                
+        except Exception as e:
+            print(f"Ошибка при скачивании отчёта: {e}")
+            self.send_error(500, f"Ошибка сервера: {str(e)}")
+    
+    def handle_report_content(self):
+        """Обработка получения содержимого отчёта для просмотра"""
+        try:
+            # Извлекаем ID отчёта из URL
+            report_id = self.path.split('/')[-1]
+            
+            # Получаем информацию об отчёте из базы данных
+            if not supabase:
+                self.send_error(500, "Supabase не инициализирован")
+                return
+                
+            result = supabase.table("Cards").select("report_path").eq("id", report_id).execute()
+            
+            if not result.data:
+                self.send_error(404, "Отчёт не найден")
+                return
+                
+            report_data = result.data[0]
+            report_path = report_data.get('report_path')
+            
+            if not report_path or not os.path.exists(report_path):
+                self.send_error(404, "Файл отчёта не найден")
+                return
+            
+            # Отправляем содержимое файла
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            with open(report_path, 'rb') as f:
+                self.wfile.write(f.read())
+                
+        except Exception as e:
+            print(f"Ошибка при получении содержимого отчёта: {e}")
+            self.send_error(500, f"Ошибка сервера: {str(e)}")
 
 def watch_files():
     """Мониторинг изменений в папке data"""
