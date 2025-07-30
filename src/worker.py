@@ -4,27 +4,64 @@ import os
 from dotenv import load_dotenv
 
 # Загружаем .env файл для локальной разработки
-load_dotenv()
+# Ищем .env файл в рабочей директории и в родительской директории
+env_loaded = False
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
+
+# Пробуем загрузить .env из текущей директории
+if os.path.exists(os.path.join(current_dir, '.env')):
+    load_dotenv(os.path.join(current_dir, '.env'))
+    env_loaded = True
+    print(f"Загружен .env файл из: {current_dir}")
+
+# Если не найден, пробуем из родительской директории
+elif os.path.exists(os.path.join(parent_dir, '.env')):
+    load_dotenv(os.path.join(parent_dir, '.env'))
+    env_loaded = True
+    print(f"Загружен .env файл из: {parent_dir}")
+
+# Если .env не найден, выводим информацию для отладки
+if not env_loaded:
+    print(f"Текущая директория: {current_dir}")
+    print(f"Родительская директория: {parent_dir}")
+    print("Файл .env не найден, используем переменные окружения")
 
 # Читаем переменные окружения
 url = os.getenv('SUPABASE_URL')
 key = os.getenv('SUPABASE_KEY')
 
-# Если переменные не найдены, пробуем прочитать из файлов (для systemd secrets)
+print(f"DEBUG: URL из переменных окружения: {url}")
+print(f"DEBUG: KEY из переменных окружения: {key[:20] if key else 'None'}...")
+
+# Если переменные не найдены, пробуем прочитать из systemd secrets
 if not url or not key:
     credentials_dir = os.getenv('CREDENTIALS_DIRECTORY')
+    print(f"DEBUG: CREDENTIALS_DIRECTORY: {credentials_dir}")
     if credentials_dir:
         try:
             with open(os.path.join(credentials_dir, 'SUPABASE_URL'), 'r') as f:
                 url = f.read().strip()
             with open(os.path.join(credentials_dir, 'SUPABASE_KEY'), 'r') as f:
                 key = f.read().strip()
+            print("Загружены credentials из systemd secrets")
         except Exception as e:
-            print(f"Ошибка чтения секретов: {e}")
+            print(f"Ошибка чтения systemd secrets: {e}")
 
 # Проверяем, что переменные загружены
 if not url or not key:
+    print("ERROR: SUPABASE_URL или SUPABASE_KEY не найдены!")
+    print(f"DEBUG: URL = {url}")
+    print(f"DEBUG: KEY = {key[:20] if key else 'None'}...")
     raise Exception("SUPABASE_URL и SUPABASE_KEY должны быть установлены")
+
+print(f"Supabase URL: {url[:30]}...")
+print(f"Supabase Key: {key[:20]}...")
+
+# Проверяем формат URL
+if not url.startswith('https://'):
+    print(f"ERROR: Неверный формат URL: {url}")
+    raise Exception("SUPABASE_URL должен начинаться с https://")
 
 supabase: Client = create_client(url, key)
 
