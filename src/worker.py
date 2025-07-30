@@ -34,20 +34,6 @@ key = os.getenv('SUPABASE_KEY')
 print(f"DEBUG: URL из переменных окружения: {url}")
 print(f"DEBUG: KEY из переменных окружения: {key[:20] if key else 'None'}...")
 
-# Если переменные не найдены, пробуем прочитать из systemd secrets
-if not url or not key:
-    credentials_dir = os.getenv('CREDENTIALS_DIRECTORY')
-    print(f"DEBUG: CREDENTIALS_DIRECTORY: {credentials_dir}")
-    if credentials_dir:
-        try:
-            with open(os.path.join(credentials_dir, 'SUPABASE_URL'), 'r') as f:
-                url = f.read().strip()
-            with open(os.path.join(credentials_dir, 'SUPABASE_KEY'), 'r') as f:
-                key = f.read().strip()
-            print("Загружены credentials из systemd secrets")
-        except Exception as e:
-            print(f"Ошибка чтения systemd secrets: {e}")
-
 # Проверяем, что переменные загружены
 if not url or not key:
     print("ERROR: SUPABASE_URL или SUPABASE_KEY не найдены!")
