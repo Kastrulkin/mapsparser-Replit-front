@@ -65,13 +65,31 @@ def process_queue():
                 
                 # Обновляем статус заявки в ParseQueue
                 supabase.table("ParseQueue").update({
-                    "status": "captcha_required",
-                    "error_message": "Обнаружена капча. Требуется ручная обработка."
+                    "status": "captcha_required"
                 }).eq("id", row["id"]).execute()
                 
                 print(f"Заявка {row['id']} помечена как требующая ручной обработки капчи.")
                 continue  # Переходим к следующей заявке
             # Сохраняем результат в Cards (только нужные поля)
+            # Обрабатываем пустые значения для числовых полей
+            rating = card_data.get("rating")
+            if rating == "" or rating is None:
+                rating = None
+            else:
+                try:
+                    rating = float(rating)
+                except (ValueError, TypeError):
+                    rating = None
+                    
+            reviews_count = card_data.get("reviews_count")
+            if reviews_count == "" or reviews_count is None:
+                reviews_count = None
+            else:
+                try:
+                    reviews_count = int(reviews_count)
+                except (ValueError, TypeError):
+                    reviews_count = None
+            
             card_insert_result = supabase.table("Cards").insert({
                 "user_id": row["user_id"],
                 "url": row["url"],
@@ -79,8 +97,8 @@ def process_queue():
                 "address": card_data.get("address"),
                 "phone": card_data.get("phone"),
                 "site": card_data.get("site"),
-                "rating": card_data.get("rating"),
-                "reviews_count": card_data.get("reviews_count"),
+                "rating": rating,
+                "reviews_count": reviews_count,
                 "categories": card_data.get("categories"),
                 "overview": card_data.get("overview"),
                 "products": card_data.get("products"),
@@ -147,8 +165,7 @@ def process_queue():
             # Обновляем статус заявки в ParseQueue при ошибке
             try:
                 supabase.table("ParseQueue").update({
-                    "status": "error",
-                    "error_message": str(e)
+                    "status": "error"
                 }).eq("id", row["id"]).execute()
                 print(f"Заявка {row['id']} помечена как ошибка.")
             except Exception as update_error:
