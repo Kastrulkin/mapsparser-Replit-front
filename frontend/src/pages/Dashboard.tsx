@@ -177,7 +177,7 @@ const Dashboard = () => {
       }
 
       // Создаём ссылку для скачивания
-      const downloadUrl = `http://192.168.0.90:8001/api/download-report/${reportId}`;
+      const downloadUrl = `http://80.78.242.105:8001/api/download-report/${reportId}`;
       
       // Создаём временную ссылку и скачиваем файл
       const link = document.createElement('a');
@@ -203,7 +203,7 @@ const Dashboard = () => {
     setLoadingReport(true);
     try {
       // Получаем содержимое отчёта
-      const response = await fetch(`http://192.168.0.90:8001/api/report-content/${reportId}`);
+      const response = await fetch(`http://80.78.242.105:8001/api/report-content/${reportId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
