@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>SEO-отчёт: {{ card.overview.title if card.overview and card.overview.title else 'Без названия' }}</title>
+    <title>SEO Report: {{ card.overview.title if card.overview and card.overview.title else 'No Title' }}</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; }
         h1, h2, h3 { color: #2d3a4a; }
@@ -19,19 +19,19 @@
     </style>
 </head>
 <body>
-    <h1>SEO-анализ страницы Яндекс.Карт</h1>
+    <h1>SEO Analysis of Yandex Maps Page</h1>
     <div class="card-info">
-        <h2>{{ card.overview.title if card.overview and card.overview.title else 'Без названия' }}</h2>
-        <p><b>Ссылка:</b> <a href="{{ card.overview.site if card.overview and card.overview.site else '#' }}">{{ card.overview.site if card.overview and card.overview.site else 'Нет сайта' }}</a></p>
+        <h2>{{ card.overview.title if card.overview and card.overview.title else 'No Title' }}</h2>
+        <p><b>Link:</b> <a href="{{ card.overview.site if card.overview and card.overview.site else '#' }}">{{ card.overview.site if card.overview and card.overview.site else 'No Website' }}</a></p>
     </div>
     <div class="score">
-        <b>Оценка SEO:</b> {{ analysis.score }} / 100
+        <b>SEO Score:</b> {{ analysis.score }} / 100
     </div>
     <div class="recommendations">
-        <h2>Рекомендации по улучшению</h2>
+        <h2>Improvement Recommendations</h2>
         {% if analysis.ai_analysis and analysis.ai_analysis.generated_text %}
         <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-            <h3>🤖 ИИ-анализ:</h3>
+            <h3>🤖 AI Analysis:</h3>
             <p>{{ analysis.ai_analysis.generated_text }}</p>
         </div>
         {% endif %}
@@ -42,26 +42,26 @@
         </ul>
     </div>
     <div class="section">
-        <h2>Обзор</h2>
+        <h2>Overview</h2>
         {% if card.overview %}
         <table>
-            <tr><th>Название</th><td>{{ card.overview.title | default('') }}</td></tr>
-            <tr><th>Рейтинг</th><td>{{ card.overview.rating | default('') }}</td></tr>
-            <tr><th>Количество оценок</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
-            <tr><th>Количество отзывов</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
-            <tr><th>Ближайшее метро</th><td>{% if card.nearest_metro %}{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
-            <tr><th>Ближайшая остановка</th><td>{% if card.nearest_stop %}{{ card.nearest_stop.name }}{% if card.nearest_stop.distance %} ({{ card.nearest_stop.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
-            <tr><th>Адрес</th><td>{{ card.overview.address | default('') }}</td></tr>
-            <tr><th>Телефон</th><td>{{ card.overview.phone | default('') }}</td></tr>
-            <tr><th>Сайт</th><td>{{ card.overview.site | default('') }}</td></tr>
-            <tr><th>Часы работы</th><td>{{ card.overview.hours | default('') }}</td></tr>
+            <tr><th>Title</th><td>{{ card.overview.title | default('') }}</td></tr>
+            <tr><th>Rating</th><td>{{ card.overview.rating | default('') }}</td></tr>
+            <tr><th>Ratings Count</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
+            <tr><th>Reviews Count</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
+            <tr><th>Nearest Metro</th><td>{% if card.nearest_metro %}{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
+            <tr><th>Nearest Stop</th><td>{% if card.nearest_stop %}{{ card.nearest_stop.name }}{% if card.nearest_stop.distance %} ({{ card.nearest_stop.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
+            <tr><th>Address</th><td>{{ card.overview.address | default('') }}</td></tr>
+            <tr><th>Phone</th><td>{{ card.overview.phone | default('') }}</td></tr>
+            <tr><th>Website</th><td>{{ card.overview.site | default('') }}</td></tr>
+            <tr><th>Working Hours</th><td>{{ card.overview.hours | default('') }}</td></tr>
         </table>
-        {% else %}<p>Нет данных</p>{% endif %}
+        {% else %}<p>No data</p>{% endif %}
     </div>
     
-    <!-- Новый раздел Рубрики -->
+    <!-- New section Categories -->
     <div class="section">
-        <h2>Рубрики</h2>
+        <h2>Categories</h2>
         {% if card.overview.rubric and card.overview.rubric|length > 0 %}
             <ul>
             {% for r in card.overview.rubric %}
@@ -73,28 +73,28 @@
         {% endif %}
     </div>
     <div class="section">
-        <h2>Категории товаров и услуг</h2>
+        <h2>Product and Service Categories</h2>
         {% if card.product_categories and card.product_categories|length > 0 %}
         <ul>
             {% for cat in card.product_categories %}
             <li>{{ cat }}</li>
             {% endfor %}
         </ul>
-        {% else %}<p>Нет данных</p>{% endif %}
+        {% else %}<p>No data</p>{% endif %}
     </div>
     <div class="section">
-        <h2>Товары и услуги</h2>
+        <h2>Products and Services</h2>
         {% if card.products and card.products|length > 0 %}
             {% for cat in card.products %}
                 <h3>{{ cat["category"] }}</h3>
                 {% if cat["items"] and cat["items"]|length > 0 %}
                 <table>
                     <tr>
-                        <th>Название</th>
-                        <th>Описание</th>
-                        <th>Цена</th>
-                        <th>Длительность</th>
-                        <th>Фото</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Price</th>
+                        <th>Duration</th>
+                        <th>Photo</th>
                     </tr>
                     {% for item in cat["items"] %}
                     <tr>
@@ -106,9 +106,9 @@
                     </tr>
                     {% endfor %}
                 </table>
-                {% else %}<p>Нет товаров в категории</p>{% endif %}
+                {% else %}<p>No products in category</p>{% endif %}
             {% endfor %}
-        {% else %}<p>Нет данных</p>{% endif %}
+        {% else %}<p>No data</p>{% endif %}
     </div>
     <div class="section">
         <h2>Новости</h2>
