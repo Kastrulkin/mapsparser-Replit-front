@@ -2,13 +2,34 @@ import time
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-load_dotenv()
-from parser import parse_yandex_card
-from ai_analyzer import analyze_business_data
 
+# Загружаем .env файл для локальной разработки
+load_dotenv()
+
+# Читаем переменные окружения
 url = os.getenv('SUPABASE_URL')
 key = os.getenv('SUPABASE_KEY')
+
+# Если переменные не найдены, пробуем прочитать из файлов (для systemd secrets)
+if not url or not key:
+    credentials_dir = os.getenv('CREDENTIALS_DIRECTORY')
+    if credentials_dir:
+        try:
+            with open(os.path.join(credentials_dir, 'SUPABASE_URL'), 'r') as f:
+                url = f.read().strip()
+            with open(os.path.join(credentials_dir, 'SUPABASE_KEY'), 'r') as f:
+                key = f.read().strip()
+        except Exception as e:
+            print(f"Ошибка чтения секретов: {e}")
+
+# Проверяем, что переменные загружены
+if not url or not key:
+    raise Exception("SUPABASE_URL и SUPABASE_KEY должны быть установлены")
+
 supabase: Client = create_client(url, key)
+
+from parser import parse_yandex_card
+from ai_analyzer import analyze_business_data
 
 def process_queue():
     result = supabase.table("ParseQueue").select("*").execute()

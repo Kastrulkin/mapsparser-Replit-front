@@ -1,0 +1,19 @@
+[Unit]
+Description=SEO Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/mapsparser-Replit-front
+Environment=PATH=/root/mapsparser-Replit-front/venv/bin
+LoadCredential=SUPABASE_URL:/etc/systemd/system/seo-worker.supabase_url
+LoadCredential=SUPABASE_KEY:/etc/systemd/system/seo-worker.supabase_key
+Environment="SUPABASE_URL=${CREDENTIALS_DIRECTORY}/SUPABASE_URL"
+Environment="SUPABASE_KEY=${CREDENTIALS_DIRECTORY}/SUPABASE_KEY"
+ExecStart=/root/mapsparser-Replit-front/venv/bin/python /root/mapsparser-Replit-front/src/worker.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 
