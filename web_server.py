@@ -104,6 +104,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 with open(report_path, 'r', encoding='cp1251') as f:
                     content = f.read()
                     self.wfile.write(content.encode('utf-8'))
+            except Exception as e:
+                # Если всё не работает, отправляем пустой файл
+                self.wfile.write(b'<html><body><h1>Error loading report</h1></body></html>')
                 
         except Exception as e:
             print(f"Error downloading report: {e}")
@@ -148,6 +151,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 with open(report_path, 'r', encoding='cp1251') as f:
                     content = f.read()
                     self.wfile.write(content.encode('utf-8'))
+            except Exception as e:
+                # Если всё не работает, отправляем пустой файл
+                self.wfile.write(b'<html><body><h1>Error loading report</h1></body></html>')
                 
         except Exception as e:
             print(f"Error getting report content: {e}")
