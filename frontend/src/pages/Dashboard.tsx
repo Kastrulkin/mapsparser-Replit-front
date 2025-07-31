@@ -651,32 +651,30 @@ const Dashboard = () => {
             </div>
           )}
         </div>
-        {/* Report Viewer Modal */}
+        {/* Report Viewer Inline */}
         {viewingReport && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-card rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-              <div className="flex items-center justify-between p-6 border-b border-border/20">
-                <h3 className="text-xl font-semibold text-foreground">Просмотр отчёта</h3>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setViewingReport(null)}
-                >
-                  ✕
-                </Button>
-              </div>
-              <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
-                {reportContent ? (
-                  <div 
-                    dangerouslySetInnerHTML={{ __html: reportContent }}
-                    className="prose prose-sm max-w-none"
-                  />
-                ) : (
-                  <div className="text-center text-muted-foreground">
-                    Загрузка отчёта...
-                  </div>
-                )}
-              </div>
+          <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-foreground">Просмотр отчёта</h3>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setViewingReport(null)}
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="overflow-auto max-h-[70vh] border border-border/20 rounded-lg p-4">
+              {reportContent ? (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: reportContent }}
+                  className="prose prose-sm max-w-none"
+                />
+              ) : (
+                <div className="text-center text-muted-foreground">
+                  Загрузка отчёта...
+                </div>
+              )}
             </div>
           </div>
         )}
