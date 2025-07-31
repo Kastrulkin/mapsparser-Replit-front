@@ -64,6 +64,12 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             print(f"DEBUG: Routing to content handler")
             self.handle_report_content()
             return
+        
+        # Новый endpoint для просмотра отчёта в браузере
+        if self.path.startswith('/view-report/'):
+            print(f"DEBUG: Routing to view report handler")
+            self.handle_view_report()
+            return
             
         if self.path == '/':
             self.path = '/index.html'
@@ -211,6 +217,73 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 
         except Exception as e:
             print(f"Error getting report content: {e}")
+            self.send_error(500, "Server error occurred")
+
+    def handle_view_report(self):
+        """Handle viewing report in browser"""
+        try:
+            print(f"DEBUG: Starting view report handler")
+            print(f"DEBUG: Full path: {self.path}")
+            # Extract report ID from URL
+            report_id = self.path.split('/')[-1]
+            print(f"DEBUG: Extracted report ID: {report_id}")
+            
+            # Get report information from database
+            if not supabase:
+                print(f"DEBUG: Supabase not initialized!")
+                self.send_error(500, "Supabase not initialized")
+                return
+                
+            print(f"DEBUG: Querying database for report")
+            result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
+            print(f"DEBUG: Database query result: {result}")
+            
+            if not result.data:
+                print(f"DEBUG: No data found in database for ID: {report_id}")
+                self.send_error(404, "Report not found")
+                return
+                
+            report_data = result.data[0]
+            report_path = report_data.get('report_path')
+            title = report_data.get('title', 'report')
+            print(f"DEBUG: Report path from DB: {report_path}")
+            print(f"DEBUG: Title from DB: {title}")
+            
+            if not report_path or not os.path.exists(report_path):
+                print(f"DEBUG: Report file not found: {report_path}")
+                self.send_error(404, "Report file not found")
+                return
+            
+            print(f"DEBUG: File exists, size: {os.path.getsize(report_path)} bytes")
+            
+            # Send file content for viewing in browser
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Accept')
+            self.end_headers()
+            
+            try:
+                print(f"DEBUG: Reading file for viewing")
+                with open(report_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    print(f"DEBUG: File read successfully, content length: {len(content)}")
+                    self.wfile.write(content.encode('utf-8'))
+                    print(f"DEBUG: Content sent successfully for viewing")
+            except UnicodeDecodeError as e:
+                print(f"DEBUG: UTF-8 failed, trying cp1251: {e}")
+                with open(report_path, 'r', encoding='cp1251') as f:
+                    content = f.read()
+                    print(f"DEBUG: File read with cp1251, content length: {len(content)}")
+                    self.wfile.write(content.encode('utf-8'))
+                    print(f"DEBUG: Content sent successfully with cp1251")
+            except Exception as e:
+                print(f"DEBUG: All encoding methods failed: {e}")
+                self.wfile.write(b'<html><body><h1>Error loading report</h1></body></html>')
+                
+        except Exception as e:
+            print(f"Error viewing report: {e}")
             self.send_error(500, "Server error occurred")
 
 def watch_files():
