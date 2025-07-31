@@ -67,23 +67,38 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
     def handle_download_report(self):
         """Handle report download"""
         try:
+            print(f"DEBUG: Starting download report handler")
+            print(f"DEBUG: Full path: {self.path}")
             # Extract report ID from URL
             report_id = self.path.split('/')[-1]
+            print(f"DEBUG: Extracted report ID: {report_id}")
             
             # Get report information from database
+            print(f"DEBUG: Checking Supabase initialization")
             if not supabase:
+                print(f"DEBUG: Supabase not initialized!")
                 self.send_error(500, "Supabase not initialized")
                 return
-                
+            
+            print(f"DEBUG: Supabase initialized, querying database")
             result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
+            print(f"DEBUG: Database query result: {result}")
             
             if not result.data:
+                print(f"DEBUG: No data found in database for ID: {report_id}")
                 self.send_error(404, "Report not found")
                 return
+            
+            print(f"DEBUG: Found data in database: {result.data}")
                 
             report_data = result.data[0]
             report_path = report_data.get('report_path')
             title = report_data.get('title', 'report')
+            print(f"DEBUG: Report data: {report_data}")
+            print(f"DEBUG: Report path from DB: {report_path}")
+            print(f"DEBUG: Title from DB: {title}")
+            print(f"DEBUG: Report path is None: {report_path is None}")
+            print(f"DEBUG: Report path is empty: {report_path == ''}")
             
             if not report_path or not os.path.exists(report_path):
                 print(f"DEBUG: Report file not found: {report_path}")
