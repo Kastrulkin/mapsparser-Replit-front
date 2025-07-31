@@ -99,15 +99,22 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             
             try:
+                print(f"DEBUG: Trying to read file with UTF-8 encoding")
                 with open(report_path, 'r', encoding='utf-8') as f:
                     content = f.read()
+                    print(f"DEBUG: File read successfully, content length: {len(content)}")
                     self.wfile.write(content.encode('utf-8'))
-            except UnicodeDecodeError:
+                    print(f"DEBUG: Content sent successfully")
+            except UnicodeDecodeError as e:
+                print(f"DEBUG: UTF-8 failed, trying cp1251: {e}")
                 # Если UTF-8 не работает, попробуем cp1251
                 with open(report_path, 'r', encoding='cp1251') as f:
                     content = f.read()
+                    print(f"DEBUG: File read with cp1251, content length: {len(content)}")
                     self.wfile.write(content.encode('utf-8'))
+                    print(f"DEBUG: Content sent successfully with cp1251")
             except Exception as e:
+                print(f"DEBUG: All encoding methods failed: {e}")
                 # Если всё не работает, отправляем пустой файл
                 self.wfile.write(b'<html><body><h1>Error loading report</h1></body></html>')
                 
