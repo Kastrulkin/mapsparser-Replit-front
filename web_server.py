@@ -86,8 +86,12 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             title = report_data.get('title', 'report')
             
             if not report_path or not os.path.exists(report_path):
+                print(f"DEBUG: Report file not found: {report_path}")
                 self.send_error(404, "Report file not found")
                 return
+            
+            print(f"DEBUG: File exists, size: {os.path.getsize(report_path)} bytes")
+            print(f"DEBUG: File permissions: {oct(os.stat(report_path).st_mode)[-3:]}")
             
             # Отправляем файл
             self.send_response(200)
@@ -103,6 +107,7 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 with open(report_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                     print(f"DEBUG: File read successfully, content length: {len(content)}")
+                    print(f"DEBUG: First 200 chars: {repr(content[:200])}")
                     self.wfile.write(content.encode('utf-8'))
                     print(f"DEBUG: Content sent successfully")
             except UnicodeDecodeError as e:
@@ -146,8 +151,12 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             print(f"DEBUG: Report path: {report_path}")
             
             if not report_path or not os.path.exists(report_path):
+                print(f"DEBUG: Report file not found: {report_path}")
                 self.send_error(404, "Report file not found")
                 return
+            
+            print(f"DEBUG: File exists, size: {os.path.getsize(report_path)} bytes")
+            print(f"DEBUG: File permissions: {oct(os.stat(report_path).st_mode)[-3:]}")
             
             # Send file content
             self.send_response(200)
