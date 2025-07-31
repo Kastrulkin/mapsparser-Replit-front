@@ -20,8 +20,8 @@ def generate_html_report(card_data: dict, analysis: dict = None, competitor_data
     template = env.get_template('report_template.html')
     html = template.render(card=card_data, analysis=analysis, competitor=competitor_data)
     
-    # Получаем название из overview или title для имени файла
-    title = card_data.get('overview', {}).get('title') or card_data.get('title', 'card')
+    # Получаем название из title для имени файла
+    title = card_data.get('title', 'card')
     
     # Создаём директорию data в корне проекта, если её нет
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
