@@ -93,6 +93,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Content-Disposition', f'attachment; filename="seo_report_{title}.html"')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Accept')
             self.end_headers()
             
             try:
@@ -117,6 +120,7 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
         try:
             # Extract report ID from URL
             report_id = self.path.split('/')[-1]
+            print(f"DEBUG: Requesting report content for ID: {report_id}")
             
             # Get report information from database
             if not supabase:
@@ -126,11 +130,13 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             result = supabase.table("Cards").select("report_path").eq("id", report_id).execute()
             
             if not result.data:
+                print(f"DEBUG: Report not found for ID: {report_id}")
                 self.send_error(404, "Report not found")
                 return
                 
             report_data = result.data[0]
             report_path = report_data.get('report_path')
+            print(f"DEBUG: Report path: {report_path}")
             
             if not report_path or not os.path.exists(report_path):
                 self.send_error(404, "Report file not found")
@@ -140,6 +146,8 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Accept')
             self.end_headers()
             
             try:
