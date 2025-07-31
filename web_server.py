@@ -124,7 +124,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             # Отправляем файл
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Content-Disposition', f'attachment; filename="seo_report_{title}.html"')
+            # Используем безопасное имя файла без русских символов
+            safe_title = title.encode('ascii', 'ignore').decode('ascii') if title else 'report'
+            self.send_header('Content-Disposition', f'attachment; filename="seo_report_{safe_title}.html"')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type, Accept')
