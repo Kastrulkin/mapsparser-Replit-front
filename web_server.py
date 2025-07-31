@@ -95,13 +95,19 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-Disposition', f'attachment; filename="seo_report_{title}.html"')
             self.end_headers()
             
-            with open(report_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                self.wfile.write(content.encode('utf-8'))
+            try:
+                with open(report_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    self.wfile.write(content.encode('utf-8'))
+            except UnicodeDecodeError:
+                # Если UTF-8 не работает, попробуем cp1251
+                with open(report_path, 'r', encoding='cp1251') as f:
+                    content = f.read()
+                    self.wfile.write(content.encode('utf-8'))
                 
         except Exception as e:
             print(f"Error downloading report: {e}")
-            self.send_error(500, f"Server error: {str(e)}")
+            self.send_error(500, "Server error occurred")
     
     def handle_report_content(self):
         """Handle getting report content for viewing"""
@@ -133,13 +139,19 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
-            with open(report_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                self.wfile.write(content.encode('utf-8'))
+            try:
+                with open(report_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    self.wfile.write(content.encode('utf-8'))
+            except UnicodeDecodeError:
+                # Если UTF-8 не работает, попробуем cp1251
+                with open(report_path, 'r', encoding='cp1251') as f:
+                    content = f.read()
+                    self.wfile.write(content.encode('utf-8'))
                 
         except Exception as e:
             print(f"Error getting report content: {e}")
-            self.send_error(500, f"Server error: {str(e)}")
+            self.send_error(500, "Server error occurred")
 
 def watch_files():
     """Monitor changes in data folder"""
