@@ -36,7 +36,7 @@ PROMPTS = {
 }
 
 # Текущая активная модель
-CURRENT_MODEL = "t5-base"
+CURRENT_MODEL = "facebook/bart-base"
 
 def get_model_config(model_name=None):
     """Получить конфигурацию модели"""

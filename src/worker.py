@@ -52,7 +52,7 @@ if not url.startswith('https://'):
 supabase: Client = create_client(url, key)
 
 from parser import parse_yandex_card
-from ai_analyzer import analyze_business_data
+from simple_ai_analyzer import analyze_business_data
 
 def process_queue():
     result = supabase.table("ParseQueue").select("*").execute()
