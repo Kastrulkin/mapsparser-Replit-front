@@ -2,318 +2,909 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>SEO-отчёт: {{ card.overview.title if card.overview and card.overview.title else 'Без названия' }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO-отчёт: {{ card.title if card.title else 'Без названия' }}</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; }
-        h1, h2, h3 { color: #2d3a4a; }
-        .score { font-size: 2em; color: #2e7d32; }
-        .recommendations { background: #fffbe7; padding: 15px; border-radius: 8px; }
-        .card-info, .section { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        ul { margin: 0 0 0 20px; }
-        table { border-collapse: collapse; width: 100%; background: #fff; margin-bottom: 20px; }
-        th, td { border: 1px solid #e0e0e0; padding: 8px 12px; text-align: left; }
-        th { background: #f0f0f0; }
-        .ok { color: #2e7d32; font-weight: bold; }
-        .bad { color: #c62828; font-weight: bold; }
-        .photo-thumb { max-width: 120px; max-height: 90px; margin: 2px; border-radius: 4px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #374151;
+            background: #f9fafb;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .space-y-8 > * + * {
+            margin-top: 2rem;
+        }
+        
+        .space-y-4 > * + * {
+            margin-top: 1rem;
+        }
+        
+        .space-y-6 > * + * {
+            margin-top: 1.5rem;
+        }
+        
+        .space-y-2 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-3xl {
+            font-size: 1.875rem;
+            line-height: 2.25rem;
+        }
+        
+        .text-2xl {
+            font-size: 1.5rem;
+            line-height: 2rem;
+        }
+        
+        .text-lg {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+        }
+        
+        .text-sm {
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        
+        .font-bold {
+            font-weight: 700;
+        }
+        
+        .font-semibold {
+            font-weight: 600;
+        }
+        
+        .font-medium {
+            font-weight: 500;
+        }
+        
+        .text-primary {
+            color: #3b82f6;
+        }
+        
+        .text-success {
+            color: #10b981;
+        }
+        
+        .text-warning {
+            color: #f59e0b;
+        }
+        
+        .text-destructive {
+            color: #ef4444;
+        }
+        
+        .text-muted {
+            color: #6b7280;
+        }
+        
+        .bg-white {
+            background-color: #ffffff;
+        }
+        
+        .bg-success {
+            background-color: #10b981;
+        }
+        
+        .bg-warning {
+            background-color: #f59e0b;
+        }
+        
+        .bg-destructive {
+            background-color: #ef4444;
+        }
+        
+        .bg-muted {
+            background-color: #f3f4f6;
+        }
+        
+        .text-white {
+            color: #ffffff;
+        }
+        
+        .rounded-lg {
+            border-radius: 0.5rem;
+        }
+        
+        .rounded {
+            border-radius: 0.25rem;
+        }
+        
+        .shadow-sm {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        .p-6 {
+            padding: 1.5rem;
+        }
+        
+        .p-4 {
+            padding: 1rem;
+        }
+        
+        .p-2 {
+            padding: 0.5rem;
+        }
+        
+        .pb-3 {
+            padding-bottom: 0.75rem;
+        }
+        
+        .px-4 {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .py-2 {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        
+        .mb-3 {
+            margin-bottom: 0.75rem;
+        }
+        
+        .mb-4 {
+            margin-bottom: 1rem;
+        }
+        
+        .mt-1 {
+            margin-top: 0.25rem;
+        }
+        
+        .mt-4 {
+            margin-top: 1rem;
+        }
+        
+        .flex {
+            display: flex;
+        }
+        
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .items-start {
+            align-items: flex-start;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .gap-4 {
+            gap: 1rem;
+        }
+        
+        .w-4 {
+            width: 1rem;
+        }
+        
+        .h-4 {
+            height: 1rem;
+        }
+        
+        .w-5 {
+            width: 1.25rem;
+        }
+        
+        .h-5 {
+            height: 1.25rem;
+        }
+        
+        .w-2 {
+            width: 0.5rem;
+        }
+        
+        .h-2 {
+            height: 0.5rem;
+        }
+        
+        .max-w-2xl {
+            max-width: 42rem;
+        }
+        
+        .mx-auto {
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 1.5rem 1.5rem 0.75rem 1.5rem;
+        }
+        
+        .card-content {
+            padding: 0 1.5rem 1.5rem 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .card-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: 9999px;
+            border: 1px solid #d1d5db;
+        }
+        
+        .badge-primary {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .badge-secondary {
+            background-color: #f3f4f6;
+            color: #374151;
+            border-color: #d1d5db;
+        }
+        
+        .badge-success {
+            background-color: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        
+        .badge-warning {
+            background-color: #f59e0b;
+            color: white;
+            border-color: #f59e0b;
+        }
+        
+        .badge-destructive {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .table tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        .grid {
+            display: grid;
+        }
+        
+        .grid-cols-1 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+        
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        
+        .grid-cols-6 {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        
+        .aspect-square {
+            aspect-ratio: 1 / 1;
+        }
+        
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .max-w-xs {
+            max-width: 20rem;
+        }
+        
+        .separator {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 1.5rem 0;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fbbf24;
+        }
+        
+        .list-none {
+            list-style: none;
+        }
+        
+        .list-disc {
+            list-style: disc;
+        }
+        
+        .list-inside {
+            list-style-position: inside;
+        }
+        
+        @media (min-width: 768px) {
+            .md\\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            
+            .md\\:grid-cols-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .lg\\:grid-cols-6 {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>SEO-анализ страницы Яндекс.Карт</h1>
-    <div class="card-info">
-        <h2>{{ card.overview.title if card.overview and card.overview.title else 'Без названия' }}</h2>
-        <p><b>Ссылка:</b> <a href="{{ card.overview.site if card.overview and card.overview.site else '#' }}">{{ card.overview.site if card.overview and card.overview.site else 'Нет сайта' }}</a></p>
-    </div>
-    <div class="score">
-        <b>Оценка SEO:</b> {{ analysis.score }} / 100
-    </div>
-    <div class="recommendations">
-        <h2>Рекомендации по улучшению</h2>
-        {% if analysis.ai_analysis and analysis.ai_analysis.generated_text %}
-        <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-            <h3>🤖 ИИ-анализ:</h3>
-            <p>{{ analysis.ai_analysis.generated_text }}</p>
+    <div class="container space-y-8">
+        <!-- Header -->
+        <div class="text-center space-y-4">
+            <h1 class="text-3xl font-bold text-primary">SEO-анализ страницы Яндекс.Карт</h1>
+            <div class="card max-w-2xl mx-auto">
+                <div class="card-header">
+                    <h2 class="card-title flex items-center gap-2">
+                        📈 {{ card.title if card.title else 'Без названия' }}
+                    </h2>
+                    <p class="card-description flex items-center gap-2">
+                        🌐 {{ card.site if card.site else 'Нет сайта' }}
+                    </p>
+                </div>
+                <div class="card-content">
+                    <div class="flex items-center justify-center gap-4">
+                        <span class="badge {% if analysis.score >= 80 %}badge-success{% elif analysis.score >= 60 %}badge-warning{% else %}badge-destructive{% endif %} text-lg px-4 py-2">
+                            Оценка SEO: {{ analysis.score }} / 100
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Рекомендации -->
+        {% if analysis.recommendations and analysis.recommendations|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    ⚠️ Рекомендации по улучшению
+                </h2>
+            </div>
+            <div class="card-content">
+                {% if analysis.ai_analysis and analysis.ai_analysis.generated_text %}
+                <div class="alert alert-warning mb-4">
+                    <h3 class="font-semibold mb-2">🤖 ИИ-анализ:</h3>
+                    <p>{{ analysis.ai_analysis.generated_text }}</p>
+                </div>
+                {% endif %}
+                <ul class="space-y-2">
+                    {% for rec in analysis.recommendations %}
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">{{ rec }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         {% endif %}
-        <ul>
-            {% for rec in analysis.recommendations %}
-            <li>{{ rec }}</li>
-            {% endfor %}
-        </ul>
-    </div>
-    <div class="section">
-        <h2>Overview</h2>
+
+        <!-- Обзор -->
         {% if card.overview %}
-        <table>
-            <tr><th>Title</th><td>{{ card.overview.title | default('') }}</td></tr>
-            <tr><th>Rating</th><td>{{ card.overview.rating | default('') }}</td></tr>
-            <tr><th>Ratings Count</th><td>{{ card.overview.ratings_count | default('') }}</td></tr>
-            <tr><th>Reviews Count</th><td>{{ card.overview.reviews_count | default('') }}</td></tr>
-            <tr><th>Nearest Metro</th><td>{% if card.nearest_metro %}{{ card.nearest_metro.name }}{% if card.nearest_metro.distance %} ({{ card.nearest_metro.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
-            <tr><th>Nearest Stop</th><td>{% if card.nearest_stop %}{{ card.nearest_stop.name }}{% if card.nearest_stop.distance %} ({{ card.nearest_stop.distance }}){% endif %}{% else %}—{% endif %}</td></tr>
-            <tr><th>Address</th><td>{{ card.overview.address | default('') }}</td></tr>
-            <tr><th>Phone</th><td>{{ card.overview.phone | default('') }}</td></tr>
-            <tr><th>Website</th><td>{{ card.overview.site | default('') }}</td></tr>
-            <tr><th>Working Hours</th><td>{{ card.overview.hours | default('') }}</td></tr>
-        </table>
-        {% else %}<p>No data</p>{% endif %}
-    </div>
-    
-    <!-- New section Categories -->
-    <div class="section">
-        <h2>Categories</h2>
-        {% if card.overview.rubric and card.overview.rubric|length > 0 %}
-            <ul>
-            {% for r in card.overview.rubric %}
-                <li>{{ r }}</li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>—</p>
-        {% endif %}
-    </div>
-    <div class="section">
-        <h2>Product and Service Categories</h2>
-        {% if card.product_categories and card.product_categories|length > 0 %}
-        <ul>
-            {% for cat in card.product_categories %}
-            <li>{{ cat }}</li>
-            {% endfor %}
-        </ul>
-        {% else %}<p>No data</p>{% endif %}
-    </div>
-    <div class="section">
-        <h2>Products and Services</h2>
-        {% if card.products and card.products|length > 0 %}
-            {% for cat in card.products %}
-                <h3>{{ cat["category"] }}</h3>
-                {% if cat["items"] and cat["items"]|length > 0 %}
-                <table>
-                    <tr>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Price</th>
-                        <th>Duration</th>
-                        <th>Photo</th>
-                    </tr>
-                    {% for item in cat["items"] %}
-                    <tr>
-                        <td>{{ item.name }}</td>
-                        <td>{{ item.description }}</td>
-                        <td>{{ item.price }}</td>
-                        <td>{{ item.duration }}</td>
-                        <td>{% if item.photo %}<img src="{{ item.photo }}" alt="{{ item.name }}" style="max-width:80px;max-height:80px;"/>{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
-                {% else %}<p>No products in category</p>{% endif %}
-            {% endfor %}
-        {% else %}<p>No data</p>{% endif %}
-    </div>
-    <div class="section">
-        <h2>Новости</h2>
-        {% if card.news and card.news|length > 0 %}
-        <table>
-            <tr><th>Дата</th><th>Текст</th><th>Фото</th></tr>
-            {% for n in card.news %}
-            <tr>
-                <td>{{ n.date }}</td>
-                <td>{{ n.text }}</td>
-                <td>
-                    {% if n.photos and n.photos|length > 0 %}
-                        {% for photo in n.photos %}
-                            <img src="{{ photo }}" style="max-width:80px;max-height:80px;"/>
-                        {% endfor %}
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% else %}<p>Нет новостей</p>{% endif %}
-    </div>
-    <div class="section">
-        <h2>Фото</h2>
-        {% if card.photos and card.photos|length > 0 %}
-            {% for p in card.photos %}
-                <img src="{{ p }}" class="photo-thumb">
-            {% endfor %}
-            <p>Всего фото: {{ card.photos|length }}</p>
-        {% else %}<p>Нет фото</p>{% endif %}
-    </div>
-    <div class="section">
-        <h2>Отзывы</h2>
-        <div style="color:#c62828; font-size:1em; margin-bottom:10px;">
-            <b>Внимание:</b> В отчёте отображаются не все отзывы. Яндекс ограничивает количество отзывов, доступных для автоматического сбора через интерфейс. Обычно удаётся получить только часть отзывов (40–120), даже если на карточке указано больше.
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Обзор</h2>
+            </div>
+            <div class="card-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            ⭐ <span class="font-medium">Рейтинг:</span>
+                            <span>{{ card.overview.rating | default('—') }}</span>
+                            {% if card.overview.reviews_count %}
+                            <span class="text-muted">({{ card.overview.reviews_count }} отзывов)</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📍 <span class="font-medium">Адрес:</span>
+                            <span class="text-sm">{{ card.overview.address | default('—') }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📞 <span class="font-medium">Телефон:</span>
+                            <span>{{ card.overview.phone | default('—') }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            🌐 <span class="font-medium">Сайт:</span>
+                            <span class="text-sm">{{ card.overview.site | default('—') }}</span>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            🕒 <span class="font-medium">Часы работы:</span>
+                            <span class="text-sm">{{ card.overview.hours | default('—') }}</span>
+                        </div>
+                        {% if card.overview.description %}
+                        <div>
+                            <span class="font-medium">Описание:</span>
+                            <p class="text-sm text-muted mt-1">{{ card.overview.description }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
-        {% if card.reviews %}
-            <p>Средняя оценка: <b>{{ card.reviews.rating | default('') }}</b> | Количество отзывов: <b>{{ card.reviews.reviews_count | default('') }}</b></p>
-            {% if card.reviews.items %}
-            <p><b>Всего спарсилось отзывов: {{ card.reviews["items"]|length }}</b></p>
-            <table>
-                <tr><th>№</th><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
-                {% for r in card.reviews["items"] %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ r.author | default('') }}</td>
-                    <td>{{ r.date | default('') }}</td>
-                    <td>{{ r.score | default('') }}</td>
-                    <td>{{ r.text | default('') }}</td>
-                    <td>{{ r.org_reply | default('') }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            {% else %}<p>Нет отзывов</p>{% endif %}
-        {% else %}
-            <p>Нет отзывов</p>
         {% endif %}
-    </div>
-    <div class="section">
-        <h2>Особенности</h2>
-        {% set f = card.features_full %}
-        {% if f %}
-            <h3>Булевые особенности (галочки):</h3>
-            {% if f.bool and f.bool|length > 0 %}
-            <ul>
-                {% for b in f.bool %}
-                <li>{% if b.text %}{{ b.text }}{% else %}{{ b }}{% endif %}{% if b.defined %} <b>(особая)</b>{% endif %}</li>
-                {% endfor %}
-            </ul>
-            {% else %}<p>Нет булевых особенностей</p>{% endif %}
 
-            <h3>Ценностные особенности (категории услуг):</h3>
-            {% if f.valued and f.valued|length > 0 %}
-            <ul>
-                {% for v in f.valued %}
-                <li><b>{{ v.title }}:</b> {{ v.value }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}<p>Нет ценностных особенностей</p>{% endif %}
-
-            <h3>Цены:</h3>
-            {% if f.prices and f.prices|length > 0 %}
-            <ul>
-                {% for p in f.prices %}
-                <li><b>{{ p.title }}:</b> {{ p.value }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}<p>Нет цен</p>{% endif %}
-
-            <h3>Категории (из блока «Особенности»):</h3>
-            {% if f.categories and f.categories|length > 0 %}
-            <ul>
-                {% for cat in f.categories %}
-                <li>{{ cat }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}<p>Нет категорий</p>{% endif %}
-        {% else %}
-            <p>Нет данных</p>
-        {% endif %}
-    </div>
-
-    {% if competitor %}
-    <div class="section competitor-section" style="border-top: 3px solid #e74c3c; margin-top: 30px; padding-top: 20px;">
-        <h1 style="color: #e74c3c;">АНАЛИЗ КОНКУРЕНТА</h1>
-        {% if competitor.status %}
-            <p style="color: #e74c3c; font-weight: bold;">{{ competitor.status }}</p>
-        {% else %}
-            <div class="section">
-                <h2>Основная информация конкурента</h2>
-                <table>
-                    <tr><th>Параметр</th><th>Значение</th></tr>
-                    <tr><td>Название</td><td>{{ competitor.overview.title or 'Не указано' }}</td></tr>
-                    <tr><td>Адрес</td><td>{{ competitor.overview.address or 'Не указан' }}</td></tr>
-                    <tr><td>Телефон</td><td>{{ competitor.overview.phone or 'Не указан' }}</td></tr>
-                    <tr><td>Сайт</td><td>{{ competitor.overview.site or 'Не указан' }}</td></tr>
-                    <tr><td>Рейтинг</td><td>{{ competitor.overview.rating or 'Не указан' }}</td></tr>
-                    <tr><td>Количество оценок</td><td>{{ competitor.overview.ratings_count or 'Не указано' }}</td></tr>
-                    <tr><td>Количество отзывов</td><td>{{ competitor.overview.reviews_count or 'Не указано' }}</td></tr>
-                    <tr><td>Часы работы</td><td>{{ competitor.overview.hours or 'Не указаны' }}</td></tr>
-                </table>
+        <!-- Рубрики -->
+        {% if card.overview.rubric and card.overview.rubric|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Рубрики</h2>
             </div>
-            {% if competitor.products %}
-            <div class="section">
-                <h2>Товары и услуги конкурента</h2>
-                {% for category in competitor.products %}
-                <h3>{{ category.category }}</h3>
-                <table>
-                    <tr><th>Название</th><th>Описание</th><th>Цена</th><th>Длительность</th><th>Фото</th></tr>
-                    {% for item in category.items %}
-                    <tr>
-                        <td>{{ item.name }}</td>
-                        <td>{{ item.description }}</td>
-                        <td>{{ item.price }}</td>
-                        <td>{{ item.duration }}</td>
-                        <td>{% if item.photo %}<img src="{{ item.photo }}" style="max-width:80px;max-height:80px;">{% endif %}</td>
-                    </tr>
+            <div class="card-content">
+                <div class="flex flex-wrap gap-2">
+                    {% for rubric in card.overview.rubric %}
+                    <span class="badge badge-secondary">{{ rubric }}</span>
                     {% endfor %}
-                </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Категории товаров и услуг -->
+        {% if card.product_categories and card.product_categories|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Категории товаров и услуг</h2>
+            </div>
+            <div class="card-content">
+                <div class="flex flex-wrap gap-2">
+                    {% for category in card.product_categories %}
+                    <span class="badge badge-secondary">{{ category }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Товары и услуги -->
+        {% if card.products and card.products|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Товары и услуги</h2>
+            </div>
+            <div class="card-content space-y-6">
+                {% for category in card.products %}
+                <div>
+                    <h4 class="font-semibold text-lg mb-3">{{ category.category }}</h4>
+                    {% if category.items and category.items|length > 0 %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Описание</th>
+                                <th>Цена</th>
+                                <th>Длительность</th>
+                                <th>Фото</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in category.items %}
+                            <tr>
+                                <td class="font-medium">{{ item.name or '—' }}</td>
+                                <td class="text-sm">{{ item.description or '—' }}</td>
+                                <td>{{ item.price or '—' }}</td>
+                                <td>{{ item.duration or '—' }}</td>
+                                <td>
+                                    {% if item.photo %}
+                                    📷
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">Нет товаров в категории</p>
+                    {% endif %}
+                    {% if not loop.last %}
+                    <div class="separator"></div>
+                    {% endif %}
+                </div>
                 {% endfor %}
             </div>
-            {% endif %}
-            {% if competitor.reviews.items %}
-            <div class="section">
-                <h2>Отзывы конкурента</h2>
-                <p>Средняя оценка: <b>{{ competitor.reviews.rating }}</b> | Количество отзывов: <b>{{ competitor.reviews.reviews_count }}</b></p>
-                <p><b>Всего спарсилось отзывов: {{ competitor.reviews.items|length }}</b></p>
-                
-                <table>
-                    <tr><th>№</th><th>Автор</th><th>Дата</th><th>Оценка</th><th>Текст</th><th>Ответ организации</th></tr>
-                    {% for review in competitor.reviews.items[:10] %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td>{{ review.author }}</td>
-                        <td>{{ review.date }}</td>
-                        <td>{{ review.score }}</td>
-                        <td>{{ review.text }}</td>
-                        <td>{{ review.org_reply }}</td>
-                    </tr>
-                    {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Новости -->
+        {% if card.news and card.news|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Новости</h2>
+            </div>
+            <div class="card-content">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Текст</th>
+                            <th>Фото</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for news in card.news %}
+                        <tr>
+                            <td>{{ news.date or '—' }}</td>
+                            <td class="text-sm">{{ news.text or '—' }}</td>
+                            <td>
+                                {% if news.photos and news.photos|length > 0 %}
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">{{ news.photos|length }}</span>
+                                </div>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
-                {% if competitor.reviews.items|length > 10 %}
-                <p><i>Показаны первые 10 отзывов из {{ competitor.reviews.items|length }}</i></p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Фото -->
+        {% if card.photos and card.photos|length > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    📷 Фото
+                </h2>
+                <p class="card-description">Всего фото: {{ card.photos|length }}</p>
+            </div>
+            <div class="card-content">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {% for photo in card.photos[:12] %}
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if card.photos|length > 12 %}
+                <p class="text-center text-muted mt-4">
+                    И ещё {{ card.photos|length - 12 }} фото...
+                </p>
                 {% endif %}
             </div>
-            {% endif %}
-            <div class="section">
-                <h2>Сравнение с основной карточкой</h2>
-                <table>
-                    <tr><th>Параметр</th><th>Основная карточка</th><th>Конкурент</th></tr>
-                    <tr>
-                        <td>Рейтинг</td>
-                        <td>{{ card.overview.rating or 'Не указан' }}</td>
-                        <td>{{ competitor.overview.rating or 'Не указан' }}</td>
-                    </tr>
-                    <tr>
-                        <td>Количество оценок</td>
-                        <td>{{ card.overview.ratings_count or 'Не указано' }}</td>
-                        <td>{{ competitor.overview.ratings_count or 'Не указано' }}</td>
-                    </tr>
-                    <tr>
-                        <td>Количество отзывов</td>
-                        <td>{{ card.overview.reviews_count or 'Не указано' }}</td>
-                        <td>{{ competitor.overview.reviews_count or 'Не указано' }}</td>
-                    </tr>
-                    <tr>
-                        <td>Количество фото</td>
-                        <td>{{ card.photos_count or 0 }}</td>
-                        <td>{{ competitor.photos_count or 0 }}</td>
-                    </tr>
-                    <tr>
-                        <td>Наличие сайта</td>
-                        <td>{% if card.overview.site %}Есть{% else %}Нет{% endif %}</td>
-                        <td>{% if competitor.overview.site %}Есть{% else %}Нет{% endif %}</td>
-                    </tr>
-                    <tr>
-                        <td>Наличие телефона</td>
-                        <td>{% if card.overview.phone %}Есть{% else %}Нет{% endif %}</td>
-                        <td>{% if competitor.overview.phone %}Есть{% else %}Нет{% endif %}</td>
-                    </tr>
-                </table>
+        </div>
+        {% endif %}
+
+        <!-- Отзывы -->
+        {% if card.reviews %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    💬 Отзывы
+                </h2>
+                <p class="card-description">
+                    Средняя оценка: {{ card.reviews.rating | default('—') }} | 
+                    Количество отзывов: {{ card.reviews.reviews_count or 0 }}
+                </p>
             </div>
+            <div class="card-content">
+                <div class="alert alert-warning mb-4">
+                    <p class="text-sm">
+                        ⚠️ Внимание: В отчёте отображаются не все отзывы. Яндекс ограничивает количество отзывов, 
+                        доступных для автоматического сбора через интерфейс.
+                    </p>
+                </div>
+                
+                {% if card.reviews.items and card.reviews.items|length > 0 %}
+                <p class="mb-4 text-sm text-muted">
+                    Всего спарсилось отзывов: {{ card.reviews.items|length }}
+                </p>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Автор</th>
+                            <th>Дата</th>
+                            <th>Оценка</th>
+                            <th>Текст</th>
+                            <th>Ответ организации</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in card.reviews.items[:10] %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="font-medium">{{ review.author or '—' }}</td>
+                            <td>{{ review.date or '—' }}</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ {{ review.score or '—' }}
+                                </div>
+                            </td>
+                            <td class="text-sm max-w-xs truncate">
+                                {{ review.text or '—' }}
+                            </td>
+                            <td class="text-sm max-w-xs truncate">
+                                {{ review.org_reply or '—' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if card.reviews.items|length > 10 %}
+                <p class="text-center text-muted mt-4">
+                    Показаны первые 10 отзывов из {{ card.reviews.items|length }}
+                </p>
+                {% endif %}
+                {% else %}
+                <p class="text-muted">Нет отзывов</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Особенности -->
+        {% if card.features_full %}
+        {% set f = card.features_full %}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Особенности</h2>
+            </div>
+            <div class="card-content space-y-6">
+                <!-- Булевые особенности -->
+                {% if f.bool and f.bool|length > 0 %}
+                <div>
+                    <h4 class="font-semibold mb-3">Булевые особенности (галочки):</h4>
+                    <div class="flex flex-wrap gap-2">
+                        {% for feature in f.bool %}
+                        <span class="badge {% if feature.defined %}badge-primary{% else %}badge-secondary{% endif %}">
+                            {{ feature.text or feature }}{% if feature.defined %} (особая){% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Ценностные особенности -->
+                {% if f.valued and f.valued|length > 0 %}
+                <div>
+                    <h4 class="font-semibold mb-3">Ценностные особенности (категории услуг):</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {% for feature in f.valued %}
+                        <div class="flex justify-between items-center p-2 bg-muted rounded">
+                            <span class="font-medium">{{ feature.title }}:</span>
+                            <span>{{ feature.value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Цены -->
+                {% if f.prices and f.prices|length > 0 %}
+                <div>
+                    <h4 class="font-semibold mb-3">Цены:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {% for price in f.prices %}
+                        <div class="flex justify-between items-center p-2 bg-success/10 rounded">
+                            <span class="font-medium">{{ price.title }}:</span>
+                            <span class="text-success font-semibold">{{ price.value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Категории -->
+                {% if f.categories and f.categories|length > 0 %}
+                <div>
+                    <h4 class="font-semibold mb-3">Категории (из блока «Особенности»):</h4>
+                    <div class="flex flex-wrap gap-2">
+                        {% for category in f.categories %}
+                        <span class="badge badge-secondary">{{ category }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Анализ конкурента -->
+        {% if competitor %}
+        <div class="space-y-6">
+            <div class="separator"></div>
+            <h2 class="text-2xl font-bold text-center text-primary">АНАЛИЗ КОНКУРЕНТА</h2>
+            
+            <!-- Основная информация конкурента -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Основная информация конкурента</h2>
+                </div>
+                <div class="card-content">
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <td class="font-medium">Название</td>
+                                <td>{{ competitor.overview.title or 'Не указано' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Адрес</td>
+                                <td>{{ competitor.overview.address or 'Не указан' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Телефон</td>
+                                <td>{{ competitor.overview.phone or 'Не указан' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Сайт</td>
+                                <td>{{ competitor.overview.site or 'Не указан' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Рейтинг</td>
+                                <td>{{ competitor.overview.rating or 'Не указан' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Количество оценок</td>
+                                <td>{{ competitor.overview.ratings_count or 'Не указано' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Количество отзывов</td>
+                                <td>{{ competitor.overview.reviews_count or 'Не указано' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Часы работы</td>
+                                <td>{{ competitor.overview.hours or 'Не указаны' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Сравнение -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Сравнение с основной карточкой</h2>
+                </div>
+                <div class="card-content">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Параметр</th>
+                                <th>Основная карточка</th>
+                                <th>Конкурент</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-medium">Рейтинг</td>
+                                <td>{{ card.overview.rating or 'Не указан' }}</td>
+                                <td>{{ competitor.overview.rating or 'Не указан' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Количество оценок</td>
+                                <td>{{ card.overview.ratings_count or 'Не указано' }}</td>
+                                <td>{{ competitor.overview.ratings_count or 'Не указано' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Количество отзывов</td>
+                                <td>{{ card.overview.reviews_count or 'Не указано' }}</td>
+                                <td>{{ competitor.overview.reviews_count or 'Не указано' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Количество фото</td>
+                                <td>{{ card.photos|length if card.photos else 0 }}</td>
+                                <td>{{ competitor.photos|length if competitor.photos else 0 }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Наличие сайта</td>
+                                <td>
+                                    <span class="badge {% if card.overview.site %}badge-success{% else %}badge-secondary{% endif %}">
+                                        {{ 'Есть' if card.overview.site else 'Нет' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if competitor.overview.site %}badge-success{% else %}badge-secondary{% endif %}">
+                                        {{ 'Есть' if competitor.overview.site else 'Нет' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="font-medium">Наличие телефона</td>
+                                <td>
+                                    <span class="badge {% if card.overview.phone %}badge-success{% else %}badge-secondary{% endif %}">
+                                        {{ 'Есть' if card.overview.phone else 'Нет' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if competitor.overview.phone %}badge-success{% else %}badge-secondary{% endif %}">
+                                        {{ 'Есть' if competitor.overview.phone else 'Нет' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
-    {% endif %}
-
 </body>
 </html> 
