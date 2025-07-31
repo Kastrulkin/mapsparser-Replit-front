@@ -19,12 +19,21 @@ load_dotenv()
 
 # Инициализация Supabase
 def init_supabase():
+    print("DEBUG: Initializing Supabase client")
     url = os.getenv('SUPABASE_URL')
     key = os.getenv('SUPABASE_KEY')
+    print(f"DEBUG: SUPABASE_URL exists: {url is not None}")
+    print(f"DEBUG: SUPABASE_KEY exists: {key is not None}")
     if not url or not key:
         print("ERROR: SUPABASE_URL or SUPABASE_KEY not found!")
         return None
-    return create_client(url, key)
+    try:
+        client = create_client(url, key)
+        print("DEBUG: Supabase client created successfully")
+        return client
+    except Exception as e:
+        print(f"ERROR: Failed to create Supabase client: {e}")
+        return None
 
 supabase: Client = init_supabase()
 
@@ -42,13 +51,17 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
     
     def do_GET(self):
+        print(f"DEBUG: GET request to: {self.path}")
+        
         # API endpoint для скачивания отчёта
         if self.path.startswith('/api/download-report/'):
+            print(f"DEBUG: Routing to download handler")
             self.handle_download_report()
             return
         
         # API endpoint для получения содержимого отчёта
         if self.path.startswith('/api/report-content/'):
+            print(f"DEBUG: Routing to content handler")
             self.handle_report_content()
             return
             
