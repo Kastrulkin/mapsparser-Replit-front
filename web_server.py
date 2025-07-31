@@ -95,8 +95,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-Disposition', f'attachment; filename="seo_report_{title}.html"')
             self.end_headers()
             
-            with open(report_path, 'rb') as f:
-                self.wfile.write(f.read())
+            with open(report_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                self.wfile.write(content.encode('utf-8'))
                 
         except Exception as e:
             print(f"Error downloading report: {e}")
@@ -132,8 +133,9 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
-            with open(report_path, 'rb') as f:
-                self.wfile.write(f.read())
+            with open(report_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                self.wfile.write(content.encode('utf-8'))
                 
         except Exception as e:
             print(f"Error getting report content: {e}")
