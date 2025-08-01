@@ -21,7 +21,7 @@ export class SupabaseDebug {
         email,
         password,
         options: {
-          emailRedirectTo: window.location.origin + '/set-password'
+          emailRedirectTo: 'https://beautybot.pro/set-password'
         }
       });
 

@@ -59,6 +59,9 @@ const Login = () => {
     const { data, error: regError } = await supabase.auth.signUp({
       email: registerForm.email,
       password: registerForm.password,
+      options: {
+        redirectTo: 'https://beautybot.pro/set-password'
+      }
     });
     if (regError || !data.user) {
       if (regError?.message?.toLowerCase().includes('user already registered') || regError?.message?.toLowerCase().includes('user already exists')) {
@@ -87,7 +90,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: window.location.origin + '/login' });
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: 'https://beautybot.pro/set-password' });
     setLoading(false);
     if (error) {
       setError('Ошибка при отправке письма для сброса пароля.');
