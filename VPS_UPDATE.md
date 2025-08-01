@@ -4,7 +4,7 @@
 
 ### 1. Перейдите в директорию проекта
 ```bash
-cd /path/to/your/project  # замените на реальный путь к проекту
+cd /root/mapsparser-Replit-front
 ```
 
 ### 2. Проверьте статус git
@@ -67,5 +67,5 @@ ls -la
 
 **Команда для быстрого обновления:**
 ```bash
-cd /path/to/project && git pull origin main && systemctl restart seo-worker
+cd /root/mapsparser-Replit-front && git pull origin main && systemctl restart seo-worker
 ``` 
