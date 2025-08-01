@@ -73,12 +73,27 @@ const Login = () => {
       return;
     }
     // Сохраняем профиль в users
-    await supabase.from('Users').upsert({
+    const { error: profileError } = await supabase.from('Users').upsert({
       id: data.user.id,
       email: registerForm.email,
       phone: registerForm.phone,
       name: registerForm.name,
       yandex_url: registerForm.yandexUrl,
+    });
+    
+    if (profileError) {
+      console.error('Ошибка сохранения профиля:', profileError);
+      setError('Ошибка сохранения профиля: ' + profileError.message);
+      setLoading(false);
+      return;
+    }
+    
+    console.log('Профиль сохранен:', {
+      id: data.user.id,
+      email: registerForm.email,
+      phone: registerForm.phone,
+      name: registerForm.name,
+      yandex_url: registerForm.yandexUrl
     });
     setLoading(false);
     setInfo('Проверьте почту и подтвердите email для завершения регистрации.');
