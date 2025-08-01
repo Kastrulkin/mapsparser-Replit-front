@@ -86,46 +86,111 @@ def prepare_data_for_analysis(card_data: Dict[str, Any]) -> str:
 
 def call_huggingface_analysis(text: str) -> Dict[str, Any]:
     """
-    Вызывает Hugging Face модель для анализа
+    Анализирует данные с помощью модели ainize/bart-base-cnn
     """
     try:
+        from model_config import get_model_config, get_prompt
+        
         # Получаем конфигурацию модели
-        model_config = get_model_config()
-        model_name = model_config["name"]
+        model_config = get_model_config("ainize/bart-base-cnn")
+        
+        # Получаем промпт
+        prompt = get_prompt("seo_analysis", text)
+        
+        # Вызываем Hugging Face API
+        import requests
+        import os
+        
+        hf_token = os.getenv('HUGGINGFACE_API_TOKEN')
+        if not hf_token:
+            return {"error": "HUGGINGFACE_API_TOKEN не найден"}
         
         headers = {
-            "Authorization": f"Bearer {HF_API_TOKEN}",
+            "Authorization": f"Bearer {hf_token}",
             "Content-Type": "application/json"
         }
-        
-        # Получаем промпт для анализа
-        prompt = get_prompt("seo_analysis", text)
         
         payload = {
             "inputs": prompt,
             "parameters": {
-                "max_length": model_config["max_length"],
-                "temperature": model_config["temperature"],
-                "do_sample": model_config["do_sample"],
-                "top_p": model_config["top_p"]
+                "max_length": model_config.get("max_length", 1024),
+                "temperature": model_config.get("temperature", 0.7),
+                "do_sample": model_config.get("do_sample", True),
+                "top_p": model_config.get("top_p", 0.9),
+                "repetition_penalty": model_config.get("repetition_penalty", 1.1)
             }
         }
         
         response = requests.post(
-            f"{HF_API_URL}/{model_name}",
+            f"https://api-inference.huggingface.co/models/ainize/bart-base-cnn",
             headers=headers,
-            json=payload
+            json=payload,
+            timeout=60
         )
         
         if response.status_code == 200:
-            return response.json()
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                first_result = result[0]
+                if 'generated_text' in first_result:
+                    generated_text = first_result['generated_text']
+                elif 'summary_text' in first_result:
+                    generated_text = first_result['summary_text']
+                else:
+                    generated_text = str(first_result)
+                
+                return {
+                    "generated_text": generated_text,
+                    "analysis_type": "ai_model",
+                    "model_used": "ainize/bart-base-cnn"
+                }
+            else:
+                return {"error": "Неожиданный формат ответа от модели"}
         else:
-            print(f"Ошибка Hugging Face API: {response.status_code}")
-            return {"error": "API error", "status": response.status_code}
+            return {"error": f"Ошибка API {response.status_code}: {response.text}"}
             
     except Exception as e:
-        print(f"Ошибка при вызове Hugging Face: {e}")
+        print(f"Ошибка при анализе: {e}")
         return {"error": str(e)}
+
+def analyze_with_rules(text: str) -> str:
+    """
+    Анализирует данные на основе правил SEO для Яндекс.Карт
+    """
+    text_lower = text.lower()
+    recommendations = []
+    
+    # 1. Анализ названия
+    if "метро" in text_lower or "район" in text_lower:
+        recommendations.append("1) Название: Уберите из названия ключевые слова и геометки. Оставьте только официальное название компании")
+    
+    # 2. Анализ услуг
+    if "услуги" in text_lower or "стрижка" in text_lower or "маникюр" in text_lower:
+        recommendations.append("2) Услуги: Добавьте к названиям услуг ключевые слова и геолокацию (например, 'Стрижка у метро Парк Победы')")
+    
+    # 3. Анализ адреса
+    if "адрес" in text_lower:
+        if "метро" not in text_lower and "остановка" not in text_lower:
+            recommendations.append("3) Контакты: Добавьте информацию о ближайшем метро или остановке в адрес")
+    
+    # 4. Анализ контента
+    if "фото" in text_lower:
+        if "8" in text or "10" in text:
+            recommendations.append("4) Контент: Добавьте больше фотографий (минимум 10): фасад, интерьер, процесс работы, результаты")
+    
+    # 5. Анализ активности
+    if "отзыв" in text_lower:
+        recommendations.append("5) Активность: Регулярно отвечайте на отзывы и публикуйте новости в разделе 'Посты'")
+    
+    # Если рекомендаций мало, добавляем базовые
+    if len(recommendations) < 3:
+        recommendations.extend([
+            "Добавьте полную информацию о способах оплаты (наличные, карты, СБП)",
+            "Укажите точные часы работы",
+            "Добавьте ссылки на социальные сети"
+        ])
+    
+    return ". ".join(recommendations[:5]) + "."
 
 def generate_recommendations(analysis_result: Dict[str, Any], card_data: Dict[str, Any]) -> List[str]:
     """
