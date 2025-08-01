@@ -43,7 +43,7 @@ def get_model_config(model_name=None):
     if model_name is None:
         model_name = CURRENT_MODEL
     
-    return AVAILABLE_MODELS.get(model_name, AVAILABLE_MODELS["gpt2"])
+    return AVAILABLE_MODELS.get(model_name, AVAILABLE_MODELS["facebook/bart-base"])
 
 def get_prompt(prompt_type="seo_analysis", text=""):
     """Получить промпт для анализа"""

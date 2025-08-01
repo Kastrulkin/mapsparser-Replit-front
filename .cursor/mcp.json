@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "huggingface": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-huggingface"],
+      "env": {
+        "HUGGINGFACE_API_TOKEN": "${HUGGINGFACE_API_TOKEN}"
+      }
+    }
+  }
+} 
