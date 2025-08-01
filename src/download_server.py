@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 # Инициализация Supabase
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')  # Используем SUPABASE_KEY вместо SUPABASE_SERVICE_ROLE_KEY
+supabase_key = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(supabase_url, supabase_key)
 
 @app.route('/api/download-report/<card_id>', methods=['GET'])
@@ -125,4 +125,4 @@ def report_status(card_id):
 
 if __name__ == "__main__":
     print("Сервер скачивания отчётов запущен на порту 5001")
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+    app.run(host='0.0.0.0', port=8001, debug=True) 
