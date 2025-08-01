@@ -105,10 +105,6 @@ const Header = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
-            {console.log('Header render - isAuth:', isAuth)}
-            {/* Принудительно показываем кнопку Вход для отладки */}
-            <Link to="/login"><Button variant="ghost">Вход (Отладка)</Button></Link>
-            
             {!isAuth ? (
               <>
                 <Link to="/login"><Button variant="ghost">Вход</Button></Link>
