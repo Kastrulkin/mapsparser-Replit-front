@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 # Инициализация Supabase
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+supabase_key = os.getenv('SUPABASE_KEY')  # Используем SUPABASE_KEY вместо SUPABASE_SERVICE_ROLE_KEY
 supabase: Client = create_client(supabase_url, supabase_key)
 
 @app.route('/api/download-report/<card_id>', methods=['GET'])
