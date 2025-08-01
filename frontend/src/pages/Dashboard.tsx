@@ -176,13 +176,14 @@ const Dashboard = () => {
         return;
       }
 
-      // Создаём ссылку для скачивания
-      const downloadUrl = `http://80.78.242.105:8001/api/download-report/${reportId}`;
+      // Используем новый эндпоинт для скачивания с правильными заголовками
+      const downloadUrl = `https://beautybot.pro/api/download-report/${reportId}`;
       
       // Создаём временную ссылку и скачиваем файл
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = `seo_report_${reportData.title || reportId}.html`;
+      link.target = '_blank'; // Открываем в новой вкладке для безопасности
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -202,8 +203,8 @@ const Dashboard = () => {
 
     setLoadingReport(true);
     try {
-      // Получаем содержимое отчёта
-      const response = await fetch(`http://80.78.242.105:8001/api/report-content/${reportId}`);
+      // Используем новый эндпоинт для просмотра с правильными заголовками
+      const response = await fetch(`https://beautybot.pro/api/view-report/${reportId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
