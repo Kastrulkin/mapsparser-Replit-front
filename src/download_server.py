@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 # Инициализация Supabase
 supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')
+supabase_key = os.getenv('SUPABASE_KEY')  # Используем SUPABASE_KEY вместо SUPABASE_SERVICE_ROLE_KEY
 supabase: Client = create_client(supabase_url, supabase_key)
 
 @app.route('/api/download-report/<card_id>', methods=['GET'])
@@ -36,9 +36,30 @@ def download_report(card_id):
         if not os.path.exists(report_path):
             return jsonify({"error": "Файл отчёта не найден"}), 404
         
-        # Формируем имя файла для скачивания
+        # Формируем имя файла для скачивания (только латинские символы)
         title = card_data.get('title', 'report')
-        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        # Транслитерация русских символов
+        translit_map = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+            'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+            'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'YO', 'Ж': 'ZH', 'З': 'Z',
+            'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R',
+            'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'TS', 'Ч': 'CH', 'Ш': 'SH', 'Щ': 'SCH',
+            'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'YU', 'Я': 'YA'
+        }
+        
+        safe_title = ""
+        for char in title:
+            if char in translit_map:
+                safe_title += translit_map[char]
+            elif char.isalnum() or char in (' ', '-', '_'):
+                safe_title += char
+            else:
+                safe_title += '_'
+        
+        safe_title = safe_title.strip().replace(' ', '_')
         filename = f"seo_report_{safe_title}_{card_id}.html"
         
         # Читаем содержимое файла
@@ -124,5 +145,5 @@ def report_status(card_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    print("Сервер скачивания отчётов запущен на порту 5001")
+    print("Сервер скачивания отчётов запущен на порту 8001")
     app.run(host='0.0.0.0', port=8001, debug=True) 
