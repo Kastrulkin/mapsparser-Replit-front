@@ -47,11 +47,19 @@ const Dashboard = () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       if (user) {
-        const { data: profileData } = await supabase
+        console.log('Загружаем профиль для пользователя:', user.id);
+        const { data: profileData, error: profileError } = await supabase
           .from("Users")
           .select("*")
           .eq("id", user.id)
           .single();
+        
+        if (profileError) {
+          console.error('Ошибка загрузки профиля:', profileError);
+        } else {
+          console.log('Профиль загружен:', profileData);
+        }
+        
         setProfile(profileData);
         setForm({
           email: profileData?.email || user.email || "",
