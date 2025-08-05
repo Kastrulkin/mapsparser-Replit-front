@@ -69,8 +69,8 @@ const Header = () => {
                 <img 
                   src={logo} 
                   alt="BeautyBot Logo" 
-                  className="h-12 w-auto"
-                  style={{ maxHeight: '48px' }}
+                  className="h-24 w-auto"
+                  style={{ maxHeight: '96px' }}
                 />
               </Link>
             </div>
