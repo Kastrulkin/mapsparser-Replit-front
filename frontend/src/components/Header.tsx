@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { auth } from "../lib/auth";
+import logo from "../assets/images/logo.png"; // Импортируем логотип
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -64,8 +65,13 @@ const Header = () => {
         <div className="flex justify-between items-center py-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-2xl font-bold text-foreground hover:text-primary transition-colors" style={{ textDecoration: 'none' }}>
-                BeautyBot
+              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
+                <img 
+                  src={logo} 
+                  alt="BeautyBot Logo" 
+                  className="h-8 w-auto"
+                  style={{ maxHeight: '32px' }}
+                />
               </Link>
             </div>
           </div>
