@@ -48,11 +48,30 @@ const Dashboard = () => {
       setUser(user);
       if (user) {
         console.log('Загружаем профиль для пользователя:', user.id);
-        const { data: profileData, error: profileError } = await supabase
+        console.log('Email пользователя:', user.email);
+        
+        // Сначала пробуем найти по ID
+        let { data: profileData, error: profileError } = await supabase
           .from("Users")
           .select("*")
           .eq("id", user.id)
           .single();
+        
+        // Если не найдено по ID, пробуем по email
+        if (profileError && user.email) {
+          console.log('Не найдено по ID, ищем по email:', user.email);
+          const { data: profileByEmail, error: emailError } = await supabase
+            .from("Users")
+            .select("*")
+            .eq("email", user.email)
+            .single();
+          
+          if (!emailError && profileByEmail) {
+            profileData = profileByEmail;
+            profileError = null;
+            console.log('Найдено по email:', profileByEmail);
+          }
+        }
         
         if (profileError) {
           console.error('Ошибка загрузки профиля:', profileError);
