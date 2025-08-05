@@ -36,53 +36,86 @@ def analyze_business_data(card_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def prepare_data_for_analysis(card_data: Dict[str, Any]) -> str:
     """
-    Подготавливает данные для ИИ-анализа
+    Подготавливает данные для ИИ-анализа в структурированном виде
     """
-    text_parts = []
+    sections = []
     
-    # Основная информация
+    # 1. НАЗВАНИЕ КОМПАНИИ
     if card_data.get('title'):
-        text_parts.append(f"Название: {card_data['title']}")
+        sections.append(f"НАЗВАНИЕ: {card_data['title']}")
     
+    # 2. АДРЕС И КОНТАКТЫ
+    contact_info = []
     if card_data.get('address'):
-        text_parts.append(f"Адрес: {card_data['address']}")
+        contact_info.append(f"Адрес: {card_data['address']}")
+    if card_data.get('phone'):
+        contact_info.append(f"Телефон: {card_data['phone']}")
+    if card_data.get('site'):
+        contact_info.append(f"Сайт: {card_data['site']}")
+    if contact_info:
+        sections.append("КОНТАКТЫ:\n" + "\n".join(contact_info))
     
+    # 3. РЕЙТИНГ И ОТЗЫВЫ
+    rating_info = []
     if card_data.get('rating'):
-        text_parts.append(f"Рейтинг: {card_data['rating']}")
-    
+        rating_info.append(f"Рейтинг: {card_data['rating']}")
     if card_data.get('reviews_count'):
-        text_parts.append(f"Количество отзывов: {card_data['reviews_count']}")
+        rating_info.append(f"Количество отзывов: {card_data['reviews_count']}")
+    if card_data.get('ratings_count'):
+        rating_info.append(f"Количество оценок: {card_data['ratings_count']}")
+    if rating_info:
+        sections.append("РЕЙТИНГ:\n" + "\n".join(rating_info))
     
-    # Описание
+    # 4. КАТЕГОРИИ И РУБРИКИ
+    if card_data.get('categories'):
+        categories = card_data['categories']
+        if isinstance(categories, list):
+            sections.append(f"КАТЕГОРИИ: {', '.join(categories)}")
+        elif isinstance(categories, dict):
+            sections.append(f"КАТЕГОРИИ: {json.dumps(categories, ensure_ascii=False)}")
+    
+    # 5. ОПИСАНИЕ
     if card_data.get('overview'):
         overview = card_data['overview']
         if isinstance(overview, dict):
             if 'description' in overview:
-                text_parts.append(f"Описание: {overview['description']}")
+                sections.append(f"ОПИСАНИЕ: {overview['description']}")
         elif isinstance(overview, str):
-            text_parts.append(f"Описание: {overview}")
+            sections.append(f"ОПИСАНИЕ: {overview}")
     
-    # Категории
-    if card_data.get('categories'):
-        categories = card_data['categories']
-        if isinstance(categories, list):
-            text_parts.append(f"Категории: {', '.join(categories)}")
-        elif isinstance(categories, dict):
-            text_parts.append(f"Категории: {json.dumps(categories, ensure_ascii=False)}")
+    # 6. УСЛУГИ И ТОВАРЫ
+    if card_data.get('products'):
+        products = card_data['products']
+        if isinstance(products, list) and len(products) > 0:
+            product_names = []
+            for product in products[:10]:  # Первые 10 услуг
+                if isinstance(product, dict) and 'name' in product:
+                    product_names.append(product['name'])
+            if product_names:
+                sections.append("УСЛУГИ:\n" + "\n".join(f"- {name}" for name in product_names))
     
-    # Отзывы
+    # 7. ФОТО
+    if card_data.get('photos'):
+        photos = card_data['photos']
+        if isinstance(photos, list):
+            sections.append(f"ФОТО: {len(photos)} изображений")
+    
+    # 8. ЧАСЫ РАБОТЫ
+    if card_data.get('hours'):
+        sections.append(f"ЧАСЫ РАБОТЫ: {card_data['hours']}")
+    
+    # 9. ОТЗЫВЫ (первые 3 для анализа тональности)
     if card_data.get('reviews'):
         reviews = card_data['reviews']
         if isinstance(reviews, list) and len(reviews) > 0:
-            # Берём первые 5 отзывов для анализа
             review_texts = []
-            for review in reviews[:5]:
+            for review in reviews[:3]:
                 if isinstance(review, dict) and 'text' in review:
-                    review_texts.append(review['text'])
+                    review_texts.append(review['text'][:200] + "..." if len(review['text']) > 200 else review['text'])
             if review_texts:
-                text_parts.append(f"Отзывы: {' '.join(review_texts)}")
+                sections.append("ОТЗЫВЫ:\n" + "\n".join(f"- {text}" for text in review_texts))
     
-    return "\n".join(text_parts)
+    return "\n\n".join(sections)
 
 def call_huggingface_analysis(text: str) -> Dict[str, Any]:
     """
