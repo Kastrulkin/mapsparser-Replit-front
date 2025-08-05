@@ -66,14 +66,11 @@ def download_report(card_id):
         with open(report_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Создаём ответ с правильными заголовками
+        # Создаём ответ с правильными заголовками для скачивания
         response = Response(content, mimetype='text/html; charset=utf-8')
         response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
         response.headers['Content-Type'] = 'text/html; charset=utf-8'
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        # Убираем строгие заголовки безопасности для скачивания
         
         return response
         
@@ -108,10 +105,8 @@ def view_report(card_id):
         # Создаём ответ для просмотра в браузере
         response = Response(content, mimetype='text/html; charset=utf-8')
         response.headers['Content-Type'] = 'text/html; charset=utf-8'
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        # Разрешаем отображение в iframe для просмотра
+        response.headers['X-Frame-Options'] = 'ALLOWALL'
         
         return response
         
