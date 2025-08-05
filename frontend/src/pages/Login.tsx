@@ -105,7 +105,9 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: 'https://beautybot.pro/set-password' });
+            const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { 
+          redirectTo: 'https://beautybot.pro/set-password?email=' + encodeURIComponent(resetEmail) 
+        });
     setLoading(false);
     if (error) {
       setError('Ошибка при отправке письма для сброса пароля.');

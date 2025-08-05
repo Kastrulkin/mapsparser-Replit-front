@@ -53,7 +53,7 @@ const EmailConfirmation: React.FC = () => {
       if (isExistingUser) {
         // Для существующего пользователя отправляем reset password
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/set-password'
+          redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
         });
 
         if (resetError) {
@@ -82,7 +82,7 @@ const EmailConfirmation: React.FC = () => {
             // Если пользователь уже зарегистрирован, отправляем reset password
             setIsExistingUser(true);
             const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.origin + '/set-password'
+              redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
             });
 
             if (resetError) {

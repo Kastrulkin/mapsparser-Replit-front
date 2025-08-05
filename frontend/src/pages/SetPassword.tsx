@@ -11,18 +11,45 @@ const SetPassword: React.FC = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email;
+  const [email, setEmail] = useState<string>('');
 
   // Проверяем, что пользователь пришел с подтвержденным email или пропускаем проверку
   useEffect(() => {
     const checkUser = async () => {
-      if (!email) {
+      // Получаем email из разных источников
+      let userEmail = location.state?.email;
+      const skipEmailConfirmation = location.state?.skipEmailConfirmation;
+      
+      // Если email не передан в state, пробуем получить из URL параметров
+      if (!userEmail) {
+        const urlParams = new URLSearchParams(window.location.search);
+        userEmail = urlParams.get('email');
+        if (userEmail) {
+          console.log('Email получен из URL параметров:', userEmail);
+        }
+      }
+      
+      // Если email не передан в state или URL, пробуем получить из Supabase Auth
+      if (!userEmail) {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser();
+          if (user && user.email) {
+            userEmail = user.email;
+            setEmail(userEmail);
+            console.log('Email получен из Auth:', userEmail);
+          }
+        } catch (error) {
+          console.log('Ошибка получения пользователя из Auth:', error);
+        }
+      } else {
+        setEmail(userEmail);
+      }
+
+      if (!userEmail) {
         setError('Email не найден. Попробуйте войти заново.');
         return;
       }
 
-      const skipEmailConfirmation = location.state?.skipEmailConfirmation;
-      
       if (skipEmailConfirmation) {
         // Пропускаем проверку email-подтверждения
         console.log('Пропускаем проверку email-подтверждения');
@@ -40,7 +67,7 @@ const SetPassword: React.FC = () => {
           return;
         }
 
-        if (user && user.email === email) {
+        if (user && user.email === userEmail) {
           console.log('Пользователь авторизован:', user.email);
           setIsAuthorized(true);
         } else {
@@ -54,7 +81,7 @@ const SetPassword: React.FC = () => {
     };
 
     checkUser();
-  }, [email, location.state]);
+  }, [location.state]);
 
   const handleResetPassword = async () => {
     if (!email) {
@@ -67,7 +94,7 @@ const SetPassword: React.FC = () => {
 
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/set-password'
+        redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
       });
 
       if (resetError) {
