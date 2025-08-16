@@ -59,18 +59,25 @@ try:
         else:
             print("auth_id уже совпадает")
             
-        # Также обновляем отчёты в Cards и ParseQueue
+        # Обновляем отчёты в Cards (используем старый ID пользователя)
         print("Обновляем отчёты в Cards...")
-        cards_update = supabase.table('Cards').update({
-            'user_id': auth_user.id
-        }).eq('user_email', email).execute()
-        print(f"Обновлено отчётов в Cards: {len(cards_update.data) if cards_update.data else 0}")
+        try:
+            cards_update = supabase.table('Cards').update({
+                'user_id': profileData['id']  # Используем ID из Users
+            }).eq('user_id', current_user['id']).execute()  # Ищем по старому ID
+            print(f"Обновлено отчётов в Cards: {len(cards_update.data) if cards_update.data else 0}")
+        except Exception as e:
+            print(f"Ошибка обновления Cards: {e}")
         
+        # Обновляем отчёты в ParseQueue (используем старый ID пользователя)
         print("Обновляем отчёты в ParseQueue...")
-        queue_update = supabase.table('ParseQueue').update({
-            'user_id': auth_user.id
-        }).eq('user_email', email).execute()
-        print(f"Обновлено отчётов в ParseQueue: {len(queue_update.data) if queue_update.data else 0}")
+        try:
+            queue_update = supabase.table('ParseQueue').update({
+                'user_id': profileData['id']  # Используем ID из Users
+            }).eq('user_id', current_user['id']).execute()  # Ищем по старому ID
+            print(f"Обновлено отчётов в ParseQueue: {len(queue_update.data) if queue_update.data else 0}")
+        except Exception as e:
+            print(f"Ошибка обновления ParseQueue: {e}")
         
     else:
         print("Пользователь не найден в таблице Users, создаем запись")
