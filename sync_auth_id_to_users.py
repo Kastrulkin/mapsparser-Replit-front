@@ -28,7 +28,7 @@ try:
     auth_result = supabase.auth.admin.list_users()
     auth_user = None
     
-    for user in auth_result.users:
+    for user in auth_result:
         if user.email == email:
             auth_user = user
             print(f"Пользователь в Auth: ID={user.id}, Email={user.email}")
