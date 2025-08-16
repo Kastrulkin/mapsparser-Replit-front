@@ -3,29 +3,8 @@ from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 
-# Загружаем .env файл для локальной разработки
-# Ищем .env файл в рабочей директории и в родительской директории
-env_loaded = False
-current_dir = os.getcwd()
-parent_dir = os.path.dirname(current_dir)
-
-# Пробуем загрузить .env из текущей директории
-if os.path.exists(os.path.join(current_dir, '.env')):
-    load_dotenv(os.path.join(current_dir, '.env'))
-    env_loaded = True
-    print(f"Загружен .env файл из: {current_dir}")
-
-# Если не найден, пробуем из родительской директории
-elif os.path.exists(os.path.join(parent_dir, '.env')):
-    load_dotenv(os.path.join(parent_dir, '.env'))
-    env_loaded = True
-    print(f"Загружен .env файл из: {parent_dir}")
-
-# Если .env не найден, выводим информацию для отладки
-if not env_loaded:
-    print(f"Текущая директория: {current_dir}")
-    print(f"Родительская директория: {parent_dir}")
-    print("Файл .env не найден, используем переменные окружения")
+# Загружаем .env файл
+load_dotenv()
 
 # Читаем переменные окружения
 url = os.getenv('SUPABASE_URL')
