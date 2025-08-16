@@ -310,7 +310,7 @@ const Dashboard = () => {
         .order("created_at", { ascending: false });
       
       // Получаем отчёты в обработке из ParseQueue
-      const { data: queueData } = await supabase
+      const { data: updatedQueueData } = await supabase
         .from("ParseQueue")
         .select("id, url, created_at, status")
         .eq("user_id", user.id)
@@ -319,7 +319,7 @@ const Dashboard = () => {
       // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
       const allReports = [
         ...(reportsData || []).map(report => ({ ...report, status: 'completed', source: 'cards' })),
-        ...(queueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
+        ...(updatedQueueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
       ];
       
       setReports(allReports);
