@@ -82,9 +82,16 @@ const Dashboard = () => {
           console.log('Профиль загружен:', profileData);
         }
         
-        setProfile(profileData);
+        // Создаем объединенный профиль: email из Auth, остальное из Users
+        const combinedProfile = {
+          ...profileData,
+          email: user.email, // Всегда берем email из Auth
+          id: user.id // Всегда берем ID из Auth
+        };
+        
+        setProfile(combinedProfile);
         setForm({
-          email: profileData?.email || user.email || "",
+          email: user.email || "", // Email из Auth
           phone: profileData?.phone || "",
           name: profileData?.name || "",
           yandexUrl: profileData?.yandex_url || ""
