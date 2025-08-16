@@ -63,7 +63,7 @@ try:
         print("Обновляем отчёты в Cards...")
         try:
             cards_update = supabase.table('Cards').update({
-                'user_id': profileData['id']  # Используем ID из Users
+                'user_id': current_user['id']  # Используем ID из Users
             }).eq('user_id', current_user['id']).execute()  # Ищем по старому ID
             print(f"Обновлено отчётов в Cards: {len(cards_update.data) if cards_update.data else 0}")
         except Exception as e:
@@ -73,7 +73,7 @@ try:
         print("Обновляем отчёты в ParseQueue...")
         try:
             queue_update = supabase.table('ParseQueue').update({
-                'user_id': profileData['id']  # Используем ID из Users
+                'user_id': current_user['id']  # Используем ID из Users
             }).eq('user_id', current_user['id']).execute()  # Ищем по старому ID
             print(f"Обновлено отчётов в ParseQueue: {len(queue_update.data) if queue_update.data else 0}")
         except Exception as e:
