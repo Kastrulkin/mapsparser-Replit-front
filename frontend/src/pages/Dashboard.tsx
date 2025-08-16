@@ -7,7 +7,10 @@ import InviteFriendForm from "@/components/InviteFriendForm";
 
 function getNextReportDate(reports: any[]) {
   if (!reports.length) return null;
-  const last = new Date(reports[0].created_at);
+  // Фильтруем только завершённые отчёты для расчёта времени
+  const completedReports = reports.filter(report => report.status === 'completed');
+  if (!completedReports.length) return null;
+  const last = new Date(completedReports[0].created_at);
   return new Date(last.getTime() + 7 * 24 * 60 * 60 * 1000);
 }
 
@@ -93,7 +96,7 @@ const Dashboard = () => {
         // Получаем готовые отчёты из Cards
         const { data: reportsData } = await supabase
           .from("Cards")
-          .select("id, url, created_at")
+          .select("id, url, created_at, title")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
         
@@ -305,7 +308,21 @@ const Dashboard = () => {
         .select("id, url, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-      setReports(reportsData || []);
+      
+      // Получаем отчёты в обработке из ParseQueue
+      const { data: queueData } = await supabase
+        .from("ParseQueue")
+        .select("id, url, created_at, status")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      
+      // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
+      const allReports = [
+        ...(reportsData || []).map(report => ({ ...report, status: 'completed', source: 'cards' })),
+        ...(queueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
+      ];
+      
+      setReports(allReports);
 
     } catch (error: any) {
       setError(error.message || "Ошибка при создании отчёта");
@@ -314,7 +331,10 @@ const Dashboard = () => {
     }
   };
 
-  const canCreateReport = !reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports)) || hasRecentInvite;
+  // Проверяем, есть ли отчёты в обработке
+  const hasPendingReports = reports.some(report => report.status === 'pending' || report.status === 'processing');
+  
+  const canCreateReport = (!reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports)) || hasRecentInvite) && !hasPendingReports;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Загрузка...</div>;
 
@@ -621,7 +641,14 @@ const Dashboard = () => {
               {reports.map((report) => (
                 <div key={report.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 bg-muted/5 rounded-2xl border border-border/20 hover:bg-muted/10 transition-all duration-200">
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-foreground">{report.url}</h4>
+                    <h4 className="font-semibold text-foreground">
+                      {report.title || report.url}
+                    </h4>
+                    {report.title && (
+                      <p className="text-sm text-muted-foreground break-all">
+                        {report.url}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-muted-foreground">
                         Создан: {new Date(report.created_at).toLocaleDateString('ru-RU', { 
@@ -640,6 +667,16 @@ const Dashboard = () => {
                       {report.status === 'processing' && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
                           Обрабатывается
+                        </span>
+                      )}
+                      {report.status === 'captcha_required' && (
+                        <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                          Требует проверки
+                        </span>
+                      )}
+                      {report.status === 'error' && (
+                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                          Ошибка
                         </span>
                       )}
                       {report.status === 'completed' && (
@@ -668,6 +705,14 @@ const Dashboard = () => {
                           Скачать
                         </Button>
                       </>
+                    ) : report.status === 'error' ? (
+                      <span className="text-sm text-red-600">
+                        Произошла ошибка при обработке. Попробуйте создать отчёт заново.
+                      </span>
+                    ) : report.status === 'captcha_required' ? (
+                      <span className="text-sm text-orange-600">
+                        Требуется ручная проверка. Обработка может занять больше времени.
+                      </span>
                     ) : (
                       <span className="text-sm text-muted-foreground">
                         Обработка займёт в среднем около дня, т.к. все отчёты проверяются человеком
