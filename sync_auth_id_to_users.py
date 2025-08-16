@@ -4,6 +4,7 @@
 """
 
 import os
+import uuid
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -45,19 +46,18 @@ try:
         current_user = users_result.data[0]
         print(f"Пользователь в таблице Users: ID={current_user['id']}, Email={current_user['email']}")
         
-        # Обновляем ID в таблице Users на ID из Auth
-        if current_user['id'] != auth_user.id:
-            print(f"Обновляем ID с {current_user['id']} на {auth_user.id}")
+        # Обновляем auth_id в таблице Users
+        if current_user.get('auth_id') != auth_user.id:
+            print(f"Обновляем auth_id на {auth_user.id}")
             
             # Обновляем запись в Users
             update_result = supabase.table('Users').update({
-                'id': auth_user.id,
-                'auth_id': auth_user.id  # Добавляем поле auth_id для связи
+                'auth_id': auth_user.id
             }).eq('email', email).execute()
             
             print(f"Запись обновлена: {update_result.data}")
         else:
-            print("ID уже совпадают")
+            print("auth_id уже совпадает")
             
         # Также обновляем отчёты в Cards и ParseQueue
         print("Обновляем отчёты в Cards...")
@@ -75,10 +75,10 @@ try:
     else:
         print("Пользователь не найден в таблице Users, создаем запись")
         
-        # Создаем запись в Users с правильным ID из Auth
+        # Создаем запись в Users с правильным auth_id из Auth
         new_user_data = {
-            'id': auth_user.id,
-            'auth_id': auth_user.id,
+            'id': str(uuid.uuid4()),  # Генерируем уникальный ID для Users
+            'auth_id': auth_user.id,  # ID из Auth для связи
             'email': auth_user.email,
             'created_at': auth_user.created_at,
             'updated_at': auth_user.updated_at
