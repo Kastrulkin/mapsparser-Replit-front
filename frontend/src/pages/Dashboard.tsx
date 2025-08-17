@@ -301,7 +301,7 @@ const Dashboard = () => {
         const { data: queueData, error: queueError } = await supabase
           .from("ParseQueue")
           .insert({
-            user_id: profile?.id, // user_id = id из Users
+            user_id: profileData?.id, // user_id = id из Users
             url: createReportForm.yandexUrl,
             email: currentUser.email,
             status: 'pending'
@@ -328,14 +328,14 @@ const Dashboard = () => {
       const { data: reportsData } = await supabase
         .from("Cards")
         .select("id, url, created_at")
-        .eq("user_id", profile?.id) // user_id = id из Users
+        .eq("user_id", profileData?.id) // user_id = id из Users
         .order("created_at", { ascending: false });
       
       // Получаем отчёты в обработке из ParseQueue
       const { data: updatedQueueData } = await supabase
         .from("ParseQueue")
         .select("id, url, created_at, status")
-        .eq("user_id", profile?.id) // user_id = id из Users
+        .eq("user_id", profileData?.id) // user_id = id из Users
         .order("created_at", { ascending: false });
       
       // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
