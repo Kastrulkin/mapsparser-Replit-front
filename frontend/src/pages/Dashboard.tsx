@@ -87,6 +87,8 @@ const Dashboard = () => {
           console.error('Ошибка загрузки профиля:', profileError);
         } else {
           console.log('Профиль загружен:', profileData);
+          console.log('profileData?.id:', profileData?.id);
+          console.log('user.id:', user.id);
         }
         
         // Создаем объединенный профиль: email из Auth, остальное из Users
