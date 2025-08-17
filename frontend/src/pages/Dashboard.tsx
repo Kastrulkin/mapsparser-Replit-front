@@ -110,6 +110,7 @@ const Dashboard = () => {
           yandexUrl: profileData?.yandex_url || ""
         });
         // Получаем готовые отчёты из Cards (ищем по user_id из профиля)
+        console.log('Перед запросом к Cards, profileData?.id:', profileData?.id);
         const { data: reportsData } = await supabase
           .from("Cards")
           .select("id, url, created_at, title")
@@ -117,6 +118,7 @@ const Dashboard = () => {
           .order("created_at", { ascending: false });
         
         // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
+        console.log('Перед запросом к ParseQueue, profileData?.id:', profileData?.id);
         const { data: queueData } = await supabase
           .from("ParseQueue")
           .select("id, url, created_at, status")
