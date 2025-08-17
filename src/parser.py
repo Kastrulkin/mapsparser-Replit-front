@@ -335,6 +335,10 @@ def parse_overview_data(page):
     # Телефон - улучшенный парсинг
     try:
         phone_selectors = [
+            # Новые точные селекторы от пользователя
+            "div.orgpage-header-view__contacts > div.orgpage-header-view__contact > div > div > div",
+            "div.orgpage-header-view__contacts > div.orgpage-header-view__contact > div > div",
+            # Стандартные селекторы
             "span.business-phones-view__text",
             "div.business-contacts-view__phone-number span",
             "div.business-contacts-view__phone span",
@@ -349,7 +353,12 @@ def parse_overview_data(page):
             "span:has-text('+7')",
             "div:has-text('Показать телефон')",
             # Альтернативный селектор по примеру пользователя
-            "div.card-feature-view__content > div > div > div"
+            "div.card-feature-view__content > div > div > div",
+            # Новые селекторы для извлечения телефона из текста
+            "div.card-feature-view__content",
+            "div.business-contacts-view__phone",
+            "div.orgpage-phones-view__phone-number",
+            "div.card-phones-view__number"
         ]
 
         data['phone'] = ''
@@ -359,7 +368,9 @@ def parse_overview_data(page):
             for phone_elem in phone_elems:
                 phone_text = phone_elem.inner_text().strip()
                 print(f"  Кандидат на телефон: '{phone_text}' (селектор: {selector})")
+                
                 # Проверяем на наличие цифр и символов телефона
+                import re
                 if re.search(r'[\d+\-\(\)\s]{7,}', phone_text):
                     # Очищаем от лишних символов, оставляя только цифры, +, -, (, ), пробелы
                     phone_cleaned = re.sub(r'[^\d+\-\(\)\s]', '', phone_text).strip()
@@ -379,6 +390,23 @@ def parse_overview_data(page):
 
             if data['phone']:
                 break
+                
+        # Если телефон не найден, пробуем извлечь из всех элементов на странице
+        if not data['phone']:
+            import re
+            all_elements = page.query_selector_all("*")
+            for elem in all_elements:
+                try:
+                    text = elem.inner_text().strip()
+                    if text and re.search(r'\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2}', text):
+                        phone_match = re.search(r'\+7\s*\(\d{3}\)\s*\d{3}-\d{2}-\d{2}', text)
+                        if phone_match:
+                            data['phone'] = phone_match.group(0)
+                            print(f"  Найден телефон в общем поиске: {data['phone']}")
+                            break
+                except:
+                    continue
+                    
         print(f"Итоговый телефон: {data['phone']}")
     except Exception as e:
         print(f"Ошибка при парсинге телефона: {e}")
@@ -508,15 +536,44 @@ def parse_overview_data(page):
     except Exception:
         data['reviews_count'] = ''
 
-    # Краткое время работы (на главной)
+    # Краткое время работы (на главной) - улучшенный парсинг
     try:
-        short_hours_el = page.query_selector("div.card-feature-view__wrapper")
-        if short_hours_el:
-            short_hours = short_hours_el.inner_text().strip()
-            print(f"Краткое время работы: {short_hours}")
-            data['hours_short'] = short_hours
-        else:
-            data['hours_short'] = ''
+        hours_selectors = [
+            "div.card-feature-view__wrapper",
+            "div.business-working-status-view__text",
+            "div[class*='working-status']",
+            "div[class*='hours']",
+            "div.card-feature-view__content",
+            "div.business-contacts-view__hours",
+            "span[class*='working']",
+            "div:has-text('Открыто')",
+            "div:has-text('Закрыто')"
+        ]
+        
+        data['hours_short'] = ''
+        for selector in hours_selectors:
+            hours_el = page.query_selector(selector)
+            if hours_el:
+                hours_text = hours_el.inner_text().strip()
+                print(f"Кандидат на часы работы: '{hours_text}' (селектор: {selector})")
+                if hours_text and ('Открыто' in hours_text or 'Закрыто' in hours_text or 'до' in hours_text):
+                    data['hours_short'] = hours_text
+                    print(f"Найдены часы работы: {data['hours_short']}")
+                    break
+                    
+        # Если не найдено, пробуем общий поиск
+        if not data['hours_short']:
+            all_elements = page.query_selector_all("*")
+            for elem in all_elements:
+                try:
+                    text = elem.inner_text().strip()
+                    if text and ('Открыто до' in text or 'Закрыто' in text) and len(text) < 50:
+                        data['hours_short'] = text
+                        print(f"Найдены часы работы в общем поиске: {data['hours_short']}")
+                        break
+                except:
+                    continue
+                    
     except Exception as e:
         print(f"Ошибка при парсинге краткого времени работы: {e}")
         data['hours_short'] = ''
@@ -533,16 +590,32 @@ def parse_overview_data(page):
     except Exception as e:
         print(f"Ошибка при попытке кликнуть по кнопке 'График': {e}")
 
-    # После клика ищем полное расписание (альтернативный селектор)
+    # После клика ищем полное расписание (улучшенный парсинг)
     try:
-        intervals_table = page.query_selector("div.business-working-intervals-view._wide._card, div.business-working-intervals-view")
+        schedule_selectors = [
+            "div.business-working-intervals-view._wide._card",
+            "div.business-working-intervals-view",
+            "div[class*='working-intervals']",
+            "div[class*='schedule']",
+            "table[class*='schedule']",
+            "div:has-text('Понедельник')",
+            "div:has-text('Вторник')"
+        ]
+        
+        intervals_table = None
+        for selector in schedule_selectors:
+            intervals_table = page.query_selector(selector)
+            if intervals_table:
+                print(f"Найдена таблица расписания: {selector}")
+                break
+                
         hours_full = []
         if intervals_table:
-            rows = intervals_table.query_selector_all("div.business-working-intervals-view__item")
+            rows = intervals_table.query_selector_all("div.business-working-intervals-view__item, tr, div[class*='interval']")
             print(f"Найдено строк расписания: {len(rows)}")
             for row in rows:
-                day_el = row.query_selector("div.business-working-intervals-view__day")
-                interval_el = row.query_selector("div.business-working-intervals-view__interval")
+                day_el = row.query_selector("div.business-working-intervals-view__day, td:first-child, div[class*='day']")
+                interval_el = row.query_selector("div.business-working-intervals-view__interval, td:last-child, div[class*='time']")
                 day = day_el.inner_text().strip() if day_el else ''
                 interval = interval_el.inner_text().strip() if interval_el else ''
                 print(f"  День: '{day}', часы: '{interval}'")
@@ -550,18 +623,30 @@ def parse_overview_data(page):
                     hours_full.append(f"{day}: {interval}")
         else:
             print("Таблица полного расписания не найдена!")
+            
         data['hours_full'] = hours_full
-        # Краткая форма: если все дни одинаковые, выводим "Пн-Вс: 10:00–00:00"
-        if hours_full and len(set([h.split(': ')[1] for h in hours_full])) == 1:
-            interval = hours_full[0].split(': ')[1]
-            data['hours'] = f"Пн-Вс: {interval}"
-            print(f"Все дни одинаковые, краткая форма: {data['hours']}")
+        
+        # Если полное расписание не найдено, используем краткое
+        if not hours_full and data.get('hours_short'):
+            data['hours'] = data['hours_short']
+        elif hours_full:
+            # Краткая форма: если все дни одинаковые, выводим "Пн-Вс: 10:00–00:00"
+            try:
+                if len(set([h.split(': ')[1] for h in hours_full])) == 1:
+                    interval = hours_full[0].split(': ')[1]
+                    data['hours'] = f"Пн-Вс: {interval}"
+                    print(f"Все дни одинаковые, краткая форма: {data['hours']}")
+                else:
+                    data['hours'] = '; '.join(hours_full)
+                    print(f"Часы работы по дням: {data['hours']}")
+            except:
+                data['hours'] = '; '.join(hours_full)
         else:
-            data['hours'] = '; '.join(hours_full)
-            print(f"Часы работы по дням: {data['hours']}")
+            data['hours'] = ''
+            
     except Exception as e:
         print(f"Ошибка при парсинге полного расписания: {e}")
-        data['hours'] = ''
+        data['hours'] = data.get('hours_short', '')
         data['hours_full'] = []
 
     # Социальные сети
@@ -806,17 +891,55 @@ def parse_reviews(page):
                     text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
                     text = text_el.inner_text().strip() if text_el else ""
 
-                    # Ответ организации - как в рабочем коде
+                    # Ответ организации - улучшенный парсинг
                     reply = ""
                     try:
-                        reply_btn = block.query_selector("div.business-review-view__comment-expand[aria-label='Посмотреть ответ организации']")
-                        if reply_btn and reply_btn.is_visible():
-                            reply_btn.click()
-                            page.wait_for_timeout(500)
-                            reply_el = block.query_selector("div.business-review-comment-content__bubble")
+                        # Ищем кнопку для раскрытия ответа
+                        reply_btn_selectors = [
+                            "div.business-review-view__comment-expand[aria-label='Посмотреть ответ организации']",
+                            "div.business-review-view__comment-expand",
+                            "button[aria-label*='ответ']",
+                            "div[class*='comment-expand']",
+                            "div[class*='reply']",
+                            "button:has-text('ответ')",
+                            "div:has-text('ответ организации')"
+                        ]
+                        
+                        reply_clicked = False
+                        for selector in reply_btn_selectors:
+                            reply_btn = block.query_selector(selector)
+                            if reply_btn and reply_btn.is_visible():
+                                try:
+                                    reply_btn.click()
+                                    page.wait_for_timeout(1000)
+                                    reply_clicked = True
+                                    print(f"Клик по кнопке ответа: {selector}")
+                                    break
+                                except Exception as e:
+                                    print(f"Ошибка при клике по кнопке ответа {selector}: {e}")
+                                    continue
+                        
+                        # Ищем текст ответа
+                        reply_selectors = [
+                            "div.business-review-comment-content__bubble",
+                            "div.business-review-view__comment",
+                            "div[class*='comment-content']",
+                            "div[class*='reply-content']",
+                            "div[class*='business-reply']",
+                            "div:has-text('ответ')"
+                        ]
+                        
+                        for selector in reply_selectors:
+                            reply_el = block.query_selector(selector)
                             if reply_el:
-                                reply = reply_el.inner_text().strip()
-                    except Exception:
+                                reply_text = reply_el.inner_text().strip()
+                                if reply_text and len(reply_text) > 10:  # Минимальная длина ответа
+                                    reply = reply_text
+                                    print(f"Найден ответ организации: {reply[:50]}...")
+                                    break
+                                    
+                    except Exception as e:
+                        print(f"Ошибка при парсинге ответа организации: {e}")
                         pass
 
                     reviews_data['items'].append({

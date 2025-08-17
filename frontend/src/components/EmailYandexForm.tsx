@@ -53,10 +53,31 @@ const EmailYandexForm: React.FC = () => {
         // 2. Создаём пользователя без email-подтверждения
         const tempPassword = generateRandomPassword();
         
-        // Сначала создаем пользователя в таблице Users
+        // Сначала создаем пользователя в Auth, затем в таблице Users
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: email,
+          password: tempPassword,
+          options: {
+            data: {
+              email: email
+            }
+          }
+        });
+        
+        if (authError) {
+          console.error('Ошибка создания пользователя в Auth:', authError);
+          setError('Ошибка при создании пользователя: ' + authError.message);
+          setLoading(false);
+          return;
+        }
+        
+        // Теперь создаем запись в таблице Users с правильным ID
         const { data: userData, error: userError } = await supabase
           .from('Users')
-          .insert({ email: email })
+          .insert({ 
+            id: authData.user!.id,
+            email: email 
+          })
           .select('id')
           .single();
           
@@ -73,8 +94,7 @@ const EmailYandexForm: React.FC = () => {
         
         userId = userData.id;
         
-        // Пропускаем создание пользователя в Auth из-за rate limit
-        console.log('Пропускаем создание пользователя в Auth из-за rate limit');
+        console.log('Пользователь создан в Auth и Users с ID:', userId);
         
         // Сохраняем временный пароль для последующей смены
         localStorage.setItem('tempPassword', tempPassword);

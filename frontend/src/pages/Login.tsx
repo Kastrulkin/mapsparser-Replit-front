@@ -105,16 +105,59 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-            const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { 
+
+    // Функция для повторных попыток
+    const attemptReset = async (attempt: number = 1): Promise<boolean> => {
+      try {
+        console.log(`Попытка восстановления пароля #${attempt} для ${resetEmail}`);
+        
+        const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { 
           redirectTo: 'https://beautybot.pro/set-password?email=' + encodeURIComponent(resetEmail) 
         });
+
+        if (error) {
+          console.error(`Ошибка попытки #${attempt}:`, error);
+          
+          // Проверяем тип ошибки
+          if (error.message?.includes('rate limit') || error.message?.includes('too many requests')) {
+            setError('Превышен лимит отправки email. Попробуйте позже.');
+            return false;
+          } else if (error.message?.includes('timeout') || error.message?.includes('504')) {
+            if (attempt < 3) {
+              setInfo(`Попытка ${attempt} не удалась из-за таймаута. Повторяем через 2 секунды...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return await attemptReset(attempt + 1);
+            } else {
+              setError('Сервер временно недоступен. Попробуйте позже или обратитесь в поддержку.');
+              return false;
+            }
+          } else {
+            setError('Ошибка при отправке письма для сброса пароля: ' + error.message);
+            return false;
+          }
+        } else {
+          console.log('Письмо для сброса пароля отправлено успешно');
+          setInfo('Письмо для сброса пароля отправлено на вашу почту.');
+          setTab('login');
+          return true;
+        }
+      } catch (error) {
+        console.error(`Исключение в попытке #${attempt}:`, error);
+        
+        if (attempt < 3) {
+          setInfo(`Попытка ${attempt} не удалась. Повторяем через 2 секунды...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await attemptReset(attempt + 1);
+        } else {
+          setError('Произошла ошибка при отправке письма. Попробуйте позже.');
+          return false;
+        }
+      }
+    };
+
+    // Запускаем процесс восстановления с повторными попытками
+    await attemptReset();
     setLoading(false);
-    if (error) {
-      setError('Ошибка при отправке письма для сброса пароля.');
-    } else {
-      setInfo('Письмо для сброса пароля отправлено на вашу почту.');
-      setTab('login');
-    }
   };
 
   return (

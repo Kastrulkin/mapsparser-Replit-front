@@ -100,6 +100,20 @@ export class SimpleAuth {
       return { user: null, error };
     }
   }
+
+  async findUserByEmail(email: string): Promise<{ data: User | null; error: any }> {
+    try {
+      const { data, error } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      return { data, error };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
 }
 
 export const auth = SimpleAuth.getInstance(); 

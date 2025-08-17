@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
 import { useLocation, useNavigate } from 'react-router-dom';
+import AlternativePasswordReset from '../components/AlternativePasswordReset';
 
 const SetPassword: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -9,6 +10,7 @@ const SetPassword: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [showAlternativeReset, setShowAlternativeReset] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState<string>('');
@@ -91,22 +93,59 @@ const SetPassword: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setInfo(null);
 
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
-      });
+    // Функция для повторных попыток
+    const attemptReset = async (attempt: number = 1): Promise<boolean> => {
+      try {
+        console.log(`Попытка восстановления пароля #${attempt} для ${email}`);
+        
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
+        });
 
-      if (resetError) {
-        setError('Ошибка при отправке письма: ' + resetError.message);
-      } else {
-        setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+        if (resetError) {
+          console.error(`Ошибка попытки #${attempt}:`, resetError);
+          
+          // Проверяем тип ошибки
+          if (resetError.message?.includes('rate limit') || resetError.message?.includes('too many requests')) {
+            setError('Превышен лимит отправки email. Попробуйте позже.');
+            return false;
+          } else if (resetError.message?.includes('timeout') || resetError.message?.includes('504')) {
+            if (attempt < 3) {
+              setInfo(`Попытка ${attempt} не удалась из-за таймаута. Повторяем через 2 секунды...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return await attemptReset(attempt + 1);
+            } else {
+              setError('Сервер временно недоступен. Попробуйте позже или обратитесь в поддержку.');
+              return false;
+            }
+          } else {
+            setError('Ошибка при отправке письма: ' + resetError.message);
+            return false;
+          }
+        } else {
+          console.log('Письмо для восстановления пароля отправлено успешно');
+          setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+          return true;
+        }
+      } catch (error) {
+        console.error(`Исключение в попытке #${attempt}:`, error);
+        
+        if (attempt < 3) {
+          setInfo(`Попытка ${attempt} не удалась. Повторяем через 2 секунды...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await attemptReset(attempt + 1);
+        } else {
+          setError('Произошла ошибка при отправке письма. Попробуйте позже.');
+          return false;
+        }
       }
-    } catch (error) {
-      setError('Произошла ошибка: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    // Запускаем процесс восстановления с повторными попытками
+    await attemptReset();
+    setLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,6 +196,24 @@ const SetPassword: React.FC = () => {
     }
   };
 
+  // Если показываем альтернативное восстановление пароля
+  if (showAlternativeReset) {
+    return (
+      <AlternativePasswordReset
+        email={email}
+        onSuccess={() => {
+          setShowAlternativeReset(false);
+          setError(null);
+          setInfo('Пароль успешно обновлен!');
+        }}
+        onCancel={() => {
+          setShowAlternativeReset(false);
+          setError(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md flex flex-col gap-4 mt-12">
       <h2 className="text-2xl font-bold mb-2">Установите пароль для входа</h2>
@@ -191,13 +248,22 @@ const SetPassword: React.FC = () => {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3">
           <p className="text-red-600 text-sm mb-3">{error}</p>
-          <button
-            onClick={handleResetPassword}
-            disabled={loading}
-            className="w-full bg-red-600 text-white rounded px-3 py-2 text-sm hover:bg-red-700 transition disabled:opacity-50"
-          >
-            {loading ? 'Отправляем...' : 'Восстановить пароль через email'}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleResetPassword}
+              disabled={loading}
+              className="w-full bg-red-600 text-white rounded px-3 py-2 text-sm hover:bg-red-700 transition disabled:opacity-50"
+            >
+              {loading ? 'Отправляем...' : 'Восстановить пароль через email'}
+            </button>
+            <button
+              onClick={() => setShowAlternativeReset(true)}
+              disabled={loading}
+              className="w-full bg-blue-600 text-white rounded px-3 py-2 text-sm hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              Альтернативное восстановление пароля
+            </button>
+          </div>
         </div>
       )}
       
@@ -212,13 +278,22 @@ const SetPassword: React.FC = () => {
           <p className="text-sm text-gray-600 mb-3">
             Не получается установить пароль?
           </p>
-          <button
-            onClick={handleResetPassword}
-            disabled={loading}
-            className="w-full text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
-          >
-            Восстановить пароль через email
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleResetPassword}
+              disabled={loading}
+              className="w-full text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
+            >
+              Восстановить пароль через email
+            </button>
+            <button
+              onClick={() => setShowAlternativeReset(true)}
+              disabled={loading}
+              className="w-full text-sm text-green-600 hover:text-green-800 underline disabled:opacity-50"
+            >
+              Альтернативное восстановление пароля
+            </button>
+          </div>
         </div>
       )}
     </div>

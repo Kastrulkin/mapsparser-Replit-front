@@ -40,7 +40,7 @@ const EmailConfirmation: React.FC = () => {
     }
   };
 
-  const handleResendEmail = async () => {
+    const handleResendEmail = async () => {
     if (!email) {
       setError('Email не найден.');
       return;
@@ -48,26 +48,60 @@ const EmailConfirmation: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setInfo(null);
 
-    try {
-      if (isExistingUser) {
-        // Для существующего пользователя отправляем reset password
+    // Функция для повторных попыток восстановления пароля
+    const attemptResetPassword = async (attempt: number = 1): Promise<boolean> => {
+      try {
+        console.log(`Попытка восстановления пароля #${attempt} для ${email}`);
+        
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
         });
 
         if (resetError) {
-          console.error('Ошибка reset password:', resetError);
-          if (resetError.message?.includes('rate limit')) {
+          console.error(`Ошибка попытки #${attempt}:`, resetError);
+          
+          if (resetError.message?.includes('rate limit') || resetError.message?.includes('too many requests')) {
             setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
+            return false;
+          } else if (resetError.message?.includes('timeout') || resetError.message?.includes('504')) {
+            if (attempt < 3) {
+              setInfo(`Попытка ${attempt} не удалась из-за таймаута. Повторяем через 2 секунды...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return await attemptResetPassword(attempt + 1);
+            } else {
+              setError('Сервер временно недоступен. Попробуйте позже или обратитесь в поддержку.');
+              return false;
+            }
           } else {
             setError('Ошибка при отправке письма: ' + resetError.message);
+            return false;
           }
         } else {
+          console.log('Письмо для восстановления пароля отправлено успешно');
           setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+          return true;
         }
-      } else {
-        // Для нового пользователя пытаемся зарегистрировать
+      } catch (error) {
+        console.error(`Исключение в попытке #${attempt}:`, error);
+        
+        if (attempt < 3) {
+          setInfo(`Попытка ${attempt} не удалась. Повторяем через 2 секунды...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await attemptResetPassword(attempt + 1);
+        } else {
+          setError('Произошла ошибка при отправке письма. Попробуйте позже.');
+          return false;
+        }
+      }
+    };
+
+    // Функция для повторных попыток регистрации
+    const attemptSignUp = async (attempt: number = 1): Promise<boolean> => {
+      try {
+        console.log(`Попытка регистрации #${attempt} для ${email}`);
+        
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password: 'temporary-password-' + Date.now(), // Временный пароль
@@ -77,27 +111,54 @@ const EmailConfirmation: React.FC = () => {
         });
 
         if (signUpError) {
-          console.error('Ошибка signup:', signUpError);
+          console.error(`Ошибка регистрации #${attempt}:`, signUpError);
+          
           if (signUpError.message?.includes('already registered')) {
             // Если пользователь уже зарегистрирован, отправляем reset password
             setIsExistingUser(true);
-            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
-            });
-
-            if (resetError) {
-              setError('Ошибка при отправке письма: ' + resetError.message);
-            } else {
-              setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
-            }
-          } else if (signUpError.message?.includes('rate limit')) {
+            return await attemptResetPassword();
+          } else if (signUpError.message?.includes('rate limit') || signUpError.message?.includes('too many requests')) {
             setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
+            return false;
+          } else if (signUpError.message?.includes('timeout') || signUpError.message?.includes('504')) {
+            if (attempt < 3) {
+              setInfo(`Попытка регистрации ${attempt} не удалась из-за таймаута. Повторяем через 2 секунды...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return await attemptSignUp(attempt + 1);
+            } else {
+              setError('Сервер временно недоступен. Попробуйте позже или обратитесь в поддержку.');
+              return false;
+            }
           } else {
             setError('Ошибка при отправке письма: ' + signUpError.message);
+            return false;
           }
         } else {
+          console.log('Письмо с подтверждением отправлено успешно');
           setInfo('Письмо с подтверждением отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
+          return true;
         }
+      } catch (error) {
+        console.error(`Исключение в регистрации #${attempt}:`, error);
+        
+        if (attempt < 3) {
+          setInfo(`Попытка регистрации ${attempt} не удалась. Повторяем через 2 секунды...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await attemptSignUp(attempt + 1);
+        } else {
+          setError('Произошла ошибка при отправке письма. Попробуйте позже.');
+          return false;
+        }
+      }
+    };
+
+    try {
+      if (isExistingUser) {
+        // Для существующего пользователя отправляем reset password
+        await attemptResetPassword();
+      } else {
+        // Для нового пользователя пытаемся зарегистрировать
+        await attemptSignUp();
       }
     } catch (error) {
       console.error('Общая ошибка:', error);

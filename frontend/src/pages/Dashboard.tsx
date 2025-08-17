@@ -47,20 +47,41 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log('Состояние авторизации:', { user, authError });
       setUser(user);
       if (user) {
         console.log('Загружаем профиль для пользователя:', user.id);
         console.log('Email пользователя:', user.email);
         
         // Ищем профиль по email (самый надежный способ)
+        console.log('Пытаемся найти профиль по email:', user.email);
+        console.log('Текущий пользователь:', user);
+        
         let { data: profileData, error: profileError } = await supabase
           .from("Users")
           .select("*")
-          .eq("email", user.email)
-          .single();
+          .eq("email", user.email);
         
         console.log('Результат поиска профиля:', { profileData, profileError });
+        
+        // Если не найдено по email, пробуем по auth_id
+        if (!profileData || profileData.length === 0) {
+          console.log('Не найдено по email, пробуем по auth_id:', user.id);
+          const { data: profileByAuthId, error: authIdError } = await supabase
+            .from("Users")
+            .select("*")
+            .eq("auth_id", user.id);
+          
+          console.log('Результат поиска по auth_id:', { profileByAuthId, authIdError });
+          
+          if (profileByAuthId && profileByAuthId.length > 0) {
+            profileData = profileByAuthId[0];
+            profileError = null;
+          }
+        } else {
+          profileData = profileData[0]; // Берем первый результат
+        }
         
         if (profileError) {
           console.error('Ошибка загрузки профиля:', profileError);
@@ -90,14 +111,15 @@ const Dashboard = () => {
         const { data: reportsData } = await supabase
           .from("Cards")
           .select("id, url, created_at, title")
-          .eq("user_id", profileData?.id)
+          .eq("user_id", profileData?.id) // user_id в Cards = id из Users
           .order("created_at", { ascending: false });
         
         // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
         const { data: queueData } = await supabase
           .from("ParseQueue")
           .select("id, url, created_at, status")
-          .eq("user_id", profileData?.id)
+          .eq("user_id", profileData?.id) // user_id в ParseQueue = id из Users
+          .order("created_at", { ascending: false });
           .order("created_at", { ascending: false });
         
         // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
@@ -272,8 +294,7 @@ const Dashboard = () => {
         const { data: queueData, error: queueError } = await supabase
           .from("ParseQueue")
           .insert({
-            user_id: profileData?.id || currentUser.id, // ID из Users или Auth
-            auth_id: currentUser.id, // ID из Auth для связи
+            user_id: profile?.id, // user_id = id из Users
             url: createReportForm.yandexUrl,
             email: currentUser.email,
             status: 'pending'
@@ -300,14 +321,14 @@ const Dashboard = () => {
       const { data: reportsData } = await supabase
         .from("Cards")
         .select("id, url, created_at")
-        .eq("user_id", user.id)
+        .eq("user_id", profile?.id) // user_id = id из Users
         .order("created_at", { ascending: false });
       
       // Получаем отчёты в обработке из ParseQueue
       const { data: updatedQueueData } = await supabase
         .from("ParseQueue")
         .select("id, url, created_at, status")
-        .eq("user_id", user.id)
+        .eq("user_id", profile?.id) // user_id = id из Users
         .order("created_at", { ascending: false });
       
       // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
