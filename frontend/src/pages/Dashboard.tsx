@@ -120,7 +120,6 @@ const Dashboard = () => {
           .select("id, url, created_at, status")
           .eq("user_id", profileData?.id) // user_id в ParseQueue = id из Users
           .order("created_at", { ascending: false });
-          .order("created_at", { ascending: false });
         
         // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
         const allReports = [
