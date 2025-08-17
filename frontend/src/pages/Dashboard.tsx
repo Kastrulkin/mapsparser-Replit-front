@@ -95,7 +95,7 @@ const Dashboard = () => {
         const combinedProfile = {
           ...profileData,
           email: user.email, // Всегда берем email из Auth
-          id: user.id // Всегда берем ID из Auth
+          id: profileData?.id // Берем ID из Users, а не из Auth
         };
         
         setProfile(combinedProfile);
