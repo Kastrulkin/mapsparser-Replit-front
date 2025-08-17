@@ -111,6 +111,8 @@ const Dashboard = () => {
         });
         // Получаем готовые отчёты из Cards (ищем по user_id из профиля)
         console.log('Перед запросом к Cards, profileData?.id:', profileData?.id);
+        console.log('Перед запросом к Cards, profileData:', profileData);
+        console.log('Перед запросом к Cards, typeof profileData?.id:', typeof profileData?.id);
         const { data: reportsData } = await supabase
           .from("Cards")
           .select("id, url, created_at, title")
@@ -119,6 +121,8 @@ const Dashboard = () => {
         
         // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
         console.log('Перед запросом к ParseQueue, profileData?.id:', profileData?.id);
+        console.log('Перед запросом к ParseQueue, profileData:', profileData);
+        console.log('Перед запросом к ParseQueue, typeof profileData?.id:', typeof profileData?.id);
         const { data: queueData } = await supabase
           .from("ParseQueue")
           .select("id, url, created_at, status")
