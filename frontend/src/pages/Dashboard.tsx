@@ -113,21 +113,25 @@ const Dashboard = () => {
         console.log('Перед запросом к Cards, profileData?.id:', profileData?.id);
         console.log('Перед запросом к Cards, profileData:', profileData);
         console.log('Перед запросом к Cards, typeof profileData?.id:', typeof profileData?.id);
-        const { data: reportsData } = await supabase
+        const { data: reportsData, error: reportsError } = await supabase
           .from("Cards")
           .select("id, url, created_at, title")
           .eq("user_id", profileData?.id) // user_id в Cards = id из Users
           .order("created_at", { ascending: false });
         
+        console.log('Результат запроса к Cards:', { reportsData, reportsError });
+        
         // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
         console.log('Перед запросом к ParseQueue, profileData?.id:', profileData?.id);
         console.log('Перед запросом к ParseQueue, profileData:', profileData);
         console.log('Перед запросом к ParseQueue, typeof profileData?.id:', typeof profileData?.id);
-        const { data: queueData } = await supabase
+        const { data: queueData, error: queueError } = await supabase
           .from("ParseQueue")
           .select("id, url, created_at, status")
           .eq("user_id", profileData?.id) // user_id в ParseQueue = id из Users
           .order("created_at", { ascending: false });
+        
+        console.log('Результат запроса к ParseQueue:', { queueData, queueError });
         
         // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
         const allReports = [
