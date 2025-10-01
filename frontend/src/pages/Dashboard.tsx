@@ -237,11 +237,12 @@ const Dashboard = () => {
 
   const handleDownloadReport = async (reportId: string) => {
     try {
+      const normalizedId = (reportId || "").replace(/_/g, "-");
       // Получаем информацию об отчёте
       const { data: reportData, error } = await supabase
         .from("Cards")
         .select("report_path, title")
-        .eq("id", reportId)
+        .eq("id", normalizedId)
         .single();
 
       if (error || !reportData) {
@@ -255,12 +256,12 @@ const Dashboard = () => {
       }
 
       // Используем новый эндпоинт для скачивания с правильными заголовками
-      const downloadUrl = `https://beautybot.pro/api/download-report/${reportId}`;
+      const downloadUrl = `https://beautybot.pro/api/download-report/${normalizedId}`;
       
       // Создаём временную ссылку и скачиваем файл
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `seo_report_${reportData.title || reportId}.html`;
+      link.download = `seo_report_${reportData.title || normalizedId}.html`;
       link.target = '_blank'; // Открываем в новой вкладке для безопасности
       document.body.appendChild(link);
       link.click();
@@ -281,8 +282,9 @@ const Dashboard = () => {
 
     setLoadingReport(true);
     try {
+      const normalizedId = (reportId || "").replace(/_/g, "-");
       // Используем новый эндпоинт для просмотра с правильными заголовками
-      const response = await fetch(`https://beautybot.pro/api/view-report/${reportId}`);
+      const response = await fetch(`https://beautybot.pro/api/view-report/${normalizedId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -290,7 +292,7 @@ const Dashboard = () => {
       
       const content = await response.text();
       setReportContent(content);
-      setViewingReport(reportId);
+      setViewingReport(normalizedId);
     } catch (error: any) {
       setError("Ошибка при загрузке отчёта: " + error.message);
     } finally {
