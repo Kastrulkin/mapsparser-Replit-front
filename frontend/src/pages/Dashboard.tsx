@@ -286,8 +286,10 @@ const Dashboard = () => {
     }
   };
 
-  const handleViewReport = async (reportId: string) => {
-    if (viewingReport === reportId) {
+  const handleViewReport = async (reportOrId: any) => {
+    const initialId: string = typeof reportOrId === 'string' ? reportOrId : (reportOrId?.id || '');
+    const initialUrl: string | undefined = typeof reportOrId === 'string' ? undefined : reportOrId?.url;
+    if (viewingReport === initialId) {
       setViewingReport(null);
       setReportContent("");
       return;
@@ -295,28 +297,33 @@ const Dashboard = () => {
 
     setLoadingReport(true);
     try {
-      const normalizedId = (reportId || "").replace(/_/g, "-");
-      // Проверяем текущую карточку, чтобы при необходимости уметь сделать фоллбек
-      const { data: cardInfo } = await supabase
-        .from("Cards")
-        .select("url, title, report_path")
-        .eq("id", normalizedId)
-        .single();
+      const normalizedId = (initialId || "").replace(/_/g, "-");
+      // Пытаемся получить info по id (мог быть неверный id из UI)
+      const { data: cardInfo } = normalizedId
+        ? await supabase
+            .from("Cards")
+            .select("id, url, title, report_path")
+            .eq("id", normalizedId)
+            .single()
+        : { data: null } as any;
       // Используем новый эндпоинт для просмотра с правильными заголовками
       let response = await fetch(`https://beautybot.pro/api/view-report/${normalizedId}`);
       
       // Если не найдено (например, новый дубль по той же ссылке), пробуем взять последний готовый отчёт по той же URL
-      if (!response.ok && response.status === 404 && cardInfo?.url) {
+      const candidateUrl = cardInfo?.url || initialUrl;
+      if (!response.ok && response.status === 404 && candidateUrl) {
         const { data: alt } = await supabase
           .from("Cards")
           .select("id")
-          .eq("url", cardInfo.url)
+          .eq("url", candidateUrl)
           .not("report_path", "is", null)
           .order("created_at", { ascending: false })
           .limit(1);
         if (alt && alt.length > 0) {
           const fallbackId = alt[0].id as string;
           response = await fetch(`https://beautybot.pro/api/view-report/${fallbackId}`);
+          // Переключим текущий просматриваемый ID на найденный
+          setViewingReport(fallbackId);
         }
       }
 
@@ -324,7 +331,7 @@ const Dashboard = () => {
       
       const content = await response.text();
       setReportContent(content);
-      setViewingReport(normalizedId);
+      if (!viewingReport) setViewingReport(normalizedId || initialId);
     } catch (error: any) {
       setError("Ошибка при загрузке отчёта: " + error.message);
     } finally {
