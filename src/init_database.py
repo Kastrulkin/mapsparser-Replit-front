@@ -12,7 +12,52 @@ def init_database():
     conn = sqlite3.connect("reports.db")
     cursor = conn.cursor()
     
-    # Создаем таблицу Cards
+    # 1. Таблица Users - пользователи системы
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS Users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT,
+        name TEXT,
+        phone TEXT,
+        telegram_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1,
+        is_verified BOOLEAN DEFAULT 0,
+        verification_token TEXT,
+        reset_token TEXT,
+        reset_token_expires TIMESTAMP
+    )
+    """)
+    
+    # 2. Таблица Invites - приглашённые пользователи
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS Invites (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        invited_by TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        FOREIGN KEY (invited_by) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 3. Таблица ParseQueue - очередь запрошенных отчётов
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ParseQueue (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 4. Таблица Cards - готовые отчёты
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS Cards (
         id TEXT PRIMARY KEY,
@@ -37,18 +82,22 @@ def init_database():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         seo_score INTEGER,
         ai_analysis TEXT,
-        recommendations TEXT
+        recommendations TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
     )
     """)
     
-    # Создаем таблицу ParseQueue
+    # Дополнительная таблица для управления сессиями
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS ParseQueue (
+    CREATE TABLE IF NOT EXISTS UserSessions (
         id TEXT PRIMARY KEY,
-        url TEXT NOT NULL,
         user_id TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        token TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ip_address TEXT,
+        user_agent TEXT,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
     )
     """)
     
