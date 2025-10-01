@@ -241,7 +241,7 @@ const Dashboard = () => {
       // Получаем информацию об отчёте
       const { data: reportData, error } = await supabase
         .from("Cards")
-        .select("report_path, title")
+        .select("report_path, title, url")
         .eq("id", normalizedId)
         .single();
 
@@ -250,18 +250,31 @@ const Dashboard = () => {
         return;
       }
 
+      // Если для этой карточки нет файла, пробуем найти самый свежий отчёт по той же ссылке/названию
+      let targetId = normalizedId;
       if (!reportData.report_path) {
-        setError("Отчёт ещё не сгенерирован");
-        return;
+        const { data: alt } = await supabase
+          .from("Cards")
+          .select("id, report_path")
+          .eq("url", reportData.url)
+          .not("report_path", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (alt && alt.length > 0) {
+          targetId = alt[0].id;
+        } else {
+          setError("Отчёт ещё не сгенерирован");
+          return;
+        }
       }
 
       // Используем новый эндпоинт для скачивания с правильными заголовками
-      const downloadUrl = `https://beautybot.pro/api/download-report/${normalizedId}`;
+      const downloadUrl = `https://beautybot.pro/api/download-report/${targetId}`;
       
       // Создаём временную ссылку и скачиваем файл
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `seo_report_${reportData.title || normalizedId}.html`;
+      link.download = `seo_report_${reportData.title || targetId}.html`;
       link.target = '_blank'; // Открываем в новой вкладке для безопасности
       document.body.appendChild(link);
       link.click();
@@ -283,12 +296,31 @@ const Dashboard = () => {
     setLoadingReport(true);
     try {
       const normalizedId = (reportId || "").replace(/_/g, "-");
+      // Проверяем текущую карточку, чтобы при необходимости уметь сделать фоллбек
+      const { data: cardInfo } = await supabase
+        .from("Cards")
+        .select("url, title, report_path")
+        .eq("id", normalizedId)
+        .single();
       // Используем новый эндпоинт для просмотра с правильными заголовками
-      const response = await fetch(`https://beautybot.pro/api/view-report/${normalizedId}`);
+      let response = await fetch(`https://beautybot.pro/api/view-report/${normalizedId}`);
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Если не найдено (например, новый дубль по той же ссылке), пробуем взять последний готовый отчёт по той же URL
+      if (!response.ok && response.status === 404 && cardInfo?.url) {
+        const { data: alt } = await supabase
+          .from("Cards")
+          .select("id")
+          .eq("url", cardInfo.url)
+          .not("report_path", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (alt && alt.length > 0) {
+          const fallbackId = alt[0].id as string;
+          response = await fetch(`https://beautybot.pro/api/view-report/${fallbackId}`);
+        }
       }
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const content = await response.text();
       setReportContent(content);
