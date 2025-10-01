@@ -11,7 +11,7 @@ def get_db_connection():
     return conn
 
 from parser import parse_yandex_card
-from simple_ai_analyzer import analyze_business_data
+from gigachat_analyzer import analyze_business_data
 
 def process_queue():
     """Обрабатывает очередь парсинга из SQLite базы данных"""
