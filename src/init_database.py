@@ -18,11 +18,37 @@ def init_database():
         id TEXT PRIMARY KEY,
         url TEXT,
         title TEXT,
+        address TEXT,
+        phone TEXT,
+        site TEXT,
+        rating REAL,
+        reviews_count INTEGER,
+        categories TEXT,
+        overview TEXT,
+        products TEXT,
+        news TEXT,
+        photos TEXT,
+        features_full TEXT,
+        competitors TEXT,
+        hours TEXT,
+        hours_full TEXT,
         report_path TEXT,
         user_id TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         seo_score INTEGER,
-        ai_analysis TEXT
+        ai_analysis TEXT,
+        recommendations TEXT
+    )
+    """)
+    
+    # Создаем таблицу ParseQueue
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ParseQueue (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
     

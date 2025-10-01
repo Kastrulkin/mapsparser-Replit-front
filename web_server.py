@@ -11,31 +11,13 @@ import time
 import json
 import urllib.parse
 from pathlib import Path
-from supabase import create_client, Client
-from dotenv import load_dotenv
+import sqlite3
 
-# Загружаем переменные окружения
-load_dotenv()
-
-# Инициализация Supabase
-def init_supabase():
-    print("DEBUG: Initializing Supabase client")
-    url = os.getenv('SUPABASE_URL')
-    key = os.getenv('SUPABASE_KEY')
-    print(f"DEBUG: SUPABASE_URL exists: {url is not None}")
-    print(f"DEBUG: SUPABASE_KEY exists: {key is not None}")
-    if not url or not key:
-        print("ERROR: SUPABASE_URL or SUPABASE_KEY not found!")
-        return None
-    try:
-        client = create_client(url, key)
-        print("DEBUG: Supabase client created successfully")
-        return client
-    except Exception as e:
-        print(f"ERROR: Failed to create Supabase client: {e}")
-        return None
-
-supabase: Client = init_supabase()
+def get_db_connection():
+    """Получить соединение с SQLite базой данных"""
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -204,19 +186,18 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             print(f"DEBUG: Requesting report content for ID: {report_id}")
             
             # Get report information from database
-            if not supabase:
-                self.send_error(500, "Supabase not initialized")
-                return
-                
-            result = supabase.table("Cards").select("report_path").eq("id", report_id).execute()
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT report_path FROM Cards WHERE id = ?", (report_id,))
+            result = cursor.fetchone()
+            conn.close()
             
-            if not result.data:
+            if not result:
                 print(f"DEBUG: Report not found for ID: {report_id}")
                 self.send_error(404, "Report not found")
                 return
                 
-            report_data = result.data[0]
-            report_path = report_data.get('report_path')
+            report_path = result['report_path']
             print(f"DEBUG: Report path: {report_path}")
             
             if not report_path or not os.path.exists(report_path):
