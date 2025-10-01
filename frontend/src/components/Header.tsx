@@ -2,8 +2,7 @@ import { Button } from "./ui/button";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import { auth } from "../lib/auth";
+import { newAuth } from "../lib/auth_new";
 import logo from "../assets/images/logo.png"; // Импортируем логотип
 
 const Header = () => {
@@ -12,36 +11,28 @@ const Header = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Упрощенная проверка - по умолчанию не авторизован
-    setIsAuth(false);
-    
-    // Проверяем аутентификацию через Supabase Auth
-    supabase.auth.getUser().then(({ data }) => {
-      console.log('Supabase Auth check:', !!data.user);
-      if (data.user) {
-        setIsAuth(true);
+    // Проверяем аутентификацию через новую систему
+    const checkAuth = async () => {
+      try {
+        const user = await newAuth.getCurrentUser();
+        setIsAuth(!!user);
+      } catch (error) {
+        console.log('Auth check error:', error);
+        setIsAuth(false);
       }
-    });
+    };
     
-    // Проверяем аутентификацию через нашу систему
-    const currentUser = auth.getCurrentUser();
-    console.log('Local Auth check:', !!currentUser);
-    if (currentUser) {
-      setIsAuth(true);
-    }
-    
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', event, !!session?.user);
-      setIsAuth(!!session?.user);
-    });
-    return () => { listener?.subscription.unsubscribe(); };
+    checkAuth();
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    await auth.signOut();
-    setIsAuth(false);
-    navigate("/");
+    try {
+      await newAuth.signOut();
+      setIsAuth(false);
+      navigate("/");
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const navigation = [
