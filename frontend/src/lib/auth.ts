@@ -21,10 +21,27 @@ export class SimpleAuth {
 
   async signUp(email: string, password: string): Promise<{ user: User | null; error: any }> {
     try {
-      // Создаем пользователя в таблице Users
+      // Сначала создаем пользователя в Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { email }
+        }
+      });
+
+      if (authError || !authData.user) {
+        return { user: null, error: authError };
+      }
+
+      // Затем создаем запись в таблице Users с правильным Auth ID
       const { data, error } = await supabase
         .from('Users')
-        .insert({ email })
+        .insert({ 
+          id: authData.user.id,
+          email,
+          auth_id: authData.user.id  // ✅ Устанавливаем auth_id
+        })
         .select('*')
         .single();
 

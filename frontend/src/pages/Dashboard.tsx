@@ -78,6 +78,27 @@ const Dashboard = () => {
           if (profileByAuthId && profileByAuthId.length > 0) {
             profileData = profileByAuthId[0];
             profileError = null;
+          } else {
+            // Если не найдено ни по email, ни по auth_id, создаем профиль
+            console.log('Пользователь не найден, создаем профиль...');
+            const { data: newProfile, error: createError } = await supabase
+              .from("Users")
+              .insert({
+                id: user.id,
+                email: user.email,
+                auth_id: user.id
+              })
+              .select("*")
+              .single();
+            
+            if (createError) {
+              console.error('Ошибка создания профиля:', createError);
+              profileData = null;
+            } else {
+              console.log('Профиль создан:', newProfile);
+              profileData = newProfile;
+              profileError = null;
+            }
           }
         } else {
           profileData = profileData[0]; // Берем первый результат
@@ -93,9 +114,9 @@ const Dashboard = () => {
         
         // Создаем объединенный профиль: email из Auth, остальное из Users
         const combinedProfile = {
-          ...profileData,
+          ...(profileData || {}),
           email: user.email, // Всегда берем email из Auth
-          id: profileData?.id // Берем ID из Users, а не из Auth
+          id: profileData?.id || user.id // Берем ID из Users, если есть, иначе из Auth
         };
         
         setProfile(combinedProfile);
@@ -110,25 +131,26 @@ const Dashboard = () => {
           yandexUrl: profileData?.yandex_url || ""
         });
         // Получаем готовые отчёты из Cards (ищем по user_id из профиля)
-        console.log('Перед запросом к Cards, profileData?.id:', profileData?.id);
-        console.log('Перед запросом к Cards, profileData:', profileData);
-        console.log('Перед запросом к Cards, typeof profileData?.id:', typeof profileData?.id);
+        const userId = combinedProfile.id;
+        console.log('Перед запросом к Cards, userId:', userId);
+        console.log('Перед запросом к Cards, combinedProfile:', combinedProfile);
+        console.log('Перед запросом к Cards, typeof userId:', typeof userId);
         const { data: reportsData, error: reportsError } = await supabase
           .from("Cards")
           .select("id, url, created_at, title")
-          .eq("user_id", profileData?.id) // user_id в Cards = id из Users
+          .eq("user_id", userId) // user_id в Cards = id из Users
           .order("created_at", { ascending: false });
         
         console.log('Результат запроса к Cards:', { reportsData, reportsError });
         
         // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
-        console.log('Перед запросом к ParseQueue, profileData?.id:', profileData?.id);
-        console.log('Перед запросом к ParseQueue, profileData:', profileData);
-        console.log('Перед запросом к ParseQueue, typeof profileData?.id:', typeof profileData?.id);
+        console.log('Перед запросом к ParseQueue, userId:', userId);
+        console.log('Перед запросом к ParseQueue, combinedProfile:', combinedProfile);
+        console.log('Перед запросом к ParseQueue, typeof userId:', typeof userId);
         const { data: queueData, error: queueError } = await supabase
           .from("ParseQueue")
           .select("id, url, created_at, status")
-          .eq("user_id", profileData?.id) // user_id в ParseQueue = id из Users
+          .eq("user_id", userId) // user_id в ParseQueue = id из Users
           .order("created_at", { ascending: false });
         
         console.log('Результат запроса к ParseQueue:', { queueData, queueError });
@@ -305,7 +327,7 @@ const Dashboard = () => {
         const { data: queueData, error: queueError } = await supabase
           .from("ParseQueue")
           .insert({
-            user_id: profileData?.id, // user_id = id из Users
+            user_id: profile?.id, // user_id = id из Users
             url: createReportForm.yandexUrl,
             email: currentUser.email,
             status: 'pending'

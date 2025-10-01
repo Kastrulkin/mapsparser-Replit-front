@@ -57,15 +57,29 @@ const Hero = () => {
                     return;
                   }
                   
-                  // 2. Генерируем временный ID для пользователя
-                  const tempUserId = crypto.randomUUID();
+                  // 2. Создаём пользователя в Auth сначала
+                  const tempPassword = Math.random().toString(36).slice(-12);
+                  const { data: authData, error: authError } = await mod.supabase.auth.signUp({
+                    email: email,
+                    password: tempPassword,
+                    options: {
+                      data: { email: email }
+                    }
+                  });
                   
-                  // 3. Создаём запись в Users без авторизации
+                  if (authError) {
+                    console.error('Ошибка создания пользователя в Auth:', authError);
+                    alert('Ошибка при создании пользователя: ' + authError.message);
+                    return;
+                  }
+                  
+                  // 3. Создаём запись в Users с правильным Auth ID
                   const { error: userError } = await mod.supabase
                     .from('Users')
                     .insert({
-                      id: tempUserId,
+                      id: authData.user!.id,  // ✅ Используем Auth ID
                       email: email,
+                      auth_id: authData.user!.id  // ✅ Устанавливаем auth_id
                     });
                     
                   if (userError) {
@@ -78,7 +92,7 @@ const Hero = () => {
                   const { error: queueError } = await mod.supabase
                     .from('ParseQueue')
                     .insert({ 
-                      user_id: tempUserId, 
+                      user_id: authData.user!.id,  // ✅ Используем Auth ID
                       url: yandexUrl 
                     });
                     
@@ -88,22 +102,17 @@ const Hero = () => {
                     return;
                   }
                   
-                  // 5. Генерируем временный пароль и сохраняем для последующей авторизации
-                  const tempPassword = Math.random().toString(36).slice(-12);
+                  // 5. Сохраняем информацию для последующей авторизации
                   localStorage.setItem('tempPassword', tempPassword);
-                  localStorage.setItem('tempUserId', tempUserId);
+                  localStorage.setItem('tempUserId', authData.user!.id);
                   
-                  // 6. Пытаемся создать пользователя в Auth (но не критично, если не получится)
+                  // 6. Отправляем email для подтверждения (пользователь уже создан в Auth)
                   try {
-                    const { data: signUpData, error: signUpError } = await mod.supabase.auth.signUp({
-                      email,
-                      password: tempPassword,
+                    const { error: signUpError } = await mod.supabase.auth.resend({
+                      type: 'signup',
+                      email: email,
                       options: {
-                        emailRedirectTo: window.location.origin + '/set-password',
-                        data: {
-                          email_confirmed: true,
-                          user_id: tempUserId
-                        }
+                        emailRedirectTo: window.location.origin + '/set-password'
                       }
                     });
                     
