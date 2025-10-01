@@ -66,7 +66,8 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             return
         
         # Новый endpoint для просмотра отчёта в браузере
-        if self.path.startswith('/view-report/'):
+        # Поддерживаем оба пути: старый '/view-report/' и новый '/api/view-report/'
+        if self.path.startswith('/view-report/') or self.path.startswith('/api/view-report/'):
             print(f"DEBUG: Routing to view report handler")
             self.handle_view_report()
             return
