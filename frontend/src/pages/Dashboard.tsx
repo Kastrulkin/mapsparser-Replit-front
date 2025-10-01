@@ -235,9 +235,11 @@ const Dashboard = () => {
     setTimeout(() => setHasRecentInvite(false), 60 * 60 * 1000);
   };
 
-  const handleDownloadReport = async (reportId: string) => {
+  const handleDownloadReport = async (reportOrId: any) => {
     try {
-      const normalizedId = (reportId || "").replace(/_/g, "-");
+      const initialId: string = typeof reportOrId === 'string' ? reportOrId : (reportOrId?.id || '');
+      const initialUrl: string | undefined = typeof reportOrId === 'string' ? undefined : reportOrId?.url;
+      const normalizedId = (initialId || "").replace(/_/g, "-");
       // Получаем информацию об отчёте
       const { data: reportData, error } = await supabase
         .from("Cards")
@@ -256,7 +258,7 @@ const Dashboard = () => {
         const { data: alt } = await supabase
           .from("Cards")
           .select("id, report_path")
-          .eq("url", reportData.url)
+          .eq("url", reportData.url || initialUrl)
           .not("report_path", "is", null)
           .order("created_at", { ascending: false })
           .limit(1);
