@@ -783,7 +783,7 @@ const Dashboard = () => {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => handleViewReport(report.id)}
+                          onClick={() => handleViewReport(report)}
                           disabled={loadingReport}
                         >
                           {loadingReport ? 'Загрузка...' : (viewingReport === report.id ? 'Закрыть' : 'Просмотр')}
@@ -791,7 +791,7 @@ const Dashboard = () => {
                         <Button 
                           variant="default" 
                           size="sm"
-                          onClick={() => handleDownloadReport(report.id)}
+                          onClick={() => handleDownloadReport(report)}
                         >
                           Скачать
                         </Button>
