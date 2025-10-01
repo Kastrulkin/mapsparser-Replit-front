@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { newAuth } from '@/lib/auth_new';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Hero from '@/components/Hero';
 import Features from '@/components/Features';
@@ -16,27 +16,20 @@ const Index = () => {
   useEffect(() => {
     // Проверяем авторизацию при загрузке страницы
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Если пользователь авторизован, перенаправляем в личный кабинет
-        navigate('/dashboard');
-        return;
+      try {
+        const user = await newAuth.getCurrentUser();
+        if (user) {
+          // Если пользователь авторизован, перенаправляем в личный кабинет
+          navigate('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.log('User not authenticated');
       }
       setLoading(false);
     };
 
     checkAuth();
-
-    // Слушаем изменения авторизации
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        navigate('/dashboard');
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, [navigate]);
 
   // Обработка хэшей для навигации
