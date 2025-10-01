@@ -2,18 +2,17 @@
 download_server.py — Простой веб-сервер для скачивания отчётов
 """
 import os
+import sqlite3
 from flask import Flask, send_file, jsonify, Response
-from supabase import create_client, Client
-from dotenv import load_dotenv
-
-load_dotenv()
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 
-# Инициализация Supabase
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')  # Используем SUPABASE_KEY вместо SUPABASE_SERVICE_ROLE_KEY
-supabase: Client = create_client(supabase_url, supabase_key)
+def get_db_connection():
+    """Получить соединение с SQLite базой данных"""
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/api/download-report/<card_id>', methods=['GET'])
 def download_report(card_id):
@@ -21,14 +20,20 @@ def download_report(card_id):
     Скачивание HTML отчёта по ID карточки
     """
     try:
-        # Получаем данные карточки
-        response = supabase.table("Cards").select("report_path, user_id, title").eq("id", card_id).execute()
+        # Нормализуем ID
+        normalized_id = card_id.replace('_', '-')
         
-        if not response.data:
+        # Получаем данные карточки из SQLite
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        card_data = cursor.fetchone()
+        conn.close()
+        
+        if not card_data:
             return jsonify({"error": "Отчёт не найден"}), 404
         
-        card_data = response.data[0]
-        report_path = card_data.get('report_path')
+        report_path = card_data['report_path']
         
         if not report_path:
             return jsonify({"error": "Отчёт ещё не сгенерирован"}), 404
@@ -83,14 +88,20 @@ def view_report(card_id):
     Просмотр HTML отчёта в браузере
     """
     try:
-        # Получаем данные карточки
-        response = supabase.table("Cards").select("report_path, user_id, title").eq("id", card_id).execute()
+        # Нормализуем ID
+        normalized_id = card_id.replace('_', '-')
         
-        if not response.data:
+        # Получаем данные карточки из SQLite
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        card_data = cursor.fetchone()
+        conn.close()
+        
+        if not card_data:
             return jsonify({"error": "Отчёт не найден"}), 404
         
-        card_data = response.data[0]
-        report_path = card_data.get('report_path')
+        report_path = card_data['report_path']
         
         if not report_path:
             return jsonify({"error": "Отчёт ещё не сгенерирован"}), 404
@@ -119,21 +130,27 @@ def report_status(card_id):
     Проверка статуса отчёта
     """
     try:
-        response = supabase.table("Cards").select("report_path, title, seo_score, ai_analysis").eq("id", card_id).execute()
+        # Нормализуем ID
+        normalized_id = card_id.replace('_', '-')
         
-        if not response.data:
+        # Получаем данные карточки из SQLite
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        card_data = cursor.fetchone()
+        conn.close()
+        
+        if not card_data:
             return jsonify({"error": "Отчёт не найден"}), 404
-        
-        card_data = response.data[0]
         
         return jsonify({
             "success": True,
             "card_id": card_id,
-            "title": card_data.get('title'),
-            "seo_score": card_data.get('seo_score'),
-            "has_report": bool(card_data.get('report_path')),
-            "has_ai_analysis": bool(card_data.get('ai_analysis')),
-            "report_path": card_data.get('report_path')
+            "title": card_data['title'],
+            "seo_score": card_data['seo_score'],
+            "has_report": bool(card_data['report_path']),
+            "has_ai_analysis": bool(card_data['ai_analysis']),
+            "report_path": card_data['report_path']
         })
         
     except Exception as e:

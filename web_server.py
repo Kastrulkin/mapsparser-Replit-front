@@ -92,6 +92,11 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             # Extract report ID from URL
             report_id = self.path.split('/')[-1]
             print(f"DEBUG: Extracted report ID: {report_id}")
+            # Normalize incoming id and prepare alternative forms
+            normalized_id = report_id.replace('_', '-')
+            underscored_id = report_id.replace('-', '_')
+            print(f"DEBUG: Normalized report ID: {normalized_id}")
+            print(f"DEBUG: Underscored report ID: {underscored_id}")
             
             # Get report information from database
             print(f"DEBUG: Checking Supabase initialization")
@@ -101,16 +106,23 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 return
             
             print(f"DEBUG: Supabase initialized, querying database")
-            result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
+            # Fetch original card by either ID variant
+            result = (
+                supabase
+                .table("Cards")
+                .select("id, url, report_path, title, status, created_at")
+                .in_("id", [normalized_id, underscored_id])
+                .execute()
+            )
             print(f"DEBUG: Database query result: {result}")
             
             if not result.data:
-                print(f"DEBUG: No data found in database for ID: {report_id}")
+                print(f"DEBUG: No data found in database for IDs: {normalized_id} | {underscored_id}")
                 self.send_error(404, "Report not found")
                 return
             
             print(f"DEBUG: Found data in database: {result.data}")
-                
+
             report_data = result.data[0]
             report_path = report_data.get('report_path')
             title = report_data.get('title', 'report')
@@ -119,7 +131,27 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             print(f"DEBUG: Title from DB: {title}")
             print(f"DEBUG: Report path is None: {report_path is None}")
             print(f"DEBUG: Report path is empty: {report_path == ''}")
-            
+
+            # Backend fallback: if current card has no file yet, try latest completed by same URL
+            if (not report_path) and report_data.get('url'):
+                print("DEBUG: Current report has no report_path. Trying fallback by URL...")
+                fb = (
+                    supabase
+                    .table("Cards")
+                    .select("id, report_path, title, created_at")
+                    .eq("url", report_data.get('url'))
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                print(f"DEBUG: Fallback query result: {fb}")
+                if fb.data and fb.data[0].get('report_path'):
+                    report_path = fb.data[0]['report_path']
+                    title = fb.data[0].get('title', title)
+                    print(f"DEBUG: Using fallback report_path: {report_path}")
+                else:
+                    print("DEBUG: Fallback not found or has no report_path")
+
             if not report_path or not os.path.exists(report_path):
                 print(f"DEBUG: Report file not found: {report_path}")
                 self.send_error(404, "Report file not found")
@@ -228,6 +260,11 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             # Extract report ID from URL
             report_id = self.path.split('/')[-1]
             print(f"DEBUG: Extracted report ID: {report_id}")
+            # Normalize incoming id and prepare alternative forms
+            normalized_id = report_id.replace('_', '-')
+            underscored_id = report_id.replace('-', '_')
+            print(f"DEBUG: Normalized report ID: {normalized_id}")
+            print(f"DEBUG: Underscored report ID: {underscored_id}")
             
             # Get report information from database
             if not supabase:
@@ -236,11 +273,17 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
                 return
                 
             print(f"DEBUG: Querying database for report")
-            result = supabase.table("Cards").select("report_path, title").eq("id", report_id).execute()
+            result = (
+                supabase
+                .table("Cards")
+                .select("id, url, report_path, title, status, created_at")
+                .in_("id", [normalized_id, underscored_id])
+                .execute()
+            )
             print(f"DEBUG: Database query result: {result}")
             
             if not result.data:
-                print(f"DEBUG: No data found in database for ID: {report_id}")
+                print(f"DEBUG: No data found in database for IDs: {normalized_id} | {underscored_id}")
                 self.send_error(404, "Report not found")
                 return
                 
@@ -249,7 +292,27 @@ class AutoRefreshHandler(http.server.SimpleHTTPRequestHandler):
             title = report_data.get('title', 'report')
             print(f"DEBUG: Report path from DB: {report_path}")
             print(f"DEBUG: Title from DB: {title}")
-            
+
+            # Backend fallback: if current card has no file yet, try latest completed by same URL
+            if (not report_path) and report_data.get('url'):
+                print("DEBUG: Current report has no report_path. Trying fallback by URL...")
+                fb = (
+                    supabase
+                    .table("Cards")
+                    .select("id, report_path, title, created_at")
+                    .eq("url", report_data.get('url'))
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                print(f"DEBUG: Fallback query result: {fb}")
+                if fb.data and fb.data[0].get('report_path'):
+                    report_path = fb.data[0]['report_path']
+                    title = fb.data[0].get('title', title)
+                    print(f"DEBUG: Using fallback report_path: {report_path}")
+                else:
+                    print("DEBUG: Fallback not found or has no report_path")
+
             if not report_path or not os.path.exists(report_path):
                 print(f"DEBUG: Report file not found: {report_path}")
                 self.send_error(404, "Report file not found")
