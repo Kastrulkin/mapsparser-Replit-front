@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
-
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { newAuth } from "@/lib/auth_new";
 import InviteFriendForm from "@/components/InviteFriendForm";
 
 function getNextReportDate(reports: any[]) {
   if (!reports.length) return null;
-  // Фильтруем только завершённые отчёты для расчёта времени
-  const completedReports = reports.filter(report => report.status === 'completed');
+  const completedReports = reports.filter(report => report.has_report);
   if (!completedReports.length) return null;
   const last = new Date(completedReports[0].created_at);
   return new Date(last.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -26,8 +24,8 @@ function getCountdownString(date: Date) {
 
 const Dashboard = () => {
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
   const [reports, setReports] = useState<any[]>([]);
+  const [queue, setQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState({ email: "", phone: "", name: "", yandexUrl: "" });
@@ -38,811 +36,429 @@ const Dashboard = () => {
   const [viewingReport, setViewingReport] = useState<string | null>(null);
   const [reportContent, setReportContent] = useState<string>("");
   const [loadingReport, setLoadingReport] = useState(false);
-  const [invites, setInvites] = useState<any[]>([]);
   const [showCreateReport, setShowCreateReport] = useState(false);
   const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
   const [creatingReport, setCreatingReport] = useState(false);
-  const [hasRecentInvite, setHasRecentInvite] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      console.log('Состояние авторизации:', { user, authError });
-      setUser(user);
-      if (user) {
-        console.log('Загружаем профиль для пользователя:', user.id);
-        console.log('Email пользователя:', user.email);
+      try {
+        // Получаем текущего пользователя
+        const currentUser = await newAuth.getCurrentUser();
+        console.log('Текущий пользователь:', currentUser);
         
-        // Ищем профиль по email (самый надежный способ)
-        console.log('Пытаемся найти профиль по email:', user.email);
-        console.log('Текущий пользователь:', user);
-        
-        let { data: profileData, error: profileError } = await supabase
-          .from("Users")
-          .select("*")
-          .eq("email", user.email);
-        
-        console.log('Результат поиска профиля:', { profileData, profileError });
-        
-        // Если не найдено по email, пробуем по auth_id
-        if (!profileData || profileData.length === 0) {
-          console.log('Не найдено по email, пробуем по auth_id:', user.id);
-          const { data: profileByAuthId, error: authIdError } = await supabase
-            .from("Users")
-            .select("*")
-            .eq("auth_id", user.id);
-          
-          console.log('Результат поиска по auth_id:', { profileByAuthId, authIdError });
-          
-          if (profileByAuthId && profileByAuthId.length > 0) {
-            profileData = profileByAuthId[0];
-            profileError = null;
-          } else {
-            // Если не найдено ни по email, ни по auth_id, создаем профиль
-            console.log('Пользователь не найден, создаем профиль...');
-            const { data: newProfile, error: createError } = await supabase
-              .from("Users")
-              .insert({
-                id: user.id,
-                email: user.email,
-                auth_id: user.id
-              })
-              .select("*")
-              .single();
-            
-            if (createError) {
-              console.error('Ошибка создания профиля:', createError);
-              profileData = null;
-            } else {
-              console.log('Профиль создан:', newProfile);
-              profileData = newProfile;
-              profileError = null;
-            }
-          }
-        } else {
-          profileData = profileData[0]; // Берем первый результат
-        }
-        
-        if (profileError) {
-          console.error('Ошибка загрузки профиля:', profileError);
-        } else {
-          console.log('Профиль загружен:', profileData);
-          console.log('profileData?.id:', profileData?.id);
-          console.log('user.id:', user.id);
-        }
-        
-        // Создаем объединенный профиль: email из Auth, остальное из Users
-        const combinedProfile = {
-          ...(profileData || {}),
-          email: user.email, // Всегда берем email из Auth
-          id: profileData?.id || user.id // Берем ID из Users, если есть, иначе из Auth
-        };
-        
-        setProfile(combinedProfile);
-        setForm({
-          email: user.email || "", // Email из Auth
-          phone: profileData?.phone || "",
-          name: profileData?.name || "",
-          yandexUrl: profileData?.yandex_url || ""
-        });
-        // Автозаполняем форму создания отчёта
-        setCreateReportForm({
-          yandexUrl: profileData?.yandex_url || ""
-        });
-        // Получаем готовые отчёты из Cards (ищем по user_id из профиля)
-        const userId = combinedProfile.id;
-        console.log('Перед запросом к Cards, userId:', userId);
-        console.log('Перед запросом к Cards, combinedProfile:', combinedProfile);
-        console.log('Перед запросом к Cards, typeof userId:', typeof userId);
-        const { data: reportsData, error: reportsError } = await supabase
-          .from("Cards")
-          .select("id, url, created_at, title")
-          .eq("user_id", userId) // user_id в Cards = id из Users
-          .order("created_at", { ascending: false });
-        
-        console.log('Результат запроса к Cards:', { reportsData, reportsError });
-        
-        // Получаем отчёты в обработке из ParseQueue (ищем по user_id из профиля)
-        console.log('Перед запросом к ParseQueue, userId:', userId);
-        console.log('Перед запросом к ParseQueue, combinedProfile:', combinedProfile);
-        console.log('Перед запросом к ParseQueue, typeof userId:', typeof userId);
-        const { data: queueData, error: queueError } = await supabase
-          .from("ParseQueue")
-          .select("id, url, created_at, status")
-          .eq("user_id", userId) // user_id в ParseQueue = id из Users
-          .order("created_at", { ascending: false });
-        
-        console.log('Результат запроса к ParseQueue:', { queueData, queueError });
-        
-        // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
-        const allReports = [
-          ...(reportsData || []).map(report => ({ ...report, status: 'completed', source: 'cards' })),
-          ...(queueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
-        ];
-        
-        setReports(allReports);
-      }
-      setLoading(false);
-    };
-    fetchData();
-  }, [inviteSuccess]);
-
-  useEffect(() => {
-    if (!reports.length) return;
-    const next = getNextReportDate(reports);
-    if (!next) return setTimer(null);
-    const update = () => {
-      const str = getCountdownString(next);
-      setTimer(str);
-    };
-    update();
-    const interval = setInterval(update, 60000);
-    return () => clearInterval(interval);
-  }, [reports]);
-
-  useEffect(() => {
-    const fetchInvites = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from("Invites")
-        .select("*")
-        .eq("inviter_id", user.id);
-      setInvites(data || []);
-    };
-    fetchInvites();
-  }, [user, inviteSuccess]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSave = async () => {
-    setError(null);
-    setSuccess(null);
-    const { error } = await supabase
-      .from("Users")
-      .update({
-        email: form.email,
-        phone: form.phone,
-        name: form.name,
-        yandex_url: form.yandexUrl
-      })
-      .eq("id", user.id);
-    if (error) {
-      setError("Ошибка при сохранении данных");
-    } else {
-      setSuccess("Данные успешно обновлены");
-      setEditMode(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm("Вы уверены, что хотите удалить аккаунт? Это действие необратимо.")) return;
-    await supabase.from("Users").delete().eq("id", user.id);
-    await supabase.auth.signOut();
-    window.location.href = "/";
-  };
-
-  const handleCreateReportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCreateReportForm({ ...createReportForm, [e.target.name]: e.target.value });
-  };
-
-  const handleInviteSuccess = () => {
-    setHasRecentInvite(true);
-    setInviteSuccess(s => !s);
-    // Сбрасываем флаг через 1 час
-    setTimeout(() => setHasRecentInvite(false), 60 * 60 * 1000);
-  };
-
-  const handleDownloadReport = async (reportOrId: any) => {
-    try {
-      const initialId: string = typeof reportOrId === 'string' ? reportOrId : (reportOrId?.id || '');
-      const initialUrl: string | undefined = typeof reportOrId === 'string' ? undefined : reportOrId?.url;
-      const normalizedId = (initialId || "").replace(/_/g, "-");
-      // Получаем информацию об отчёте
-      const { data: reportData, error } = await supabase
-        .from("Cards")
-        .select("report_path, title, url")
-        .eq("id", normalizedId)
-        .single();
-
-      if (error || !reportData) {
-        setError("Отчёт не найден");
-        return;
-      }
-
-      // Если для этой карточки нет файла, пробуем найти самый свежий отчёт по той же ссылке/названию
-      let targetId = normalizedId;
-      if (!reportData.report_path) {
-        const { data: alt } = await supabase
-          .from("Cards")
-          .select("id, report_path")
-          .eq("url", reportData.url || initialUrl)
-          .not("report_path", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (alt && alt.length > 0) {
-          targetId = alt[0].id;
-        } else {
-          setError("Отчёт ещё не сгенерирован");
+        if (!currentUser) {
+          console.log('Пользователь не авторизован');
+          setLoading(false);
           return;
         }
+
+        setUser(currentUser);
+        setForm({
+          email: currentUser.email || "",
+          phone: currentUser.phone || "",
+          name: currentUser.name || "",
+          yandexUrl: ""
+        });
+
+        // Получаем отчёты пользователя
+        const { reports: userReports, error: reportsError } = await newAuth.getUserReports();
+        if (reportsError) {
+          console.error('Ошибка загрузки отчётов:', reportsError);
+        } else {
+          console.log('Отчёты загружены:', userReports);
+          setReports(userReports || []);
+        }
+
+        // Получаем очередь пользователя
+        const { queue: userQueue, error: queueError } = await newAuth.getUserQueue();
+        if (queueError) {
+          console.error('Ошибка загрузки очереди:', queueError);
+        } else {
+          console.log('Очередь загружена:', userQueue);
+          setQueue(userQueue || []);
+        }
+
+        // Автозаполняем форму создания отчёта
+        setCreateReportForm({
+          yandexUrl: ""
+        });
+
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        setError('Ошибка загрузки данных');
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // Используем новый эндпоинт для скачивания с правильными заголовками
-      const downloadUrl = `https://beautybot.pro/api/download-report/${targetId}`;
-      
-      // Создаём временную ссылку и скачиваем файл
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `seo_report_${reportData.title || targetId}.html`;
-      link.target = '_blank'; // Открываем в новой вкладке для безопасности
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    fetchData();
+  }, []);
 
-      setSuccess("Отчёт скачивается...");
-    } catch (error: any) {
-      setError("Ошибка при скачивании отчёта: " + error.message);
+  useEffect(() => {
+    const nextDate = getNextReportDate(reports);
+    if (nextDate) {
+      const updateTimer = () => {
+        const countdown = getCountdownString(nextDate);
+        setTimer(countdown);
+        if (!countdown) {
+          // Время истекло, обновляем данные
+          window.location.reload();
+        }
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 60000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [reports]);
 
-  const handleViewReport = async (reportOrId: any) => {
-    const initialId: string = typeof reportOrId === 'string' ? reportOrId : (reportOrId?.id || '');
-    const initialUrl: string | undefined = typeof reportOrId === 'string' ? undefined : reportOrId?.url;
-    if (viewingReport === initialId) {
-      setViewingReport(null);
-      setReportContent("");
-      return;
-    }
-
+  const handleViewReport = async (reportId: string) => {
     setLoadingReport(true);
     try {
-      const normalizedId = (initialId || "").replace(/_/g, "-");
-      // Пытаемся получить info по id (мог быть неверный id из UI)
-      const { data: cardInfo } = normalizedId
-        ? await supabase
-            .from("Cards")
-            .select("id, url, title, report_path")
-            .eq("id", normalizedId)
-            .single()
-        : { data: null } as any;
-      // Используем новый эндпоинт для просмотра с правильными заголовками
-      let response = await fetch(`https://beautybot.pro/api/view-report/${normalizedId}`);
-      
-      // Если не найдено (например, новый дубль по той же ссылке), пробуем взять последний готовый отчёт по той же URL
-      const candidateUrl = cardInfo?.url || initialUrl;
-      if (!response.ok && response.status === 404 && candidateUrl) {
-        const { data: alt } = await supabase
-          .from("Cards")
-          .select("id")
-          .eq("url", candidateUrl)
-          .not("report_path", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (alt && alt.length > 0) {
-          const fallbackId = alt[0].id as string;
-          response = await fetch(`https://beautybot.pro/api/view-report/${fallbackId}`);
-          // Переключим текущий просматриваемый ID на найденный
-          setViewingReport(fallbackId);
-        }
+      const response = await fetch(`https://beautybot.pro/api/view-report/${reportId}`);
+      if (response.ok) {
+        const content = await response.text();
+        setReportContent(content);
+        setViewingReport(reportId);
+      } else {
+        setError('Ошибка загрузки отчёта');
       }
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
-      const content = await response.text();
-      setReportContent(content);
-      if (!viewingReport) setViewingReport(normalizedId || initialId);
-    } catch (error: any) {
-      setError("Ошибка при загрузке отчёта: " + error.message);
+    } catch (error) {
+      console.error('Ошибка просмотра отчёта:', error);
+      setError('Ошибка загрузки отчёта');
     } finally {
       setLoadingReport(false);
     }
   };
 
+  const handleDownloadReport = async (reportId: string) => {
+    try {
+      const response = await fetch(`https://beautybot.pro/api/download-report/${reportId}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `seo_report_${reportId}.html`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        setError('Ошибка скачивания отчёта');
+      }
+    } catch (error) {
+      console.error('Ошибка скачивания отчёта:', error);
+      setError('Ошибка скачивания отчёта');
+    }
+  };
+
   const handleCreateReport = async () => {
-    if (!createReportForm.yandexUrl) {
-      setError("Пожалуйста, укажите ссылку на бизнес");
+    if (!createReportForm.yandexUrl.trim()) {
+      setError('Введите URL Яндекс.Карт');
       return;
     }
 
     setCreatingReport(true);
     setError(null);
-    setSuccess(null);
 
     try {
-      console.log('Создание отчёта:', {
-        user_id: user?.id,
-        url: createReportForm.yandexUrl,
-        email: user?.email
-      });
-
-      // Проверяем авторизацию
-      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
-      if (authError || !currentUser) {
-        throw new Error('Пользователь не авторизован');
+      const { queue_id, error } = await newAuth.addToQueue(createReportForm.yandexUrl);
+      
+      if (error) {
+        setError(error);
+      } else {
+        setSuccess('Отчёт добавлен в очередь обработки');
+        setShowCreateReport(false);
+        setCreateReportForm({ yandexUrl: "" });
+        
+        // Обновляем данные
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
-
-      console.log('Пользователь авторизован:', currentUser.id);
-
-              // Создаём новую запись в таблице ParseQueue для обработки
-        const { data: queueData, error: queueError } = await supabase
-          .from("ParseQueue")
-          .insert({
-            user_id: profile?.id, // user_id = id из Users
-            url: createReportForm.yandexUrl,
-            email: currentUser.email,
-            status: 'pending'
-          })
-          .select()
-          .single();
-
-      console.log('Результат создания записи:', { queueData, queueError });
-
-      if (queueError) {
-        throw queueError;
-      }
-
-      // Обновляем профиль пользователя с новой ссылкой
-      await supabase
-        .from("Users")
-        .update({ yandex_url: createReportForm.yandexUrl })
-        .eq("id", user.id);
-
-      setSuccess("Запрос на создание отчёта отправлен! Обработка займёт в среднем около дня, т.к. все отчёты проверяются человеком.");
-      setShowCreateReport(false);
-      
-      // Обновляем список отчётов (готовые отчёты из Cards)
-      const { data: reportsData } = await supabase
-        .from("Cards")
-        .select("id, url, created_at")
-        .eq("user_id", profileData?.id) // user_id = id из Users
-        .order("created_at", { ascending: false });
-      
-      // Получаем отчёты в обработке из ParseQueue
-      const { data: updatedQueueData } = await supabase
-        .from("ParseQueue")
-        .select("id, url, created_at, status")
-        .eq("user_id", profileData?.id) // user_id = id из Users
-        .order("created_at", { ascending: false });
-      
-      // Объединяем отчёты: сначала готовые из Cards, потом в обработке из ParseQueue
-      const allReports = [
-        ...(reportsData || []).map(report => ({ ...report, status: 'completed', source: 'cards' })),
-        ...(updatedQueueData || []).map(report => ({ ...report, status: report.status || 'pending', source: 'queue' }))
-      ];
-      
-      setReports(allReports);
-
-    } catch (error: any) {
-      setError(error.message || "Ошибка при создании отчёта");
+    } catch (error) {
+      console.error('Ошибка создания отчёта:', error);
+      setError('Ошибка создания отчёта');
     } finally {
       setCreatingReport(false);
     }
   };
 
-  // Проверяем, есть ли отчёты в обработке
-  const hasPendingReports = reports.some(report => report.status === 'pending' || report.status === 'processing');
-  
-  const canCreateReport = (!reports.length || (getNextReportDate(reports) && new Date() >= getNextReportDate(reports)) || hasRecentInvite) && !hasPendingReports;
+  const handleUpdateProfile = async () => {
+    try {
+      const { user: updatedUser, error } = await newAuth.updateProfile({
+        name: form.name,
+        phone: form.phone
+      });
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Загрузка...</div>;
+      if (error) {
+        setError(error);
+      } else {
+        setSuccess('Профиль обновлён');
+        setEditMode(false);
+        if (updatedUser) {
+          setUser(updatedUser);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка обновления профиля:', error);
+      setError('Ошибка обновления профиля');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await newAuth.signOut();
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Ошибка выхода:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Доступ запрещён</h1>
+          <p className="text-gray-600 mb-6">Необходима авторизация</p>
+          <Button onClick={() => window.location.href = '/login'}>
+            Войти
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Hero Section */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/5 opacity-30" />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-            Личный <span className="text-primary">кабинет</span>
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Управляйте своими данными, отчётами и подпиской
-          </p>
-        </div>
-      </section>
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16 -mt-8">
-        {/* Profile Data */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8 mb-8">
-          <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
+            <Button onClick={handleLogout} variant="outline">
+              Выйти
+            </Button>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
             </div>
-            Данные аккаунта
-          </h2>
-          {editMode ? (
-            <div className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                  <input 
-                    type="email" 
-                    name="email" 
-                    value={form.email} 
-                    onChange={handleChange} 
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Телефон</label>
-                  <input 
-                    type="text" 
-                    name="phone" 
-                    value={form.phone} 
-                    onChange={handleChange} 
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
-                  />
-                </div>
-              </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
+              {success}
+            </div>
+          )}
+
+          {/* Профиль пользователя */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Профиль</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Имя</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  value={form.name} 
-                  onChange={handleChange} 
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Ссылка на организацию (Яндекс.Карты)</label>
-                <input 
-                  type="url" 
-                  name="yandexUrl" 
-                  value={form.yandexUrl} 
-                  onChange={handleChange} 
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Имя</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({...form, name: e.target.value})}
+                  disabled={!editMode}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
-              {error && <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-lg">{error}</div>}
-              {success && <div className="text-green-600 text-sm bg-green-50 px-4 py-2 rounded-lg">{success}</div>}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button onClick={handleSave} className="flex-1">Сохранить изменения</Button>
-                <Button variant="outline" onClick={() => setEditMode(false)} className="flex-1">Отмена</Button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({...form, phone: e.target.value})}
+                  disabled={!editMode}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-b border-border/50">
-                    <span className="text-sm font-medium text-muted-foreground">Email:</span>
-                    <span className="text-foreground">{profile?.email || "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-3 border-b border-border/50">
-                    <span className="text-sm font-medium text-muted-foreground">Телефон:</span>
-                    <span className="text-foreground">{profile?.phone || "—"}</span>
-                  </div>
+            <div className="mt-4">
+              {editMode ? (
+                <div className="flex gap-2">
+                  <Button onClick={handleUpdateProfile}>Сохранить</Button>
+                  <Button onClick={() => setEditMode(false)} variant="outline">Отмена</Button>
                 </div>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-b border-border/50">
-                    <span className="text-sm font-medium text-muted-foreground">Имя:</span>
-                    <span className="text-foreground">{profile?.name || "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-3 border-b border-border/50">
-                    <span className="text-sm font-medium text-muted-foreground">Ссылка на бизнес:</span>
-                    <span className="text-foreground break-all">{profile?.yandex_url || "—"}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button onClick={() => setEditMode(true)} variant="outline" className="flex-1">Изменить данные</Button>
-                <Button variant="destructive" onClick={handleDelete} className="flex-1">Удалить аккаунт</Button>
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Invites List */}
-        <div className="bg-card/80 rounded-3xl shadow-xl border p-8 mb-8">
-          <h2 className="text-2xl font-bold mb-4">Мои приглашённые</h2>
-          {invites.length === 0 ? (
-            <div>Пока нет приглашённых.</div>
-          ) : (
-            <ul>
-              {invites.map(invite => (
-                <li key={invite.id}>
-                  {invite.friend_email} — {invite.used ? "Принято" : "Ожидает"}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {/* Report Generation и Contact Us теперь друг под другом */}
-        <div className="space-y-8">
-          {/* Report Generation */}
-          <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8">
-            <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path fillRule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 102 0V3h4v1a1 1 0 102 0V3a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm2.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm2.45.75a2.5 2.5 0 10-4.9 0h4.9zM12 9a1 1 0 100-2 1 1 0 000 2zm-2 3a1 1 0 100-2 1 1 0 000 2zm2 1a1 1 0 100-2 1 1 0 000 2zm2-3a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                </svg>
-              </div>
-              Создание отчётов
-            </h2>
-            <div className="space-y-6">
-              {/* Timer Display - Always Visible */}
-              <div className="text-center p-8 bg-gradient-to-br from-background/50 to-muted/20 rounded-3xl border border-border/20">
-                <h3 className="text-lg font-semibold text-foreground mb-4">
-                  {canCreateReport ? 'Отчёт готов к созданию' : 'До следующего отчёта'}
-                </h3>
-                <div className={`text-6xl md:text-7xl font-bold tracking-tight mb-2 ${
-                  canCreateReport 
-                    ? 'text-green-500' 
-                    : 'text-red-500'
-                }`}>
-                  {canCreateReport ? '00:00:00' : timer || '00:00:00'}
-                </div>
-                <div className="flex justify-center gap-2 text-sm text-muted-foreground">
-                  <span className="px-3 py-1 bg-muted/20 rounded-lg">
-                    {canCreateReport ? 'Дни' : 'Дни'}
-                  </span>
-                  <span className="px-3 py-1 bg-muted/20 rounded-lg">
-                    {canCreateReport ? 'Часы' : 'Часы'}
-                  </span>
-                  <span className="px-3 py-1 bg-muted/20 rounded-lg">
-                    {canCreateReport ? 'Минуты' : 'Минуты'}
-                  </span>
-                </div>
-              </div>
-              {/* Create Report Form - When Available */}
-              {canCreateReport && (
-                <div className="text-center p-6 bg-gradient-to-br from-green-500/10 to-green-600/20 rounded-2xl border border-green-500/20">
-                  <div className="w-16 h-16 bg-green-500/20 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2">Отчёт доступен</h3>
-                  <p className="text-muted-foreground mb-4">Вы можете сформировать новый SEO отчёт</p>
-                  
-                  {!showCreateReport ? (
-                    <Button 
-                      size="lg" 
-                      className="w-full animate-pulse"
-                      onClick={() => setShowCreateReport(true)}
-                    >
-                      Сформировать новый отчёт
-                    </Button>
-                  ) : (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2 text-left">
-                          Ссылка на бизнес (Яндекс.Карты)
-                        </label>
-                        <input 
-                          type="url" 
-                          name="yandexUrl" 
-                          value={createReportForm.yandexUrl} 
-                          onChange={handleCreateReportChange} 
-                          placeholder="https://yandex.ru/maps/org/..."
-                          className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200" 
-                        />
-                      </div>
-                      {error && <div className="text-destructive text-sm bg-destructive/10 px-4 py-2 rounded-lg">{error}</div>}
-                      {success && <div className="text-green-600 text-sm bg-green-50 px-4 py-2 rounded-lg">{success}</div>}
-                      <div className="flex gap-3">
-                        <Button 
-                          size="lg" 
-                          className="flex-1"
-                          onClick={handleCreateReport}
-                          disabled={creatingReport}
-                        >
-                          {creatingReport ? 'Создание...' : 'Создать отчёт'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="lg"
-                          onClick={() => setShowCreateReport(false)}
-                          disabled={creatingReport}
-                        >
-                          Отмена
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              ) : (
+                <Button onClick={() => setEditMode(true)}>Редактировать</Button>
               )}
-              {/* Invite Friend Form - When Timer is Running */}
-              {!canCreateReport && (
-                <div className="border-t border-border/20 pt-6">
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-primary/20 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Хотите отчёт раньше?</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Пригласите друга и получите возможность создать отчёт досрочно
+            </div>
+          </div>
+
+          {/* Создание отчёта */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Создать отчёт</h2>
+            {!showCreateReport ? (
+              <Button onClick={() => setShowCreateReport(true)}>
+                Создать новый отчёт
+              </Button>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    URL страницы Яндекс.Карт
+                  </label>
+                  <input
+                    type="url"
+                    value={createReportForm.yandexUrl}
+                    onChange={(e) => setCreateReportForm({...createReportForm, yandexUrl: e.target.value})}
+                    placeholder="https://yandex.ru/maps/org/..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleCreateReport} disabled={creatingReport}>
+                    {creatingReport ? 'Создание...' : 'Создать отчёт'}
+                  </Button>
+                  <Button onClick={() => setShowCreateReport(false)} variant="outline">
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Таймер следующего отчёта */}
+          {timer && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6">
+              <p className="font-medium">Следующий отчёт можно создать через: {timer}</p>
+            </div>
+          )}
+
+          {/* Очередь обработки */}
+          {queue.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">В обработке</h2>
+              <div className="space-y-2">
+                {queue.map((item) => (
+                  <div key={item.id} className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <p className="text-sm text-gray-600">URL: {item.url}</p>
+                    <p className="text-sm text-gray-600">Статус: {item.status}</p>
+                    <p className="text-sm text-gray-600">
+                      Создан: {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
-                  <InviteFriendForm onSuccess={handleInviteSuccess} />
-                </div>
-              )}
-            </div>
-          </div>
-          {/* Contact Us */}
-          <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8">
-            <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                </svg>
+                ))}
               </div>
-              Связаться с нами
-            </h2>
-            <div className="space-y-6">
-              <div className="text-center p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/20">
-                <h3 className="text-lg font-semibold text-foreground mb-2">Нужно больше?</h3>
-                <p className="text-muted-foreground mb-4">
-                  Перейдите на платный тариф и получите полную автоматизацию с ИИ агентами
-                </p>
-                <Button 
-                  size="lg" 
-                  className="w-full"
-                  onClick={() => window.location.href = '/#cta'}
-                >
-                  Узнать о тарифах
-                </Button>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-4 bg-muted/10 rounded-xl">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-muted-foreground">Агент администратор</span>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/10 rounded-xl">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-muted-foreground">Агент привлечения клиентов</span>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/10 rounded-xl">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-muted-foreground">Персональный менеджер</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Reports History */}
-        <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8 mt-8">
-          <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-              </svg>
-            </div>
-            История отчётов
-          </h2>
-          {reports.length === 0 ? (
-            <div className="text-center p-12">
-              <div className="w-16 h-16 bg-muted/20 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                <svg className="w-8 h-8 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V4H6z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">Отчётов пока нет</h3>
-              <p className="text-muted-foreground">Создайте свой первый SEO отчёт, чтобы увидеть его здесь</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {reports.map((report) => (
-                <div key={report.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 bg-muted/5 rounded-2xl border border-border/20 hover:bg-muted/10 transition-all duration-200">
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-foreground">
-                      {report.title || report.url}
-                    </h4>
-                    {report.title && (
-                      <p className="text-sm text-muted-foreground break-all">
-                        {report.url}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-muted-foreground">
-                        Создан: {new Date(report.created_at).toLocaleDateString('ru-RU', { 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                      {report.status === 'pending' && (
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                          В очереди
-                        </span>
-                      )}
-                      {report.status === 'processing' && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          Обрабатывается
-                        </span>
-                      )}
-                      {report.status === 'captcha_required' && (
-                        <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
-                          Требует проверки
-                        </span>
-                      )}
-                      {report.status === 'error' && (
-                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                          Ошибка
-                        </span>
-                      )}
-                      {report.status === 'completed' && (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                          Готов
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4 sm:mt-0">
-                    {report.status === 'completed' ? (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleViewReport(report)}
-                          disabled={loadingReport}
-                        >
-                          {loadingReport ? 'Загрузка...' : (viewingReport === report.id ? 'Закрыть' : 'Просмотр')}
-                        </Button>
-                        <Button 
-                          variant="default" 
-                          size="sm"
-                          onClick={() => handleDownloadReport(report)}
-                        >
-                          Скачать
-                        </Button>
-                      </>
-                    ) : report.status === 'error' ? (
-                      <span className="text-sm text-red-600">
-                        Произошла ошибка при обработке. Попробуйте создать отчёт заново.
-                      </span>
-                    ) : report.status === 'captcha_required' ? (
-                      <span className="text-sm text-orange-600">
-                        Требуется ручная проверка. Обработка может занять больше времени.
-                      </span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Обработка займёт в среднем около дня, т.к. все отчёты проверяются человеком
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
+
+          {/* Готовые отчёты */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Готовые отчёты</h2>
+            {reports.length === 0 ? (
+              <p className="text-gray-600">У вас пока нет готовых отчётов</p>
+            ) : (
+              <div className="space-y-4">
+                {reports.map((report) => (
+                  <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900">
+                          {report.title || 'Без названия'}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Создан: {new Date(report.created_at).toLocaleString()}
+                        </p>
+                        {report.seo_score && (
+                          <p className="text-sm text-gray-600">
+                            SEO-оценка: {report.seo_score}/100
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        {report.has_report && (
+                          <>
+                            <Button
+                              onClick={() => handleViewReport(report.id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Просмотр
+                            </Button>
+                            <Button
+                              onClick={() => handleDownloadReport(report.id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              Скачать
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Приглашения */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Пригласить друга</h2>
+            <InviteFriendForm
+              onSuccess={() => setInviteSuccess(true)}
+              onError={(error) => setError(error)}
+            />
+            {inviteSuccess && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mt-4">
+                Приглашение отправлено!
+              </div>
+            )}
+          </div>
         </div>
-        {/* Report Viewer Inline */}
-        {viewingReport && (
-          <div className="bg-card/80 backdrop-blur-sm rounded-3xl shadow-xl border border-primary/10 p-8 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-foreground">Просмотр отчёта</h3>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setViewingReport(null)}
-              >
-                ✕
+      </div>
+
+      {/* Модальное окно просмотра отчёта */}
+      {viewingReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-semibold">Просмотр отчёта</h3>
+              <Button onClick={() => setViewingReport(null)} variant="outline">
+                Закрыть
               </Button>
             </div>
-            <div className="overflow-auto max-h-[70vh] border border-border/20 rounded-lg p-4">
-              {reportContent ? (
-                <div 
-                  dangerouslySetInnerHTML={{ __html: reportContent }}
-                  className="prose prose-sm max-w-none"
-                />
-              ) : (
-                <div className="text-center text-muted-foreground">
-                  Загрузка отчёта...
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              {loadingReport ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Загрузка отчёта...</p>
                 </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: reportContent }} />
               )}
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
+
       <Footer />
     </div>
   );
