@@ -14,23 +14,9 @@ const Index = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Проверяем авторизацию при загрузке страницы
-    const checkAuth = async () => {
-      try {
-        const user = await newAuth.getCurrentUser();
-        if (user) {
-          // Если пользователь авторизован, перенаправляем в личный кабинет
-          navigate('/dashboard');
-          return;
-        }
-      } catch (error) {
-        console.log('User not authenticated');
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, [navigate]);
+    // Главная страница всегда доступна, не проверяем авторизацию
+    setLoading(false);
+  }, []);
 
   // Обработка хэшей для навигации
   useEffect(() => {
