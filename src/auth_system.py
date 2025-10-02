@@ -31,7 +31,7 @@ def verify_password(password: str, hashed: str) -> bool:
     except:
         return False
 
-def create_user(email: str, password: str, name: str = None, phone: str = None) -> Dict[str, Any]:
+def create_user(email: str, password: str = None, name: str = None, phone: str = None) -> Dict[str, Any]:
     """Создать нового пользователя"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -44,7 +44,7 @@ def create_user(email: str, password: str, name: str = None, phone: str = None) 
         
         # Создаем пользователя
         user_id = str(uuid.uuid4())
-        password_hash = hash_password(password)
+        password_hash = hash_password(password) if password else None
         verification_token = secrets.token_urlsafe(32)
         
         cursor.execute("""
@@ -85,6 +85,10 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         if not user['is_active']:
             return {"error": "Аккаунт заблокирован"}
+        
+        # Если у пользователя нет пароля, это новый пользователь
+        if not user['password_hash']:
+            return {"error": "NEED_PASSWORD", "message": "Необходимо установить пароль"}
         
         if not verify_password(password, user['password_hash']):
             return {"error": "Неверный пароль"}
@@ -165,6 +169,36 @@ def logout_session(token: str) -> bool:
         return cursor.rowcount > 0
     except:
         return False
+    finally:
+        conn.close()
+
+def set_password(user_id: str, password: str) -> Dict[str, Any]:
+    """Установить пароль для пользователя"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Проверяем, что пользователь существует
+        cursor.execute("SELECT id FROM Users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            return {"error": "Пользователь не найден"}
+        
+        # Хешируем пароль
+        password_hash = hash_password(password)
+        
+        # Обновляем пароль
+        cursor.execute("""
+            UPDATE Users 
+            SET password_hash = ?, updated_at = ?
+            WHERE id = ?
+        """, (password_hash, datetime.now().isoformat(), user_id))
+        
+        conn.commit()
+        
+        return {"success": True, "message": "Пароль успешно установлен"}
+        
+    except Exception as e:
+        return {"error": str(e)}
     finally:
         conn.close()
 

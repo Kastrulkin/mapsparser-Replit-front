@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { auth } from '../lib/auth';
+import { newAuth } from '../lib/auth_new';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AlternativePasswordReset from '../components/AlternativePasswordReset';
 
@@ -31,19 +30,7 @@ const SetPassword: React.FC = () => {
         }
       }
       
-      // Если email не передан в state или URL, пробуем получить из Supabase Auth
-      if (!userEmail) {
-        try {
-          const { data: { user }, error } = await supabase.auth.getUser();
-          if (user && user.email) {
-            userEmail = user.email;
-            setEmail(userEmail);
-            console.log('Email получен из Auth:', userEmail);
-          }
-        } catch (error) {
-          console.log('Ошибка получения пользователя из Auth:', error);
-        }
-      } else {
+      if (userEmail) {
         setEmail(userEmail);
       }
 
@@ -52,42 +39,26 @@ const SetPassword: React.FC = () => {
         return;
       }
 
-      if (skipEmailConfirmation) {
-        // Пропускаем проверку email-подтверждения
-        console.log('Пропускаем проверку email-подтверждения');
-        setIsAuthorized(true);
-        return;
-      }
-
-      try {
-        // Проверяем, есть ли авторизованный пользователь
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (error) {
-          console.log('Ошибка получения пользователя:', error);
-          setError('Не удалось получить данные пользователя. Попробуйте войти заново.');
-          return;
-        }
-
-        if (user && user.email === userEmail) {
-          console.log('Пользователь авторизован:', user.email);
-          setIsAuthorized(true);
-        } else {
-          console.log('Пользователь не авторизован или email не совпадает');
-          setError('Пользователь не авторизован. Пожалуйста, подтвердите email и попробуйте снова.');
-        }
-      } catch (error) {
-        console.error('Ошибка проверки пользователя:', error);
-        setError('Произошла ошибка при проверке пользователя: ' + (error as Error).message);
-      }
+      // Для новой системы просто разрешаем установку пароля
+      setIsAuthorized(true);
     };
 
     checkUser();
   }, [location.state]);
 
-  const handleResetPassword = async () => {
+  const handleSetPassword = async () => {
     if (!email) {
       setError('Email не найден.');
+      return;
+    }
+
+    if (!password) {
+      setError('Введите пароль.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Пароль должен содержать минимум 6 символов.');
       return;
     }
 
@@ -95,105 +66,27 @@ const SetPassword: React.FC = () => {
     setError(null);
     setInfo(null);
 
-    // Функция для повторных попыток
-    const attemptReset = async (attempt: number = 1): Promise<boolean> => {
-      try {
-        console.log(`Попытка восстановления пароля #${attempt} для ${email}`);
-        
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/set-password?email=' + encodeURIComponent(email)
-        });
-
-        if (resetError) {
-          console.error(`Ошибка попытки #${attempt}:`, resetError);
-          
-          // Проверяем тип ошибки
-          if (resetError.message?.includes('rate limit') || resetError.message?.includes('too many requests')) {
-            setError('Превышен лимит отправки email. Попробуйте позже.');
-            return false;
-          } else if (resetError.message?.includes('timeout') || resetError.message?.includes('504')) {
-            if (attempt < 3) {
-              setInfo(`Попытка ${attempt} не удалась из-за таймаута. Повторяем через 2 секунды...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              return await attemptReset(attempt + 1);
-            } else {
-              setError('Сервер временно недоступен. Попробуйте позже или обратитесь в поддержку.');
-              return false;
-            }
-          } else {
-            setError('Ошибка при отправке письма: ' + resetError.message);
-            return false;
-          }
-        } else {
-          console.log('Письмо для восстановления пароля отправлено успешно');
-          setInfo('Письмо для восстановления пароля отправлено на вашу почту. Не забудьте проверить папку СПАМ.');
-          return true;
-        }
-      } catch (error) {
-        console.error(`Исключение в попытке #${attempt}:`, error);
-        
-        if (attempt < 3) {
-          setInfo(`Попытка ${attempt} не удалась. Повторяем через 2 секунды...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          return await attemptReset(attempt + 1);
-        } else {
-          setError('Произошла ошибка при отправке письма. Попробуйте позже.');
-          return false;
-        }
+    try {
+      const { user, error } = await newAuth.setPassword(email, password);
+      
+      if (error) {
+        setError(error);
+      } else if (user) {
+        setInfo('Пароль успешно установлен! Выполняется вход...');
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
       }
-    };
-
-    // Запускаем процесс восстановления с повторными попытками
-    await attemptReset();
-    setLoading(false);
+    } catch (error) {
+      setError('Ошибка установки пароля: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (!isAuthorized) {
-        setError('Не удалось авторизоваться. Попробуйте восстановить пароль через email.');
-        setLoading(false);
-        return;
-      }
-
-      // Обновляем пароль в нашей системе аутентификации
-      const tempUserId = localStorage.getItem('tempUserId');
-      if (tempUserId) {
-        localStorage.setItem(`user_${tempUserId}_password`, password);
-        console.log('Пароль сохранен в локальной системе аутентификации');
-      }
-
-      // Пытаемся обновить пароль в Supabase Auth (но не критично)
-      try {
-        const { error: updateError } = await supabase.auth.updateUser({ password });
-        if (updateError) {
-          console.warn('Ошибка обновления пароля в Supabase Auth:', updateError);
-        } else {
-          console.log('Пароль обновлен в Supabase Auth');
-        }
-      } catch (error) {
-        console.warn('Ошибка обновления пароля в Supabase Auth:', error);
-      }
-
-      // Очищаем временные данные
-      localStorage.removeItem('tempPassword');
-      localStorage.removeItem('tempUserId');
-      
-      // Показываем сообщение об успехе
-      alert('Пароль успешно установлен! Теперь вы можете войти в личный кабинет.');
-      
-      // Редирект в личный кабинет
-      navigate('/dashboard');
-      
-    } catch (error) {
-      console.error('Общая ошибка в SetPassword:', error);
-      setError('Произошла ошибка. Попробуйте ещё раз.');
-      setLoading(false);
-    }
+    await handleSetPassword();
   };
 
   // Если показываем альтернативное восстановление пароля
@@ -250,7 +143,7 @@ const SetPassword: React.FC = () => {
           <p className="text-red-600 text-sm mb-3">{error}</p>
           <div className="flex flex-col gap-2">
             <button
-              onClick={handleResetPassword}
+              onClick={handleSetPassword}
               disabled={loading}
               className="w-full bg-red-600 text-white rounded px-3 py-2 text-sm hover:bg-red-700 transition disabled:opacity-50"
             >
@@ -280,7 +173,7 @@ const SetPassword: React.FC = () => {
           </p>
           <div className="flex flex-col gap-2">
             <button
-              onClick={handleResetPassword}
+              onClick={handleSetPassword}
               disabled={loading}
               className="w-full text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
             >

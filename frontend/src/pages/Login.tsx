@@ -23,7 +23,12 @@ const Login = () => {
       const { user, error } = await newAuth.signIn(loginForm.email, loginForm.password);
       
       if (error) {
-        setError(error);
+        if (error.includes('NEED_PASSWORD')) {
+          // Пользователь существует, но не установил пароль
+          navigate('/set-password', { state: { email: loginForm.email } });
+        } else {
+          setError(error);
+        }
       } else if (user) {
         navigate('/dashboard');
       }

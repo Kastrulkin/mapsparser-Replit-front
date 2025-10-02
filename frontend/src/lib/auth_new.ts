@@ -287,6 +287,35 @@ export class NewAuth {
     }
   }
 
+  async setPassword(email: string, password: string): Promise<{ user: User | null; error: any }> {
+    try {
+      const response = await this.makeRequest('/auth/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.error) {
+        return { user: null, error: response.error };
+      }
+
+      this.currentUser = {
+        id: response.id,
+        email: response.email,
+        name: response.name,
+        phone: response.phone,
+      };
+
+      if (response.token) {
+        this.token = response.token;
+        localStorage.setItem('auth_token', this.token);
+      }
+
+      return { user: this.currentUser, error: null };
+    } catch (error) {
+      return { user: null, error: error.message };
+    }
+  }
+
   isAuthenticated(): boolean {
     return !!this.token && !!this.currentUser;
   }

@@ -25,8 +25,12 @@ def register():
         name = data.get('name')
         phone = data.get('phone')
         
-        if not email or not password:
-            return jsonify({"error": "Email и пароль обязательны"}), 400
+        if not email:
+            return jsonify({"error": "Email обязателен"}), 400
+        
+        # Если пароль пустой, создаем пользователя без пароля
+        if not password:
+            password = None
         
         result = create_user(email, password, name, phone)
         
@@ -163,6 +167,46 @@ def change_password():
         
         if 'error' in result:
             return jsonify(result), 400
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/auth/set-password', methods=['POST'])
+def set_password():
+    """Установить пароль для нового пользователя"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({"error": "Email и пароль обязательны"}), 400
+        
+        # Находим пользователя по email
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id FROM Users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({"error": "Пользователь не найден"}), 404
+        
+        # Устанавливаем пароль
+        result = set_password(user['id'], password)
+        
+        if 'error' in result:
+            return jsonify(result), 400
+        
+        # Создаем сессию
+        token = create_session(user['id'], 
+                             request.environ.get('REMOTE_ADDR'),
+                             request.headers.get('User-Agent'))
+        
+        if token:
+            result['token'] = token
         
         return jsonify(result), 200
         
