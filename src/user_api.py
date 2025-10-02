@@ -292,7 +292,7 @@ def get_user_queue():
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, url, status, created_at
+            SELECT id, url, status, created_at 
             FROM ParseQueue 
             WHERE user_id = ? 
             ORDER BY created_at DESC
@@ -310,6 +310,51 @@ def get_user_queue():
         conn.close()
         
         return jsonify({"queue": queue_items}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/users/reports', methods=['GET'])
+def get_user_reports():
+    """Получить отчёты пользователя"""
+    try:
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        
+        if not token:
+            return jsonify({"error": "Токен не предоставлен"}), 401
+        
+        user = verify_session(token)
+        
+        if not user:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Получаем отчёты пользователя из Cards таблицы
+        cursor.execute("""
+            SELECT id, url, report_path, ai_analysis, seo_score, recommendations, created_at
+            FROM Cards 
+            WHERE user_id = ? AND report_path IS NOT NULL
+            ORDER BY created_at DESC
+        """, (user['user_id'],))
+        
+        reports = []
+        for row in cursor.fetchall():
+            reports.append({
+                "id": row['id'],
+                "url": row['url'],
+                "report_path": row['report_path'],
+                "ai_analysis": row['ai_analysis'],
+                "seo_score": row['seo_score'],
+                "recommendations": row['recommendations'],
+                "created_at": row['created_at'],
+                "has_report": True
+            })
+        
+        conn.close()
+        
+        return jsonify({"reports": reports}), 200
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
