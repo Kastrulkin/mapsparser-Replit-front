@@ -42,7 +42,7 @@ def download_report(card_id):
             return jsonify({"error": "Файл отчёта не найден"}), 404
         
         # Формируем имя файла для скачивания (только латинские символы)
-        title = card_data.get('title', 'report')
+        title = card_data['title'] if card_data['title'] else 'report'
         # Транслитерация русских символов
         translit_map = {
             'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
