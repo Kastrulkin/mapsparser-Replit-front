@@ -33,6 +33,7 @@ const Dashboard = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [timer, setTimer] = useState<string | null>(null);
+  const [canCreateReport, setCanCreateReport] = useState<boolean>(false);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
   const [reportContent, setReportContent] = useState<string>("");
   const [loadingReport, setLoadingReport] = useState(false);
@@ -97,20 +98,33 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
+    // Если нет готовых отчётов — можно создавать сразу
     const nextDate = getNextReportDate(reports);
-    if (nextDate) {
-      const updateTimer = () => {
-        const countdown = getCountdownString(nextDate);
-        setTimer(countdown);
-        if (!countdown) {
-          // Время истекло, обновляем данные
-          window.location.reload();
-        }
-      };
-      updateTimer();
-      const interval = setInterval(updateTimer, 60000);
-      return () => clearInterval(interval);
+    if (!nextDate) {
+      setCanCreateReport(true);
+      setTimer('00:00:00');
+      return;
     }
+
+    const now = new Date();
+    if (nextDate.getTime() <= now.getTime()) {
+      setCanCreateReport(true);
+      setTimer('00:00:00');
+      return;
+    }
+
+    setCanCreateReport(false);
+    const updateTimer = () => {
+      const countdown = getCountdownString(nextDate);
+      setTimer(countdown);
+      if (!countdown) {
+        // Время истекло, обновляем данные
+        window.location.reload();
+      }
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000);
+    return () => clearInterval(interval);
   }, [reports]);
 
   const handleViewReport = async (reportId: string) => {
@@ -118,9 +132,9 @@ const Dashboard = () => {
     try {
       const response = await fetch(`https://beautybot.pro/api/view-report/${reportId}`);
       if (response.ok) {
-        const content = await response.text();
-        setReportContent(content);
-        setViewingReport(reportId);
+      const content = await response.text();
+      setReportContent(content);
+      setViewingReport(reportId);
       } else {
         setError('Ошибка загрузки отчёта');
       }
@@ -186,6 +200,36 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteQueueItem = async (queueId: string) => {
+    if (!confirm('Вы уверены, что хотите удалить этот отчёт из обработки?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://beautybot.pro/api/users/queue/${queueId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setSuccess('Отчёт удалён из обработки');
+        // Обновляем данные
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Ошибка удаления отчёта');
+      }
+    } catch (error) {
+      console.error('Ошибка удаления отчёта:', error);
+      setError('Ошибка удаления отчёта');
+    }
+  };
+
   const handleUpdateProfile = async () => {
     try {
       const { user: updatedUser, error } = await newAuth.updateProfile({
@@ -246,17 +290,14 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
-            <Button onClick={handleLogout} variant="outline">
-              Выйти
-            </Button>
           </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
               {error}
-            </div>
+        </div>
           )}
 
           {success && (
@@ -269,20 +310,20 @@ const Dashboard = () => {
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Профиль</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+                <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={form.email}
+                  <input 
+                    type="email" 
+                    value={form.email} 
                   disabled
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Имя</label>
-                <input
-                  type="text"
-                  value={form.name}
+                <input 
+                  type="text" 
+                  value={form.name} 
                   onChange={(e) => setForm({...form, name: e.target.value})}
                   disabled={!editMode}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -290,7 +331,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
-                <input
+                <input 
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm({...form, phone: e.target.value})}
@@ -307,49 +348,57 @@ const Dashboard = () => {
                 </div>
               ) : (
                 <Button onClick={() => setEditMode(true)}>Редактировать</Button>
-              )}
-            </div>
-          </div>
-
+          )}
+        </div>
+                  </div>
+                  
           {/* Создание отчёта */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Создать отчёт</h2>
-            {!showCreateReport ? (
+                  {!showCreateReport ? (
               <Button onClick={() => setShowCreateReport(true)}>
                 Создать новый отчёт
-              </Button>
-            ) : (
-              <div className="space-y-4">
-                <div>
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     URL страницы Яндекс.Карт
-                  </label>
-                  <input
-                    type="url"
-                    value={createReportForm.yandexUrl}
+                        </label>
+                        <input 
+                          type="url" 
+                          value={createReportForm.yandexUrl} 
                     onChange={(e) => setCreateReportForm({...createReportForm, yandexUrl: e.target.value})}
-                    placeholder="https://yandex.ru/maps/org/..."
+                          placeholder="https://yandex.ru/maps/org/..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
+                        />
+                      </div>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateReport} disabled={creatingReport}>
-                    {creatingReport ? 'Создание...' : 'Создать отчёт'}
-                  </Button>
+                          {creatingReport ? 'Создание...' : 'Создать отчёт'}
+                        </Button>
                   <Button onClick={() => setShowCreateReport(false)} variant="outline">
-                    Отмена
-                  </Button>
+                          Отмена
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
 
-          {/* Таймер следующего отчёта */}
-          {timer && (
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6">
-              <p className="font-medium">Следующий отчёт можно создать через: {timer}</p>
+          {/* Таймер следующего отчёта - всегда виден */}
+          <div className="text-center p-8 bg-gradient-to-br from-background/50 to-muted/20 rounded-3xl border border-border/20 mb-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              {canCreateReport ? 'Отчёт готов к созданию' : 'До следующего отчёта'}
+            </h3>
+            <div className={`text-6xl md:text-7xl font-bold tracking-tight mb-2 ${canCreateReport ? 'text-green-500' : 'text-red-500'}`}>
+              {timer || '00:00:00'}
             </div>
-          )}
+            <div className="flex justify-center gap-2 text-sm text-muted-foreground">
+              <span className="px-3 py-1 bg-muted/20 rounded-lg">Дни</span>
+              <span className="px-3 py-1 bg-muted/20 rounded-lg">Часы</span>
+              <span className="px-3 py-1 bg-muted/20 rounded-lg">Минуты</span>
+            </div>
+          </div>
 
           {/* Очередь обработки */}
           {queue.length > 0 && (
@@ -358,12 +407,22 @@ const Dashboard = () => {
               <div className="space-y-2">
                 {queue.map((item) => (
                   <div key={item.id} className="bg-yellow-50 border border-yellow-200 rounded p-4">
-                    <p className="text-sm text-gray-600">URL: {item.url}</p>
-                    <p className="text-sm text-gray-600">Статус: {item.status}</p>
-                    <p className="text-sm text-gray-600">
-                      Создан: {new Date(item.created_at).toLocaleString()}
-                    </p>
-                  </div>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600">URL: {item.url}</p>
+                        <p className="text-sm text-gray-600">Статус: {item.status}</p>
+                        <p className="text-sm text-gray-600">
+                          Создан: {new Date(item.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteQueueItem(item.id)}
+                        className="ml-4 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                      >
+                        Удалить
+                      </button>
+          </div>
+        </div>
                 ))}
               </div>
             </div>
@@ -374,9 +433,9 @@ const Dashboard = () => {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Готовые отчёты</h2>
             {reports.length === 0 ? (
               <p className="text-gray-600">У вас пока нет готовых отчётов</p>
-            ) : (
-              <div className="space-y-4">
-                {reports.map((report) => (
+          ) : (
+            <div className="space-y-4">
+              {reports.map((report) => (
                   <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
@@ -390,34 +449,34 @@ const Dashboard = () => {
                           <p className="text-sm text-gray-600">
                             SEO-оценка: {report.seo_score}/100
                           </p>
-                        )}
-                      </div>
+                      )}
+                    </div>
                       <div className="flex gap-2 ml-4">
                         {report.has_report && (
-                          <>
-                            <Button
+                      <>
+                        <Button 
                               onClick={() => handleViewReport(report.id)}
-                              variant="outline"
-                              size="sm"
-                            >
+                          variant="outline" 
+                          size="sm"
+                        >
                               Просмотр
-                            </Button>
-                            <Button
+                        </Button>
+                        <Button 
                               onClick={() => handleDownloadReport(report.id)}
                               variant="outline"
-                              size="sm"
-                            >
-                              Скачать
-                            </Button>
-                          </>
+                          size="sm"
+                        >
+                          Скачать
+                        </Button>
+                      </>
                         )}
                       </div>
-                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
           {/* Приглашения */}
           <div className="mb-8">
@@ -436,7 +495,7 @@ const Dashboard = () => {
       </div>
 
       {/* Модальное окно просмотра отчёта */}
-      {viewingReport && (
+        {viewingReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b">
@@ -455,9 +514,9 @@ const Dashboard = () => {
                 <div dangerouslySetInnerHTML={{ __html: reportContent }} />
               )}
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       <Footer />
     </div>
