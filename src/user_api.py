@@ -232,47 +232,6 @@ def set_password():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/users/reports', methods=['GET'])
-def get_user_reports():
-    """Получить отчёты пользователя"""
-    try:
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        
-        if not token:
-            return jsonify({"error": "Токен не предоставлен"}), 401
-        
-        user = verify_session(token)
-        
-        if not user:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, title, url, created_at, seo_score, report_path
-            FROM Cards 
-            WHERE user_id = ? 
-            ORDER BY created_at DESC
-        """, (user['user_id'],))
-        
-        reports = []
-        for row in cursor.fetchall():
-            reports.append({
-                "id": row['id'],
-                "title": row['title'],
-                "url": row['url'],
-                "created_at": row['created_at'],
-                "seo_score": row['seo_score'],
-                "has_report": bool(row['report_path'])
-            })
-        
-        conn.close()
-        
-        return jsonify({"reports": reports}), 200
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/users/queue', methods=['GET'])
 def get_user_queue():
