@@ -107,7 +107,7 @@ const InviteFriendForm = ({ onSuccess, onError }: { onSuccess?: () => void; onEr
       </form>
       
       <div className="mt-4 text-xs text-muted-foreground">
-        <p>Приглашённый друг получит возможность создать бесплатный SEO отчёт</p>
+        <p>Приглашённый друг получит возможность улучшить свою карточку организации</p>
       </div>
     </div>
   );
