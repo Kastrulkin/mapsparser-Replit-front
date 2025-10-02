@@ -58,8 +58,26 @@ def login():
         email = data.get('email')
         password = data.get('password')
         
-        if not email or not password:
-            return jsonify({"error": "Email и пароль обязательны"}), 400
+        if not email:
+            return jsonify({"error": "Email обязателен"}), 400
+        
+        # Если пароль пустой, проверяем, есть ли у пользователя пароль
+        if not password:
+            # Проверяем, есть ли у пользователя пароль в базе
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT password_hash FROM Users WHERE email = ?", (email,))
+            user = cursor.fetchone()
+            conn.close()
+            
+            if not user:
+                return jsonify({"error": "Пользователь не найден"}), 401
+            
+            if user['password_hash']:
+                return jsonify({"error": "Пароль обязателен"}), 400
+            else:
+                # У пользователя нет пароля, возвращаем NEED_PASSWORD
+                return jsonify({"error": "NEED_PASSWORD", "message": "Необходимо установить пароль"}), 400
         
         result = authenticate_user(email, password)
         
