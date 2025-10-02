@@ -213,7 +213,8 @@ def set_password():
             return jsonify({"error": "Пользователь не найден"}), 404
         
         # Устанавливаем пароль
-        result = set_password(user['id'], password)
+        from auth_system import set_password as set_password_func
+        result = set_password_func(user['id'], password)
         
         if 'error' in result:
             return jsonify(result), 400
