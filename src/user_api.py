@@ -292,7 +292,7 @@ def get_user_reports():
         
         # Получаем отчёты пользователя из Cards таблицы
         cursor.execute("""
-            SELECT id, url, report_path, ai_analysis, seo_score, recommendations, created_at
+            SELECT id, url, report_path, ai_analysis, seo_score, created_at
             FROM Cards 
             WHERE user_id = ? AND report_path IS NOT NULL
             ORDER BY created_at DESC
@@ -306,7 +306,6 @@ def get_user_reports():
                 "report_path": row['report_path'],
                 "ai_analysis": row['ai_analysis'],
                 "seo_score": row['seo_score'],
-                "recommendations": row['recommendations'],
                 "created_at": row['created_at'],
                 "has_report": True
             })
