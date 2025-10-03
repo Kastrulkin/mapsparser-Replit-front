@@ -672,9 +672,9 @@
                     </p>
                 </div>
                 
-                {% if card.reviews.items and card.reviews.items|length > 0 %}
+                {% if card.reviews and card.reviews|length > 0 %}
                 <p class="mb-4 text-sm text-muted">
-                    Всего спарсилось отзывов: {{ card.reviews.items|length }}
+                    Всего спарсилось отзывов: {{ card.reviews|length }}
                 </p>
                 <table class="table">
                     <thead>
@@ -688,7 +688,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for review in card.reviews.items[:10] %}
+                        {% for review in card.reviews[:10] %}
                         <tr>
                             <td>{{ loop.index }}</td>
                             <td class="font-medium">{{ review.author or '—' }}</td>
@@ -708,9 +708,9 @@
                         {% endfor %}
                     </tbody>
                 </table>
-                {% if card.reviews.items|length > 10 %}
+                {% if card.reviews|length > 10 %}
                 <p class="text-center text-muted mt-4">
-                    Показаны первые 10 отзывов из {{ card.reviews.items|length }}
+                    Показаны первые 10 отзывов из {{ card.reviews|length }}
                 </p>
                 {% endif %}
                 {% else %}

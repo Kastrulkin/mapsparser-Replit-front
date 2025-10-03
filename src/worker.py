@@ -2,7 +2,7 @@ import time
 import sqlite3
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
@@ -18,8 +18,23 @@ def process_queue():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Получаем заявки из очереди
-    cursor.execute("SELECT * FROM ParseQueue WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1")
+    # Получаем заявки из очереди с учетом отсрочки и приоритета
+    # 1. Сначала pending без отсрочки
+    # 2. Потом captcha_required, у которых истекла отсрочка
+    # 3. captcha_required с отсрочкой идут в конец очереди
+    cursor.execute("""
+        SELECT * FROM ParseQueue 
+        WHERE status = 'pending' 
+        OR (status = 'captcha_required' AND (retry_after IS NULL OR retry_after <= ?))
+        ORDER BY 
+            CASE 
+                WHEN status = 'pending' THEN 1
+                WHEN status = 'captcha_required' AND (retry_after IS NULL OR retry_after <= ?) THEN 2
+                ELSE 3
+            END,
+            created_at ASC 
+        LIMIT 1
+    """, (datetime.now().isoformat(), datetime.now().isoformat()))
     queue_item = cursor.fetchone()
     
     if not queue_item:
@@ -33,10 +48,25 @@ def process_queue():
         card_data = parse_yandex_card(queue_item["url"])
         
         if card_data.get("error") == "captcha_detected":
-            print(f"Обнаружена капча для заявки {queue_item['id']}! Помечаю как требующую ручной обработки...")
+            print(f"Обнаружена капча для заявки {queue_item['id']}! Устанавливаю отсрочку на 2 часа...")
             
-            # Обновляем статус заявки
-            cursor.execute("UPDATE ParseQueue SET status = ? WHERE id = ?", ("captcha_required", queue_item["id"]))
+            # Устанавливаем отсрочку на 2 часа
+            retry_after = datetime.now() + timedelta(hours=2)
+            
+            # Проверяем, есть ли другие pending задачи
+            cursor.execute("SELECT COUNT(*) FROM ParseQueue WHERE status = 'pending' AND id != ?", (queue_item["id"],))
+            pending_count = cursor.fetchone()[0]
+            
+            if pending_count > 0:
+                print(f"Найдено {pending_count} других pending задач. Задача с капчей перемещается в конец очереди.")
+                # Обновляем created_at, чтобы задача встала в конец очереди
+                cursor.execute("UPDATE ParseQueue SET status = ?, retry_after = ?, created_at = ? WHERE id = ?", 
+                             ("captcha_required", retry_after.isoformat(), datetime.now().isoformat(), queue_item["id"]))
+            else:
+                # Если других задач нет, просто устанавливаем отсрочку
+                cursor.execute("UPDATE ParseQueue SET status = ?, retry_after = ? WHERE id = ?", 
+                             ("captcha_required", retry_after.isoformat(), queue_item["id"]))
+            
             conn.commit()
             conn.close()
             return

@@ -420,5 +420,41 @@ def accept_invite_endpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/users/queue/<queue_id>', methods=['DELETE'])
+def delete_queue_item(queue_id):
+    """Удалить элемент из очереди"""
+    try:
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        
+        if not token:
+            return jsonify({"error": "Токен не предоставлен"}), 401
+        
+        user = verify_session(token)
+        
+        if not user:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем, что элемент принадлежит пользователю
+        cursor.execute("SELECT id FROM ParseQueue WHERE id = ? AND user_id = ?", (queue_id, user['user_id']))
+        queue_item = cursor.fetchone()
+        
+        if not queue_item:
+            conn.close()
+            return jsonify({"error": "Элемент очереди не найден"}), 404
+        
+        # Удаляем элемент из очереди
+        cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "Элемент очереди удалён"}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5002, debug=True)

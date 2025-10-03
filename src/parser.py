@@ -243,7 +243,8 @@ def parse_yandex_card(url: str) -> dict:
             data['url'] = url
 
             # Парсим остальные вкладки
-            data['reviews'] = parse_reviews(page)
+            reviews_data = parse_reviews(page)
+            data['reviews'] = reviews_data.get('items', [])  # Возвращаем только список отзывов
             data['news'] = parse_news(page)
             data['photos_count'] = get_photos_count(page)
             data['photos'] = parse_photos(page)
@@ -725,6 +726,10 @@ def parse_overview_data(page):
 
 def parse_reviews(page):
     """Парсит отзывы с правильным подсчетом"""
+    import time
+    start_time = time.time()
+    max_processing_time = 300  # Максимум 5 минут на обработку отзывов
+    
     try:
         reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews, div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
         if reviews_tab:
@@ -772,9 +777,9 @@ def parse_reviews(page):
             print(f"Ошибка при подсчете отзывов: {e}")
             pass
 
-        # Скролл для загрузки отзывов
-        max_loops = 100
-        patience = 30
+        # Скролл для загрузки отзывов - ВОЗВРАЩАЕМ ОРИГИНАЛЬНЫЕ ПАРАМЕТРЫ
+        max_loops = 100  # Возвращаем оригинальное значение
+        patience = 30    # Возвращаем оригинальное значение
         last_count = 0
         same_count = 0
 
@@ -790,7 +795,7 @@ def parse_reviews(page):
 
             # Прокручиваем вниз
             page.mouse.wheel(0, 1000)
-            time.sleep(random.uniform(1.5, 2.5))
+            time.sleep(random.uniform(1.5, 2.5))  # Возвращаем оригинальное время ожидания
 
             # Проверяем количество загруженных отзывов
             current_reviews = page.query_selector_all("div.business-review-view, div[class*='review-item']")
@@ -805,13 +810,32 @@ def parse_reviews(page):
                 same_count = 0
                 last_count = current_count
                 print(f"Загружено отзывов: {current_count}")
+            
+            # Дополнительная проверка - если уже много отзывов, можно остановиться
+            if current_count >= 50:  # Если уже 50+ отзывов, этого достаточно
+                print(f"Достаточно отзывов собрано: {current_count}")
+                break
 
-        # Парсим отзывы с ИМЕНАМИ авторов
+        # Парсим отзывы с ИМЕНАМИ авторов - ОБРАБАТЫВАЕМ ВСЕ
         try:
             review_blocks = page.query_selector_all("div.business-review-view")
             print(f"Найдено блоков отзывов: {len(review_blocks)}")
 
-            for block in review_blocks:
+            for i, block in enumerate(review_blocks):
+                # Проверяем время обработки
+                if time.time() - start_time > max_processing_time:
+                    print(f"Превышено время обработки отзывов ({max_processing_time} сек), завершаем...")
+                    break
+                
+                # Добавляем прогресс для больших объёмов
+                if i > 0 and i % 20 == 0:
+                    print(f"Обработано {i} отзывов...")
+                
+                # Ограничиваем время обработки отзывов (максимум 2 минуты)
+                if i > 0 and i % 50 == 0:
+                    print(f"Обработано {i} отзывов, продолжаем...")
+                    # Небольшая пауза для предотвращения зависания
+                    time.sleep(0.1)
                 try:
                     # Имя автора - УЛУЧШЕННЫЙ парсинг
                     author = ""
@@ -911,13 +935,17 @@ def parse_reviews(page):
                             if reply_btn and reply_btn.is_visible():
                                 try:
                                     reply_btn.click()
-                                    page.wait_for_timeout(1000)
+                                    page.wait_for_timeout(500)  # Уменьшено время ожидания
                                     reply_clicked = True
                                     print(f"Клик по кнопке ответа: {selector}")
                                     break
                                 except Exception as e:
                                     print(f"Ошибка при клике по кнопке ответа {selector}: {e}")
                                     continue
+                            
+                            # Ограничиваем количество попыток клика
+                            if reply_clicked:
+                                break
                         
                         # Ищем текст ответа
                         reply_selectors = [
