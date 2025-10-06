@@ -41,44 +41,25 @@ const Hero = () => {
                 const form = e.target as HTMLFormElement;
                 const email = (form.elements.namedItem('email') as HTMLInputElement).value;
                 const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
-                const { newAuth } = await import('@/lib/auth_new');
                 
                 try {
-                  // Регистрируем пользователя через новую систему (без пароля)
-                  const { user, error } = await newAuth.signUp(
-                    email, 
-                    '', // Пустой пароль - пользователь установит его при первом входе
-                    'Пользователь', // Имя по умолчанию
-                    '' // Телефон
-                  );
-                  
-                  if (error) {
-                    if (error.includes('уже существует')) {
-                      alert('Пользователь с таким email уже зарегистрирован. Войдите в личный кабинет.');
-                      navigate('/login', { state: { email } });
-                      return;
-                    }
-                    alert('Ошибка при регистрации: ' + error);
-                    return;
+                  const resp = await fetch('/api/public/request-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, url: yandexUrl })
+                  });
+                  const result = await resp.json().catch(() => null);
+                  if (!resp.ok) {
+                    const msg = (result && (result.error || result.message)) || 'Ошибка отправки заявки';
+                    throw new Error(msg);
                   }
-                  
-                  // Добавляем URL в очередь
-                  if (user) {
-                    const { queue_id, error: queueError } = await newAuth.addToQueue(yandexUrl);
-                    
-                    if (queueError) {
-                      console.warn('Ошибка добавления в очередь:', queueError);
-                    }
-                  }
-                  
-                  // Сбрасываем форму и показываем успех
+
                   form.reset();
-                  alert('Заявка успешно отправлена! Теперь вы можете войти в личный кабинет.');
-                  navigate('/login', { state: { email } });
+                  alert('Спасибо! Мы приняли вашу заявку и скоро с вами свяжемся.');
                   
                 } catch (error) {
                   console.error('Общая ошибка:', error);
-                  alert('Произошла ошибка. Попробуйте ещё раз.');
+                  alert(error instanceof Error ? error.message : 'Произошла ошибка. Попробуйте ещё раз.');
                 } finally {
                   setIsSubmitting(false);
                 }
