@@ -10,19 +10,9 @@ const Header = () => {
   const [isAuth, setIsAuth] = useState(false);
   const navigate = useNavigate();
 
+  // ЛК отключён: всегда скрываем элементы аутентификации
   useEffect(() => {
-    // Проверяем аутентификацию через новую систему
-    const checkAuth = async () => {
-      try {
-        const user = await newAuth.getCurrentUser();
-        setIsAuth(!!user);
-      } catch (error) {
-        console.log('Auth check error:', error);
-        setIsAuth(false);
-      }
-    };
-    
-    checkAuth();
+    setIsAuth(false);
   }, []);
 
   const handleLogout = async () => {
@@ -102,19 +92,9 @@ const Header = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
-            {!isAuth ? (
-              <>
-                <Link to="/login"><Button variant="ghost">Вход</Button></Link>
-                <Link to={{ pathname: "/", hash: "#hero-form" }}>
-                  <Button>Попробовать бесплатно</Button>
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link to="/dashboard"><Button variant="ghost">Личный кабинет</Button></Link>
-                <Button variant="ghost" onClick={handleLogout}>Выход</Button>
-              </>
-            )}
+            <Link to={{ pathname: "/", hash: "#hero-form" }}>
+              <Button>Попробовать бесплатно</Button>
+            </Link>
           </div>
 
           <div className="md:hidden">
@@ -163,23 +143,9 @@ const Header = () => {
                 )
               ))}
               <div className="pt-4 space-y-2">
-                {!isAuth ? (
-                  <>
-                    <Link to="/login" className="w-full block">
-                      <Button variant="ghost" className="w-full justify-start">Вход</Button>
-                    </Link>
-                    <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
-                      <Button className="w-full justify-start">Попробовать бесплатно</Button>
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link to="/dashboard" className="w-full block">
-                      <Button variant="ghost" className="w-full justify-start">Личный кабинет</Button>
-                    </Link>
-                    <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>Выход</Button>
-                  </>
-                )}
+                <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
+                  <Button className="w-full justify-start">Попробовать бесплатно</Button>
+                </Link>
               </div>
             </div>
           </div>
