@@ -1,13 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { rateLimiter } from '../lib/rateLimiter';
-import { SupabaseWithRetry } from '../lib/supabaseWithRetry';
-import { SupabaseDebug } from '../lib/supabaseDebug';
-
-function generateRandomPassword(length = 12) {
-  return Math.random().toString(36).slice(-length);
-}
 
 const EmailYandexForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,109 +7,29 @@ const EmailYandexForm: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const navigate = useNavigate();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setSuccess(null);
     setError(null);
-
-    // Проверяем rate limiting
-    const rateKey = `signup_${email}`;
-    if (!rateLimiter.canAttempt(rateKey)) {
-      const remainingTime = rateLimiter.getRemainingTime(rateKey);
-      setError(`Слишком много попыток. Попробуйте через ${Math.ceil(remainingTime / 1000)} секунд.`);
-      setLoading(false);
-      return;
-    }
-
-    let userId: string | null = null;
     
     try {
-      // Отладочная информация
-      await SupabaseDebug.checkEmailSettings();
-      await SupabaseDebug.getRateLimitInfo();
-      
-      // 1. Проверяем, есть ли пользователь в таблице Users
-      let { data: existingUser } = await supabase
-        .from('Users')
-        .select('id')
-        .eq('email', email)
-        .single();
+      const response = await fetch('/api/public/request-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, url: yandexUrl })
+      });
 
-      if (existingUser) {
-        userId = existingUser.id;
-      } else {
-        // 2. Создаём пользователя без email-подтверждения
-        const tempPassword = generateRandomPassword();
-        
-        // Сначала создаем пользователя в Auth, затем в таблице Users
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: email,
-          password: tempPassword,
-          options: {
-            data: {
-              email: email
-            }
-          }
-        });
-        
-        if (authError) {
-          console.error('Ошибка создания пользователя в Auth:', authError);
-          setError('Ошибка при создании пользователя: ' + authError.message);
-          setLoading(false);
-          return;
-        }
-        
-        // Теперь создаем запись в таблице Users с правильным ID
-        const { data: userData, error: userError } = await supabase
-          .from('Users')
-          .insert({ 
-            id: authData.user!.id,
-            email: email 
-          })
-          .select('id')
-          .single();
-          
-        if (userError) {
-          console.error('Ошибка создания пользователя в таблице:', userError);
-          if (userError.message?.includes('rate limit')) {
-            setError('Превышен лимит отправки email. Попробуйте позже или используйте другой email.');
-          } else {
-            setError('Ошибка при создании пользователя: ' + userError.message);
-          }
-          setLoading(false);
-          return;
-        }
-        
-        userId = userData.id;
-        
-        console.log('Пользователь создан в Auth и Users с ID:', userId);
-        
-        // Сохраняем временный пароль для последующей смены
-        localStorage.setItem('tempPassword', tempPassword);
-        localStorage.setItem('tempUserId', userId);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Ошибка при отправке заявки');
       }
 
-      // 3. Сохраняем заявку на отчёт в ParseQueue
-      const { error: insertError } = await supabase
-        .from('ParseQueue')
-        .insert({ user_id: userId, url: yandexUrl });
-
-      if (insertError) {
-        setError('Ошибка при сохранении заявки: ' + insertError.message);
-        setLoading(false);
-        return;
-      }
-
-      setSuccess('Заявка успешно отправлена! Переходим к настройке пароля.');
-      // 4. Перенаправляем сразу на страницу установки пароля (без email-подтверждения)
-      navigate('/set-password', { state: { email, skipEmailConfirmation: true } });
+      setSuccess('Спасибо! Мы приняли вашу заявку и скоро с вами свяжемся.');
       
     } catch (error) {
       console.error('Общая ошибка:', error);
-      setError('Произошла ошибка. Попробуйте ещё раз.');
+      setError(error instanceof Error ? error.message : 'Произошла ошибка. Попробуйте ещё раз.');
     } finally {
       setLoading(false);
     }

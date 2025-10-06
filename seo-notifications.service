@@ -1,0 +1,16 @@
+[Unit]
+Description=SEO Notifications Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/seo-notifications
+ExecStart=/usr/bin/node backend/server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+

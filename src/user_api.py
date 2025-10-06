@@ -15,6 +15,50 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+@app.route('/api/public/request-report', methods=['POST'])
+def public_request_report():
+    """Публичная заявка на отчёт без авторизации.
+    Принимает email и url, создаёт пользователя при необходимости и добавляет URL в ParseQueue.
+    """
+    try:
+        data = request.get_json() or {}
+        email = data.get('email')
+        url = data.get('url')
+
+        if not email or not url:
+            return jsonify({"error": "Email и URL обязательны"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Ищем пользователя по email
+        cursor.execute("SELECT id FROM Users WHERE email = ?", (email,))
+        user_row = cursor.fetchone()
+
+        if user_row:
+            user_id = user_row['id']
+        else:
+            # Создаём пользователя без пароля
+            from auth_system import create_user as create_user_func
+            create_result = create_user_func(email)
+            if 'error' in create_result:
+                conn.close()
+                return jsonify(create_result), 400
+            user_id = create_result['id']
+
+        # Добавляем заявку в очередь
+        from add_to_queue import add_to_queue as add_to_queue_func
+        queue_id = add_to_queue_func(url, user_id)
+
+        conn.close()
+
+        return jsonify({
+            "queue_id": queue_id,
+            "message": "Заявка принята. Мы свяжемся с вами в ближайшее время."
+        }), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """Регистрация нового пользователя"""
