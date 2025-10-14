@@ -128,7 +128,7 @@ const About = () => {
                     window.location.href = '/#hero-form';
                   }}
                 >
-                  Получить бесплатный отчёт
+                  Настроить бесплатно
                 </Button>
               </CardContent>
             </Card>

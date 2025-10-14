@@ -53,7 +53,7 @@ const CTA = () => {
                   (form.querySelector('input, textarea, select') as HTMLElement)?.focus();
                 }
               }}>
-                Получить бесплатный отчёт
+                Настроить бесплатно
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </div>
