@@ -82,6 +82,17 @@ def download_report(card_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/health', methods=['GET'])
+def health():
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/view-report/<card_id>', methods=['GET'])
 def view_report(card_id):
     """

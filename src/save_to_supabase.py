@@ -1,24 +1,29 @@
-from supabase import create_client, Client
-import os
+import sqlite3
+import json
+import uuid
 
-# Удаляю захардкоженные ключи SUPABASE_URL и SUPABASE_KEY, убираю глобальный supabase
+
+def _get_connection():
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
 
 def check_competitor_exists(competitor_url):
-    """Проверяет, существует ли конкурент в базе данных"""
+    """Проверяет, существует ли конкурент в локальной SQLite базе данных"""
     try:
-        from supabase import create_client, Client
-        import os
-        url = os.getenv('SUPABASE_URL')
-        key = os.getenv('SUPABASE_KEY')
-        if not url or not key:
-            print("Предупреждение: переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
+        if not competitor_url:
             return False
-        supabase: Client = create_client(url, key)
-        result = supabase.table("Cards").select("id").eq("url", competitor_url).execute()
-        return len(result.data) > 0
+        conn = _get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM Cards WHERE url = ? LIMIT 1", (competitor_url,))
+        row = cur.fetchone()
+        conn.close()
+        return row is not None
     except Exception as e:
-        print(f"Ошибка при проверке конкурента: {e}")
+        print(f"Ошибка при проверке конкурента в SQLite: {e}")
         return False
+
 
 def get_next_available_competitor(competitors):
     """Возвращает первого конкурента, которого нет в базе данных"""
@@ -27,84 +32,87 @@ def get_next_available_competitor(competitors):
             return competitor
     return None
 
-def save_card_to_supabase(card_data):
-    try:
-        from supabase import create_client, Client
-        import os
-        url = os.getenv('SUPABASE_URL')
-        key = os.getenv('SUPABASE_KEY')
-        if not url or not key:
-            print("Предупреждение: Переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
-            print("Данные не будут сохранены в базу данных")
-            return None
-        supabase: Client = create_client(url, key)
-        data = {
-            "url": card_data.get("url"),
-            "title": card_data.get("overview", {}).get("title"),
-            "address": card_data.get("overview", {}).get("address"),
-            "phone": card_data.get("overview", {}).get("phone"),
-            "site": card_data.get("overview", {}).get("site"),
-            "rating": float(card_data.get("overview", {}).get("rating") or 0),
-            "ratings_count": int(card_data.get("overview", {}).get("ratings_count") or 0),
-            "reviews_count": int(card_data.get("overview", {}).get("reviews_count") or 0),
-            "rubric": card_data.get("rubric"),
-            "categories": card_data.get("product_categories"),
-            "categories_full": card_data.get("categories_full"),
-            "features_bool": card_data.get("features_bool"),
-            "features_valued": card_data.get("features_valued"),
-            "features_prices": card_data.get("features_prices"),
-            "features_full": card_data.get("features_full"),
-            "overview": card_data.get("overview"),
-            "products": card_data.get("products"),
-            "news": card_data.get("news"),
-            "photos": card_data.get("photos"),
-            "reviews": card_data.get("reviews"),
-            "hours": card_data.get("overview", {}).get("hours"),
-            "hours_full": card_data.get("overview", {}).get("hours_full"),
-            "competitors": card_data.get("competitors", []),
-            "main_card_url": None,
+
+def _extract_overview(overview):
+    if isinstance(overview, dict):
+        return {
+            "title": overview.get("title"),
+            "address": overview.get("address"),
+            "phone": overview.get("phone"),
+            "site": overview.get("site"),
+            "rating": overview.get("rating"),
+            "reviews_count": overview.get("reviews_count"),
+            "hours": overview.get("hours"),
+            "hours_full": overview.get("hours_full"),
+            "description": overview.get("description"),
         }
-        result = supabase.table("Cards").insert(data).execute()
-        print(f"Карточка сохранена с ID: {result.data[0]['id']}")
-        return result.data[0]['id']
-    except Exception as e:
-        print(f"Ошибка при сохранении в Supabase: {type(e).__name__}: {str(e)}")
+    return {}
+
+
+def _json_or_none(value):
+    try:
+        if value is None:
+            return None
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
         return None
 
-def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
-    """Сохраняет данные конкурента с привязкой к основной карточке"""
-    from supabase import create_client, Client
-    import os
-    url = os.getenv('SUPABASE_URL')
-    key = os.getenv('SUPABASE_KEY')
-    if not url or not key:
-        print("Предупреждение: переменные окружения SUPABASE_URL или SUPABASE_KEY не установлены")
+
+def save_card_to_supabase(card_data):
+    """Сохраняет карточку в SQLite (замена Supabase). Возвращает id."""
+    try:
+        overview = _extract_overview(card_data.get("overview"))
+        card_id = str(uuid.uuid4())
+
+        # Поля по схеме Cards
+        payload = {
+            "id": card_id,
+            "url": card_data.get("url"),
+            "title": overview.get("title") or card_data.get("title"),
+            "address": overview.get("address") or card_data.get("address"),
+            "phone": overview.get("phone") or card_data.get("phone"),
+            "site": overview.get("site") or card_data.get("site"),
+            "rating": float(overview.get("rating") or 0) if overview.get("rating") not in (None, "") else None,
+            "reviews_count": int(overview.get("reviews_count") or 0) if overview.get("reviews_count") not in (None, "") else None,
+            "categories": _json_or_none(card_data.get("product_categories") or card_data.get("categories")),
+            "overview": _json_or_none(card_data.get("overview")),
+            "products": _json_or_none(card_data.get("products")),
+            "news": _json_or_none(card_data.get("news")),
+            "photos": _json_or_none(card_data.get("photos")),
+            "features_full": _json_or_none(card_data.get("features_full")),
+            "competitors": _json_or_none(card_data.get("competitors") or []),
+            "hours": overview.get("hours"),
+            "hours_full": _json_or_none(overview.get("hours_full")),
+            "report_path": card_data.get("report_path"),
+            "user_id": None,
+            "seo_score": card_data.get("seo_score"),
+            "ai_analysis": _json_or_none(card_data.get("ai_analysis")),
+            "recommendations": _json_or_none(card_data.get("recommendations")),
+        }
+
+        fields = ", ".join(payload.keys())
+        placeholders = ", ".join(["?" for _ in payload])
+        values = list(payload.values())
+
+        conn = _get_connection()
+        cur = conn.cursor()
+        cur.execute(f"INSERT INTO Cards ({fields}) VALUES ({placeholders})", values)
+        conn.commit()
+        conn.close()
+
+        print(f"Карточка сохранена в SQLite с ID: {card_id}")
+        return card_id
+    except Exception as e:
+        print(f"Ошибка при сохранении в SQLite: {type(e).__name__}: {str(e)}")
         return None
-    supabase: Client = create_client(url, key)
-    data = {
-        "url": competitor_data.get("url"),
-        "title": competitor_data.get("overview", {}).get("title"),
-        "address": competitor_data.get("overview", {}).get("address"),
-        "phone": competitor_data.get("overview", {}).get("phone"),
-        "site": competitor_data.get("overview", {}).get("site"),
-        "rating": float(competitor_data.get("overview", {}).get("rating") or 0),
-        "ratings_count": int(competitor_data.get("overview", {}).get("ratings_count") or 0),
-        "reviews_count": int(competitor_data.get("overview", {}).get("reviews_count") or 0),
-        "categories": competitor_data.get("product_categories"),
-        "categories_full": competitor_data.get("categories_full"),
-        "features_bool": competitor_data.get("features_bool"),
-        "features_valued": competitor_data.get("features_valued"),
-        "features_prices": competitor_data.get("features_prices"),
-        "features_full": competitor_data.get("features_full"),
-        "overview": competitor_data.get("overview"),
-        "products": competitor_data.get("products"),
-        "news": competitor_data.get("news"),
-        "photos": competitor_data.get("photos"),
-        "reviews": competitor_data.get("reviews"),
-        "hours": competitor_data.get("overview", {}).get("hours"),
-        "hours_full": competitor_data.get("overview", {}).get("hours_full"),
-        "competitors": [],
-        "main_card_url": main_card_url,  # Привязка к основной карточке
-    }
-    result = supabase.table("Cards").insert(data).execute()
-    return result.data[0]['id'] if result.data else None
+
+
+def save_competitor_to_supabase(competitor_data, main_card_id, main_card_url):
+    """Сохраняет данные конкурента в SQLite. Возвращает id."""
+    try:
+        competitor_data = dict(competitor_data or {})
+        competitor_data['competitors'] = []
+        return save_card_to_supabase(competitor_data)
+    except Exception as e:
+        print(f"Ошибка при сохранении конкурента в SQLite: {e}")
+        return None

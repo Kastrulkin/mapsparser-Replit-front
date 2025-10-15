@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { newAuth } from '../lib/auth_new';
 import { useLocation, useNavigate } from 'react-router-dom';
-import AlternativePasswordReset from '../components/AlternativePasswordReset';
 
 const SetPassword: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -89,23 +88,7 @@ const SetPassword: React.FC = () => {
     await handleSetPassword();
   };
 
-  // Если показываем альтернативное восстановление пароля
-  if (showAlternativeReset) {
-    return (
-      <AlternativePasswordReset
-        email={email}
-        onSuccess={() => {
-          setShowAlternativeReset(false);
-          setError(null);
-          setInfo('Пароль успешно обновлен!');
-        }}
-        onCancel={() => {
-          setShowAlternativeReset(false);
-          setError(null);
-        }}
-      />
-    );
-  }
+  // Упрощенная версия без альтернативного восстановления
 
   return (
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md flex flex-col gap-4 mt-12">

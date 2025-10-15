@@ -6,12 +6,19 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 8080, // или 3000, если нужно
+    port: 3001,
     allowedHosts: [
       "localhost",
       "127.0.0.1",
       "6463ac8a-2c20-46f2-bae0-11bc92991339-00-1uzunkaw6b2ub.riker.replit.dev",
     ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5002',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   resolve: {
     alias: {

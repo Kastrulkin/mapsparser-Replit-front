@@ -28,11 +28,56 @@ const Dashboard = () => {
   const [queue, setQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [autoAnalysisUrl, setAutoAnalysisUrl] = useState('');
+  const [autoAnalysisLoading, setAutoAnalysisLoading] = useState(false);
   const [form, setForm] = useState({ email: "", phone: "", name: "", yandexUrl: "" });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [timer, setTimer] = useState<string | null>(null);
+
+  // Функция автоматического анализа карточки
+  const handleAutoAnalysis = async () => {
+    if (!autoAnalysisUrl.trim()) {
+      setError('Введите URL карточки на Яндекс.Картах');
+      return;
+    }
+
+    if (!autoAnalysisUrl.includes('yandex.ru/maps')) {
+      setError('Введите корректную ссылку на Яндекс.Карты');
+      return;
+    }
+
+    setAutoAnalysisLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('http://localhost:8000/api/analyze-card-auto', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ url: autoAnalysisUrl })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess('Карточка успешно проанализирована!');
+        setAutoAnalysisUrl('');
+        // Обновляем список отчетов
+        loadReports();
+      } else {
+        setError(data.error || 'Ошибка анализа');
+      }
+    } catch (error) {
+      setError('Ошибка соединения с сервером');
+    } finally {
+      setAutoAnalysisLoading(false);
+    }
+  };
   const [canCreateReport, setCanCreateReport] = useState<boolean>(false);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
   const [reportContent, setReportContent] = useState<string>("");
@@ -793,9 +838,42 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Анализ карточек Яндекс.Карт */}
+          {/* Автоматический анализ карточек Яндекс.Карт */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Анализ карточки на Яндекс.Картах</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">🤖 Автоматический анализ карточки</h2>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <div className="flex items-center mb-4">
+                  <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-blue-900">Быстрый анализ</h3>
+                </div>
+                <p className="text-sm text-blue-700 mb-4">Вставьте ссылку на карточку Яндекс.Карт, и система автоматически откроет её, сделает скриншот и проанализирует</p>
+                
+                <div className="flex gap-4">
+                  <input
+                    type="url"
+                    value={autoAnalysisUrl}
+                    onChange={(e) => setAutoAnalysisUrl(e.target.value)}
+                    placeholder="https://yandex.ru/maps/org/..."
+                    className="flex-1 px-4 py-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <Button 
+                    onClick={handleAutoAnalysis} 
+                    disabled={autoAnalysisLoading || !autoAnalysisUrl.trim()}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {autoAnalysisLoading ? 'Анализируем...' : 'Анализировать'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ручной анализ карточек Яндекс.Карт */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">📸 Ручной анализ карточки</h2>
             <div className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
                 <div className="flex flex-col items-center">

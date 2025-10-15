@@ -36,7 +36,7 @@ def rate_limited(limit: int = 10, window_sec: int = 60):
     return decorator
 
 app = Flask(__name__)
-CORS(app, origins=['http://localhost:3000', 'http://127.0.0.1:3000'])
+CORS(app, origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'])
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""

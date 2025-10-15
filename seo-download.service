@@ -1,0 +1,19 @@
+[Unit]
+Description=SEO Download Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/seo-bot/app
+Environment=PYTHONPATH=/opt/seo-bot/app/src
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/seo-bot/app/venv/bin/python /opt/seo-bot/app/src/download_server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

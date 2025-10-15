@@ -1,14 +1,9 @@
 import os
 import requests
 import json
+import sqlite3
 from typing import Dict, Any, List
-from supabase import create_client, Client
 from model_config import get_model_config, get_prompt
-
-# Инициализация Supabase
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')
-supabase: Client = create_client(supabase_url, supabase_key)
 
 # Hugging Face API
 HF_API_TOKEN = os.getenv('HUGGINGFACE_API_TOKEN')
@@ -269,35 +264,39 @@ def calculate_seo_score(analysis_result: Dict[str, Any]) -> int:
 
 def process_pending_analyses():
     """
-    Обрабатывает все записи в Cards, которые требуют ИИ-анализа
+    Обрабатывает все записи в Cards (SQLite), у которых пустой ai_analysis
     """
     try:
-        # Получаем записи без анализа
-        response = supabase.table('Cards').select('*').is_('ai_analysis', 'null').execute()
-        
-        if response.data:
-            print(f"Найдено {len(response.data)} записей для анализа")
-            
-            for card in response.data:
-                print(f"Анализируем карточку {card['id']}...")
-                
-                # Выполняем анализ
-                analysis_result = analyze_business_data(card)
-                
-                # Сохраняем результат
-                supabase.table('Cards').update({
-                    'ai_analysis': analysis_result,
-                    'seo_score': analysis_result['score'],
-                    'recommendations': analysis_result['recommendations']
-                }).eq('id', card['id']).execute()
-                
-                print(f"Анализ завершён для {card['id']}")
-        
-        else:
+        conn = sqlite3.connect("reports.db")
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM Cards WHERE ai_analysis IS NULL OR ai_analysis = ''")
+        rows = cur.fetchall()
+
+        if not rows:
             print("Нет записей для анализа")
-            
+            conn.close()
+            return
+
+        print(f"Найдено {len(rows)} записей для анализа")
+        for row in rows:
+            card = dict(row)
+            print(f"Анализируем карточку {card['id']}...")
+            analysis_result = analyze_business_data(card)
+            cur.execute(
+                "UPDATE Cards SET ai_analysis = ?, seo_score = ?, recommendations = ? WHERE id = ?",
+                (
+                    json.dumps(analysis_result, ensure_ascii=False),
+                    analysis_result.get('score'),
+                    json.dumps(analysis_result.get('recommendations', []), ensure_ascii=False),
+                    card['id'],
+                ),
+            )
+            conn.commit()
+            print(f"Анализ завершён для {card['id']}")
+        conn.close()
     except Exception as e:
-        print(f"Ошибка при обработке анализов: {e}")
+        print(f"Ошибка при обработке анализов (SQLite): {e}")
 
 if __name__ == "__main__":
     # Запускаем обработку
