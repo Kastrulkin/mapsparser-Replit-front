@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 const Login = () => {
   const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ name: '', phone: '', email: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ name: '', phone: '', email: '', password: '', yandexUrl: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -50,7 +50,8 @@ const Login = () => {
         registerForm.email, 
         registerForm.password, 
         registerForm.name, 
-        registerForm.phone
+        registerForm.phone,
+        registerForm.yandexUrl
       );
       
       if (error) {
@@ -92,7 +93,7 @@ const Login = () => {
             Вход в систему
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Анализ SEO для вашего бизнеса
+            Новые клиенты для вашего бизнеса
           </p>
         </div>
 
@@ -219,6 +220,19 @@ const Login = () => {
                   type="tel"
                   value={registerForm.phone}
                   onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="register-yandex-url" className="block text-sm font-medium text-gray-700">
+                  Ссылка на карты Яндекс
+                </label>
+                <input
+                  id="register-yandex-url"
+                  type="url"
+                  value={registerForm.yandexUrl}
+                  onChange={(e) => setRegisterForm({...registerForm, yandexUrl: e.target.value})}
+                  placeholder="https://yandex.ru/maps/org/..."
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>

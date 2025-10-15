@@ -13,7 +13,7 @@ export class NewAuth {
   private static instance: NewAuth;
   private currentUser: User | null = null;
   private token: string | null = null;
-  private apiBaseUrl = 'https://beautybot.pro/api';
+  private apiBaseUrl = 'http://localhost:5002/api';
 
   static getInstance(): NewAuth {
     if (!NewAuth.instance) {
@@ -55,11 +55,11 @@ export class NewAuth {
     return data;
   }
 
-  async signUp(email: string, password: string, name?: string, phone?: string): Promise<{ user: User | null; error: any }> {
+  async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string): Promise<{ user: User | null; error: any }> {
     try {
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password, name, phone }),
+        body: JSON.stringify({ email, password, name, phone, yandexUrl }),
       });
 
       if (response.error) {

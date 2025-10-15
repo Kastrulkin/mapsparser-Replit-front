@@ -3,11 +3,40 @@
 API для управления пользователями
 """
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import sqlite3
 from auth_system import *
 from datetime import datetime
+import time
+
+# Простой in-memory rate limiting (для dev)
+_rate_buckets = {}
+
+def _rate_key(ip: str, endpoint: str) -> str:
+    return f"{ip}:{endpoint}"
+
+def rate_limited(limit: int = 10, window_sec: int = 60):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            ip = request.headers.get('X-Forwarded-For', request.remote_addr) or 'unknown'
+            key = _rate_key(ip, request.endpoint or func.__name__)
+            now = time.time()
+            window_start = now - window_sec
+            timestamps = _rate_buckets.get(key, [])
+            # чистим старые
+            timestamps = [t for t in timestamps if t > window_start]
+            if len(timestamps) >= limit:
+                return jsonify({"error": "Слишком много запросов. Попробуйте позже."}), 429
+            timestamps.append(now)
+            _rate_buckets[key] = timestamps
+            return func(*args, **kwargs)
+        # сохраняем метаданные
+        wrapper.__name__ = func.__name__
+        return wrapper
+    return decorator
 
 app = Flask(__name__)
+CORS(app, origins=['http://localhost:3000', 'http://127.0.0.1:3000'])
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
@@ -16,6 +45,7 @@ def get_db_connection():
     return conn
 
 @app.route('/api/public/request-report', methods=['POST'])
+@rate_limited(limit=5, window_sec=60)
 def public_request_report():
     """Публичная заявка на отчёт без авторизации.
     Принимает email и url, создаёт пользователя при необходимости и добавляет URL в ParseQueue.
@@ -60,6 +90,7 @@ def public_request_report():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
+@rate_limited(limit=5, window_sec=60)
 def register():
     """Регистрация нового пользователя"""
     try:
@@ -95,6 +126,7 @@ def register():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
+@rate_limited(limit=10, window_sec=60)
 def login():
     """Вход пользователя"""
     try:
@@ -236,6 +268,7 @@ def change_password():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/set-password', methods=['POST'])
+@rate_limited(limit=5, window_sec=60)
 def set_password():
     """Установить пароль для нового пользователя"""
     try:
@@ -499,6 +532,136 @@ def delete_queue_item(queue_id):
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analyze-card', methods=['POST'])
+@rate_limited(limit=5, window_sec=60)
+def analyze_card():
+    """Анализ скриншота карточки Яндекс.Карт через GigaChat API"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_id = verify_token(token)
+        if not user_id:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем наличие файла
+        if 'image' not in request.files:
+            return jsonify({"error": "Файл изображения не найден"}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({"error": "Файл не выбран"}), 400
+        
+        # Проверяем тип файла
+        allowed_types = ['image/png', 'image/jpeg', 'image/jpg']
+        if file.content_type not in allowed_types:
+            return jsonify({"error": "Неподдерживаемый формат файла. Разрешены: PNG, JPG, JPEG"}), 400
+        
+        # Проверяем размер файла (15 МБ)
+        file.seek(0, 2)  # Переходим в конец файла
+        file_size = file.tell()
+        file.seek(0)  # Возвращаемся в начало
+        
+        if file_size > 15 * 1024 * 1024:  # 15 МБ
+            return jsonify({"error": "Файл слишком большой. Максимальный размер: 15 МБ"}), 400
+        
+        # Сохраняем временный файл
+        import tempfile
+        import os
+        from card_analyzer import CardAnalyzer
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+            file.save(temp_file.name)
+            temp_path = temp_file.name
+        
+        try:
+            # Анализируем карточку
+            analyzer = CardAnalyzer()
+            result = analyzer.analyze_card_screenshot(temp_path)
+            
+            return jsonify(result)
+            
+        finally:
+            # Удаляем временный файл
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+                
+    except Exception as e:
+        return jsonify({"error": f"Ошибка анализа карточки: {str(e)}"}), 500
+
+@app.route('/api/optimize-pricelist', methods=['POST'])
+@rate_limited(limit=5, window_sec=60)
+def optimize_pricelist():
+    """SEO оптимизация прайс-листа через GigaChat API"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_id = verify_token(token)
+        if not user_id:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем наличие файла
+        if 'file' not in request.files:
+            return jsonify({"error": "Файл прайс-листа не найден"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Файл не выбран"}), 400
+        
+        # Проверяем тип файла
+        allowed_types = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ]
+        if file.content_type not in allowed_types:
+            return jsonify({"error": "Неподдерживаемый формат файла. Разрешены: PDF, DOC, DOCX, XLS, XLSX"}), 400
+        
+        # Проверяем размер файла (15 МБ)
+        file.seek(0, 2)  # Переходим в конец файла
+        file_size = file.tell()
+        file.seek(0)  # Возвращаемся в начало
+        
+        if file_size > 15 * 1024 * 1024:  # 15 МБ
+            return jsonify({"error": "Файл слишком большой. Максимальный размер: 15 МБ"}), 400
+        
+        # Сохраняем временный файл
+        import tempfile
+        import os
+        from seo_optimizer import SEOOptimizer
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            file.save(temp_file.name)
+            temp_path = temp_file.name
+        
+        try:
+            # Оптимизируем прайс-лист
+            optimizer = SEOOptimizer()
+            result = optimizer.optimize_pricelist(temp_path)
+            
+            return jsonify(result)
+            
+        finally:
+            # Удаляем временный файл
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+                
+    except Exception as e:
+        return jsonify({"error": f"Ошибка оптимизации прайс-листа: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5002, debug=True)

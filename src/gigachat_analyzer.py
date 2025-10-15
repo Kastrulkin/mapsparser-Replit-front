@@ -5,47 +5,95 @@
 import requests
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import time
+import random
 
 class GigaChatAnalyzer:
-    def __init__(self, client_id: str, client_secret: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
+    def __init__(self, client_id: str = None, client_secret: str = None):
+        """Поддержка одиночного ключа и пула ключей с ротацией.
+
+        Пул можно задать переменной окружения GIGACHAT_KEYS в формате:
+        "id1:secret1;id2:secret2;id3:secret3"
+        """
+        # Загружаем пул ключей из окружения, если переданы неявно
+        keys_env = os.getenv("GIGACHAT_KEYS", "").strip()
+        self.credentials_pool: List[Tuple[str, str]] = []
+        if keys_env:
+            try:
+                for pair in keys_env.split(";"):
+                    pair = pair.strip()
+                    if not pair:
+                        continue
+                    cid, csec = pair.split(":", 1)
+                    self.credentials_pool.append((cid.strip(), csec.strip()))
+            except Exception:
+                # Игнорируем форматные ошибки и fallback к одиночному ключу
+                self.credentials_pool = []
+
+        if client_id and client_secret:
+            self.credentials_pool.insert(0, (client_id, client_secret))
+
+        # Если ничего не нашли в пуле — пробуем старые переменные окружения
+        if not self.credentials_pool:
+            env_id = os.getenv('GIGACHAT_CLIENT_ID')
+            env_secret = os.getenv('GIGACHAT_CLIENT_SECRET')
+            if env_id and env_secret:
+                self.credentials_pool = [(env_id, env_secret)]
+
+        self.current_index = 0
         self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
         self.access_token = None
         self.token_expires_at = 0
+        self.last_auth_error = None
     
+    def _rotate_credentials(self) -> None:
+        if not self.credentials_pool:
+            return
+        self.current_index = (self.current_index + 1) % len(self.credentials_pool)
+        # Инвалидируем текущий токен при смене ключа
+        self.access_token = None
+        self.token_expires_at = 0
+
+    def _get_current_credentials(self) -> Tuple[str, str]:
+        if not self.credentials_pool:
+            raise RuntimeError("GigaChat credentials are not configured")
+        return self.credentials_pool[self.current_index]
+
     def get_access_token(self) -> str:
-        """Получить токен доступа"""
+        """Получить токен доступа с ротацией ключей и retry."""
         if self.access_token and time.time() < self.token_expires_at:
             return self.access_token
-        
-        url = f"{self.base_url}/oauth"
-        data = {
-            "scope": "GIGACHAT_API_PERS"
-        }
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json"
-        }
-        auth = (self.client_id, self.client_secret)
-        
-        try:
-            response = requests.post(url, data=data, headers=headers, auth=auth, timeout=30)
-            response.raise_for_status()
-            
-            token_data = response.json()
-            self.access_token = token_data["access_token"]
-            # Токен действует 30 минут, обновляем за 5 минут до истечения
-            self.token_expires_at = time.time() + (25 * 60)
-            
-            print(f"✅ GigaChat токен получен успешно")
-            return self.access_token
-            
-        except Exception as e:
-            print(f"❌ Ошибка получения токена GigaChat: {e}")
-            raise
+
+        last_error = None
+        attempts = min(3, max(1, len(self.credentials_pool) or 1))
+        for attempt in range(attempts):
+            client_id, client_secret = self._get_current_credentials()
+            url = f"{self.base_url}/oauth"
+            data = {"scope": "GIGACHAT_API_PERS"}
+            headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+            try:
+                response = requests.post(url, data=data, headers=headers, auth=(client_id, client_secret), timeout=30)
+                if response.status_code in (401, 403):
+                    # Неверный/просроченный ключ — пробуем следующий
+                    last_error = RuntimeError(f"Auth failed for key index {self.current_index}: {response.status_code}")
+                    self._rotate_credentials()
+                    continue
+                response.raise_for_status()
+                token_data = response.json()
+                self.access_token = token_data["access_token"]
+                # Токен действует 30 минут, обновляем за 5 минут до истечения
+                self.token_expires_at = time.time() + (25 * 60)
+                print("✅ GigaChat токен получен успешно")
+                return self.access_token
+            except Exception as e:
+                last_error = e
+                # Экспоненциальная задержка с джиттером
+                time.sleep(0.5 * (2 ** attempt) + random.random() * 0.25)
+                # Попробуем другой ключ
+                self._rotate_credentials()
+
+        raise RuntimeError(f"Не удалось получить токен GigaChat: {last_error}")
     
     def analyze_business_data(self, card_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -163,36 +211,41 @@ class GigaChatAnalyzer:
 """
         return prompt
     
+    def _post_with_retry(self, url: str, headers: Dict[str, str], json_body: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, json=json_body, headers=headers, timeout=60)
+                # Если лимиты/авторизация — пробуем ротацию ключа и повтор
+                if response.status_code in (401, 403, 429, 503):
+                    last_error = RuntimeError(f"HTTP {response.status_code}")
+                    # Сменим ключ и обновим токен
+                    self._rotate_credentials()
+                    self.get_access_token()
+                else:
+                    response.raise_for_status()
+                    return response.json()
+            except Exception as e:
+                last_error = e
+            # Бэк-офф с джиттером
+            time.sleep(0.75 * (2 ** attempt) + random.random() * 0.3)
+        raise RuntimeError(f"Запрос к GigaChat не удался после повторов: {last_error}")
+
     def send_analysis_request(self, prompt: str, token: str) -> str:
-        """Отправляет запрос к GigaChat"""
+        """Отправляет запрос к GigaChat с ретраями и ротацией ключей."""
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
         data = {
             "model": "GigaChat:latest",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 2000
         }
-        
-        try:
-            response = requests.post(url, json=data, headers=headers, timeout=60)
-            response.raise_for_status()
-            
-            result = response.json()
-            return result['choices'][0]['message']['content']
-            
-        except Exception as e:
-            print(f"❌ Ошибка запроса к GigaChat: {e}")
-            raise
+        result = self._post_with_retry(url, headers, data, max_retries=3)
+        return result['choices'][0]['message']['content']
     
     def parse_analysis_result(self, analysis_text: str) -> Dict[str, Any]:
         """Парсит результат анализа"""
@@ -273,6 +326,86 @@ class GigaChatAnalyzer:
             'recommendations': recommendations,
             'score': min(100, max(0, score))
         }
+    
+    def analyze_with_image(self, prompt: str, image_base64: str) -> str:
+        """Анализ изображения с текстовым промптом"""
+        try:
+            token = self.get_access_token()
+            
+            url = f"{self.base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Формируем сообщение с изображением
+            message_content = [
+                {
+                    "type": "text",
+                    "text": prompt
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_base64}"
+                    }
+                }
+            ]
+            
+            data = {
+                "model": "GigaChat-2-Pro",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": message_content
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 4000
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response.raise_for_status()
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+            
+        except Exception as e:
+            print(f"❌ Ошибка анализа изображения: {e}")
+            raise
+    
+    def analyze_text(self, prompt: str) -> str:
+        """Анализ текста с промптом"""
+        try:
+            token = self.get_access_token()
+            
+            url = f"{self.base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "GigaChat-2-Pro",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 4000
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response.raise_for_status()
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+            
+        except Exception as e:
+            print(f"❌ Ошибка анализа текста: {e}")
+            raise
 
 def analyze_business_data(card_data: Dict[str, Any]) -> Dict[str, Any]:
     """

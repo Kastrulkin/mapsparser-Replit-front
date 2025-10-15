@@ -31,6 +31,16 @@ npm install
 npm run build
 cd ..
 
+echo "📤 Деплой фронтенда в /var/www/html..."
+# Создаём каталог, если его нет
+mkdir -p /var/www/html
+# Чистим старую выдачу и копируем новую сборку
+rm -rf /var/www/html/*
+cp -r frontend/dist/* /var/www/html/
+# На некоторых системах пользователь nginx отличается; не падаем, если группы нет
+chown -R www-data:www-data /var/www/html 2>/dev/null || true
+chmod -R 755 /var/www/html
+
 echo "🔄 Перезапускаем сервисы..."
 systemctl restart seo-worker
 systemctl restart nginx

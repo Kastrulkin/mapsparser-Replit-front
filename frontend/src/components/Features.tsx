@@ -30,7 +30,7 @@ const Features = () => {
     {
       icon: Users,
       title: "CRM для салонов",
-      description: (<><span>Ведите базу клиентов, историю посещений и персональные предпочтения каждого клиента</span><br /><span style={{ display: 'block', textAlign: 'center', width: '100%' }}>(Скоро. Август 2025)</span></>),
+      description: "Ведите базу клиентов, историю посещений и персональные предпочтения каждого клиента",
       color: "text-primary"
     },
     {

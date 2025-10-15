@@ -1,0 +1,39 @@
+Проанализируй скриншот карточки организации на Яндекс.Картах. 
+
+ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
+
+{
+  "completeness_score": число от 0 до 100,
+  "business_name": "название из карточки",
+  "category": "основная категория",
+  "analysis": {
+    "photos": {
+      "count": количество_фото,
+      "quality": "низкое/среднее/высокое",
+      "recommendations": ["рекомендация1", "рекомендация2"]
+    },
+    "description": {
+      "exists": true/false,
+      "length": количество_символов,
+      "seo_optimized": true/false,
+      "recommendations": ["рекомендация1"]
+    },
+    "contacts": {
+      "phone": true/false,
+      "website": true/false,
+      "social_media": true/false,
+      "recommendations": ["рекомендация1"]
+    },
+    "schedule": {
+      "complete": true/false,
+      "recommendations": ["рекомендация1"]
+    },
+    "services": {
+      "listed": true/false,
+      "count": количество,
+      "recommendations": ["рекомендация1"]
+    }
+  },
+  "priority_actions": ["действие1", "действие2", "действие3"],
+  "overall_recommendations": "общие рекомендации по улучшению"
+}

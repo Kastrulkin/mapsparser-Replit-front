@@ -92,6 +92,7 @@ const Header = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
+            {/* Кнопка входа скрыта по требованию. Маршрут /login остаётся доступным напрямую. */}
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
               <Button>Попробовать бесплатно</Button>
             </Link>
@@ -143,6 +144,7 @@ const Header = () => {
                 )
               ))}
               <div className="pt-4 space-y-2">
+                {/* Кнопка входа скрыта по требованию. */}
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
                   <Button className="w-full justify-start">Попробовать бесплатно</Button>
                 </Link>

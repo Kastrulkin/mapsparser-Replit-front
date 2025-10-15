@@ -23,11 +23,12 @@ const Hero = () => {
             </h1>
             
             <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-              Настроим карточку компании на картах бесплатно!
+              Заполните форму и мы настроим карточку компании на картах бесплатно!
             </p>
 
             {/* Форма для email и ссылки на Яндекс.Карты */}
             <form
+              id="hero-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 
