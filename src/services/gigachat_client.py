@@ -25,6 +25,16 @@ class GigaChatClient:
         # Загружаем конфигурацию GigaChat
         self.config = get_gigachat_config()
         
+        # Настройка проверки сертификатов TLS
+        # Можно указать путь к кастомному CA через GIGACHAT_CA_BUNDLE или REQUESTS_CA_BUNDLE
+        ca_bundle = os.getenv("GIGACHAT_CA_BUNDLE") or os.getenv("REQUESTS_CA_BUNDLE")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.verify_tls = ca_bundle  # verify принимает путь к файлу CA
+            print(f"🔐 Используется пользовательский CA bundle: {ca_bundle}")
+        else:
+            # По умолчанию используем системные сертификаты
+            self.verify_tls = True
+        
         # Загружаем ключи из переменных окружения
         self._load_credentials()
     
@@ -92,7 +102,8 @@ class GigaChatClient:
                     data=data, 
                     headers=headers, 
                     auth=(client_id, client_secret), 
-                    timeout=30
+                    timeout=30,
+                    verify=self.verify_tls
                 )
                 
                 if response.status_code in (401, 403):
@@ -124,7 +135,7 @@ class GigaChatClient:
         
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=json_body, headers=headers, timeout=60)
+                response = requests.post(url, json=json_body, headers=headers, timeout=60, verify=self.verify_tls)
                 
                 # Если лимиты/авторизация — пробуем ротацию ключа и повтор
                 if response.status_code in (401, 403, 429, 503):

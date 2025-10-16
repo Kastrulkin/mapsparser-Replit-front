@@ -3,6 +3,12 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { newAuth } from "@/lib/auth_new";
 import InviteFriendForm from "@/components/InviteFriendForm";
+import ServiceOptimizer from "@/components/ServiceOptimizer";
+import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
+import FinancialMetrics from "@/components/FinancialMetrics";
+import ProgressTracker from "@/components/ProgressTracker";
+import ROICalculator from "@/components/ROICalculator";
+import TransactionForm from "@/components/TransactionForm";
 
 function getNextReportDate(reports: any[]) {
   if (!reports.length) return null;
@@ -35,6 +41,307 @@ const Dashboard = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [timer, setTimer] = useState<string | null>(null);
+  
+  // Вкладки
+  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'progress'>('overview');
+  
+  // Услуги
+  const [userServices, setUserServices] = useState<any[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [editingService, setEditingService] = useState<string | null>(null);
+  const [showAddService, setShowAddService] = useState(false);
+  const [newService, setNewService] = useState({
+    category: '',
+    name: '',
+    description: '',
+    keywords: '',
+    price: ''
+  });
+  
+  // Финансы
+  const [showTransactionForm, setShowTransactionForm] = useState(false);
+  
+  // Информация о клиенте
+  const [clientInfo, setClientInfo] = useState({
+    businessName: '',
+    businessType: '',
+    address: '',
+    workingHours: ''
+  });
+  const [editClientInfo, setEditClientInfo] = useState(false);
+  const [savingClientInfo, setSavingClientInfo] = useState(false);
+
+  // Заполненность профиля
+  const profileCompletion = (() => {
+    const fieldsTotal = 7; // email, phone, name, businessName, businessType, address, workingHours
+    let filled = 0;
+    if ((form.email || '').trim()) filled++;
+    if ((form.phone || '').trim()) filled++;
+    if ((form.name || '').trim()) filled++;
+    if ((clientInfo.businessName || '').trim()) filled++;
+    if ((clientInfo.businessType || '').trim()) filled++;
+    if ((clientInfo.address || '').trim()) filled++;
+    if ((clientInfo.workingHours || '').trim()) filled++;
+    return Math.round((filled / fieldsTotal) * 100);
+  })();
+
+  // Загрузка услуг пользователя
+  const loadUserServices = async () => {
+    setLoadingServices(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/list`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setUserServices(data.services || []);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки услуг:', e);
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
+  // Добавление новой услуги
+  const addService = async () => {
+    if (!newService.name.trim()) {
+      setError('Название услуги обязательно');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          category: newService.category || 'Общие услуги',
+          name: newService.name,
+          description: newService.description,
+          keywords: newService.keywords.split(',').map(k => k.trim()).filter(k => k),
+          price: newService.price
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setNewService({ category: '', name: '', description: '', keywords: '', price: '' });
+        setShowAddService(false);
+        await loadUserServices();
+        setSuccess('Услуга добавлена');
+      } else {
+        setError(data.error || 'Ошибка добавления услуги');
+      }
+    } catch (e: any) {
+      setError('Ошибка добавления услуги: ' + e.message);
+    }
+  };
+
+  // Обновление услуги
+  const updateService = async (serviceId: string, updatedData: any) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedData)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setEditingService(null);
+        await loadUserServices();
+        setSuccess('Услуга обновлена');
+      } else {
+        setError(data.error || 'Ошибка обновления услуги');
+      }
+    } catch (e: any) {
+      setError('Ошибка обновления услуги: ' + e.message);
+    }
+  };
+
+  // Удаление услуги
+  const deleteService = async (serviceId: string) => {
+    if (!confirm('Вы уверены, что хотите удалить эту услугу?')) return;
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/delete/${serviceId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await loadUserServices();
+        setSuccess('Услуга удалена');
+      } else {
+        setError(data.error || 'Ошибка удаления услуги');
+      }
+    } catch (e: any) {
+      setError('Ошибка удаления услуги: ' + e.message);
+    }
+  };
+
+  // Сохранение информации о клиенте
+  const handleSaveClientInfo = async () => {
+    setSavingClientInfo(true);
+    try {
+      const response = await fetch(`${window.location.origin}/api/client-info`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify(clientInfo)
+      });
+
+      if (response.ok) {
+        setEditClientInfo(false);
+        setSuccess('Информация о бизнесе сохранена');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Ошибка сохранения информации');
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения информации:', error);
+      setError('Ошибка сохранения информации');
+    } finally {
+      setSavingClientInfo(false);
+    }
+  };
+
+  // Обновление профиля
+  const handleUpdateProfile = async () => {
+    try {
+      const { user: updatedUser, error } = await newAuth.updateProfile({
+        name: form.name,
+        phone: form.phone
+      });
+
+      if (error) {
+        setError(error);
+        return;
+      }
+
+      setUser(updatedUser);
+      setEditMode(false);
+      setSuccess('Профиль обновлен');
+    } catch (error) {
+      console.error('Ошибка обновления профиля:', error);
+      setError('Ошибка обновления профиля');
+    }
+  };
+
+  // Создание отчета
+  const [showCreateReport, setShowCreateReport] = useState(false);
+  const [creatingReport, setCreatingReport] = useState(false);
+  const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
+
+  const handleCreateReport = async () => {
+    if (!createReportForm.yandexUrl.trim()) {
+      setError('Введите URL страницы Яндекс.Карт');
+      return;
+    }
+
+    setCreatingReport(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${window.location.origin}/api/create-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          yandex_url: createReportForm.yandexUrl
+        })
+      });
+
+      if (response.ok) {
+        setSuccess('Отчёт добавлен в очередь обработки');
+        setShowCreateReport(false);
+        setCreateReportForm({ yandexUrl: "" });
+        // Обновляем список отчетов
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Ошибка создания отчёта');
+      }
+    } catch (error) {
+      console.error('Ошибка создания отчёта:', error);
+      setError('Ошибка создания отчёта');
+    } finally {
+      setCreatingReport(false);
+    }
+  };
+
+  // Просмотр отчета
+  const [viewingReport, setViewingReport] = useState<string | null>(null);
+  const [reportContent, setReportContent] = useState('');
+  const [loadingReport, setLoadingReport] = useState(false);
+
+  const handleViewReport = async (reportId: string) => {
+    setViewingReport(reportId);
+    setLoadingReport(true);
+    setReportContent('');
+
+    try {
+      const response = await fetch(`${window.location.origin}/api/reports/${reportId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setReportContent(data.content || 'Содержимое отчёта недоступно');
+      } else {
+        setError('Ошибка загрузки отчёта');
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки отчёта:', error);
+      setError('Ошибка загрузки отчёта');
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  // Скачивание отчета
+  const handleDownloadReport = async (reportId: string) => {
+    try {
+      const response = await fetch(`${window.location.origin}/api/reports/${reportId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${reportId}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setSuccess('Отчёт скачан');
+      } else {
+        setError('Ошибка скачивания отчёта');
+      }
+    } catch (error) {
+      console.error('Ошибка скачивания отчёта:', error);
+      setError('Ошибка скачивания отчёта');
+    }
+  };
 
   // Функция автоматического анализа карточки
   const handleAutoAnalysis = async () => {
@@ -79,24 +386,6 @@ const Dashboard = () => {
     }
   };
   const [canCreateReport, setCanCreateReport] = useState<boolean>(false);
-  const [viewingReport, setViewingReport] = useState<string | null>(null);
-  const [reportContent, setReportContent] = useState<string>("");
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [showCreateReport, setShowCreateReport] = useState(false);
-  const [createReportForm, setCreateReportForm] = useState({ yandexUrl: "" });
-  const [creatingReport, setCreatingReport] = useState(false);
-  
-  // Новые состояния для личной информации и услуг
-  const [clientInfo, setClientInfo] = useState({
-    businessName: "",
-    businessType: "",
-    address: "",
-    workingHours: "",
-    description: "",
-    services: ""
-  });
-  const [editClientInfo, setEditClientInfo] = useState(false);
-  const [savingClientInfo, setSavingClientInfo] = useState(false);
   const [paraphrasingService, setParaphrasingService] = useState("");
   const [paraphrasedText, setParaphrasedText] = useState("");
   const [paraphrasing, setParaphrasing] = useState(false);
@@ -152,9 +441,12 @@ const Dashboard = () => {
           yandexUrl: ""
         });
 
+        // Загружаем услуги пользователя
+        await loadUserServices();
+
         // Загружаем личную информацию о бизнесе
         try {
-          const clientInfoResponse = await fetch('https://beautybot.pro/api/client-info', {
+          const clientInfoResponse = await fetch(`${window.location.origin}/api/client-info`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
             }
@@ -208,78 +500,6 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [reports]);
 
-  const handleViewReport = async (reportId: string) => {
-    setLoadingReport(true);
-    try {
-      const response = await fetch(`https://beautybot.pro/api/view-report/${reportId}`);
-      if (response.ok) {
-      const content = await response.text();
-      setReportContent(content);
-      setViewingReport(reportId);
-      } else {
-        setError('Ошибка загрузки отчёта');
-      }
-    } catch (error) {
-      console.error('Ошибка просмотра отчёта:', error);
-      setError('Ошибка загрузки отчёта');
-    } finally {
-      setLoadingReport(false);
-    }
-  };
-
-  const handleDownloadReport = async (reportId: string) => {
-    try {
-      const response = await fetch(`https://beautybot.pro/api/download-report/${reportId}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `seo_report_${reportId}.html`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        setError('Ошибка скачивания отчёта');
-      }
-    } catch (error) {
-      console.error('Ошибка скачивания отчёта:', error);
-      setError('Ошибка скачивания отчёта');
-    }
-  };
-
-  const handleCreateReport = async () => {
-    if (!createReportForm.yandexUrl.trim()) {
-      setError('Введите URL Яндекс.Карт');
-      return;
-    }
-
-    setCreatingReport(true);
-    setError(null);
-
-    try {
-      const { queue_id, error } = await newAuth.addToQueue(createReportForm.yandexUrl);
-      
-      if (error) {
-        setError(error);
-      } else {
-        setSuccess('Отчёт добавлен в очередь обработки');
-        setShowCreateReport(false);
-        setCreateReportForm({ yandexUrl: "" });
-        
-        // Обновляем данные
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('Ошибка создания отчёта:', error);
-      setError('Ошибка создания отчёта');
-    } finally {
-      setCreatingReport(false);
-    }
-  };
 
   const handleDeleteQueueItem = async (queueId: string) => {
     if (!confirm('Вы уверены, что хотите удалить этот отчёт из обработки?')) {
@@ -311,64 +531,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleUpdateProfile = async () => {
-    try {
-      const { user: updatedUser, error } = await newAuth.updateProfile({
-        name: form.name,
-        phone: form.phone
-      });
-
-      if (error) {
-        setError(error);
-      } else {
-        setSuccess('Профиль обновлён');
-        setEditMode(false);
-        if (updatedUser) {
-          setUser(updatedUser);
-        }
-      }
-    } catch (error) {
-      console.error('Ошибка обновления профиля:', error);
-      setError('Ошибка обновления профиля');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await newAuth.signOut();
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Ошибка выхода:', error);
-    }
-  };
-
-  // Функции для работы с личной информацией
-  const handleSaveClientInfo = async () => {
-    setSavingClientInfo(true);
-    try {
-        const response = await fetch('http://localhost:5002/api/client-info', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(clientInfo)
-      });
-
-      if (response.ok) {
-        setSuccess('Информация о бизнесе сохранена');
-        setEditClientInfo(false);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Ошибка сохранения информации');
-      }
-    } catch (error) {
-      console.error('Ошибка сохранения информации:', error);
-      setError('Ошибка сохранения информации');
-    } finally {
-      setSavingClientInfo(false);
-    }
-  };
 
   // Функция для перефразирования через GigaChat
   const handleParaphraseService = async () => {
@@ -512,14 +674,36 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="mb-6">
+          <div className="mb-2 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
+            <Button variant="outline" size="sm" onClick={() => newAuth.logout()}>Выйти</Button>
+          </div>
+          {/* Приветственный блок + шкала заполненности */}
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+            <p className="text-gray-800 mb-2">👋 Добро пожаловать в <span className="font-semibold">BeautyBot.pro</span>!</p>
+            <p className="text-gray-600 text-sm">
+              Это ваш личный центр управления ростом салона.
+            </p>
+            <p className="text-gray-600 text-sm mt-2">
+              Заполните данные о себе и бизнесе — это первый шаг. Далее вы сможете совершенствовать процесс и отслеживать положительные изменения.
+            </p>
+            <p className="text-gray-600 text-sm mt-2">💡 Помните: вы платите только за результат — 7% от реального роста.</p>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-gray-700">Заполненность профиля</span>
+                <span className="text-sm font-medium text-orange-600">{profileCompletion}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
+                <div className={`h-3 rounded ${profileCompletion>=80 ? 'bg-green-500' : profileCompletion>=50 ? 'bg-yellow-500' : 'bg-orange-500'}`} style={{ width: `${profileCompletion}%` }} />
+              </div>
+            </div>
           </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
               {error}
-        </div>
+            </div>
           )}
 
           {success && (
@@ -529,14 +713,19 @@ const Dashboard = () => {
           )}
 
           {/* Профиль пользователя */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Профиль</h2>
+          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Профиль</h2>
+              {!editMode && (
+                <Button onClick={() => setEditMode(true)}>Редактировать</Button>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input 
-                    type="email" 
-                    value={form.email} 
+                <input 
+                  type="email" 
+                  value={form.email} 
                   disabled
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 />
@@ -562,102 +751,338 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-            <div className="mt-4">
-              {editMode ? (
+            {editMode && (
+              <div className="mt-4 flex justify-end">
                 <div className="flex gap-2">
                   <Button onClick={handleUpdateProfile}>Сохранить</Button>
                   <Button onClick={() => setEditMode(false)} variant="outline">Отмена</Button>
                 </div>
-              ) : (
-                <Button onClick={() => setEditMode(true)}>Редактировать</Button>
-          )}
-        </div>
-                  </div>
-                  
-          {/* Создание отчёта */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Создать отчёт</h2>
-                  {!showCreateReport ? (
-              <Button onClick={() => setShowCreateReport(true)}>
-                Создать новый отчёт
-                    </Button>
-                  ) : (
-                    <div className="space-y-4">
-                      <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL страницы Яндекс.Карт
-                        </label>
-                        <input 
-                          type="url" 
-                          value={createReportForm.yandexUrl} 
-                    onChange={(e) => setCreateReportForm({...createReportForm, yandexUrl: e.target.value})}
-                          placeholder="https://yandex.ru/maps/org/..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        />
-                      </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleCreateReport} disabled={creatingReport}>
-                          {creatingReport ? 'Создание...' : 'Создать отчёт'}
-                        </Button>
-                  <Button onClick={() => setShowCreateReport(false)} variant="outline">
-                          Отмена
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-          {/* Таймер следующего отчёта - всегда виден */}
-          <div className="text-center p-8 bg-gradient-to-br from-background/50 to-muted/20 rounded-3xl border border-border/20 mb-6">
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              {canCreateReport ? 'Отчёт готов к созданию' : 'До следующего отчёта'}
-            </h3>
-            <div className={`text-6xl md:text-7xl font-bold tracking-tight mb-2 ${canCreateReport ? 'text-green-500' : 'text-red-500'}`}>
-              {timer || '00:00:00'}
-            </div>
-            <div className="flex justify-center gap-2 text-sm text-muted-foreground">
-              <span className="px-3 py-1 bg-muted/20 rounded-lg">Дни</span>
-              <span className="px-3 py-1 bg-muted/20 rounded-lg">Часы</span>
-              <span className="px-3 py-1 bg-muted/20 rounded-lg">Минуты</span>
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Очередь обработки */}
-          {queue.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">В обработке</h2>
-              <div className="space-y-2">
-                {queue.map((item) => (
-                  <div key={item.id} className="bg-yellow-50 border border-yellow-200 rounded p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600">URL: {item.url}</p>
-                        <p className="text-sm text-gray-600">Статус: {item.status}</p>
-                        <p className="text-sm text-gray-600">
-                          Создан: {new Date(item.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteQueueItem(item.id)}
-                        className="ml-4 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
-                      >
-                        Удалить
-                      </button>
-          </div>
-        </div>
-                ))}
+          {/* Информация о бизнесе */}
+          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Информация о бизнесе</h2>
+              {!editClientInfo && (
+                <Button onClick={() => setEditClientInfo(true)}>Редактировать</Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Название бизнеса</label>
+                <input 
+                  type="text" 
+                  value={clientInfo.businessName} 
+                  onChange={(e) => setClientInfo({...clientInfo, businessName: e.target.value})}
+                  disabled={!editClientInfo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Тип бизнеса</label>
+                <input 
+                  type="text" 
+                  value={clientInfo.businessType} 
+                  onChange={(e) => setClientInfo({...clientInfo, businessType: e.target.value})}
+                  disabled={!editClientInfo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Адрес</label>
+                <input 
+                  type="text" 
+                  value={clientInfo.address} 
+                  onChange={(e) => setClientInfo({...clientInfo, address: e.target.value})}
+                  disabled={!editClientInfo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Режим работы</label>
+                <input 
+                  type="text" 
+                  value={clientInfo.workingHours} 
+                  onChange={(e) => setClientInfo({...clientInfo, workingHours: e.target.value})}
+                  disabled={!editClientInfo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
               </div>
             </div>
+            {editClientInfo && (
+              <div className="mt-4 flex justify-end">
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveClientInfo} disabled={savingClientInfo}>
+                    {savingClientInfo ? 'Сохранение...' : 'Сохранить'}
+                  </Button>
+                  <Button onClick={() => setEditClientInfo(false)} variant="outline">Отмена</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Навигация по разделам */}
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'overview'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📊 Обзор
+              </button>
+              <button
+                onClick={() => setActiveTab('finance')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'finance'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                💰 Финансы
+              </button>
+              <button
+                onClick={() => setActiveTab('progress')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'progress'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🎯 Прогресс
+              </button>
+            </div>
+          </div>
+
+          {/* Финансовая панель */}
+          {activeTab === 'finance' && (
+            <div className="space-y-6 mb-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-gray-900">💰 Финансовая панель</h2>
+                <Button 
+                  onClick={() => setShowTransactionForm(!showTransactionForm)}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {showTransactionForm ? 'Скрыть форму' : '+ Добавить транзакцию'}
+                </Button>
+              </div>
+
+              {showTransactionForm && (
+                <TransactionForm 
+                  onSuccess={() => {
+                    setShowTransactionForm(false);
+                    setSuccess('Транзакция добавлена успешно!');
+                  }}
+                  onCancel={() => setShowTransactionForm(false)}
+                />
+              )}
+
+              <FinancialMetrics />
+              <ROICalculator />
+            </div>
           )}
 
-          {/* Готовые отчёты */}
+          {/* Прогресс-трекер */}
+          {activeTab === 'progress' && (
+            <div className="space-y-6 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">🎯 Ваш прогресс</h2>
+              <ProgressTracker />
+            </div>
+          )}
+
+          {/* Основной контент (показывается на вкладке overview) */}
+          {activeTab === 'overview' && (
+            <>
+              {/* Таблица услуг (Обзор) */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex-1 pr-4">
+                    <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      📋 Ниже в блоке "Настройте описания услуг для Яндекс.Карт" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске. 
+                      <br/><br/>
+                      Эти наименования сохранятся в ваш список услуг автоматически. 
+                      <br/><br/>
+                      Вы также можете внести их вручную или потом отредактировать.
+                    </p>
+                  </div>
+                  <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+                </div>
+
+                {/* Форма добавления услуги */}
+                {showAddService && (
+                  <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Добавить новую услугу</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+                        <input
+                          type="text"
+                          value={newService.category}
+                          onChange={(e) => setNewService({...newService, category: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Например: Стрижки"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+                        <input
+                          type="text"
+                          value={newService.name}
+                          onChange={(e) => setNewService({...newService, name: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Например: Женская стрижка"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+                        <textarea
+                          value={newService.description}
+                          onChange={(e) => setNewService({...newService, description: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                          placeholder="Краткое описание услуги"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ключевые слова</label>
+                        <input
+                          type="text"
+                          value={newService.keywords}
+                          onChange={(e) => setNewService({...newService, keywords: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="стрижка, укладка, окрашивание"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
+                        <input
+                          type="text"
+                          value={newService.price}
+                          onChange={(e) => setNewService({...newService, price: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Например: 2000 руб"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button onClick={addService}>Добавить</Button>
+                      <Button onClick={() => setShowAddService(false)} variant="outline">Отмена</Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Описание</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {loadingServices ? (
+                        <tr>
+                          <td className="px-4 py-3 text-gray-500" colSpan={5}>Загрузка услуг...</td>
+                        </tr>
+                      ) : userServices.length === 0 ? (
+                        <tr>
+                          <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
+                        </tr>
+                      ) : (
+                        userServices.map((service, index) => (
+                          <tr key={service.id || index}>
+                            <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{service.description}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => setEditingService(service.id)}
+                                >
+                                  Редактировать
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => deleteService(service.id)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  Удалить
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Блок оптимизации услуг (под всеми вкладками, но над отзывами) */}
+          <div className="mb-12 bg-white rounded-lg border border-gray-200 p-4">
+            <ServiceOptimizer businessName={clientInfo.businessName} />
+          </div>
+
+          {/* Ассистент ответов на отзывы */}
+          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+            <ReviewReplyAssistant businessName={clientInfo.businessName} />
+          </div>
+
+          {/* Блоки перемещены сюда: */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Создать отчёт</h2>
+            {!showCreateReport ? (
+              <Button onClick={() => setShowCreateReport(true)}>
+                Создать новый отчёт
+              </Button>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    URL страницы Яндекс.Карт
+                  </label>
+                  <input
+                    type="url"
+                    value={createReportForm.yandexUrl}
+                    onChange={(e) => setCreateReportForm({ ...createReportForm, yandexUrl: e.target.value })}
+                    placeholder="https://yandex.ru/maps/org/..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleCreateReport} disabled={creatingReport}>
+                    {creatingReport ? 'Создание...' : 'Создать отчёт'}
+                  </Button>
+                  <Button onClick={() => setShowCreateReport(false)} variant="outline">
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Готовые отчёты</h2>
             {reports.length === 0 ? (
               <p className="text-gray-600">У вас пока нет готовых отчётов</p>
-          ) : (
-            <div className="space-y-4">
-              {reports.map((report) => (
+            ) : (
+              <div className="space-y-4">
+                {reports.map((report) => (
                   <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
@@ -671,475 +1096,25 @@ const Dashboard = () => {
                           <p className="text-sm text-gray-600">
                             SEO-оценка: {report.seo_score}/100
                           </p>
-                      )}
-                    </div>
-                      <div className="flex gap-2 ml-4">
-                        {report.has_report && (
-                      <>
-                        <Button 
-                              onClick={() => handleViewReport(report.id)}
-                          variant="outline" 
-                          size="sm"
-                        >
-                              Просмотр
-                        </Button>
-                        <Button 
-                              onClick={() => handleDownloadReport(report.id)}
-                              variant="outline"
-                          size="sm"
-                        >
-                          Скачать
-                        </Button>
-                      </>
                         )}
                       </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-          {/* Личная информация о бизнесе */}
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Информация о бизнесе</h2>
-              {!editClientInfo ? (
-                <Button onClick={() => setEditClientInfo(true)}>Редактировать</Button>
-              ) : (
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveClientInfo} disabled={savingClientInfo}>
-                    {savingClientInfo ? 'Сохранение...' : 'Сохранить'}
-                  </Button>
-                  <Button onClick={() => setEditClientInfo(false)} variant="outline">Отмена</Button>
-                </div>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Название бизнеса</label>
-                <input 
-                  type="text" 
-                  value={clientInfo.businessName} 
-                  onChange={(e) => setClientInfo({...clientInfo, businessName: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Название вашего салона"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Тип бизнеса</label>
-                <select 
-                  value={clientInfo.businessType} 
-                  onChange={(e) => setClientInfo({...clientInfo, businessType: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Выберите тип</option>
-                  <option value="beauty_salon">Салон красоты</option>
-                  <option value="barbershop">Барбершоп</option>
-                  <option value="nail_salon">Ногтевой сервис</option>
-                  <option value="spa">СПА-салон</option>
-                  <option value="massage">Массажный салон</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Адрес</label>
-                <input 
-                  type="text" 
-                  value={clientInfo.address} 
-                  onChange={(e) => setClientInfo({...clientInfo, address: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Полный адрес салона"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Режим работы</label>
-                <input 
-                  type="text" 
-                  value={clientInfo.workingHours} 
-                  onChange={(e) => setClientInfo({...clientInfo, workingHours: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Пн-Вс: 9:00-21:00"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Описание бизнеса</label>
-                <textarea 
-                  value={clientInfo.description} 
-                  onChange={(e) => setClientInfo({...clientInfo, description: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={3}
-                  placeholder="Краткое описание вашего салона"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Услуги</label>
-                <textarea 
-                  value={clientInfo.services} 
-                  onChange={(e) => setClientInfo({...clientInfo, services: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={4}
-                  placeholder="Список услуг, которые вы предоставляете"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Перефразирование описания услуг */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Перефразирование описания услуг</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Введите описание услуги для перефразирования
-                </label>
-                <textarea 
-                  value={paraphrasingService} 
-                  onChange={(e) => setParaphrasingService(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={4}
-                  placeholder="Например: Стрижка волос, укладка, окрашивание..."
-                />
-              </div>
-              <Button 
-                onClick={handleParaphraseService} 
-                disabled={paraphrasing || !paraphrasingService.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {paraphrasing ? 'Перефразирование...' : 'Перефразировать через ИИ'}
-              </Button>
-              
-              {paraphrasedText && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Перефразированный текст:
-                  </label>
-                  <div className="bg-gray-50 border border-gray-300 rounded-md p-4">
-                    <p className="text-gray-800">{paraphrasedText}</p>
-                  </div>
-                  <Button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(paraphrasedText);
-                      setSuccess('Текст скопирован в буфер обмена');
-                    }}
-                    variant="outline"
-                    className="mt-2"
-                  >
-                    Копировать
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Автоматический анализ карточек Яндекс.Карт */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">🤖 Автоматический анализ карточки</h2>
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                <div className="flex items-center mb-4">
-                  <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <h3 className="text-lg font-medium text-blue-900">Быстрый анализ</h3>
-                </div>
-                <p className="text-sm text-blue-700 mb-4">Вставьте ссылку на карточку Яндекс.Карт, и система автоматически откроет её, сделает скриншот и проанализирует</p>
-                
-                <div className="flex gap-4">
-                  <input
-                    type="url"
-                    value={autoAnalysisUrl}
-                    onChange={(e) => setAutoAnalysisUrl(e.target.value)}
-                    placeholder="https://yandex.ru/maps/org/..."
-                    className="flex-1 px-4 py-2 border border-blue-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <Button 
-                    onClick={handleAutoAnalysis} 
-                    disabled={autoAnalysisLoading || !autoAnalysisUrl.trim()}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    {autoAnalysisLoading ? 'Анализируем...' : 'Анализировать'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Ручной анализ карточек Яндекс.Карт */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">📸 Ручной анализ карточки</h2>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-                <div className="flex flex-col items-center">
-                  <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-lg font-medium text-gray-900 mb-2">Загрузите скриншот карточки</p>
-                  <p className="text-sm text-gray-500 mb-4">Поддерживаются форматы: PNG, JPG, JPEG (до 15 МБ)</p>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 15 * 1024 * 1024) {
-                          setError('Файл слишком большой. Максимальный размер: 15 МБ');
-                          return;
-                        }
-                        setCardImage(file);
-                      }
-                    }}
-                    className="hidden"
-                    id="card-upload"
-                  />
-                  <label htmlFor="card-upload" className="bg-blue-600 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-blue-700 transition-colors">
-                    Выбрать файл
-                  </label>
-                </div>
-              </div>
-              
-              {cardImage && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <svg className="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <p className="font-medium text-gray-900">{cardImage.name}</p>
-                        <p className="text-sm text-gray-500">{(cardImage.size / 1024 / 1024).toFixed(2)} МБ</p>
+                      <div className="flex gap-2 ml-4">
+                        {report.has_report && (
+                          <>
+                            <Button onClick={() => handleViewReport(report.id)} variant="outline" size="sm">
+                              Просмотр
+                            </Button>
+                            <Button onClick={() => handleDownloadReport(report.id)} variant="outline" size="sm">
+                              Скачать
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <Button 
-                      onClick={() => setCardImage(null)} 
-                      variant="outline" 
-                      size="sm"
-                    >
-                      Удалить
-                    </Button>
                   </div>
-                  
-                  <Button 
-                    onClick={handleAnalyzeCard} 
-                    disabled={analyzingCard}
-                    className="mt-4 bg-green-600 hover:bg-green-700"
-                  >
-                    {analyzingCard ? 'Анализируем...' : 'Анализировать карточку'}
-                  </Button>
-                </div>
-              )}
-              
-              {cardAnalysis && (
-                <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Результаты анализа</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Общая оценка:</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        cardAnalysis.completeness_score >= 80 ? 'bg-green-100 text-green-800' :
-                        cardAnalysis.completeness_score >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {cardAnalysis.completeness_score}/100
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Название бизнеса</h4>
-                        <p className="text-gray-600">{cardAnalysis.business_name}</p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Категория</h4>
-                        <p className="text-gray-600">{cardAnalysis.category}</p>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Приоритетные действия</h4>
-                      <ul className="list-disc list-inside space-y-1">
-                        {cardAnalysis.priority_actions.map((action, index) => (
-                          <li key={index} className="text-gray-600">{action}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Общие рекомендации</h4>
-                      <p className="text-gray-600">{cardAnalysis.overall_recommendations}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* SEO оптимизация прайс-листов */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">SEO оптимизация прайс-листов</h2>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-                <div className="flex flex-col items-center">
-                  <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p className="text-lg font-medium text-gray-900 mb-2">Загрузите прайс-лист для оптимизации</p>
-                  <p className="text-sm text-gray-500 mb-4">Поддерживаются форматы: PDF, DOC, DOCX, XLS, XLSX (до 15 МБ)</p>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 15 * 1024 * 1024) {
-                          setError('Файл слишком большой. Максимальный размер: 15 МБ');
-                          return;
-                        }
-                        setPriceListFile(file);
-                      }
-                    }}
-                    className="hidden"
-                    id="pricelist-upload"
-                  />
-                  <label htmlFor="pricelist-upload" className="bg-purple-600 text-white px-4 py-2 rounded-md cursor-pointer hover:bg-purple-700 transition-colors">
-                    Выбрать файл
-                  </label>
-                </div>
+                ))}
               </div>
-              
-              {priceListFile && (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <svg className="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <p className="font-medium text-gray-900">{priceListFile.name}</p>
-                        <p className="text-sm text-gray-500">{(priceListFile.size / 1024 / 1024).toFixed(2)} МБ</p>
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={() => setPriceListFile(null)} 
-                      variant="outline" 
-                      size="sm"
-                    >
-                      Удалить
-                    </Button>
-                  </div>
-                  
-                  <Button 
-                    onClick={handleOptimizePriceList} 
-                    disabled={optimizingPriceList}
-                    className="mt-4 bg-purple-600 hover:bg-purple-700"
-                  >
-                    {optimizingPriceList ? 'Оптимизируем...' : 'Оптимизировать прайс-лист'}
-                  </Button>
-                </div>
-              )}
-              
-              {priceListOptimization && (
-                <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Результаты SEO оптимизации</h3>
-                  
-                  <div className="space-y-6">
-                    {/* Общие рекомендации */}
-                    {priceListOptimization.general_recommendations && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Общие рекомендации</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          {priceListOptimization.general_recommendations.map((rec, index) => (
-                            <li key={index} className="text-gray-600">{rec}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {/* Оптимизированные услуги */}
-                    {priceListOptimization.services && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-4">Оптимизированные услуги</h4>
-                        <div className="space-y-4">
-                          {priceListOptimization.services.map((service, index) => (
-                            <div key={index} className="border border-gray-200 rounded-lg p-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <h5 className="font-medium text-gray-900 mb-1">Исходное название</h5>
-                                  <p className="text-gray-600 text-sm">{service.original_name}</p>
-                                </div>
-                                <div>
-                                  <h5 className="font-medium text-gray-900 mb-1">SEO название</h5>
-                                  <p className="text-green-600 font-medium text-sm">{service.optimized_name}</p>
-                                </div>
-                                <div className="md:col-span-2">
-                                  <h5 className="font-medium text-gray-900 mb-1">SEO описание</h5>
-                                  <p className="text-gray-600 text-sm">{service.seo_description}</p>
-                                </div>
-                                <div>
-                                  <h5 className="font-medium text-gray-900 mb-1">Ключевые слова</h5>
-                                  <div className="flex flex-wrap gap-1">
-                                    {service.keywords.map((keyword, keyIndex) => (
-                                      <span key={keyIndex} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                        {keyword}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div>
-                                  <h5 className="font-medium text-gray-900 mb-1">Цена</h5>
-                                  <p className="text-gray-600 text-sm">{service.price || 'Не указана'}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="mt-4 flex gap-2">
-                          <Button 
-                            onClick={() => {
-                              const csvContent = priceListOptimization.services.map(service => 
-                                `${service.original_name},${service.optimized_name},"${service.seo_description}",${service.keywords.join(';')},${service.price || ''}`
-                              ).join('\n');
-                              const csvHeader = 'Исходное название,SEO название,SEO описание,Ключевые слова,Цена\n';
-                              const blob = new Blob([csvHeader + csvContent], { type: 'text/csv' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = 'optimized-pricelist.csv';
-                              a.click();
-                              URL.revokeObjectURL(url);
-                            }}
-                            variant="outline"
-                            size="sm"
-                          >
-                            Экспорт в CSV
-                          </Button>
-                          <Button 
-                            onClick={() => {
-                              const text = priceListOptimization.services.map(service => 
-                                `${service.optimized_name}\n${service.seo_description}\nЦена: ${service.price || 'Не указана'}\nКлючевые слова: ${service.keywords.join(', ')}\n`
-                              ).join('\n---\n');
-                              navigator.clipboard.writeText(text);
-                              setSuccess('Результаты скопированы в буфер обмена');
-                            }}
-                            variant="outline"
-                            size="sm"
-                          >
-                            Копировать
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Приглашения */}
@@ -1156,33 +1131,33 @@ const Dashboard = () => {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Модальное окно просмотра отчёта */}
+        {/* Модальное окно просмотра отчёта */}
         {viewingReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">Просмотр отчёта</h3>
-              <Button onClick={() => setViewingReport(null)} variant="outline">
-                Закрыть
-              </Button>
-            </div>
-            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
-              {loadingReport ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Загрузка отчёта...</p>
-                </div>
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: reportContent }} />
-              )}
-            </div>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
+              <div className="flex justify-between items-center p-4 border-b">
+                <h3 className="text-lg font-semibold">Просмотр отчёта</h3>
+                <Button onClick={() => setViewingReport(null)} variant="outline">
+                  Закрыть
+                </Button>
+              </div>
+              <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+                {loadingReport ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Загрузка отчёта...</p>
+                  </div>
+                ) : (
+                  <div dangerouslySetInnerHTML={{ __html: reportContent }} />
+                )}
+              </div>
             </div>
           </div>
         )}
 
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 };

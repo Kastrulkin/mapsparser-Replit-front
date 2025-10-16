@@ -13,7 +13,7 @@ export class NewAuth {
   private static instance: NewAuth;
   private currentUser: User | null = null;
   private token: string | null = null;
-  private apiBaseUrl = 'http://localhost:5002/api';
+  private apiBaseUrl = `${window.location.origin}/api`;
 
   static getInstance(): NewAuth {
     if (!NewAuth.instance) {
@@ -66,11 +66,12 @@ export class NewAuth {
         return { user: null, error: response.error };
       }
 
+      const u = response.user || response;
       this.currentUser = {
-        id: response.id,
-        email: response.email,
-        name: response.name,
-        phone: response.phone,
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        phone: u.phone,
       };
 
       if (response.token) {
@@ -95,11 +96,12 @@ export class NewAuth {
         return { user: null, error: response.error };
       }
 
+      const u2 = response.user || response;
       this.currentUser = {
-        id: response.id,
-        email: response.email,
-        name: response.name,
-        phone: response.phone,
+        id: u2.id,
+        email: u2.email,
+        name: u2.name,
+        phone: u2.phone,
       };
 
       if (response.token) {
@@ -136,12 +138,12 @@ export class NewAuth {
 
     try {
       const response = await this.makeRequest('/auth/me');
-      
+      const u = response.user || response;
       this.currentUser = {
-        id: response.user_id,
-        email: response.email,
-        name: response.name,
-        phone: response.phone,
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        phone: u.phone,
       };
 
       return this.currentUser;

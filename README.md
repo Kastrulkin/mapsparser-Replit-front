@@ -20,16 +20,8 @@
    ```bash
    pip install -r requirements.txt
    ```
-3. Создайте файл `.env` в корне проекта:
-   ```env
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_KEY=your-supabase-anon-key
-   ```
-4. Создайте файл `frontend/.env`:
-   ```env
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_KEY=your-supabase-anon-key
-   ```
+3. Создайте файл `.env` в корне проекта (при необходимости переменные для локальных сервисов). Supabase больше не используется.
+4. Файл `frontend/.env` не требуется для Supabase.
 
 ### Установка Playwright
 После установки зависимостей обязательно выполните:
@@ -66,10 +58,7 @@ Type=simple
 User=root
 WorkingDirectory=/path/to/project
 Environment=PATH=/path/to/project/venv/bin
-LoadCredential=SUPABASE_URL:/etc/systemd/system/seo-worker.supabase_url
-LoadCredential=SUPABASE_KEY:/etc/systemd/system/seo-worker.supabase_key
-Environment="SUPABASE_URL=${CREDENTIALS_DIRECTORY}/SUPABASE_URL"
-Environment="SUPABASE_KEY=${CREDENTIALS_DIRECTORY}/SUPABASE_KEY"
+# Supabase переменные не требуются
 ExecStart=/path/to/project/venv/bin/python /path/to/project/src/worker.py
 Restart=always
 RestartSec=10
@@ -79,11 +68,7 @@ WantedBy=multi-user.target
 ```
 
 ### 2. Создание секретов
-```bash
-echo "https://your-project.supabase.co" > /etc/systemd/system/seo-worker.supabase_url
-echo "your-supabase-anon-key" > /etc/systemd/system/seo-worker.supabase_key
-chmod 600 /etc/systemd/system/seo-worker.supabase_*
-```
+Секреты Supabase не требуются.
 
 ### 3. Запуск сервиса
 ```bash

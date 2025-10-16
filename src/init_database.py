@@ -131,6 +131,110 @@ def init_database():
     )
     """)
     
+    # 7. Таблица FinancialTransactions - финансовые транзакции
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS FinancialTransactions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        transaction_date DATE NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        client_type TEXT NOT NULL CHECK (client_type IN ('new', 'returning')),
+        services TEXT, -- JSON массив услуг
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 8. Таблица FinancialMetrics - агрегированные метрики
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS FinancialMetrics (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        total_revenue DECIMAL(10,2) DEFAULT 0,
+        total_orders INTEGER DEFAULT 0,
+        new_clients INTEGER DEFAULT 0,
+        returning_clients INTEGER DEFAULT 0,
+        average_check DECIMAL(10,2) DEFAULT 0,
+        retention_rate DECIMAL(5,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 9. Таблица ROIData - данные ROI
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ROIData (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        investment_amount DECIMAL(10,2) NOT NULL,
+        returns_amount DECIMAL(10,2) NOT NULL,
+        roi_percentage DECIMAL(5,2) NOT NULL,
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 10. Таблица ProgressStages - этапы прогресса
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ProgressStages (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        stage_number INTEGER NOT NULL,
+        stage_name TEXT NOT NULL,
+        stage_description TEXT,
+        status TEXT NOT NULL CHECK (status IN ('completed', 'active', 'pending')),
+        progress_percentage INTEGER DEFAULT 0,
+        target_revenue DECIMAL(10,2),
+        target_clients INTEGER,
+        target_roi DECIMAL(5,2),
+        current_revenue DECIMAL(10,2) DEFAULT 0,
+        current_clients INTEGER DEFAULT 0,
+        current_roi DECIMAL(5,2) DEFAULT 0,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 11. Таблица StageTasks - задачи этапов
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS StageTasks (
+        id TEXT PRIMARY KEY,
+        stage_id TEXT NOT NULL,
+        task_title TEXT NOT NULL,
+        task_description TEXT,
+        is_completed BOOLEAN DEFAULT 0,
+        priority INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        FOREIGN KEY (stage_id) REFERENCES ProgressStages (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 12. Таблица UserServices - услуги пользователей
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS UserServices (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        keywords TEXT, -- JSON массив ключевых слов
+        price TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
     # Добавляем тестовые данные
     cursor.execute("""
     INSERT OR REPLACE INTO Cards (id, url, title, report_path, user_id, seo_score, ai_analysis)

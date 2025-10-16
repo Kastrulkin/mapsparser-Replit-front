@@ -1,0 +1,267 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from './ui/button';
+
+interface ProgressStage {
+  id: string;
+  stage_number: number;
+  stage_name: string;
+  stage_description: string;
+  status: 'completed' | 'active' | 'pending';
+  progress_percentage: number;
+  target_revenue: number;
+  target_clients: number;
+  target_roi: number;
+  current_revenue: number;
+  current_clients: number;
+  current_roi: number;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+interface ProgressTrackerProps {
+  onUpdate?: () => void;
+}
+
+const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate }) => {
+  const [stages, setStages] = useState<ProgressStage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Моковые данные для демонстрации
+  const mockStages: ProgressStage[] = [
+    {
+      id: '1',
+      stage_number: 1,
+      stage_name: 'Диагностика',
+      stage_description: 'Анализ текущего состояния карточки и базовых показателей',
+      status: 'completed',
+      progress_percentage: 100,
+      target_revenue: 10000,
+      target_clients: 20,
+      target_roi: 0,
+      current_revenue: 12000,
+      current_clients: 25,
+      current_roi: 0,
+      started_at: '2024-01-01',
+      completed_at: '2024-01-07'
+    },
+    {
+      id: '2',
+      stage_number: 2,
+      stage_name: 'Оптимизация',
+      stage_description: 'Настройка карточки, оптимизация прайс-листа, улучшение фото',
+      status: 'active',
+      progress_percentage: 65,
+      target_revenue: 25000,
+      target_clients: 50,
+      target_roi: 25,
+      current_revenue: 18000,
+      current_clients: 35,
+      current_roi: 15,
+      started_at: '2024-01-08',
+      completed_at: null
+    },
+    {
+      id: '3',
+      stage_number: 3,
+      stage_name: 'Рост',
+      stage_description: 'Первые результаты оптимизации, рост клиентской базы',
+      status: 'pending',
+      progress_percentage: 0,
+      target_revenue: 50000,
+      target_clients: 100,
+      target_roi: 50,
+      current_revenue: 0,
+      current_clients: 0,
+      current_roi: 0,
+      started_at: null,
+      completed_at: null
+    },
+    {
+      id: '4',
+      stage_number: 4,
+      stage_name: 'Масштабирование',
+      stage_description: 'Устойчивый рост прибыли и автоматизация процессов',
+      status: 'pending',
+      progress_percentage: 0,
+      target_revenue: 100000,
+      target_clients: 200,
+      target_roi: 100,
+      current_revenue: 0,
+      current_clients: 0,
+      current_roi: 0,
+      started_at: null,
+      completed_at: null
+    }
+  ];
+
+  useEffect(() => {
+    // Имитируем загрузку данных
+    setTimeout(() => {
+      setStages(mockStages);
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const getStageIcon = (status: string, stageNumber: number) => {
+    if (status === 'completed') return '✅';
+    if (status === 'active') return '🔄';
+    return '⏳';
+  };
+
+  const getStageColor = (status: string) => {
+    if (status === 'completed') return 'border-green-200 bg-green-50';
+    if (status === 'active') return 'border-blue-200 bg-blue-50';
+    return 'border-gray-200 bg-gray-50';
+  };
+
+  const getProgressColor = (percentage: number) => {
+    if (percentage >= 100) return 'bg-green-500';
+    if (percentage >= 75) return 'bg-blue-500';
+    if (percentage >= 50) return 'bg-yellow-500';
+    if (percentage >= 25) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">❌ {error}</div>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Попробовать снова
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-semibold text-gray-900">🎯 Путь к вашим целям</h3>
+        <div className="text-sm text-gray-500">
+          Прогресс по этапам стратегии
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {stages.map((stage, index) => (
+          <div
+            key={stage.id}
+            className={`rounded-lg border-2 p-4 ${getStageColor(stage.status)}`}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-3">
+                <div className="text-2xl">
+                  {getStageIcon(stage.status, stage.stage_number)}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-semibold text-gray-900">
+                      {stage.stage_name}
+                    </h4>
+                    {stage.status === 'active' && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        Активный
+                      </span>
+                    )}
+                    {stage.status === 'completed' && (
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        Завершен
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {stage.stage_description}
+                  </p>
+                  
+                  {stage.status === 'active' && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Прогресс</span>
+                        <span>{stage.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${getProgressColor(stage.progress_percentage)}`}
+                          style={{ width: `${stage.progress_percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {stage.status !== 'pending' && (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <div className="text-gray-500">Выручка</div>
+                        <div className="font-semibold">
+                          {formatCurrency(stage.current_revenue)} / {formatCurrency(stage.target_revenue)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">Клиенты</div>
+                        <div className="font-semibold">
+                          {stage.current_clients} / {stage.target_clients}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">ROI</div>
+                        <div className="font-semibold">
+                          {stage.current_roi.toFixed(1)}% / {stage.target_roi.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4">
+        <div className="text-center">
+          <div className="text-lg font-semibold text-gray-900 mb-2">
+            💎 Прогнозируемый результат
+          </div>
+          <div className="text-2xl font-bold text-green-600 mb-2">
+            +{formatCurrency(180000)}
+          </div>
+          <div className="text-sm text-gray-600">
+            Прирост через 3 месяца при текущем темпе
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            Ваша инвестиция: {formatCurrency(12600)} (7% от прироста)
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProgressTracker;
