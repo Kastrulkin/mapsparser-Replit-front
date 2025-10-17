@@ -25,6 +25,7 @@ def init_database():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         is_active BOOLEAN DEFAULT 1,
         is_verified BOOLEAN DEFAULT 0,
+        is_superadmin BOOLEAN DEFAULT 0,
         verification_token TEXT,
         reset_token TEXT,
         reset_token_expires TIMESTAMP
@@ -232,6 +233,21 @@ def init_database():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE
+    )
+    """)
+    
+    # 13. Таблица Businesses - компании/бизнесы
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS Businesses (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        industry TEXT,
+        owner_id TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_id) REFERENCES Users (id) ON DELETE CASCADE
     )
     """)
     

@@ -9,6 +9,7 @@ import FinancialMetrics from "@/components/FinancialMetrics";
 import ProgressTracker from "@/components/ProgressTracker";
 import ROICalculator from "@/components/ROICalculator";
 import TransactionForm from "@/components/TransactionForm";
+import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 
 function getNextReportDate(reports: any[]) {
@@ -48,6 +49,10 @@ const Dashboard = () => {
   
   // Услуги
   const [userServices, setUserServices] = useState<any[]>([]);
+  
+  // Бизнесы (для суперадмина)
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [loadingServices, setLoadingServices] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
@@ -419,6 +424,14 @@ const Dashboard = () => {
           yandexUrl: ""
         });
 
+        // Загружаем бизнесы если пользователь суперадмин
+        if (currentUser.is_superadmin && currentUser.businesses) {
+          setBusinesses(currentUser.businesses);
+          if (currentUser.businesses.length > 0) {
+            setCurrentBusinessId(currentUser.businesses[0].id);
+          }
+        }
+
         // Получаем отчёты пользователя
         const { reports: userReports, error: reportsError } = await newAuth.getUserReports();
         if (reportsError) {
@@ -677,7 +690,17 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="mb-2 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
-            <Button variant="outline" size="sm" onClick={() => newAuth.logout()}>Выйти</Button>
+            <div className="flex items-center space-x-4">
+              {user?.is_superadmin && businesses.length > 0 && (
+                <BusinessSwitcher
+                  businesses={businesses}
+                  currentBusinessId={currentBusinessId}
+                  onBusinessChange={setCurrentBusinessId}
+                  isSuperadmin={user.is_superadmin}
+                />
+              )}
+              <Button variant="outline" size="sm" onClick={() => newAuth.logout()}>Выйти</Button>
+            </div>
           </div>
           {/* Приветственный блок + шкала заполненности */}
           <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
@@ -1064,8 +1087,8 @@ const Dashboard = () => {
           {/* Блок оптимизации услуг (под всеми вкладками, но над отзывами) */}
           <div className="mb-12 bg-white rounded-lg border border-gray-200 p-4">
             <ServiceOptimizer businessName={clientInfo.businessName} />
-          </div>
-          
+                    </div>
+                    
                     
           {/* Ассистент ответов на отзывы */}
           <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">

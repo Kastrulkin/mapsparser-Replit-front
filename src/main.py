@@ -1717,14 +1717,30 @@ def get_user_info():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
+        # Получаем дополнительную информацию о пользователе
+        db = DatabaseManager()
+        user_id = user_data.get('user_id') or user_data.get('id')
+        is_superadmin = db.is_superadmin(user_id)
+        
+        # Если суперадмин - получаем все бизнесы
+        businesses = []
+        if is_superadmin:
+            businesses = db.get_all_businesses()
+        else:
+            businesses = db.get_businesses_by_owner(user_id)
+        
+        db.close()
+        
         return jsonify({
             "success": True,
             "user": {
-                "id": user_data.get('user_id') or user_data.get('id'),
+                "id": user_id,
                 "email": user_data.get('email'),
                 "name": user_data.get('name'),
-                "phone": user_data.get('phone')
-            }
+                "phone": user_data.get('phone'),
+                "is_superadmin": is_superadmin
+            },
+            "businesses": businesses
         })
         
     except Exception as e:
@@ -1753,6 +1769,162 @@ def logout():
         
     except Exception as e:
         print(f"❌ Ошибка выхода: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ===== SUPERADMIN API =====
+
+@app.route('/api/superadmin/businesses', methods=['GET'])
+def get_all_businesses():
+    """Получить все бизнесы (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        businesses = db.get_all_businesses()
+        db.close()
+        
+        return jsonify({"success": True, "businesses": businesses})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения бизнесов: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/businesses', methods=['POST'])
+def create_business():
+    """Создать новый бизнес (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description', '')
+        industry = data.get('industry', '')
+        owner_id = data.get('owner_id')
+        
+        if not name:
+            return jsonify({"error": "Название бизнеса обязательно"}), 400
+        
+        business_id = db.create_business(name, description, industry, owner_id)
+        db.close()
+        
+        return jsonify({"success": True, "business_id": business_id})
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/businesses/<business_id>', methods=['PUT'])
+def update_business(business_id):
+    """Обновить бизнес (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description')
+        industry = data.get('industry')
+        
+        db.update_business(business_id, name, description, industry)
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/businesses/<business_id>', methods=['DELETE'])
+def delete_business(business_id):
+    """Удалить бизнес (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        db.delete_business(business_id)
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/users', methods=['GET'])
+def get_all_users():
+    """Получить всех пользователей (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        users = db.get_all_users()
+        db.close()
+        
+        return jsonify({"success": True, "users": users})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения пользователей: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(Exception)

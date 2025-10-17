@@ -30,7 +30,7 @@ class DatabaseManager:
         """Получить всех пользователей"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT id, email, name, phone, created_at, is_active, is_verified
+            SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
             FROM Users 
             ORDER BY created_at DESC
         """)
@@ -379,6 +379,103 @@ class DatabaseManager:
         stats['completed_reports_count'] = cursor.fetchone()['count']
         
         return stats
+    
+    # ===== SUPERADMIN METHODS =====
+    
+    def is_superadmin(self, user_id: str) -> bool:
+        """Проверить, является ли пользователь суперадмином"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT is_superadmin FROM Users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        return bool(row['is_superadmin']) if row else False
+    
+    def set_superadmin(self, user_id: str, is_superadmin: bool = True):
+        """Установить статус суперадмина для пользователя"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE Users 
+            SET is_superadmin = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (is_superadmin, user_id))
+        self.conn.commit()
+    
+    # ===== BUSINESSES =====
+    
+    def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None) -> str:
+        """Создать новый бизнес"""
+        business_id = str(uuid.uuid4())
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO Businesses (id, name, description, industry, owner_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (business_id, name, description, industry, owner_id))
+        self.conn.commit()
+        return business_id
+    
+    def get_all_businesses(self) -> List[Dict[str, Any]]:
+        """Получить все бизнесы (только для суперадмина)"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT b.*, u.email as owner_email, u.name as owner_name
+            FROM Businesses b
+            LEFT JOIN Users u ON b.owner_id = u.id
+            WHERE b.is_active = 1
+            ORDER BY b.created_at DESC
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_businesses_by_owner(self, owner_id: str) -> List[Dict[str, Any]]:
+        """Получить бизнесы конкретного владельца"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM Businesses 
+            WHERE owner_id = ? AND is_active = 1
+            ORDER BY created_at DESC
+        """, (owner_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
+        """Получить бизнес по ID"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def update_business(self, business_id: str, name: str = None, description: str = None, industry: str = None):
+        """Обновить информацию о бизнесе"""
+        cursor = self.conn.cursor()
+        updates = []
+        params = []
+        
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+        if industry is not None:
+            updates.append("industry = ?")
+            params.append(industry)
+        
+        if updates:
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(business_id)
+            cursor.execute(f"""
+                UPDATE Businesses 
+                SET {', '.join(updates)}
+                WHERE id = ?
+            """, params)
+            self.conn.commit()
+    
+    def delete_business(self, business_id: str):
+        """Удалить бизнес (мягкое удаление)"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE Businesses 
+            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (business_id,))
+        self.conn.commit()
 
 def main():
     """Основная функция для тестирования"""
