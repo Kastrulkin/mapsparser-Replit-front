@@ -20,8 +20,8 @@
    ```bash
    pip install -r requirements.txt
    ```
-3. Создайте файл `.env` в корне проекта (при необходимости переменные для локальных сервисов). Supabase больше не используется.
-4. Файл `frontend/.env` не требуется для Supabase.
+3. Создайте файл `.env` в корне проекта (при необходимости переменные для локальных сервисов).
+4. Файл `frontend/.env` не требуется.
 
 ### Установка Playwright
 После установки зависимостей обязательно выполните:
@@ -58,7 +58,7 @@ Type=simple
 User=root
 WorkingDirectory=/path/to/project
 Environment=PATH=/path/to/project/venv/bin
-# Supabase переменные не требуются
+# Переменные окружения не требуются
 ExecStart=/path/to/project/venv/bin/python /path/to/project/src/worker.py
 Restart=always
 RestartSec=10
@@ -68,7 +68,7 @@ WantedBy=multi-user.target
 ```
 
 ### 2. Создание секретов
-Секреты Supabase не требуются.
+Секреты внешних сервисов не требуются.
 
 ### 3. Запуск сервиса
 ```bash

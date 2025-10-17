@@ -7,7 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/root/mapsparser-Replit-front
 Environment=PATH=/root/mapsparser-Replit-front/venv/bin
-# Supabase переменные больше не используются
+# Переменные окружения для локальной разработки
 ExecStart=/root/mapsparser-Replit-front/venv/bin/python /root/mapsparser-Replit-front/src/worker.py
 Restart=always
 RestartSec=10

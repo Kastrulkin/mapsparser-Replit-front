@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    conn = sqlite3.connect("reports.db")
+    conn = sqlite3.connect("src/reports.db")
     conn.row_factory = sqlite3.Row
     return conn
 

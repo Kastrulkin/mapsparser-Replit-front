@@ -53,9 +53,64 @@ const Dashboard = () => {
   // Бизнесы (для суперадмина)
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
+  const [currentBusiness, setCurrentBusiness] = useState<any>(null);
   const [loadingServices, setLoadingServices] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
+
+  // Функция для переключения бизнеса
+  const handleBusinessChange = async (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (business) {
+      setCurrentBusinessId(businessId);
+      setCurrentBusiness(business);
+      
+      // Обновляем форму с данными выбранного бизнеса
+      setForm({
+        email: business.owner_email || user?.email || "",
+        phone: user?.phone || "",
+        name: business.owner_name || user?.name || "",
+        yandexUrl: ""
+      });
+      
+      // Загружаем данные бизнеса
+      try {
+        const token = newAuth.getToken();
+        if (!token) return;
+        
+        const response = await fetch(`/api/business/${businessId}/data`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Обновляем услуги
+          setUserServices(data.services || []);
+          
+          // Обновляем информацию о клиенте
+          setClientInfo({
+            businessName: data.business.name || '',
+            businessType: data.business.business_type || '',
+            address: data.business.address || '',
+            workingHours: data.business.working_hours || ''
+          });
+          
+          console.log(`🔄 Переключились на бизнес: ${business.name}`);
+          console.log(`📊 Загружено услуг: ${data.services?.length || 0}`);
+          console.log(`📊 Данные бизнеса:`, data.business);
+        } else {
+          const errorData = await response.json();
+          console.error('Ошибка загрузки данных бизнеса:', errorData);
+        }
+      } catch (error) {
+        console.error('Ошибка при загрузке данных бизнеса:', error);
+      }
+    }
+  };
   const [newService, setNewService] = useState({
     category: '',
     name: '',
@@ -428,7 +483,9 @@ const Dashboard = () => {
         if (currentUser.is_superadmin && currentUser.businesses) {
           setBusinesses(currentUser.businesses);
           if (currentUser.businesses.length > 0) {
-            setCurrentBusinessId(currentUser.businesses[0].id);
+            const firstBusiness = currentUser.businesses[0];
+            setCurrentBusinessId(firstBusiness.id);
+            setCurrentBusiness(firstBusiness);
           }
         }
 
@@ -695,16 +752,26 @@ const Dashboard = () => {
                 <BusinessSwitcher
                   businesses={businesses}
                   currentBusinessId={currentBusinessId}
-                  onBusinessChange={setCurrentBusinessId}
+                  onBusinessChange={handleBusinessChange}
                   isSuperadmin={user.is_superadmin}
                 />
               )}
-              <Button variant="outline" size="sm" onClick={() => newAuth.logout()}>Выйти</Button>
+              <Button variant="outline" size="sm" onClick={() => newAuth.signOut()}>Выйти</Button>
             </div>
           </div>
           {/* Приветственный блок + шкала заполненности */}
           <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
             <p className="text-gray-800 mb-2">👋 Добро пожаловать в <span className="font-semibold">BeautyBot.pro</span>!</p>
+            {currentBusiness && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <span className="font-medium">Текущий бизнес:</span> {currentBusiness.name}
+                  {currentBusiness.description && (
+                    <span className="block text-xs text-blue-600 mt-1">{currentBusiness.description}</span>
+                  )}
+                </p>
+              </div>
+            )}
             <p className="text-gray-600 text-sm">
               Это ваш личный центр управления ростом салона.
             </p>

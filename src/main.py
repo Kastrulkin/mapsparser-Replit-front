@@ -101,7 +101,7 @@ INDEX_HTML = """
 </html>
 """
 
-# ==================== ЛОКАЛЬНЫЕ УТИЛИТЫ ДЛЯ SQLITE (вместо Supabase) ====================
+# ==================== ЛОКАЛЬНЫЕ УТИЛИТЫ ДЛЯ SQLITE ====================
 def competitor_exists(url: str) -> bool:
     try:
         db = DatabaseManager()
@@ -1789,7 +1789,7 @@ def get_all_businesses():
         
         # Проверяем права суперадмина
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['id']):
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         businesses = db.get_all_businesses()
@@ -1817,7 +1817,7 @@ def create_business():
         
         # Проверяем права суперадмина
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['id']):
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         data = request.get_json()
@@ -1854,7 +1854,7 @@ def update_business(business_id):
         
         # Проверяем права суперадмина
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['id']):
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         data = request.get_json()
@@ -1887,7 +1887,7 @@ def delete_business(business_id):
         
         # Проверяем права суперадмина
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['id']):
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         db.delete_business(business_id)
@@ -1915,7 +1915,7 @@ def get_all_users():
         
         # Проверяем права суперадмина
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['id']):
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         users = db.get_all_users()
@@ -1925,6 +1925,92 @@ def get_all_users():
         
     except Exception as e:
         print(f"❌ Ошибка получения пользователей: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/data', methods=['GET'])
+def get_business_data(business_id):
+    """Получить полные данные конкретного бизнеса"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        
+        # Проверяем доступ к бизнесу
+        business = db.get_business_by_id(business_id)
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        # Проверяем права доступа
+        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+        
+        # Получаем услуги бизнеса
+        services = db.get_services_by_business(business_id)
+        
+        # Получаем финансовые данные бизнеса
+        financial_data = db.get_financial_data_by_business(business_id)
+        
+        # Получаем отчеты бизнеса
+        reports = db.get_reports_by_business(business_id)
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "business": business,
+            "services": services,
+            "financial_data": financial_data,
+            "reports": reports
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения данных бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/services', methods=['GET'])
+def get_business_services(business_id):
+    """Получить услуги конкретного бизнеса"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        
+        # Проверяем доступ к бизнесу
+        business = db.get_business_by_id(business_id)
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        # Проверяем права доступа
+        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+        
+        services = db.get_services_by_business(business_id)
+        db.close()
+        
+        return jsonify({"success": True, "services": services})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения услуг бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(Exception)

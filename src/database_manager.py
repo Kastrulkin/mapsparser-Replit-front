@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    conn = sqlite3.connect("reports.db")
+    conn = sqlite3.connect("src/reports.db")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -401,14 +401,16 @@ class DatabaseManager:
     
     # ===== BUSINESSES =====
     
-    def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None) -> str:
+    def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
+                       business_type: str = None, address: str = None, working_hours: str = None,
+                       phone: str = None, email: str = None, website: str = None) -> str:
         """Создать новый бизнес"""
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Businesses (id, name, description, industry, owner_id)
-            VALUES (?, ?, ?, ?, ?)
-        """, (business_id, name, description, industry, owner_id))
+            INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id))
         self.conn.commit()
         return business_id
     
@@ -476,6 +478,79 @@ class DatabaseManager:
             WHERE id = ?
         """, (business_id,))
         self.conn.commit()
+    
+    def get_services_by_business(self, business_id: str):
+        """Получить услуги конкретного бизнеса"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, name, description, category, keywords, price, created_at, updated_at
+            FROM UserServices 
+            WHERE business_id = ? AND is_active = 1
+            ORDER BY created_at DESC
+        """, (business_id,))
+        
+        columns = [description[0] for description in cursor.description]
+        services = []
+        for row in cursor.fetchall():
+            service = dict(zip(columns, row))
+            services.append(service)
+        
+        return services
+    
+    def get_financial_data_by_business(self, business_id: str):
+        """Получить финансовые данные конкретного бизнеса"""
+        cursor = self.conn.cursor()
+        
+        # Получаем транзакции
+        cursor.execute("""
+            SELECT id, amount, description, transaction_type, date, created_at
+            FROM FinancialTransactions 
+            WHERE business_id = ? 
+            ORDER BY date DESC
+        """, (business_id,))
+        
+        columns = [description[0] for description in cursor.description]
+        transactions = []
+        for row in cursor.fetchall():
+            transaction = dict(zip(columns, row))
+            transactions.append(transaction)
+        
+        # Получаем метрики
+        cursor.execute("""
+            SELECT id, metric_name, metric_value, period, created_at
+            FROM FinancialMetrics 
+            WHERE business_id = ? 
+            ORDER BY created_at DESC
+        """, (business_id,))
+        
+        columns = [description[0] for description in cursor.description]
+        metrics = []
+        for row in cursor.fetchall():
+            metric = dict(zip(columns, row))
+            metrics.append(metric)
+        
+        return {
+            "transactions": transactions,
+            "metrics": metrics
+        }
+    
+    def get_reports_by_business(self, business_id: str):
+        """Получить отчеты конкретного бизнеса"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, title, report_path, seo_score, ai_analysis, created_at, updated_at
+            FROM Cards 
+            WHERE business_id = ? 
+            ORDER BY created_at DESC
+        """, (business_id,))
+        
+        columns = [description[0] for description in cursor.description]
+        reports = []
+        for row in cursor.fetchall():
+            report = dict(zip(columns, row))
+            reports.append(report)
+        
+        return reports
 
 def main():
     """Основная функция для тестирования"""

@@ -1,4 +1,11 @@
-import { User } from './auth';
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  phone?: string;
+  is_superadmin?: boolean;
+  businesses?: any[];
+}
 
 export interface AuthResponse {
   id: string;
@@ -144,6 +151,8 @@ export class NewAuth {
         email: u.email,
         name: u.name,
         phone: u.phone,
+        is_superadmin: u.is_superadmin,
+        businesses: response.businesses || [],
       };
 
       return this.currentUser;
