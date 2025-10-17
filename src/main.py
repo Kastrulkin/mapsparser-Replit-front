@@ -389,11 +389,47 @@ def services_optimize():
             except FileNotFoundError:
                 frequent_queries = "Частотные запросы не найдены"
 
-            # Загружаем основной промпт из файла
+            # Загружаем новый промпт из файла
             try:
                 with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
-                    prompt_template = f.read()
+                    prompt_file = f.read()
+                
+                # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
+                system_prompt = ""
+                user_template = ""
+                
+                if "SYSTEM_PROMPT = " in prompt_file:
+                    system_start = prompt_file.find('SYSTEM_PROMPT = """') + len('SYSTEM_PROMPT = """')
+                    system_end = prompt_file.find('"""', system_start)
+                    system_prompt = prompt_file[system_start:system_end]
+                
+                if "USER_PROMPT_TEMPLATE = " in prompt_file:
+                    user_start = prompt_file.find('USER_PROMPT_TEMPLATE = """') + len('USER_PROMPT_TEMPLATE = """')
+                    user_end = prompt_file.find('"""', user_start)
+                    user_template = prompt_file[user_start:user_end]
+                
+                # Загружаем примеры хороших формулировок
+                try:
+                    with open('prompts/good_service_examples.txt', 'r', encoding='utf-8') as f:
+                        good_examples = f.read()
+                except FileNotFoundError:
+                    good_examples = "Примеры не найдены"
+                
+                # Формируем финальный промпт
+                user_prompt = user_template.replace('{region}', str(region or 'не указан'))
+                user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
+                user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
+                user_prompt = user_prompt.replace('{length}', str(length or 150))
+                user_prompt = user_prompt.replace('{instructions}', str(instructions or '—'))
+                user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
+                user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
+                user_prompt = user_prompt.replace('{content}', str(content[:4000]))
+                
+                # Объединяем system и user промпты
+                prompt = f"{system_prompt}\n\n{user_prompt}"
+                
             except FileNotFoundError:
+                # Fallback на старый промпт
                 prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
@@ -424,17 +460,16 @@ def services_optimize():
 Исходные услуги/контент:
 {content}"""
 
-            # Формируем финальный промпт БЕЗ str.format (чтобы не сломать JSON-скобки)
-            prompt = (
-                prompt_template
-                .replace('{region}', str(region or 'не указан'))
-                .replace('{business_name}', str(business_name or 'салон красоты'))
-                .replace('{tone}', str(tone or 'профессиональный'))
-                .replace('{length}', str(length or 150))
-                .replace('{instructions}', str(instructions or '—'))
-                .replace('{frequent_queries}', str(frequent_queries))
-                .replace('{content}', str(content[:4000]))
-            )
+                prompt = (
+                    prompt_template
+                    .replace('{region}', str(region or 'не указан'))
+                    .replace('{business_name}', str(business_name or 'салон красоты'))
+                    .replace('{tone}', str(tone or 'профессиональный'))
+                    .replace('{length}', str(length or 150))
+                    .replace('{instructions}', str(instructions or '—'))
+                    .replace('{frequent_queries}', str(frequent_queries))
+                    .replace('{content}', str(content[:4000]))
+                )
 
             result = analyze_text_with_gigachat(prompt)
         # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики

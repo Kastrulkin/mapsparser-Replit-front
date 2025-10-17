@@ -61,6 +61,56 @@ class DatabaseManager:
         self.conn.commit()
         return user_id
     
+    def authenticate_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Аутентификация пользователя по email и паролю"""
+        import hashlib
+        
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return None
+            
+        # Проверяем пароль
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        if user['password_hash'] != password_hash:
+            return None
+            
+        return dict(user)
+    
+    def create_session(self, user_id: str) -> str:
+        """Создать сессию для пользователя"""
+        session_token = str(uuid.uuid4())
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO Sessions (token, user_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+        """, (session_token, user_id, datetime.now().isoformat(), 
+              (datetime.now() + timedelta(days=30)).isoformat()))
+        self.conn.commit()
+        return session_token
+    
+    def verify_session(self, token: str) -> Optional[Dict[str, Any]]:
+        """Проверить сессию и получить данные пользователя"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT u.*, s.created_at as session_created_at
+            FROM Users u
+            JOIN Sessions s ON u.id = s.user_id
+            WHERE s.token = ? AND s.expires_at > ?
+        """, (token, datetime.now().isoformat()))
+        
+        result = cursor.fetchone()
+        return dict(result) if result else None
+    
+    def delete_session(self, token: str) -> bool:
+        """Удалить сессию"""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM Sessions WHERE token = ?", (token,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
     def update_user(self, user_id: str, **kwargs) -> bool:
         """Обновить пользователя"""
         cursor = self.conn.cursor()
