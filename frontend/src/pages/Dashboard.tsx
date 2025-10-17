@@ -9,6 +9,7 @@ import FinancialMetrics from "@/components/FinancialMetrics";
 import ProgressTracker from "@/components/ProgressTracker";
 import ROICalculator from "@/components/ROICalculator";
 import TransactionForm from "@/components/TransactionForm";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 
 function getNextReportDate(reports: any[]) {
   if (!reports.length) return null;
@@ -474,7 +475,7 @@ const Dashboard = () => {
     // Если нет готовых отчётов — можно создавать сразу
     const nextDate = getNextReportDate(reports);
     if (!nextDate) {
-      setCanCreateReport(true);
+    setCanCreateReport(true);
       setTimer('00:00:00');
       return;
     }
@@ -492,7 +493,7 @@ const Dashboard = () => {
       setTimer(countdown);
       if (!countdown) {
         // Время истекло, обновляем данные
-        window.location.reload();
+          window.location.reload();
       }
     };
     updateTimer();
@@ -703,7 +704,7 @@ const Dashboard = () => {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
               {error}
-            </div>
+        </div>
           )}
 
           {success && (
@@ -721,11 +722,11 @@ const Dashboard = () => {
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+                <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input 
-                  type="email" 
-                  value={form.email} 
+                  <input 
+                    type="email" 
+                    value={form.email} 
                   disabled
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 />
@@ -758,9 +759,9 @@ const Dashboard = () => {
                   <Button onClick={() => setEditMode(false)} variant="outline">Отмена</Button>
                 </div>
               </div>
-            )}
-          </div>
-
+          )}
+                  </div>
+                  
           {/* Информация о бизнесе */}
           <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-4">
@@ -770,36 +771,59 @@ const Dashboard = () => {
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+                      <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Название бизнеса</label>
-                <input 
+                        <input 
                   type="text" 
                   value={clientInfo.businessName} 
                   onChange={(e) => setClientInfo({...clientInfo, businessName: e.target.value})}
                   disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Тип бизнеса</label>
-                <input 
-                  type="text" 
-                  value={clientInfo.businessType} 
-                  onChange={(e) => setClientInfo({...clientInfo, businessType: e.target.value})}
-                  disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
+                {editClientInfo ? (
+                  <Select
+                    value={clientInfo.businessType || "beauty_salon"}
+                    onValueChange={(v) => setClientInfo({ ...clientInfo, businessType: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите тип" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beauty_salon">Салон красоты</SelectItem>
+                      <SelectItem value="barbershop">Барбершоп</SelectItem>
+                      <SelectItem value="spa">SPA/Wellness</SelectItem>
+                      <SelectItem value="nail_studio">Ногтевая студия</SelectItem>
+                      <SelectItem value="cosmetology">Косметология</SelectItem>
+                      <SelectItem value="massage">Массаж</SelectItem>
+                      <SelectItem value="brows_lashes">Брови и ресницы</SelectItem>
+                      <SelectItem value="makeup">Макияж</SelectItem>
+                      <SelectItem value="tanning">Солярий</SelectItem>
+                      <SelectItem value="other">Другое</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <input
+                    type="text"
+                    value={clientInfo.businessType}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                    readOnly
+                  />
+                )}
               </div>
-              <div>
+                      <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Адрес</label>
-                <input 
+                        <input 
                   type="text" 
                   value={clientInfo.address} 
                   onChange={(e) => setClientInfo({...clientInfo, address: e.target.value})}
                   disabled={!editClientInfo}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Режим работы</label>
                 <input 
@@ -816,12 +840,12 @@ const Dashboard = () => {
                 <div className="flex gap-2">
                   <Button onClick={handleSaveClientInfo} disabled={savingClientInfo}>
                     {savingClientInfo ? 'Сохранение...' : 'Сохранить'}
-                  </Button>
+                        </Button>
                   <Button onClick={() => setEditClientInfo(false)} variant="outline">Отмена</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
 
           {/* Навигация по разделам */}
           <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
@@ -856,12 +880,13 @@ const Dashboard = () => {
               >
                 🎯 Прогресс
               </button>
-            </div>
           </div>
 
+            {/* Контент вкладок */}
+            <div className="mt-6">
           {/* Финансовая панель */}
           {activeTab === 'finance' && (
-            <div className="space-y-6 mb-6">
+                <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold text-gray-900">💰 Финансовая панель</h2>
                 <Button 
@@ -889,7 +914,7 @@ const Dashboard = () => {
 
           {/* Прогресс-трекер */}
           {activeTab === 'progress' && (
-            <div className="space-y-6 mb-6">
+                <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">🎯 Ваш прогресс</h2>
               <ProgressTracker />
             </div>
@@ -898,146 +923,149 @@ const Dashboard = () => {
           {/* Основной контент (показывается на вкладке overview) */}
           {activeTab === 'overview' && (
             <>
-              {/* Таблица услуг (Обзор) */}
-              <div className="mb-8">
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex-1 pr-4">
-                    <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
-                    <p className="text-sm text-gray-600 mt-1">
-                      📋 Ниже в блоке "Настройте описания услуг для Яндекс.Карт" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске. 
-                      <br/><br/>
-                      Эти наименования сохранятся в ваш список услуг автоматически. 
-                      <br/><br/>
-                      Вы также можете внести их вручную или потом отредактировать.
-                    </p>
-                  </div>
-                  <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
-                </div>
-
-                {/* Форма добавления услуги */}
-                {showAddService && (
-                  <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Добавить новую услугу</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
-                        <input
-                          type="text"
-                          value={newService.category}
-                          onChange={(e) => setNewService({...newService, category: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="Например: Стрижки"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
-                        <input
-                          type="text"
-                          value={newService.name}
-                          onChange={(e) => setNewService({...newService, name: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="Например: Женская стрижка"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
-                        <textarea
-                          value={newService.description}
-                          onChange={(e) => setNewService({...newService, description: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          rows={3}
-                          placeholder="Краткое описание услуги"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Ключевые слова</label>
-                        <input
-                          type="text"
-                          value={newService.keywords}
-                          onChange={(e) => setNewService({...newService, keywords: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="стрижка, укладка, окрашивание"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
-                        <input
-                          type="text"
-                          value={newService.price}
-                          onChange={(e) => setNewService({...newService, price: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="Например: 2000 руб"
-                        />
-                      </div>
+                  {/* Таблица услуг (Обзор) */}
+            <div className="mb-8">
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex-1 pr-4">
+                        <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                          📋 Ниже в блоке "Настройте описания услуг для Яндекс.Карт" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске. 
+                          <br/><br/>
+                          Эти наименования сохранятся в ваш список услуг автоматически. 
+                          <br/><br/>
+                          Вы также можете внести их вручную или потом отредактировать.
+                        </p>
                     </div>
-                    <div className="flex gap-2 mt-4">
-                      <Button onClick={addService}>Добавить</Button>
-                      <Button onClick={() => setShowAddService(false)} variant="outline">Отмена</Button>
-                    </div>
-                  </div>
-                )}
+                      <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+        </div>
 
-                <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Описание</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {loadingServices ? (
-                        <tr>
-                          <td className="px-4 py-3 text-gray-500" colSpan={5}>Загрузка услуг...</td>
-                        </tr>
-                      ) : userServices.length === 0 ? (
-                        <tr>
-                          <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
-                        </tr>
-                      ) : (
-                        userServices.map((service, index) => (
-                          <tr key={service.id || index}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{service.description}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <div className="flex gap-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => setEditingService(service.id)}
-                                >
-                                  Редактировать
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => deleteService(service.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  Удалить
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    {/* Форма добавления услуги */}
+                    {showAddService && (
+                      <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">Добавить новую услугу</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+                <input 
+                  type="text" 
+                              value={newService.category}
+                              onChange={(e) => setNewService({...newService, category: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              placeholder="Например: Стрижки"
+                />
               </div>
-            </>
-          )}
+              <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+                <input 
+                  type="text" 
+                              value={newService.name}
+                              onChange={(e) => setNewService({...newService, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              placeholder="Например: Женская стрижка"
+                />
+              </div>
+              <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+                <textarea 
+                              value={newService.description}
+                              onChange={(e) => setNewService({...newService, description: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  rows={3}
+                              placeholder="Краткое описание услуги"
+                />
+              </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Ключевые слова</label>
+                            <input
+                              type="text"
+                              value={newService.keywords}
+                              onChange={(e) => setNewService({...newService, keywords: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              placeholder="стрижка, укладка, окрашивание"
+                />
+              </div>
+              <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
+                            <input
+                              type="text"
+                              value={newService.price}
+                              onChange={(e) => setNewService({...newService, price: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              placeholder="Например: 2000 руб"
+                />
+              </div>
+                  </div>
+                        <div className="flex gap-2 mt-4">
+                          <Button onClick={addService}>Добавить</Button>
+                          <Button onClick={() => setShowAddService(false)} variant="outline">Отмена</Button>
+                </div>
+            </div>
+                    )}
+
+                    <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Описание</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {loadingServices ? (
+                            <tr>
+                              <td className="px-4 py-3 text-gray-500" colSpan={5}>Загрузка услуг...</td>
+                            </tr>
+                          ) : userServices.length === 0 ? (
+                            <tr>
+                              <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
+                            </tr>
+                          ) : (
+                            userServices.map((service, index) => (
+                              <tr key={service.id || index}>
+                                <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
+                                <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600">{service.description}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
+                                <td className="px-4 py-3 text-sm">
+                                  <div className="flex gap-2">
+                  <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => setEditingService(service.id)}
+                                    >
+                                      Редактировать
+                  </Button>
+                    <Button 
+                      size="sm"
+                                      variant="outline" 
+                                      onClick={() => deleteService(service.id)}
+                                      className="text-red-600 hover:text-red-700"
+                    >
+                      Удалить
+                    </Button>
+                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                      </div>
+                </>
+              )}
+                      </div>
+                    </div>
+                    
 
           {/* Блок оптимизации услуг (под всеми вкладками, но над отзывами) */}
           <div className="mb-12 bg-white rounded-lg border border-gray-200 p-4">
             <ServiceOptimizer businessName={clientInfo.businessName} />
-          </div>
-
+                    </div>
+                    
           {/* Ассистент ответов на отзывы */}
           <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
             <ReviewReplyAssistant businessName={clientInfo.businessName} />
@@ -1051,7 +1079,7 @@ const Dashboard = () => {
                 Создать новый отчёт
               </Button>
             ) : (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     URL страницы Яндекс.Карт
@@ -1067,13 +1095,13 @@ const Dashboard = () => {
                 <div className="flex gap-2">
                   <Button onClick={handleCreateReport} disabled={creatingReport}>
                     {creatingReport ? 'Создание...' : 'Создать отчёт'}
-                  </Button>
+                    </Button>
                   <Button onClick={() => setShowCreateReport(false)} variant="outline">
                     Отмена
                   </Button>
                 </div>
-              </div>
-            )}
+                      </div>
+                    )}
           </div>
 
           <div className="mb-8">
@@ -1081,7 +1109,7 @@ const Dashboard = () => {
             {reports.length === 0 ? (
               <p className="text-gray-600">У вас пока нет готовых отчётов</p>
             ) : (
-              <div className="space-y-4">
+                        <div className="space-y-4">
                 {reports.map((report) => (
                   <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4">
                     <div className="flex justify-between items-start">
@@ -1097,24 +1125,24 @@ const Dashboard = () => {
                             SEO-оценка: {report.seo_score}/100
                           </p>
                         )}
-                      </div>
+                                </div>
                       <div className="flex gap-2 ml-4">
                         {report.has_report && (
                           <>
                             <Button onClick={() => handleViewReport(report.id)} variant="outline" size="sm">
                               Просмотр
-                            </Button>
+                          </Button>
                             <Button onClick={() => handleDownloadReport(report.id)} variant="outline" size="sm">
                               Скачать
-                            </Button>
+                          </Button>
                           </>
                         )}
+                        </div>
                       </div>
-                    </div>
                   </div>
                 ))}
-              </div>
-            )}
+                </div>
+              )}
           </div>
 
           {/* Приглашения */}
@@ -1129,34 +1157,34 @@ const Dashboard = () => {
                 Приглашение отправлено!
               </div>
             )}
-          </div>
         </div>
+      </div>
 
-        {/* Модальное окно просмотра отчёта */}
+      {/* Модальное окно просмотра отчёта */}
         {viewingReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
-              <div className="flex justify-between items-center p-4 border-b">
-                <h3 className="text-lg font-semibold">Просмотр отчёта</h3>
-                <Button onClick={() => setViewingReport(null)} variant="outline">
-                  Закрыть
-                </Button>
-              </div>
-              <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
-                {loadingReport ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Загрузка отчёта...</p>
-                  </div>
-                ) : (
-                  <div dangerouslySetInnerHTML={{ __html: reportContent }} />
-                )}
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-semibold">Просмотр отчёта</h3>
+              <Button onClick={() => setViewingReport(null)} variant="outline">
+                Закрыть
+              </Button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+              {loadingReport ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Загрузка отчёта...</p>
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: reportContent }} />
+              )}
+            </div>
             </div>
           </div>
         )}
 
-        <Footer />
+      <Footer />
       </div>
     </div>
   );

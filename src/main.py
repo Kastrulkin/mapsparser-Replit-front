@@ -3,6 +3,9 @@ main.py — Веб-сервер для SEO-анализатора Яндекс.�
 """
 import os
 import sys
+
+# Устанавливаем переменную окружения для отключения SSL проверки GigaChat
+os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from parser import parse_yandex_card
 from analyzer import analyze_card
@@ -201,6 +204,15 @@ def spa_fallback(path):
     # Иначе — SPA индекс
     return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
 
+# Временные заглушки для тихой работы фронтенда
+@app.route('/api/users/reports', methods=['GET'])
+def stub_users_reports():
+    return jsonify({"success": True, "reports": []})
+
+@app.route('/api/users/queue', methods=['GET'])
+def stub_users_queue():
+    return jsonify({"success": True, "queue": []})
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     """API для анализа карточки"""
@@ -316,16 +328,29 @@ def services_optimize():
         if not content:
             return jsonify({"error": "Не передан текст услуг или файл"}), 400
 
-        # Строгий промпт
-        prompt = f"""
-Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+        # Загружаем частотные запросы
+        try:
+            with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
+                frequent_queries = f.read()
+        except FileNotFoundError:
+            frequent_queries = "Частотные запросы не найдены"
+
+        # Загружаем основной промпт из файла
+        try:
+            with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
+                prompt_template = f.read()
+        except FileNotFoundError:
+            prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
-Регион: {region or 'не указан'}
-Название бизнеса: {business_name or 'салон красоты'}
-Тон: {tone or 'профессиональный'}
-Длина описания: {length or 150} символов
-Дополнительные инструкции: {instructions or '—'}
+Регион: {region}
+Название бизнеса: {business_name}
+Тон: {tone}
+Длина описания: {length} символов
+Дополнительные инструкции: {instructions}
+
+ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
+{frequent_queries}
 
 Формат ответа СТРОГО В JSON:
 {{
@@ -343,12 +368,28 @@ def services_optimize():
 }}
 
 Исходные услуги/контент:
-{content[:4000]}
-"""
+{content}"""
+
+        # Формируем финальный промпт БЕЗ str.format (чтобы не сломать JSON-скобки)
+        prompt = (
+            prompt_template
+            .replace('{region}', str(region or 'не указан'))
+            .replace('{business_name}', str(business_name or 'салон красоты'))
+            .replace('{tone}', str(tone or 'профессиональный'))
+            .replace('{length}', str(length or 150))
+            .replace('{instructions}', str(instructions or '—'))
+            .replace('{frequent_queries}', str(frequent_queries))
+            .replace('{content}', str(content[:4000]))
+        )
 
         result = analyze_text_with_gigachat(prompt)
+        # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
         if 'error' in result:
-            return jsonify({"error": result['error']}), 500
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Ошибка оптимизации'),
+                "raw": result.get('raw_response')
+            }), 502
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()

@@ -16,6 +16,7 @@ class GigaChatClient:
     def __init__(self):
         """Инициализация с поддержкой ротации ключей"""
         self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
+        self.oauth_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
         self.credentials_pool: List[Tuple[str, str]] = []
         self.current_index = 0
         self.access_token = None
@@ -31,6 +32,10 @@ class GigaChatClient:
         if ca_bundle and os.path.exists(ca_bundle):
             self.verify_tls = ca_bundle  # verify принимает путь к файлу CA
             print(f"🔐 Используется пользовательский CA bundle: {ca_bundle}")
+        elif os.getenv("GIGACHAT_SSL_VERIFY", "true").lower() == "false":
+            # Отключаем проверку SSL если явно указано
+            self.verify_tls = False
+            print("⚠️ SSL проверка отключена для GigaChat")
         else:
             # По умолчанию используем системные сертификаты
             self.verify_tls = True
@@ -90,18 +95,25 @@ class GigaChatClient:
         for attempt in range(attempts):
             try:
                 client_id, client_secret = self._get_current_credentials()
-                url = f"{self.base_url}/oauth"
+                url = self.oauth_url
                 data = {"scope": "GIGACHAT_API_PERS"}
+                
+                # Генерируем уникальный RqUID для каждого запроса
+                import uuid
+                rquid = str(uuid.uuid4())
+                
+                # Используем Authorization Key напрямую (уже закодированный)
                 headers = {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
+                    "RqUID": rquid,
+                    "Authorization": f"Basic {client_secret}"
                 }
                 
                 response = requests.post(
                     url, 
                     data=data, 
                     headers=headers, 
-                    auth=(client_id, client_secret), 
                     timeout=30,
                     verify=self.verify_tls
                 )
@@ -189,8 +201,13 @@ class GigaChatClient:
                         "content": message_content
                     }
                 ],
-                "temperature": model_config["temperature"],
-                "max_tokens": model_config["max_tokens"]
+                "parameters": {
+                    "temperature": model_config["temperature"],
+                    "max_tokens": model_config["max_tokens"],
+                    "top_p": model_config.get("top_p", 1),
+                    "frequency_penalty": model_config.get("frequency_penalty", 0),
+                    "presence_penalty": model_config.get("presence_penalty", 0)
+                }
             }
             
             result = self._post_with_retry(url, headers, data, max_retries=3)
@@ -220,8 +237,13 @@ class GigaChatClient:
                         "content": prompt
                     }
                 ],
-                "temperature": model_config["temperature"],
-                "max_tokens": model_config["max_tokens"]
+                "parameters": {
+                    "temperature": model_config["temperature"],
+                    "max_tokens": model_config["max_tokens"],
+                    "top_p": model_config.get("top_p", 1),
+                    "frequency_penalty": model_config.get("frequency_penalty", 0),
+                    "presence_penalty": model_config.get("presence_penalty", 0)
+                }
             }
             
             result = self._post_with_retry(url, headers, data, max_retries=3)
