@@ -1064,7 +1064,8 @@ const Dashboard = () => {
           {/* Блок оптимизации услуг (под всеми вкладками, но над отзывами) */}
           <div className="mb-12 bg-white rounded-lg border border-gray-200 p-4">
             <ServiceOptimizer businessName={clientInfo.businessName} />
-                    </div>
+          </div>
+          
                     
           {/* Ассистент ответов на отзывы */}
           <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">

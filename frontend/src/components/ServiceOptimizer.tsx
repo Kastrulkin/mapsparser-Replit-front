@@ -150,7 +150,7 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
         />
       ) : (
         <div>
-          <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
+          <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
           {file && <p className="text-xs text-gray-500 mt-1">Файл: {file.name}</p>}
         </div>
       )}

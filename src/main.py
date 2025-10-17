@@ -320,27 +320,81 @@ def services_optimize():
         # Источник: файл или текст
         file = request.files.get('file') if 'file' in request.files else None
         if file:
-            content = file.read().decode('utf-8', errors='ignore')
+            # Проверяем тип файла (прайс-листы + скриншоты)
+            allowed_types = [
+                'application/pdf', 
+                'application/msword', 
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel', 
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/plain',
+                'text/csv',
+                'image/png',
+                'image/jpeg',
+                'image/jpg'
+            ]
+            if file.content_type not in allowed_types:
+                return jsonify({"error": "Неподдерживаемый тип файла. Разрешены: PDF, DOC, DOCX, XLS, XLSX, TXT, CSV, PNG, JPG, JPEG"}), 400
+            
+            # Определяем тип обработки по типу файла
+            if file.content_type.startswith('image/'):
+                # Для изображений - анализ скриншота
+                import base64
+                image_data = file.read()
+                image_base64 = base64.b64encode(image_data).decode('utf-8')
+                
+                # Используем промпт для анализа скриншота
+                try:
+                    with open('prompts/cards-analysis-prompt.txt', 'r', encoding='utf-8') as f:
+                        screenshot_prompt = f.read()
+                except FileNotFoundError:
+                    screenshot_prompt = """Проанализируй скриншот карточки организации на Яндекс.Картах. 
+ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
+{
+  "completeness_score": число от 0 до 100,
+  "business_name": "название из карточки",
+  "category": "основная категория",
+  "analysis": {
+    "photos": {"count": количество_фото, "quality": "низкое/среднее/высокое", "recommendations": ["рекомендация1"]},
+    "description": {"exists": true/false, "length": количество_символов, "seo_optimized": true/false, "recommendations": ["рекомендация1"]},
+    "contacts": {"phone": true/false, "website": true/false, "social_media": true/false, "recommendations": ["рекомендация1"]},
+    "schedule": {"complete": true/false, "recommendations": ["рекомендация1"]},
+    "services": {"listed": true/false, "count": количество, "recommendations": ["рекомендация1"]}
+  },
+  "priority_actions": ["действие1", "действие2", "действие3"],
+  "overall_recommendations": "общие рекомендации по улучшению"
+}"""
+                
+                result = analyze_screenshot_with_gigachat(image_base64, screenshot_prompt)
+            else:
+                # Для документов - анализ текста
+                content = file.read().decode('utf-8', errors='ignore')
         else:
             data = request.get_json(silent=True) or {}
             content = (data.get('text') or '').strip()
 
-        if not content:
-            return jsonify({"error": "Не передан текст услуг или файл"}), 400
+        # Если файл - изображение, результат уже получен выше
+        if file and file.content_type.startswith('image/'):
+            # Результат анализа скриншота уже в переменной result
+            pass
+        else:
+            # Для текста и документов - проверяем наличие контента
+            if not content:
+                return jsonify({"error": "Не передан текст услуг или файл"}), 400
 
-        # Загружаем частотные запросы
-        try:
-            with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
-                frequent_queries = f.read()
-        except FileNotFoundError:
-            frequent_queries = "Частотные запросы не найдены"
+            # Загружаем частотные запросы
+            try:
+                with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
+                    frequent_queries = f.read()
+            except FileNotFoundError:
+                frequent_queries = "Частотные запросы не найдены"
 
-        # Загружаем основной промпт из файла
-        try:
-            with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
-                prompt_template = f.read()
-        except FileNotFoundError:
-            prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+            # Загружаем основной промпт из файла
+            try:
+                with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
+                    prompt_template = f.read()
+            except FileNotFoundError:
+                prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -370,19 +424,19 @@ def services_optimize():
 Исходные услуги/контент:
 {content}"""
 
-        # Формируем финальный промпт БЕЗ str.format (чтобы не сломать JSON-скобки)
-        prompt = (
-            prompt_template
-            .replace('{region}', str(region or 'не указан'))
-            .replace('{business_name}', str(business_name or 'салон красоты'))
-            .replace('{tone}', str(tone or 'профессиональный'))
-            .replace('{length}', str(length or 150))
-            .replace('{instructions}', str(instructions or '—'))
-            .replace('{frequent_queries}', str(frequent_queries))
-            .replace('{content}', str(content[:4000]))
-        )
+            # Формируем финальный промпт БЕЗ str.format (чтобы не сломать JSON-скобки)
+            prompt = (
+                prompt_template
+                .replace('{region}', str(region or 'не указан'))
+                .replace('{business_name}', str(business_name or 'салон красоты'))
+                .replace('{tone}', str(tone or 'профессиональный'))
+                .replace('{length}', str(length or 150))
+                .replace('{instructions}', str(instructions or '—'))
+                .replace('{frequent_queries}', str(frequent_queries))
+                .replace('{content}', str(content[:4000]))
+            )
 
-        result = analyze_text_with_gigachat(prompt)
+            result = analyze_text_with_gigachat(prompt)
         # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
         if 'error' in result:
             return jsonify({
