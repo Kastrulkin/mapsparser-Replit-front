@@ -167,30 +167,56 @@ class GigaChatClient:
         
         raise RuntimeError(f"Запрос к GigaChat не удался после повторов: {last_error}")
     
-    def analyze_screenshot(self, image_base64: str, prompt: str) -> str:
-        """Анализ скриншота карточки"""
+    def upload_file_simple(self, file_data: bytes, filename: str) -> str:
+        """Простая загрузка файла в GigaChat"""
         try:
             token = self.get_access_token()
             
+            url = f"{self.base_url}/files"
+            headers = {
+                "Authorization": f"Bearer {token}"
+            }
+            
+            # ИСПРАВЛЕНИЕ: Правильный формат multipart/form-data
+            files = {'file': (filename, file_data, 'image/png')}
+            data = {'purpose': 'general'}
+            
+            response = requests.post(url, headers=headers, files=files, data=data, verify=False, timeout=60)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"DEBUG: Ответ от /files: {result}")
+                return result.get('id')
+            else:
+                print(f"DEBUG: Ошибка загрузки: {response.status_code}")
+                print(f"DEBUG: Тело ответа: {response.text}")
+                raise Exception(f"Ошибка загрузки: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            print(f"DEBUG: Исключение в upload_file_simple: {str(e)}")
+            raise Exception(f"Ошибка загрузки файла: {str(e)}")
+
+    def analyze_screenshot(self, image_base64: str, prompt: str) -> str:
+        """Анализ скриншота карточки"""
+        try:
+            print(f"🚨 DEBUG: Начинаем анализ скриншота")
+            print(f"🚨 DEBUG: Размер base64: {len(image_base64)} символов")
+            
+            # Загружаем файл в GigaChat
+            import base64
+            file_data = base64.b64decode(image_base64)
+            file_id = self.upload_file_simple(file_data, "screenshot.png")
+            print(f"🚨 DEBUG: Файл загружен, file_id: {file_id}")
+            
+            # Получаем токен
+            token = self.get_access_token()
+            
+            # Формируем запрос к GigaChat
             url = f"{self.base_url}/chat/completions"
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json"
             }
-            
-            # Формируем сообщение с изображением
-            message_content = [
-                {
-                    "type": "text",
-                    "text": prompt
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_base64}"
-                    }
-                }
-            ]
             
             model_config = self.config.get_model_config()
             data = {
@@ -198,24 +224,64 @@ class GigaChatClient:
                 "messages": [
                     {
                         "role": "user",
-                        "content": message_content
+                        "content": prompt,
+                        "attachments": [file_id]
                     }
                 ],
                 "parameters": {
-                    "temperature": model_config["temperature"],
-                    "max_tokens": model_config["max_tokens"],
-                    "top_p": model_config.get("top_p", 1),
+                    "temperature": model_config.get("temperature", 0.1),
+                    "max_tokens": model_config.get("max_tokens", 2000),
                     "frequency_penalty": model_config.get("frequency_penalty", 0),
                     "presence_penalty": model_config.get("presence_penalty", 0)
                 }
             }
             
             result = self._post_with_retry(url, headers, data, max_retries=3)
-            return result["choices"][0]["message"]["content"]
+            print(f"🚨 DEBUG: Полный ответ от GigaChat: {result}")
+            
+            # Исправляем согласно документации GigaChat
+            if "alternatives" in result:
+                content = result["alternatives"][0]["message"]["content"]
+                print(f"🚨 DEBUG: Используем структуру 'alternatives'")
+            elif "choices" in result:
+                content = result["choices"][0]["message"]["content"]
+                print(f"🚨 DEBUG: Используем структуру 'choices' (старая)")
+            else:
+                raise Exception("Неизвестная структура ответа от GigaChat")
+            
+            print(f"🚨 DEBUG: Извлеченный контент: {content}")
+            
+            # Очищаем JSON от лишних символов
+            import re
+            import json
+            
+            # Находим последнюю закрывающую скобку }
+            last_brace = content.rfind('}')
+            if last_brace != -1:
+                cleaned_content = content[:last_brace + 1]
+            else:
+                cleaned_content = content
+            
+            print(f"🚨 DEBUG: Оригинальный ответ: {content[:200]}...")
+            print(f"🚨 DEBUG: Очищенный ответ: {cleaned_content[:200]}...")
+            print(f"🚨 DEBUG: Проблемный участок (позиция 830-840): {content[830:840]}")
+            print(f"🚨 DEBUG: Длина оригинального: {len(content)}, очищенного: {len(cleaned_content)}")
+            
+            # Проверяем, что JSON валидный
+            try:
+                json.loads(cleaned_content)
+                print(f"✅ JSON валидный после очистки")
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON все еще невалидный: {e}")
+                # Попробуем более агрессивную очистку
+                cleaned_content = re.sub(r'}[^}]*$', '}', content)
+                print(f"🚨 DEBUG: Агрессивная очистка: {cleaned_content[:200]}...")
+            
+            return cleaned_content
             
         except Exception as e:
-            print(f"❌ Ошибка анализа скриншота: {e}")
-            raise
+            print(f"🚨 DEBUG: Исключение в analyze_screenshot: {str(e)}")
+            raise Exception(f"Ошибка анализа скриншота: {str(e)}")
     
     def analyze_text(self, prompt: str) -> str:
         """Анализ текста"""
@@ -247,7 +313,23 @@ class GigaChatClient:
             }
             
             result = self._post_with_retry(url, headers, data, max_retries=3)
-            return result["choices"][0]["message"]["content"]
+            
+            # Исправляем согласно документации GigaChat
+            if "alternatives" in result:
+                content = result["alternatives"][0]["message"]["content"]
+            elif "choices" in result:
+                content = result["choices"][0]["message"]["content"]
+            else:
+                raise Exception("Неизвестная структура ответа от GigaChat")
+            
+            # Очищаем JSON от лишних символов
+            import re
+            # Убираем все символы после последней закрывающей скобки }
+            cleaned_content = re.sub(r'}[^}]*$', '}', content)
+            print(f"🚨 DEBUG: Оригинальный ответ: {content[:100]}...")
+            print(f"🚨 DEBUG: Очищенный ответ: {cleaned_content[:100]}...")
+            
+            return cleaned_content
             
         except Exception as e:
             print(f"❌ Ошибка анализа текста: {e}")

@@ -343,26 +343,61 @@ def services_optimize():
                 image_data = file.read()
                 image_base64 = base64.b64encode(image_data).decode('utf-8')
                 
-                # Используем промпт для анализа скриншота
+                # Используем упрощенный промпт для анализа скриншота прайс-листа
                 try:
-                    with open('prompts/cards-analysis-prompt.txt', 'r', encoding='utf-8') as f:
-                        screenshot_prompt = f.read()
+                    with open('prompts/screenshot-analysis-prompt.txt', 'r', encoding='utf-8') as f:
+                        prompt_content = f.read()
+                    
+                    # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
+                    system_prompt = ""
+                    user_prompt_template = ""
+                    
+                    lines = prompt_content.split('\n')
+                    current_section = None
+                    
+                    for line in lines:
+                        if line.strip().startswith('SYSTEM_PROMPT'):
+                            current_section = 'system'
+                            continue
+                        elif line.strip().startswith('USER_PROMPT_TEMPLATE'):
+                            current_section = 'user'
+                            continue
+                        elif line.strip().startswith('"""') and current_section:
+                            if current_section == 'system':
+                                system_prompt = line.replace('"""', '').strip()
+                            elif current_section == 'user':
+                                user_prompt_template = line.replace('"""', '').strip()
+                            current_section = None
+                            continue
+                        elif current_section == 'system':
+                            system_prompt += line + '\n'
+                        elif current_section == 'user':
+                            user_prompt_template += line + '\n'
+                    
+                    # Формируем финальный промпт
+                    formatted_user_prompt = user_prompt_template.format(
+                        region=region or 'Санкт-Петербург',
+                        business_name=business_name or 'Салон красоты',
+                        tone=tone or 'Профессиональный',
+                        length=length or 150,
+                        instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
+                    )
+                    screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
+                    
                 except FileNotFoundError:
-                    screenshot_prompt = """Проанализируй скриншот карточки организации на Яндекс.Картах. 
+                    screenshot_prompt = """Проанализируй скриншот прайс-листа салона красоты и найди все услуги.
+
 ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
 {
-  "completeness_score": число от 0 до 100,
-  "business_name": "название из карточки",
-  "category": "основная категория",
-  "analysis": {
-    "photos": {"count": количество_фото, "quality": "низкое/среднее/высокое", "recommendations": ["рекомендация1"]},
-    "description": {"exists": true/false, "length": количество_символов, "seo_optimized": true/false, "recommendations": ["рекомендация1"]},
-    "contacts": {"phone": true/false, "website": true/false, "social_media": true/false, "recommendations": ["рекомендация1"]},
-    "schedule": {"complete": true/false, "recommendations": ["рекомендация1"]},
-    "services": {"listed": true/false, "count": количество, "recommendations": ["рекомендация1"]}
-  },
-  "priority_actions": ["действие1", "действие2", "действие3"],
-  "overall_recommendations": "общие рекомендации по улучшению"
+  "services": [
+    {
+      "original_name": "исходное название с скриншота",
+      "optimized_name": "SEO-оптимизированное название",
+      "seo_description": "детальное описание с ключевыми словами",
+      "keywords": ["ключ1", "ключ2", "ключ3"],
+      "category": "hair|nails|spa|barber|massage|makeup|brows|lashes|other"
+    }
+  ]
 }"""
                 
                 result = analyze_screenshot_with_gigachat(image_base64, screenshot_prompt)
@@ -376,7 +411,8 @@ def services_optimize():
         # Если файл - изображение, результат уже получен выше
         if file and file.content_type.startswith('image/'):
             # Результат анализа скриншота уже в переменной result
-            pass
+            # Для изображений content не используется, но инициализируем пустой строкой
+            content = ""
         else:
             # Для текста и документов - проверяем наличие контента
             if not content:
@@ -1718,6 +1754,14 @@ def logout():
     except Exception as e:
         print(f"❌ Ошибка выхода: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Глобальный обработчик исключений"""
+    import traceback
+    print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
+    print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
+    return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
     print("SEO анализатор запущен на порту 8000")

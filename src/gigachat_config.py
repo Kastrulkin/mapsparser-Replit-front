@@ -38,7 +38,7 @@ class GigaChatConfig:
         
         # Параметры генерации
         self.temperature = float(os.getenv('GIGACHAT_TEMPERATURE', '0.1'))
-        self.max_tokens = int(os.getenv('GIGACHAT_MAX_TOKENS', '4000'))
+        self.max_tokens = int(os.getenv('GIGACHAT_MAX_TOKENS', '6000'))
         
         # Таймауты
         self.request_timeout = int(os.getenv('GIGACHAT_TIMEOUT', '60'))
