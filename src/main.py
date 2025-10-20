@@ -2828,6 +2828,39 @@ def get_business_services(business_id):
         print(f"❌ Ошибка получения услуг бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/public/contact', methods=['POST', 'OPTIONS'])
+def public_contact():
+    """Обработка формы обратной связи"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        phone = data.get('phone', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not name or not email or not message:
+            return jsonify({"error": "Имя, email и сообщение обязательны"}), 400
+        
+        # Здесь можно добавить отправку email или сохранение в базу данных
+        print(f"📧 НОВОЕ СООБЩЕНИЕ ОТ {name} ({email}):")
+        print(f"📞 Телефон: {phone}")
+        print(f"💬 Сообщение: {message}")
+        print("-" * 50)
+        
+        # TODO: Добавить отправку email через SMTP или внешний сервис
+        
+        return jsonify({"success": True, "message": "Сообщение отправлено"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обработки формы обратной связи: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Глобальный обработчик исключений"""

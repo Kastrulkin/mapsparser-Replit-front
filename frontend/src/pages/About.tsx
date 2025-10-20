@@ -182,16 +182,17 @@ const About = () => {
       {/* Pricing Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">Тарифы</h2>
-          
+          <h2 className="text-3xl font-bold text-foreground mb-8">Условия</h2>
+
           <Card className="p-8 mb-8">
             <CardContent className="p-0">
-              <div className="text-4xl font-bold text-primary mb-4">12 000 ₽/месяц</div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">Базовый пакет</h3>
+              <div className="text-2xl font-bold text-primary mb-4">Оплата по факту результата</div>
+              <h3 className="text-xl font-semibold text-foreground mb-4">7% от оплат привлечённых клиентов</h3>
               <div className="space-y-2 text-muted-foreground mb-6">
-                <div>• Агент привлечения клиентов</div>
-                <div>• Агент администратор</div>
-                <div>• Выделенный менеджер</div>
+                <div>- Настройка бизнес процесса</div>
+                <div>- Агент привлдечения клиентов</div>
+                <div>- Агент администратор</div>
+                <div>- Выделенный менеджер</div>
               </div>
               <Button
                 variant="default"
@@ -201,14 +202,10 @@ const About = () => {
                   navigate('/contact');
                 }}
               >
-                Подключить
+                Начать сотрудничество
               </Button>
             </CardContent>
           </Card>
-
-          <p className="text-lg text-muted-foreground">
-            Если нужна будет полная автоматизация четырьмя агентами, мы обсудим условия индивидуально
-          </p>
         </div>
       </section>
 

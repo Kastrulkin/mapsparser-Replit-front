@@ -68,17 +68,30 @@ const CTA = () => {
                   <span className="text-primary font-semibold">1</span>
                 </div>
                 <div>
-                  <h5 className="font-semibold text-foreground mb-1 text-lg">Агент привлечения клиентов</h5>
+                  <h5 className="font-semibold text-foreground mb-1 text-lg">Настройка бизнес процессов</h5>
                   <ul className="list-disc pl-5 text-base text-muted-foreground space-y-1">
-                    <li>Сравнивает с конкурентами по требованию.</li>
-                    <li>Полная настройка Яндекс.Карт.</li>
-                    <li>Мониторит отзывы и отвечает на них.</li>
+                    <li>Работаем с сотрдуниками</li>
+                    <li>Настраиваем работу с базой клиентов</li>
+                    <li>Партнёрства и оффлайн продажи</li>
                   </ul>
                 </div>
               </div>
               <div className="flex items-start">
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mr-4 mt-1">
                   <span className="text-primary font-semibold">2</span>
+                </div>
+                <div>
+                  <h5 className="font-semibold text-foreground mb-1 text-lg">Агент привлечения клиентов</h5>
+                  <ul className="list-disc pl-5 text-base text-muted-foreground space-y-1">
+                    <li>Полная настройка Яндекс.Карт.</li>
+                    <li>Мониторит отзывы и отвечает на них.</li>
+                    <li>Посты для карт и соцсетей.</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mr-4 mt-1">
+                  <span className="text-primary font-semibold">3</span>
                 </div>
                 <div>
                   <h5 className="font-semibold text-foreground mb-1 text-lg">Агент администратор</h5>
@@ -91,7 +104,7 @@ const CTA = () => {
               </div>
               <div className="flex items-start">
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mr-4 mt-1">
-                  <span className="text-primary font-semibold">3</span>
+                  <span className="text-primary font-semibold">4</span>
                 </div>
                 <div>
                   <h5 className="font-semibold text-foreground mb-1 text-lg">Поддержка</h5>
@@ -103,7 +116,7 @@ const CTA = () => {
                 </div>
               </div>
             </div>
-            <div className="text-center text-lg font-semibold text-primary mt-8 mb-2">Полноценный ИИ сотрудник за 12 000 рублей в месяц</div>
+            <div className="text-center text-lg font-semibold text-primary mt-8 mb-2">Полноценное развитие бизнеса с оплатой из полученных доходов!</div>
             <Button 
               variant="default" 
               size="lg" 
