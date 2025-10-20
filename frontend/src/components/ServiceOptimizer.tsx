@@ -28,6 +28,8 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
   const [file, setFile] = useState<File | null>(null);
   const [tone, setTone] = useState<Tone>('professional');
   const [instructions, setInstructions] = useState('');
+  const [exampleInput, setExampleInput] = useState('');
+  const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
   const [region, setRegion] = useState('');
   const [length, setLength] = useState(150);
   const [loading, setLoading] = useState(false);
@@ -35,6 +37,61 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
   const [result, setResult] = useState<OptimizeResultService[] | null>(null);
   const [recs, setRecs] = useState<string[] | null>(null);
   const [addedServices, setAddedServices] = useState<Set<number>>(new Set());
+
+  const loadExamples = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/examples`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExamples((data.examples || []).map((e:any)=>({ id: e.id, text: e.text })));
+      }
+    } catch {}
+  };
+
+  React.useEffect(()=>{ loadExamples(); }, []);
+
+  const addExample = async () => {
+    const text = exampleInput.trim();
+    if (!text) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/examples`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExampleInput('');
+        await loadExamples();
+      } else {
+        setError(data.error || 'Ошибка добавления примера');
+      }
+    } catch (e:any) {
+      setError(e.message || 'Ошибка добавления примера');
+    }
+  };
+
+  const deleteExample = async (id: string) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/examples/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadExamples();
+      } else {
+        setError(data.error || 'Ошибка удаления примера');
+      }
+    } catch (e:any) {
+      setError(e.message || 'Ошибка удаления примера');
+    }
+  };
 
   const callOptimize = async () => {
     setLoading(true);
@@ -181,6 +238,25 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
       <div>
         <label className="block text-sm text-gray-600 mb-1">Дополнительные инструкции (необязательно)</label>
         <Textarea rows={3} value={instructions} onChange={(e)=> setInstructions(e.target.value)} placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи." />
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">Примеры формулировок услуг (до 5)</label>
+        <div className="flex gap-2">
+          <Input value={exampleInput} onChange={(e)=> setExampleInput(e.target.value)} placeholder="Например: Женская стрижка любой сложности. Консультация включена" />
+          <Button onClick={addExample} variant="outline">Добавить</Button>
+        </div>
+        {examples.length>0 && (
+          <ul className="mt-2 space-y-1">
+            {examples.map(e => (
+              <li key={e.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                <span className="mr-2 truncate">{e.text}</span>
+                <button className="text-xs text-red-600" onClick={()=> deleteExample(e.id)}>Удалить</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-gray-500 mt-1">Эти примеры сохраняются в вашем аккаунте и будут использоваться ИИ при оптимизации.</p>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}

@@ -439,7 +439,12 @@ class DatabaseManager:
     def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
         """Получить бизнес по ID"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("""
+            SELECT id, name, description, industry, business_type, address, working_hours, 
+                   phone, email, website, owner_id, owner_name, owner_email, is_active, 
+                   created_at, updated_at
+            FROM Businesses WHERE id = ?
+        """, (business_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
     
@@ -482,12 +487,32 @@ class DatabaseManager:
     def get_services_by_business(self, business_id: str):
         """Получить услуги конкретного бизнеса"""
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT id, name, description, category, keywords, price, created_at, updated_at
-            FROM UserServices 
-            WHERE business_id = ? AND is_active = 1
-            ORDER BY created_at DESC
-        """, (business_id,))
+        
+        # Проверяем, есть ли поле business_id в таблице UserServices
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if 'business_id' in columns:
+            # Используем business_id для фильтрации
+            cursor.execute("""
+                SELECT id, name, description, category, keywords, price, created_at, updated_at
+                FROM UserServices 
+                WHERE business_id = ? AND is_active = 1
+                ORDER BY created_at DESC
+            """, (business_id,))
+        else:
+            # Fallback: получаем owner_id бизнеса и выбираем услуги по user_id
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+            row = cursor.fetchone()
+            owner_id = row[0] if row else None
+            if not owner_id:
+                return []
+            cursor.execute("""
+                SELECT id, name, description, category, keywords, price, created_at, updated_at
+                FROM UserServices 
+                WHERE user_id = ? AND is_active = 1
+                ORDER BY created_at DESC
+            """, (owner_id,))
         
         columns = [description[0] for description in cursor.description]
         services = []
@@ -500,6 +525,20 @@ class DatabaseManager:
     def get_financial_data_by_business(self, business_id: str):
         """Получить финансовые данные конкретного бизнеса"""
         cursor = self.conn.cursor()
+        
+        # Создаем таблицу FinancialMetrics если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS FinancialMetrics (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                metric_name TEXT NOT NULL,
+                metric_value REAL NOT NULL,
+                period TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        self.conn.commit()
         
         # Получаем транзакции
         cursor.execute("""
@@ -537,6 +576,27 @@ class DatabaseManager:
     def get_reports_by_business(self, business_id: str):
         """Получить отчеты конкретного бизнеса"""
         cursor = self.conn.cursor()
+        
+        # Создаем таблицу Cards если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Cards (
+                id TEXT PRIMARY KEY,
+                url TEXT,
+                title TEXT,
+                report_path TEXT,
+                user_id TEXT,
+                business_id TEXT,
+                seo_score INTEGER,
+                ai_analysis TEXT,
+                recommendations TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        self.conn.commit()
+        
         cursor.execute("""
             SELECT id, title, report_path, seo_score, ai_analysis, created_at, updated_at
             FROM Cards 

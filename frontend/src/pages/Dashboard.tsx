@@ -5,6 +5,7 @@ import { newAuth } from "@/lib/auth_new";
 import InviteFriendForm from "@/components/InviteFriendForm";
 import ServiceOptimizer from "@/components/ServiceOptimizer";
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
+import NewsGenerator from "@/components/NewsGenerator";
 import FinancialMetrics from "@/components/FinancialMetrics";
 import ProgressTracker from "@/components/ProgressTracker";
 import ROICalculator from "@/components/ROICalculator";
@@ -65,12 +66,18 @@ const Dashboard = () => {
       setCurrentBusinessId(businessId);
       setCurrentBusiness(business);
       
-      // Обновляем форму с данными выбранного бизнеса
-      setForm({
-        email: business.owner_email || user?.email || "",
-        phone: user?.phone || "",
-        name: business.owner_name || user?.name || "",
-        yandexUrl: ""
+      // Сохраняем выбор в localStorage
+      localStorage.setItem('selectedBusinessId', businessId);
+      
+      // НЕ обновляем данные профиля пользователя при переключении бизнеса
+      // Данные профиля (email, phone, name) должны оставаться неизменными
+      
+      // Обновляем информацию о бизнесе
+      setClientInfo({
+        businessName: business.name || "",
+        businessType: business.business_type || "beauty_salon",
+        address: business.address || "",
+        workingHours: business.working_hours || ""
       });
       
       // Загружаем данные бизнеса
@@ -98,6 +105,16 @@ const Dashboard = () => {
             address: data.business.address || '',
             workingHours: data.business.working_hours || ''
           });
+          
+          // Обновляем данные профиля из профиля бизнеса
+          if (data.business_profile) {
+            setForm({
+              email: data.business_profile.contact_email || user?.email || "",
+              phone: data.business_profile.contact_phone || user?.phone || "",
+              name: data.business_profile.contact_name || user?.name || "",
+              yandexUrl: ""
+            });
+          }
           
           console.log(`🔄 Переключились на бизнес: ${business.name}`);
           console.log(`📊 Загружено услуг: ${data.services?.length || 0}`);
@@ -185,7 +202,8 @@ const Dashboard = () => {
           name: newService.name,
           description: newService.description,
           keywords: newService.keywords.split(',').map(k => k.trim()).filter(k => k),
-          price: newService.price
+          price: newService.price,
+          business_id: currentBusinessId
         })
       });
 
@@ -262,12 +280,31 @@ const Dashboard = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         },
-        body: JSON.stringify(clientInfo)
+        body: JSON.stringify({
+          ...clientInfo,
+          businessId: currentBusinessId
+        })
       });
 
       if (response.ok) {
         setEditClientInfo(false);
         setSuccess('Информация о бизнесе сохранена');
+        
+        // Обновляем данные текущего бизнеса в списке
+        if (currentBusinessId) {
+          const updatedBusinesses = businesses.map(b => 
+            b.id === currentBusinessId 
+              ? { ...b, name: clientInfo.businessName, address: clientInfo.address, working_hours: clientInfo.workingHours }
+              : b
+          );
+          setBusinesses(updatedBusinesses);
+          
+          // Обновляем текущий бизнес
+          const updatedCurrentBusiness = updatedBusinesses.find(b => b.id === currentBusinessId);
+          if (updatedCurrentBusiness) {
+            setCurrentBusiness(updatedCurrentBusiness);
+          }
+        }
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Ошибка сохранения информации');
@@ -283,19 +320,44 @@ const Dashboard = () => {
   // Обновление профиля
   const handleUpdateProfile = async () => {
     try {
-      const { user: updatedUser, error } = await newAuth.updateProfile({
-        name: form.name,
-        phone: form.phone
-      });
+      // Если есть выбранный бизнес, сохраняем в профиль бизнеса
+      if (currentBusinessId) {
+        const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          },
+          body: JSON.stringify({
+            contact_name: form.name,
+            contact_phone: form.phone,
+            contact_email: form.email
+          })
+        });
 
-      if (error) {
-        setError(error);
-        return;
+        if (response.ok) {
+          setEditMode(false);
+          setSuccess('Профиль бизнеса обновлен');
+        } else {
+          const errorData = await response.json();
+          setError(errorData.error || 'Ошибка обновления профиля бизнеса');
+        }
+      } else {
+        // Если нет выбранного бизнеса, обновляем глобальный профиль
+        const { user: updatedUser, error } = await newAuth.updateProfile({
+          name: form.name,
+          phone: form.phone
+        });
+
+        if (error) {
+          setError(error);
+          return;
+        }
+
+        setUser(updatedUser);
+        setEditMode(false);
+        setSuccess('Профиль обновлен');
       }
-
-      setUser(updatedUser);
-      setEditMode(false);
-      setSuccess('Профиль обновлен');
     } catch (error) {
       console.error('Ошибка обновления профиля:', error);
       setError('Ошибка обновления профиля');
@@ -435,8 +497,8 @@ const Dashboard = () => {
       if (data.success) {
         setSuccess('Карточка успешно проанализирована!');
         setAutoAnalysisUrl('');
-        // Обновляем список отчетов
-        loadReports();
+        // Перезагрузим страницу для обновления отчётов
+        window.location.reload();
       } else {
         setError(data.error || 'Ошибка анализа');
       }
@@ -483,9 +545,17 @@ const Dashboard = () => {
         if (currentUser.is_superadmin && currentUser.businesses) {
           setBusinesses(currentUser.businesses);
           if (currentUser.businesses.length > 0) {
-            const firstBusiness = currentUser.businesses[0];
-            setCurrentBusinessId(firstBusiness.id);
-            setCurrentBusiness(firstBusiness);
+            // Проверяем, есть ли сохраненный выбор в localStorage
+            const savedBusinessId = localStorage.getItem('selectedBusinessId');
+            const businessToSelect = savedBusinessId 
+              ? currentUser.businesses.find(b => b.id === savedBusinessId) || currentUser.businesses[0]
+              : currentUser.businesses[0];
+            
+            setCurrentBusinessId(businessToSelect.id);
+            setCurrentBusiness(businessToSelect);
+            
+            // Сохраняем выбор в localStorage
+            localStorage.setItem('selectedBusinessId', businessToSelect.id);
           }
         }
 
@@ -748,6 +818,11 @@ const Dashboard = () => {
           <div className="mb-2 flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
             <div className="flex items-center space-x-4">
+              {user?.is_superadmin && (
+                <div className="text-sm text-gray-600">
+                  Суперпользователь: {user.email}
+                </div>
+              )}
               {user?.is_superadmin && businesses.length > 0 && (
                 <BusinessSwitcher
                   businesses={businesses}
@@ -1160,6 +1235,11 @@ const Dashboard = () => {
           {/* Ассистент ответов на отзывы */}
           <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
             <ReviewReplyAssistant businessName={clientInfo.businessName} />
+          </div>
+
+          {/* Новости под отзывами */}
+          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+            <NewsGenerator services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} />
           </div>
 
           {/* Блоки перемещены сюда: */}

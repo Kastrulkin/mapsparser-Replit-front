@@ -1,0 +1,34 @@
+SEO анализатор запущен на порту 8000
+ * Serving Flask app 'main'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://192.168.0.12:8000
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [20/Oct/2025 19:14:50] "GET /dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:50] "GET /assets/index-B3vP_EWR.js HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:50] "GET /assets/index-CNzFJzBn.css HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/auth/me HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /assets/logo-t8GesQqV.png HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/auth/me HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/users/reports HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/users/queue HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /favicon.svg HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/services/list HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/client-info HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/review-examples HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/examples HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/news-examples HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:14:51] "GET /api/news/list HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:15:33] "POST /api/business/e0833836242fdaf1f085232ab1e29f41/profile HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:15:36] "GET /api/business/ffc877a7-b405-4370-837f-d2fa985e8416/data HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:15:41] "[36mGET /assets/index-CNzFJzBn.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [20/Oct/2025 19:15:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:15:45] "GET /api/business/e0833836242fdaf1f085232ab1e29f41/data HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:15:53] "GET /api/business/ffc877a7-b405-4370-837f-d2fa985e8416/data HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:16:56] "POST /api/services/add HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:16:56] "GET /api/services/list HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:17:04] "GET /api/business/e0833836242fdaf1f085232ab1e29f41/data HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 19:17:10] "GET /api/business/ffc877a7-b405-4370-837f-d2fa985e8416/data HTTP/1.1" 200 -

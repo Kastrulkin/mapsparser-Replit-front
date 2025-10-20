@@ -18,6 +18,7 @@ import base64
 import os
 import json
 from datetime import datetime, timedelta
+import random
 
 # Автоматическая загрузка переменных окружения из .env
 try:
@@ -444,12 +445,28 @@ def services_optimize():
                     user_end = prompt_file.find('"""', user_start)
                     user_template = prompt_file[user_start:user_end]
                 
-                # Загружаем примеры хороших формулировок
+                # Загружаем примеры хороших формулировок из БД пользователя
                 try:
-                    with open('prompts/good_service_examples.txt', 'r', encoding='utf-8') as f:
-                        good_examples = f.read()
-                except FileNotFoundError:
-                    good_examples = "Примеры не найдены"
+                    db = DatabaseManager()
+                    cur = db.conn.cursor()
+                    cur.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS UserServiceExamples (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            example_text TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+                        )
+                        """
+                    )
+                    cur.execute("SELECT example_text FROM UserServiceExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                    rows = cur.fetchall()
+                    db.close()
+                    examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
+                    good_examples = "\n".join(examples_list) if examples_list else ""
+                except Exception:
+                    good_examples = ""
                 
                 # Формируем финальный промпт
                 user_prompt = user_template.replace('{region}', str(region or 'не указан'))
@@ -519,6 +536,20 @@ def services_optimize():
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        # Гарантируем наличие таблицы PricelistOptimizations
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS PricelistOptimizations (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                original_file_path TEXT,
+                optimized_data TEXT,
+                services_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP
+            )
+            """
+        )
         optimization_id = str(uuid.uuid4())
         upload_dir = 'uploads/pricelists'
         os.makedirs(upload_dir, exist_ok=True)
@@ -553,6 +584,471 @@ def services_optimize():
         print(f"❌ Ошибка оптимизации услуг: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ==================== ПРИМЕРЫ ФОРМУЛИРОВОК УСЛУГ (ПОЛЬЗОВАТЕЛЯ) ====================
+@app.route('/api/examples', methods=['GET', 'POST', 'OPTIONS'])
+def user_service_examples():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        # Обеспечим таблицу
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserServiceExamples (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                example_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        if request.method == 'GET':
+            cur.execute("SELECT id, example_text, created_at FROM UserServiceExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            rows = cur.fetchall()
+            db.close()
+            examples = []
+            for row in rows:
+                # row может быть tuple или Row
+                if isinstance(row, tuple):
+                    examples.append({"id": row[0], "text": row[1], "created_at": row[2]})
+                else:
+                    examples.append({"id": row['id'], "text": row['example_text'], "created_at": row['created_at']})
+            return jsonify({"success": True, "examples": examples})
+
+        # POST
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        if not text:
+            db.close()
+            return jsonify({"error": "Текст примера обязателен"}), 400
+        # Ограничим 5 примеров на пользователя
+        cur.execute("SELECT COUNT(*) FROM UserServiceExamples WHERE user_id = ?", (user_data['user_id'],))
+        count = cur.fetchone()[0]
+        if count >= 5:
+            db.close()
+            return jsonify({"error": "Максимум 5 примеров"}), 400
+        example_id = str(uuid.uuid4())
+        cur.execute("INSERT INTO UserServiceExamples (id, user_id, example_text) VALUES (?, ?, ?)", (example_id, user_data['user_id'], text))
+        db.conn.commit()
+        db.close()
+        return jsonify({"success": True, "id": example_id})
+    except Exception as e:
+        print(f"❌ Ошибка работы с примерами услуг: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/examples/<example_id>', methods=['DELETE', 'OPTIONS'])
+def delete_user_service_example(example_id: str):
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        cur.execute("DELETE FROM UserServiceExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        deleted = cur.rowcount
+        db.conn.commit()
+        db.close()
+        if deleted == 0:
+            return jsonify({"error": "Пример не найден"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка удаления примера: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== НОВОСТИ ДЛЯ КАРТ ====================
+@app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
+def news_generate():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        use_service = bool(data.get('use_service'))
+        selected_service_id = data.get('service_id')
+        raw_info = (data.get('raw_info') or '').strip()
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        # ensure table
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
+            )
+            """
+        )
+
+        service_context = ''
+        if use_service:
+            if selected_service_id:
+                cur.execute("SELECT name, description FROM UserServices WHERE id = ? AND user_id = ?", (selected_service_id, user_data['user_id']))
+                row = cur.fetchone()
+                if row:
+                    name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
+                    service_context = f"Услуга: {name}. Описание: {desc or ''}"
+            else:
+                # выбрать случайную услугу пользователя
+                cur.execute("SELECT name, description FROM UserServices WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
+                row = cur.fetchone()
+                if row:
+                    name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
+                    service_context = f"Услуга: {name}. Описание: {desc or ''}"
+
+        # Подтянем примеры новостей пользователя (до 5)
+        news_examples = ""
+        try:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS UserNewsExamples (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    example_text TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            cur.execute("SELECT example_text FROM UserNewsExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            r = cur.fetchall()
+            ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
+            if ex:
+                news_examples = "\n".join(ex)
+        except Exception:
+            news_examples = ""
+
+        prompt = f"""
+Ты — маркетолог для локального бизнеса. Сгенерируй короткую новость для публикации в Яндекс.Картах.
+Требования: 1-2 предложения, до 300 символов, без эмодзи и хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+Верни СТРОГО JSON: {{"news": "текст новости"}}
+
+Контекст услуги (может отсутствовать): {service_context}
+Свободная информация (может отсутствовать): {raw_info[:800]}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}
+"""
+
+        result = analyze_text_with_gigachat(prompt)
+        if 'error' in result:
+            db.close()
+            return jsonify({"error": result['error']}), 500
+
+        generated_text = result.get('news') or result.get('text') or json.dumps(result, ensure_ascii=False)
+
+        news_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text)
+        )
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
+    except Exception as e:
+        print(f"❌ Ошибка генерации новости: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news/approve', methods=['POST', 'OPTIONS'])
+def news_approve():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        news_id = data.get('news_id')
+        if not news_id:
+            return jsonify({"error": "news_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        # ensure table exists
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        if cur.rowcount == 0:
+            db.close()
+            return jsonify({"error": "Новость не найдена"}), 404
+        db.conn.commit()
+        db.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка утверждения новости: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news/list', methods=['GET', 'OPTIONS'])
+def news_list():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+        rows = cur.fetchall()
+        db.close()
+        items = []
+        for row in rows:
+            if isinstance(row, tuple):
+                items.append({
+                    "id": row[0], "service_id": row[1], "source_text": row[2],
+                    "generated_text": row[3], "approved": bool(row[4]), "created_at": row[5]
+                })
+            else:
+                items.append({
+                    "id": row['id'], "service_id": row['service_id'], "source_text": row['source_text'],
+                    "generated_text": row['generated_text'], "approved": bool(row['approved']), "created_at": row['created_at']
+                })
+        return jsonify({"success": True, "news": items})
+    except Exception as e:
+        print(f"❌ Ошибка получения списка новостей: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news/update', methods=['POST', 'OPTIONS'])
+def news_update():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        news_id = data.get('news_id'); text = (data.get('text') or '').strip()
+        if not news_id or not text:
+            return jsonify({"error": "news_id и text обязательны"}), 400
+        db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute("UPDATE UserNews SET generated_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (text, news_id, user_data['user_id']))
+        if cur.rowcount == 0:
+            db.close(); return jsonify({"error": "Новость не найдена"}), 404
+        db.conn.commit(); db.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка обновления новости: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ПРИМЕРЫ ДЛЯ ОТЗЫВОВ И НОВОСТЕЙ ====================
+@app.route('/api/review-examples', methods=['GET', 'POST', 'OPTIONS'])
+def review_examples():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserReviewExamples (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                example_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        if request.method == 'GET':
+            cur.execute("SELECT id, example_text, created_at FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            rows = cur.fetchall(); db.close()
+            items = []
+            for row in rows:
+                items.append({"id": (row[0] if isinstance(row, tuple) else row['id']), "text": (row[1] if isinstance(row, tuple) else row['example_text']), "created_at": (row[2] if isinstance(row, tuple) else row['created_at'])})
+            return jsonify({"success": True, "examples": items})
+
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        if not text:
+            db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
+        cur.execute("SELECT COUNT(*) FROM UserReviewExamples WHERE user_id = ?", (user_data['user_id'],))
+        cnt = cur.fetchone()[0]
+        if cnt >= 5:
+            db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
+        ex_id = str(uuid.uuid4())
+        cur.execute("INSERT INTO UserReviewExamples (id, user_id, example_text) VALUES (?, ?, ?)", (ex_id, user_data['user_id'], text))
+        db.conn.commit(); db.close()
+        return jsonify({"success": True, "id": ex_id})
+    except Exception as e:
+        print(f"❌ Ошибка примеров отзывов: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/review-examples/<example_id>', methods=['DELETE', 'OPTIONS'])
+def review_examples_delete(example_id: str):
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute("DELETE FROM UserReviewExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        deleted = cur.rowcount
+        db.conn.commit(); db.close()
+        if deleted == 0:
+            return jsonify({"error": "Пример не найден"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка удаления примера отзывов: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news-examples', methods=['GET', 'POST', 'OPTIONS'])
+def news_examples():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNewsExamples (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                example_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        if request.method == 'GET':
+            cur.execute("SELECT id, example_text, created_at FROM UserNewsExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            rows = cur.fetchall(); db.close()
+            items = []
+            for row in rows:
+                items.append({"id": (row[0] if isinstance(row, tuple) else row['id']), "text": (row[1] if isinstance(row, tuple) else row['example_text']), "created_at": (row[2] if isinstance(row, tuple) else row['created_at'])})
+            return jsonify({"success": True, "examples": items})
+
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        if not text:
+            db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
+        cur.execute("SELECT COUNT(*) FROM UserNewsExamples WHERE user_id = ?", (user_data['user_id'],))
+        cnt = cur.fetchone()[0]
+        if cnt >= 5:
+            db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
+        ex_id = str(uuid.uuid4())
+        cur.execute("INSERT INTO UserNewsExamples (id, user_id, example_text) VALUES (?, ?, ?)", (ex_id, user_data['user_id'], text))
+        db.conn.commit(); db.close()
+        return jsonify({"success": True, "id": ex_id})
+    except Exception as e:
+        print(f"❌ Ошибка примеров новостей: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news-examples/<example_id>', methods=['DELETE', 'OPTIONS'])
+def news_examples_delete(example_id: str):
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute("DELETE FROM UserNewsExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        deleted = cur.rowcount
+        db.conn.commit(); db.close()
+        if deleted == 0:
+            return jsonify({"error": "Пример не найден"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка удаления примера новостей: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # ==================== СЕРВИС: ОТВЕТЫ НА ОТЗЫВЫ ====================
 @app.route('/api/reviews/reply', methods=['POST', 'OPTIONS'])
 def reviews_reply():
@@ -564,7 +1060,8 @@ def reviews_reply():
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({"error": "Требуется авторизация"}), 401
         token = auth_header.split(' ')[1]
-        if not verify_session(token):
+        user_data = verify_session(token)
+        if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
         data = request.get_json() or {}
@@ -573,9 +1070,34 @@ def reviews_reply():
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
 
+        # Подтянем примеры ответов пользователя (до 5)
+        examples_text = ""
+        try:
+            db = DatabaseManager()
+            cur = db.conn.cursor()
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS UserReviewExamples (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    example_text TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            cur.execute("SELECT example_text FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            rows = cur.fetchall(); db.close()
+            examples = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
+            if examples:
+                examples_text = "\n".join(examples)
+        except Exception:
+            examples_text = ""
+
         prompt = f"""
-Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента. 
+Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
 Отзыв клиента: {review_text[:1000]}
@@ -586,6 +1108,67 @@ def reviews_reply():
         return jsonify({"success": True, "result": result})
     except Exception as e:
         print(f"❌ Ошибка генерации ответа на отзыв: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/review-replies/update', methods=['POST', 'OPTIONS'])
+def review_replies_update():
+    """Сохранить отредактированный ответ на отзыв"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        reply_id = data.get('replyId') or data.get('reply_id')
+        reply_text = (data.get('replyText') or data.get('reply_text') or '').strip()
+        
+        if not reply_id:
+            return jsonify({"error": "ID ответа обязателен"}), 400
+        
+        if not reply_text:
+            return jsonify({"error": "Текст ответа обязателен"}), 400
+        
+        # Создаем таблицу для хранения ответов на отзывы, если её нет
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS UserReviewReplies (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                original_review TEXT,
+                reply_text TEXT NOT NULL,
+                tone TEXT DEFAULT 'профессиональный',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Обновляем или создаем запись
+        cursor.execute("""
+            INSERT OR REPLACE INTO UserReviewReplies 
+            (id, user_id, reply_text, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        """, (reply_id, user_data['user_id'], reply_text))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Ответ на отзыв сохранен"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения ответа на отзыв: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== СЕРВИС: УПРАВЛЕНИЕ УСЛУГАМИ ====================
@@ -613,6 +1196,7 @@ def add_service():
         description = data.get('description', '')
         keywords = data.get('keywords', [])
         price = data.get('price', '')
+        business_id = data.get('business_id')
 
         if not name:
             return jsonify({"error": "Название услуги обязательно"}), 400
@@ -622,10 +1206,20 @@ def add_service():
         user_id = user_data['user_id']
         service_id = str(uuid.uuid4())
 
-        cursor.execute("""
-            INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
+        # Проверяем, есть ли поле business_id в таблице UserServices
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if 'business_id' in columns and business_id:
+            cursor.execute("""
+                INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
+        else:
+            cursor.execute("""
+                INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
 
         db.conn.commit()
         db.close()
@@ -666,12 +1260,22 @@ def get_services():
 
         result = []
         for service in services:
+            # keywords в старых данных могли храниться как строка "a, b" — сделаем устойчивый парсинг
+            raw_kw = service['keywords']
+            parsed_kw = []
+            if raw_kw:
+                try:
+                    parsed_kw = json.loads(raw_kw)
+                    if not isinstance(parsed_kw, list):
+                        parsed_kw = []
+                except Exception:
+                    parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
             result.append({
                 "id": service['id'],
                 "category": service['category'],
                 "name": service['name'],
                 "description": service['description'],
-                "keywords": json.loads(service['keywords']) if service['keywords'] else [],
+                "keywords": parsed_kw,
                 "price": service['price'],
                 "created_at": service['created_at']
             })
@@ -852,6 +1456,34 @@ def client_info():
             )
         )
         db.conn.commit()
+
+        # Опциональная синхронизация с Businesses, если явно передан business_id
+        try:
+            business_id = (data.get('businessId') or data.get('business_id'))
+            if business_id:
+                # Проверим доступ
+                # Получим владельца бизнеса
+                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+                row = cursor.fetchone()
+                owner_id = row[0] if row else None
+                if owner_id and (owner_id == user_id or user_id):
+                    # Обновляем только базовые поля, если пришли
+                    updates = []
+                    params = []
+                    if data.get('businessName') is not None:
+                        updates.append('name = ?'); params.append(data.get('businessName'))
+                    if data.get('address') is not None:
+                        updates.append('address = ?'); params.append(data.get('address'))
+                    if data.get('workingHours') is not None:
+                        updates.append('working_hours = ?'); params.append(data.get('workingHours'))
+                    if updates:
+                        updates.append('updated_at = CURRENT_TIMESTAMP')
+                        params.append(business_id)
+                        cursor.execute(f"UPDATE Businesses SET {', '.join(updates)} WHERE id = ?", params)
+                        db.conn.commit()
+        except Exception as _:
+            pass
+
         db.close()
         return jsonify({"success": True})
 
@@ -1771,6 +2403,60 @@ def logout():
         print(f"❌ Ошибка выхода: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/users/profile', methods=['PUT'])
+def update_user_profile():
+    """Обновить профиль пользователя"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        # Получаем пользователя по токену
+        from auth_system import verify_session
+        user = verify_session(token)
+        if not user:
+            return jsonify({"error": "Неверный токен"}), 401
+        
+        # Получаем данные для обновления
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        # Обновляем только разрешенные поля
+        updates = {}
+        if 'name' in data:
+            updates['name'] = data['name']
+        if 'phone' in data:
+            updates['phone'] = data['phone']
+        
+        if not updates:
+            return jsonify({"error": "Нет данных для обновления"}), 400
+        
+        # Обновляем в базе данных
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
+        values = list(updates.values()) + [user['user_id']]
+        
+        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = ?", values)
+        db.conn.commit()
+        db.close()
+        
+        # Возвращаем обновленные данные пользователя
+        updated_user = {**user, **updates}
+        return jsonify({
+            "success": True,
+            "user": updated_user
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления профиля: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # ===== SUPERADMIN API =====
 
 @app.route('/api/superadmin/businesses', methods=['GET'])
@@ -1942,6 +2628,56 @@ def get_business_data(business_id):
             return jsonify({"error": "Недействительный токен"}), 401
         
         db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Создаем таблицу FinancialTransactions если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS FinancialTransactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                business_id TEXT,
+                transaction_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                description TEXT,
+                category TEXT,
+                date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Создаем таблицу BusinessProfiles если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessProfiles (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                contact_name TEXT,
+                contact_phone TEXT,
+                contact_email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Добавляем поле business_id в UserServices если его нет
+        try:
+            cursor.execute("ALTER TABLE UserServices ADD COLUMN business_id TEXT")
+            cursor.execute("""
+                UPDATE UserServices 
+                SET business_id = (
+                    SELECT b.id FROM Businesses b 
+                    WHERE b.owner_id = UserServices.user_id 
+                    LIMIT 1
+                )
+                WHERE business_id IS NULL
+            """)
+        except Exception:
+            # Поле уже существует или другая ошибка
+            pass
+        
+        db.conn.commit()
         
         # Проверяем доступ к бизнесу
         business = db.get_business_by_id(business_id)
@@ -1963,11 +2699,29 @@ def get_business_data(business_id):
         # Получаем отчеты бизнеса
         reports = db.get_reports_by_business(business_id)
         
+        # Получаем профиль бизнеса
+        cursor.execute("""
+            SELECT contact_name, contact_phone, contact_email
+            FROM BusinessProfiles 
+            WHERE business_id = ?
+        """, (business_id,))
+        profile_row = cursor.fetchone()
+        business_profile = {
+            "contact_name": profile_row[0] if profile_row else "",
+            "contact_phone": profile_row[1] if profile_row else "",
+            "contact_email": profile_row[2] if profile_row else ""
+        } if profile_row else {
+            "contact_name": "",
+            "contact_phone": "",
+            "contact_email": ""
+        }
+        
         db.close()
         
         return jsonify({
             "success": True,
             "business": business,
+            "business_profile": business_profile,
             "services": services,
             "financial_data": financial_data,
             "reports": reports
@@ -1975,6 +2729,67 @@ def get_business_data(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка получения данных бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/profile', methods=['POST', 'OPTIONS'])
+def update_business_profile(business_id):
+    """Обновить профиль бизнеса"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Создаем таблицу BusinessProfiles если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessProfiles (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                contact_name TEXT,
+                contact_phone TEXT,
+                contact_email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Обновляем или создаем профиль бизнеса
+        profile_id = f"profile_{business_id}"
+        cursor.execute("""
+            INSERT OR REPLACE INTO BusinessProfiles 
+            (id, business_id, contact_name, contact_phone, contact_email, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            profile_id,
+            business_id,
+            data.get('contact_name', ''),
+            data.get('contact_phone', ''),
+            data.get('contact_email', '')
+        ))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Профиль бизнеса обновлен"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления профиля бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/business/<business_id>/services', methods=['GET'])
