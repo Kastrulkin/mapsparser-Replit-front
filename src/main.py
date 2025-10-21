@@ -11,7 +11,7 @@ from parser import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
-from database_manager import DatabaseManager
+from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
 import uuid
 import base64
