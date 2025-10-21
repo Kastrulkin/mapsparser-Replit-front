@@ -2278,6 +2278,31 @@ def register():
         if 'error' in result:
             return jsonify({"error": result['error']}), 400
         
+        # Отправляем приветственное письмо
+        welcome_subject = "Добро пожаловать в BeautyBot!"
+        welcome_body = f"""
+Добро пожаловать в BeautyBot, {name}!
+
+Ваш аккаунт успешно создан:
+Email: {email}
+Имя: {name}
+Телефон: {phone if phone else 'Не указан'}
+
+Теперь вы можете:
+- Настроить описания услуг для Яндекс.Карт
+- Генерировать ответы на отзывы
+- Создавать новости для публикации
+- И многое другое!
+
+Начните с настройки вашего первого бизнеса.
+
+---
+С уважением,
+Команда BeautyBot
+        """
+        
+        send_email(email, welcome_subject, welcome_body)
+        
         # Создаем сессию
         session_token = create_session(result['id'])
         if not session_token:
@@ -2828,19 +2853,18 @@ def get_business_services(business_id):
         print(f"❌ Ошибка получения услуг бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
-def send_contact_email(name, email, phone, message):
-    """Отправка email с сообщением обратной связи"""
+def send_email(to_email, subject, body, from_name="BeautyBot"):
+    """Универсальная функция для отправки email"""
     try:
         import smtplib
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         
-        # Настройки SMTP для reg.ru
+        # Настройки SMTP из .env
         smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
         smtp_password = os.getenv("SMTP_PASSWORD")
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
         
         if not smtp_password:
             print("❌ SMTP_PASSWORD не установлен в переменных окружения")
@@ -2848,12 +2872,32 @@ def send_contact_email(name, email, phone, message):
         
         # Создание сообщения
         msg = MIMEMultipart()
-        msg['From'] = smtp_username
-        msg['To'] = contact_email
-        msg['Subject'] = f"Новое сообщение с сайта BeautyBot от {name}"
+        msg['From'] = f"{from_name} <{smtp_username}>"
+        msg['To'] = to_email
+        msg['Subject'] = subject
         
-        # Тело письма
-        body = f"""
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # Отправка
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ Email отправлен на {to_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка отправки email: {e}")
+        return False
+
+def send_contact_email(name, email, phone, message):
+    """Отправка email с сообщением обратной связи"""
+    contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+    
+    subject = f"Новое сообщение с сайта BeautyBot от {name}"
+    body = f"""
 Новое сообщение с сайта BeautyBot
 
 Имя: {name}
@@ -2865,23 +2909,9 @@ Email: {email}
 
 ---
 Отправлено с сайта beautybot.pro
-        """
-        
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
-        # Отправка
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(smtp_username, smtp_password)
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"✅ Email отправлен на {contact_email}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Ошибка отправки email: {e}")
-        return False
+    """
+    
+    return send_email(contact_email, subject, body)
 
 @app.route('/api/auth/reset-password', methods=['POST'])
 def reset_password():
@@ -2918,9 +2948,33 @@ def reset_password():
         conn.commit()
         conn.close()
         
-        # Отправляем email с токеном (пока просто логируем)
+        # Отправляем email с токеном
         print(f"🔑 Токен восстановления для {email}: {reset_token}")
         print(f"⏰ Действителен до: {expires_at}")
+        
+        # Отправляем реальное письмо
+        subject = "Восстановление пароля BeautyBot"
+        body = f"""
+Восстановление пароля для BeautyBot
+
+Ваш токен восстановления: {reset_token}
+Действителен до: {expires_at.strftime('%d.%m.%Y %H:%M')}
+
+Для сброса пароля перейдите по ссылке:
+https://beautybot.pro/reset-password?token={reset_token}&email={email}
+
+Если вы не запрашивали восстановление пароля, проигнорируйте это письмо.
+
+---
+BeautyBot
+        """
+        
+        email_sent = send_email(email, subject, body)
+        
+        if email_sent:
+            print(f"✅ Email отправлен на {email}")
+        else:
+            print(f"❌ Не удалось отправить email на {email}")
         
         return jsonify({
             "success": True, 
@@ -3028,5 +3082,15 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
+    # Автоматическая синхронизация базы данных
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from sync_database import sync_database
+        sync_database()
+    except Exception as e:
+        print(f"⚠️ Ошибка синхронизации базы данных: {e}")
+    
     print("SEO анализатор запущен на порту 8000")
     app.run(host='0.0.0.0', port=8000, debug=False)
