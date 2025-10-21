@@ -2836,11 +2836,15 @@ def send_contact_email(name, email, phone, message):
         from email.mime.multipart import MIMEMultipart
         
         # Настройки SMTP для reg.ru
-        smtp_server = "mail.hosting.reg.ru"
-        smtp_port = 587
-        smtp_username = "info@beautybot.pro"
-        smtp_password = "an9-Nfx-j7V-Nrx"
-        contact_email = "info@beautybot.pro"
+        smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
+        smtp_password = os.getenv("SMTP_PASSWORD")
+        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        
+        if not smtp_password:
+            print("❌ SMTP_PASSWORD не установлен в переменных окружения")
+            return False
         
         # Создание сообщения
         msg = MIMEMultipart()
