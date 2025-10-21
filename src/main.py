@@ -2835,9 +2835,9 @@ def send_contact_email(name, email, phone, message):
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         
-                    # Настройки SMTP для reg.ru
-                    smtp_server = "mail.hosting.reg.ru"
-                    smtp_port = 587
+        # Настройки SMTP для reg.ru
+        smtp_server = "mail.hosting.reg.ru"
+        smtp_port = 587
         smtp_username = "info@beautybot.pro"
         smtp_password = "an9-Nfx-j7V-Nrx"
         contact_email = "info@beautybot.pro"
