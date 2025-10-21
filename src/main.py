@@ -2828,6 +2828,57 @@ def get_business_services(business_id):
         print(f"❌ Ошибка получения услуг бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
+def send_contact_email(name, email, phone, message):
+    """Отправка email с сообщением обратной связи"""
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        # Настройки SMTP для reg.ru
+        smtp_server = "smtp.reg.ru"
+        smtp_port = 587
+        smtp_username = "info@beautybot.pro"
+        smtp_password = "an9-Nfx-j7V-Nrx"
+        contact_email = "info@beautybot.pro"
+        
+        # Создание сообщения
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = contact_email
+        msg['Subject'] = f"Новое сообщение с сайта BeautyBot от {name}"
+        
+        # Тело письма
+        body = f"""
+Новое сообщение с сайта BeautyBot
+
+Имя: {name}
+Email: {email}
+Телефон: {phone if phone else 'Не указан'}
+
+Сообщение:
+{message}
+
+---
+Отправлено с сайта beautybot.pro
+        """
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # Отправка
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ Email отправлен на {contact_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка отправки email: {e}")
+        return False
+
 @app.route('/api/public/contact', methods=['POST', 'OPTIONS'])
 def public_contact():
     """Обработка формы обратной связи"""
@@ -2847,13 +2898,16 @@ def public_contact():
         if not name or not email or not message:
             return jsonify({"error": "Имя, email и сообщение обязательны"}), 400
         
-        # Здесь можно добавить отправку email или сохранение в базу данных
+        # Логирование в консоль
         print(f"📧 НОВОЕ СООБЩЕНИЕ ОТ {name} ({email}):")
         print(f"📞 Телефон: {phone}")
         print(f"💬 Сообщение: {message}")
         print("-" * 50)
         
-        # TODO: Добавить отправку email через SMTP или внешний сервис
+        # Отправка email
+        email_sent = send_contact_email(name, email, phone, message)
+        if not email_sent:
+            print("⚠️ Не удалось отправить email, но сообщение сохранено в логах")
         
         return jsonify({"success": True, "message": "Сообщение отправлено"})
         
