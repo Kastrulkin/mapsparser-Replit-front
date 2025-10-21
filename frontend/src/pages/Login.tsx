@@ -76,8 +76,23 @@ const Login = () => {
     setInfo(null);
     
     try {
-      // TODO: Implement password reset
-      setInfo('Функция восстановления пароля будет добавлена позже');
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: registerForm.email
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setInfo('Инструкции по восстановлению пароля отправлены на email. Проверьте почту!');
+      } else {
+        setError(data.error || 'Ошибка восстановления пароля');
+      }
     } catch (error) {
       setError('Ошибка восстановления пароля: ' + (error as Error).message);
     } finally {

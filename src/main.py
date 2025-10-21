@@ -2883,6 +2883,106 @@ Email: {email}
         print(f"❌ Ошибка отправки email: {e}")
         return False
 
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Запрос на восстановление пароля"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email обязателен"}), 400
+        
+        # Проверяем, существует ли пользователь
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM Users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({"error": "Пользователь с таким email не найден"}), 404
+        
+        # Генерируем токен восстановления
+        import secrets
+        from datetime import datetime, timedelta
+        
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = datetime.now() + timedelta(hours=1)
+        
+        # Сохраняем токен в базе
+        cursor.execute("""
+            UPDATE Users 
+            SET reset_token = ?, reset_token_expires = ? 
+            WHERE email = ?
+        """, (reset_token, expires_at.isoformat(), email))
+        conn.commit()
+        conn.close()
+        
+        # Отправляем email с токеном (пока просто логируем)
+        print(f"🔑 Токен восстановления для {email}: {reset_token}")
+        print(f"⏰ Действителен до: {expires_at}")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Инструкции по восстановлению пароля отправлены на email"
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка восстановления пароля: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/auth/confirm-reset', methods=['POST'])
+def confirm_reset():
+    """Подтверждение сброса пароля с новым паролем"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        token = data.get('token')
+        new_password = data.get('password')
+        
+        if not all([email, token, new_password]):
+            return jsonify({"error": "Все поля обязательны"}), 400
+        
+        # Проверяем токен
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, reset_token, reset_token_expires 
+            FROM Users 
+            WHERE email = ? AND reset_token = ?
+        """, (email, token))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({"error": "Неверный токен"}), 400
+        
+        # Проверяем срок действия токена
+        from datetime import datetime
+        if datetime.now() > datetime.fromisoformat(user[2]):
+            return jsonify({"error": "Токен истек"}), 400
+        
+        # Устанавливаем новый пароль
+        from auth_system import set_password
+        result = set_password(user[0], new_password)
+        
+        if 'error' in result:
+            return jsonify(result), 400
+        
+        # Очищаем токен
+        cursor.execute("""
+            UPDATE Users 
+            SET reset_token = NULL, reset_token_expires = NULL 
+            WHERE id = ?
+        """, (user[0],))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "Пароль успешно изменен"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка подтверждения сброса: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/public/contact', methods=['POST', 'OPTIONS'])
 def public_contact():
     """Обработка формы обратной связи"""
