@@ -12,6 +12,7 @@ import ROICalculator from "@/components/ROICalculator";
 import TransactionForm from "@/components/TransactionForm";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 function getNextReportDate(reports: any[]) {
   if (!reports.length) return null;
@@ -1226,94 +1227,28 @@ const Dashboard = () => {
                     </div>
                     
 
-          {/* Блок оптимизации услуг (под всеми вкладками, но над отзывами) */}
-          <div className="mb-12 bg-white rounded-lg border border-gray-200 p-4">
-            <ServiceOptimizer businessName={clientInfo.businessName} />
+          {/* Работа с Яндекс Картами (сворачиваемый блок) */}
+          <div className="mb-8 bg-white rounded-lg border border-gray-200">
+            <Accordion type="single" collapsible defaultValue="yamaps-tools">
+              <AccordionItem value="yamaps-tools">
+                <AccordionTrigger className="px-4">
+                  <span className="text-xl font-semibold text-gray-900">Работа с Яндекс Картами</span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-8">
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <ServiceOptimizer businessName={clientInfo.businessName} />
                     </div>
-                    
-                    
-          {/* Ассистент ответов на отзывы */}
-          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
-            <ReviewReplyAssistant businessName={clientInfo.businessName} />
-          </div>
-
-          {/* Новости под отзывами */}
-          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
-            <NewsGenerator services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} />
-          </div>
-
-          {/* Блоки перемещены сюда: */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Создать отчёт</h2>
-            {!showCreateReport ? (
-              <Button onClick={() => setShowCreateReport(true)}>
-                Создать новый отчёт
-              </Button>
-            ) : (
-            <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL страницы Яндекс.Карт
-                  </label>
-                  <input
-                    type="url"
-                    value={createReportForm.yandexUrl}
-                    onChange={(e) => setCreateReportForm({ ...createReportForm, yandexUrl: e.target.value })}
-                    placeholder="https://yandex.ru/maps/org/..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleCreateReport} disabled={creatingReport}>
-                    {creatingReport ? 'Создание...' : 'Создать отчёт'}
-                    </Button>
-                  <Button onClick={() => setShowCreateReport(false)} variant="outline">
-                    Отмена
-                  </Button>
-                </div>
-                      </div>
-                    )}
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Готовые отчёты</h2>
-            {reports.length === 0 ? (
-              <p className="text-gray-600">У вас пока нет готовых отчётов</p>
-            ) : (
-                        <div className="space-y-4">
-                {reports.map((report) => (
-                  <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900">
-                          {report.title || 'Без названия'}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Создан: {new Date(report.created_at).toLocaleString()}
-                        </p>
-                        {report.seo_score && (
-                          <p className="text-sm text-gray-600">
-                            SEO-оценка: {report.seo_score}/100
-                          </p>
-                        )}
-                                </div>
-                      <div className="flex gap-2 ml-4">
-                        {report.has_report && (
-                          <>
-                            <Button onClick={() => handleViewReport(report.id)} variant="outline" size="sm">
-                              Просмотр
-                          </Button>
-                            <Button onClick={() => handleDownloadReport(report.id)} variant="outline" size="sm">
-                              Скачать
-                          </Button>
-                          </>
-                        )}
-                        </div>
-                      </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <ReviewReplyAssistant businessName={clientInfo.businessName} />
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <NewsGenerator services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} />
+                    </div>
                   </div>
-                ))}
-                </div>
-              )}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
 
           {/* Приглашения */}

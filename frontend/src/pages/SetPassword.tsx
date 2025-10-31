@@ -12,25 +12,24 @@ const SetPassword: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState<string>('');
+  const [token, setToken] = useState<string>('');
 
   // Проверяем, что пользователь пришел с подтвержденным email или пропускаем проверку
   useEffect(() => {
     const checkUser = async () => {
-      // Получаем email из разных источников
-      let userEmail = location.state?.email;
-      const skipEmailConfirmation = location.state?.skipEmailConfirmation;
-      
-      // Если email не передан в state, пробуем получить из URL параметров
-      if (!userEmail) {
-        const urlParams = new URLSearchParams(window.location.search);
-        userEmail = urlParams.get('email');
-        if (userEmail) {
-          console.log('Email получен из URL параметров:', userEmail);
-        }
-      }
+      // Получаем email и токен из URL параметров
+      const urlParams = new URLSearchParams(window.location.search);
+      const userEmail = urlParams.get('email');
+      const userToken = urlParams.get('token');
       
       if (userEmail) {
         setEmail(userEmail);
+        console.log('Email получен из URL параметров:', userEmail);
+      }
+      
+      if (userToken) {
+        setToken(userToken);
+        console.log('Токен получен из URL параметров:', userToken);
       }
 
       if (!userEmail) {
@@ -66,15 +65,46 @@ const SetPassword: React.FC = () => {
     setInfo(null);
 
     try {
-      const { user, error } = await newAuth.setPassword(email, password);
+      let result;
       
-      if (error) {
-        setError(error);
-      } else if (user) {
-        setInfo('Пароль успешно установлен! Выполняется вход...');
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+      // Если есть токен, используем восстановление пароля
+      if (token) {
+        const response = await fetch('/api/auth/confirm-reset', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            token: token,
+            password: password
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          setInfo('Пароль успешно изменен! Выполняется вход...');
+          setTimeout(() => {
+            navigate('/login');
+          }, 2000);
+          return;
+        } else {
+          setError(data.error || 'Ошибка сброса пароля');
+          return;
+        }
+      } else {
+        // Обычная установка пароля
+        result = await newAuth.setPassword(email, password);
+        
+        if (result.error) {
+          setError(result.error);
+        } else if (result.user) {
+          setInfo('Пароль успешно установлен! Выполняется вход...');
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 2000);
+        }
       }
     } catch (error) {
       setError('Ошибка установки пароля: ' + (error as Error).message);
@@ -92,7 +122,9 @@ const SetPassword: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md flex flex-col gap-4 mt-12">
-      <h2 className="text-2xl font-bold mb-2">Установите пароль для входа</h2>
+      <h2 className="text-2xl font-bold mb-2">
+        {token ? 'Восстановление пароля' : 'Установите пароль для входа'}
+      </h2>
       
       {!isAuthorized && !error && (
         <div className="text-center py-4">
