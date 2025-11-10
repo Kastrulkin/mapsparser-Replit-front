@@ -3,9 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Users, Target, Lightbulb, Award, Heart, Globe } from "lucide-react";
 import Footer from "@/components/Footer";
 import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 const About = () => {
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (window.location.hash === "#pricing") {
+      const el = document.getElementById("pricing");
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
+    }
+  }, []);
+  
   return (
     <div className="min-h-screen bg-background">
       
@@ -96,11 +109,11 @@ const About = () => {
       {/* How We Work Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-foreground mb-12 text-center">Как?</h2>
+          <h2 className="text-3xl font-bold text-foreground mb-12 text-center">Как это работает?</h2>
           
           <div className="mb-12">
             <h3 className="text-2xl font-semibold text-foreground mb-6 text-center">
-              Начнём с оптимизации Яндекс.Карт, продолжим полной автоматизацией
+              Начнём с оптимизации Яндекс.Карт, продолжим полной оптимизацией
             </h3>
           </div>
 
@@ -112,15 +125,26 @@ const About = () => {
                   <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
                     <span className="text-primary font-bold">1</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">Вы самостоятельно</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Вы ищете решение сами</h3>
                 </div>
-                <p className="text-muted-foreground mb-4">
-                  Вы можете сделать это самостоятельно - сформировать отчёт, получить рекомендации 
-                  и внести изменения. Через некоторое время повторить.
-                </p>
-                <p className="text-muted-foreground mb-4">
-                  Инструкция пошаговая, но исполнение всё равно займёт время, которое нужно для основной работы.
-                </p>
+                <div className="space-y-3 text-muted-foreground mb-6">
+                  <div className="flex items-start gap-2">
+                    <span className="text-primary">•</span>
+                    <span>Вам нужно учиться работать с Яндекс.Картами, CRM, социальными сетями</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-primary">•</span>
+                    <span>Договариваться с партнёрами и нанимать людей для продвижения</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-primary">•</span>
+                    <span>Каждый день следить за отзывами, обновлять информацию, анализировать результаты</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-primary">•</span>
+                    <span>Инструкции из интернета помогают частично, но нужно время на тестирование</span>
+                  </div>
+                </div>
                 <Button
                   size="lg"
                   className="mt-2 text-lg px-8 py-3"
@@ -128,7 +152,7 @@ const About = () => {
                     window.location.href = '/#hero-form';
                   }}
                 >
-                  Настроить бесплатно
+                  Настроить карты бесплатно
                 </Button>
               </CardContent>
             </Card>
@@ -140,27 +164,24 @@ const About = () => {
                   <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                     <span className="text-primary-foreground font-bold">2</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">Мы сделаем за вас</h3>
+                  <h3 className="text-xl font-semibold text-foreground">Мы берём это на себя</h3>
                 </div>
-                <p className="text-muted-foreground mb-4">
-                  Подключите наших агентов, живого сотрудника и займитесь своими делами
-                </p>
                 <div className="space-y-3 text-muted-foreground mb-6">
                   <div className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    <span>Никаких дашбордов и панелей, не надо будет разбираться с настройками</span>
+                    <span>Мы оптимизируем ваши карточки, настраиваем видимость и следим за результатом</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    <span>Мы проанализируем рынок и ваш бизнес, предложим улучшения, согласуем с вами и внесём изменения</span>
+                    <span>Ищем партнёров, предлагаем совместные программы и акции, которые работают</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    <span>Настроим и подключим ИИ агентов к мессенджерам, выведем виджет на сайт</span>
+                    <span>Обновляем контент, отвечаем на отзывы, анализируем, что приносит клиентов</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    <span>Вы всегда будете на связи</span>
+                    <span>Вы видите результат с первого месяца — новые клиенты, рост среднего чека, повторные визиты</span>
                   </div>
                 </div>
                 <Button
@@ -180,32 +201,58 @@ const About = () => {
       </section>
 
       {/* Pricing Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+      <section id="pricing" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-8">Условия</h2>
 
-          <Card className="p-8 mb-8">
-            <CardContent className="p-0">
-              <div className="text-2xl font-bold text-primary mb-4">Оплата по факту результата</div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">7% от оплат привлечённых клиентов</h3>
-              <div className="space-y-2 text-muted-foreground mb-6">
-                <div>- Настройка бизнес процесса</div>
-                <div>- Агент привлдечения клиентов</div>
-                <div>- Агент администратор</div>
-                <div>- Выделенный менеджер</div>
-              </div>
-              <Button
-                variant="default"
-                size="lg"
-                className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2"
-                onClick={() => {
-                  navigate('/contact');
-                }}
-              >
-                Начать сотрудничество
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="grid lg:grid-cols-2 gap-8 mb-8">
+            {/* Option 1 */}
+            <Card className="p-8">
+              <CardContent className="p-0">
+                <div className="text-2xl font-bold text-primary mb-4">Настроить карты 20000 в месяц (3 месяца)</div>
+                <div className="space-y-2 text-muted-foreground mb-6">
+                  <div>- Карточка компании на Яндексе</div>
+                  <div>- Карточка компании на 2 Gis</div>
+                  <div>- Описания услуг по SEO ключам</div>
+                  <div>- Работа с отзывами</div>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2 w-full"
+                  onClick={() => {
+                    navigate('/contact');
+                  }}
+                >
+                  Настроить карты
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Option 2 */}
+            <Card className="p-8 border-primary">
+              <CardContent className="p-0">
+                <div className="text-2xl font-bold text-primary mb-4">Оплата по факту результата</div>
+                <h3 className="text-xl font-semibold text-foreground mb-4">7% от оплат привлечённых клиентов</h3>
+                <div className="space-y-2 text-muted-foreground mb-6">
+                  <div>- Привлечение клиентов</div>
+                  <div>- Настройка бизнес процессов</div>
+                  <div>- CRM</div>
+                  <div>- Выделенный менеджер</div>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2 w-full"
+                  onClick={() => {
+                    navigate('/contact');
+                  }}
+                >
+                  Начать сотрудничество
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

@@ -16,7 +16,7 @@ const Footer = () => {
           <div className="max-w-md">
             <h3 className="text-2xl font-bold text-foreground mb-4">BeautyBot</h3>
             <p className="text-muted-foreground mb-6 max-w-md">
-              ИИ-агенты для автоматизации салонов красоты. Увеличьте доходы и улучшите клиентский опыт с помощью умных технологий.
+              Локальное продвижение локального бизнеса
             </p>
             <div className="flex items-center text-sm text-muted-foreground">
               <Heart className="w-4 h-4 mr-1 text-primary" />

@@ -44,8 +44,8 @@ const Index = () => {
   return (
     <div>
       <Hero />
-      <Features />
       <Stats />
+      <Features />
       <Testimonials />
       <CTA />
       <Footer />
