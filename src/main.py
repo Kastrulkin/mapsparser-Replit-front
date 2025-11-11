@@ -17,6 +17,7 @@ import uuid
 import base64
 import os
 import json
+import sqlite3
 from datetime import datetime, timedelta
 import random
 
@@ -3035,6 +3036,56 @@ def confirm_reset():
         
     except Exception as e:
         print(f"❌ Ошибка подтверждения сброса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
+def public_request_report():
+    """Публичная заявка на отчёт без авторизации.
+    Принимает email и url, отправляет email на info@beautybot.pro о новой заявке.
+    """
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        email = data.get('email', '').strip()
+        url = data.get('url', '').strip()
+        
+        if not email or not url:
+            return jsonify({"error": "Email и URL обязательны"}), 400
+        
+        # Отправляем email на info@beautybot.pro о новой заявке
+        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        subject = f"Новая заявка с сайта BeautyBot от {email}"
+        body = f"""
+Новая заявка с сайта BeautyBot
+
+Email клиента: {email}
+Ссылка на бизнес: {url}
+
+---
+Отправлено с сайта beautybot.pro
+        """
+        
+        email_sent = send_email(contact_email, subject, body)
+        if not email_sent:
+            print("⚠️ Не удалось отправить email")
+        
+        # Логирование в консоль
+        print(f"📧 НОВАЯ ЗАЯВКА ОТ {email}:")
+        print(f"🔗 URL: {url}")
+        print("-" * 50)
+        
+        return jsonify({
+            "success": True,
+            "message": "Заявка принята. Мы свяжемся с вами в ближайшее время."
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка обработки заявки: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/public/contact', methods=['POST', 'OPTIONS'])

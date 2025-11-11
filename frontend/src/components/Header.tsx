@@ -3,6 +3,8 @@ import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
+import { useLanguage } from "../i18n/LanguageContext";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import logo from "../assets/images/logo.png"; // Импортируем логотип
 
 const Header = () => {
@@ -10,6 +12,7 @@ const Header = () => {
   const [isAuth, setIsAuth] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   
   // ЛК отключён: всегда скрываем элементы аутентификации
   // Скрываем Header на странице Dashboard (там свой хедер)
@@ -42,9 +45,9 @@ const Header = () => {
   };
 
   const navigation = [
-    { name: 'Что мы делаем?', href: '/#agents' },
-    { name: 'Кто мы?', href: '/about' },
-    { name: 'Цены', href: '/about#pricing' },
+    { name: t.header.whatWeDo, href: '/#agents' },
+    { name: t.header.whoWeAre, href: '/about' },
+    { name: t.header.prices, href: '/about#pricing' },
   ];
 
   return (
@@ -66,7 +69,7 @@ const Header = () => {
           
           <nav className="hidden md:flex items-center space-x-14">
             {navigation.map((item) => (
-              item.name === 'Что мы делаем?' ? (
+              item.href === '/#agents' ? (
                 <Link
                   key={item.name}
                   to={{ pathname: "/", hash: "#agents" }}
@@ -77,7 +80,7 @@ const Header = () => {
                 >
                   {item.name}
                 </Link>
-              ) : item.name === 'Цены' ? (
+              ) : item.href === '/about#pricing' ? (
                 <Link
                   key={item.name}
                   to={{ pathname: "/about", hash: "#pricing" }}
@@ -99,9 +102,10 @@ const Header = () => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
+            <LanguageSwitcher />
             {/* Кнопка входа скрыта по требованию. Маршрут /login остаётся доступным напрямую. */}
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
-              <Button>Попробовать бесплатно</Button>
+              <Button>{t.header.tryFree}</Button>
             </Link>
           </div>
 
@@ -120,7 +124,7 @@ const Header = () => {
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
-                item.name === 'Что мы делаем?' ? (
+                item.href === '/#agents' ? (
                   <Link
                     key={item.name}
                     to={{ pathname: "/", hash: "#agents" }}
@@ -131,7 +135,7 @@ const Header = () => {
                   >
                     {item.name}
                   </Link>
-                ) : item.name === 'Цены' ? (
+                ) : item.href === '/about#pricing' ? (
                   <Link
                     key={item.name}
                     to={{ pathname: "/about", hash: "#pricing" }}
@@ -151,9 +155,12 @@ const Header = () => {
                 )
               ))}
               <div className="pt-4 space-y-2">
+                <div className="px-3 py-2">
+                  <LanguageSwitcher />
+                </div>
                 {/* Кнопка входа скрыта по требованию. */}
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
-                  <Button className="w-full justify-start">Попробовать бесплатно</Button>
+                  <Button className="w-full justify-start">{t.header.tryFree}</Button>
                 </Link>
               </div>
             </div>

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Mail, Phone, MapPin, Loader2 } from "lucide-react";
 import Footer from "@/components/Footer";
+import { useLanguage } from "@/i18n/LanguageContext";
 
 const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -14,6 +15,7 @@ const Contact = () => {
     phone: '',
     message: ''
   });
+  const { t } = useLanguage();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,14 +34,14 @@ const Contact = () => {
       const result = await response.json();
       
       if (response.ok) {
-        alert('Спасибо! Ваше сообщение отправлено. Мы свяжемся с вами в ближайшее время.');
+        alert(t.contact.success);
         setFormData({ name: '', email: '', phone: '', message: '' });
       } else {
-        throw new Error(result.error || 'Ошибка отправки сообщения');
+        throw new Error(result.error || t.contact.error);
       }
     } catch (error) {
       console.error('Ошибка отправки:', error);
-      alert(error instanceof Error ? error.message : 'Произошла ошибка. Попробуйте ещё раз.');
+      alert(error instanceof Error ? error.message : t.contact.error);
     } finally {
       setIsSubmitting(false);
     }
@@ -58,10 +60,10 @@ const Contact = () => {
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
-            Свяжитесь с <span className="text-primary">нами</span>
+            {t.contact.title}
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Готовы автоматизировать свой бизнес? Оставьте заявку и мы свяжемся с вами в течение дня.
+            {t.contact.subtitle}
           </p>
         </div>
       </section>
@@ -72,7 +74,7 @@ const Contact = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Contact Info */}
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-6">Наши контакты</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-6">{t.contact.contactsTitle}</h2>
               
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
@@ -80,30 +82,30 @@ const Contact = () => {
                     <Mail className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Email</h3>
+                    <h3 className="font-semibold text-foreground">{t.contact.emailTitle}</h3>
                     <p className="text-muted-foreground">info@beautybot.pro</p>
                   </div>
                 </div>
               </div>
               
               <div className="mt-8 p-6 bg-muted/50 rounded-xl">
-                <h3 className="font-semibold text-foreground mb-2">Время работы</h3>
-                <p className="text-muted-foreground">Пн-Пт: 9:00 - 18:00</p>
-                <p className="text-muted-foreground">Сб-Вс: 10:00 - 16:00</p>
+                <h3 className="font-semibold text-foreground mb-2">{t.contact.workingHoursTitle}</h3>
+                <p className="text-muted-foreground">{t.contact.workingDays1}</p>
+                <p className="text-muted-foreground">{t.contact.workingDays2}</p>
               </div>
             </div>
 
             {/* Contact Form */}
             <Card>
               <CardHeader>
-                <CardTitle>Отправить сообщение</CardTitle>
+                <CardTitle>{t.contact.formTitle}</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <Input
                       name="name"
-                      placeholder="Ваше имя"
+                      placeholder={t.contact.name}
                       value={formData.name}
                       onChange={handleChange}
                       required
@@ -114,7 +116,7 @@ const Contact = () => {
                     <Input
                       name="email"
                       type="email"
-                      placeholder="Ваш email"
+                      placeholder={t.contact.email}
                       value={formData.email}
                       onChange={handleChange}
                       required
@@ -125,7 +127,7 @@ const Contact = () => {
                     <Input
                       name="phone"
                       type="tel"
-                      placeholder="Ваш телефон"
+                      placeholder={t.contact.phone}
                       value={formData.phone}
                       onChange={handleChange}
                     />
@@ -134,7 +136,7 @@ const Contact = () => {
                   <div>
                     <Textarea
                       name="message"
-                      placeholder="Ваше сообщение"
+                      placeholder={t.contact.message}
                       value={formData.message}
                       onChange={handleChange}
                       rows={4}
@@ -151,10 +153,10 @@ const Contact = () => {
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Отправляем...
+                        {t.contact.sending}
                       </>
                     ) : (
-                      'Отправить сообщение'
+                      t.contact.send
                     )}
                   </Button>
                 </form>

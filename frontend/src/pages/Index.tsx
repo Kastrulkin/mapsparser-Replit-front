@@ -20,7 +20,7 @@ const Index = () => {
 
   // Обработка хэшей для навигации
   useEffect(() => {
-    if (location.hash === "#agents" || location.hash === "#cta") {
+    if (location.hash === "#agents" || location.hash === "#cta" || location.hash === "#hero-form") {
       const el = document.getElementById(location.hash.replace('#', ''));
       if (el) {
         setTimeout(() => {

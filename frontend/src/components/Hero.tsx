@@ -3,10 +3,12 @@ import { Play, Users, Calendar, TrendingUp, Heart, Loader2 } from "lucide-react"
 import heroImage from "@/assets/hero-image.jpg";
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 const Hero = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { t } = useLanguage();
   
   return (
     <section className="relative overflow-hidden bg-background">
@@ -15,15 +17,15 @@ const Hero = () => {
           <div>
             <div className="inline-flex items-center px-4 py-2 bg-accent/10 rounded-full text-sm text-accent mb-6">
               <Heart className="w-4 h-4 mr-2" />
-              Новые клиенты без труда
+              {t.hero.newClients}
             </div>
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
-              Почему ваш конкурент выше вас на Яндекс Картах?
+              {t.hero.title}
             </h1>
             
             <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-              Заполните форму и мы настроим карточку компании на картах бесплатно!
+              {t.hero.subtitle}
             </p>
 
             {/* Форма для email и ссылки на Яндекс.Карты */}
@@ -51,16 +53,16 @@ const Hero = () => {
                   });
                   const result = await resp.json().catch(() => null);
                   if (!resp.ok) {
-                    const msg = (result && (result.error || result.message)) || 'Ошибка отправки заявки';
+                    const msg = (result && (result.error || result.message)) || t.hero.errorMessage;
                     throw new Error(msg);
                   }
 
                   form.reset();
-                  alert('Спасибо! Мы приняли вашу заявку и скоро с вами свяжемся.');
+                  alert(t.hero.successMessage);
                   
                 } catch (error) {
                   console.error('Общая ошибка:', error);
-                  alert(error instanceof Error ? error.message : 'Произошла ошибка. Попробуйте ещё раз.');
+                  alert(error instanceof Error ? error.message : t.hero.errorMessage);
                 } finally {
                   setIsSubmitting(false);
                 }
@@ -71,7 +73,7 @@ const Hero = () => {
                 <input
                   name="email"
                   type="email"
-                  placeholder="Ваш email"
+                  placeholder={t.hero.emailPlaceholder}
                   required
                   className="w-full px-6 py-4 text-lg rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
                 />
@@ -81,7 +83,7 @@ const Hero = () => {
                 <input
                   name="yandexUrl"
                   type="url"
-                  placeholder="Ссылка на ваш бизнес в Яндекс.Картах"
+                  placeholder={t.hero.yandexUrlPlaceholder}
                   required
                   className="w-full px-6 py-4 text-lg rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
                 />
@@ -96,19 +98,19 @@ const Hero = () => {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Отправляем заявку...
+                    {t.hero.submitting}
                   </>
                 ) : (
                   <>
                     <TrendingUp className="w-5 h-5 mr-2" />
-                    Настроить бесплатно
+                    {t.hero.submitButton}
                   </>
                 )}
               </Button>
             </form>
             
             <p className="text-sm text-muted-foreground mt-4">
-              Нажимая кнопку, вы соглашаетесь с обработкой персональных данных
+              {t.hero.privacyText}
             </p>
           </div>
           

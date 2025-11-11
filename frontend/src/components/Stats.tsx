@@ -1,6 +1,8 @@
 import { TrendingUp, Users, Calendar, DollarSign } from "lucide-react";
+import { useLanguage } from "@/i18n/LanguageContext";
 
 const Stats = () => {
+  const { t } = useLanguage();
   const stats = [
     {
       icon: Users,
@@ -33,11 +35,11 @@ const Stats = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Мы не просто предоставляем инструменты —
-            <span className="text-primary"> мы приносим результаты бизнесу.</span>
+            {t.stats.title}
+            <span className="text-primary"> {t.stats.titleHighlight}</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Вот, что уже достигли наши клиенты:
+            {t.stats.subtitle}
           </p>
         </div>
 
@@ -46,19 +48,19 @@ const Stats = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4 group-hover:bg-primary/20 transition-colors">
               <TrendingUp className="w-8 h-8 text-primary" />
             </div>
-            <div className="text-2xl font-bold text-foreground mb-2">2 новых запроса на запись в день</div>
+            <div className="text-2xl font-bold text-foreground mb-2">{t.stats.stat1}</div>
           </div>
           <div className="text-center group">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4 group-hover:bg-primary/20 transition-colors">
               <Calendar className="w-8 h-8 text-primary" />
             </div>
-            <div className="text-2xl font-bold text-foreground mb-2">Новые клиенты за 2-4 недели</div>
+            <div className="text-2xl font-bold text-foreground mb-2">{t.stats.stat2}</div>
           </div>
           <div className="text-center group">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4 group-hover:bg-primary/20 transition-colors">
               <Users className="w-8 h-8 text-primary" />
             </div>
-            <div className="text-2xl font-bold text-foreground mb-2">1700% рост лидов в массаж-студии</div>
+            <div className="text-2xl font-bold text-foreground mb-2">{t.stats.stat3}</div>
           </div>
         </div>
       </div>

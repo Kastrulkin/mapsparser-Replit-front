@@ -1,42 +1,44 @@
 import { Bot, Calendar, MessageSquare, TrendingUp, Users, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/i18n/LanguageContext";
 
 const Features = () => {
+  const { t } = useLanguage();
   const features = [
     {
       icon: Users,
-      title: "Приходят новые клиенты",
-      description: "Вы получаете новых клиентов через карты, соцсети и партнёрские программы - стабильный поток как онлайн, так и оффлайн.",
+      title: t.features.newClients,
+      description: t.features.newClientsDesc,
       color: "text-primary"
     },
     {
       icon: MessageSquare,
-      title: "Вы не теряете ни одной заявки",
-      description: "Все обращения сразу попадают в единую систему - вы не упускаете ни одного клиента.",
+      title: t.features.noLostLeads,
+      description: t.features.noLostLeadsDesc,
       color: "text-success"
     },
     {
       icon: Calendar,
-      title: "Пришедший клиент - возвращается",
-      description: "Мы напомним о визите и вовремя вернем даже тех, кто давно не был. Ваши клиенты возвращаются и рекомендуют вас.",
+      title: t.features.returningClients,
+      description: t.features.returningClientsDesc,
       color: "text-info"
     },
     {
       icon: TrendingUp,
-      title: "Вы продаёте больше за каждый визит",
-      description: "Ваши мастера знают, что дополнительно предложить клиенту. Средний чек растёт за счёт комбо-пакетов и программ лояльности.",
+      title: t.features.biggerCheck,
+      description: t.features.biggerCheckDesc,
       color: "text-warning"
     },
     {
       icon: TrendingUp,
-      title: "Видите, откуда приходят деньги и как развиваться",
-      description: "Вся бизнес-аналитика перед глазами: вы точно знаете, откуда приходят клиенты и кто рекомендует вас чаще всего.",
+      title: t.features.transparency,
+      description: t.features.transparencyDesc,
       color: "text-primary"
     },
     {
       icon: Zap,
-      title: "Ваши клиенты всегда получают актуальную информацию",
-      description: "Будь то карты, Telegram или соцсети - информация о вас везде одинаково свежая и корректная.",
+      title: t.features.upToDate,
+      description: t.features.upToDateDesc,
       color: "text-success"
     }
   ];
@@ -46,10 +48,10 @@ const Features = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Без магии - просто делаем свою работу, чтобы вы росли
+            {t.features.title}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Мы приводим вам клиентов онлайн и оффлайн, настраиваем и сопровождаем процессы - вы видите только результат.
+            {t.features.subtitle}
           </p>
         </div>
 
