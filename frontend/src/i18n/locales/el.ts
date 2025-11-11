@@ -184,7 +184,7 @@ export const el = {
     option2Point4: "Βλέπεις αποτελέσματα από τον πρώτο μήνα — νέοι πελάτες, αύξηση μέσου τιμολογίου, επαναλαμβανόμενες επισκέψεις",
     option2Button: "Επικοινώνησε με ειδικό",
     pricingTitle: "Συνθήκες",
-    pricingOption1Title: "Ρύθμιση χαρτών $310 το μήνα (3 μήνες)",
+    pricingOption1Title: "Ρύθμιση χαρτών $310 το μήνα",
     pricingOption1Point1: "Κάρτα εταιρείας στο Google",
     pricingOption1Point2: "Κάρτα εταιρείας σε δημοφιλή τοπικά υπηρεσίες",
     pricingOption1Point3: "Περιγραφές υπηρεσιών με λέξεις-κλειδιά SEO",

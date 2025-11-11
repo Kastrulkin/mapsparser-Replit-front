@@ -184,7 +184,7 @@ export const en = {
     option2Point4: "You see results from the first month — new clients, average check growth, repeat visits",
     option2Button: "Contact an expert",
     pricingTitle: "Terms",
-    pricingOption1Title: "Set up maps $310 per month (3 months)",
+    pricingOption1Title: "Set up maps $310 per month",
     pricingOption1Point1: "Company card on Google",
     pricingOption1Point2: "Company card on local popular services",
     pricingOption1Point3: "Service descriptions with SEO keywords",

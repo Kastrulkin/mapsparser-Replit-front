@@ -184,7 +184,7 @@ export const ru = {
     option2Point4: "Вы видите результат с первого месяца — новые клиенты, рост среднего чека, повторные визиты",
     option2Button: "Связаться с экспертом",
     pricingTitle: "Условия",
-    pricingOption1Title: "Настроить карты 20000 рублей в месяц (от 3 месяцев)",
+    pricingOption1Title: "Настроить карты 20000 рублей в месяц",
     pricingOption1Point1: "Карточка компании на Яндексе",
     pricingOption1Point2: "Карточка компании на 2 Gis",
     pricingOption1Point3: "Описания услуг по SEO ключам",

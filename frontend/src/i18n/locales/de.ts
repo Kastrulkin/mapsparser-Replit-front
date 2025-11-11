@@ -184,7 +184,7 @@ export const de = {
     option2Point4: "Sie sehen Ergebnisse ab dem ersten Monat — neue Kunden, Wachstum des durchschnittlichen Rechnungsbetrags, wiederholte Besuche",
     option2Button: "Experten kontaktieren",
     pricingTitle: "Bedingungen",
-    pricingOption1Title: "Karten $310 pro Monat einrichten (3 Monate)",
+    pricingOption1Title: "Karten $310 pro Monat einrichten",
     pricingOption1Point1: "Unternehmenskarte auf Google",
     pricingOption1Point2: "Unternehmenskarte auf lokalen beliebten Diensten",
     pricingOption1Point3: "Dienstleistungsbeschreibungen mit SEO-Schlüsselwörtern",

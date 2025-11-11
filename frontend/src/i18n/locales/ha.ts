@@ -169,7 +169,7 @@ export const ha = {
     option2Point4: "Za ku ga sakamako tun daga watan farko — sabbin abokan ciniki, girman matsakaicin biya, dawowa",
     option2Button: "Tuntuɓi ƙwararre",
     pricingTitle: "Sharuɗɗa",
-    pricingOption1Title: "Saita taswira $310 a wata (3 watanni)",
+    pricingOption1Title: "Saita taswira $310 a wata",
     pricingOption1Point1: "Katin kamfani a Google",
     pricingOption1Point2: "Katin kamfani akan sabis na gida da aka fi so",
     pricingOption1Point3: "Bayanan ayyuka tare da kalmomin SEO",

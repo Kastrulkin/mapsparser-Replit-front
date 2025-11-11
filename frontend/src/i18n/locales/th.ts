@@ -169,7 +169,7 @@ export const th = {
     option2Point4: "เห็นผลตั้งแต่เดือนแรก — ลูกค้าใหม่ บิลเฉลี่ยโต การกลับมา",
     option2Button: "ติดต่อผู้เชี่ยวชาญ",
     pricingTitle: "เงื่อนไข",
-    pricingOption1Title: "ตั้งค่าแผนที่ $310 ต่อเดือน (3 เดือน)",
+    pricingOption1Title: "ตั้งค่าแผนที่ $310 ต่อเดือน",
     pricingOption1Point1: "โปรไฟล์ธุรกิจบน Google",
     pricingOption1Point2: "โปรไฟล์ธุรกิจบนบริการท้องถิ่นยอดนิยม",
     pricingOption1Point3: "คำอธิบายบริการพร้อมคีย์เวิร์ด SEO",

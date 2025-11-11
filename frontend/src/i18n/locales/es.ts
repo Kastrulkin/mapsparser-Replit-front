@@ -184,7 +184,7 @@ export const es = {
     option2Point4: "Ves resultados desde el primer mes — nuevos clientes, crecimiento del ticket promedio, visitas repetidas",
     option2Button: "Contactar un experto",
     pricingTitle: "Condiciones",
-    pricingOption1Title: "Configurar mapas $310 por mes (3 meses)",
+    pricingOption1Title: "Configurar mapas $310 por mes",
     pricingOption1Point1: "Tarjeta de empresa en Google",
     pricingOption1Point2: "Tarjeta de empresa en servicios locales populares",
     pricingOption1Point3: "Descripciones de servicios con palabras clave SEO",

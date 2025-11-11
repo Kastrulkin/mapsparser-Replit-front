@@ -169,7 +169,7 @@ export const ar = {
     option2Point4: "سترون النتائج من الشهر الأول — عملاء جدد، فاتورة أعلى، زيارات متكررة",
     option2Button: "تواصل مع خبير",
     pricingTitle: "الشروط",
-    pricingOption1Title: "إعداد الخرائط $310 شهريًا (3 أشهر)",
+    pricingOption1Title: "إعداد الخرائط $310 شهريًا",
     pricingOption1Point1: "بطاقة الشركة على Google",
     pricingOption1Point2: "بطاقة الشركة على الخدمات المحلية الشائعة",
     pricingOption1Point3: "وصف الخدمات بكلمات مفتاحية SEO",
