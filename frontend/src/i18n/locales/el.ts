@@ -186,7 +186,7 @@ export const el = {
     pricingTitle: "Συνθήκες",
     pricingOption1Title: "Ρύθμιση χαρτών $310 το μήνα (3 μήνες)",
     pricingOption1Point1: "Κάρτα εταιρείας στο Google",
-    pricingOption1Point2: "Κάρτα εταιρείας στο 2GIS",
+    pricingOption1Point2: "Κάρτα εταιρείας σε δημοφιλή τοπικά υπηρεσίες",
     pricingOption1Point3: "Περιγραφές υπηρεσιών με λέξεις-κλειδιά SEO",
     pricingOption1Point4: "Διαχείριση κριτικών",
     pricingOption1Button: "Ρύθμιση χαρτών",

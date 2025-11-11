@@ -171,7 +171,7 @@ export const ha = {
     pricingTitle: "Sharuɗɗa",
     pricingOption1Title: "Saita taswira $310 a wata (3 watanni)",
     pricingOption1Point1: "Katin kamfani a Google",
-    pricingOption1Point2: "Katin kamfani a 2GIS",
+    pricingOption1Point2: "Katin kamfani akan sabis na gida da aka fi so",
     pricingOption1Point3: "Bayanan ayyuka tare da kalmomin SEO",
     pricingOption1Point4: "Gudanar da bitoci",
     pricingOption1Button: "Saita taswira",

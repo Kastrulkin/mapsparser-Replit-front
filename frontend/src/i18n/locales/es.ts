@@ -186,7 +186,7 @@ export const es = {
     pricingTitle: "Condiciones",
     pricingOption1Title: "Configurar mapas $310 por mes (3 meses)",
     pricingOption1Point1: "Tarjeta de empresa en Google",
-    pricingOption1Point2: "Tarjeta de empresa en 2GIS",
+    pricingOption1Point2: "Tarjeta de empresa en servicios locales populares",
     pricingOption1Point3: "Descripciones de servicios con palabras clave SEO",
     pricingOption1Point4: "Gestión de reseñas",
     pricingOption1Button: "Configurar mapas",

@@ -171,7 +171,7 @@ export const th = {
     pricingTitle: "เงื่อนไข",
     pricingOption1Title: "ตั้งค่าแผนที่ $310 ต่อเดือน (3 เดือน)",
     pricingOption1Point1: "โปรไฟล์ธุรกิจบน Google",
-    pricingOption1Point2: "โปรไฟล์ธุรกิจบน 2GIS",
+    pricingOption1Point2: "โปรไฟล์ธุรกิจบนบริการท้องถิ่นยอดนิยม",
     pricingOption1Point3: "คำอธิบายบริการพร้อมคีย์เวิร์ด SEO",
     pricingOption1Point4: "การจัดการรีวิว",
     pricingOption1Button: "ตั้งค่าแผนที่",

@@ -171,7 +171,7 @@ export const ar = {
     pricingTitle: "الشروط",
     pricingOption1Title: "إعداد الخرائط $310 شهريًا (3 أشهر)",
     pricingOption1Point1: "بطاقة الشركة على Google",
-    pricingOption1Point2: "بطاقة الشركة على 2GIS",
+    pricingOption1Point2: "بطاقة الشركة على الخدمات المحلية الشائعة",
     pricingOption1Point3: "وصف الخدمات بكلمات مفتاحية SEO",
     pricingOption1Point4: "إدارة التقييمات",
     pricingOption1Button: "إعداد الخرائط",

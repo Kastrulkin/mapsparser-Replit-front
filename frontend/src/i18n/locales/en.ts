@@ -186,7 +186,7 @@ export const en = {
     pricingTitle: "Terms",
     pricingOption1Title: "Set up maps $310 per month (3 months)",
     pricingOption1Point1: "Company card on Google",
-    pricingOption1Point2: "Company card on 2GIS",
+    pricingOption1Point2: "Company card on local popular services",
     pricingOption1Point3: "Service descriptions with SEO keywords",
     pricingOption1Point4: "Review management",
     pricingOption1Button: "Set up maps",

@@ -186,7 +186,7 @@ export const de = {
     pricingTitle: "Bedingungen",
     pricingOption1Title: "Karten $310 pro Monat einrichten (3 Monate)",
     pricingOption1Point1: "Unternehmenskarte auf Google",
-    pricingOption1Point2: "Unternehmenskarte auf 2GIS",
+    pricingOption1Point2: "Unternehmenskarte auf lokalen beliebten Diensten",
     pricingOption1Point3: "Dienstleistungsbeschreibungen mit SEO-Schlüsselwörtern",
     pricingOption1Point4: "Bewertungsverwaltung",
     pricingOption1Button: "Karten einrichten",
