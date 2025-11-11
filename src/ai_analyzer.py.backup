@@ -1,4 +1,3 @@
-from safe_db_utils import get_db_connection
 import os
 import requests
 import json
@@ -268,7 +267,7 @@ def process_pending_analyses():
     Обрабатывает все записи в Cards (SQLite), у которых пустой ai_analysis
     """
     try:
-        conn = get_db_connection()
+        conn = sqlite3.connect("reports.db")
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute("SELECT * FROM Cards WHERE ai_analysis IS NULL OR ai_analysis = ''")

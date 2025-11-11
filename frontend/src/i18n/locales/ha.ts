@@ -1,4 +1,7 @@
 export const ha = {
+  // Page title
+  pageTitle: "BeautyBot.pro - Tallata gida ga kasuwanci na gida",
+  
   header: {
     whatWeDo: "Me muke yi?",
     whoWeAre: "Su waye mu?",

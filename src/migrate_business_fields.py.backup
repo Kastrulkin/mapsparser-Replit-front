@@ -2,7 +2,6 @@
 """
 Миграция для добавления полей в таблицу Businesses
 """
-from safe_db_utils import get_db_connection
 import sqlite3
 import sys
 import os
@@ -10,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def migrate_business_fields():
     """Добавить новые поля в таблицу Businesses"""
-    conn = get_db_connection()
+    conn = sqlite3.connect("reports.db")
     cursor = conn.cursor()
     
     try:

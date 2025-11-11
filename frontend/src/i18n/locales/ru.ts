@@ -1,4 +1,7 @@
 export const ru = {
+  // Page title
+  pageTitle: "BeautyBot.pro - Локальное продвижение локального бизнеса",
+  
   // Header
   header: {
     whatWeDo: "Что мы делаем?",

@@ -2,7 +2,6 @@
 """
 Скрипт для инициализации SQLite базы данных
 """
-from safe_db_utils import get_db_connection
 import sqlite3
 import os
 from datetime import datetime
@@ -10,7 +9,7 @@ from datetime import datetime
 def init_database():
     """Создать и инициализировать базу данных"""
     # Создаем базу данных
-    conn = get_db_connection()
+    conn = sqlite3.connect("reports.db")
     cursor = conn.cursor()
     
     # 1. Таблица Users - пользователи системы

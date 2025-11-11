@@ -58,6 +58,8 @@ const Dashboard = () => {
   const [currentBusiness, setCurrentBusiness] = useState<any>(null);
   const [loadingServices, setLoadingServices] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [showAddService, setShowAddService] = useState(false);
 
   // Функция для переключения бизнеса
@@ -543,20 +545,40 @@ const Dashboard = () => {
         });
 
         // Загружаем бизнесы если пользователь суперадмин
-        if (currentUser.is_superadmin && currentUser.businesses) {
-          setBusinesses(currentUser.businesses);
-          if (currentUser.businesses.length > 0) {
-            // Проверяем, есть ли сохраненный выбор в localStorage
-            const savedBusinessId = localStorage.getItem('selectedBusinessId');
-            const businessToSelect = savedBusinessId 
-              ? currentUser.businesses.find(b => b.id === savedBusinessId) || currentUser.businesses[0]
-              : currentUser.businesses[0];
-            
-            setCurrentBusinessId(businessToSelect.id);
-            setCurrentBusiness(businessToSelect);
-            
-            // Сохраняем выбор в localStorage
-            localStorage.setItem('selectedBusinessId', businessToSelect.id);
+        if (currentUser.is_superadmin) {
+          console.log('Суперпользователь обнаружен, businesses из getCurrentUser:', currentUser.businesses);
+          
+          // Всегда загружаем businesses отдельно через API для надежности
+          try {
+            const response = await fetch('/api/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+              }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Ответ /api/auth/me:', data);
+              if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
+                console.log(`Загружено ${data.businesses.length} бизнесов`);
+                setBusinesses(data.businesses);
+                const savedBusinessId = localStorage.getItem('selectedBusinessId');
+                const businessToSelect = savedBusinessId 
+                  ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
+                  : data.businesses[0];
+                
+                setCurrentBusinessId(businessToSelect.id);
+                setCurrentBusiness(businessToSelect);
+                localStorage.setItem('selectedBusinessId', businessToSelect.id);
+              } else {
+                console.warn('Бизнесы не найдены в ответе API или пустой массив');
+                setBusinesses([]);
+              }
+            } else {
+              console.error('Ошибка ответа /api/auth/me:', response.status, response.statusText);
+            }
+          } catch (error) {
+            console.error('Ошибка загрузки бизнесов:', error);
+            setBusinesses([]);
           }
         }
 
@@ -812,31 +834,54 @@ const Dashboard = () => {
     );
   }
 
+  const wizardNext = () => setWizardStep((s) => (s < 4 ? ((s + 1) as 1 | 2 | 3 | 4) : s));
+  const wizardPrev = () => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="mb-2 flex items-center justify-between">
+      {/* Полупрозрачный хедер с размытием */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-white/70 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Личный кабинет</h1>
-            <div className="flex items-center space-x-4">
-              {user?.is_superadmin && (
-                <div className="text-sm text-gray-600">
-                  Суперпользователь: {user.email}
-                </div>
-              )}
+            <div className="flex items-center space-x-4 gap-2">
               {user?.is_superadmin && businesses.length > 0 && (
                 <BusinessSwitcher
                   businesses={businesses}
-                  currentBusinessId={currentBusinessId}
+                  currentBusinessId={currentBusinessId || undefined}
                   onBusinessChange={handleBusinessChange}
-                  isSuperadmin={user.is_superadmin}
+                  isSuperadmin={true}
                 />
               )}
-              <Button variant="outline" size="sm" onClick={() => newAuth.signOut()}>Выйти</Button>
+              {user?.is_superadmin && businesses.length === 0 && (
+                <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                  Загрузка бизнесов...
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowWizard(true)}>Мастер оптимизации</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await newAuth.signOut();
+                  } finally {
+                    // Чистим локальные данные и уходим на страницу входа
+                    try { localStorage.clear(); } catch {}
+                    window.location.href = "/login";
+                  }
+                }}
+              >
+                Выйти
+              </Button>
             </div>
           </div>
-          {/* Приветственный блок + шкала заполненности */}
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8 pt-24">
+        {/* Приветственный блок + шкала заполненности */}
+        <div className="mb-6 bg-gradient-to-br from-white via-gray-50/50 to-white rounded-lg border-2 border-gray-200 shadow-md p-4">
             <p className="text-gray-800 mb-2">👋 Добро пожаловать в <span className="font-semibold">BeautyBot.pro</span>!</p>
             {currentBusiness && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -880,7 +925,7 @@ const Dashboard = () => {
           )}
 
           {/* Профиль пользователя */}
-          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="mb-8 bg-gradient-to-br from-white via-gray-50 to-white rounded-lg border-2 border-gray-300 shadow-md p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Профиль</h2>
               {!editMode && (
@@ -929,7 +974,7 @@ const Dashboard = () => {
                   </div>
                   
           {/* Информация о бизнесе */}
-          <div className="mb-8 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="mb-8 bg-gradient-to-br from-white via-orange-50/30 to-white rounded-lg border-2 border-orange-200/50 shadow-md p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Информация о бизнесе</h2>
               {!editClientInfo && (
@@ -1014,7 +1059,7 @@ const Dashboard = () => {
                 </div>
 
           {/* Навигация по разделам */}
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="mb-6 bg-gradient-to-r from-gray-50 to-white rounded-lg border-2 border-gray-200 shadow-sm p-4">
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setActiveTab('overview')}
@@ -1090,7 +1135,7 @@ const Dashboard = () => {
           {activeTab === 'overview' && (
             <>
                   {/* Таблица услуг (Обзор) */}
-            <div className="mb-8">
+            <div className="mb-8 bg-gradient-to-br from-white via-orange-50/20 to-white rounded-lg border-2 border-orange-200/50 shadow-md p-4">
                     <div className="flex justify-between items-center mb-4">
                       <div className="flex-1 pr-4">
                         <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
@@ -1220,15 +1265,14 @@ const Dashboard = () => {
                         </tbody>
                       </table>
                     </div>
-                      </div>
+                  </div>
                 </>
               )}
-                      </div>
-                    </div>
+            </div>
+          </div>
                     
-
           {/* Работа с Яндекс Картами (сворачиваемый блок) */}
-          <div className="mb-8 bg-white rounded-lg border border-gray-200">
+          <div className="mb-8 bg-gradient-to-br from-white via-gray-50 to-white rounded-lg border-2 border-gray-300 shadow-md">
             <Accordion type="single" collapsible defaultValue="yamaps-tools">
               <AccordionItem value="yamaps-tools">
                 <AccordionTrigger className="px-4">
@@ -1264,7 +1308,160 @@ const Dashboard = () => {
               </div>
             )}
         </div>
-      </div>
+
+      {/* Модальное окно мастера оптимизации - полупрозрачный оверлей */}
+      {showWizard && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={() => setShowWizard(false)}>
+          <div className="bg-white/95 backdrop-blur-md rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden shadow-2xl border-2 border-gray-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации бизнеса</h2>
+                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">Шаг {wizardStep}/4</span>
+              </div>
+              <Button onClick={() => setShowWizard(false)} variant="outline" size="sm">✕</Button>
+            </div>
+            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)] bg-gradient-to-br from-white to-gray-50/50">
+              {/* Шаг 1 */}
+              {wizardStep === 1 && (
+                <div className="space-y-4">
+                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Ссылка на карточку *</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="https://yandex.ru/maps/org/..." />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Рейтинг (0–5)</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="4.6" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Количество отзывов</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="128" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Частота обновления фото</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['Еженедельно','Ежемесячно','Раз в квартал','Редко','Не знаю'].map(x => (
+                          <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Новости (наличие/частота)</label>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {['Да','Нет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {['Еженедельно','Ежемесячно','Реже','По событию'].map(x => (
+                          <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Текущие тексты/услуги</label>
+                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={5} placeholder={"Стрижка мужская\nСтрижка женская\nОкрашивание"} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Шаг 2 */}
+              {wizardStep === 2 && (
+                <div className="space-y-4">
+                  <p className="text-gray-600 mb-4">Опишите, как вы хотите звучать и чего избегать. Это задаст тон для всех текстов.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">What do you like?</label>
+                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Лаконично, экспертно, заботливо, премиально…" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">What do you dislike?</label>
+                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Без клише, без канцелярита, без агрессивных продаж…" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки (до 5)</label>
+                      <div className="space-y-2">
+                        {[1,2,3,4,5].map(i => (
+                          <input key={i} className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Например: Стрижка, которая держит форму и не требует укладки" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Шаг 3 */}
+              {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <p className="text-gray-600 mb-4">Выберите подходящие формулировки — мы предложим несколько вариантов на услугу.</p>
+                  <div className="space-y-4">
+                    {["Стрижка мужская","Окрашивание"].map((name) => (
+                      <div key={name} className="border border-gray-200 rounded-lg p-3 bg-white">
+                        <div className="font-medium text-gray-900 mb-2">{name}</div>
+                        <div className="grid md:grid-cols-3 gap-2">
+                          {[1,2,3].map(v => (
+                            <div key={v} className="border rounded-md p-2 text-sm text-gray-700">Вариант {v}: лаконичная формулировка услуги…</div>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <Button variant="outline" size="sm">Принять выбранные</Button>
+                          <Button variant="outline" size="sm">Сохранить как шаблон</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Шаг 4 */}
+              {wizardStep === 4 && (
+                <div className="space-y-4">
+                  <p className="text-gray-600 mb-4">Немного цифр, чтобы план был реалистичным. Можно заполнить позже.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Как давно работаете</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['0–6 мес','6–12 мес','1–3 года','3+ лет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Постоянные клиенты</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="например, 150" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CRM</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Например: Yclients" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Расположение</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['Дом','ТЦ','Двор','Магистраль','Центр','Спальник','Около метро'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Средний чек (₽)</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="2200" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Выручка в месяц (₽)</label>
+                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="350000" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Что нравится/не нравится в карточке</label>
+                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Нравится: фото, тон. Не нравится: мало отзывов, нет новостей…" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="mt-6 flex justify-between pt-4 border-t border-gray-200">
+                <Button variant="outline" onClick={wizardPrev} disabled={wizardStep===1}>Назад</Button>
+                {wizardStep < 4 ? (
+                  <Button onClick={wizardNext}>Продолжить</Button>
+                ) : (
+                  <Button onClick={() => {setShowWizard(false); window.location.href = "/sprint";}}>Сформировать план</Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно просмотра отчёта */}
         {viewingReport && (
@@ -1286,12 +1483,12 @@ const Dashboard = () => {
                 <div dangerouslySetInnerHTML={{ __html: reportContent }} />
               )}
             </div>
-            </div>
           </div>
+        </div>
         )}
 
-      <Footer />
       </div>
+      <Footer />
     </div>
   );
 };

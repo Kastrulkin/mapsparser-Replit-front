@@ -1,4 +1,7 @@
 export const es = {
+  // Page title
+  pageTitle: "BeautyBot.pro - Promoción local para negocios locales",
+  
   // Header
   header: {
     whatWeDo: "¿Qué Hacemos?",

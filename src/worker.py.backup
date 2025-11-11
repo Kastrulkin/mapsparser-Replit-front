@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 from parser import parse_yandex_card
 from gigachat_analyzer import analyze_business_data

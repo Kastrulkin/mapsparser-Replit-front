@@ -136,7 +136,7 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
     
     try:
         cursor.execute("""
-            SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active
+            SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin
             FROM UserSessions s
             JOIN Users u ON s.user_id = u.id
             WHERE s.token = ? AND s.expires_at > ?
@@ -150,7 +150,8 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
             "user_id": session['user_id'],
             "email": session['email'],
             "name": session['name'],
-            "phone": session['phone']
+            "phone": session['phone'],
+            "is_superadmin": bool(session['is_superadmin']) if session['is_superadmin'] is not None else False
         }
         
     except Exception as e:

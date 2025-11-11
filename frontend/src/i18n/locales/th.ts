@@ -1,4 +1,7 @@
 export const th = {
+  // Page title
+  pageTitle: "BeautyBot.pro - การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
+  
   header: {
     whatWeDo: "เราทำอะไร?",
     whoWeAre: "เราเป็นใคร?",

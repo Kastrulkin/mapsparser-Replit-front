@@ -10,8 +10,9 @@ app = Flask(__name__)
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/api/download-report/<card_id>', methods=['GET'])
 def download_report(card_id):

@@ -1,4 +1,7 @@
 export const el = {
+  // Page title
+  pageTitle: "BeautyBot.pro - Τοπική προώθηση για τοπική επιχείρηση",
+  
   // Header
   header: {
     whatWeDo: "Τι Κάνουμε?",

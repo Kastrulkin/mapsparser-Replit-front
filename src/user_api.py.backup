@@ -9,7 +9,6 @@ from auth_system import *
 from database_manager import DatabaseManager
 from datetime import datetime
 import time
-import os
 
 # Простой in-memory rate limiting (для dev)
 _rate_buckets = {}
@@ -42,47 +41,9 @@ CORS(app, origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://loc
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
-
-def send_email(to_email, subject, body, from_name="BeautyBot"):
-    """Универсальная функция для отправки email"""
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        
-        # Настройки SMTP из .env
-        smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        
-        if not smtp_password:
-            print("❌ SMTP_PASSWORD не установлен в переменных окружения")
-            return False
-        
-        # Создание сообщения
-        msg = MIMEMultipart()
-        msg['From'] = f"{from_name} <{smtp_username}>"
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
-        # Отправка
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(smtp_username, smtp_password)
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"✅ Email отправлен на {to_email}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Ошибка отправки email: {e}")
-        return False
+    conn = sqlite3.connect("reports.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/api/public/request-report', methods=['POST'])
 @rate_limited(limit=5, window_sec=60)
@@ -122,24 +83,6 @@ def public_request_report():
 
         conn.close()
 
-        # Отправляем email на info@beautybot.pro о новой заявке
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
-        subject = f"Новая заявка с сайта BeautyBot от {email}"
-        body = f"""
-Новая заявка с сайта BeautyBot
-
-Email клиента: {email}
-Ссылка на бизнес: {url}
-ID заявки в очереди: {queue_id}
-
----
-Отправлено с сайта beautybot.pro
-        """
-        
-        email_sent = send_email(contact_email, subject, body)
-        if not email_sent:
-            print("⚠️ Не удалось отправить email, но заявка сохранена")
-        
         return jsonify({
             "queue_id": queue_id,
             "message": "Заявка принята. Мы свяжемся с вами в ближайшее время."
@@ -240,18 +183,14 @@ def logout():
         if not token:
             return jsonify({"error": "Токен не предоставлен"}), 401
         
-        from auth_system import logout_session
         success = logout_session(token)
         
         if success:
-            return jsonify({"success": True, "message": "Выход выполнен успешно"}), 200
+            return jsonify({"message": "Выход выполнен успешно"}), 200
         else:
-            return jsonify({"error": "Ошибка выхода"}), 500
+            return jsonify({"error": "Недействительный токен"}), 401
             
     except Exception as e:
-        import traceback
-        print(f"Ошибка при выходе: {e}")
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/me', methods=['GET'])

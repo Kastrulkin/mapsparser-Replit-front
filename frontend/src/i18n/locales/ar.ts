@@ -1,4 +1,7 @@
 export const ar = {
+  // Page title
+  pageTitle: "BeautyBot.pro - ترويج محلي للأعمال المحلية",
+  
   header: {
     whatWeDo: "ماذا نفعل؟",
     whoWeAre: "من نحن؟",

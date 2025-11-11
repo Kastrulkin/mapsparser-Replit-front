@@ -1,4 +1,7 @@
 export const de = {
+  // Page title
+  pageTitle: "BeautyBot.pro - Lokale Förderung für lokale Unternehmen",
+  
   // Header
   header: {
     whatWeDo: "Was Wir Tun?",
