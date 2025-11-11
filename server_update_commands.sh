@@ -21,7 +21,8 @@ echo ""
 # 3. Обновляем зависимости frontend
 echo "📦 Обновляем зависимости frontend..."
 cd frontend
-npm install
+npm cache clean --force 2>/dev/null || true
+npm install --legacy-peer-deps
 echo "✅ Зависимости обновлены"
 echo ""
 
