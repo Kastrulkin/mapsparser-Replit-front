@@ -139,7 +139,7 @@ ID заявки в очереди: {queue_id}
         email_sent = send_email(contact_email, subject, body)
         if not email_sent:
             print("⚠️ Не удалось отправить email, но заявка сохранена")
-        
+
         return jsonify({
             "queue_id": queue_id,
             "message": "Заявка принята. Мы свяжемся с вами в ближайшее время."

@@ -1939,19 +1939,41 @@ def add_transaction():
         cursor = db.conn.cursor()
         
         transaction_id = str(uuid.uuid4())
-        cursor.execute("""
-            INSERT INTO FinancialTransactions 
-            (id, user_id, transaction_date, amount, client_type, services, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            transaction_id,
-            user_data['user_id'],
-            data['transaction_date'],
-            data['amount'],
-            data['client_type'],
-            json.dumps(data.get('services', [])),
-            data.get('notes', '')
-        ))
+        
+        # Проверяем наличие поля master_id в таблице
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_master_id = 'master_id' in columns
+        
+        if has_master_id:
+            cursor.execute("""
+                INSERT INTO FinancialTransactions 
+                (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                transaction_id,
+                user_data['user_id'],
+                data['transaction_date'],
+                data['amount'],
+                data['client_type'],
+                json.dumps(data.get('services', [])),
+                data.get('notes', ''),
+                data.get('master_id')
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO FinancialTransactions 
+                (id, user_id, transaction_date, amount, client_type, services, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                transaction_id,
+                user_data['user_id'],
+                data['transaction_date'],
+                data['amount'],
+                data['client_type'],
+                json.dumps(data.get('services', [])),
+                data.get('notes', '')
+            ))
         
         db.conn.commit()
         db.close()
@@ -1964,6 +1986,222 @@ def add_transaction():
         
     except Exception as e:
         return jsonify({"error": f"Ошибка добавления транзакции: {str(e)}"}), 500
+
+@app.route('/api/finance/transaction/upload', methods=['POST', 'OPTIONS'])
+def upload_transaction_file():
+    """Загрузить файл или фото с транзакциями и распознать их"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем наличие файла
+        file = None
+        is_image = False
+        
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename == '':
+                file = None
+        elif 'photo' in request.files:
+            file = request.files['photo']
+            is_image = True
+            if file.filename == '':
+                file = None
+        
+        if not file:
+            return jsonify({"error": "Файл не выбран"}), 400
+        
+        # Проверяем тип файла
+        if is_image:
+            allowed_types = ['image/png', 'image/jpeg', 'image/jpg']
+            if file.content_type not in allowed_types:
+                return jsonify({"error": "Неподдерживаемый тип файла. Разрешены: PNG, JPG, JPEG"}), 400
+        else:
+            allowed_types = ['application/pdf', 'application/msword', 
+                           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                           'application/vnd.ms-excel',
+                           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                           'text/plain', 'text/csv']
+            if file.content_type not in allowed_types:
+                return jsonify({"error": "Неподдерживаемый тип файла. Разрешены: PDF, DOC, DOCX, XLS, XLSX, TXT, CSV"}), 400
+        
+        # Читаем промпт для анализа транзакций
+        try:
+            with open('prompts/transaction-analysis-prompt.txt', 'r', encoding='utf-8') as f:
+                prompt_content = f.read()
+        except FileNotFoundError:
+            prompt_content = """Проанализируй документ/фото и извлеки все транзакции (продажи услуг).
+Верни результат в формате JSON:
+{
+  "transactions": [
+    {
+      "transaction_date": "YYYY-MM-DD",
+      "amount": число,
+      "client_type": "new" или "returning",
+      "services": ["услуга1", "услуга2"],
+      "master_name": "имя мастера" или null,
+      "notes": "дополнительная информация" или null
+    }
+  ]
+}"""
+        
+        # Обрабатываем файл
+        if is_image:
+            # Для изображений - анализ через GigaChat
+            import base64
+            image_data = file.read()
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            
+            result = analyze_screenshot_with_gigachat(image_base64, prompt_content)
+            
+            if 'error' in result:
+                return jsonify({"error": result['error']}), 500
+            
+            # Парсим JSON из результата
+            try:
+                analysis_result = json.loads(result) if isinstance(result, str) else result
+                transactions = analysis_result.get('transactions', [])
+            except:
+                return jsonify({"error": "Не удалось распарсить результат анализа"}), 500
+        else:
+            # Для текстовых файлов - читаем содержимое и анализируем
+            file_content = file.read().decode('utf-8', errors='ignore')
+            result = analyze_text_with_gigachat(prompt_content + "\n\nСодержимое файла:\n" + file_content)
+            
+            if 'error' in result:
+                return jsonify({"error": result['error']}), 500
+            
+            try:
+                analysis_result = json.loads(result) if isinstance(result, str) else result
+                transactions = analysis_result.get('transactions', [])
+            except:
+                return jsonify({"error": "Не удалось распарсить результат анализа"}), 500
+        
+        # Сохраняем транзакции в БД
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем наличие поля master_id
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_master_id = 'master_id' in columns
+        
+        saved_transactions = []
+        for trans in transactions:
+            transaction_id = str(uuid.uuid4())
+            
+            # Получаем master_id по имени мастера (если есть таблица Masters)
+            master_id = None
+            if trans.get('master_name'):
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Masters'")
+                masters_table_exists = cursor.fetchone()
+                if masters_table_exists:
+                    cursor.execute("SELECT id FROM Masters WHERE name = ? LIMIT 1", (trans['master_name'],))
+                    master_row = cursor.fetchone()
+                    if master_row:
+                        master_id = master_row[0]
+            
+            # Получаем business_id из текущего бизнеса пользователя
+            business_id = None
+            if has_business_id:
+                cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_data['user_id'],))
+                business_row = cursor.fetchone()
+                if business_row:
+                    business_id = business_row[0]
+            
+            if has_master_id and has_business_id:
+                cursor.execute("""
+                    INSERT INTO FinancialTransactions 
+                    (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    transaction_id,
+                    user_data['user_id'],
+                    business_id,
+                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
+                    trans.get('amount', 0),
+                    trans.get('client_type', 'new'),
+                    json.dumps(trans.get('services', [])),
+                    trans.get('notes', ''),
+                    master_id
+                ))
+            elif has_master_id:
+                cursor.execute("""
+                    INSERT INTO FinancialTransactions 
+                    (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    transaction_id,
+                    user_data['user_id'],
+                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
+                    trans.get('amount', 0),
+                    trans.get('client_type', 'new'),
+                    json.dumps(trans.get('services', [])),
+                    trans.get('notes', ''),
+                    master_id
+                ))
+            elif has_business_id:
+                cursor.execute("""
+                    INSERT INTO FinancialTransactions 
+                    (id, user_id, business_id, transaction_date, amount, client_type, services, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    transaction_id,
+                    user_data['user_id'],
+                    business_id,
+                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
+                    trans.get('amount', 0),
+                    trans.get('client_type', 'new'),
+                    json.dumps(trans.get('services', [])),
+                    trans.get('notes', '')
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO FinancialTransactions 
+                    (id, user_id, transaction_date, amount, client_type, services, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    transaction_id,
+                    user_data['user_id'],
+                    trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
+                    trans.get('amount', 0),
+                    trans.get('client_type', 'new'),
+                    json.dumps(trans.get('services', [])),
+                    trans.get('notes', '')
+                ))
+            
+            saved_transactions.append({
+                "id": transaction_id,
+                "transaction_date": trans.get('transaction_date'),
+                "amount": trans.get('amount'),
+                "client_type": trans.get('client_type'),
+                "services": trans.get('services', []),
+                "master_id": master_id,
+                "notes": trans.get('notes')
+            })
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "transactions": saved_transactions,
+            "count": len(saved_transactions),
+            "message": f"Успешно добавлено {len(saved_transactions)} транзакций"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка обработки файла: {str(e)}"}), 500
 
 @app.route('/api/finance/transactions', methods=['GET'])
 def get_transactions():
@@ -2142,6 +2380,423 @@ def get_financial_metrics():
         
     except Exception as e:
         return jsonify({"error": f"Ошибка получения метрик: {str(e)}"}), 500
+
+@app.route('/api/finance/breakdown', methods=['GET'])
+def get_financial_breakdown():
+    """Получить разбивку доходов по услугам и мастерам для круговых диаграмм"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Параметры периода
+        period = request.args.get('period', 'month')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Если даты не указаны, вычисляем период
+        if not start_date or not end_date:
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            if period == 'week':
+                start_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'month':
+                start_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'quarter':
+                start_date = (now - timedelta(days=90)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'year':
+                start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+        
+        # Проверяем наличие полей в таблице
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_business_id = 'business_id' in columns
+        has_master_id = 'master_id' in columns
+        
+        # Получаем business_id из запроса
+        current_business_id = request.args.get('business_id')
+        
+        # Получаем транзакции за период
+        if has_business_id and current_business_id:
+            if has_master_id:
+                cursor.execute("""
+                    SELECT services, amount, master_id
+                    FROM FinancialTransactions 
+                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                """, (current_business_id, start_date, end_date))
+            else:
+                cursor.execute("""
+                    SELECT services, amount, NULL as master_id
+                    FROM FinancialTransactions 
+                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                """, (current_business_id, start_date, end_date))
+        else:
+            if has_master_id:
+                cursor.execute("""
+                    SELECT services, amount, master_id
+                    FROM FinancialTransactions 
+                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                """, (user_data['user_id'], start_date, end_date))
+            else:
+                cursor.execute("""
+                    SELECT services, amount, NULL as master_id
+                    FROM FinancialTransactions 
+                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                """, (user_data['user_id'], start_date, end_date))
+        
+        transactions = cursor.fetchall()
+        
+        # Агрегируем по услугам
+        services_revenue = {}
+        for row in transactions:
+            services_json = row[0]  # services (JSON)
+            amount = float(row[1] or 0)
+            
+            if services_json:
+                try:
+                    services = json.loads(services_json) if isinstance(services_json, str) else services_json
+                    if isinstance(services, list):
+                        # Распределяем сумму поровну между услугами
+                        service_amount = amount / len(services) if len(services) > 0 else amount
+                        for service in services:
+                            service_name = service.strip() if isinstance(service, str) else str(service)
+                            if service_name:
+                                services_revenue[service_name] = services_revenue.get(service_name, 0) + service_amount
+                except:
+                    pass
+        
+        # Агрегируем по мастерам
+        masters_revenue = {}
+        for row in transactions:
+            master_id = row[2] if len(row) > 2 else None  # master_id (может отсутствовать)
+            amount = float(row[1] or 0)
+            
+            if master_id:
+                # Проверяем наличие таблицы Masters
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Masters'")
+                masters_table_exists = cursor.fetchone()
+                
+                if masters_table_exists:
+                    cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
+                    master_row = cursor.fetchone()
+                    master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
+                else:
+                    master_name = f"Мастер {master_id[:8]}"
+                
+                masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
+            else:
+                # Если мастер не указан, добавляем в "Не указан"
+                masters_revenue["Не указан"] = masters_revenue.get("Не указан", 0) + amount
+        
+        # Преобразуем в массивы для диаграмм
+        services_data = [{"name": name, "value": round(value, 2)} for name, value in services_revenue.items()]
+        masters_data = [{"name": name, "value": round(value, 2)} for name, value in masters_revenue.items()]
+        
+        # Сортируем по убыванию значения
+        services_data.sort(key=lambda x: x['value'], reverse=True)
+        masters_data.sort(key=lambda x: x['value'], reverse=True)
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "period": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "period_type": period
+            },
+            "by_services": services_data,
+            "by_masters": masters_data
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка получения разбивки: {str(e)}"}), 500
+
+# ==================== ЭНДПОИНТЫ ДЛЯ СЕТЕЙ ====================
+
+@app.route('/api/networks/<string:network_id>/locations', methods=['GET'])
+def get_network_locations(network_id):
+    """Получить список точек сети"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем, что пользователь имеет доступ к сети
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        network = cursor.fetchone()
+        
+        if not network:
+            db.close()
+            return jsonify({"error": "Сеть не найдена"}), 404
+        
+        # Проверяем права доступа (владелец или суперадмин)
+        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой сети"}), 403
+        
+        # Получаем точки сети
+        cursor.execute("""
+            SELECT id, name, address, description 
+            FROM Businesses 
+            WHERE network_id = ? 
+            ORDER BY name
+        """, (network_id,))
+        
+        locations = []
+        for row in cursor.fetchall():
+            locations.append({
+                "id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "description": row[3]
+            })
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "locations": locations
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка получения точек сети: {str(e)}"}), 500
+
+@app.route('/api/networks/<string:network_id>/stats', methods=['GET'])
+def get_network_stats(network_id):
+    """Получить статистику сети"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        period = request.args.get('period', 'month')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем доступ к сети
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        network = cursor.fetchone()
+        
+        if not network:
+            db.close()
+            return jsonify({"error": "Сеть не найдена"}), 404
+        
+        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой сети"}), 403
+        
+        # Получаем точки сети
+        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = ?", (network_id,))
+        locations = cursor.fetchall()
+        location_ids = [loc[0] for loc in locations]
+        
+        if not location_ids:
+            db.close()
+            return jsonify({
+                "success": True,
+                "stats": {
+                    "total_revenue": 0,
+                    "total_orders": 0,
+                    "locations_count": 0,
+                    "by_services": [],
+                    "by_masters": [],
+                    "by_locations": [],
+                    "ratings": [],
+                    "bad_reviews": []
+                }
+            })
+        
+        # Вычисляем период
+        if not start_date or not end_date:
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            if period == 'week':
+                start_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'month':
+                start_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'quarter':
+                start_date = (now - timedelta(days=90)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            elif period == 'year':
+                start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+        
+        # Получаем транзакции всех точек сети
+        # Проверяем наличие поля business_id
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_business_id = 'business_id' in columns
+        
+        if has_business_id and location_ids:
+            placeholders = ','.join(['?'] * len(location_ids))
+            cursor.execute(f"""
+                SELECT services, amount, master_id, business_id
+                FROM FinancialTransactions 
+                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN ? AND ?
+            """, location_ids + [start_date, end_date])
+        else:
+            # Если business_id нет, получаем через user_id владельца сети
+            cursor.execute("""
+                SELECT services, amount, master_id, NULL as business_id
+                FROM FinancialTransactions 
+                WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+            """, (network[0], start_date, end_date))
+        
+        transactions = cursor.fetchall()
+        
+        # Агрегируем данные
+        services_revenue = {}
+        masters_revenue = {}
+        locations_revenue = {loc[1]: 0 for loc in locations}
+        
+        for row in transactions:
+            services_json = row[0]
+            amount = float(row[1] or 0)
+            master_id = row[2]
+            business_id = row[3]
+            
+            # По услугам
+            if services_json:
+                try:
+                    services = json.loads(services_json) if isinstance(services_json, str) else services_json
+                    if isinstance(services, list):
+                        service_amount = amount / len(services) if len(services) > 0 else amount
+                        for service in services:
+                            service_name = service.strip() if isinstance(service, str) else str(service)
+                            if service_name:
+                                services_revenue[service_name] = services_revenue.get(service_name, 0) + service_amount
+                except:
+                    pass
+            
+            # По мастерам
+            if master_id:
+                cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
+                master_row = cursor.fetchone()
+                master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
+                masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
+            
+            # По точкам
+            location_name = next((loc[1] for loc in locations if loc[0] == business_id), "Неизвестно")
+            locations_revenue[location_name] = locations_revenue.get(location_name, 0) + amount
+        
+        # Преобразуем в массивы
+        by_services = [{"name": name, "value": round(value, 2)} for name, value in services_revenue.items()]
+        by_masters = [{"name": name, "value": round(value, 2)} for name, value in masters_revenue.items()]
+        by_locations = [{"name": name, "value": round(value, 2)} for name, value in locations_revenue.items()]
+        
+        by_services.sort(key=lambda x: x['value'], reverse=True)
+        by_masters.sort(key=lambda x: x['value'], reverse=True)
+        by_locations.sort(key=lambda x: x['value'], reverse=True)
+        
+        # Получаем рейтинги (заглушка - нужно будет добавить таблицу Reviews)
+        ratings = []
+        bad_reviews = []
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "total_revenue": sum(locations_revenue.values()),
+                "total_orders": len(transactions),
+                "locations_count": len(locations),
+                "by_services": by_services,
+                "by_masters": by_masters,
+                "by_locations": by_locations,
+                "ratings": ratings,
+                "bad_reviews": bad_reviews
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка получения статистики сети: {str(e)}"}), 500
+
+@app.route('/api/networks', methods=['GET'])
+def get_user_networks():
+    """Получить список сетей пользователя"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем наличие таблицы Networks
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Networks'")
+        networks_table_exists = cursor.fetchone()
+        
+        if not networks_table_exists:
+            db.close()
+            return jsonify({
+                "success": True,
+                "networks": []
+            })
+        
+        # Получаем сети пользователя
+        cursor.execute("""
+            SELECT id, name, description 
+            FROM Networks 
+            WHERE owner_id = ? 
+            ORDER BY name
+        """, (user_data['user_id'],))
+        
+        networks = []
+        for row in cursor.fetchall():
+            networks.append({
+                "id": row[0],
+                "name": row[1],
+                "description": row[2]
+            })
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "networks": networks
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка получения сетей: {str(e)}"}), 500
 
 @app.route('/api/finance/roi', methods=['GET'])
 def get_roi_data():

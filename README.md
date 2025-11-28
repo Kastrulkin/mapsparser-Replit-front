@@ -77,6 +77,21 @@ systemctl enable seo-worker
 systemctl start seo-worker
 ```
 
+## Как коммитить изменения
+
+1. **Проверьте статус**: `git status -sb`.
+2. **Добавьте файлы**: `git add <путь>`. Для массового добавления используйте `git add .`.
+3. **Создайте коммит**: `git commit -m "Краткое описание изменений"`.
+4. **Подготовьте токен**:
+   - Установите переменную окружения `export GITHUB_TOKEN=<ваш токен>`, либо
+   - Однократно сохраните креды: `git config credential.helper store` и выполните `git credential fill`/`approve`.
+5. **Отправьте изменения**:
+   ```bash
+   git push https://$GITHUB_TOKEN@github.com/Kastrulkin/mapsparser-Replit-front.git main
+   ```
+   или, если helper уже настроен: `git push origin main`.
+6. **Безопасность**: не добавляйте токен в коммит и не храните его в репозитории. Для временных сессий можно экспортировать токен только на время пуша.
+
 ## Структура проекта
 - `src/` — исходный код бэкенда
 - `frontend/` — веб-интерфейс (React + Vite)

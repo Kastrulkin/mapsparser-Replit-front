@@ -14,3 +14,8 @@
   - Переводы хранятся в `frontend/src/i18n/locales/*.ts`, ключи синхронизированы между языками.
 - **i18n-паттерн**: `LanguageProvider` оборачивает приложение, `LanguageSwitcher` обновляет `localStorage`, `t.pageTitle` синхронизирует `<title>`.
 - **Безопасность данных**: резервные копии в `db_backups`, скрипты очистки явно защищают `reports.db`, `.env`, `node_modules`, `venv`, таблицы Users/UserSessions.
+- **Коммиты и пуши**:
+  - Перед пушем всегда выполняем `git status -sb` и `git add`.
+  - Коммиты с осмысленным сообщением на русском.
+  - Для GitHub используем PAT в переменной `GITHUB_TOKEN` и пушим `git push https://$GITHUB_TOKEN@github.com/Kastrulkin/mapsparser-Replit-front.git main`, либо предварительно настраиваем `credential.helper store`.
+  - Никогда не сохраняем токен в репозитории или конфиге; экспортируем только на время пуша.

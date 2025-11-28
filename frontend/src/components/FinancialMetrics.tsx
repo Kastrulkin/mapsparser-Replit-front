@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 interface FinancialMetricsProps {
   onRefresh?: () => void;
@@ -26,8 +27,21 @@ interface MetricsData {
   };
 }
 
+interface BreakdownData {
+  period: {
+    start_date: string;
+    end_date: string;
+    period_type: string;
+  };
+  by_services: Array<{ name: string; value: number }>;
+  by_masters: Array<{ name: string; value: number }>;
+}
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
+
 const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('month');
@@ -38,18 +52,33 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/finance/metrics?period=${selectedPeriod}`, {
+      
+      // Загружаем метрики
+      const metricsResponse = await fetch(`http://localhost:8000/api/finance/metrics?period=${selectedPeriod}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      const data = await response.json();
+      const metricsData = await metricsResponse.json();
 
-      if (data.success) {
-        setMetrics(data);
+      if (metricsData.success) {
+        setMetrics(metricsData);
       } else {
-        setError(data.error || 'Ошибка загрузки метрик');
+        setError(metricsData.error || 'Ошибка загрузки метрик');
+      }
+
+      // Загружаем разбивку по услугам и мастерам
+      const breakdownResponse = await fetch(`http://localhost:8000/api/finance/breakdown?period=${selectedPeriod}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const breakdownData = await breakdownResponse.json();
+
+      if (breakdownData.success) {
+        setBreakdown(breakdownData);
       }
     } catch (error) {
       setError('Ошибка соединения с сервером');
@@ -228,6 +257,75 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
             </div>
             <div className="text-2xl">❤️</div>
           </div>
+        </div>
+      </div>
+
+      {/* Круговые диаграммы */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        {/* Диаграмма по услугам */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
+            💼 Доход по услугам
+          </h4>
+          {breakdown && breakdown.by_services.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={breakdown.by_services}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {breakdown.by_services.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => `${formatCurrency(value)}`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center text-gray-500 py-8">
+              Нет данных по услугам
+            </div>
+          )}
+        </div>
+
+        {/* Диаграмма по мастерам */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
+            👤 Доход по мастерам
+          </h4>
+          {breakdown && breakdown.by_masters.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={breakdown.by_masters}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {breakdown.by_masters.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => `${formatCurrency(value)}`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center text-gray-500 py-8">
+              Нет данных по мастерам
+            </div>
+          )}
         </div>
       </div>
 

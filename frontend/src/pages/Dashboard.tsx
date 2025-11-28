@@ -11,6 +11,8 @@ import ProgressTracker from "@/components/ProgressTracker";
 import ROICalculator from "@/components/ROICalculator";
 import TransactionForm from "@/components/TransactionForm";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+import { NetworkSwitcher } from "@/components/NetworkSwitcher";
+import { NetworkDashboard } from "@/components/NetworkDashboard";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
@@ -47,7 +49,7 @@ const Dashboard = () => {
   const [timer, setTimer] = useState<string | null>(null);
   
   // Вкладки
-  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'progress'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'progress' | 'network'>('overview');
   
   // Услуги
   const [userServices, setUserServices] = useState<any[]>([]);
@@ -56,6 +58,11 @@ const Dashboard = () => {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<any>(null);
+  
+  // Сети
+  const [networks, setNetworks] = useState<any[]>([]);
+  const [currentNetworkId, setCurrentNetworkId] = useState<string | null>(null);
+  const [currentLocationId, setCurrentLocationId] = useState<string | null>(null);
   const [loadingServices, setLoadingServices] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
@@ -165,6 +172,26 @@ const Dashboard = () => {
     if ((clientInfo.workingHours || '').trim()) filled++;
     return Math.round((filled / fieldsTotal) * 100);
   })();
+
+  // Загрузка сетей пользователя
+  const loadNetworks = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/networks`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success && data.networks && data.networks.length > 0) {
+        setNetworks(data.networks);
+        // Если есть сети, выбираем первую
+        if (!currentNetworkId) {
+          setCurrentNetworkId(data.networks[0].id);
+        }
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки сетей:', e);
+    }
+  };
 
   // Загрузка услуг пользователя
   const loadUserServices = async () => {
@@ -607,6 +634,9 @@ const Dashboard = () => {
 
         // Загружаем услуги пользователя
         await loadUserServices();
+        
+        // Загружаем сети пользователя
+        await loadNetworks();
 
         // Загружаем личную информацию о бизнесе
         try {
@@ -1128,6 +1158,24 @@ const Dashboard = () => {
                 <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">🎯 Ваш прогресс</h2>
               <ProgressTracker />
+            </div>
+          )}
+
+          {/* Дашборд сети */}
+          {activeTab === 'network' && currentNetworkId && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-gray-900">🌐 Дашборд сети</h2>
+                <NetworkSwitcher
+                  networkId={currentNetworkId}
+                  currentLocationId={currentLocationId || undefined}
+                  onLocationChange={(locationId) => {
+                    setCurrentLocationId(locationId);
+                    // Можно обновить данные при переключении точки
+                  }}
+                />
+              </div>
+              <NetworkDashboard networkId={currentNetworkId} />
             </div>
           )}
 
