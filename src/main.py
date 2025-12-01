@@ -3934,6 +3934,62 @@ Email клиента: {email}
         print(f"❌ Ошибка обработки заявки: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
+def public_request_registration():
+    """Публичная заявка на регистрацию без авторизации.
+    Принимает данные регистрации, отправляет email на info@beautybot.pro о новой заявке.
+    """
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        phone = data.get('phone', '').strip()
+        yandex_url = data.get('yandex_url', '').strip()
+        
+        if not email:
+            return jsonify({"error": "Email обязателен"}), 400
+        
+        # Отправляем email на info@beautybot.pro о новой заявке на регистрацию
+        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        subject = f"Новая заявка на регистрацию от {email}"
+        body = f"""
+Новая заявка на регистрацию с сайта BeautyBot
+
+Имя: {name or 'Не указано'}
+Email: {email}
+Телефон: {phone or 'Не указан'}
+Ссылка на Яндекс.Карты: {yandex_url or 'Не указана'}
+
+---
+Отправлено с сайта beautybot.pro
+        """
+        
+        email_sent = send_email(contact_email, subject, body)
+        if not email_sent:
+            print("⚠️ Не удалось отправить email")
+        
+        # Логирование в консоль
+        print(f"📧 НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ ОТ {email}:")
+        print(f"👤 Имя: {name or 'Не указано'}")
+        print(f"📞 Телефон: {phone or 'Не указан'}")
+        print(f"🔗 Яндекс.Карты: {yandex_url or 'Не указана'}")
+        print("-" * 50)
+        
+        return jsonify({
+            "success": True,
+            "message": "Заявка на регистрацию принята. Мы свяжемся с вами в ближайшее время."
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка обработки заявки на регистрацию: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # ===== TELEGRAM BOT API =====
 
 @app.route('/api/telegram/bind', methods=['POST'])
@@ -4147,8 +4203,6 @@ def public_contact():
 def handle_exception(e):
     """Глобальный обработчик исключений"""
     import traceback
-
-from yandex_sync_service import YandexSyncService
     print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500

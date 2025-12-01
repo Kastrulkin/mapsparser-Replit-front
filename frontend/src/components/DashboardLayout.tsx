@@ -93,6 +93,7 @@ export const DashboardLayout = () => {
           currentBusinessId={currentBusinessId}
           onBusinessChange={handleBusinessChange}
           isSuperadmin={user.is_superadmin}
+          user={user}
         />
         <main className="flex-1 p-6">
           <Outlet context={{ user, currentBusinessId, currentBusiness, businesses }} />

@@ -1,5 +1,5 @@
 import { Button } from "./ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogIn } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
@@ -60,8 +60,7 @@ const Header = () => {
                 <img 
                   src={logo} 
                   alt="BeautyBot Logo" 
-                  className="h-32 w-auto"
-                  style={{ maxHeight: '128px' }}
+                  className="h-12 w-auto"
                 />
               </Link>
             </div>
@@ -103,7 +102,16 @@ const Header = () => {
 
           <div className="hidden md:flex items-center space-x-4">
             <LanguageSwitcher />
-            {/* Кнопка входа скрыта по требованию. Маршрут /login остаётся доступным напрямую. */}
+            <Link to="/login">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Вход</span>
+              </Button>
+            </Link>
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
               <Button>{t.header.tryFree}</Button>
             </Link>
@@ -158,9 +166,18 @@ const Header = () => {
                 <div className="px-3 py-2">
                   <LanguageSwitcher />
                 </div>
-                {/* Кнопка входа скрыта по требованию. */}
+                <Link to="/login" className="w-full block mx-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Вход
+                  </Button>
+                </Link>
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
-                  <Button className="w-full justify-start">{t.header.tryFree}</Button>
+                  <Button className="w-full justify-start mx-3">{t.header.tryFree}</Button>
                 </Link>
               </div>
             </div>

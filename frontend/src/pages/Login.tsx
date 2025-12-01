@@ -46,24 +46,31 @@ const Login = () => {
     setInfo(null);
     
     try {
-      const { user, error } = await newAuth.signUp(
-        registerForm.email, 
-        registerForm.password, 
-        registerForm.name, 
-        registerForm.phone,
-        registerForm.yandexUrl
-      );
+      // Отправляем заявку на регистрацию
+      const response = await fetch('/api/public/request-registration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: registerForm.name,
+          email: registerForm.email,
+          phone: registerForm.phone,
+          yandex_url: registerForm.yandexUrl
+        })
+      });
       
-      if (error) {
-        setError(error);
-      } else if (user) {
-        setInfo('Регистрация успешна! Выполняется вход...');
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setInfo(data.message || 'Заявка на регистрацию принята. Мы свяжемся с вами в ближайшее время.');
+        // Очищаем форму
+        setRegisterForm({ name: '', phone: '', email: '', password: '', yandexUrl: '' });
+      } else {
+        setError(data.error || 'Ошибка отправки заявки на регистрацию');
       }
     } catch (error) {
-      setError('Ошибка регистрации: ' + (error as Error).message);
+      setError('Ошибка отправки заявки: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -251,25 +258,12 @@ const Login = () => {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
-              <div>
-                <label htmlFor="register-password" className="block text-sm font-medium text-gray-700">
-                  Пароль
-                </label>
-                <input
-                  id="register-password"
-                  type="password"
-                  required
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
               <Button
                 type="submit"
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+                {loading ? 'Отправка заявки...' : 'Отправить заявку на регистрацию'}
               </Button>
             </form>
           )}

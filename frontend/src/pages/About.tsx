@@ -203,21 +203,45 @@ const About = () => {
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.pricingTitle}</h2>
 
-          <div className="grid lg:grid-cols-2 gap-8 mb-8">
-            {/* Option 1 */}
-            <Card className="p-8">
-              <CardContent className="p-0">
-                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption1Title}</div>
-                <div className="space-y-2 text-muted-foreground mb-6">
-                  <div>- {t.about.pricingOption1Point1}</div>
-                  <div>- {t.about.pricingOption1Point2}</div>
-                  <div>- {t.about.pricingOption1Point3}</div>
-                  <div>- {t.about.pricingOption1Point4}</div>
+          <div className="grid lg:grid-cols-3 gap-8 mb-8">
+            {/* Option 0 - Новый раздел */}
+            <Card className="p-8 flex flex-col">
+              <CardContent className="p-0 flex flex-col flex-1">
+                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption0Title}</div>
+                <div className="space-y-2 text-muted-foreground mb-6 flex-1">
+                  <div>- {t.about.pricingOption0Point1}</div>
+                  <div>- {t.about.pricingOption0Point2}</div>
+                  <div>- {t.about.pricingOption0Point3}</div>
+                  <div>- {t.about.pricingOption0Point4}</div>
                 </div>
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2 w-full"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  onClick={() => {
+                    navigate('/contact');
+                  }}
+                >
+                  {t.about.pricingOption0Button}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Option 1 */}
+            <Card className="p-8 flex flex-col">
+              <CardContent className="p-0 flex flex-col flex-1">
+                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption1Title}</div>
+                <div className="space-y-2 text-muted-foreground mb-6 flex-1">
+                  <div>- {t.about.pricingOption1Point1}</div>
+                  <div>- {t.about.pricingOption1Point2}</div>
+                  <div>- {t.about.pricingOption1Point3}</div>
+                  <div>- {t.about.pricingOption1Point4}</div>
+                  <div>- {t.about.pricingOption1Point5}</div>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
                   onClick={() => {
                     navigate('/contact');
                   }}
@@ -229,27 +253,21 @@ const About = () => {
 
             {/* Option 2 */}
             <Card className="p-8 border-primary">
-            <CardContent className="p-0">
+              <CardContent className="p-0">
                 <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption2Title}</div>
                 <h3 className="text-xl font-semibold text-foreground mb-4">{t.about.pricingOption2Subtitle}</h3>
-              <div className="space-y-2 text-muted-foreground mb-6">
+                <div className="space-y-2 text-muted-foreground mb-6">
                   <div>- {t.about.pricingOption2Point1}</div>
                   <div>- {t.about.pricingOption2Point2}</div>
                   <div>- {t.about.pricingOption2Point3}</div>
                   <div>- {t.about.pricingOption2Point4}</div>
-              </div>
-              <Button
-                variant="default"
-                size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2 w-full"
-                onClick={() => {
-                  navigate('/contact');
-                }}
-              >
-                  {t.about.pricingOption2Button}
-              </Button>
-            </CardContent>
-          </Card>
+                  <div>- {t.about.pricingOption2Point5}</div>
+                </div>
+                <div className="text-sm text-muted-foreground italic mt-4">
+                  {t.about.pricingOption2Note}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
@@ -263,14 +281,11 @@ const About = () => {
           <p className="text-xl text-muted-foreground mb-8">
             {t.about.finalText}
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Button size="lg" className="text-lg px-8 py-3"
               onClick={() => navigate('/contact')}
             >
               {t.about.contactUs}
-            </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8 py-3">
-              {t.about.getConsultation}
             </Button>
           </div>
         </div>
