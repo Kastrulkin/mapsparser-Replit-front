@@ -8,7 +8,38 @@ import os
 from datetime import datetime
 
 def init_database():
-    """Создать и инициализировать базу данных"""
+    """Создать и инициализировать базу данных (безопасно, с проверкой существующих данных)"""
+    from safe_db_utils import get_db_path, backup_database
+    import os
+    
+    # Получаем путь к базе данных
+    db_path = get_db_path()
+    
+    # Проверяем, существует ли база данных и есть ли в ней данные
+    if os.path.exists(db_path):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли таблица Users и данные в ней
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Users'")
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) FROM Users")
+            user_count = cursor.fetchone()[0]
+            if user_count > 0:
+                print(f"⚠️  База данных уже существует и содержит {user_count} пользователей!")
+                print(f"📁 Путь: {db_path}")
+                print("✅ Инициализация пропущена - данные сохранены")
+                print("💡 Используйте миграции для обновления структуры БД")
+                conn.close()
+                return
+        
+        # Если база существует, но пустая - создаем бэкап
+        print(f"💾 Создаю бэкап существующей базы данных...")
+        backup_path = backup_database()
+        if backup_path:
+            print(f"✅ Бэкап создан: {backup_path}")
+        conn.close()
+    
     # Создаем базу данных
     conn = get_db_connection()
     cursor = conn.cursor()
