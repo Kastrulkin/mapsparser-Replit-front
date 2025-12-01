@@ -44,6 +44,7 @@ echo ""
 # 6. Перезапускаем сервисы
 echo "🔄 Перезапускаем сервисы..."
 systemctl restart nginx
+systemctl restart seo-api 2>/dev/null || echo "⚠️  seo-api не найден (это нормально)"
 systemctl restart seo-worker 2>/dev/null || echo "⚠️  seo-worker не найден (это нормально)"
 echo "✅ Сервисы перезапущены"
 echo ""
@@ -57,6 +58,7 @@ echo "✅ Обновление и очистка завершены!"
 echo ""
 echo "📊 Проверка статуса сервисов:"
 systemctl status nginx --no-pager -l | head -5
+systemctl status seo-api --no-pager -l | head -5 2>/dev/null || echo "⚠️  seo-api не найден"
 echo ""
 echo "🌐 Сайт должен быть доступен на beautybot.pro"
 
