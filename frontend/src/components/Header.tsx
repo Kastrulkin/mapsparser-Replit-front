@@ -29,8 +29,8 @@ const Header = () => {
     }
   }, []);
   
-  // Не показываем Header на Dashboard
-  if (location.pathname === '/dashboard') {
+  // Не показываем Header на страницах кабинета (/dashboard...)
+  if (location.pathname.startsWith('/dashboard')) {
     return null;
   }
 

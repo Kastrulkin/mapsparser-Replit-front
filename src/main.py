@@ -2091,10 +2091,11 @@ def upload_transaction_file():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие поля master_id
+        # Проверяем наличие полей master_id и business_id
         cursor.execute("PRAGMA table_info(FinancialTransactions)")
         columns = [row[1] for row in cursor.fetchall()]
         has_master_id = 'master_id' in columns
+        has_business_id = 'business_id' in columns
         
         saved_transactions = []
         for trans in transactions:
@@ -2722,8 +2723,31 @@ def get_network_stats(network_id):
         by_masters.sort(key=lambda x: x['value'], reverse=True)
         by_locations.sort(key=lambda x: x['value'], reverse=True)
         
-        # Получаем рейтинги (заглушка - нужно будет добавить таблицу Reviews)
+        # Рейтинги и отзывы по данным Яндекс.Карт (если есть кеш-поля)
         ratings = []
+        try:
+            cursor.execute(
+                """
+                SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
+                FROM Businesses
+                WHERE network_id = ? AND is_active = 1
+                """,
+                (network_id,),
+            )
+            for row in cursor.fetchall():
+                ratings.append(
+                    {
+                        "business_id": row[0],
+                        "name": row[1],
+                        "rating": row[2],
+                        "reviews_total": row[3],
+                        "reviews_30d": row[4],
+                        "last_sync": row[5],
+                    }
+                )
+        except Exception:
+            ratings = []
+        
         bad_reviews = []
         
         db.close()
@@ -2744,6 +2768,98 @@ def get_network_stats(network_id):
         
     except Exception as e:
         return jsonify({"error": f"Ошибка получения статистики сети: {str(e)}"}), 500
+
+
+@app.route('/api/admin/yandex/sync/<string:network_id>', methods=['POST'])
+def admin_sync_network_yandex(network_id):
+    """
+    Ручной запуск синхронизации Яндекс-данных для сети.
+    Требует действующей сессии и прав суперадмина или владельца сети.
+    """
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        network = cursor.fetchone()
+
+        if not network:
+            db.close()
+            return jsonify({"error": "Сеть не найдена"}), 404
+
+        if network[0] != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой сети"}), 403
+
+        db.close()
+
+        sync_service = YandexSyncService()
+        synced_count = sync_service.sync_network(network_id)
+
+        return jsonify(
+            {
+                "success": True,
+                "synced_count": synced_count,
+                "message": f"Обновлено бизнесов: {synced_count}",
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": f"Ошибка синхронизации Яндекс для сети: {str(e)}"}), 500
+
+
+@app.route('/api/admin/yandex/sync/business/<string:business_id>', methods=['POST'])
+def admin_sync_business_yandex(business_id):
+    """
+    Ручной запуск синхронизации Яндекс-данных для одного бизнеса.
+    Требует действующей сессии и прав суперадмина или владельца бизнеса.
+    """
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        if business[0] != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        db.close()
+
+        sync_service = YandexSyncService()
+        ok = sync_service.sync_business(business_id)
+
+        return jsonify(
+            {
+                "success": bool(ok),
+                "message": "Синхронизация выполнена" if ok else "Не удалось синхронизировать бизнес",
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": f"Ошибка синхронизации Яндекс для бизнеса: {str(e)}"}), 500
+
 
 @app.route('/api/networks', methods=['GET'])
 def get_user_networks():
@@ -3412,6 +3528,81 @@ def get_business_data(business_id):
         print(f"❌ Ошибка получения данных бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/business/<business_id>/yandex-link', methods=['POST', 'OPTIONS'])
+def update_business_yandex_link(business_id):
+    """Обновление ссылки/ID Яндекс.Карт для бизнеса и запуск синхронизации (по возможности)."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        yandex_url = (data.get('yandex_url') or '').strip()
+
+        if not yandex_url:
+            return jsonify({"error": "Не указана ссылка на Яндекс.Карты"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем права доступа к бизнесу
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = row[0]
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Обновляем ссылку и, при возможности, yandex_org_id
+        from yandex_adapter import YandexAdapter
+
+        adapter = YandexAdapter()
+        org_id = adapter.parse_org_id_from_url(yandex_url)
+
+        cursor.execute(
+            """
+            UPDATE Businesses
+            SET yandex_url = ?, yandex_org_id = ?
+            WHERE id = ?
+            """,
+            (yandex_url, org_id, business_id),
+        )
+
+        db.conn.commit()
+        db.close()
+
+        # Пытаемся запустить синхронизацию (если есть org_id и настроен адаптер)
+        synced = False
+        try:
+            if org_id:
+                sync_service = YandexSyncService()
+                synced = sync_service.sync_business(business_id)
+        except Exception as sync_err:
+            print(f"⚠️ Ошибка при синхронизации Яндекс после обновления ссылки: {sync_err}")
+
+        return jsonify(
+            {
+                "success": True,
+                "synced": bool(synced),
+                "message": "Ссылка Яндекс.Карт обновлена",
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": f"Ошибка обновления ссылки Яндекс.Карт: {str(e)}"}), 500
+
 @app.route('/api/business/<business_id>/profile', methods=['POST', 'OPTIONS'])
 def update_business_profile(business_id):
     """Обновить профиль бизнеса"""
@@ -3743,6 +3934,179 @@ Email клиента: {email}
         print(f"❌ Ошибка обработки заявки: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ===== TELEGRAM BOT API =====
+
+@app.route('/api/telegram/bind', methods=['POST'])
+def generate_telegram_bind_token():
+    """Генерация токена для привязки Telegram аккаунта"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Генерируем токен привязки
+        import secrets
+        from datetime import datetime, timedelta
+        
+        bind_token = secrets.token_urlsafe(32)
+        expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Удаляем старые неиспользованные токены пользователя
+        cursor.execute("""
+            DELETE FROM TelegramBindTokens 
+            WHERE user_id = ? AND used = 0 AND expires_at < ?
+        """, (user_data['user_id'], datetime.now().isoformat()))
+        
+        # Создаем новый токен
+        token_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
+            VALUES (?, ?, ?, ?, 0, ?)
+        """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "token": bind_token,
+            "expires_at": expires_at.isoformat(),
+            "qr_data": f"https://t.me/BeautyBotPro_bot?start={bind_token}"
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка генерации токена привязки: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/telegram/bind/status', methods=['GET'])
+def get_telegram_bind_status():
+    """Проверка статуса привязки Telegram аккаунта"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем, привязан ли Telegram
+        cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
+        user_row = cursor.fetchone()
+        
+        is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "is_linked": is_linked,
+            "telegram_id": user_row[0] if is_linked else None
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка проверки статуса привязки: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/telegram/bind/verify', methods=['POST'])
+def verify_telegram_bind_token():
+    """Проверка токена привязки (вызывается из бота)"""
+    try:
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid JSON"}), 400
+        
+        bind_token = data.get('token', '').strip()
+        telegram_id = data.get('telegram_id', '').strip()
+        
+        if not bind_token or not telegram_id:
+            return jsonify({"error": "Токен и telegram_id обязательны"}), 400
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем токен
+        cursor.execute("""
+            SELECT id, user_id, expires_at, used
+            FROM TelegramBindTokens
+            WHERE token = ?
+        """, (bind_token,))
+        
+        token_row = cursor.fetchone()
+        
+        if not token_row:
+            db.close()
+            return jsonify({"error": "Токен не найден"}), 404
+        
+        token_id, user_id, expires_at, used = token_row
+        
+        # Проверяем срок действия
+        from datetime import datetime
+        if datetime.fromisoformat(expires_at) < datetime.now():
+            db.close()
+            return jsonify({"error": "Токен истек"}), 400
+        
+        # Проверяем, не использован ли уже
+        if used:
+            db.close()
+            return jsonify({"error": "Токен уже использован"}), 400
+        
+        # Проверяем, не привязан ли уже этот Telegram к другому аккаунту
+        cursor.execute("SELECT id FROM Users WHERE telegram_id = ? AND id != ?", (telegram_id, user_id))
+        existing_user = cursor.fetchone()
+        if existing_user:
+            db.close()
+            return jsonify({"error": "Этот Telegram уже привязан к другому аккаунту"}), 400
+        
+        # Привязываем Telegram к аккаунту
+        cursor.execute("""
+            UPDATE Users 
+            SET telegram_id = ?, updated_at = ?
+            WHERE id = ?
+        """, (telegram_id, datetime.now().isoformat(), user_id))
+        
+        # Помечаем токен как использованный
+        cursor.execute("""
+            UPDATE TelegramBindTokens
+            SET used = 1
+            WHERE id = ?
+        """, (token_id,))
+        
+        db.conn.commit()
+        
+        # Получаем информацию о пользователе
+        cursor.execute("SELECT email, name FROM Users WHERE id = ?", (user_id,))
+        user_info = cursor.fetchone()
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "user": {
+                "id": user_id,
+                "email": user_info[0] if user_info else None,
+                "name": user_info[1] if user_info else None
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка проверки токена привязки: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/public/contact', methods=['POST', 'OPTIONS'])
 def public_contact():
     """Обработка формы обратной связи"""
@@ -3783,6 +4147,8 @@ def public_contact():
 def handle_exception(e):
     """Глобальный обработчик исключений"""
     import traceback
+
+from yandex_sync_service import YandexSyncService
     print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500

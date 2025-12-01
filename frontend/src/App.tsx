@@ -3,14 +3,21 @@ import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 import Header from "./components/Header";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import About from "./pages/About";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import { DashboardLayout } from "./components/DashboardLayout";
+import { ProfilePage } from "./pages/dashboard/ProfilePage";
+import { CardOverviewPage } from "./pages/dashboard/CardOverviewPage";
+import { ProgressPage } from "./pages/dashboard/ProgressPage";
+import { FinancePage } from "./pages/dashboard/FinancePage";
+import { SettingsPage } from "./pages/dashboard/SettingsPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import WizardYandex from "./pages/WizardYandex";
@@ -38,7 +45,18 @@ const AppContent = () => {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<Navigate to="/dashboard/progress" replace />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="card" element={<CardOverviewPage />} />
+            <Route path="progress" element={<ProgressPage />} />
+            <Route path="finance" element={<FinancePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          {/* Legacy route - keep for backward compatibility */}
+          <Route path="/dashboard-old" element={<Dashboard />} />
+
           <Route path="/wizard" element={<WizardYandex />} />
           <Route path="/sprint" element={<Sprint />} />
           <Route path="/phrases" element={<ServicePhrases />} />
@@ -56,7 +74,9 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
-      <AppContent />
+      <CurrencyProvider>
+        <AppContent />
+      </CurrencyProvider>
     </LanguageProvider>
   </QueryClientProvider>
 );

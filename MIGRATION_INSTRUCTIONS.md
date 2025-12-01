@@ -37,6 +37,18 @@ python src/migrate_add_network_support.py
 - Добавляет поле `business_id` в таблицу `FinancialTransactions`
 - Создаёт необходимые индексы
 
+### 3. Добавление типов бизнеса и поддержки Яндекс.Карт
+
+```bash
+python src/migrate_add_business_type_and_yandex.py
+```
+
+**Что делает:**
+- Добавляет поле `business_type` в таблицу `Businesses` (тип бизнеса внутри бьюти-вертикали)
+- Добавляет поля `yandex_org_id` и `yandex_url` для связи с карточкой в Яндекс.Картах
+- Добавляет кеш-поля `yandex_rating`, `yandex_reviews_total`, `yandex_reviews_30d`, `yandex_last_sync` в `Businesses`
+- Создаёт таблицу `YandexBusinessStats` для хранения исторических рядов по рейтингу и отзывам
+
 ## ✅ Проверка после миграций
 
 После выполнения миграций проверьте:

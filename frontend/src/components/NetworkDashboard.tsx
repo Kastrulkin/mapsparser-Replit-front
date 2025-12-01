@@ -14,7 +14,14 @@ interface NetworkStats {
   by_services: Array<{ name: string; value: number }>;
   by_masters: Array<{ name: string; value: number }>;
   by_locations: Array<{ name: string; value: number }>;
-  ratings: Array<{ location_name: string; rating: number; reviews_count: number }>;
+  ratings: Array<{
+    business_id: string;
+    name: string;
+    rating: number | null;
+    reviews_total: number | null;
+    reviews_30d: number | null;
+    last_sync: string | null;
+  }>;
   bad_reviews: Array<{ location_name: string; count: number }>;
 }
 
@@ -225,10 +232,14 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
             <div className="space-y-2">
               {stats.ratings.map((item, index) => (
                 <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                  <span className="text-sm font-medium">{item.location_name}</span>
+                  <span className="text-sm font-medium">{item.name}</span>
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">{item.rating.toFixed(1)}</span>
-                    <span className="text-xs text-gray-400">({item.reviews_count} отзывов)</span>
+                    <span className="text-sm text-gray-600">
+                      {item.rating != null ? item.rating.toFixed(1) : '—'}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      ({item.reviews_total ?? 0} отзывов, за 30 дн: {item.reviews_30d ?? 0})
+                    </span>
                   </div>
                 </div>
               ))}

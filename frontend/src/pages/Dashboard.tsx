@@ -13,6 +13,7 @@ import TransactionForm from "@/components/TransactionForm";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { NetworkSwitcher } from "@/components/NetworkSwitcher";
 import { NetworkDashboard } from "@/components/NetworkDashboard";
+import TelegramConnection from "@/components/TelegramConnection";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
@@ -49,7 +50,7 @@ const Dashboard = () => {
   const [timer, setTimer] = useState<string | null>(null);
   
   // Вкладки
-  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'progress' | 'network'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'progress' | 'network' | 'settings'>('overview');
   
   // Услуги
   const [userServices, setUserServices] = useState<any[]>([]);
@@ -66,7 +67,7 @@ const Dashboard = () => {
   const [loadingServices, setLoadingServices] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [showAddService, setShowAddService] = useState(false);
 
   // Функция для переключения бизнеса
@@ -125,6 +126,13 @@ const Dashboard = () => {
               yandexUrl: ""
             });
           }
+
+          // Обновляем ссылку на Яндекс.Карты для текущего бизнеса (если есть)
+          if (data.business && data.business.yandex_url) {
+            setYandexCardUrl(data.business.yandex_url);
+          } else {
+            setYandexCardUrl('');
+          }
           
           console.log(`🔄 Переключились на бизнес: ${business.name}`);
           console.log(`📊 Загружено услуг: ${data.services?.length || 0}`);
@@ -136,6 +144,37 @@ const Dashboard = () => {
       } catch (error) {
         console.error('Ошибка при загрузке данных бизнеса:', error);
       }
+    }
+  };
+
+  const handleSaveYandexLink = async () => {
+    if (!currentBusinessId) {
+      setError('Сначала выберите бизнес');
+      return;
+    }
+    if (!yandexCardUrl.trim()) {
+      setError('Введите ссылку на карточку Яндекс.Карт');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/yandex-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({ yandex_url: yandexCardUrl })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSuccess('Ссылка на Яндекс.Карты сохранена и синхронизация запущена');
+      } else {
+        setError(data.error || 'Не удалось сохранить ссылку на Яндекс.Карты');
+      }
+    } catch (e: any) {
+      setError('Ошибка сохранения ссылки на Яндекс.Карты: ' + e.message);
     }
   };
   const [newService, setNewService] = useState({
@@ -158,6 +197,7 @@ const Dashboard = () => {
   });
   const [editClientInfo, setEditClientInfo] = useState(false);
   const [savingClientInfo, setSavingClientInfo] = useState(false);
+  const [yandexCardUrl, setYandexCardUrl] = useState<string>('');
 
   // Заполненность профиля
   const profileCompletion = (() => {
@@ -864,8 +904,14 @@ const Dashboard = () => {
     );
   }
 
-  const wizardNext = () => setWizardStep((s) => (s < 4 ? ((s + 1) as 1 | 2 | 3 | 4) : s));
-  const wizardPrev = () => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
+  const wizardNext = () => {
+    // На первом шаге сохраняем ссылку на Яндекс.Карты, если она указана
+    if (wizardStep === 1) {
+      handleSaveYandexLink();
+    }
+    setWizardStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
+  };
+  const wizardPrev = () => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -1121,6 +1167,16 @@ const Dashboard = () => {
               >
                 🎯 Прогресс
               </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'settings'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                ⚙️ Настройки
+              </button>
           </div>
 
             {/* Контент вкладок */}
@@ -1158,6 +1214,14 @@ const Dashboard = () => {
                 <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">🎯 Ваш прогресс</h2>
               <ProgressTracker />
+            </div>
+          )}
+
+          {/* Настройки */}
+          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900">⚙️ Настройки</h2>
+              <TelegramConnection />
             </div>
           )}
 
@@ -1364,7 +1428,7 @@ const Dashboard = () => {
             <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации бизнеса</h2>
-                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">Шаг {wizardStep}/4</span>
+                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">Шаг {wizardStep}/3</span>
               </div>
               <Button onClick={() => setShowWizard(false)} variant="outline" size="sm">✕</Button>
             </div>
@@ -1375,8 +1439,15 @@ const Dashboard = () => {
                   <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Ссылка на карточку *</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="https://yandex.ru/maps/org/..." />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Вставьте ссылку на карточку вашего салона в Яндекс.Картах.
+                      </label>
+                      <input
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="https://yandex.ru/maps/org/..."
+                        value={yandexCardUrl}
+                        onChange={(e) => setYandexCardUrl(e.target.value)}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Рейтинг (0–5)</label>
@@ -1439,28 +1510,6 @@ const Dashboard = () => {
               {/* Шаг 3 */}
               {wizardStep === 3 && (
                 <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Выберите подходящие формулировки — мы предложим несколько вариантов на услугу.</p>
-                  <div className="space-y-4">
-                    {["Стрижка мужская","Окрашивание"].map((name) => (
-                      <div key={name} className="border border-gray-200 rounded-lg p-3 bg-white">
-                        <div className="font-medium text-gray-900 mb-2">{name}</div>
-                        <div className="grid md:grid-cols-3 gap-2">
-                          {[1,2,3].map(v => (
-                            <div key={v} className="border rounded-md p-2 text-sm text-gray-700">Вариант {v}: лаконичная формулировка услуги…</div>
-                          ))}
-                        </div>
-                        <div className="mt-2 flex gap-2">
-                          <Button variant="outline" size="sm">Принять выбранные</Button>
-                          <Button variant="outline" size="sm">Сохранить как шаблон</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* Шаг 4 */}
-              {wizardStep === 4 && (
-                <div className="space-y-4">
                   <p className="text-gray-600 mb-4">Немного цифр, чтобы план был реалистичным. Можно заполнить позже.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1500,7 +1549,7 @@ const Dashboard = () => {
               )}
               <div className="mt-6 flex justify-between pt-4 border-t border-gray-200">
                 <Button variant="outline" onClick={wizardPrev} disabled={wizardStep===1}>Назад</Button>
-                {wizardStep < 4 ? (
+                {wizardStep < 3 ? (
                   <Button onClick={wizardNext}>Продолжить</Button>
                 ) : (
                   <Button onClick={() => {setShowWizard(false); window.location.href = "/sprint";}}>Сформировать план</Button>

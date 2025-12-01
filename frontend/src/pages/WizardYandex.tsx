@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
-type StepKey = 1 | 2 | 3 | 4;
+type StepKey = 1 | 2 | 3;
 
 const WizardYandex = () => {
   const [step, setStep] = useState<StepKey>(1);
 
-  const next = () => setStep((s) => (s < 4 ? ((s + 1) as StepKey) : s));
+  const next = () => setStep((s) => (s < 3 ? ((s + 1) as StepKey) : s));
   const prev = () => setStep((s) => (s > 1 ? ((s - 1) as StepKey) : s));
 
   return (
@@ -15,7 +15,7 @@ const WizardYandex = () => {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">Мастер оптимизации бизнеса</h1>
-            <div className="text-sm text-gray-600">Шаг {step}/4</div>
+            <div className="text-sm text-gray-600">Шаг {step}/3</div>
           </div>
         </div>
 
@@ -25,7 +25,9 @@ const WizardYandex = () => {
             <div className="mb-4 text-gray-600">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ссылка на карточку *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Вставьте ссылку на карточку вашего салона в Яндекс.Картах.
+                </label>
                 <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="https://yandex.ru/maps/org/..." />
               </div>
               <div>
@@ -91,29 +93,6 @@ const WizardYandex = () => {
         {/* Шаг 3 */}
         {step === 3 && (
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="mb-4 text-gray-600">Выберите подходящие формулировки — мы предложим несколько вариантов на услугу.</div>
-            <div className="space-y-4">
-              {["Стрижка мужская","Окрашивание"].map((name) => (
-                <div key={name} className="border border-gray-200 rounded-lg p-3">
-                  <div className="font-medium text-gray-900 mb-2">{name}</div>
-                  <div className="grid md:grid-cols-3 gap-2">
-                    {[1,2,3].map(v => (
-                      <div key={v} className="border rounded-md p-2 text-sm text-gray-700">Вариант {v}: лаконичная формулировка услуги…</div>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <Button variant="outline" size="sm">Принять выбранные</Button>
-                    <Button variant="outline" size="sm">Сохранить как шаблон</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Шаг 4 */}
-        {step === 4 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="mb-4 text-gray-600">Немного цифр, чтобы план был реалистичным. Можно заполнить позже.</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -154,7 +133,7 @@ const WizardYandex = () => {
 
         <div className="mt-6 flex justify-between">
           <Button variant="outline" onClick={prev} disabled={step===1}>Назад</Button>
-          {step < 4 ? (
+          {step < 3 ? (
             <Button onClick={next}>Продолжить</Button>
           ) : (
             <Button onClick={() => (window.location.href = "/sprint")}>Сформировать план</Button>

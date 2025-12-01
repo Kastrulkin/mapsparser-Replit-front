@@ -1,0 +1,109 @@
+import { Outlet, Navigate } from 'react-router-dom';
+import { DashboardSidebar } from './DashboardSidebar';
+import { DashboardHeader } from './DashboardHeader';
+import { useState, useEffect } from 'react';
+import { newAuth } from '../lib/auth_new';
+import { BusinessSwitcher } from './BusinessSwitcher';
+
+export const DashboardLayout = () => {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
+  const [currentBusiness, setCurrentBusiness] = useState<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const currentUser = await newAuth.getCurrentUser();
+        if (!currentUser) {
+          setLoading(false);
+          return;
+        }
+
+        setUser(currentUser);
+
+        // Загружаем бизнесы если пользователь суперадмин
+        if (currentUser.is_superadmin) {
+          try {
+            const response = await fetch('/api/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+              }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
+                setBusinesses(data.businesses);
+                const savedBusinessId = localStorage.getItem('selectedBusinessId');
+                const businessToSelect = savedBusinessId
+                  ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
+                  : data.businesses[0];
+
+                setCurrentBusinessId(businessToSelect.id);
+                setCurrentBusiness(businessToSelect);
+                localStorage.setItem('selectedBusinessId', businessToSelect.id);
+              }
+            }
+          } catch (error) {
+            console.error('Ошибка загрузки бизнесов:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки пользователя:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const handleBusinessChange = async (businessId: string) => {
+    const business = businesses.find(b => b.id === businessId);
+    if (business) {
+      setCurrentBusinessId(businessId);
+      setCurrentBusiness(business);
+      localStorage.setItem('selectedBusinessId', businessId);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <DashboardSidebar isMobile={false} />
+      <div className="md:pl-64 flex flex-col min-h-screen">
+        <DashboardHeader
+          businesses={businesses}
+          currentBusinessId={currentBusinessId}
+          onBusinessChange={handleBusinessChange}
+          isSuperadmin={user.is_superadmin}
+        />
+        <main className="flex-1 p-6">
+          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses }} />
+        </main>
+      </div>
+      {/* Mobile sidebar overlay */}
+      <DashboardSidebar
+        isMobile={true}
+        onClose={() => setSidebarOpen(false)}
+      />
+    </div>
+  );
+};
+
