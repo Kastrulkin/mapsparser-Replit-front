@@ -2914,6 +2914,122 @@ def get_user_networks():
     except Exception as e:
         return jsonify({"error": f"Ошибка получения сетей: {str(e)}"}), 500
 
+@app.route('/api/networks', methods=['POST'])
+def create_network():
+    """Создать новую сеть"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        data = request.get_json()
+        name = data.get('name')
+        description = data.get('description', '')
+        
+        if not name:
+            return jsonify({"error": "Название сети обязательно"}), 400
+        
+        db = DatabaseManager()
+        network_id = db.create_network(name, user_data['user_id'], description)
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "network_id": network_id
+        }), 201
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Ошибка создания сети: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": f"Ошибка создания сети: {str(e)}"}), 500
+
+@app.route('/api/networks/<string:network_id>/businesses', methods=['POST'])
+def add_business_to_network(network_id):
+    """Добавить бизнес в сеть"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        data = request.get_json()
+        business_id = data.get('business_id')
+        name = data.get('name')
+        address = data.get('address', '')
+        yandex_url = data.get('yandex_url', '')
+        
+        if not business_id and not name:
+            return jsonify({"error": "Необходимо указать business_id или name"}), 400
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем права доступа к сети
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        network = cursor.fetchone()
+        
+        if not network:
+            db.close()
+            return jsonify({"error": "Сеть не найдена"}), 404
+        
+        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой сети"}), 403
+        
+        # Если business_id указан - добавляем существующий бизнес в сеть
+        if business_id:
+            # Проверяем, что бизнес принадлежит пользователю
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+            business = cursor.fetchone()
+            if not business:
+                db.close()
+                return jsonify({"error": "Бизнес не найден"}), 404
+            if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+                db.close()
+                return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+            
+            db.add_business_to_network(business_id, network_id)
+            db.close()
+            return jsonify({"success": True, "message": "Бизнес добавлен в сеть"})
+        
+        # Если business_id не указан - создаем новый бизнес в сети
+        if not name:
+            db.close()
+            return jsonify({"error": "Название бизнеса обязательно"}), 400
+        
+        # Создаем новый бизнес
+        new_business_id = db.create_business(
+            name=name,
+            owner_id=user_data['user_id'],
+            address=address,
+            business_type='beauty_salon',
+            yandex_url=yandex_url
+        )
+        
+        # Добавляем в сеть
+        db.add_business_to_network(new_business_id, network_id)
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "business_id": new_business_id,
+            "message": "Бизнес создан и добавлен в сеть"
+        }), 201
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка добавления бизнеса в сеть: {str(e)}"}), 500
+
 @app.route('/api/finance/roi', methods=['GET'])
 def get_roi_data():
     """Получить данные ROI"""
@@ -3151,11 +3267,16 @@ def get_user_info():
         user_id = user_data.get('user_id') or user_data.get('id')
         is_superadmin = db.is_superadmin(user_id)
         
-        # Если суперадмин - получаем все бизнесы
+        # Определяем, какие бизнесы показывать пользователю
         businesses = []
         if is_superadmin:
+            # Суперадмин видит все бизнесы
             businesses = db.get_all_businesses()
+        elif db.is_network_owner(user_id):
+            # Владелец сети видит ТОЛЬКО бизнесы из своих сетей
+            businesses = db.get_businesses_by_network_owner(user_id)
         else:
+            # Обычный пользователь видит только свои бизнесы
             businesses = db.get_businesses_by_owner(user_id)
         
         db.close()

@@ -84,7 +84,18 @@ const Header = () => {
                   key={item.name}
                   to={{ pathname: "/about", hash: "#pricing" }}
                   className="text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => {}}
+                  onClick={(e) => {
+                    // Если уже на странице /about, прокручиваем сразу
+                    if (location.pathname === '/about') {
+                      e.preventDefault();
+                      const el = document.getElementById("pricing");
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth" });
+                        // Обновляем URL без перезагрузки
+                        window.history.pushState(null, '', '/about#pricing');
+                      }
+                    }
+                  }}
                 >
                   {item.name}
                 </Link>
@@ -148,7 +159,19 @@ const Header = () => {
                     key={item.name}
                     to={{ pathname: "/about", hash: "#pricing" }}
                     className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => {}}
+                    onClick={(e) => {
+                      // Если уже на странице /about, прокручиваем сразу
+                      if (location.pathname === '/about') {
+                        e.preventDefault();
+                        const el = document.getElementById("pricing");
+                        if (el) {
+                          el.scrollIntoView({ behavior: "smooth" });
+                          // Обновляем URL без перезагрузки
+                          window.history.pushState(null, '', '/about#pricing');
+                        }
+                      }
+                      setIsMenuOpen(false);
+                    }}
                   >
                     {item.name}
                   </Link>

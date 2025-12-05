@@ -2,24 +2,41 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Target, Lightbulb, Award, Heart, Globe } from "lucide-react";
 import Footer from "@/components/Footer";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useLanguage } from "@/i18n/LanguageContext";
 
 const About = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   
   useEffect(() => {
-    if (window.location.hash === "#pricing") {
-      const el = document.getElementById("pricing");
-      if (el) {
-        setTimeout(() => {
-          el.scrollIntoView({ behavior: "smooth" });
-        }, 100);
+    const scrollToPricing = () => {
+      if (window.location.hash === "#pricing") {
+        const el = document.getElementById("pricing");
+        if (el) {
+          setTimeout(() => {
+            el.scrollIntoView({ behavior: "smooth" });
+          }, 100);
+        }
       }
-    }
-  }, []);
+    };
+    
+    // Прокручиваем при монтировании
+    scrollToPricing();
+    
+    // Прокручиваем при изменении хеша
+    const handleHashChange = () => {
+      scrollToPricing();
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [location.hash]);
   
   return (
     <div className="min-h-screen bg-background">

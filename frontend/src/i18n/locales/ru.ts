@@ -34,10 +34,10 @@ export const ru = {
   // Hero
   hero: {
     newClients: "Новые клиенты без труда",
-    title: "Почему ваш конкурент выше вас на Яндекс Картах?",
+    title: "Почему ваш конкурент выше вас на картах?",
     subtitle: "Заполните форму и мы настроим карточку компании на картах бесплатно!",
     emailPlaceholder: "Ваш email",
-    yandexUrlPlaceholder: "Ссылка на ваш бизнес в Яндекс.Картах",
+    yandexUrlPlaceholder: "Ссылка на ваш бизнес на картах",
     submitButton: "Настроить бесплатно",
     submitting: "Отправляем заявку...",
     privacyText: "Нажимая кнопку, вы соглашаетесь с обработкой персональных данных",
@@ -191,7 +191,7 @@ export const ru = {
     pricingOption0Point4: "Генерация ответов на отзывы",
     pricingOption0Button: "Получить доступ",
     pricingOption1Title: "Настроим работу салона 25000 рублей в месяц",
-    pricingOption1Point1: "Карточка компании на Яндексе, 2 Gis",
+    pricingOption1Point1: "Карточка компании на картах",
     pricingOption1Point2: "Коммуникация с клиентами",
     pricingOption1Point3: "Допродажи и кросс-продажи",
     pricingOption1Point4: "Оптимизация бизнес-процессов",

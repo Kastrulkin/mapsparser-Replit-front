@@ -69,15 +69,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
       <div className="flex items-center justify-end px-4 py-3">
-        <div className="flex items-center gap-3">
-          {isSuperadmin && businesses.length > 0 && (
-            <BusinessSwitcher
-              businesses={businesses}
-              currentBusinessId={currentBusinessId || undefined}
-              onBusinessChange={onBusinessChange || (() => {})}
-              isSuperadmin={true}
-            />
-          )}
+              <div className="flex items-center gap-3">
+                 {businesses.length > 0 && (
+                   <BusinessSwitcher
+                     businesses={businesses}
+                     currentBusinessId={currentBusinessId || undefined}
+                     onBusinessChange={onBusinessChange || (() => {})}
+                     isSuperadmin={isSuperadmin || false}
+                   />
+                 )}
 
           <LanguageSwitcher />
 

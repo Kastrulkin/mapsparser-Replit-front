@@ -102,12 +102,15 @@ class GigaChatClient:
                 import uuid
                 rquid = str(uuid.uuid4())
                 
-                # Используем Authorization Key напрямую (уже закодированный)
+                # Правильный формат Basic авторизации: base64(client_id:client_secret)
+                credentials = f"{client_id}:{client_secret}"
+                encoded_credentials = base64.b64encode(credentials.encode()).decode()
+                
                 headers = {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Accept": "application/json",
                     "RqUID": rquid,
-                    "Authorization": f"Basic {client_secret}"
+                    "Authorization": f"Basic {encoded_credentials}"
                 }
                 
                 response = requests.post(

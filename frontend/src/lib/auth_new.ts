@@ -48,18 +48,49 @@ export class NewAuth {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
 
-    const data = await response.json();
+      // Проверяем Content-Type перед парсингом JSON
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType && contentType.includes('application/json');
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Ошибка запроса');
+      let data: any = {};
+      
+      if (isJson) {
+        const text = await response.text();
+        if (text.trim()) {
+          try {
+            data = JSON.parse(text);
+          } catch (parseError) {
+            console.error('Ошибка парсинга JSON:', parseError, 'Ответ:', text);
+            throw new Error(`Ошибка парсинга ответа сервера: ${text.substring(0, 100)}`);
+          }
+        }
+      } else {
+        // Если ответ не JSON, читаем как текст
+        const text = await response.text();
+        console.error('Сервер вернул не-JSON ответ:', text.substring(0, 200));
+        throw new Error(`Сервер вернул неверный формат ответа (${response.status}): ${text.substring(0, 100)}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || `Ошибка запроса (${response.status})`);
+      }
+
+      return data;
+    } catch (error) {
+      // Если это уже наша ошибка, пробрасываем дальше
+      if (error instanceof Error && error.message.includes('Ошибка')) {
+        throw error;
+      }
+      // Иначе это сетевая ошибка или другая проблема
+      console.error('Ошибка запроса:', error);
+      throw new Error(`Ошибка соединения с сервером: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     }
-
-    return data;
   }
 
   async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string): Promise<{ user: User | null; error: any }> {

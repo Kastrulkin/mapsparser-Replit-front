@@ -18,7 +18,16 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from safe_db_utils import get_db_connection
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 
-# Токен бота из переменных окружения
+# Автоматически подгружаем переменные окружения из .env,
+# как это сделано в main.py, чтобы GigaChat-ключи и другие
+# настройки, заданные в проекте, были доступны и боту.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("⚠️ Для автоматической загрузки .env установите пакет python-dotenv")
+
+# Токен бота и базовый URL API из переменных окружения
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
 

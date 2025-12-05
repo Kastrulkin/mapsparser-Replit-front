@@ -417,14 +417,14 @@ class DatabaseManager:
     
     def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
                        business_type: str = None, address: str = None, working_hours: str = None,
-                       phone: str = None, email: str = None, website: str = None) -> str:
+                       phone: str = None, email: str = None, website: str = None, yandex_url: str = None) -> str:
         """Создать новый бизнес"""
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id))
+            INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url))
         self.conn.commit()
         return business_id
     
@@ -441,7 +441,7 @@ class DatabaseManager:
         return [dict(row) for row in cursor.fetchall()]
     
     def get_businesses_by_owner(self, owner_id: str) -> List[Dict[str, Any]]:
-        """Получить бизнесы конкретного владельца"""
+        """Получить бизнесы конкретного владельца (только прямые, без сетей)"""
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM Businesses 
@@ -449,6 +449,87 @@ class DatabaseManager:
             ORDER BY created_at DESC
         """, (owner_id,))
         return [dict(row) for row in cursor.fetchall()]
+    
+    def get_businesses_by_network_owner(self, owner_id: str) -> List[Dict[str, Any]]:
+        """Получить бизнесы владельца сети: свои личные + бизнесы из сетей"""
+        cursor = self.conn.cursor()
+        
+        # Получаем бизнесы, которые напрямую принадлежат пользователю
+        cursor.execute("""
+            SELECT * FROM Businesses 
+            WHERE owner_id = ? AND is_active = 1
+            ORDER BY created_at DESC
+        """, (owner_id,))
+        direct_businesses = [dict(row) for row in cursor.fetchall()]
+        
+        # Получаем бизнесы из сетей, которыми владеет пользователь
+        cursor.execute("""
+            SELECT b.* 
+            FROM Businesses b
+            INNER JOIN Networks n ON b.network_id = n.id
+            WHERE n.owner_id = ? AND b.is_active = 1
+            ORDER BY b.created_at DESC
+        """, (owner_id,))
+        network_businesses = [dict(row) for row in cursor.fetchall()]
+        
+        # Объединяем и убираем дубликаты
+        all_businesses = {}
+        for business in direct_businesses + network_businesses:
+            all_businesses[business['id']] = business
+        
+        return list(all_businesses.values())
+    
+    def is_network_owner(self, user_id: str) -> bool:
+        """Проверить, является ли пользователь владельцем хотя бы одной сети"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) FROM Networks WHERE owner_id = ?
+        """, (user_id,))
+        count = cursor.fetchone()[0]
+        return count > 0
+    
+    def create_network(self, name: str, owner_id: str, description: str = None) -> str:
+        """Создать новую сеть"""
+        network_id = str(uuid.uuid4())
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO Networks (id, name, owner_id, description, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (network_id, name, owner_id, description, datetime.now().isoformat(), datetime.now().isoformat()))
+        self.conn.commit()
+        return network_id
+    
+    def get_user_networks(self, owner_id: str) -> List[Dict[str, Any]]:
+        """Получить все сети пользователя"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM Networks 
+            WHERE owner_id = ? 
+            ORDER BY created_at DESC
+        """, (owner_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def add_business_to_network(self, business_id: str, network_id: str) -> bool:
+        """Добавить бизнес в сеть"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE Businesses 
+            SET network_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (network_id, business_id))
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
+    def remove_business_from_network(self, business_id: str) -> bool:
+        """Удалить бизнес из сети"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE Businesses 
+            SET network_id = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (business_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
     
     def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
         """Получить бизнес по ID"""
