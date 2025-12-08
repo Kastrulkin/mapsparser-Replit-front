@@ -28,10 +28,10 @@ export const ar = {
   hero: {
     newClients: "عملاء جدد بدون عناء",
     title: "لماذا منافسك أعلى منك في خرائط Google؟",
-    subtitle: "املأ النموذج وسنعد بطاقة شركتك على الخرائط مجانًا!",
+    subtitle: "املأ النموذج وسنحلل بطاقة شركتك على الخرائط مجانًا!",
     emailPlaceholder: "بريدك الإلكتروني",
     yandexUrlPlaceholder: "رابط نشاطك على خرائط Google",
-    submitButton: "إعداد مجانًا",
+    submitButton: "احصل مجانًا",
     submitting: "جارٍ إرسال الطلب...",
     privacyText: "بالنقر على الزر، فإنك توافق على معالجة البيانات الشخصية",
     successMessage: "شكرًا لك! استلمنا طلبك وسنتواصل معك قريبًا.",

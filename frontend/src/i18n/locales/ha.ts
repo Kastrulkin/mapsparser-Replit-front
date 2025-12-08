@@ -28,10 +28,10 @@ export const ha = {
   hero: {
     newClients: "Sabbin abokan ciniki ba tare da wahala ba",
     title: "Me ya sa abokin hamayyarka ya fi ka a Google Maps?",
-    subtitle: "Cika fom, za mu saita shafin kasuwancinka akan taswira kyauta!",
+    subtitle: "Cika fom, za mu bincika shafin kasuwancinka akan taswira kyauta!",
     emailPlaceholder: "Imel ɗinka",
     yandexUrlPlaceholder: "Hanyar kasuwancinka a Google Maps",
-    submitButton: "Saita kyauta",
+    submitButton: "Samu kyauta",
     submitting: "Aika buƙata...",
     privacyText: "Ta danna maɓalli, ka yarda da sarrafa bayanan kai",
     successMessage: "Na gode! Mun karɓi buƙatarka, za mu tuntuɓe ka nan ba da jimawa ba.",

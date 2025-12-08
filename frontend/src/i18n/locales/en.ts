@@ -35,10 +35,10 @@ export const en = {
   hero: {
     newClients: "New clients effortlessly",
     title: "Why is your competitor above you on Google Maps?",
-    subtitle: "Fill out the form and we'll set up your company card on maps for free!",
+    subtitle: "Fill out the form and we'll analyze your company card on maps for free!",
     emailPlaceholder: "Your email",
     yandexUrlPlaceholder: "Link to your business on Google Maps",
-    submitButton: "Set up for free",
+    submitButton: "Get for free",
     submitting: "Submitting request...",
     privacyText: "By clicking the button, you agree to the processing of personal data",
     successMessage: "Thank you! We have received your request and will contact you soon.",
