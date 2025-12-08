@@ -300,6 +300,7 @@ def health():
 def services_optimize():
     """Единая точка: перефразирование услуг из текста или файла."""
     try:
+        print(f"🔍 Начало обработки запроса /api/services/optimize")
         # Разрешим preflight запросы
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -402,7 +403,9 @@ def services_optimize():
   ]
 }"""
                 
+                print(f"🔍 Анализ скриншота, размер base64: {len(image_base64)} символов")
                 result = analyze_screenshot_with_gigachat(image_base64, screenshot_prompt)
+                print(f"🔍 Результат анализа скриншота: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
             else:
                 # Для документов - анализ текста
                 content = file.read().decode('utf-8', errors='ignore')
@@ -528,9 +531,12 @@ def services_optimize():
             result = analyze_text_with_gigachat(prompt)
         # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
         if 'error' in result:
+            error_msg = result.get('error', 'Ошибка оптимизации')
+            print(f"❌ Ошибка в результате: {error_msg}")
+            print(f"❌ Полный результат: {result}")
             return jsonify({
                 "success": False,
-                "error": result.get('error', 'Ошибка оптимизации'),
+                "error": error_msg,
                 "raw": result.get('raw_response')
             }), 502
 
@@ -583,6 +589,8 @@ def services_optimize():
 
     except Exception as e:
         print(f"❌ Ошибка оптимизации услуг: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # ==================== ПРИМЕРЫ ФОРМУЛИРОВОК УСЛУГ (ПОЛЬЗОВАТЕЛЯ) ====================
@@ -751,7 +759,7 @@ def news_generate():
             news_examples = ""
 
         prompt = f"""
-Ты — маркетолог для локального бизнеса. Сгенерируй короткую новость для публикации в Яндекс.Картах.
+Ты — маркетолог для локального бизнеса. Сгенерируй короткую новость для публикации на картах (Google, Яндекс).
 Требования: 1-2 предложения, до 300 символов, без эмодзи и хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
@@ -901,6 +909,38 @@ def news_update():
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка обновления новости: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/news/delete', methods=['POST', 'OPTIONS'])
+def news_delete():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        news_id = data.get('news_id')
+        if not news_id:
+            return jsonify({"error": "news_id обязателен"}), 400
+        
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        cur.execute("DELETE FROM UserNews WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        deleted = cur.rowcount
+        db.conn.commit()
+        db.close()
+        
+        if deleted == 0:
+            return jsonify({"error": "Новость не найдена"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка удаления новости: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== ПРИМЕРЫ ДЛЯ ОТЗЫВОВ И НОВОСТЕЙ ====================

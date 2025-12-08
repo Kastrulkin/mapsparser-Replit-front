@@ -22,7 +22,7 @@ const tonePresets: { key: Tone; label: string; example: string }[] = [
   { key: 'business', label: 'Деловой', example: "Экспресс-стрижка для занятых. Без ожидания" },
 ];
 
-export default function ServiceOptimizer({ businessName }: { businessName?: string }) {
+export default function ServiceOptimizer({ businessName, businessId }: { businessName?: string; businessId?: string }) {
   const [mode, setMode] = useState<'text' | 'file'>('text');
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -157,6 +157,9 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
     const service = result[serviceIndex];
     try {
       const token = localStorage.getItem('auth_token');
+      // Получаем business_id из пропсов или из localStorage
+      const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
+      
       const response = await fetch(`${window.location.origin}/api/services/add`, {
         method: 'POST',
         headers: {
@@ -168,15 +171,18 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
           name: service.optimized_name,
           description: service.seo_description,
           keywords: service.keywords,
-          price: service.price
+          price: service.price,
+          business_id: currentBusinessId
         })
       });
       
-      if (response.ok) {
+      const data = await response.json();
+      if (response.ok && data.success) {
         setAddedServices(prev => new Set([...prev, serviceIndex]));
+        setError(null);
         // Можно добавить уведомление об успехе
       } else {
-        setError('Ошибка добавления услуги');
+        setError(data.error || 'Ошибка добавления услуги');
       }
     } catch (e: any) {
       setError('Ошибка добавления услуги: ' + e.message);
@@ -186,7 +192,7 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для Яндекс.Карт</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для карточки компании на картах</h2>
         <p className="text-sm text-gray-600">🔎 Карты и локальное SEO — это один из самых эффективных каналов продаж.</p>
         <p className="text-sm text-gray-600 mt-2">Правильные названия и описания услуг повышают видимость в поиске, клики на карточку и позиции в выдаче.</p>
         <p className="text-sm text-gray-600 mt-2">Введите услуги текстом или загрузите прайс‑лист — ИИ вернёт краткие SEO‑формулировки в строгом формате с учётом частотности запросов, ваших формулировок и вашего местоположения.</p>
@@ -206,9 +212,30 @@ export default function ServiceOptimizer({ businessName }: { businessName?: stri
           placeholder={"Например: Стрижка волос, укладка, окрашивание...\n\nСовет: Укажите желаемый тон и нюансы (материалы, УТП, район/метро)."}
         />
       ) : (
-        <div>
-          <Input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
-          {file && <p className="text-xs text-gray-500 mt-1">Файл: {file.name}</p>}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              id="file-upload"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => document.getElementById('file-upload')?.click()}
+            >
+              Выберите файл
+            </Button>
+            {file && <p className="text-sm text-gray-700">Файл: {file.name}</p>}
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+            <p className="text-xs text-amber-800">
+              <strong>⚠️ Важно:</strong> Для оптимального распознавания рекомендуется загружать файлы с <strong>до 10 услугами</strong> на фото. 
+              Файлы с 14-15 услугами могут не распознаться полностью. Большее количество услуг, сомнительно, что подойдут для обработки.
+            </p>
+          </div>
         </div>
       )}
 

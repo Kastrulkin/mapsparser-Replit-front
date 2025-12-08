@@ -25,10 +25,22 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     """Проверка пароля"""
     try:
-        salt, pwd_hash = hashed.split(':')
+        if not hashed or ':' not in hashed:
+            print(f"❌ Неверный формат хеша: {hashed[:50] if hashed else 'None'}...")
+            return False
+        
+        salt, pwd_hash = hashed.split(':', 1)
+        print(f"🔍 Соль: {salt[:20]}..., Хеш: {pwd_hash[:20]}...")
         new_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
-        return new_hash.hex() == pwd_hash
-    except:
+        new_hash_hex = new_hash.hex()
+        print(f"🔍 Новый хеш: {new_hash_hex[:20]}...")
+        result = new_hash_hex == pwd_hash
+        print(f"🔍 Сравнение: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ Ошибка при проверке пароля: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def create_user(email: str, password: str = None, name: str = None, phone: str = None) -> Dict[str, Any]:
@@ -81,18 +93,28 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         user = cursor.fetchone()
         if not user:
+            print(f"❌ Пользователь не найден: {email}")
             return {"error": "Пользователь не найден"}
         
         if not user['is_active']:
+            print(f"❌ Аккаунт заблокирован: {email}")
             return {"error": "Аккаунт заблокирован"}
         
         # Если у пользователя нет пароля, это новый пользователь
         if not user['password_hash']:
+            print(f"❌ У пользователя нет пароля: {email}")
             return {"error": "NEED_PASSWORD", "message": "Необходимо установить пароль"}
         
-        if not verify_password(password, user['password_hash']):
+        print(f"🔍 Проверка пароля для: {email}")
+        print(f"🔍 Формат хеша в БД: {user['password_hash'][:50]}...")
+        password_valid = verify_password(password, user['password_hash'])
+        print(f"🔍 Результат проверки пароля: {password_valid}")
+        
+        if not password_valid:
+            print(f"❌ Неверный пароль для: {email}")
             return {"error": "Неверный пароль"}
         
+        print(f"✅ Успешная авторизация: {email}")
         return {
             "id": user['id'],
             "email": user['email'],
@@ -102,6 +124,9 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        print(f"❌ Ошибка при авторизации: {e}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
     finally:
         conn.close()

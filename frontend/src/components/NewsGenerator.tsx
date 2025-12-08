@@ -77,6 +77,18 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
     if (data.success) await loadNews();
   };
 
+  const deleteNews = async (id: string) => {
+    if (!confirm('Вы уверены, что хотите удалить эту новость?')) return;
+    const token = localStorage.getItem('auth_token');
+    const res = await fetch(`${window.location.origin}/api/news/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ news_id: id })
+    });
+    const data = await res.json();
+    if (data.success) await loadNews();
+  };
+
   const addExample = async () => {
     const text = exampleInput.trim();
     if (!text) return;
@@ -145,7 +157,15 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
 
       {generated && (
         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
-          <div className="font-medium mb-1">Сгенерированный вариант</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-medium">Сгенерированный вариант</div>
+            <button 
+              onClick={() => setGenerated('')}
+              className="text-xs text-red-600 hover:text-red-800 underline"
+            >
+              Удалить
+            </button>
+          </div>
           <div className="mb-2">{generated}</div>
         </div>
       )}
@@ -158,11 +178,34 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
           <ul className="space-y-2">
             {news.map((n:any) => (
               <li key={n.id} className="border border-gray-200 rounded p-2 text-sm">
-                <Textarea rows={3} defaultValue={n.generated_text} onBlur={(e)=> saveEdited(n.id, e.target.value)} />
+                <Textarea 
+                  id={`news-textarea-${n.id}`}
+                  rows={3} 
+                  defaultValue={n.generated_text} 
+                  onBlur={(e)=> saveEdited(n.id, e.target.value)} 
+                />
                 <div className="mt-2 flex gap-2">
                   {!n.approved && (
                     <Button size="sm" variant="outline" onClick={()=> approve(n.id)}>Принять</Button>
                   )}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      const textarea = document.getElementById(`news-textarea-${n.id}`) as HTMLTextAreaElement;
+                      textarea?.focus();
+                    }}
+                  >
+                    Редактировать
+                  </Button>
+                  <Button 
+                    size="sm"
+                    variant="outline" 
+                    onClick={() => deleteNews(n.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    Удалить
+                  </Button>
                 </div>
               </li>
             ))}

@@ -224,7 +224,7 @@ export const CardOverviewPage = () => {
           <div className="flex-1 pr-4">
             <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
             <p className="text-sm text-gray-600 mt-1">
-              📋 Ниже в блоке "Настройте описания услуг для Яндекс.Карт" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске.
+              📋 Ниже в блоке "Настройте описания услуг для карточки компании на картах" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске.
               <br/><br/>
               Эти наименования сохранятся в ваш список услуг автоматически.
               <br/><br/>
@@ -361,7 +361,7 @@ export const CardOverviewPage = () => {
             <AccordionContent>
               <div className="space-y-6 p-6">
                 <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                  <ServiceOptimizer businessName={clientInfo.businessName} />
+                  <ServiceOptimizer businessName={clientInfo.businessName} businessId={currentBusinessId} />
                 </div>
                 <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
                   <ReviewReplyAssistant businessName={clientInfo.businessName} />

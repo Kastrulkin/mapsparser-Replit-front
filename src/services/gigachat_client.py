@@ -102,15 +102,13 @@ class GigaChatClient:
                 import uuid
                 rquid = str(uuid.uuid4())
                 
-                # Правильный формат Basic авторизации: base64(client_id:client_secret)
-                credentials = f"{client_id}:{client_secret}"
-                encoded_credentials = base64.b64encode(credentials.encode()).decode()
-                
+                # Согласно документации GigaChat: Authorization: Bearer <ключ_авторизации>
+                # client_secret уже является готовым ключом авторизации
                 headers = {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Accept": "application/json",
                     "RqUID": rquid,
-                    "Authorization": f"Basic {encoded_credentials}"
+                    "Authorization": f"Bearer {client_secret}"
                 }
                 
                 response = requests.post(
@@ -144,13 +142,13 @@ class GigaChatClient:
         
         raise RuntimeError(f"Не удалось получить токен GigaChat: {last_error}")
     
-    def _post_with_retry(self, url: str, headers: Dict[str, str], json_body: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+    def _post_with_retry(self, url: str, headers: Dict[str, str], json_body: Dict[str, Any], max_retries: int = 3, timeout: int = 60) -> Dict[str, Any]:
         """POST запрос с retry и ротацией ключей"""
         last_error = None
         
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=json_body, headers=headers, timeout=60, verify=self.verify_tls)
+                response = requests.post(url, json=json_body, headers=headers, timeout=timeout, verify=self.verify_tls)
                 
                 # Если лимиты/авторизация — пробуем ротацию ключа и повтор
                 if response.status_code in (401, 403, 429, 503):
@@ -184,7 +182,7 @@ class GigaChatClient:
             files = {'file': (filename, file_data, 'image/png')}
             data = {'purpose': 'general'}
             
-            response = requests.post(url, headers=headers, files=files, data=data, verify=False, timeout=60)
+            response = requests.post(url, headers=headers, files=files, data=data, verify=False, timeout=120)
             
             if response.status_code == 200:
                 result = response.json()
@@ -222,6 +220,9 @@ class GigaChatClient:
             }
             
             model_config = self.config.get_model_config()
+            # Для анализа скриншотов увеличиваем max_tokens до максимума (4000)
+            # чтобы избежать обрезания JSON при большом количестве услуг
+            max_tokens_for_screenshot = min(model_config.get("max_tokens", 4000), 4000)
             data = {
                 "model": model_config["model"],
                 "messages": [
@@ -233,13 +234,14 @@ class GigaChatClient:
                 ],
                 "parameters": {
                     "temperature": model_config.get("temperature", 0.1),
-                    "max_tokens": model_config.get("max_tokens", 2000),
+                    "max_tokens": max_tokens_for_screenshot,
                     "frequency_penalty": model_config.get("frequency_penalty", 0),
                     "presence_penalty": model_config.get("presence_penalty", 0)
                 }
             }
             
-            result = self._post_with_retry(url, headers, data, max_retries=3)
+            # Для анализа скриншотов увеличиваем таймаут до 180 секунд (3 минуты)
+            result = self._post_with_retry(url, headers, data, max_retries=3, timeout=180)
             print(f"🚨 DEBUG: Полный ответ от GigaChat: {result}")
             
             # Исправляем согласно документации GigaChat
@@ -357,9 +359,93 @@ class GigaChatClient:
                 
         except json.JSONDecodeError as e:
             print(f"⚠️ Ошибка парсинга JSON: {e}")
-            # Попробуем исправить JSON
+            print(f"⚠️ Позиция ошибки: {e.pos}, длина текста: {len(response_text)}")
+            
+            # Попробуем исправить обрезанный JSON
             try:
-                # Убираем лишние символы и пробуем снова
+                # Если JSON обрезан, попробуем найти последний валидный элемент массива services
+                if '"services"' in response_text and '[' in response_text:
+                    # Находим начало массива services
+                    services_start = response_text.find('"services"')
+                    if services_start != -1:
+                        array_start = response_text.find('[', services_start)
+                        if array_start != -1:
+                            # Пытаемся найти последний валидный объект в массиве
+                            # Ищем все закрывающие скобки объектов }
+                            brace_count = 0
+                            last_valid_brace = -1
+                            in_string = False
+                            escape_next = False
+                            
+                            for i in range(array_start, len(response_text)):
+                                char = response_text[i]
+                                if escape_next:
+                                    escape_next = False
+                                    continue
+                                if char == '\\':
+                                    escape_next = True
+                                    continue
+                                if char == '"' and not escape_next:
+                                    in_string = not in_string
+                                    continue
+                                if not in_string:
+                                    if char == '{':
+                                        brace_count += 1
+                                    elif char == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            last_valid_brace = i
+                            
+                            if last_valid_brace != -1:
+                                # Обрезаем до последнего валидного объекта
+                                # Находим начало JSON объекта
+                                json_start = response_text.find('{')
+                                if json_start != -1:
+                                    # Берем от начала до последнего валидного объекта
+                                    fixed_json = response_text[json_start:last_valid_brace + 1]
+                                    # Закрываем массив services и объект
+                                    fixed_json += ']}'
+                                    
+                                    print(f"🔧 Попытка восстановить обрезанный JSON")
+                                    print(f"🔧 Длина восстановленного JSON: {len(fixed_json)}")
+                                    parsed = json.loads(fixed_json)
+                                    services_count = len(parsed.get('services', []))
+                                    print(f"✅ JSON успешно восстановлен, услуг: {services_count}")
+                                    return parsed
+            except Exception as fix_error:
+                print(f"⚠️ Не удалось восстановить JSON: {fix_error}")
+                import traceback
+                traceback.print_exc()
+            
+            # Попробуем более простой способ - найти все валидные объекты в массиве
+            try:
+                import re
+                # Ищем все объекты вида {"original_name": ..., "optimized_name": ...}
+                # Используем регулярное выражение для поиска валидных JSON объектов
+                services_pattern = r'\{"original_name"[^}]*"category"[^}]*\}'
+                matches = re.findall(services_pattern, response_text)
+                
+                if matches:
+                    # Собираем валидные объекты в массив
+                    valid_services = []
+                    for match in matches:
+                        try:
+                            service_obj = json.loads(match)
+                            valid_services.append(service_obj)
+                        except:
+                            continue
+                    
+                    if valid_services:
+                        print(f"🔧 Найдено {len(valid_services)} валидных услуг через regex")
+                        return {
+                            "services": valid_services,
+                            "general_recommendations": []
+                        }
+            except Exception as regex_error:
+                print(f"⚠️ Regex восстановление не удалось: {regex_error}")
+            
+            # Попробуем стандартную очистку
+            try:
                 cleaned = response_text.strip()
                 if cleaned.startswith('```json'):
                     cleaned = cleaned[7:]
@@ -369,9 +455,11 @@ class GigaChatClient:
                 
                 return json.loads(cleaned)
             except:
+                # Последняя попытка - вернуть то, что удалось распарсить
                 return {
-                    "error": "Не удалось распарсить JSON",
-                    "raw_response": response_text[:500]
+                    "error": "Не удалось распарсить JSON. Возможно, ответ был обрезан из-за большого количества услуг. Попробуйте разбить на несколько скриншотов.",
+                    "raw_response": response_text[:1000],
+                    "note": f"Длина ответа: {len(response_text)} символов, возможно достигнут лимит токенов"
                 }
         except Exception as e:
             return {
