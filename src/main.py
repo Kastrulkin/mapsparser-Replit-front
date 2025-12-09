@@ -433,6 +433,45 @@ def services_optimize():
             except FileNotFoundError:
                 frequent_queries = "Частотные запросы не найдены"
 
+            # Проверяем наличие косметологических терминов в услугах
+            cosmetic_terms = [
+                'косметология', 'косметолог', 'чистка лица', 'пилинг лица',
+                'ботокс', 'диспорт', 'контурная пластика', 'филлеры',
+                'гиалуроновая кислота', 'биоревитализация', 'мезотерапия',
+                'плазмолифтинг', 'rf-лифтинг', 'smas-лифтинг', 'ультразвуковой smas',
+                'лазерная эпиляция', 'фотоэпиляция', 'лазерное омоложение',
+                'лазерная шлифовка', 'нитевой лифтинг', 'липолитики',
+                'микротоки', 'аппаратная косметология', 'дермапен', 'микронидлинг',
+                'антивозрастные процедуры', 'лечение акне', 'постакне', 'купероз',
+                'уход за кожей', 'омоложение лица', 'маска для лица'
+            ]
+
+            lower_content = content.lower()
+            lower_frequent = frequent_queries.lower() if frequent_queries else ""
+            missing_cosmetic_terms = [
+                term for term in cosmetic_terms
+                if term in lower_content and term not in lower_frequent
+            ]
+
+            if missing_cosmetic_terms:
+                print(f"⚠️ Найдены косметологические термины без частоток: {missing_cosmetic_terms}")
+                # Пытаемся инициировать обновление Wordstat
+                try:
+                    from update_wordstat_data import main as update_wordstat_main
+                    update_wordstat_main()
+                except Exception as e:
+                    print(f"⚠️ Не удалось запустить обновление Wordstat: {e}")
+                # Отправляем уведомление
+                try:
+                    send_email(
+                        "demyanovap@yandex.ru",
+                        "Нужны новые Wordstat-ключи (косметология)",
+                        "При анализе услуг найдены термины без частотных запросов:\n"
+                        + "\n".join(missing_cosmetic_terms)
+                    )
+                except Exception as e:
+                    print(f"⚠️ Не удалось отправить уведомление: {e}")
+
             # Загружаем новый промпт из файла
             try:
                 with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
