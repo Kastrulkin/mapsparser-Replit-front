@@ -18,19 +18,10 @@ BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'db_
 def get_db_path():
     """
     Получить путь к основной базе данных
-    Проверяет оба возможных местоположения
+    Используется единая база: src/reports.db
     """
-    # Приоритет 1: src/reports.db (как в auth_system)
+    # Единая база данных: src/reports.db
     db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports.db')
-    if os.path.exists(db_path):
-        return db_path
-    
-    # Приоритет 2: reports.db в корне
-    root_db = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'reports.db')
-    if os.path.exists(root_db):
-        return root_db
-    
-    # Если не найдена, создаем в src/
     return db_path
 
 def get_db_connection():

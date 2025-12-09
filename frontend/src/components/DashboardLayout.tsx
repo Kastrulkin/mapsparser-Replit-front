@@ -72,6 +72,21 @@ export const DashboardLayout = () => {
     }
   };
 
+  const updateBusiness = (businessId: string, updates: Partial<any>) => {
+    const updatedBusinesses = businesses.map(b => 
+      b.id === businessId ? { ...b, ...updates } : b
+    );
+    setBusinesses(updatedBusinesses);
+    
+    // Обновляем текущий бизнес, если он был изменен
+    if (currentBusinessId === businessId) {
+      const updatedBusiness = updatedBusinesses.find(b => b.id === businessId);
+      if (updatedBusiness) {
+        setCurrentBusiness(updatedBusiness);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -99,7 +114,7 @@ export const DashboardLayout = () => {
           user={user}
         />
         <main className="flex-1 p-6">
-          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses }} />
+          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness }} />
         </main>
       </div>
       {/* Mobile sidebar overlay */}

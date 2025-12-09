@@ -222,7 +222,11 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="text-xs text-gray-500 mb-2">
+        Эти показатели будут отображаться корректно при подключении к CRM.
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-60 pointer-events-none">
         <div className="bg-orange-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>

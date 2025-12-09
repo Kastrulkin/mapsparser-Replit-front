@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import FinancialMetrics from '@/components/FinancialMetrics';
 import ROICalculator from '@/components/ROICalculator';
 import TransactionForm from '@/components/TransactionForm';
+import TransactionTable from '@/components/TransactionTable';
 
 export const FinancePage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="space-y-6">
@@ -37,6 +39,7 @@ export const FinancePage = () => {
             setShowTransactionForm(false);
             setSuccess('Транзакция добавлена успешно!');
             setTimeout(() => setSuccess(null), 3000);
+            setRefreshKey((k) => k + 1);
           }}
           onCancel={() => setShowTransactionForm(false)}
         />
@@ -44,6 +47,15 @@ export const FinancePage = () => {
 
       <FinancialMetrics />
       <ROICalculator />
+      <div className="flex justify-end mb-2">
+        <Button 
+          onClick={() => setShowTransactionForm(true)}
+          className="bg-green-600 hover:bg-green-700"
+        >
+          + Добавить транзакцию
+        </Button>
+      </div>
+      <TransactionTable currentBusinessId={currentBusinessId} refreshKey={refreshKey} />
     </div>
   );
 };

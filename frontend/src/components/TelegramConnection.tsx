@@ -5,7 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Alert, AlertDescription } from './ui/alert';
 import { Copy, Check, Loader2, Bot } from 'lucide-react';
 
-const TelegramConnection: React.FC = () => {
+interface TelegramConnectionProps {
+  currentBusinessId?: string | null;
+}
+
+const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusinessId }) => {
   const [bindToken, setBindToken] = useState<string | null>(null);
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
   const [isLinked, setIsLinked] = useState(false);
@@ -15,13 +19,28 @@ const TelegramConnection: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    checkStatus();
-  }, []);
+    // Сбрасываем статус при смене бизнеса
+    setIsLinked(false);
+    
+    if (currentBusinessId) {
+      checkStatus();
+    }
+  }, [currentBusinessId]);
 
   const checkStatus = async () => {
+    if (!currentBusinessId) {
+      setIsLinked(false);
+      return;
+    }
+    
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${window.location.origin}/api/telegram/bind/status`, {
+      const url = new URL(`${window.location.origin}/api/telegram/bind/status`);
+      url.searchParams.append('business_id', currentBusinessId);
+      
+      console.log('Проверка статуса Telegram для бизнеса:', currentBusinessId);
+      
+      const response = await fetch(url.toString(), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -29,14 +48,26 @@ const TelegramConnection: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setIsLinked(data.is_linked || false);
+        console.log('✅ Статус Telegram для бизнеса', currentBusinessId, ':', data);
+        // Явно проверяем, что is_linked === true (не просто truthy значение)
+        setIsLinked(data.is_linked === true);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Ошибка проверки статуса:', response.status, errorData);
+        setIsLinked(false);
       }
     } catch (e) {
       console.error('Ошибка проверки статуса:', e);
+      setIsLinked(false);
     }
   };
 
   const generateToken = async () => {
+    if (!currentBusinessId) {
+      setError('Сначала выберите бизнес');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -46,8 +77,10 @@ const TelegramConnection: React.FC = () => {
       const response = await fetch(`${window.location.origin}/api/telegram/bind`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ business_id: currentBusinessId })
       });
 
       if (response.ok) {
@@ -83,7 +116,7 @@ const TelegramConnection: React.FC = () => {
   };
 
   return (
-    <Card>
+    <Card key={currentBusinessId || 'no-business'}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bot className="w-5 h-5" />
@@ -94,7 +127,7 @@ const TelegramConnection: React.FC = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLinked ? (
+        {isLinked && currentBusinessId ? (
           <Alert>
             <AlertDescription>
               ✅ Telegram-бот успешно подключен! Вы можете использовать все функции бота.

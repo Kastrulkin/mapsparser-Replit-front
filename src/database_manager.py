@@ -10,19 +10,9 @@ from typing import List, Dict, Any, Optional
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
     import os
-    # Единая база данных хранится в src/reports.db
-    # Предпочитаем её, чтобы избежать рассинхронизации с корневой базой
-    preferred_db = "src/reports.db"
-    fallback_db = "reports.db"
-
-    if os.path.exists(preferred_db):
-        db_path = preferred_db
-    elif os.path.exists(fallback_db):
-        db_path = fallback_db
-    else:
-        # По умолчанию создаём в src/
-        os.makedirs("src", exist_ok=True)
-        db_path = preferred_db
+    # Единая база данных: src/reports.db
+    db_path = "src/reports.db"
+    os.makedirs("src", exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn

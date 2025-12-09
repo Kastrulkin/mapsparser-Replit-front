@@ -5,7 +5,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 import { newAuth } from '@/lib/auth_new';
 
 export const ProfilePage = () => {
-  const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness, updateBusiness } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
   const [savingClientInfo, setSavingClientInfo] = useState(false);
@@ -109,6 +109,15 @@ export const ProfilePage = () => {
       if (response.ok) {
         setEditClientInfo(false);
         setSuccess('Информация о бизнесе сохранена');
+        
+        // Обновляем название бизнеса в списке businesses, чтобы оно отображалось в выпадающем списке
+        if (currentBusinessId && updateBusiness) {
+          updateBusiness(currentBusinessId, {
+            name: clientInfo.businessName,
+            address: clientInfo.address,
+            working_hours: clientInfo.workingHours
+          });
+        }
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Ошибка сохранения информации');

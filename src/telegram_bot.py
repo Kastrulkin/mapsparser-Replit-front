@@ -152,11 +152,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }
                 await query.edit_message_text(
                     "💰 *Добавление транзакции*\n\n"
-                    "Отправьте:\n"
-                    "1. 📷 Фото чека/документа, или\n"
-                    "2. 📝 Текст в формате:\n"
+                    "Отправьте фото или текст — как вам удобнее:\n\n"
+                    "📷 *Фото:* чека, документа или ваших записей (мобиль распознает)\n\n"
+                    "📝 *Текст в формате:*\n"
                     "   Сумма: 1000\n"
-                    "   Услуги: Стрижка, Окрашивание\n"
+                    "   Услуга: Стрижка мужская\n"
+                    "   (или Услуги: Стрижка, Окрашивание)\n"
                     "   Мастер: Имя (опционально)\n"
                     "   Дата: YYYY-MM-DD (опционально)\n\n"
                     "Или /cancel для отмены",
@@ -385,6 +386,50 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                     json.dumps(trans.get('services', [])), trans.get('notes', '')
                 ))
             saved_count += 1
+            
+            # Добавляем услуги из транзакции в UserServices, если их там еще нет
+            services_list = trans.get('services', [])
+            if services_list and business_id:
+                # Проверяем наличие поля business_id в UserServices
+                cursor.execute("PRAGMA table_info(UserServices)")
+                service_columns = [row[1] for row in cursor.fetchall()]
+                has_business_id_in_services = 'business_id' in service_columns
+                
+                for service_name in services_list:
+                    if not service_name or not isinstance(service_name, str):
+                        continue
+                    
+                    # Проверяем, есть ли уже такая услуга для этого бизнеса
+                    if has_business_id_in_services:
+                        cursor.execute("""
+                            SELECT id FROM UserServices 
+                            WHERE business_id = ? AND name = ? AND user_id = ?
+                            LIMIT 1
+                        """, (business_id, service_name.strip(), db_user_id))
+                    else:
+                        cursor.execute("""
+                            SELECT id FROM UserServices 
+                            WHERE name = ? AND user_id = ?
+                            LIMIT 1
+                        """, (service_name.strip(), db_user_id))
+                    
+                    existing_service = cursor.fetchone()
+                    
+                    if not existing_service:
+                        # Добавляем новую услугу
+                        service_id = str(uuid.uuid4())
+                        if has_business_id_in_services:
+                            cursor.execute("""
+                                INSERT INTO UserServices 
+                                (id, user_id, business_id, category, name, description, keywords, price, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                            """, (service_id, db_user_id, business_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO UserServices 
+                                (id, user_id, category, name, description, keywords, price, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                            """, (service_id, db_user_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
         
         conn.commit()
         conn.close()
@@ -490,6 +535,10 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Аккаунт не привязан")
         return
     
+    if not business_id:
+        await update.message.reply_text("❌ Бизнес не выбран. Пожалуйста, выберите бизнес в меню /start")
+        return
+    
     # Парсим текст
     transaction_data = {
         'transaction_date': datetime.now().strftime('%Y-%m-%d'),
@@ -502,6 +551,10 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
     
     lines = text.split('\n')
     for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
         if ':' in line:
             key, value = line.split(':', 1)
             key = key.strip().lower()
@@ -514,18 +567,37 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
                     transaction_data['amount'] = float(value.replace('₽', '').replace('руб', '').strip())
                 except:
                     pass
-            elif 'услуги' in key:
-                transaction_data['services'] = [s.strip() for s in value.split(',')]
+            elif 'услуги' in key or 'услуга' in key:
+                # Поддерживаем как единственное, так и множественное число
+                if ',' in value:
+                    transaction_data['services'] = [s.strip() for s in value.split(',')]
+                else:
+                    # Если одна услуга без запятых
+                    transaction_data['services'] = [value.strip()]
             elif 'мастер' in key:
                 transaction_data['master_name'] = value
             elif 'тип' in key and 'клиент' in key:
                 transaction_data['client_type'] = value if value in ['new', 'returning'] else 'new'
             else:
                 transaction_data['notes'] += line + ' '
+        else:
+            # Строка без двоеточия - возможно, это дата в свободном формате
+            # Проверяем, содержит ли строка признаки даты
+            line_lower = line.lower()
+            months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+                     'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                     'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+            if any(month in line_lower for month in months) and any(char.isdigit() for char in line):
+                # Это похоже на дату - сохраняем в notes, но не парсим
+                transaction_data['notes'] += line + ' '
     
     if transaction_data['amount'] == 0:
         await update.message.reply_text("❌ Пожалуйста, укажите сумму транзакции")
         return
+    
+    # Логирование для отладки
+    print(f"[DEBUG] handle_transaction_text: business_id={business_id}, services={transaction_data['services']}, amount={transaction_data['amount']}")
     
     # Сохраняем транзакцию
     conn = get_db_connection()
@@ -534,8 +606,16 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
     # Проверяем наличие полей
     cursor.execute("PRAGMA table_info(FinancialTransactions)")
     columns = [row[1] for row in cursor.fetchall()]
-    has_master_id = 'master_id' in columns
-    has_business_id = 'business_id' in columns
+    columns_set = set(columns)
+    has_master_id = 'master_id' in columns_set
+    has_business_id = 'business_id' in columns_set
+    has_user_id = 'user_id' in columns_set
+    has_services_col = 'services' in columns_set
+    has_notes_col = 'notes' in columns_set
+    has_transaction_date_col = 'transaction_date' in columns_set
+    has_date_col = 'date' in columns_set
+    has_description_col = 'description' in columns_set
+    has_transaction_type_col = 'transaction_type' in columns_set
     
     transaction_id = str(uuid.uuid4())
     
@@ -547,45 +627,131 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
         if master_row:
             master_id = master_row[0]
     
-    if has_master_id and has_business_id:
-        cursor.execute("""
-            INSERT INTO FinancialTransactions 
-            (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            transaction_id, db_user_id, business_id,
-            transaction_data['transaction_date'], transaction_data['amount'],
-            transaction_data['client_type'], json.dumps(transaction_data['services']),
-            transaction_data['notes'], master_id
-        ))
-    elif has_master_id:
-        cursor.execute("""
-            INSERT INTO FinancialTransactions 
-            (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            transaction_id, db_user_id,
-            transaction_data['transaction_date'], transaction_data['amount'],
-            transaction_data['client_type'], json.dumps(transaction_data['services']),
-            transaction_data['notes'], master_id
-        ))
+    # Формируем описание, если нет колонок services/notes
+    description_parts = []
+    if transaction_data.get('services'):
+        description_parts.append("Услуги: " + ", ".join(transaction_data['services']))
+    if transaction_data.get('master_name'):
+        description_parts.append(f"Мастер: {transaction_data['master_name']}")
+    if transaction_data.get('notes'):
+        description_parts.append(f"Заметки: {transaction_data['notes'].strip()}")
+    description_text = "; ".join(description_parts) if description_parts else ""
+    
+    # Значения по умолчанию
+    transaction_type_value = 'income' if has_transaction_type_col else None
+    date_value = transaction_data['transaction_date'] if has_date_col else None
+    
+    # Формируем динамический INSERT под доступные колонки
+    insert_columns = ['id']
+    insert_values = [transaction_id]
+    
+    if has_user_id:
+        insert_columns.append('user_id')
+        insert_values.append(db_user_id)
+    if has_business_id:
+        insert_columns.append('business_id')
+        insert_values.append(business_id)
+    if has_transaction_date_col:
+        insert_columns.append('transaction_date')
+        insert_values.append(transaction_data['transaction_date'])
+    elif has_date_col and date_value:
+        insert_columns.append('date')
+        insert_values.append(date_value)
+    
+    insert_columns.append('amount')
+    insert_values.append(transaction_data['amount'])
+    
+    insert_columns.append('client_type')
+    insert_values.append(transaction_data['client_type'])
+    
+    if has_services_col:
+        insert_columns.append('services')
+        insert_values.append(json.dumps(transaction_data['services']))
+    if has_notes_col:
+        insert_columns.append('notes')
+        insert_values.append(transaction_data['notes'])
+    if has_description_col:
+        insert_columns.append('description')
+        insert_values.append(description_text)
+    if has_transaction_type_col and transaction_type_value:
+        insert_columns.append('transaction_type')
+        insert_values.append(transaction_type_value)
+    if has_master_id:
+        insert_columns.append('master_id')
+        insert_values.append(master_id)
+    
+    placeholders = ",".join(["?"] * len(insert_columns))
+    sql = f"INSERT INTO FinancialTransactions ({', '.join(insert_columns)}) VALUES ({placeholders})"
+    cursor.execute(sql, insert_values)
+    
+    # Добавляем услуги из транзакции в UserServices, если их там еще нет
+    services_list = transaction_data.get('services', [])
+    added_services_count = 0
+    
+    if services_list and business_id:
+        # Проверяем наличие поля business_id в UserServices
+        cursor.execute("PRAGMA table_info(UserServices)")
+        service_columns = [row[1] for row in cursor.fetchall()]
+        has_business_id_in_services = 'business_id' in service_columns
+        
+        print(f"[DEBUG] Adding services: {services_list}, business_id={business_id}, has_business_id_in_services={has_business_id_in_services}")
+        
+        for service_name in services_list:
+            if not service_name or not isinstance(service_name, str):
+                continue
+            
+            service_name_clean = service_name.strip()
+            if not service_name_clean:
+                continue
+            
+            # Проверяем, есть ли уже такая услуга для этого бизнеса
+            if has_business_id_in_services:
+                cursor.execute("""
+                    SELECT id FROM UserServices 
+                    WHERE business_id = ? AND name = ? AND user_id = ?
+                    LIMIT 1
+                """, (business_id, service_name_clean, db_user_id))
+            else:
+                cursor.execute("""
+                    SELECT id FROM UserServices 
+                    WHERE name = ? AND user_id = ?
+                    LIMIT 1
+                """, (service_name_clean, db_user_id))
+            
+            existing_service = cursor.fetchone()
+            
+            if not existing_service:
+                # Добавляем новую услугу
+                service_id = str(uuid.uuid4())
+                if has_business_id_in_services:
+                    cursor.execute("""
+                        INSERT INTO UserServices 
+                        (id, user_id, business_id, category, name, description, keywords, price, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (service_id, db_user_id, business_id, 'Общие услуги', service_name_clean, '', '[]', ''))
+                    print(f"[DEBUG] Added service: {service_name_clean} for business_id={business_id}")
+                else:
+                    cursor.execute("""
+                        INSERT INTO UserServices 
+                        (id, user_id, category, name, description, keywords, price, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (service_id, db_user_id, 'Общие услуги', service_name_clean, '', '[]', ''))
+                    print(f"[DEBUG] Added service: {service_name_clean} (no business_id)")
+                added_services_count += 1
+            else:
+                print(f"[DEBUG] Service already exists: {service_name_clean}")
     else:
-        cursor.execute("""
-            INSERT INTO FinancialTransactions 
-            (id, user_id, transaction_date, amount, client_type, services, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            transaction_id, db_user_id,
-            transaction_data['transaction_date'], transaction_data['amount'],
-            transaction_data['client_type'], json.dumps(transaction_data['services']),
-            transaction_data['notes']
-        ))
+        print(f"[DEBUG] No services to add: services_list={services_list}, business_id={business_id}")
     
     conn.commit()
     conn.close()
     
+    services_msg = ""
+    if added_services_count > 0:
+        services_msg = f"\n\n➕ Добавлено новых услуг: {added_services_count}"
+    
     await update.message.reply_text(
-        f"✅ Транзакция добавлена!\n\n"
+        f"✅ Транзакция добавлена!{services_msg}\n\n"
         f"💰 Сумма: {transaction_data['amount']} ₽\n"
         f"📅 Дата: {transaction_data['transaction_date']}\n\n"
         f"Используйте /start для возврата в меню"

@@ -1,0 +1,72 @@
+#!/bin/bash
+# Скрипт для обновления проекта на продакшн-сервере beautybot.pro
+
+echo "🚀 Начинаем обновление проекта на продакшн-сервере..."
+echo ""
+
+# 1. Переходим в директорию проекта
+cd /root/mapsparser-Replit-front || {
+    echo "❌ Директория проекта не найдена!"
+    echo "Клонируем проект..."
+    git clone https://github.com/Kastrulkin/mapsparser-Replit-front.git /root/mapsparser-Replit-front
+    cd /root/mapsparser-Replit-front
+}
+
+# 2. Получаем последние изменения из GitHub
+echo "📥 Получаем изменения из GitHub..."
+git fetch origin
+git checkout main
+git pull origin main
+echo "✅ Изменения получены"
+echo ""
+
+# 3. Обновляем зависимости Python (если нужно)
+echo "📦 Обновляем зависимости Python..."
+source venv/bin/activate 2>/dev/null || python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt --quiet
+echo "✅ Зависимости Python обновлены"
+echo ""
+
+# 4. Обновляем зависимости frontend
+echo "📦 Обновляем зависимости frontend..."
+cd frontend
+npm cache clean --force 2>/dev/null || true
+npm install --legacy-peer-deps --silent
+echo "✅ Зависимости frontend обновлены"
+echo ""
+
+# 5. Собираем frontend
+echo "🔨 Собираем frontend..."
+rm -rf dist
+npm run build
+echo "✅ Frontend собран"
+echo ""
+
+# 6. Копируем собранные файлы в /var/www/html
+echo "📋 Копируем файлы в /var/www/html..."
+cd ..
+rm -rf /var/www/html/*
+cp -r frontend/dist/* /var/www/html/
+chown -R www-data:www-data /var/www/html 2>/dev/null || chown -R nginx:nginx /var/www/html 2>/dev/null || true
+chmod -R 755 /var/www/html
+echo "✅ Файлы скопированы"
+echo ""
+
+# 7. Перезапускаем сервисы
+echo "🔄 Перезапускаем сервисы..."
+systemctl restart nginx
+systemctl restart seo-worker 2>/dev/null || echo "⚠️  seo-worker не найден (это нормально)"
+systemctl restart seo-api 2>/dev/null || echo "⚠️  seo-api не найден (это нормально)"
+echo "✅ Сервисы перезапущены"
+echo ""
+
+# 8. Проверяем статус
+echo "📊 Проверка статуса сервисов:"
+systemctl status nginx --no-pager -l | head -3
+echo ""
+
+echo "✅ Обновление завершено!"
+echo "🌐 Сайт должен быть доступен на https://beautybot.pro"
+echo ""
+echo "💡 Не забудьте очистить кеш браузера (Cmd+Shift+R или Ctrl+Shift+R)"
+

@@ -14,7 +14,7 @@ export const SettingsPage = () => {
 
       <NetworkManagement />
 
-      <TelegramConnection />
+      <TelegramConnection currentBusinessId={currentBusinessId} />
     </div>
   );
 };

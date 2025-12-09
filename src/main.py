@@ -7,6 +7,7 @@ import sys
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask_cors import CORS
 from parser import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
@@ -29,6 +30,8 @@ except ImportError:
     print('Внимание: для автоматической загрузки .env установите пакет python-dotenv')
 
 app = Flask(__name__)
+# Разрешаем CORS для локального фронтенда
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
@@ -2027,6 +2030,111 @@ def add_transaction():
     except Exception as e:
         return jsonify({"error": f"Ошибка добавления транзакции: {str(e)}"}), 500
 
+
+@app.route('/api/finance/transaction/<string:transaction_id>', methods=['PUT', 'OPTIONS'])
+def update_transaction(transaction_id):
+    """Обновить финансовую транзакцию"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json() or {}
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем принадлежность транзакции пользователю
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Транзакция не найдена"}), 404
+        if row[1] != user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нет доступа к транзакции"}), 403
+
+        fields = []
+        params = []
+        if 'transaction_date' in data:
+            fields.append("transaction_date = ?")
+            params.append(data.get('transaction_date'))
+        if 'amount' in data:
+            fields.append("amount = ?")
+            params.append(float(data.get('amount') or 0))
+        if 'client_type' in data:
+            fields.append("client_type = ?")
+            params.append(data.get('client_type') or 'new')
+        if 'services' in data:
+            fields.append("services = ?")
+            params.append(json.dumps(data.get('services') or []))
+        if 'notes' in data:
+            fields.append("notes = ?")
+            params.append(data.get('notes') or '')
+
+        if not fields:
+            db.close()
+            return jsonify({"error": "Нет полей для обновления"}), 400
+
+        params.append(transaction_id)
+        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = ?", params)
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "message": "Транзакция обновлена"})
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка обновления транзакции: {str(e)}"}), 500
+
+
+@app.route('/api/finance/transaction/<string:transaction_id>', methods=['DELETE', 'OPTIONS'])
+def delete_transaction(transaction_id):
+    """Удалить финансовую транзакцию"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем принадлежность транзакции пользователю
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Транзакция не найдена"}), 404
+        if row[1] != user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нет доступа к транзакции"}), 403
+
+        cursor.execute("DELETE FROM FinancialTransactions WHERE id = ?", (transaction_id,))
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "message": "Транзакция удалена"})
+        
+    except Exception as e:
+        return jsonify({"error": f"Ошибка удаления транзакции: {str(e)}"}), 500
+
 @app.route('/api/finance/transaction/upload', methods=['POST', 'OPTIONS'])
 def upload_transaction_file():
     """Загрузить файл или фото с транзакциями и распознать их"""
@@ -2267,19 +2375,38 @@ def get_transactions():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Строим запрос
-        query = "SELECT * FROM FinancialTransactions WHERE user_id = ?"
+        # Строим запрос с явными полями (без SELECT *)
+        # Используем COALESCE(transaction_date, date) для совместимости со старой схемой
+        query = """
+            SELECT 
+                id,
+                business_id,
+                COALESCE(transaction_date, date) AS tx_date,
+                amount,
+                client_type,
+                services,
+                notes,
+                created_at
+            FROM FinancialTransactions
+            WHERE user_id = ?
+        """
         params = [user_data['user_id']]
         
+        # Фильтр по бизнесу, если передан
+        current_business_id = request.args.get('business_id')
+        if current_business_id:
+            query += " AND business_id = ?"
+            params.append(current_business_id)
+        
         if start_date:
-            query += " AND transaction_date >= ?"
+            query += " AND COALESCE(transaction_date, date) >= ?"
             params.append(start_date)
         
         if end_date:
-            query += " AND transaction_date <= ?"
+            query += " AND COALESCE(transaction_date, date) <= ?"
             params.append(end_date)
         
-        query += " ORDER BY transaction_date DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY tx_date DESC, created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -2287,15 +2414,34 @@ def get_transactions():
         
         # Преобразуем в словари
         result = []
-        for transaction in transactions:
+        for t in transactions:
+            tx_id = t[0]
+            business_id = t[1]
+            tx_date = t[2]
+            amount = float(t[3] or 0)
+            client_type_val = t[4] or 'new'
+            services_raw = t[5]
+            notes_val = t[6] or ''
+            created_at_val = t[7]
+            
+            services_list = []
+            if services_raw:
+                try:
+                    services_list = json.loads(services_raw) if isinstance(services_raw, str) else services_raw
+                    if not isinstance(services_list, list):
+                        services_list = []
+                except Exception:
+                    services_list = []
+            
             result.append({
-                "id": transaction[0],
-                "transaction_date": transaction[2],
-                "amount": float(transaction[3]),
-                "client_type": transaction[4],
-                "services": json.loads(transaction[5]) if transaction[5] else [],
-                "notes": transaction[6],
-                "created_at": transaction[7]
+                "id": tx_id,
+                "business_id": business_id,
+                "transaction_date": tx_date,
+                "amount": amount,
+                "client_type": client_type_val,
+                "services": services_list,
+                "notes": notes_val,
+                "created_at": created_at_val
             })
         
         db.close()
@@ -4155,7 +4301,7 @@ Email: {email}
 
 @app.route('/api/telegram/bind', methods=['POST'])
 def generate_telegram_bind_token():
-    """Генерация токена для привязки Telegram аккаунта"""
+    """Генерация токена для привязки Telegram аккаунта для конкретного бизнеса"""
     try:
         # Проверяем авторизацию
         auth_header = request.headers.get('Authorization')
@@ -4167,6 +4313,22 @@ def generate_telegram_bind_token():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
+        # Получаем business_id из запроса
+        data = request.get_json(silent=True) or {}
+        business_id = data.get('business_id')
+        
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+        
+        # Проверяем, что бизнес принадлежит пользователю
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id FROM Businesses WHERE id = ? AND owner_id = ?", (business_id, user_data['user_id']))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
+        
         # Генерируем токен привязки
         import secrets
         from datetime import datetime, timedelta
@@ -4174,21 +4336,40 @@ def generate_telegram_bind_token():
         bind_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
         
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        # Проверяем наличие поля business_id в таблице TelegramBindTokens
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_business_id = 'business_id' in columns
         
-        # Удаляем старые неиспользованные токены пользователя
-        cursor.execute("""
-            DELETE FROM TelegramBindTokens 
-            WHERE user_id = ? AND used = 0 AND expires_at < ?
-        """, (user_data['user_id'], datetime.now().isoformat()))
+        # Если поля нет, добавляем его
+        if not has_business_id:
+            cursor.execute("ALTER TABLE TelegramBindTokens ADD COLUMN business_id TEXT")
+            db.conn.commit()
+        
+        # Удаляем старые неиспользованные токены для этого бизнеса
+        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
+            cursor.execute("""
+                DELETE FROM TelegramBindTokens 
+                WHERE business_id = ? AND used = 0 AND expires_at < ?
+            """, (business_id, datetime.now().isoformat()))
+        else:
+            cursor.execute("""
+                DELETE FROM TelegramBindTokens 
+                WHERE user_id = ? AND used = 0 AND expires_at < ?
+            """, (user_data['user_id'], datetime.now().isoformat()))
         
         # Создаем новый токен
         token_id = str(uuid.uuid4())
-        cursor.execute("""
-            INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
-            VALUES (?, ?, ?, ?, 0, ?)
-        """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
+        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
+            cursor.execute("""
+                INSERT INTO TelegramBindTokens (id, user_id, business_id, token, expires_at, used, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?)
+            """, (token_id, user_data['user_id'], business_id, bind_token, expires_at.isoformat(), datetime.now().isoformat()))
+        else:
+            cursor.execute("""
+                INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
+                VALUES (?, ?, ?, ?, 0, ?)
+            """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
         
         db.conn.commit()
         db.close()
@@ -4206,7 +4387,7 @@ def generate_telegram_bind_token():
 
 @app.route('/api/telegram/bind/status', methods=['GET'])
 def get_telegram_bind_status():
-    """Проверка статуса привязки Telegram аккаунта"""
+    """Проверка статуса привязки Telegram аккаунта для конкретного бизнеса"""
     try:
         # Проверяем авторизацию
         auth_header = request.headers.get('Authorization')
@@ -4218,21 +4399,67 @@ def get_telegram_bind_status():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
+        # Получаем business_id из query параметров
+        business_id = request.args.get('business_id')
+        
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+        
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем, привязан ли Telegram
-        cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
-        user_row = cursor.fetchone()
+        # Проверяем, что бизнес принадлежит пользователю
+        cursor.execute("SELECT id FROM Businesses WHERE id = ? AND owner_id = ?", (business_id, user_data['user_id']))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
         
-        is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
+        # Проверяем наличие поля business_id в таблице TelegramBindTokens
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_business_id = 'business_id' in columns
+        
+        # Проверяем, привязан ли Telegram для этого бизнеса
+        is_linked = False
+        user_row = None
+        
+        if has_business_id:
+            # Проверяем, есть ли использованный токен для ЭТОГО КОНКРЕТНОГО бизнеса
+            # Важно: проверяем только токены с business_id = текущему бизнесу
+            # Токены с business_id = NULL или другим бизнесом не учитываются
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM TelegramBindTokens 
+                WHERE business_id = ? AND used = 1 AND user_id = ?
+            """, (business_id, user_data['user_id']))
+            result = cursor.fetchone()
+            has_used_token_for_this_business = result[0] > 0 if result else False
+            
+            print(f"🔍 Проверка статуса Telegram для бизнеса {business_id}: has_used_token_for_this_business={has_used_token_for_this_business}")
+            
+            if has_used_token_for_this_business:
+                # Проверяем, что у пользователя есть telegram_id
+                cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
+                user_row = cursor.fetchone()
+                is_linked = user_row and user_row[0] is not None and user_row[0] != 'None' and user_row[0] != ''
+                print(f"🔍 Telegram ID пользователя: {user_row[0] if user_row else None}, is_linked={is_linked}")
+            else:
+                # Нет использованного токена для этого бизнеса - не подключен
+                is_linked = False
+                user_row = None
+                print(f"🔍 Нет использованного токена для бизнеса {business_id} - не подключен")
+        else:
+            # Старая логика: проверяем только привязку к пользователю
+            cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
+            user_row = cursor.fetchone()
+            is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
         
         db.close()
         
         return jsonify({
             "success": True,
             "is_linked": is_linked,
-            "telegram_id": user_row[0] if is_linked else None
+            "telegram_id": user_row[0] if is_linked and user_row else None
         }), 200
         
     except Exception as e:
@@ -4256,20 +4483,38 @@ def verify_telegram_bind_token():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем токен
-        cursor.execute("""
-            SELECT id, user_id, expires_at, used
-            FROM TelegramBindTokens
-            WHERE token = ?
-        """, (bind_token,))
+        # Проверяем токен (включая business_id)
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_business_id = 'business_id' in columns
         
-        token_row = cursor.fetchone()
+        if has_business_id:
+            cursor.execute("""
+                SELECT id, user_id, business_id, expires_at, used
+                FROM TelegramBindTokens
+                WHERE token = ?
+            """, (bind_token,))
+            token_row = cursor.fetchone()
+            if token_row:
+                token_id, user_id, business_id_from_token, expires_at, used = token_row
+            else:
+                token_row = None
+        else:
+            cursor.execute("""
+                SELECT id, user_id, expires_at, used
+                FROM TelegramBindTokens
+                WHERE token = ?
+            """, (bind_token,))
+            token_row = cursor.fetchone()
+            if token_row:
+                token_id, user_id, expires_at, used = token_row
+                business_id_from_token = None
+            else:
+                token_row = None
         
         if not token_row:
             db.close()
             return jsonify({"error": "Токен не найден"}), 404
-        
-        token_id, user_id, expires_at, used = token_row
         
         # Проверяем срок действия
         from datetime import datetime
@@ -4297,11 +4542,19 @@ def verify_telegram_bind_token():
         """, (telegram_id, datetime.now().isoformat(), user_id))
         
         # Помечаем токен как использованный
-        cursor.execute("""
-            UPDATE TelegramBindTokens
-            SET used = 1
-            WHERE id = ?
-        """, (token_id,))
+        # Если у токена был business_id, сохраняем его при обновлении
+        if has_business_id and business_id_from_token:
+            cursor.execute("""
+                UPDATE TelegramBindTokens
+                SET used = 1, business_id = ?
+                WHERE id = ?
+            """, (business_id_from_token, token_id))
+        else:
+            cursor.execute("""
+                UPDATE TelegramBindTokens
+                SET used = 1
+                WHERE id = ?
+            """, (token_id,))
         
         db.conn.commit()
         
