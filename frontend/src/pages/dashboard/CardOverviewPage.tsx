@@ -351,12 +351,12 @@ export const CardOverviewPage = () => {
         </div>
       </div>
 
-      {/* Работа с Яндекс Картами */}
+      {/* Работа с картами */}
       <div className="bg-white rounded-lg border border-gray-200">
         <Accordion type="single" collapsible defaultValue="yamaps-tools">
           <AccordionItem value="yamaps-tools">
             <AccordionTrigger className="px-6">
-              <span className="text-xl font-semibold text-gray-900">Работа с Яндекс Картами</span>
+              <span className="text-xl font-semibold text-gray-900">Работа с картами</span>
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-6 p-6">

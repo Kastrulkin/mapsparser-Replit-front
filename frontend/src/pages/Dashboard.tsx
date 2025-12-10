@@ -1383,12 +1383,12 @@ const Dashboard = () => {
             </div>
           </div>
                     
-          {/* Работа с Яндекс Картами (сворачиваемый блок) */}
+          {/* Работа с картами (сворачиваемый блок) */}
           <div className="mb-8 bg-gradient-to-br from-white via-gray-50 to-white rounded-lg border-2 border-gray-300 shadow-md">
             <Accordion type="single" collapsible defaultValue="yamaps-tools">
               <AccordionItem value="yamaps-tools">
                 <AccordionTrigger className="px-4">
-                  <span className="text-xl font-semibold text-gray-900">Работа с Яндекс Картами</span>
+                  <span className="text-xl font-semibold text-gray-900">Работа с картами</span>
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-8">

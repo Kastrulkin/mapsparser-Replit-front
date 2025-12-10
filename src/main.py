@@ -6,7 +6,7 @@ import sys
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
-from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
 from parser import parse_yandex_card
 from analyzer import analyze_card
@@ -1487,9 +1487,58 @@ def client_info():
             )
         """)
 
+        # Таблица ссылок на карты (несколько на бизнес)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessMapLinks (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                business_id TEXT,
+                url TEXT,
+                map_type TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Таблица результатов парсинга карт
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS MapParseResults (
+                id TEXT PRIMARY KEY,
+                business_id TEXT,
+                url TEXT,
+                map_type TEXT,
+                rating TEXT,
+                reviews_count INTEGER,
+                news_count INTEGER,
+                photos_count INTEGER,
+                report_path TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         if request.method == 'GET':
             cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
+
+            # Получаем ссылки на карты для текущего бизнеса (если указан)
+            links = []
+            current_business_id = request.args.get('business_id')
+            if current_business_id:
+                cursor.execute("""
+                    SELECT id, url, map_type, created_at 
+                    FROM BusinessMapLinks 
+                    WHERE business_id = ? 
+                    ORDER BY created_at DESC
+                """, (current_business_id,))
+                link_rows = cursor.fetchall()
+                links = [
+                    {
+                        "id": r[0],
+                        "url": r[1],
+                        "mapType": r[2],
+                        "createdAt": r[3]
+                    } for r in link_rows
+                ]
+
             db.close()
             if not row:
                 return jsonify({
@@ -1499,7 +1548,8 @@ def client_info():
                     "address": "",
                     "workingHours": "",
                     "description": "",
-                    "services": ""
+                    "services": "",
+                    "mapLinks": links
                 })
             return jsonify({
                 "success": True,
@@ -1508,7 +1558,8 @@ def client_info():
                 "address": row[2] or "",
                 "workingHours": row[3] or "",
                 "description": row[4] or "",
-                "services": row[5] or ""
+                "services": row[5] or "",
+                "mapLinks": links
             })
 
         # POST/PUT: сохранить/обновить
@@ -1540,9 +1591,65 @@ def client_info():
         )
         db.conn.commit()
 
+        # Сохраняем ссылки на карты, если переданы
+        map_links = data.get('mapLinks') or data.get('map_links') or []
+        business_id = (data.get('businessId') or data.get('business_id'))
+
+        def detect_map_type(url: str) -> str:
+            u = (url or '').lower()
+            if 'yandex' in u:
+                return 'yandex'
+            if 'google' in u:
+                return 'google'
+            return 'other'
+
+        if business_id and isinstance(map_links, list):
+            # Удаляем старые ссылки и результаты для консистентности
+            cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
+            db.conn.commit()
+
+            for link in map_links:
+                url = link.get('url') if isinstance(link, dict) else str(link)
+                if not url:
+                    continue
+                map_type = detect_map_type(url)
+                cursor.execute("""
+                    INSERT INTO BusinessMapLinks (id, user_id, business_id, url, map_type, created_at)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (str(uuid.uuid4()), user_id, business_id, url, map_type))
+                # Если это Яндекс карта — парсим и сохраняем результат
+                if map_type == 'yandex':
+                    try:
+                        card_data = parse_yandex_card(url)
+                        # Генерируем отчёт
+                        analysis = analyze_card(card_data)
+                        report_path = generate_html_report(card_data, analysis, {})
+                        rating = card_data.get('overview', {}).get('rating', '')
+                        reviews_count = card_data.get('reviews_count') or card_data.get('overview', {}).get('reviews_count') or 0
+                        news_count = len(card_data.get('news') or [])
+                        photos_count = card_data.get('photos_count') or 0
+
+                        cursor.execute("""
+                            INSERT INTO MapParseResults
+                            (id, business_id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        """, (
+                            str(uuid.uuid4()),
+                            business_id,
+                            url,
+                            map_type,
+                            str(rating),
+                            int(reviews_count or 0),
+                            int(news_count or 0),
+                            int(photos_count or 0),
+                            report_path
+                        ))
+                        db.conn.commit()
+                    except Exception as e:
+                        print(f"⚠️ Ошибка парсинга Яндекс-карты {url}: {e}")
+
         # Опциональная синхронизация с Businesses, если явно передан business_id
         try:
-            business_id = (data.get('businessId') or data.get('business_id'))
             if business_id:
                 # Проверим доступ
                 # Получим владельца бизнеса
@@ -1573,6 +1680,113 @@ def client_info():
     except Exception as e:
         print(f"❌ Ошибка сохранения клиентской информации: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<string:business_id>/map-parses', methods=['GET'])
+def get_map_parses(business_id):
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        user_id = user_data.get('user_id') or user_data.get('id')
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем владельца
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        owner_id = row[0]
+        if owner_id != user_id and not db.is_superadmin(user_id):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+
+        cursor.execute("""
+            SELECT id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY datetime(created_at) DESC
+        """, (business_id,))
+        rows = cursor.fetchall()
+        db.close()
+
+        items = []
+        for r in rows:
+            items.append({
+                "id": r[0],
+                "url": r[1],
+                "mapType": r[2],
+                "rating": r[3],
+                "reviewsCount": r[4],
+                "newsCount": r[5],
+                "photosCount": r[6],
+                "reportPath": r[7],
+                "createdAt": r[8]
+            })
+
+        return jsonify({"success": True, "items": items})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения результатов парсинга: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/map-report/<string:parse_id>', methods=['GET'])
+def get_map_report(parse_id):
+    try:
+        # Авторизация
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        user_id = user_data.get('user_id') or user_data.get('id')
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT m.report_path, m.business_id, b.owner_id
+            FROM MapParseResults m
+            LEFT JOIN Businesses b ON m.business_id = b.id
+            WHERE m.id = ?
+            LIMIT 1
+        """, (parse_id,))
+        row = cursor.fetchone()
+        db.close()
+
+        if not row:
+            return jsonify({"error": "Отчет не найден"}), 404
+
+        report_path = row[0]
+        business_owner = row[2]
+        if business_owner != user_id:
+            # Проверка суперадмина
+            db2 = DatabaseManager()
+            if not db2.is_superadmin(user_id):
+                db2.close()
+                return jsonify({"error": "Нет доступа"}), 403
+            db2.close()
+
+        if not report_path or not os.path.exists(report_path):
+            return jsonify({"error": "Файл отчета недоступен"}), 404
+
+        with open(report_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+        return Response(html, mimetype='text/html')
+
+    except Exception as e:
+        print(f"❌ Ошибка выдачи отчета: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/analyze-screenshot', methods=['POST'])
 def analyze_screenshot():

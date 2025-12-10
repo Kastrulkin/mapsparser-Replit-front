@@ -14,7 +14,8 @@ export const ProfilePage = () => {
     businessName: '',
     businessType: '',
     address: '',
-    workingHours: ''
+    workingHours: '',
+    mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -300,6 +301,66 @@ export const ProfilePage = () => {
               disabled={!editClientInfo}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
+          </div>
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Ссылки на карты</label>
+              {editClientInfo && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setClientInfo({
+                      ...clientInfo,
+                      mapLinks: [...clientInfo.mapLinks, { url: '' }]
+                    })
+                  }
+                >
+                  + Добавить ссылку
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {(clientInfo.mapLinks || []).map((link, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    type="url"
+                    value={link.url}
+                    onChange={(e) => {
+                      const updated = [...clientInfo.mapLinks];
+                      updated[idx] = { ...updated[idx], url: e.target.value };
+                      setClientInfo({ ...clientInfo, mapLinks: updated });
+                    }}
+                    disabled={!editClientInfo}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="https://yandex.ru/maps/... или https://maps.google.com/..."
+                  />
+                  {link.mapType && (
+                    <span className="text-xs text-gray-500 w-16 text-center">
+                      {link.mapType}
+                    </span>
+                  )}
+                  {editClientInfo && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        const updated = [...clientInfo.mapLinks];
+                        updated.splice(idx, 1);
+                        setClientInfo({ ...clientInfo, mapLinks: updated });
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {!clientInfo.mapLinks?.length && (
+                <div className="text-sm text-gray-500">
+                  Пока нет ссылок. Добавьте ссылку на Яндекс или Google карты.
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {editClientInfo && (

@@ -1,5 +1,6 @@
 import { useOutletContext } from 'react-router-dom';
 import ProgressTracker from '@/components/ProgressTracker';
+import MapParseTable from '@/components/MapParseTable';
 
 export const ProgressPage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
@@ -12,6 +13,7 @@ export const ProgressPage = () => {
       </div>
 
       <ProgressTracker />
+      <MapParseTable businessId={currentBusinessId} />
     </div>
   );
 };
