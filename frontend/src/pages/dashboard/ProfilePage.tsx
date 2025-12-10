@@ -35,7 +35,8 @@ export const ProfilePage = () => {
   useEffect(() => {
     const loadClientInfo = async () => {
       try {
-        const response = await fetch(`${window.location.origin}/api/client-info`, {
+        const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+        const response = await fetch(`${window.location.origin}/api/client-info${qs}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
           }

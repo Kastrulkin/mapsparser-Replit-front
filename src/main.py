@@ -1591,8 +1591,12 @@ def client_info():
         )
         db.conn.commit()
 
-        # Сохраняем ссылки на карты, если переданы
-        map_links = data.get('mapLinks') or data.get('map_links') or []
+        # Сохраняем ссылки на карты, если переданы (чтобы не стирать при отсутствии поля)
+        map_links = None
+        if 'mapLinks' in data:
+            map_links = data.get('mapLinks')
+        elif 'map_links' in data:
+            map_links = data.get('map_links')
         business_id = (data.get('businessId') or data.get('business_id'))
 
         def detect_map_type(url: str) -> str:
