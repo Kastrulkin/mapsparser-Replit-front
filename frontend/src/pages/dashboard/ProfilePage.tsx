@@ -17,6 +17,8 @@ export const ProfilePage = () => {
     workingHours: '',
     mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -40,7 +42,10 @@ export const ProfilePage = () => {
         });
         if (response.ok) {
           const data = await response.json();
-          setClientInfo(data);
+          setClientInfo({
+            ...data,
+            mapLinks: (data.mapLinks && Array.isArray(data.mapLinks) ? data.mapLinks : [])
+          });
         }
       } catch (error) {
         console.error('Ошибка загрузки информации о бизнесе:', error);
@@ -93,6 +98,8 @@ export const ProfilePage = () => {
   };
 
   const handleSaveClientInfo = async () => {
+    setParseStatus('processing');
+    setParseErrors([]);
     setSavingClientInfo(true);
     try {
       const response = await fetch(`${window.location.origin}/api/client-info`, {
@@ -119,13 +126,26 @@ export const ProfilePage = () => {
             working_hours: clientInfo.workingHours
           });
         }
+
+        const data = await response.json();
+        if (data.parseStatus === 'error') {
+          setParseStatus('error');
+          setParseErrors(data.parseErrors || []);
+          setError('Парсер завершился с ошибкой');
+        } else if (data.parseStatus === 'completed' || data.parseStatus === 'skipped') {
+          setParseStatus('done');
+        } else {
+          setParseStatus('done');
+        }
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Ошибка сохранения информации');
+        setParseStatus('error');
       }
     } catch (error) {
       console.error('Ошибка сохранения информации:', error);
       setError('Ошибка сохранения информации');
+      setParseStatus('error');
     } finally {
       setSavingClientInfo(false);
     }
@@ -320,8 +340,16 @@ export const ProfilePage = () => {
                 </Button>
               )}
             </div>
+            <p className="text-xs text-gray-500 mb-2">
+              Добавьте ссылку на ваш бизнес на картах — раз в неделю мы будем получать данные, чтобы отслеживать прогресс и давать советы по оптимизации.
+              {' '}
+              Данные с карт будут сохраняться на вкладке{' '}
+              <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
+                Прогресс
+              </a>.
+            </p>
             <div className="space-y-2">
-              {(clientInfo.mapLinks || []).map((link, idx) => (
+              {(clientInfo.mapLinks && clientInfo.mapLinks.length ? clientInfo.mapLinks : [{ url: '' }]).map((link, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
                   <input
                     type="url"
@@ -333,7 +361,7 @@ export const ProfilePage = () => {
                     }}
                     disabled={!editClientInfo}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="https://yandex.ru/maps/... или https://maps.google.com/..."
+                    placeholder="Система сама определит, какими картами вы пользуетесь"
                   />
                   {link.mapType && (
                     <span className="text-xs text-gray-500 w-16 text-center">
@@ -355,9 +383,29 @@ export const ProfilePage = () => {
                   )}
                 </div>
               ))}
-              {!clientInfo.mapLinks?.length && (
-                <div className="text-sm text-gray-500">
-                  Пока нет ссылок. Добавьте ссылку на Яндекс или Google карты.
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={savingClientInfo}
+                  onClick={() => {
+                    // Парсер запускается вместе с сохранением ссылок
+                    handleSaveClientInfo();
+                  }}
+                >
+                  Запустить парсер данных
+                </Button>
+              </div>
+              <div className="text-xs text-gray-600">
+                Статус парсинга:{' '}
+                {parseStatus === 'processing' && <span className="text-blue-600">в процессе...</span>}
+                {parseStatus === 'done' && <span className="text-green-600">завершён</span>}
+                {parseStatus === 'error' && <span className="text-red-600">ошибка</span>}
+                {parseStatus === 'idle' && <span className="text-gray-500">ожидает запуска</span>}
+              </div>
+              {parseErrors.length > 0 && (
+                <div className="text-xs text-red-600">
+                  Ошибки: {parseErrors.join('; ')}
                 </div>
               )}
             </div>

@@ -1603,10 +1603,16 @@ def client_info():
                 return 'google'
             return 'other'
 
+        parse_errors = []
+        parse_status = "skipped"
+
         if business_id and isinstance(map_links, list):
             # Удаляем старые ссылки и результаты для консистентности
             cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
             db.conn.commit()
+
+            if map_links:
+                parse_status = "completed"
 
             for link in map_links:
                 url = link.get('url') if isinstance(link, dict) else str(link)
@@ -1647,6 +1653,16 @@ def client_info():
                         db.conn.commit()
                     except Exception as e:
                         print(f"⚠️ Ошибка парсинга Яндекс-карты {url}: {e}")
+                        parse_status = "error"
+                        parse_errors.append(str(e))
+                        try:
+                            send_email(
+                                "demyanovap@yandex.ru",
+                                "Ошибка парсинга Яндекс-карты",
+                                f"URL: {url}\nОшибка: {e}"
+                            )
+                        except Exception as _:
+                            pass
 
         # Опциональная синхронизация с Businesses, если явно передан business_id
         try:
@@ -1675,7 +1691,7 @@ def client_info():
             pass
 
         db.close()
-        return jsonify({"success": True})
+        return jsonify({"success": True, "parseStatus": parse_status, "parseErrors": parse_errors})
 
     except Exception as e:
         print(f"❌ Ошибка сохранения клиентской информации: {e}")
