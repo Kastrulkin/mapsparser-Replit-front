@@ -1610,13 +1610,14 @@ def client_info():
         parse_errors = []
         parse_status = "skipped"
 
+        # Обновляем ссылки, только если поле пришло в payload
         if business_id and isinstance(map_links, list):
             # Удаляем старые ссылки и результаты для консистентности
             cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
             db.conn.commit()
 
             if map_links:
-                parse_status = "completed"
+                parse_status = "processing"
 
             for link in map_links:
                 url = link.get('url') if isinstance(link, dict) else str(link)
@@ -1655,6 +1656,7 @@ def client_info():
                             report_path
                         ))
                         db.conn.commit()
+                        parse_status = "completed"
                     except Exception as e:
                         print(f"⚠️ Ошибка парсинга Яндекс-карты {url}: {e}")
                         parse_status = "error"
@@ -1667,6 +1669,25 @@ def client_info():
                             )
                         except Exception as _:
                             pass
+
+        # Всегда возвращаем текущие ссылки для бизнеса
+        current_links = []
+        if business_id:
+            cursor.execute("""
+                SELECT id, url, map_type, created_at 
+                FROM BusinessMapLinks 
+                WHERE business_id = ? 
+                ORDER BY created_at DESC
+            """, (business_id,))
+            link_rows = cursor.fetchall()
+            current_links = [
+                {
+                    "id": r[0],
+                    "url": r[1],
+                    "mapType": r[2],
+                    "createdAt": r[3]
+                } for r in link_rows
+            ]
 
         # Опциональная синхронизация с Businesses, если явно передан business_id
         try:
@@ -1695,7 +1716,7 @@ def client_info():
             pass
 
         db.close()
-        return jsonify({"success": True, "parseStatus": parse_status, "parseErrors": parse_errors})
+        return jsonify({"success": True, "parseStatus": parse_status, "parseErrors": parse_errors, "mapLinks": current_links})
 
     except Exception as e:
         print(f"❌ Ошибка сохранения клиентской информации: {e}")

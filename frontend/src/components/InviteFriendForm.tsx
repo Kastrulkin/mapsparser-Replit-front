@@ -85,7 +85,7 @@ const InviteFriendForm = ({ onSuccess, onError }: { onSuccess?: () => void; onEr
         
         <div>
           <label htmlFor="friend-url" className="block text-sm font-medium text-foreground mb-2">
-            Ссылка на бизнес друга (Яндекс.Карты)
+            Ссылка на бизнес друга на картах
           </label>
           <input
             id="friend-url"
@@ -93,7 +93,7 @@ const InviteFriendForm = ({ onSuccess, onError }: { onSuccess?: () => void; onEr
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
-            placeholder="https://yandex.ru/maps/org/..."
+            placeholder="https://maps.example.com/..."
           />
         </div>
         
