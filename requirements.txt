@@ -12,6 +12,7 @@ playwright>=1.40.0
 transformers>=4.35.0
 torch>=2.1.0
 flask>=2.3.0
+flask-cors>=4.0.0
 
 # Дополнительные зависимости для веб-сервера
 gunicorn>=21.2.0
