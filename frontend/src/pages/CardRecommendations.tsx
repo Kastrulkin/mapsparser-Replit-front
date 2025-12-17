@@ -4,7 +4,7 @@ const CardRecommendations = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Рекомендации по карточке</h1>
-          <p className="text-gray-600 mt-2">Список улучшений с привязкой к требованиям Яндекса.</p>
+          <p className="text-gray-600 mt-2">Список улучшений с привязкой к требованиям карт.</p>
         </div>
 
         <div className="space-y-3">

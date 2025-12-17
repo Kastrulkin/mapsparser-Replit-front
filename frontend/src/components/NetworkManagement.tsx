@@ -342,7 +342,7 @@ export const NetworkManagement: React.FC = () => {
                       <div>
                         <Label htmlFor={`location-yandex-${index}`}>
                           <LinkIcon className="w-4 h-4 inline mr-1" />
-                          Ссылка на Яндекс.Карты
+                          Ссылка на карты
                         </Label>
                         <Input
                           id={`location-yandex-${index}`}

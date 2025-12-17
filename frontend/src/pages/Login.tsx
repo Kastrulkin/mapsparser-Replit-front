@@ -247,7 +247,7 @@ const Login = () => {
               </div>
               <div>
                 <label htmlFor="register-yandex-url" className="block text-sm font-medium text-gray-700">
-                  Ссылка на карты Яндекс
+                  Ссылка на карты
                 </label>
                 <input
                   id="register-yandex-url"

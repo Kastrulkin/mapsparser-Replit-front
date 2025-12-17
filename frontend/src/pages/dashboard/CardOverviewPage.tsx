@@ -163,7 +163,7 @@ export const CardOverviewPage = () => {
       return;
     }
     if (!yandexCardUrl.trim()) {
-      setError('Введите ссылку на карточку Яндекс.Карт');
+      setError('Введите ссылку на карточку на картах');
       return;
     }
 
@@ -179,12 +179,12 @@ export const CardOverviewPage = () => {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        setSuccess('Ссылка на Яндекс.Карты сохранена и синхронизация запущена');
+        setSuccess('Ссылка на карты сохранена и синхронизация запущена');
       } else {
-        setError(data.error || 'Не удалось сохранить ссылку на Яндекс.Карты');
+        setError(data.error || 'Не удалось сохранить ссылку на карты');
       }
     } catch (e: any) {
-      setError('Ошибка сохранения ссылки на Яндекс.Карты: ' + e.message);
+      setError('Ошибка сохранения ссылки на карты: ' + e.message);
     }
   };
 
@@ -404,11 +404,11 @@ export const CardOverviewPage = () => {
               {/* Шаг 1 */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</p>
+                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Вставьте ссылку на карточку вашего салона в Яндекс.Картах.
+                        Вставьте ссылку на карточку вашего салона на картах.
                       </label>
                       <input
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"

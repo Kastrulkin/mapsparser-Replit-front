@@ -127,7 +127,7 @@ const Dashboard = () => {
             });
           }
 
-          // Обновляем ссылку на Яндекс.Карты для текущего бизнеса (если есть)
+          // Обновляем ссылку на карты для текущего бизнеса (если есть)
           if (data.business && data.business.yandex_url) {
             setYandexCardUrl(data.business.yandex_url);
           } else {
@@ -153,7 +153,7 @@ const Dashboard = () => {
       return;
     }
     if (!yandexCardUrl.trim()) {
-      setError('Введите ссылку на карточку Яндекс.Карт');
+      setError('Введите ссылку на карточку на картах');
       return;
     }
 
@@ -169,12 +169,12 @@ const Dashboard = () => {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        setSuccess('Ссылка на Яндекс.Карты сохранена и синхронизация запущена');
+        setSuccess('Ссылка на карты сохранена и синхронизация запущена');
       } else {
-        setError(data.error || 'Не удалось сохранить ссылку на Яндекс.Карты');
+        setError(data.error || 'Не удалось сохранить ссылку на карты');
       }
     } catch (e: any) {
-      setError('Ошибка сохранения ссылки на Яндекс.Карты: ' + e.message);
+      setError('Ошибка сохранения ссылки на карты: ' + e.message);
     }
   };
   const [newService, setNewService] = useState({
@@ -441,7 +441,7 @@ const Dashboard = () => {
 
   const handleCreateReport = async () => {
     if (!createReportForm.yandexUrl.trim()) {
-      setError('Введите URL страницы Яндекс.Карт');
+      setError('Введите URL страницы на картах');
       return;
     }
 
@@ -539,12 +539,12 @@ const Dashboard = () => {
   // Функция автоматического анализа карточки
   const handleAutoAnalysis = async () => {
     if (!autoAnalysisUrl.trim()) {
-      setError('Введите URL карточки на Яндекс.Картах');
+      setError('Введите URL карточки на картах');
       return;
     }
 
-    if (!autoAnalysisUrl.includes('yandex.ru/maps')) {
-      setError('Введите корректную ссылку на Яндекс.Карты');
+    if (!autoAnalysisUrl.includes('yandex.ru/maps') && !autoAnalysisUrl.includes('google.com/maps')) {
+      setError('Введите корректную ссылку на карты');
       return;
     }
 
@@ -905,7 +905,7 @@ const Dashboard = () => {
   }
 
   const wizardNext = () => {
-    // На первом шаге сохраняем ссылку на Яндекс.Карты, если она указана
+    // На первом шаге сохраняем ссылку на карты, если она указана
     if (wizardStep === 1) {
       handleSaveYandexLink();
     }
@@ -1436,11 +1436,11 @@ const Dashboard = () => {
               {/* Шаг 1 */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</p>
+                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Вставьте ссылку на карточку вашего салона в Яндекс.Картах.
+                        Вставьте ссылку на карточку вашего салона на картах.
                       </label>
                       <input
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"

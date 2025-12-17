@@ -51,7 +51,7 @@ const EmailYandexForm: React.FC = () => {
       />
       <input
         type="url"
-        placeholder="Ссылка на Яндекс.Карты"
+        placeholder="Ссылка на карты"
         value={yandexUrl}
         onChange={e => setYandexUrl(e.target.value)}
         required

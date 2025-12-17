@@ -22,11 +22,11 @@ const WizardYandex = () => {
         {/* Шаг 1 */}
         {step === 1 && (
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="mb-4 text-gray-600">Соберём ключевые данные по карточке, чтобы дать точные рекомендации Яндекса.</div>
+            <div className="mb-4 text-gray-600">Соберём ключевые данные по карточке, чтобы дать точные рекомендации.</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Вставьте ссылку на карточку вашего салона в Яндекс.Картах.
+                  Вставьте ссылку на карточку вашего салона на картах.
                 </label>
                 <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="https://yandex.ru/maps/org/..." />
               </div>

@@ -28,7 +28,7 @@ const Hero = () => {
               {t.hero.subtitle}
             </p>
 
-            {/* Форма для email и ссылки на Яндекс.Карты */}
+            {/* Форма для email и ссылки на карты */}
             <form
               id="hero-form"
               onSubmit={async (e) => {
