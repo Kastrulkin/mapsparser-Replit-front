@@ -103,23 +103,56 @@ export const ProfilePage = () => {
     setParseErrors([]);
     setSavingClientInfo(true);
     try {
+      // Фильтруем пустые ссылки перед отправкой
+      const validMapLinks = (clientInfo.mapLinks || [])
+        .map(link => typeof link === 'string' ? link : link.url)
+        .filter(url => url && url.trim());
+      
+      const payload = {
+        ...clientInfo,
+        businessId: currentBusinessId,
+        mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
+      };
+      
+      console.log('Отправляю данные:', payload);
+
       const response = await fetch(`${window.location.origin}/api/client-info`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         },
-        body: JSON.stringify({
-          ...clientInfo,
-          businessId: currentBusinessId
-        })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
+        const data = await response.json();
+        console.log('Ответ сервера:', data);
+        
+        // Всегда перезагружаем данные после сохранения для синхронизации
+        const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+        const reloadResponse = await fetch(`${window.location.origin}/api/client-info${qs}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          }
+        });
+        if (reloadResponse.ok) {
+          const reloadData = await reloadResponse.json();
+          setClientInfo({
+            ...reloadData,
+            mapLinks: (reloadData.mapLinks && Array.isArray(reloadData.mapLinks) ? reloadData.mapLinks : [])
+          });
+        } else {
+          // Если перезагрузка не удалась, используем данные из ответа
+          if (Array.isArray(data.mapLinks)) {
+            setClientInfo({ ...clientInfo, mapLinks: data.mapLinks });
+          }
+        }
+        
         setEditClientInfo(false);
         setSuccess('Информация о бизнесе сохранена');
         
-        // Обновляем название бизнеса в списке businesses, чтобы оно отображалось в выпадающем списке
+        // Обновляем название бизнеса в списке businesses
         if (currentBusinessId && updateBusiness) {
           updateBusiness(currentBusinessId, {
             name: clientInfo.businessName,
@@ -128,19 +161,31 @@ export const ProfilePage = () => {
           });
         }
 
-        const data = await response.json();
-        if (data.parseStatus === 'error') {
+        // Проверяем статус парсинга
+        if (data.parseStatus === 'queued') {
+          setParseStatus('queued');
+          // Начинаем периодическую проверку статуса
+          checkParseStatus();
+        } else if (data.parseStatus === 'error') {
           setParseStatus('error');
           setParseErrors(data.parseErrors || []);
           setError('Парсер завершился с ошибкой');
-        } else if (data.parseStatus === 'completed' || data.parseStatus === 'skipped') {
-          setParseStatus('done');
         } else {
           setParseStatus('done');
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Ошибка сохранения информации');
+        // Проверяем, не истёк ли токен
+        if (response.status === 401) {
+          setError('Сессия истекла. Пожалуйста, войдите заново.');
+          // Очищаем токен и перенаправляем на страницу входа
+          localStorage.removeItem('auth_token');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        } else {
+          const errorData = await response.json();
+          setError(errorData.error || 'Ошибка сохранения информации');
+        }
         setParseStatus('error');
       }
     } catch (error) {
@@ -149,6 +194,35 @@ export const ProfilePage = () => {
       setParseStatus('error');
     } finally {
       setSavingClientInfo(false);
+    }
+  };
+
+  const checkParseStatus = async () => {
+    if (!currentBusinessId) return;
+    
+    try {
+      const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/parse-status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const status = data.status;
+        
+        if (status === 'done' || status === 'error' || status === 'captcha') {
+          setParseStatus(status);
+          // Останавливаем проверку
+          return;
+        } else if (status === 'processing' || status === 'queued') {
+          setParseStatus(status);
+          // Продолжаем проверку через 3 секунды
+          setTimeout(checkParseStatus, 3000);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка проверки статуса парсинга:', error);
     }
   };
 
@@ -399,9 +473,11 @@ export const ProfilePage = () => {
               </div>
               <div className="text-xs text-gray-600">
                 Статус парсинга:{' '}
+                {parseStatus === 'queued' && <span className="text-yellow-600">в очереди...</span>}
                 {parseStatus === 'processing' && <span className="text-blue-600">в процессе...</span>}
                 {parseStatus === 'done' && <span className="text-green-600">завершён</span>}
                 {parseStatus === 'error' && <span className="text-red-600">ошибка</span>}
+                {parseStatus === 'captcha' && <span className="text-orange-600">требуется капча</span>}
                 {parseStatus === 'idle' && <span className="text-gray-500">ожидает запуска</span>}
               </div>
               {parseErrors.length > 0 && (
