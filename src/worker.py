@@ -21,6 +21,18 @@ def process_queue():
     cursor = conn.cursor()
     
     try:
+        # Проверяем, существует ли таблица ParseQueue
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ParseQueue'")
+        if not cursor.fetchone():
+            print("⚠️ Таблица ParseQueue не найдена. Инициализирую схему БД...")
+            conn.close()
+            # Импортируем и вызываем инициализацию
+            from init_database_schema import init_database_schema
+            init_database_schema()
+            # Открываем новое соединение после инициализации
+            conn = get_db_connection()
+            cursor = conn.cursor()
+        
         # Проверяем и добавляем недостающие поля в ParseQueue
         try:
             cursor.execute("PRAGMA table_info(ParseQueue)")
