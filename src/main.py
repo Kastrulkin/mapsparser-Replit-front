@@ -1689,57 +1689,48 @@ def client_info():
                 } for r in link_rows
             ]
 
-        # Синхронизация с Businesses: создаём или обновляем бизнес
+        # Синхронизация с Businesses: обновляем существующий бизнес
         try:
             business_name = data.get('businessName') or ''
-            created_new_business = False
             
-            # Если business_id не передан, но есть business_name - ищем или создаём бизнес
-            if not business_id and business_name:
-                # Ищем существующий бизнес для этого пользователя с таким именем
-                cursor.execute("""
-                    SELECT id FROM Businesses 
-                    WHERE owner_id = ? AND name = ? AND is_active = 1
-                    LIMIT 1
-                """, (user_id, business_name))
-                existing_business = cursor.fetchone()
-                
-                if existing_business:
-                    # Бизнес существует - используем его
-                    business_id = existing_business[0]
-                    print(f"✅ Найден существующий бизнес: {business_name} (ID: {business_id})")
-                else:
-                    # Бизнеса нет - создаём новый
-                    business_id = str(uuid.uuid4())
+            # Если business_id не передан, ищем существующий бизнес пользователя
+            if not business_id:
+                # Сначала ищем по имени (если переименовали)
+                if business_name:
                     cursor.execute("""
-                        INSERT INTO Businesses 
-                        (id, name, business_type, address, working_hours, owner_id, is_active, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """, (
-                        business_id,
-                        business_name,
-                        data.get('businessType') or 'beauty_salon',
-                        data.get('address') or '',
-                        data.get('workingHours') or '',
-                        user_id
-                    ))
-                    db.conn.commit()
-                    created_new_business = True
-                    print(f"✅ Создан новый бизнес: {business_name} (ID: {business_id})")
-            
-            # Обновляем бизнес, если передан business_id или создан новый
-            if business_id:
-                # Проверяем доступ (для существующих бизнесов)
-                if not created_new_business:
-                    cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-                    row = cursor.fetchone()
-                    owner_id = row[0] if row else None
-                    if not owner_id or (owner_id != user_id and not user_data.get('is_superadmin')):
-                        print(f"⚠️ Нет доступа к бизнесу {business_id}")
-                        business_id = None
+                        SELECT id FROM Businesses 
+                        WHERE owner_id = ? AND name = ? AND is_active = 1
+                        LIMIT 1
+                    """, (user_id, business_name))
+                    existing_by_name = cursor.fetchone()
+                    if existing_by_name:
+                        business_id = existing_by_name[0]
+                        print(f"✅ Найден бизнес по имени: {business_name} (ID: {business_id})")
                 
-                # Обновляем данные бизнеса
-                if business_id:
+                # Если не нашли по имени, берём первый активный бизнес пользователя
+                if not business_id:
+                    cursor.execute("""
+                        SELECT id FROM Businesses 
+                        WHERE owner_id = ? AND is_active = 1
+                        ORDER BY created_at ASC
+                        LIMIT 1
+                    """, (user_id,))
+                    first_business = cursor.fetchone()
+                    if first_business:
+                        business_id = first_business[0]
+                        print(f"✅ Используется первый бизнес пользователя (ID: {business_id})")
+            
+            # Обновляем бизнес, если найден
+            if business_id:
+                # Проверяем доступ
+                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+                row = cursor.fetchone()
+                owner_id = row[0] if row else None
+                if not owner_id or (owner_id != user_id and not user_data.get('is_superadmin')):
+                    print(f"⚠️ Нет доступа к бизнесу {business_id}")
+                    business_id = None
+                else:
+                    # Обновляем данные бизнеса
                     updates = []
                     params = []
                     if data.get('businessName') is not None:
