@@ -70,8 +70,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
       <div className="flex items-center justify-end px-4 py-3">
               <div className="flex items-center gap-3">
-                 {/* Показываем переключатель бизнесов для суперадмина всегда, для остальных - если больше 1 */}
-                 {((isSuperadmin && businesses.length > 0) || businesses.length > 1) && (
+                 {/* Показываем переключатель бизнесов для суперадмина всегда (даже если бизнесов нет), для остальных - если больше 1 */}
+                 {(isSuperadmin || businesses.length > 1) && (
                    <BusinessSwitcher
                      businesses={businesses}
                      currentBusinessId={currentBusinessId || undefined}

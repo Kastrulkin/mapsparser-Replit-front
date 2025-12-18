@@ -46,9 +46,10 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     window.location.reload();
   };
 
-  if (businesses.length === 0) {
-    return null;
-  }
+  // Для суперадмина показываем список всегда, даже если бизнесов нет
+  // Если бизнесов нет - показываем только опцию "Добавить новую компанию"
+  const hasBusinesses = businesses.length > 0;
+  const showAddOnly = isSuperadmin && !hasBusinesses;
 
   return (
     <div className="relative">
@@ -59,7 +60,9 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
         <Building2 className="w-4 h-4 text-gray-600" />
         <div className="text-left">
           <div className="text-sm font-medium text-gray-900">
-            {selectedBusiness?.name || 'Выберите бизнес'}
+            {showAddOnly 
+              ? 'Добавить компанию' 
+              : selectedBusiness?.name || 'Выберите бизнес'}
           </div>
           {isSuperadmin && selectedBusiness?.owner_name && (
             <div className="text-xs text-gray-500">
@@ -72,7 +75,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {businesses.map((business) => (
+          {hasBusinesses && businesses.map((business) => (
             <button
               key={business.id}
               onClick={() => handleBusinessSelect(business)}
@@ -110,11 +113,15 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
                 setIsOpen(false);
                 setShowCreateModal(true);
               }}
-              className="w-full text-left px-4 py-3 border-t border-gray-200 hover:bg-blue-50 transition-colors"
+              className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
+                hasBusinesses ? 'border-t border-gray-200' : ''
+              }`}
             >
               <div className="flex items-center space-x-3">
                 <Plus className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">Добавить новый бизнес</span>
+                <span className="text-sm font-medium text-blue-600">
+                  {showAddOnly ? 'Добавить новую компанию' : 'Добавить новый бизнес'}
+                </span>
               </div>
             </button>
           )}
