@@ -14,6 +14,7 @@ from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
+from init_database_schema import init_database_schema
 import uuid
 import base64
 import os
@@ -1725,46 +1726,6 @@ def client_info():
             if yandex_urls:
                 parse_status = "queued"
                 
-                # Создаём таблицу ParseQueue, если её нет
-                try:
-                    cursor.execute("""
-                        CREATE TABLE IF NOT EXISTS ParseQueue (
-                            id TEXT PRIMARY KEY,
-                            url TEXT NOT NULL,
-                            user_id TEXT NOT NULL,
-                            business_id TEXT,
-                            status TEXT NOT NULL DEFAULT 'pending',
-                            retry_after TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE,
-                            FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
-                        )
-                    """)
-                    db.conn.commit()
-                    
-                    # Создаём индексы, если их нет
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_status ON ParseQueue(status)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_business_id ON ParseQueue(business_id)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_user_id ON ParseQueue(user_id)")
-                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_created_at ON ParseQueue(created_at)")
-                    db.conn.commit()
-                    
-                    # Проверяем/добавляем поле business_id в ParseQueue (для старых таблиц)
-                    cursor.execute("PRAGMA table_info(ParseQueue)")
-                    columns = [row[1] for row in cursor.fetchall()]
-                    if 'business_id' not in columns:
-                        print("📝 Добавляю поле business_id в ParseQueue...")
-                        cursor.execute("ALTER TABLE ParseQueue ADD COLUMN business_id TEXT")
-                        db.conn.commit()
-                    if 'retry_after' not in columns:
-                        print("📝 Добавляю поле retry_after в ParseQueue...")
-                        cursor.execute("ALTER TABLE ParseQueue ADD COLUMN retry_after TEXT")
-                        db.conn.commit()
-                except Exception as e:
-                    print(f"⚠️ Ошибка создания/проверки ParseQueue: {e}")
-                    import traceback
-                    traceback.print_exc()
-                
                 # Добавляем задачи в очередь
                 for url in yandex_urls:
                     try:
@@ -1897,7 +1858,52 @@ def get_parse_status(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        # Проверяем статусы в очереди для этого бизнеса
+        # Получаем последнюю задачу парсинга для этого бизнеса с retry_after
+        cursor.execute("""
+            SELECT status, retry_after, created_at 
+            FROM ParseQueue 
+            WHERE business_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (business_id,))
+        queue_row = cursor.fetchone()
+        
+        retry_info = None
+        overall_status = "idle"
+        
+        if queue_row:
+            overall_status = queue_row[0] if queue_row[0] else 'idle'
+            retry_after = queue_row[1] if queue_row[1] else None
+            
+            # Вычисляем оставшееся время до повтора для статуса captcha
+            if overall_status == 'captcha' and retry_after:
+                try:
+                    from datetime import datetime
+                    retry_dt = datetime.fromisoformat(retry_after)
+                    now = datetime.now()
+                    if retry_dt > now:
+                        delta = retry_dt - now
+                        hours = int(delta.total_seconds() / 3600)
+                        minutes = int((delta.total_seconds() % 3600) / 60)
+                        retry_info = {
+                            'retry_after': retry_after,
+                            'hours': hours,
+                            'minutes': minutes
+                        }
+                        print(f"✅ Вычислен retry_info: {hours} ч {minutes} мин")
+                    else:
+                        print(f"⚠️ Время retry_after уже прошло: {retry_after} < {now}")
+                        retry_info = None
+                except Exception as e:
+                    print(f"⚠️ Ошибка вычисления retry_info: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    retry_info = None
+            else:
+                if overall_status == 'captcha':
+                    print(f"⚠️ Статус captcha, но retry_after отсутствует: {retry_after}")
+        
+        # Проверяем статусы в очереди для этого бизнеса (для обратной совместимости)
         cursor.execute("""
             SELECT status, COUNT(*) as count
             FROM ParseQueue
@@ -1910,24 +1916,54 @@ def get_parse_status(business_id):
         for row in status_rows:
             statuses[row[0]] = row[1]
         
-        # Определяем общий статус
-        overall_status = "idle"
-        if statuses.get('processing'):
-            overall_status = "processing"
-        elif statuses.get('pending') or statuses.get('queued'):
-            overall_status = "queued"
-        elif statuses.get('error'):
-            overall_status = "error"
-        elif statuses.get('captcha'):
-            overall_status = "captcha"
-        elif statuses.get('done'):
-            overall_status = "done"
+        # Определяем общий статус (если не определён выше из queue_row)
+        # НЕ переопределяем статус, если он уже установлен из queue_row (например, captcha)
+        if overall_status == "idle":
+            if statuses.get('processing'):
+                overall_status = "processing"
+            elif statuses.get('pending') or statuses.get('queued'):
+                overall_status = "queued"
+            elif statuses.get('error'):
+                overall_status = "error"
+            elif statuses.get('captcha'):
+                overall_status = "captcha"
+                # Если статус captcha, но retry_info не был вычислен выше, вычисляем его здесь
+                if retry_info is None:
+                    cursor.execute("""
+                        SELECT retry_after 
+                        FROM ParseQueue 
+                        WHERE business_id = ? AND status = 'captcha'
+                        ORDER BY created_at DESC 
+                        LIMIT 1
+                    """, (business_id,))
+                    retry_row = cursor.fetchone()
+                    if retry_row and retry_row[0]:
+                        try:
+                            from datetime import datetime
+                            retry_dt = datetime.fromisoformat(retry_row[0])
+                            now = datetime.now()
+                            if retry_dt > now:
+                                delta = retry_dt - now
+                                hours = int(delta.total_seconds() / 3600)
+                                minutes = int((delta.total_seconds() % 3600) / 60)
+                                retry_info = {
+                                    'retry_after': retry_row[0],
+                                    'hours': hours,
+                                    'minutes': minutes
+                                }
+                                print(f"✅ Вычислен retry_info (fallback): {hours} ч {minutes} мин")
+                        except Exception as e:
+                            print(f"⚠️ Ошибка вычисления retry_info (fallback): {e}")
+            elif statuses.get('done'):
+                overall_status = "done"
         
+        print(f"📊 Возвращаю статус: {overall_status}, retry_info: {retry_info}")
         db.close()
         return jsonify({
             "success": True,
             "status": overall_status,
-            "details": statuses
+            "details": statuses,
+            "retry_info": retry_info
         })
 
     except Exception as e:
@@ -5481,5 +5517,9 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
+    # Инициализируем схему базы данных при первом запуске
+    print("🔄 Проверка схемы базы данных...")
+    init_database_schema()
+    
     print("SEO анализатор запущен на порту 8000")
     app.run(host='0.0.0.0', port=8000, debug=False)

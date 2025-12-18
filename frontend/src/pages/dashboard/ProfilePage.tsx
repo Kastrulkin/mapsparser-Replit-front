@@ -17,8 +17,10 @@ export const ProfilePage = () => {
     workingHours: '',
     mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
-  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued' | 'captcha'>('idle');
   const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [retryInfo, setRetryInfo] = useState<{ hours: number; minutes: number } | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<{ hours: number; minutes: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingCredentials, setSendingCredentials] = useState(false);
@@ -46,6 +48,11 @@ export const ProfilePage = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('📥 Получены данные с сервера:', data);
+          
+          // Проверяем статус парсинга при загрузке страницы
+          if (currentBusinessId) {
+            checkParseStatus();
+          }
           // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
           const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
             ? data.mapLinks.map((link: any) => ({
@@ -266,6 +273,52 @@ export const ProfilePage = () => {
     }
   };
 
+  // Функция для обратного отсчёта времени до повтора
+  const startCountdown = (initialHours: number, initialMinutes: number) => {
+    // Устанавливаем начальное значение
+    setRetryCountdown({ hours: initialHours, minutes: initialMinutes });
+    
+    let currentHours = initialHours;
+    let currentMinutes = initialMinutes;
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    const updateCountdown = () => {
+      // Проверяем, не закончилось ли время
+      if (currentHours === 0 && currentMinutes === 0) {
+        setRetryCountdown(null);
+        // Когда отсчёт закончился, проверяем статус снова
+        if (currentBusinessId) {
+          setTimeout(() => checkParseStatus(), 1000);
+        }
+        return;
+      }
+      
+      // Уменьшаем время
+      if (currentMinutes > 0) {
+        currentMinutes--;
+      } else if (currentHours > 0) {
+        currentHours--;
+        currentMinutes = 59;
+      }
+      
+      // Обновляем состояние
+      setRetryCountdown({ hours: currentHours, minutes: currentMinutes });
+      
+      // Планируем следующее обновление через минуту
+      timeoutId = setTimeout(updateCountdown, 60000);
+    };
+    
+    // Первое обновление через минуту (чтобы сразу показать начальное время)
+    timeoutId = setTimeout(updateCountdown, 60000);
+    
+    // Возвращаем функцию очистки для возможности отмены
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  };
+
   const checkParseStatus = async () => {
     if (!currentBusinessId) return;
     
@@ -280,10 +333,38 @@ export const ProfilePage = () => {
         const data = await response.json();
         const status = data.status;
         
+        // Сохраняем информацию о времени повтора для captcha
+        if (data.retry_info) {
+          const retryInfoData = {
+            hours: data.retry_info.hours || 0,
+            minutes: data.retry_info.minutes || 0
+          };
+          console.log('📊 Получен retry_info:', retryInfoData);
+          setRetryInfo(retryInfoData);
+          // Устанавливаем начальное значение для отсчёта
+          setRetryCountdown(retryInfoData);
+        } else {
+          console.log('⚠️ retry_info не получен');
+          setRetryInfo(null);
+          setRetryCountdown(null);
+        }
+        
         if (status === 'done' || status === 'error' || status === 'captcha') {
           setParseStatus(status);
-          // Останавливаем проверку
-          return;
+          // Для captcha запускаем обратный отсчёт
+          if (status === 'captcha' && data.retry_info) {
+            const hours = data.retry_info.hours || 0;
+            const minutes = data.retry_info.minutes || 0;
+            console.log('⏰ Запускаю обратный отсчёт:', hours, 'ч', minutes, 'мин');
+            // Запускаем обратный отсчёт только если есть время
+            if (hours > 0 || minutes > 0) {
+              startCountdown(hours, minutes);
+            }
+          }
+          // Останавливаем проверку статуса (кроме captcha, для которой нужен отсчёт)
+          if (status !== 'captcha') {
+            return;
+          }
         } else if (status === 'processing' || status === 'queued') {
           setParseStatus(status);
           // Продолжаем проверку через 3 секунды
@@ -614,7 +695,29 @@ export const ProfilePage = () => {
                 {parseStatus === 'processing' && <span className="text-blue-600">в процессе...</span>}
                 {parseStatus === 'done' && <span className="text-green-600">завершён</span>}
                 {parseStatus === 'error' && <span className="text-red-600">ошибка</span>}
-                {parseStatus === 'captcha' && <span className="text-orange-600">требуется капча</span>}
+                {parseStatus === 'captcha' && (
+                  <div className="text-orange-600">
+                    <div className="font-medium mb-1">
+                      ⚠️ На странице по ссылке потребовалась капча
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      Мы не можем в данный момент спарсить данные. Предпримем повторную попытку через{' '}
+                      {retryCountdown ? (
+                        <span className="font-semibold text-orange-700">
+                          {retryCountdown.hours > 0 ? `${retryCountdown.hours} ч ` : ''}
+                          {retryCountdown.minutes > 0 ? `${retryCountdown.minutes} мин` : 'менее минуты'}
+                        </span>
+                      ) : retryInfo ? (
+                        <span className="font-semibold text-orange-700">
+                          {retryInfo.hours > 0 ? `${retryInfo.hours} ч ` : ''}
+                          {retryInfo.minutes > 0 ? `${retryInfo.minutes} мин` : 'менее минуты'}
+                        </span>
+                      ) : (
+                        'несколько часов'
+                      )}
+                    </div>
+                  </div>
+                )}
                 {parseStatus === 'idle' && <span className="text-gray-500">ожидает запуска</span>}
               </div>
               {parseErrors.length > 0 && (

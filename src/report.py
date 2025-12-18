@@ -16,6 +16,25 @@ def generate_html_report(card_data: dict, analysis: dict = None, competitor_data
             'ai_analysis': card_data.get('ai_analysis', {})
         }
     
+    # Нормализуем структуру products перед рендерингом
+    if 'products' in card_data and isinstance(card_data['products'], list):
+        normalized_products = []
+        for cat in card_data['products']:
+            if isinstance(cat, dict):
+                items = cat.get('items', [])
+                # Убеждаемся, что items - это список, а не метод
+                if not isinstance(items, list):
+                    items = []
+                normalized_products.append({
+                    'category': cat.get('category', ''),
+                    'items': items
+                })
+        card_data = dict(card_data)  # Создаём копию, чтобы не изменять оригинал
+        card_data['products'] = normalized_products
+    elif 'products' not in card_data:
+        card_data = dict(card_data)
+        card_data['products'] = []
+    
     env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
     template = env.get_template('report_template.html')
     html = template.render(card=card_data, analysis=analysis, competitor=competitor_data)

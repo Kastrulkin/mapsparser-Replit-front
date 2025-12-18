@@ -548,7 +548,8 @@
                 {% for category in card.products %}
                 <div>
                     <h4 class="font-semibold text-lg mb-3">{{ category.category }}</h4>
-                    {% if category.items and category.items|length > 0 %}
+                    {% set items_list = category.items if category.items is iterable and category.items is not string else [] %}
+                    {% if items_list|length > 0 %}
                     <table class="table">
                         <thead>
                             <tr>
@@ -560,7 +561,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for item in category.items %}
+                            {% for item in items_list %}
                             <tr>
                                 <td class="font-medium">{{ item.name or '—' }}</td>
                                 <td class="text-sm">{{ item.description or '—' }}</td>
