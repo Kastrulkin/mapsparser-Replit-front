@@ -99,6 +99,13 @@ export const ProfilePage = () => {
   };
 
   const handleSaveClientInfo = async () => {
+    // Проверяем, что бизнес выбран
+    if (!currentBusinessId) {
+      setError('Пожалуйста, выберите бизнес из выпадающего списка перед сохранением');
+      setSavingClientInfo(false);
+      return;
+    }
+
     setParseStatus('processing');
     setParseErrors([]);
     setSavingClientInfo(true);
