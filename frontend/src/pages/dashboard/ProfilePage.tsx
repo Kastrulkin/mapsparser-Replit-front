@@ -114,10 +114,38 @@ export const ProfilePage = () => {
   const handleSaveClientInfo = async () => {
     console.log('🔵 handleSaveClientInfo вызван, currentBusinessId:', currentBusinessId);
     
-    // Проверяем, что бизнес выбран
-    if (!currentBusinessId) {
-      console.error('❌ Бизнес не выбран!');
-      setError('Пожалуйста, выберите бизнес из выпадающего списка перед сохранением');
+    // Определяем бизнес: если не выбран, пытаемся найти автоматически
+    let effectiveBusinessId = currentBusinessId;
+    
+    if (!effectiveBusinessId) {
+      // Если бизнес не выбран, пытаемся найти автоматически
+      if (businesses && businesses.length > 0) {
+        // Если только один бизнес - используем его
+        if (businesses.length === 1) {
+          effectiveBusinessId = businesses[0].id;
+          console.log('✅ Автоматически выбран единственный бизнес:', effectiveBusinessId);
+        } 
+        // Если есть название бизнеса в clientInfo - ищем по имени
+        else if (clientInfo.businessName) {
+          const foundBusiness = businesses.find(b => 
+            b.name && b.name.toLowerCase().trim() === clientInfo.businessName.toLowerCase().trim()
+          );
+          if (foundBusiness) {
+            effectiveBusinessId = foundBusiness.id;
+            console.log('✅ Бизнес найден по имени:', effectiveBusinessId, clientInfo.businessName);
+          }
+        }
+      }
+    }
+    
+    // Если бизнес всё ещё не определён - показываем ошибку
+    if (!effectiveBusinessId) {
+      console.error('❌ Бизнес не выбран и не может быть определён автоматически!');
+      if (businesses && businesses.length > 1) {
+        setError('Пожалуйста, выберите бизнес из выпадающего списка в правом верхнем углу страницы перед сохранением');
+      } else {
+        setError('Не удалось определить бизнес. Пожалуйста, обратитесь в поддержку.');
+      }
       setSavingClientInfo(false);
       return;
     }
@@ -134,7 +162,7 @@ export const ProfilePage = () => {
       
       const payload = {
         ...clientInfo,
-        businessId: currentBusinessId,
+        businessId: effectiveBusinessId,
         mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
       };
       
@@ -154,7 +182,7 @@ export const ProfilePage = () => {
         console.log('Ответ сервера:', data);
         
         // Всегда перезагружаем данные после сохранения для синхронизации
-        const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+        const qs = effectiveBusinessId ? `?business_id=${effectiveBusinessId}` : '';
         const reloadResponse = await fetch(`${window.location.origin}/api/client-info${qs}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
@@ -193,8 +221,8 @@ export const ProfilePage = () => {
         setSuccess('Информация о бизнесе сохранена');
         
         // Обновляем название бизнеса в списке businesses
-        if (currentBusinessId && updateBusiness) {
-          updateBusiness(currentBusinessId, {
+        if (effectiveBusinessId && updateBusiness) {
+          updateBusiness(effectiveBusinessId, {
             name: clientInfo.businessName,
             address: clientInfo.address,
             working_hours: clientInfo.workingHours
@@ -365,8 +393,8 @@ export const ProfilePage = () => {
         )}
       </div>
 
-      {/* Предупреждение, если бизнес не выбран */}
-      {!currentBusinessId && (
+      {/* Предупреждение, если бизнес не выбран и не может быть определён автоматически */}
+      {!currentBusinessId && !(businesses && businesses.length === 1) && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <div className="flex items-start">
             <div className="flex-shrink-0">
