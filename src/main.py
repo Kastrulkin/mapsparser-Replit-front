@@ -1330,13 +1330,38 @@ def get_services():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         user_id = user_data['user_id']
-
-        cursor.execute("""
-            SELECT id, category, name, description, keywords, price, created_at
-            FROM UserServices 
-            WHERE user_id = ? 
-            ORDER BY created_at DESC
-        """, (user_id,))
+        
+        # Получаем business_id из query параметров
+        business_id = request.args.get('business_id')
+        
+        # Если передан business_id - фильтруем по нему, иначе по user_id
+        if business_id:
+            # Проверяем доступ к бизнесу
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ? AND is_active = 1", (business_id,))
+            business_row = cursor.fetchone()
+            if business_row:
+                owner_id = business_row[0]
+                if owner_id == user_id or user_data.get('is_superadmin'):
+                    cursor.execute("""
+                        SELECT id, category, name, description, keywords, price, created_at
+                        FROM UserServices 
+                        WHERE business_id = ? 
+                        ORDER BY created_at DESC
+                    """, (business_id,))
+                else:
+                    db.close()
+                    return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+            else:
+                db.close()
+                return jsonify({"error": "Бизнес не найден"}), 404
+        else:
+            # Старая логика для обратной совместимости
+            cursor.execute("""
+                SELECT id, category, name, description, keywords, price, created_at
+                FROM UserServices 
+                WHERE user_id = ? 
+                ORDER BY created_at DESC
+            """, (user_id,))
         
         services = cursor.fetchall()
         db.close()
@@ -1516,28 +1541,85 @@ def client_info():
         """)
 
         if request.method == 'GET':
+            current_business_id = request.args.get('business_id')
+            
+            # Если передан business_id - берём данные из таблицы Businesses
+            if current_business_id:
+                # Проверяем доступ к бизнесу
+                cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM Businesses WHERE id = ? AND is_active = 1", (current_business_id,))
+                business_row = cursor.fetchone()
+                
+                if business_row:
+                    owner_id = business_row[0]
+                    # Проверяем права доступа
+                    if owner_id == user_id or user_data.get('is_superadmin'):
+                        # Получаем ссылки на карты для этого бизнеса
+                        links = []
+                        cursor.execute("""
+                            SELECT id, url, map_type, created_at 
+                            FROM BusinessMapLinks 
+                            WHERE business_id = ? 
+                            ORDER BY created_at DESC
+                        """, (current_business_id,))
+                        link_rows = cursor.fetchall()
+                        links = [
+                            {
+                                "id": r[0],
+                                "url": r[1],
+                                "mapType": r[2],
+                                "createdAt": r[3]
+                            } for r in link_rows
+                        ]
+                        
+                        # Получаем услуги для этого бизнеса
+                        cursor.execute("""
+                            SELECT name, description, category, price 
+                            FROM UserServices 
+                            WHERE business_id = ? 
+                            ORDER BY created_at DESC
+                        """, (current_business_id,))
+                        services_rows = cursor.fetchall()
+                        services_list = [{"name": r[0], "description": r[1], "category": r[2], "price": r[3]} for r in services_rows]
+                        
+                        db.close()
+                        return jsonify({
+                            "success": True,
+                            "businessName": business_row[1] or "",
+                            "businessType": business_row[2] or "",
+                            "address": business_row[3] or "",
+                            "workingHours": business_row[4] or "",
+                            "description": "",
+                            "services": services_list,
+                            "mapLinks": links
+                        })
+                    else:
+                        db.close()
+                        return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+                else:
+                    db.close()
+                    return jsonify({"error": "Бизнес не найден"}), 404
+            
+            # Старая логика для обратной совместимости (если business_id не передан)
             cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
 
-            # Получаем ссылки на карты для текущего бизнеса (если указан)
+            # Получаем ссылки на карты (старая логика - по user_id)
             links = []
-            current_business_id = request.args.get('business_id')
-            if current_business_id:
-                cursor.execute("""
-                    SELECT id, url, map_type, created_at 
-                    FROM BusinessMapLinks 
-                    WHERE business_id = ? 
-                    ORDER BY created_at DESC
-                """, (current_business_id,))
-                link_rows = cursor.fetchall()
-                links = [
-                    {
-                        "id": r[0],
-                        "url": r[1],
-                        "mapType": r[2],
-                        "createdAt": r[3]
-                    } for r in link_rows
-                ]
+            cursor.execute("""
+                SELECT id, url, map_type, created_at 
+                FROM BusinessMapLinks 
+                WHERE user_id = ? 
+                ORDER BY created_at DESC
+            """, (user_id,))
+            link_rows = cursor.fetchall()
+            links = [
+                {
+                    "id": r[0],
+                    "url": r[1],
+                    "mapType": r[2],
+                    "createdAt": r[3]
+                } for r in link_rows
+            ]
 
             db.close()
             if not row:
@@ -1643,16 +1725,45 @@ def client_info():
             if yandex_urls:
                 parse_status = "queued"
                 
-                # Проверяем/добавляем поле business_id в ParseQueue
+                # Создаём таблицу ParseQueue, если её нет
                 try:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS ParseQueue (
+                            id TEXT PRIMARY KEY,
+                            url TEXT NOT NULL,
+                            user_id TEXT NOT NULL,
+                            business_id TEXT,
+                            status TEXT NOT NULL DEFAULT 'pending',
+                            retry_after TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE,
+                            FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+                        )
+                    """)
+                    db.conn.commit()
+                    
+                    # Создаём индексы, если их нет
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_status ON ParseQueue(status)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_business_id ON ParseQueue(business_id)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_user_id ON ParseQueue(user_id)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_created_at ON ParseQueue(created_at)")
+                    db.conn.commit()
+                    
+                    # Проверяем/добавляем поле business_id в ParseQueue (для старых таблиц)
                     cursor.execute("PRAGMA table_info(ParseQueue)")
                     columns = [row[1] for row in cursor.fetchall()]
                     if 'business_id' not in columns:
                         print("📝 Добавляю поле business_id в ParseQueue...")
                         cursor.execute("ALTER TABLE ParseQueue ADD COLUMN business_id TEXT")
                         db.conn.commit()
+                    if 'retry_after' not in columns:
+                        print("📝 Добавляю поле retry_after в ParseQueue...")
+                        cursor.execute("ALTER TABLE ParseQueue ADD COLUMN retry_after TEXT")
+                        db.conn.commit()
                 except Exception as e:
-                    print(f"⚠️ Ошибка проверки структуры ParseQueue: {e}")
+                    print(f"⚠️ Ошибка создания/проверки ParseQueue: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 # Добавляем задачи в очередь
                 for url in yandex_urls:
@@ -2868,9 +2979,22 @@ def get_financial_metrics():
         period = request.args.get('period', 'month')  # week, month, quarter, year
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
+        business_id = request.args.get('business_id')
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        
+        # Если передан business_id - проверяем доступ
+        if business_id:
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ? AND is_active = 1", (business_id,))
+            business_row = cursor.fetchone()
+            if not business_row:
+                db.close()
+                return jsonify({"error": "Бизнес не найден"}), 404
+            owner_id = business_row[0]
+            if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+                db.close()
+                return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
         # Если даты не указаны, вычисляем период
         if not start_date or not end_date:
@@ -2890,8 +3014,20 @@ def get_financial_metrics():
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
         
+        # Формируем WHERE условие с учётом business_id
+        where_clause = "transaction_date BETWEEN ? AND ?"
+        where_params = [start_date, end_date]
+        
+        if business_id:
+            where_clause = f"business_id = ? AND {where_clause}"
+            where_params = [business_id] + where_params
+        else:
+            # Старая логика для обратной совместимости
+            where_clause = f"user_id = ? AND {where_clause}"
+            where_params = [user_data['user_id']] + where_params
+        
         # Получаем агрегированные данные
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT 
                 COUNT(*) as total_orders,
                 SUM(amount) as total_revenue,
@@ -2899,8 +3035,8 @@ def get_financial_metrics():
                 SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END) as new_clients,
                 SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END) as returning_clients
             FROM FinancialTransactions 
-            WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
-        """, (user_data['user_id'], start_date, end_date))
+            WHERE {where_clause}
+        """, tuple(where_params))
         
         metrics = cursor.fetchone()
         
@@ -2917,13 +3053,24 @@ def get_financial_metrics():
         prev_start = (start_dt - timedelta(days=period_days)).strftime('%Y-%m-%d')
         prev_end = start_date
         
-        cursor.execute("""
+        # Формируем WHERE условие для предыдущего периода
+        prev_where_clause = "transaction_date BETWEEN ? AND ?"
+        prev_where_params = [prev_start, prev_end]
+        
+        if business_id:
+            prev_where_clause = f"business_id = ? AND {prev_where_clause}"
+            prev_where_params = [business_id] + prev_where_params
+        else:
+            prev_where_clause = f"user_id = ? AND {prev_where_clause}"
+            prev_where_params = [user_data['user_id']] + prev_where_params
+        
+        cursor.execute(f"""
             SELECT 
                 COUNT(*) as prev_orders,
                 SUM(amount) as prev_revenue
             FROM FinancialTransactions 
-            WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
-        """, (user_data['user_id'], prev_start, prev_end))
+            WHERE {prev_where_clause}
+        """, tuple(prev_where_params))
         
         prev_metrics = cursor.fetchone()
         
@@ -4001,26 +4148,78 @@ def create_business():
             return jsonify({"error": "Недействительный токен"}), 401
         
         # Проверяем права суперадмина
-        db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            return jsonify({"error": "Недостаточно прав"}), 403
-        
-        data = request.get_json()
-        name = data.get('name')
-        description = data.get('description', '')
-        industry = data.get('industry', '')
-        owner_id = data.get('owner_id')
-        
-        if not name:
-            return jsonify({"error": "Название бизнеса обязательно"}), 400
-        
-        business_id = db.create_business(name, description, industry, owner_id)
-        db.close()
-        
-        return jsonify({"success": True, "business_id": business_id})
+        with DatabaseManager() as db:
+            if not db.is_superadmin(user_data['user_id']):
+                return jsonify({"error": "Недостаточно прав"}), 403
+            
+            data = request.get_json()
+            name = data.get('name')
+            description = data.get('description', '')
+            industry = data.get('industry', '')
+            owner_id = data.get('owner_id')
+            owner_email = data.get('owner_email')
+            owner_name = data.get('owner_name', '')
+            owner_phone = data.get('owner_phone', '')
+            
+            if not name:
+                return jsonify({"error": "Название бизнеса обязательно"}), 400
+            
+            # Если передан owner_email, но не owner_id - находим или создаём пользователя
+            if owner_email and not owner_id:
+                existing_user = db.get_user_by_email(owner_email)
+                if existing_user:
+                    owner_id = existing_user['id']
+                    print(f"✅ Найден существующий пользователь: {owner_email} (ID: {owner_id})")
+                else:
+                    # Создаём пользователя напрямую через DatabaseManager, чтобы использовать то же соединение
+                    import uuid
+                    from datetime import datetime
+                    
+                    # Используем то же соединение, что и DatabaseManager
+                    cursor = db.conn.cursor()
+                    owner_id = str(uuid.uuid4())
+                    
+                    try:
+                        cursor.execute("""
+                            INSERT INTO Users (id, email, name, phone, created_at, is_active, is_verified)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            owner_id,
+                            owner_email,
+                            owner_name or None,
+                            owner_phone or None,
+                            datetime.now().isoformat(),
+                            1,  # is_active
+                            0   # is_verified
+                        ))
+                        db.conn.commit()
+                        print(f"✅ Создан новый пользователь: {owner_email} (ID: {owner_id})")
+                    except Exception as e:
+                        db.conn.rollback()
+                        print(f"❌ Ошибка создания пользователя: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        return jsonify({"error": f"Ошибка создания пользователя: {str(e)}"}), 400
+            
+            # Проверяем, что owner_id установлен
+            if not owner_id:
+                return jsonify({"error": "Необходимо указать owner_id или owner_email для создания бизнеса"}), 400
+            
+            try:
+                business_id = db.create_business(name, description, industry, owner_id)
+                db.conn.commit()  # Явно коммитим транзакцию
+                return jsonify({"success": True, "business_id": business_id, "owner_id": owner_id})
+            except Exception as e:
+                db.conn.rollback()
+                print(f"❌ Ошибка создания бизнеса: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": f"Ошибка создания бизнеса: {str(e)}"}), 500
         
     except Exception as e:
         print(f"❌ Ошибка создания бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/superadmin/businesses/<business_id>', methods=['PUT'])
@@ -4054,6 +4253,125 @@ def update_business(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка обновления бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/businesses/<business_id>/send-credentials', methods=['POST'])
+def send_business_credentials(business_id):
+    """Отправить данные для входа владельцу бизнеса (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        # Получаем информацию о бизнесе и владельце
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT b.*, u.email, u.name as owner_name
+            FROM Businesses b
+            LEFT JOIN Users u ON b.owner_id = u.id
+            WHERE b.id = ?
+        """, (business_id,))
+        business_row = cursor.fetchone()
+        
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        business = dict(business_row)
+        owner_email = business.get('email')
+        
+        if not owner_email:
+            db.close()
+            return jsonify({"error": "У бизнеса не указан email владельца"}), 400
+        
+        # Генерируем временный пароль, если у пользователя его нет
+        import secrets
+        from auth_system import set_password, get_user_by_id
+        
+        owner_id = business.get('owner_id')
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "У бизнеса не указан владелец"}), 400
+        
+        owner_user = get_user_by_id(owner_id)
+        if not owner_user:
+            db.close()
+            return jsonify({"error": "Владелец бизнеса не найден"}), 404
+        
+        # Генерируем пароль, если его нет
+        temp_password = None
+        if not owner_user.get('password_hash'):
+            temp_password = secrets.token_urlsafe(12)
+            set_password(owner_id, temp_password)
+            print(f"✅ Сгенерирован временный пароль для {owner_email}")
+        
+        # Отправляем email с данными для входа
+        login_url = "https://beautybot.pro/login"
+        subject = f"Данные для входа в личный кабинет {business.get('name', 'BeautyBot')}"
+        
+        if temp_password:
+            body = f"""
+Здравствуйте, {business.get('owner_name', '')}!
+
+Ваш бизнес "{business.get('name', '')}" был зарегистрирован в системе BeautyBot.
+
+Данные для входа в личный кабинет:
+Email: {owner_email}
+Пароль: {temp_password}
+
+Пожалуйста, войдите в систему по ссылке: {login_url}
+
+После первого входа рекомендуется изменить пароль в настройках профиля.
+
+---
+С уважением,
+Команда BeautyBot
+            """
+        else:
+            body = f"""
+Здравствуйте, {business.get('owner_name', '')}!
+
+Ваш бизнес "{business.get('name', '')}" зарегистрирован в системе BeautyBot.
+
+Для входа в личный кабинет используйте ваш существующий пароль:
+Email: {owner_email}
+
+Войти в систему: {login_url}
+
+Если вы забыли пароль, воспользуйтесь функцией восстановления пароля на странице входа.
+
+---
+С уважением,
+Команда BeautyBot
+            """
+        
+        email_sent = send_email(owner_email, subject, body)
+        db.close()
+        
+        if email_sent:
+            return jsonify({
+                "success": True,
+                "message": f"Данные для входа отправлены на {owner_email}",
+                "password_generated": temp_password is not None
+            })
+        else:
+            return jsonify({"error": "Не удалось отправить email"}), 500
+        
+    except Exception as e:
+        print(f"❌ Ошибка отправки credentials: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/superadmin/businesses/<business_id>', methods=['DELETE'])
@@ -5163,15 +5481,5 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    # Автоматическая синхронизация базы данных
-    try:
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from sync_database import sync_database
-        sync_database()
-    except Exception as e:
-        print(f"⚠️ Ошибка синхронизации базы данных: {e}")
-    
     print("SEO анализатор запущен на порту 8000")
     app.run(host='0.0.0.0', port=8000, debug=False)

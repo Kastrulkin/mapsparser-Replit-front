@@ -5,6 +5,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recha
 
 interface FinancialMetricsProps {
   onRefresh?: () => void;
+  currentBusinessId?: string | null;
 }
 
 interface MetricsData {
@@ -39,7 +40,7 @@ interface BreakdownData {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
 
-const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
+const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentBusinessId }) => {
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,14 +48,21 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
   const [period, setPeriod] = useState('month');
 
   const loadMetrics = async (selectedPeriod: string = period) => {
+    if (!currentBusinessId) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
 
     try {
       const token = localStorage.getItem('auth_token');
+      const baseUrl = window.location.origin;
+      const businessParam = currentBusinessId ? `&business_id=${currentBusinessId}` : '';
       
       // Загружаем метрики
-      const metricsResponse = await fetch(`http://localhost:8000/api/finance/metrics?period=${selectedPeriod}`, {
+      const metricsResponse = await fetch(`${baseUrl}/api/finance/metrics?period=${selectedPeriod}${businessParam}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -69,7 +77,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
       }
 
       // Загружаем разбивку по услугам и мастерам
-      const breakdownResponse = await fetch(`http://localhost:8000/api/finance/breakdown?period=${selectedPeriod}`, {
+      const breakdownResponse = await fetch(`${baseUrl}/api/finance/breakdown?period=${selectedPeriod}${businessParam}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -89,7 +97,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh }) => {
 
   useEffect(() => {
     loadMetrics();
-  }, []);
+  }, [currentBusinessId]);
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);

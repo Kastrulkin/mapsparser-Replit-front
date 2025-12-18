@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Building2, Users } from 'lucide-react';
+import { ChevronDown, Building2, Users, Plus } from 'lucide-react';
+import { CreateBusinessModal } from './CreateBusinessModal';
 
 interface Business {
   id: string;
@@ -25,6 +26,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (businesses.length > 0) {
@@ -37,6 +39,11 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     setSelectedBusiness(business);
     onBusinessChange(business.id);
     setIsOpen(false);
+  };
+
+  const handleCreateSuccess = (businessId: string) => {
+    // Перезагружаем страницу для обновления списка бизнесов
+    window.location.reload();
   };
 
   if (businesses.length === 0) {
@@ -96,8 +103,29 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
               </div>
             </button>
           ))}
+          
+          {isSuperadmin && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setShowCreateModal(true);
+              }}
+              className="w-full text-left px-4 py-3 border-t border-gray-200 hover:bg-blue-50 transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                <Plus className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-600">Добавить новый бизнес</span>
+              </div>
+            </button>
+          )}
         </div>
       )}
+
+      <CreateBusinessModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleCreateSuccess}
+      />
     </div>
   );
 };

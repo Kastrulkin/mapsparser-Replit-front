@@ -9,24 +9,38 @@ from typing import List, Dict, Any, Optional
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    import os
-    # Единая база данных: src/reports.db
-    db_path = "src/reports.db"
-    os.makedirs("src", exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    from safe_db_utils import get_db_connection as _get_db_connection
+    return _get_db_connection()
 
 class DatabaseManager:
     """Менеджер для работы с базой данных"""
     
     def __init__(self):
         self.conn = get_db_connection()
+        self._closed = False
     
     def close(self):
         """Закрыть соединение"""
-        if self.conn:
-            self.conn.close()
+        if self.conn and not self._closed:
+            try:
+                # Коммитим все незакоммиченные изменения
+                self.conn.commit()
+            except:
+                pass
+            try:
+                self.conn.close()
+            except:
+                pass
+            self._closed = True
+    
+    def __enter__(self):
+        """Контекстный менеджер: вход"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Контекстный менеджер: выход"""
+        self.close()
+        return False
     
     # ===== USERS (Пользователи) =====
     
@@ -409,14 +423,22 @@ class DatabaseManager:
                        business_type: str = None, address: str = None, working_hours: str = None,
                        phone: str = None, email: str = None, website: str = None, yandex_url: str = None) -> str:
         """Создать новый бизнес"""
+        if not owner_id:
+            raise ValueError("owner_id обязателен для создания бизнеса")
+        
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url))
-        self.conn.commit()
-        return business_id
+        try:
+            cursor.execute("""
+                INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url))
+            # НЕ коммитим здесь - вызывающий код должен сделать commit
+            return business_id
+        except Exception as e:
+            # Откатываем при ошибке
+            self.conn.rollback()
+            raise
     
     def get_all_businesses(self) -> List[Dict[str, Any]]:
         """Получить все бизнесы (только для суперадмина)"""

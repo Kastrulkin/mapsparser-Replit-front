@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -21,6 +22,7 @@ interface BusinessLocation {
 
 export const NetworkManagement: React.FC = () => {
   const { toast } = useToast();
+  const { currentBusinessId, currentBusiness } = useOutletContext<any>();
   const [isNetwork, setIsNetwork] = useState<boolean>(false);
   const [networks, setNetworks] = useState<Network[]>([]);
   const [selectedNetworkId, setSelectedNetworkId] = useState<string>('');
@@ -102,6 +104,7 @@ export const NetworkManagement: React.FC = () => {
       }
 
       if (data.success) {
+        const newNetworkId = data.network_id;
         toast({
           title: 'Успешно',
           description: 'Сеть создана'
@@ -109,7 +112,34 @@ export const NetworkManagement: React.FC = () => {
         setNetworkName('');
         setNetworkDescription('');
         await loadNetworks();
-        setSelectedNetworkId(data.network_id);
+        setSelectedNetworkId(newNetworkId);
+        
+        // Автоматически добавляем текущий бизнес в сеть, если он есть
+        if (currentBusinessId && currentBusiness) {
+          try {
+            const addResponse = await fetch(`/api/networks/${newNetworkId}/businesses`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                business_id: currentBusinessId
+              })
+            });
+            
+            if (addResponse.ok) {
+              toast({
+                title: 'Успешно',
+                description: `Бизнес "${currentBusiness.name}" добавлен в сеть`
+              });
+              // Перезагружаем страницу для обновления списка бизнесов
+              setTimeout(() => window.location.reload(), 1000);
+            }
+          } catch (error) {
+            console.error('Ошибка добавления бизнеса в сеть:', error);
+          }
+        }
       } else {
         throw new Error(data.error || 'Ошибка создания сети');
       }
@@ -227,7 +257,35 @@ export const NetworkManagement: React.FC = () => {
             </Button>
             <Button
               variant={isNetwork ? 'default' : 'outline'}
-              onClick={() => setIsNetwork(true)}
+              onClick={async () => {
+                setIsNetwork(true);
+                // Если есть текущий бизнес и есть сеть - добавляем бизнес в сеть
+                if (currentBusinessId && selectedNetworkId) {
+                  try {
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/networks/${selectedNetworkId}/businesses`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        business_id: currentBusinessId
+                      })
+                    });
+                    
+                    if (response.ok) {
+                      toast({
+                        title: 'Успешно',
+                        description: `Бизнес добавлен в сеть`
+                      });
+                      setTimeout(() => window.location.reload(), 1000);
+                    }
+                  } catch (error) {
+                    console.error('Ошибка добавления бизнеса в сеть:', error);
+                  }
+                }
+              }}
             >
               Сеть
             </Button>

@@ -12,9 +12,8 @@ from typing import Optional, Dict, Any
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
-    conn = sqlite3.connect("src/reports.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+    from safe_db_utils import get_db_connection as _get_db_connection
+    return _get_db_connection()
 
 def hash_password(password: str) -> str:
     """Хеширование пароля"""

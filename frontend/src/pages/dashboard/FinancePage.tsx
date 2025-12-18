@@ -45,7 +45,7 @@ export const FinancePage = () => {
         />
       )}
 
-      <FinancialMetrics />
+      <FinancialMetrics currentBusinessId={currentBusinessId} />
       <ROICalculator />
       <div className="flex justify-end mb-2">
         <Button 

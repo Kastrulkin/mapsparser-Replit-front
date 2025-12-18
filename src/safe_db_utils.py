@@ -27,8 +27,34 @@ def get_db_path():
 def get_db_connection():
     """Получить соединение с SQLite базой данных (безопасно)"""
     db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
+    # Используем таймаут 30 секунд для ожидания разблокировки БД
+    conn = sqlite3.connect(db_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    
+    # Включаем WAL режим для лучшей параллельной работы
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        result = cursor.fetchone()
+        if result and result[0] != 'wal':
+            print(f"⚠️ WAL режим не включён, текущий режим: {result[0]}")
+        else:
+            print(f"✅ WAL режим включён")
+        cursor.close()
+    except Exception as e:
+        # Если WAL не поддерживается, продолжаем без него
+        print(f"⚠️ Не удалось включить WAL режим: {e}")
+    
+    # Оптимизация для производительности
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")  # 30 секунд ожидания
+        cursor.execute("PRAGMA foreign_keys=ON")  # Включаем внешние ключи
+        cursor.close()
+    except Exception as e:
+        print(f"⚠️ Не удалось установить PRAGMA: {e}")
+    
     return conn
 
 def backup_database():

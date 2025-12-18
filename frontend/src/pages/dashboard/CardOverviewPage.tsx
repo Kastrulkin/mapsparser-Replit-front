@@ -39,10 +39,16 @@ export const CardOverviewPage = () => {
   }, [currentBusinessId]);
 
   const loadUserServices = async () => {
+    if (!currentBusinessId) {
+      setUserServices([]);
+      return;
+    }
+    
     setLoadingServices(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${window.location.origin}/api/services/list`, {
+      const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+      const response = await fetch(`${window.location.origin}/api/services/list${qs}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -57,15 +63,31 @@ export const CardOverviewPage = () => {
   };
 
   const loadClientInfo = async () => {
+    if (!currentBusinessId) {
+      setClientInfo({
+        businessName: '',
+        businessType: '',
+        address: '',
+        workingHours: ''
+      });
+      return;
+    }
+    
     try {
-      const response = await fetch(`${window.location.origin}/api/client-info`, {
+      const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+      const response = await fetch(`${window.location.origin}/api/client-info${qs}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
       });
       if (response.ok) {
         const data = await response.json();
-        setClientInfo(data);
+        setClientInfo({
+          businessName: data.businessName || '',
+          businessType: data.businessType || '',
+          address: data.address || '',
+          workingHours: data.workingHours || ''
+        });
       }
     } catch (error) {
       console.error('Ошибка загрузки информации о бизнесе:', error);

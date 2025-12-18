@@ -21,6 +21,7 @@ export const ProfilePage = () => {
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [sendingCredentials, setSendingCredentials] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -426,9 +427,47 @@ export const ProfilePage = () => {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Информация о бизнесе</h2>
-          {!editClientInfo && (
-            <Button onClick={() => setEditClientInfo(true)}>Редактировать</Button>
-          )}
+          <div className="flex gap-2">
+            {user?.is_superadmin && currentBusinessId && !editClientInfo && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (!currentBusinessId) return;
+                  setSendingCredentials(true);
+                  setError(null);
+                  setSuccess(null);
+                  try {
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/superadmin/businesses/${currentBusinessId}/send-credentials`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                      }
+                    });
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      setSuccess(data.message || 'Данные для входа отправлены владельцу бизнеса');
+                    } else {
+                      const errorData = await response.json();
+                      setError(errorData.error || 'Ошибка отправки данных для входа');
+                    }
+                  } catch (err: any) {
+                    setError('Ошибка отправки данных для входа: ' + err.message);
+                  } finally {
+                    setSendingCredentials(false);
+                  }
+                }}
+                disabled={sendingCredentials}
+              >
+                {sendingCredentials ? 'Отправка...' : 'Send credentials'}
+              </Button>
+            )}
+            {!editClientInfo && (
+              <Button onClick={() => setEditClientInfo(true)}>Редактировать</Button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
