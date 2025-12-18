@@ -27,8 +27,8 @@ def sync_clientinfo_to_businesses():
     
     print(f"📋 Найдено записей в ClientInfo: {len(client_info_rows)}")
     
-    created_count = 0
     updated_count = 0
+    skipped_count = 0
     
     for row in client_info_rows:
         user_id = row[0]
@@ -37,40 +37,56 @@ def sync_clientinfo_to_businesses():
         address = row[3] or ''
         working_hours = row[4] or ''
         
-        # Проверяем, есть ли уже бизнес для этого пользователя с таким именем
+        # Ищем существующий бизнес для этого пользователя
+        # Сначала по имени (если переименовали)
         cursor.execute("""
             SELECT id, name FROM Businesses 
             WHERE owner_id = ? AND name = ? AND is_active = 1
+            LIMIT 1
         """, (user_id, business_name))
-        existing_business = cursor.fetchone()
+        existing_by_name = cursor.fetchone()
         
-        if existing_business:
-            # Бизнес уже существует - обновляем данные
-            business_id = existing_business[0]
+        if existing_by_name:
+            # Нашли по имени - обновляем
+            business_id = existing_by_name[0]
             cursor.execute("""
                 UPDATE Businesses 
                 SET business_type = ?, address = ?, working_hours = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (business_type, address, working_hours, business_id))
             updated_count += 1
-            print(f"  ✅ Обновлён бизнес: {business_name} (ID: {business_id})")
+            print(f"  ✅ Обновлён бизнес по имени: {business_name} (ID: {business_id})")
         else:
-            # Бизнеса нет - создаём новый
-            business_id = str(uuid.uuid4())
+            # Не нашли по имени - ищем первый активный бизнес пользователя
             cursor.execute("""
-                INSERT INTO Businesses 
-                (id, name, business_type, address, working_hours, owner_id, is_active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            """, (business_id, business_name, business_type, address, working_hours, user_id))
-            created_count += 1
-            print(f"  ✅ Создан бизнес: {business_name} (ID: {business_id}) для пользователя {row[5]}")
+                SELECT id, name FROM Businesses 
+                WHERE owner_id = ? AND is_active = 1
+                ORDER BY created_at ASC
+                LIMIT 1
+            """, (user_id,))
+            first_business = cursor.fetchone()
+            
+            if first_business:
+                # Нашли первый бизнес - обновляем его (включая название)
+                business_id = first_business[0]
+                cursor.execute("""
+                    UPDATE Businesses 
+                    SET name = ?, business_type = ?, address = ?, working_hours = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (business_name, business_type, address, working_hours, business_id))
+                updated_count += 1
+                print(f"  ✅ Обновлён первый бизнес пользователя: {first_business[1]} → {business_name} (ID: {business_id})")
+            else:
+                # У пользователя нет бизнесов - пропускаем (не создаём)
+                skipped_count += 1
+                print(f"  ⚠️ Пропущено: у пользователя {row[5]} нет бизнесов в таблице Businesses")
     
     conn.commit()
     conn.close()
     
     print(f"\n✅ Синхронизация завершена:")
-    print(f"   - Создано бизнесов: {created_count}")
     print(f"   - Обновлено бизнесов: {updated_count}")
+    print(f"   - Пропущено (нет бизнесов): {skipped_count}")
 
 if __name__ == "__main__":
     sync_clientinfo_to_businesses()
