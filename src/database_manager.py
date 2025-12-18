@@ -405,7 +405,11 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("SELECT is_superadmin FROM Users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
-        return bool(row['is_superadmin']) if row else False
+        if row:
+            # Обрабатываем как sqlite3.Row или tuple
+            is_superadmin_val = row[0] if isinstance(row, (tuple, list)) else row.get('is_superadmin', row[0] if len(row) > 0 else 0)
+            return bool(is_superadmin_val)
+        return False
     
     def set_superadmin(self, user_id: str, is_superadmin: bool = True):
         """Установить статус суперадмина для пользователя"""
@@ -447,10 +451,21 @@ class DatabaseManager:
             SELECT b.*, u.email as owner_email, u.name as owner_name
             FROM Businesses b
             LEFT JOIN Users u ON b.owner_id = u.id
-            WHERE b.is_active = 1
+            WHERE b.is_active = 1 OR b.is_active IS NULL
             ORDER BY b.created_at DESC
         """)
-        return [dict(row) for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+        # Преобразуем sqlite3.Row в словари
+        result = []
+        for row in rows:
+            if hasattr(row, 'keys'):
+                # Это sqlite3.Row
+                result.append({key: row[key] for key in row.keys()})
+            else:
+                # Это tuple - преобразуем в dict по описанию колонок
+                columns = [desc[0] for desc in cursor.description]
+                result.append(dict(zip(columns, row)))
+        return result
     
     def get_businesses_by_owner(self, owner_id: str) -> List[Dict[str, Any]]:
         """Получить бизнесы конкретного владельца (только прямые, без сетей)"""
