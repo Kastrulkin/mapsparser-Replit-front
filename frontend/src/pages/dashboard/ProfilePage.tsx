@@ -112,13 +112,17 @@ export const ProfilePage = () => {
   };
 
   const handleSaveClientInfo = async () => {
+    console.log('🔵 handleSaveClientInfo вызван, currentBusinessId:', currentBusinessId);
+    
     // Проверяем, что бизнес выбран
     if (!currentBusinessId) {
+      console.error('❌ Бизнес не выбран!');
       setError('Пожалуйста, выберите бизнес из выпадающего списка перед сохранением');
       setSavingClientInfo(false);
       return;
     }
 
+    console.log('✅ Бизнес выбран, начинаю сохранение...');
     setParseStatus('processing');
     setParseErrors([]);
     setSavingClientInfo(true);
@@ -500,6 +504,7 @@ export const ProfilePage = () => {
                   className="bg-blue-600 hover:bg-blue-700"
                   disabled={savingClientInfo}
                   onClick={() => {
+                    console.log('🔵 Кнопка "Запустить парсер данных" нажата, savingClientInfo:', savingClientInfo);
                     // Парсер запускается вместе с сохранением ссылок
                     handleSaveClientInfo();
                   }}
@@ -527,7 +532,13 @@ export const ProfilePage = () => {
         {editClientInfo && (
           <div className="mt-4 flex justify-end">
             <div className="flex gap-2">
-              <Button onClick={handleSaveClientInfo} disabled={savingClientInfo}>
+              <Button 
+                onClick={() => {
+                  console.log('🟢 Кнопка "Сохранить" нажата, savingClientInfo:', savingClientInfo, 'editClientInfo:', editClientInfo);
+                  handleSaveClientInfo();
+                }} 
+                disabled={savingClientInfo}
+              >
                 {savingClientInfo ? 'Сохранение...' : 'Сохранить'}
               </Button>
               <Button onClick={() => setEditClientInfo(false)} variant="outline">Отмена</Button>
