@@ -170,15 +170,40 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
         if not session:
             return None
         
-        return {
-            "user_id": session['user_id'],
-            "email": session['email'],
-            "name": session['name'],
-            "phone": session['phone'],
-            "is_superadmin": bool(session['is_superadmin']) if session['is_superadmin'] is not None else False
-        }
+        # Безопасное извлечение данных из sqlite3.Row
+        try:
+            # Если это sqlite3.Row, обращаемся по ключам
+            if hasattr(session, 'keys'):
+                user_id = session['user_id'] if 'user_id' in session.keys() else None
+                email = session['email'] if 'email' in session.keys() else None
+                name = session['name'] if 'name' in session.keys() else None
+                phone = session['phone'] if 'phone' in session.keys() else None
+                is_superadmin_val = session['is_superadmin'] if 'is_superadmin' in session.keys() else None
+            else:
+                # Если это tuple или другой тип
+                user_id = session[0] if len(session) > 0 else None
+                email = session[2] if len(session) > 2 else None
+                name = session[3] if len(session) > 3 else None
+                phone = session[4] if len(session) > 4 else None
+                is_superadmin_val = session[6] if len(session) > 6 else None
+            
+            return {
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "phone": phone,
+                "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False
+            }
+        except Exception as e:
+            print(f"❌ Ошибка извлечения данных сессии: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
         
     except Exception as e:
+        print(f"❌ Ошибка проверки сессии: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         conn.close()

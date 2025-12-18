@@ -4028,7 +4028,16 @@ def get_user_info():
         
         # Получаем дополнительную информацию о пользователе
         db = DatabaseManager()
-        user_id = user_data.get('user_id') or user_data.get('id')
+        # Безопасное получение user_id из словаря
+        user_id = user_data.get('user_id') if isinstance(user_data, dict) else (user_data.get('id') if hasattr(user_data, 'get') else None)
+        if not user_id:
+            # Если user_data - это sqlite3.Row, обращаемся по индексу или ключу
+            if hasattr(user_data, 'keys'):
+                user_id = user_data['user_id'] if 'user_id' in user_data.keys() else (user_data['id'] if 'id' in user_data.keys() else None)
+            else:
+                db.close()
+                return jsonify({"error": "Не удалось определить ID пользователя"}), 500
+        
         is_superadmin = db.is_superadmin(user_id)
         
         # Определяем, какие бизнесы показывать пользователю
@@ -4045,13 +4054,21 @@ def get_user_info():
         
         db.close()
         
+        # Безопасное получение данных пользователя
+        def safe_get(data, key, default=None):
+            if isinstance(data, dict):
+                return data.get(key, default)
+            elif hasattr(data, 'keys') and key in data.keys():
+                return data[key]
+            return default
+        
         return jsonify({
             "success": True,
             "user": {
                 "id": user_id,
-                "email": user_data.get('email'),
-                "name": user_data.get('name'),
-                "phone": user_data.get('phone'),
+                "email": safe_get(user_data, 'email'),
+                "name": safe_get(user_data, 'name'),
+                "phone": safe_get(user_data, 'phone'),
                 "is_superadmin": is_superadmin
             },
             "businesses": businesses
