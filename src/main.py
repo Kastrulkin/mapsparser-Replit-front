@@ -1599,6 +1599,8 @@ def client_info():
             map_links = data.get('map_links')
         business_id = (data.get('businessId') or data.get('business_id'))
 
+        print(f"🔍 DEBUG client-info: business_id={business_id}, map_links={map_links}, type={type(map_links)}")
+
         def detect_map_type(url: str) -> str:
             u = (url or '').lower()
             if 'yandex' in u:
@@ -1612,63 +1614,61 @@ def client_info():
 
         # Обновляем ссылки, только если поле пришло в payload
         if business_id and isinstance(map_links, list):
-            # Удаляем старые ссылки и результаты для консистентности
+            # Фильтруем пустые ссылки
+            valid_links = []
+            for link in map_links:
+                url = link.get('url') if isinstance(link, dict) else str(link)
+                if url and url.strip():
+                    valid_links.append(url.strip())
+            
+            print(f"🔍 DEBUG: valid_links={valid_links}")
+            
+            # Удаляем старые ссылки для консистентности
             cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
             db.conn.commit()
 
-            if map_links:
-                parse_status = "processing"
-
-            for link in map_links:
-                url = link.get('url') if isinstance(link, dict) else str(link)
-                if not url:
-                    continue
+            # Сохраняем валидные ссылки
+            for url in valid_links:
                 map_type = detect_map_type(url)
                 cursor.execute("""
                     INSERT INTO BusinessMapLinks (id, user_id, business_id, url, map_type, created_at)
                     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """, (str(uuid.uuid4()), user_id, business_id, url, map_type))
-                # Если это Яндекс карта — парсим и сохраняем результат
-                if map_type == 'yandex':
-                    try:
-                        card_data = parse_yandex_card(url)
-                        # Генерируем отчёт
-                        analysis = analyze_card(card_data)
-                        report_path = generate_html_report(card_data, analysis, {})
-                        rating = card_data.get('overview', {}).get('rating', '')
-                        reviews_count = card_data.get('reviews_count') or card_data.get('overview', {}).get('reviews_count') or 0
-                        news_count = len(card_data.get('news') or [])
-                        photos_count = card_data.get('photos_count') or 0
+                print(f"✅ Сохранена ссылка: {url} (тип: {map_type})")
+            
+            db.conn.commit()
 
-                        cursor.execute("""
-                            INSERT INTO MapParseResults
-                            (id, business_id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                        """, (
-                            str(uuid.uuid4()),
-                            business_id,
-                            url,
-                            map_type,
-                            str(rating),
-                            int(reviews_count or 0),
-                            int(news_count or 0),
-                            int(photos_count or 0),
-                            report_path
-                        ))
+            # Если есть Яндекс карты — добавляем в очередь парсинга
+            yandex_urls = [url for url in valid_links if detect_map_type(url) == 'yandex']
+            if yandex_urls:
+                parse_status = "queued"
+                
+                # Проверяем/добавляем поле business_id в ParseQueue
+                try:
+                    cursor.execute("PRAGMA table_info(ParseQueue)")
+                    columns = [row[1] for row in cursor.fetchall()]
+                    if 'business_id' not in columns:
+                        print("📝 Добавляю поле business_id в ParseQueue...")
+                        cursor.execute("ALTER TABLE ParseQueue ADD COLUMN business_id TEXT")
                         db.conn.commit()
-                        parse_status = "completed"
+                except Exception as e:
+                    print(f"⚠️ Ошибка проверки структуры ParseQueue: {e}")
+                
+                # Добавляем задачи в очередь
+                for url in yandex_urls:
+                    try:
+                        queue_id = str(uuid.uuid4())
+                        cursor.execute("""
+                            INSERT INTO ParseQueue (id, url, user_id, business_id, status, created_at)
+                            VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+                        """, (queue_id, url, user_id, business_id))
+                        print(f"✅ Добавлена задача в очередь: {queue_id} для URL: {url}")
                     except Exception as e:
-                        print(f"⚠️ Ошибка парсинга Яндекс-карты {url}: {e}")
+                        print(f"⚠️ Ошибка добавления в очередь: {e}")
+                        parse_errors.append(f"Ошибка добавления {url} в очередь: {str(e)}")
                         parse_status = "error"
-                        parse_errors.append(str(e))
-                        try:
-                            send_email(
-                                "demyanovap@yandex.ru",
-                                "Ошибка парсинга Яндекс-карты",
-                                f"URL: {url}\nОшибка: {e}"
-                            )
-                        except Exception as _:
-                            pass
+                
+                db.conn.commit()
 
         # Всегда возвращаем текущие ссылки для бизнеса
         current_links = []
@@ -1689,16 +1689,57 @@ def client_info():
                 } for r in link_rows
             ]
 
-        # Опциональная синхронизация с Businesses, если явно передан business_id
+        # Синхронизация с Businesses: создаём или обновляем бизнес
         try:
+            business_name = data.get('businessName') or ''
+            created_new_business = False
+            
+            # Если business_id не передан, но есть business_name - ищем или создаём бизнес
+            if not business_id and business_name:
+                # Ищем существующий бизнес для этого пользователя с таким именем
+                cursor.execute("""
+                    SELECT id FROM Businesses 
+                    WHERE owner_id = ? AND name = ? AND is_active = 1
+                    LIMIT 1
+                """, (user_id, business_name))
+                existing_business = cursor.fetchone()
+                
+                if existing_business:
+                    # Бизнес существует - используем его
+                    business_id = existing_business[0]
+                    print(f"✅ Найден существующий бизнес: {business_name} (ID: {business_id})")
+                else:
+                    # Бизнеса нет - создаём новый
+                    business_id = str(uuid.uuid4())
+                    cursor.execute("""
+                        INSERT INTO Businesses 
+                        (id, name, business_type, address, working_hours, owner_id, is_active, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """, (
+                        business_id,
+                        business_name,
+                        data.get('businessType') or 'beauty_salon',
+                        data.get('address') or '',
+                        data.get('workingHours') or '',
+                        user_id
+                    ))
+                    db.conn.commit()
+                    created_new_business = True
+                    print(f"✅ Создан новый бизнес: {business_name} (ID: {business_id})")
+            
+            # Обновляем бизнес, если передан business_id или создан новый
             if business_id:
-                # Проверим доступ
-                # Получим владельца бизнеса
-                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-                row = cursor.fetchone()
-                owner_id = row[0] if row else None
-                if owner_id and (owner_id == user_id or user_id):
-                    # Обновляем только базовые поля, если пришли
+                # Проверяем доступ (для существующих бизнесов)
+                if not created_new_business:
+                    cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+                    row = cursor.fetchone()
+                    owner_id = row[0] if row else None
+                    if not owner_id or (owner_id != user_id and not user_data.get('is_superadmin')):
+                        print(f"⚠️ Нет доступа к бизнесу {business_id}")
+                        business_id = None
+                
+                # Обновляем данные бизнеса
+                if business_id:
                     updates = []
                     params = []
                     if data.get('businessName') is not None:
@@ -1707,19 +1748,88 @@ def client_info():
                         updates.append('address = ?'); params.append(data.get('address'))
                     if data.get('workingHours') is not None:
                         updates.append('working_hours = ?'); params.append(data.get('workingHours'))
+                    if data.get('businessType') is not None:
+                        updates.append('business_type = ?'); params.append(data.get('businessType'))
                     if updates:
                         updates.append('updated_at = CURRENT_TIMESTAMP')
                         params.append(business_id)
                         cursor.execute(f"UPDATE Businesses SET {', '.join(updates)} WHERE id = ?", params)
                         db.conn.commit()
-        except Exception as _:
-            pass
+                        print(f"✅ Обновлён бизнес: {business_id}")
+        except Exception as e:
+            print(f"⚠️ Ошибка синхронизации с Businesses: {e}")
+            import traceback
+            traceback.print_exc()
 
         db.close()
         return jsonify({"success": True, "parseStatus": parse_status, "parseErrors": parse_errors, "mapLinks": current_links})
 
     except Exception as e:
         print(f"❌ Ошибка сохранения клиентской информации: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<string:business_id>/parse-status', methods=['GET'])
+def get_parse_status(business_id):
+    """Получить статус парсинга для бизнеса из очереди"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        user_id = user_data.get('user_id') or user_data.get('id')
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем владельца
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        owner_id = row[0]
+        if owner_id != user_id and not db.is_superadmin(user_id):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+
+        # Проверяем статусы в очереди для этого бизнеса
+        cursor.execute("""
+            SELECT status, COUNT(*) as count
+            FROM ParseQueue
+            WHERE business_id = ?
+            GROUP BY status
+        """, (business_id,))
+        status_rows = cursor.fetchall()
+        
+        statuses = {}
+        for row in status_rows:
+            statuses[row[0]] = row[1]
+        
+        # Определяем общий статус
+        overall_status = "idle"
+        if statuses.get('processing'):
+            overall_status = "processing"
+        elif statuses.get('pending') or statuses.get('queued'):
+            overall_status = "queued"
+        elif statuses.get('error'):
+            overall_status = "error"
+        elif statuses.get('captcha'):
+            overall_status = "captcha"
+        elif statuses.get('done'):
+            overall_status = "done"
+        
+        db.close()
+        return jsonify({
+            "success": True,
+            "status": overall_status,
+            "details": statuses
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения статуса парсинга: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/business/<string:business_id>/map-parses', methods=['GET'])
