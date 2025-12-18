@@ -394,7 +394,8 @@ export const ProfilePage = () => {
       </div>
 
       {/* Предупреждение, если бизнес не выбран и не может быть определён автоматически */}
-      {!currentBusinessId && !(businesses && businesses.length === 1) && (
+      {/* Не показываем предупреждение если: бизнесов 0 или 1 (для владельцев одной точки) */}
+      {!currentBusinessId && businesses && businesses.length > 1 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <div className="flex items-start">
             <div className="flex-shrink-0">

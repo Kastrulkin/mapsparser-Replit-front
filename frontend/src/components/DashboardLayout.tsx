@@ -34,21 +34,31 @@ export const DashboardLayout = () => {
           });
           if (response.ok) {
             const data = await response.json();
+            console.log('📊 Загружены данные пользователя:', { 
+              is_superadmin: data.user?.is_superadmin, 
+              businesses_count: data.businesses?.length || 0 
+            });
             // API возвращает businesses для всех типов пользователей:
             // - суперадмин: все бизнесы
             // - владелец сети: только бизнесы из своих сетей
             // - обычный: только свои бизнесы
             if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
+              console.log('✅ Бизнесы загружены:', data.businesses.length);
               setBusinesses(data.businesses);
               const savedBusinessId = localStorage.getItem('selectedBusinessId');
               const businessToSelect = savedBusinessId
                 ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
                 : data.businesses[0];
 
+              console.log('✅ Выбран бизнес:', businessToSelect.id, businessToSelect.name);
               setCurrentBusinessId(businessToSelect.id);
               setCurrentBusiness(businessToSelect);
               localStorage.setItem('selectedBusinessId', businessToSelect.id);
+            } else {
+              console.warn('⚠️ Бизнесы не загружены или список пуст:', data.businesses);
             }
+          } else {
+            console.error('❌ Ошибка загрузки /api/auth/me:', response.status);
           }
         } catch (error) {
           console.error('Ошибка загрузки бизнесов:', error);
