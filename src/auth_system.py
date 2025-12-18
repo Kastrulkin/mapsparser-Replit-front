@@ -95,18 +95,44 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
             print(f"❌ Пользователь не найден: {email}")
             return {"error": "Пользователь не найден"}
         
-        if not user['is_active']:
+        # Безопасное извлечение данных из sqlite3.Row
+        try:
+            if hasattr(user, 'keys'):
+                # Это sqlite3.Row
+                user_id = user['id'] if 'id' in user.keys() else None
+                user_email = user['email'] if 'email' in user.keys() else None
+                password_hash = user['password_hash'] if 'password_hash' in user.keys() else None
+                user_name = user['name'] if 'name' in user.keys() else None
+                user_phone = user['phone'] if 'phone' in user.keys() else None
+                is_active = user['is_active'] if 'is_active' in user.keys() else None
+                is_verified = user['is_verified'] if 'is_verified' in user.keys() else None
+            else:
+                # Если это tuple
+                user_id = user[0] if len(user) > 0 else None
+                user_email = user[1] if len(user) > 1 else None
+                password_hash = user[2] if len(user) > 2 else None
+                user_name = user[3] if len(user) > 3 else None
+                user_phone = user[4] if len(user) > 4 else None
+                is_active = user[5] if len(user) > 5 else None
+                is_verified = user[6] if len(user) > 6 else None
+        except Exception as e:
+            print(f"❌ Ошибка извлечения данных пользователя: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": "Ошибка обработки данных пользователя"}
+        
+        if not is_active:
             print(f"❌ Аккаунт заблокирован: {email}")
             return {"error": "Аккаунт заблокирован"}
         
         # Если у пользователя нет пароля, это новый пользователь
-        if not user['password_hash']:
+        if not password_hash:
             print(f"❌ У пользователя нет пароля: {email}")
             return {"error": "NEED_PASSWORD", "message": "Необходимо установить пароль"}
         
         print(f"🔍 Проверка пароля для: {email}")
-        print(f"🔍 Формат хеша в БД: {user['password_hash'][:50]}...")
-        password_valid = verify_password(password, user['password_hash'])
+        print(f"🔍 Формат хеша в БД: {password_hash[:50] if password_hash else 'None'}...")
+        password_valid = verify_password(password, password_hash)
         print(f"🔍 Результат проверки пароля: {password_valid}")
         
         if not password_valid:
@@ -115,11 +141,11 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         print(f"✅ Успешная авторизация: {email}")
         return {
-            "id": user['id'],
-            "email": user['email'],
-            "name": user['name'],
-            "phone": user['phone'],
-            "is_verified": user['is_verified']
+            "id": user_id,
+            "email": user_email,
+            "name": user_name,
+            "phone": user_phone,
+            "is_verified": is_verified
         }
         
     except Exception as e:
