@@ -36,6 +36,7 @@ export const ProfilePage = () => {
     const loadClientInfo = async () => {
       try {
         const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+        console.log('🔄 Загружаю client-info для business_id:', currentBusinessId);
         const response = await fetch(`${window.location.origin}/api/client-info${qs}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
@@ -43,13 +44,25 @@ export const ProfilePage = () => {
         });
         if (response.ok) {
           const data = await response.json();
+          console.log('📥 Получены данные с сервера:', data);
+          // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
+          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
+            ? data.mapLinks.map((link: any) => ({
+                id: link.id,
+                url: link.url || '',
+                mapType: link.mapType || link.map_type
+              }))
+            : []);
+          console.log('📋 Нормализованные mapLinks:', normalizedMapLinks);
           setClientInfo({
             ...data,
-            mapLinks: (data.mapLinks && Array.isArray(data.mapLinks) ? data.mapLinks : [])
+            mapLinks: normalizedMapLinks
           });
+        } else {
+          console.error('❌ Ошибка загрузки client-info:', response.status, await response.text());
         }
       } catch (error) {
-        console.error('Ошибка загрузки информации о бизнесе:', error);
+        console.error('❌ Ошибка загрузки информации о бизнесе:', error);
       }
     };
     loadClientInfo();
@@ -145,14 +158,30 @@ export const ProfilePage = () => {
         });
         if (reloadResponse.ok) {
           const reloadData = await reloadResponse.json();
+          console.log('🔄 Перезагруженные данные:', reloadData);
+          // Нормализуем mapLinks
+          const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks) 
+            ? reloadData.mapLinks.map((link: any) => ({
+                id: link.id,
+                url: link.url || '',
+                mapType: link.mapType || link.map_type
+              }))
+            : []);
+          console.log('📋 Нормализованные mapLinks после перезагрузки:', normalizedMapLinks);
           setClientInfo({
             ...reloadData,
-            mapLinks: (reloadData.mapLinks && Array.isArray(reloadData.mapLinks) ? reloadData.mapLinks : [])
+            mapLinks: normalizedMapLinks
           });
         } else {
           // Если перезагрузка не удалась, используем данные из ответа
+          console.log('⚠️ Перезагрузка не удалась, использую данные из ответа');
           if (Array.isArray(data.mapLinks)) {
-            setClientInfo({ ...clientInfo, mapLinks: data.mapLinks });
+            const normalizedMapLinks = data.mapLinks.map((link: any) => ({
+              id: link.id,
+              url: link.url || '',
+              mapType: link.mapType || link.map_type
+            }));
+            setClientInfo({ ...clientInfo, mapLinks: normalizedMapLinks });
           }
         }
         
