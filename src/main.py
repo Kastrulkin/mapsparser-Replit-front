@@ -4026,17 +4026,29 @@ def get_user_info():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
+        # Отладочное логирование
+        print(f"🔍 DEBUG get_user_info: user_data type = {type(user_data)}")
+        print(f"🔍 DEBUG get_user_info: user_data = {user_data}")
+        
         # Получаем дополнительную информацию о пользователе
         db = DatabaseManager()
-        # Безопасное получение user_id из словаря
-        user_id = user_data.get('user_id') if isinstance(user_data, dict) else (user_data.get('id') if hasattr(user_data, 'get') else None)
+        # Безопасное получение user_id
+        user_id = None
+        if isinstance(user_data, dict):
+            user_id = user_data.get('user_id') or user_data.get('id')
+        elif hasattr(user_data, 'keys'):
+            # Это sqlite3.Row
+            if 'user_id' in user_data.keys():
+                user_id = user_data['user_id']
+            elif 'id' in user_data.keys():
+                user_id = user_data['id']
+        
         if not user_id:
-            # Если user_data - это sqlite3.Row, обращаемся по индексу или ключу
-            if hasattr(user_data, 'keys'):
-                user_id = user_data['user_id'] if 'user_id' in user_data.keys() else (user_data['id'] if 'id' in user_data.keys() else None)
-            else:
-                db.close()
-                return jsonify({"error": "Не удалось определить ID пользователя"}), 500
+            db.close()
+            print(f"❌ Ошибка: не удалось определить user_id из user_data: {user_data}")
+            return jsonify({"error": "Не удалось определить ID пользователя"}), 500
+        
+        print(f"🔍 DEBUG get_user_info: user_id = {user_id}")
         
         is_superadmin = db.is_superadmin(user_id)
         
@@ -4076,6 +4088,8 @@ def get_user_info():
         
     except Exception as e:
         print(f"❌ Ошибка получения информации о пользователе: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
