@@ -292,12 +292,25 @@ def init_database_schema():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON Businesses(owner_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_businesses_network_id ON Businesses(network_id)")
         
-        # Индексы для FinancialTransactions
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_financial_transactions_business_id ON FinancialTransactions(business_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_financial_transactions_date ON FinancialTransactions(transaction_date)")
+        # Индексы для FinancialTransactions (проверяем наличие колонок)
+        try:
+            cursor.execute("PRAGMA table_info(FinancialTransactions)")
+            ft_columns = [row[1] for row in cursor.fetchall()]
+            if 'business_id' in ft_columns:
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_financial_transactions_business_id ON FinancialTransactions(business_id)")
+            if 'transaction_date' in ft_columns:
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_financial_transactions_date ON FinancialTransactions(transaction_date)")
+        except Exception as e:
+            print(f"⚠️ Пропущены индексы для FinancialTransactions: {e}")
         
-        # Индексы для UserServices
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_services_business_id ON UserServices(business_id)")
+        # Индексы для UserServices (проверяем наличие колонок)
+        try:
+            cursor.execute("PRAGMA table_info(UserServices)")
+            us_columns = [row[1] for row in cursor.fetchall()]
+            if 'business_id' in us_columns:
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_services_business_id ON UserServices(business_id)")
+        except Exception as e:
+            print(f"⚠️ Пропущены индексы для UserServices: {e}")
         
         # Индексы для BusinessMapLinks
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_business_map_links_business_id ON BusinessMapLinks(business_id)")
