@@ -405,11 +405,25 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("SELECT is_superadmin FROM Users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
-        if row:
-            # Обрабатываем как sqlite3.Row или tuple
-            is_superadmin_val = row[0] if isinstance(row, (tuple, list)) else row.get('is_superadmin', row[0] if len(row) > 0 else 0)
-            return bool(is_superadmin_val)
-        return False
+        if not row:
+            return False
+
+        # Безопасная обработка sqlite3.Row или tuple
+        try:
+            if hasattr(row, "keys"):
+                # sqlite3.Row
+                if "is_superadmin" in row.keys():
+                    return bool(row["is_superadmin"])
+                # Если по какой‑то причине колонки нет — считаем, что не суперадмин
+                return False
+            else:
+                # tuple/list — берём первый столбец
+                return bool(row[0]) if len(row) > 0 else False
+        except Exception as e:
+            print(f"❌ Ошибка проверки is_superadmin: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def set_superadmin(self, user_id: str, is_superadmin: bool = True):
         """Установить статус суперадмина для пользователя"""
