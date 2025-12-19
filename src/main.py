@@ -4018,6 +4018,20 @@ def login():
         if 'error' in result:
             return jsonify({"error": result['error']}), 401
         
+        # Проверяем, есть ли у пользователя хотя бы один активный бизнес
+        # Если все бизнесы заблокированы, пользователь не может войти
+        db = DatabaseManager()
+        is_superadmin = db.is_superadmin(result['id'])
+        
+        if not is_superadmin:
+            # Проверяем активные бизнесы для обычных пользователей
+            businesses = db.get_businesses_by_owner(result['id'])
+            if len(businesses) == 0:
+                db.close()
+                return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
+        
+        db.close()
+        
         # Создаем сессию
         session_token = create_session(result['id'])
         if not session_token:
@@ -4089,6 +4103,12 @@ def get_user_info():
         else:
             # Обычный пользователь видит только свои бизнесы
             businesses = db.get_businesses_by_owner(user_id)
+        
+        # Проверяем, есть ли у пользователя хотя бы один активный бизнес
+        # Если все бизнесы заблокированы, пользователь не может войти
+        if not is_superadmin and len(businesses) == 0:
+            db.close()
+            return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
         
         db.close()
         
@@ -4484,15 +4504,22 @@ def delete_business(business_id):
         # Проверяем права суперадмина
         db = DatabaseManager()
         if not db.is_superadmin(user_data['user_id']):
+            db.close()
             return jsonify({"error": "Недостаточно прав"}), 403
         
-        db.delete_business(business_id)
+        print(f"🔍 DELETE запрос для бизнеса: {business_id}")
+        success = db.delete_business(business_id)
         db.close()
         
-        return jsonify({"success": True})
+        if success:
+            return jsonify({"success": True, "message": "Бизнес удалён навсегда"})
+        else:
+            return jsonify({"error": "Бизнес не найден или не удалось удалить"}), 404
         
     except Exception as e:
         print(f"❌ Ошибка удаления бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/superadmin/users', methods=['GET'])
@@ -4547,6 +4574,22 @@ def get_users_with_businesses():
             return jsonify({"error": "Недостаточно прав"}), 403
         
         users_with_businesses = db.get_all_users_with_businesses()
+        
+        # Логируем для отладки
+        total_blocked = 0
+        for user in users_with_businesses:
+            email = user.get('email', 'N/A')
+            blocked_direct = sum(1 for b in user.get('direct_businesses', []) if b.get('is_active') == 0)
+            blocked_network = sum(1 for network in user.get('networks', []) for b in network.get('businesses', []) if b.get('is_active') == 0)
+            total_blocked += blocked_direct + blocked_network
+            if blocked_direct > 0 or blocked_network > 0:
+                print(f"🔍 DEBUG API: Пользователь {email} имеет {blocked_direct} заблокированных прямых + {blocked_network} в сетях")
+                if email == 'demyanovap@yandex.ru':
+                    print(f"🔍 DEBUG API: Всего бизнесов у {email}: {len(user.get('direct_businesses', []))}")
+                    for b in user.get('direct_businesses', []):
+                        print(f"  - {b.get('name')} (is_active: {b.get('is_active')})")
+        print(f"🔍 DEBUG API get_all_users_with_businesses: всего заблокированных бизнесов: {total_blocked}")
+        
         db.close()
         
         return jsonify({"success": True, "users": users_with_businesses})

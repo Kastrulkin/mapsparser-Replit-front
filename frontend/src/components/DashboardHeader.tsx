@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { newAuth } from '../lib/auth_new';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { BusinessSwitcher } from './BusinessSwitcher';
-import { LogOut, LogIn } from 'lucide-react';
+import { LogOut, LogIn, Settings } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,20 +34,25 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   user: userProp,
 }) => {
   const { currency, setCurrency } = useCurrency();
+  const navigate = useNavigate();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
       if (userProp) {
         setIsAuthenticated(true);
+        setCurrentUser(userProp);
         return;
       }
       try {
-        const currentUser = await newAuth.getCurrentUser();
-        setIsAuthenticated(!!currentUser);
+        const user = await newAuth.getCurrentUser();
+        setIsAuthenticated(!!user);
+        setCurrentUser(user);
       } catch (error) {
         setIsAuthenticated(false);
+        setCurrentUser(null);
       }
     };
     checkAuth();
@@ -78,6 +84,19 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                      onBusinessChange={onBusinessChange || (() => {})}
                      isSuperadmin={isSuperadmin || false}
                    />
+                 )}
+
+                 {/* Пункт меню "Базич" для суперадмина demyanovap@yandex.ru */}
+                 {currentUser?.email === 'demyanovap@yandex.ru' && (
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={() => navigate('/dashboard/bazich')}
+                     className="flex items-center gap-2"
+                   >
+                     <Settings className="w-4 h-4" />
+                     <span className="hidden sm:inline">Базич</span>
+                   </Button>
                  )}
 
           <LanguageSwitcher />

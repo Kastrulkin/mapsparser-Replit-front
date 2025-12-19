@@ -114,7 +114,17 @@ export const AdminPage: React.FC = () => {
     const checkAccess = async () => {
       try {
         const currentUser = await newAuth.getCurrentUser();
-        if (!currentUser || currentUser.email !== 'demyanovap@yandex.ru') {
+        if (!currentUser) {
+          // Если пользователь не авторизован, перенаправляем на логин
+          toast({
+            title: 'Требуется авторизация',
+            description: 'Пожалуйста, войдите в систему',
+            variant: 'destructive',
+          });
+          navigate('/login');
+          return;
+        }
+        if (currentUser.email !== 'demyanovap@yandex.ru') {
           toast({
             title: 'Доступ запрещён',
             description: 'Эта страница доступна только для demyanovap@yandex.ru',
@@ -126,11 +136,17 @@ export const AdminPage: React.FC = () => {
         loadUsers();
       } catch (error) {
         console.error('Ошибка проверки доступа:', error);
-        navigate('/dashboard');
+        // Не перенаправляем на /login, если уже в контексте DashboardLayout
+        // Просто показываем ошибку и остаёмся на странице
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось проверить доступ',
+          variant: 'destructive',
+        });
       }
     };
     checkAccess();
-  }, []);
+  }, [navigate]);
 
   const loadUsers = async () => {
     try {
@@ -142,7 +158,8 @@ export const AdminPage: React.FC = () => {
           description: 'Требуется авторизация',
           variant: 'destructive',
         });
-        navigate('/login');
+        // Не перенаправляем на /login, если уже в контексте DashboardLayout
+        // Просто показываем ошибку
         return;
       }
 
@@ -168,6 +185,16 @@ export const AdminPage: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
+        // Логируем для отладки
+        let totalBlocked = 0;
+        data.users?.forEach((user: any) => {
+          const blockedDirect = user.direct_businesses?.filter((b: any) => b.is_active === 0).length || 0;
+          const blockedNetwork = user.networks?.reduce((sum: number, n: any) => 
+            sum + (n.businesses?.filter((b: any) => b.is_active === 0).length || 0), 0) || 0;
+          totalBlocked += blockedDirect + blockedNetwork;
+        });
+        console.log(`🔍 DEBUG AdminPage: Загружено пользователей: ${data.users?.length || 0}, заблокированных бизнесов: ${totalBlocked}`);
+        console.log('🔍 DEBUG AdminPage: Данные пользователей:', data.users);
         setUsers(data.users || []);
       }
     } catch (error) {
@@ -209,6 +236,7 @@ export const AdminPage: React.FC = () => {
       onConfirm: async () => {
         try {
           const token = await newAuth.getToken();
+          console.log(`🔍 DELETE запрос для бизнеса: ID=${businessId}, name=${businessName}`);
           const response = await fetch(`/api/superadmin/businesses/${businessId}`, {
             method: 'DELETE',
             headers: {
@@ -216,6 +244,8 @@ export const AdminPage: React.FC = () => {
               'Content-Type': 'application/json',
             },
           });
+          
+          console.log(`🔍 DELETE ответ: status=${response.status}, ok=${response.ok}`);
 
           if (response.ok) {
             toast({
@@ -339,8 +369,11 @@ export const AdminPage: React.FC = () => {
               users.map((user) => {
                 const allBusinesses: Array<{ id: string; name: string; type: 'direct' | 'network'; networkId?: string; networkName?: string; business: Business }> = [];
                 
-                // Добавляем прямые бизнесы
-                user.direct_businesses.forEach(business => {
+                // Добавляем прямые бизнесы (включая заблокированные)
+                const directBusinesses = user.direct_businesses || [];
+                console.log(`🔍 DEBUG Frontend: Пользователь ${user.email}, прямых бизнесов: ${directBusinesses.length}`);
+                directBusinesses.forEach(business => {
+                  console.log(`  - Бизнес: ${business.name}, is_active: ${business.is_active}, type: ${typeof business.is_active}`);
                   allBusinesses.push({
                     id: business.id,
                     name: business.name,
@@ -411,7 +444,16 @@ export const AdminPage: React.FC = () => {
                                   className="p-2 border border-gray-200 rounded hover:bg-blue-50 cursor-pointer"
                                   onClick={() => handleBusinessClick(business.id)}
                                 >
-                                  <div className="text-sm font-medium text-gray-900">{business.name}</div>
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`text-sm font-medium ${business.is_active === 0 ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                      {business.name}
+                                    </div>
+                                    {business.is_active === 0 && (
+                                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                                        Заблокирован
+                                      </span>
+                                    )}
+                                  </div>
                                   {business.address && (
                                     <div className="text-xs text-gray-500 flex items-center mt-1">
                                       <MapPin className="h-3 w-3 mr-1" />
@@ -429,7 +471,14 @@ export const AdminPage: React.FC = () => {
                           onClick={() => handleBusinessClick(item.business.id)}
                         >
                           <Building2 className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-900">{item.name}</span>
+                          <span className={`text-sm font-medium ${item.business.is_active === 0 ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            {item.name}
+                          </span>
+                          {item.business.is_active === 0 && (
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                              Заблокирован
+                            </span>
+                          )}
                           {item.business.address && (
                             <span className="text-xs text-gray-500 flex items-center">
                               <MapPin className="h-3 w-3 mr-1" />
@@ -447,7 +496,9 @@ export const AdminPage: React.FC = () => {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleBlock(item.business.id, item.name, item.business.is_active !== 1);
+                              // Если бизнес активен (is_active === 1), хотим заблокировать (isBlocked = true)
+                              // Если бизнес заблокирован (is_active !== 1), хотим разблокировать (isBlocked = false)
+                              handleBlock(item.business.id, item.name, item.business.is_active === 1);
                             }}
                             className={item.business.is_active !== 1 ? 'bg-green-50 text-green-700 hover:bg-green-100' : ''}
                           >
@@ -478,7 +529,9 @@ export const AdminPage: React.FC = () => {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleBlock(business.id, business.name, business.is_active !== 1);
+                                      // Если бизнес активен (is_active === 1), хотим заблокировать (isBlocked = true)
+                                      // Если бизнес заблокирован (is_active !== 1), хотим разблокировать (isBlocked = false)
+                                      handleBlock(business.id, business.name, business.is_active === 1);
                                     }}
                                     className={business.is_active !== 1 ? 'bg-green-50 text-green-700 hover:bg-green-100' : ''}
                                   >

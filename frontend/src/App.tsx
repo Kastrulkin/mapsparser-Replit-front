@@ -54,7 +54,9 @@ const AppContent = () => {
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="bazich" element={<AdminPage />} />
           </Route>
+          {/* Legacy route - keep for backward compatibility */}
           <Route path="/bazich" element={<AdminPage />} />
           {/* Legacy route - keep for backward compatibility */}
           <Route path="/dashboard-old" element={<Dashboard />} />

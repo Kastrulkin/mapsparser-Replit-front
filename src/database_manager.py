@@ -459,7 +459,7 @@ class DatabaseManager:
             raise
     
     def get_all_businesses(self) -> List[Dict[str, Any]]:
-        """Получить все бизнесы (только для суперадмина)"""
+        """Получить все бизнесы (только для суперадмина) - только активные"""
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT b.*, u.email as owner_email, u.name as owner_name
@@ -492,13 +492,13 @@ class DatabaseManager:
         return [dict(row) for row in cursor.fetchall()]
     
     def get_businesses_by_network_owner(self, owner_id: str) -> List[Dict[str, Any]]:
-        """Получить бизнесы владельца сети: свои личные + бизнесы из сетей"""
+        """Получить бизнесы владельца сети: свои личные + бизнесы из сетей - только активные"""
         cursor = self.conn.cursor()
         
         # Получаем бизнесы, которые напрямую принадлежат пользователю
         cursor.execute("""
             SELECT * FROM Businesses 
-            WHERE owner_id = ? AND is_active = 1
+            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
             ORDER BY created_at DESC
         """, (owner_id,))
         direct_businesses = [dict(row) for row in cursor.fetchall()]
@@ -508,7 +508,7 @@ class DatabaseManager:
             SELECT b.* 
             FROM Businesses b
             INNER JOIN Networks n ON b.network_id = n.id
-            WHERE n.owner_id = ? AND b.is_active = 1
+            WHERE n.owner_id = ? AND (b.is_active = 1 OR b.is_active IS NULL)
             ORDER BY b.created_at DESC
         """, (owner_id,))
         network_businesses = [dict(row) for row in cursor.fetchall()]
@@ -573,11 +573,11 @@ class DatabaseManager:
         return cursor.rowcount > 0
     
     def get_businesses_by_network(self, network_id: str) -> List[Dict[str, Any]]:
-        """Получить все бизнесы (точки) сети"""
+        """Получить все бизнесы (точки) сети - включая заблокированные"""
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM Businesses 
-            WHERE network_id = ? AND is_active = 1
+            WHERE network_id = ?
             ORDER BY created_at DESC
         """, (network_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -605,13 +605,17 @@ class DatabaseManager:
                 columns = [desc[0] for desc in cursor.description]
                 user_dict = dict(zip(columns, user_row))
             
-            # Получаем прямые бизнесы пользователя (не в сети)
+            # Получаем прямые бизнесы пользователя (не в сети) - включая заблокированные
             cursor.execute("""
                 SELECT * FROM Businesses 
-                WHERE owner_id = ? AND network_id IS NULL AND (is_active = 1 OR is_active IS NULL)
+                WHERE owner_id = ? AND network_id IS NULL
                 ORDER BY created_at DESC
             """, (user_id,))
             direct_businesses = [dict(row) for row in cursor.fetchall()]
+            # Логируем для отладки
+            blocked_count = sum(1 for b in direct_businesses if b.get('is_active') == 0)
+            if blocked_count > 0:
+                print(f"🔍 DEBUG: Пользователь {user_id} имеет {blocked_count} заблокированных бизнесов из {len(direct_businesses)} всего")
             
             # Получаем сети пользователя
             cursor.execute("""
@@ -635,6 +639,33 @@ class DatabaseManager:
                 **user_dict,
                 'direct_businesses': direct_businesses,
                 'networks': networks_with_businesses
+            })
+        
+        # Находим бизнесы без владельцев (orphan businesses) - включая заблокированные
+        cursor.execute("""
+            SELECT b.*
+            FROM Businesses b
+            LEFT JOIN Users u ON b.owner_id = u.id
+            WHERE b.network_id IS NULL
+            AND b.owner_id IS NOT NULL
+            AND u.id IS NULL
+            ORDER BY b.created_at DESC
+        """)
+        orphan_businesses = [dict(row) for row in cursor.fetchall()]
+        
+        # Добавляем специальную запись для бизнесов без владельцев
+        if orphan_businesses:
+            result.append({
+                'id': None,
+                'email': '[Без владельца]',
+                'name': '[Бизнесы без владельца]',
+                'phone': None,
+                'created_at': None,
+                'is_active': None,
+                'is_verified': None,
+                'is_superadmin': False,
+                'direct_businesses': orphan_businesses,
+                'networks': []
             })
         
         return result
@@ -678,14 +709,42 @@ class DatabaseManager:
             self.conn.commit()
     
     def delete_business(self, business_id: str):
-        """Удалить бизнес (мягкое удаление)"""
+        """Удалить бизнес навсегда (реальное удаление)"""
         cursor = self.conn.cursor()
-        cursor.execute("""
-            UPDATE Businesses 
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        """, (business_id,))
+        
+        # Проверяем, существует ли бизнес
+        cursor.execute("SELECT id, name FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+        if not business:
+            print(f"❌ Бизнес с ID {business_id} не найден")
+            return False
+        
+        print(f"🔍 Удаление бизнеса: ID={business_id}, name={business[1] if business else 'N/A'}")
+        
+        # Удаляем связанные данные
+        cursor.execute("DELETE FROM UserServices WHERE business_id = ?", (business_id,))
+        deleted_services = cursor.rowcount
+        cursor.execute("DELETE FROM FinancialTransactions WHERE business_id = ?", (business_id,))
+        deleted_transactions = cursor.rowcount
+        cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
+        deleted_links = cursor.rowcount
+        cursor.execute("DELETE FROM MapParseResults WHERE business_id = ?", (business_id,))
+        deleted_results = cursor.rowcount
+        cursor.execute("DELETE FROM ParseQueue WHERE business_id = ?", (business_id,))
+        deleted_queue = cursor.rowcount
+        cursor.execute("DELETE FROM TelegramBindTokens WHERE business_id = ?", (business_id,))
+        deleted_tokens = cursor.rowcount
+        
+        print(f"🔍 Удалено связанных данных: services={deleted_services}, transactions={deleted_transactions}, links={deleted_links}, results={deleted_results}, queue={deleted_queue}, tokens={deleted_tokens}")
+        
+        # Удаляем сам бизнес
+        cursor.execute("DELETE FROM Businesses WHERE id = ?", (business_id,))
+        deleted_count = cursor.rowcount
         self.conn.commit()
+        
+        print(f"🔍 Удалено бизнесов: {deleted_count}")
+        
+        return deleted_count > 0
     
     def block_business(self, business_id: str, is_blocked: bool = True):
         """Заблокировать/разблокировать бизнес"""
