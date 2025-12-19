@@ -3294,7 +3294,7 @@ def get_financial_breakdown():
 # ==================== ЭНДПОИНТЫ ДЛЯ СЕТЕЙ ====================
 
 @app.route('/api/networks/<string:network_id>/locations', methods=['GET'])
-def get_network_locations(network_id):
+def get_network_locations_by_network_id(network_id):
     """Получить список точек сети"""
     try:
         auth_header = request.headers.get('Authorization')
