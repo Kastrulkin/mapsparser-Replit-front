@@ -4511,6 +4511,10 @@ def get_users_with_businesses():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
+        # Проверяем, что это именно demyanovap@yandex.ru
+        if user_data.get('email') != 'demyanovap@yandex.ru':
+            return jsonify({"error": "Доступ запрещён. Только для demyanovap@yandex.ru"}), 403
+        
         # Проверяем права суперадмина
         db = DatabaseManager()
         if not db.is_superadmin(user_data['user_id']):
@@ -4523,6 +4527,42 @@ def get_users_with_businesses():
         
     except Exception as e:
         print(f"❌ Ошибка получения пользователей с бизнесами: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/businesses/<business_id>/block', methods=['POST'])
+def block_business(business_id):
+    """Заблокировать/разблокировать бизнес (только для demyanovap@yandex.ru)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем, что это именно demyanovap@yandex.ru
+        if user_data.get('email') != 'demyanovap@yandex.ru':
+            return jsonify({"error": "Доступ запрещён"}), 403
+        
+        data = request.get_json()
+        is_blocked = data.get('is_blocked', True)
+        
+        db = DatabaseManager()
+        success = db.block_business(business_id, is_blocked)
+        db.close()
+        
+        if success:
+            return jsonify({"success": True, "message": "Бизнес заблокирован" if is_blocked else "Бизнес разблокирован"})
+        else:
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+    except Exception as e:
+        print(f"❌ Ошибка блокировки бизнеса: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

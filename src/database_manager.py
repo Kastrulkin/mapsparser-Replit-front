@@ -687,6 +687,17 @@ class DatabaseManager:
         """, (business_id,))
         self.conn.commit()
     
+    def block_business(self, business_id: str, is_blocked: bool = True):
+        """Заблокировать/разблокировать бизнес"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE Businesses 
+            SET is_active = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (0 if is_blocked else 1, business_id))
+        self.conn.commit()
+        return cursor.rowcount > 0
+    
     def get_services_by_business(self, business_id: str):
         """Получить услуги конкретного бизнеса"""
         cursor = self.conn.cursor()
