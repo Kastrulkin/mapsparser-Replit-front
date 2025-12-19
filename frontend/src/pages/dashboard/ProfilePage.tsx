@@ -30,14 +30,55 @@ export const ProfilePage = () => {
   const [loadingLocations, setLoadingLocations] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    // Если есть currentBusiness и это не наш бизнес, загружаем данные владельца
+    if (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
+      // Показываем данные владельца из currentBusiness (если есть) или загружаем
+      if (currentBusiness.owner_email || currentBusiness.owner_name) {
+        setForm({
+          email: currentBusiness.owner_email || "",
+          phone: currentBusiness.owner_phone || "",
+          name: currentBusiness.owner_name || ""
+        });
+      } else {
+        // Загружаем данные владельца бизнеса через API
+        loadOwnerData();
+      }
+    } else if (user) {
+      // Показываем данные текущего пользователя
       setForm({
         email: user.email || "",
         phone: user.phone || "",
         name: user.name || ""
       });
     }
-  }, [user]);
+  }, [user, currentBusiness, currentBusinessId]);
+
+  const loadOwnerData = async () => {
+    if (!currentBusinessId) return;
+    
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/client-info?business_id=${currentBusinessId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.owner) {
+          // Показываем данные владельца бизнеса
+          setForm({
+            email: data.owner.email || "",
+            phone: data.owner.phone || "",
+            name: data.owner.name || ""
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных владельца:', error);
+    }
+  };
 
   useEffect(() => {
     const loadClientInfo = async () => {
@@ -52,6 +93,15 @@ export const ProfilePage = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('📥 Получены данные с сервера:', data);
+          
+          // Если есть данные владельца бизнеса и это не наш бизнес, обновляем форму
+          if (data.owner && currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
+            setForm({
+              email: data.owner.email || "",
+              phone: data.owner.phone || "",
+              name: data.owner.name || ""
+            });
+          }
           
           // Загружаем точки сети, если бизнес является сетью
           if (currentBusinessId) {
@@ -463,9 +513,19 @@ export const ProfilePage = () => {
       {/* Профиль пользователя */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Профиль</h2>
-          {!editMode && (
+          <h2 className="text-xl font-semibold text-gray-900">
+            Профиль
+            {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
+              <span className="ml-2 text-sm font-normal text-gray-500">
+                (владелец бизнеса)
+              </span>
+            )}
+          </h2>
+          {!editMode && currentBusiness && currentBusiness.owner_id === user?.id && (
             <Button onClick={() => setEditMode(true)}>Редактировать</Button>
+          )}
+          {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
+            <span className="text-sm text-gray-500">Редактирование недоступно (чужой бизнес)</span>
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -484,7 +544,7 @@ export const ProfilePage = () => {
               type="text" 
               value={form.name} 
               onChange={(e) => setForm({...form, name: e.target.value})}
-              disabled={!editMode}
+              disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
           </div>
@@ -494,7 +554,7 @@ export const ProfilePage = () => {
               type="tel"
               value={form.phone}
               onChange={(e) => setForm({...form, phone: e.target.value})}
-              disabled={!editMode}
+              disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
           </div>

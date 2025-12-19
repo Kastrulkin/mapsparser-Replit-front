@@ -1582,6 +1582,31 @@ def client_info():
                         services_rows = cursor.fetchall()
                         services_list = [{"name": r[0], "description": r[1], "category": r[2], "price": r[3]} for r in services_rows]
                         
+                        # Получаем данные владельца бизнеса для отображения
+                        owner_data = None
+                        if owner_id:
+                            cursor.execute("""
+                                SELECT id, email, name, phone
+                                FROM Users
+                                WHERE id = ?
+                            """, (owner_id,))
+                            owner_row = cursor.fetchone()
+                            if owner_row:
+                                if hasattr(owner_row, 'keys'):
+                                    owner_data = {
+                                        'id': owner_row['id'],
+                                        'email': owner_row['email'],
+                                        'name': owner_row['name'],
+                                        'phone': owner_row['phone']
+                                    }
+                                else:
+                                    owner_data = {
+                                        'id': owner_row[0],
+                                        'email': owner_row[1],
+                                        'name': owner_row[2],
+                                        'phone': owner_row[3] if len(owner_row) > 3 else None
+                                    }
+                        
                         db.close()
                         return jsonify({
                             "success": True,
@@ -1591,7 +1616,8 @@ def client_info():
                             "workingHours": business_row[4] or "",
                             "description": "",
                             "services": services_list,
-                            "mapLinks": links
+                            "mapLinks": links,
+                            "owner": owner_data  # Добавляем данные владельца
                         })
                     else:
                         db.close()
