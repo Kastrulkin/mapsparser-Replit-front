@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Building2, Users, Plus } from 'lucide-react';
-import { CreateBusinessModal } from './CreateBusinessModal';
+import { ChevronDown, Building2, Users } from 'lucide-react';
 
 interface Business {
   id: string;
@@ -26,7 +25,6 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (businesses.length > 0) {
@@ -41,15 +39,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     setIsOpen(false);
   };
 
-  const handleCreateSuccess = (businessId: string) => {
-    // Перезагружаем страницу для обновления списка бизнесов
-    window.location.reload();
-  };
-
-  // Для суперадмина показываем список всегда, даже если бизнесов нет
-  // Если бизнесов нет - показываем только опцию "Добавить новую компанию"
   const hasBusinesses = businesses.length > 0;
-  const showAddOnly = isSuperadmin && !hasBusinesses;
 
   return (
     <div className="relative">
@@ -60,9 +50,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
         <Building2 className="w-4 h-4 text-gray-600" />
         <div className="text-left">
           <div className="text-sm font-medium text-gray-900">
-            {showAddOnly 
-              ? 'Добавить компанию' 
-              : selectedBusiness?.name || 'Выберите бизнес'}
+            {selectedBusiness?.name || 'Выберите бизнес'}
           </div>
           {isSuperadmin && selectedBusiness?.owner_name && (
             <div className="text-xs text-gray-500">
@@ -106,33 +94,8 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
               </div>
             </button>
           ))}
-          
-          {isSuperadmin && (
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                setShowCreateModal(true);
-              }}
-              className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors ${
-                hasBusinesses ? 'border-t border-gray-200' : ''
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Plus className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">
-                  {showAddOnly ? 'Добавить новую компанию' : 'Добавить новый бизнес'}
-                </span>
-              </div>
-            </button>
-          )}
         </div>
       )}
-
-      <CreateBusinessModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handleCreateSuccess}
-      />
     </div>
   );
 };

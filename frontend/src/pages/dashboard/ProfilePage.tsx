@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
+import { Network, MapPin } from 'lucide-react';
 
 export const ProfilePage = () => {
   const { user, currentBusinessId, currentBusiness, updateBusiness, businesses } = useOutletContext<any>();
@@ -24,6 +25,9 @@ export const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [sendingCredentials, setSendingCredentials] = useState(false);
+  const [networkLocations, setNetworkLocations] = useState<any[]>([]);
+  const [isNetwork, setIsNetwork] = useState(false);
+  const [loadingLocations, setLoadingLocations] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -48,6 +52,11 @@ export const ProfilePage = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('📥 Получены данные с сервера:', data);
+          
+          // Загружаем точки сети, если бизнес является сетью
+          if (currentBusinessId) {
+            loadNetworkLocations();
+          }
           
           // Проверяем статус парсинга при загрузке страницы
           if (currentBusinessId) {
@@ -75,6 +84,31 @@ export const ProfilePage = () => {
     };
     loadClientInfo();
   }, [currentBusinessId]);
+
+  const loadNetworkLocations = async () => {
+    if (!currentBusinessId) return;
+    
+    try {
+      setLoadingLocations(true);
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setIsNetwork(data.is_network || false);
+        setNetworkLocations(data.locations || []);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки точек сети:', error);
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
 
   const handleUpdateProfile = async () => {
     try {
@@ -745,6 +779,68 @@ export const ProfilePage = () => {
           </div>
         )}
       </div>
+
+      {/* Точки сети */}
+      {isNetwork && networkLocations.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <Network className="h-5 w-5 mr-2 text-blue-600" />
+              Точки сети
+            </h2>
+            <span className="text-sm text-gray-500">
+              {networkLocations.length} {networkLocations.length === 1 ? 'точка' : networkLocations.length < 5 ? 'точки' : 'точек'}
+            </span>
+          </div>
+          {loadingLocations ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p className="text-sm text-gray-500">Загрузка точек сети...</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {networkLocations.map((location) => (
+                <div
+                  key={location.id}
+                  className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
+                  onClick={() => {
+                    if (onBusinessChange) {
+                      onBusinessChange(location.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{location.name}</p>
+                      {location.description && (
+                        <p className="text-sm text-gray-500 mt-1">{location.description}</p>
+                      )}
+                      {location.address && (
+                        <p className="text-xs text-gray-400 mt-1 flex items-center">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {location.address}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onBusinessChange) {
+                          onBusinessChange(location.id);
+                        }
+                      }}
+                    >
+                      Открыть
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

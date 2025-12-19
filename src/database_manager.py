@@ -572,6 +572,73 @@ class DatabaseManager:
         self.conn.commit()
         return cursor.rowcount > 0
     
+    def get_businesses_by_network(self, network_id: str) -> List[Dict[str, Any]]:
+        """Получить все бизнесы (точки) сети"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM Businesses 
+            WHERE network_id = ? AND is_active = 1
+            ORDER BY created_at DESC
+        """, (network_id,))
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_all_users_with_businesses(self) -> List[Dict[str, Any]]:
+        """Получить всех пользователей с их бизнесами и сетями (для админской страницы)"""
+        cursor = self.conn.cursor()
+        
+        # Получаем всех пользователей
+        cursor.execute("""
+            SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
+            FROM Users 
+            ORDER BY created_at DESC
+        """)
+        users = cursor.fetchall()
+        
+        result = []
+        for user_row in users:
+            user_id = user_row['id'] if hasattr(user_row, 'keys') else user_row[0]
+            
+            # Преобразуем пользователя в словарь
+            if hasattr(user_row, 'keys'):
+                user_dict = {key: user_row[key] for key in user_row.keys()}
+            else:
+                columns = [desc[0] for desc in cursor.description]
+                user_dict = dict(zip(columns, user_row))
+            
+            # Получаем прямые бизнесы пользователя (не в сети)
+            cursor.execute("""
+                SELECT * FROM Businesses 
+                WHERE owner_id = ? AND network_id IS NULL AND (is_active = 1 OR is_active IS NULL)
+                ORDER BY created_at DESC
+            """, (user_id,))
+            direct_businesses = [dict(row) for row in cursor.fetchall()]
+            
+            # Получаем сети пользователя
+            cursor.execute("""
+                SELECT * FROM Networks 
+                WHERE owner_id = ? 
+                ORDER BY created_at DESC
+            """, (user_id,))
+            networks = [dict(row) for row in cursor.fetchall()]
+            
+            # Для каждой сети получаем её точки (бизнесы)
+            networks_with_businesses = []
+            for network in networks:
+                network_id = network['id']
+                network_businesses = self.get_businesses_by_network(network_id)
+                networks_with_businesses.append({
+                    **network,
+                    'businesses': network_businesses
+                })
+            
+            result.append({
+                **user_dict,
+                'direct_businesses': direct_businesses,
+                'networks': networks_with_businesses
+            })
+        
+        return result
+    
     def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
         """Получить бизнес по ID"""
         cursor = self.conn.cursor()

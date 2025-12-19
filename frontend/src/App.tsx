@@ -18,6 +18,7 @@ import { CardOverviewPage } from "./pages/dashboard/CardOverviewPage";
 import { ProgressPage } from "./pages/dashboard/ProgressPage";
 import { FinancePage } from "./pages/dashboard/FinancePage";
 import { SettingsPage } from "./pages/dashboard/SettingsPage";
+import { AdminPage } from "./pages/dashboard/AdminPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import WizardYandex from "./pages/WizardYandex";
@@ -54,6 +55,7 @@ const AppContent = () => {
             <Route path="finance" element={<FinancePage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
+          <Route path="/bazich" element={<AdminPage />} />
           {/* Legacy route - keep for backward compatibility */}
           <Route path="/dashboard-old" element={<Dashboard />} />
 

@@ -24,6 +24,12 @@ export const DashboardLayout = () => {
 
         setUser(currentUser);
 
+        // Проверяем, есть ли бизнес, выбранный из админской страницы
+        const adminSelectedBusinessId = localStorage.getItem('admin_selected_business_id');
+        if (adminSelectedBusinessId) {
+          localStorage.removeItem('admin_selected_business_id');
+        }
+
         // Загружаем бизнесы для суперадмина, владельцев сетей и обычных пользователей
         // API сам определит, какие бизнесы показывать
         try {
@@ -45,10 +51,22 @@ export const DashboardLayout = () => {
             if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
               console.log('✅ Бизнесы загружены:', data.businesses.length);
               setBusinesses(data.businesses);
-              const savedBusinessId = localStorage.getItem('selectedBusinessId');
-              const businessToSelect = savedBusinessId
-                ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
-                : data.businesses[0];
+              
+              // Приоритет: бизнес из админской страницы > сохраненный > первый
+              let businessToSelect;
+              if (adminSelectedBusinessId) {
+                businessToSelect = data.businesses.find((b: any) => b.id === adminSelectedBusinessId);
+                if (businessToSelect) {
+                  console.log('✅ Выбран бизнес из админской страницы:', businessToSelect.id, businessToSelect.name);
+                }
+              }
+              
+              if (!businessToSelect) {
+                const savedBusinessId = localStorage.getItem('selectedBusinessId');
+                businessToSelect = savedBusinessId
+                  ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
+                  : data.businesses[0];
+              }
 
               console.log('✅ Выбран бизнес:', businessToSelect.id, businessToSelect.name);
               setCurrentBusinessId(businessToSelect.id);

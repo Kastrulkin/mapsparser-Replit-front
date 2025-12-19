@@ -4497,6 +4497,90 @@ def get_all_users():
         print(f"❌ Ошибка получения пользователей: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/admin/users-with-businesses', methods=['GET'])
+def get_users_with_businesses():
+    """Получить всех пользователей с их бизнесами и сетями (для админской страницы)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        users_with_businesses = db.get_all_users_with_businesses()
+        db.close()
+        
+        return jsonify({"success": True, "users": users_with_businesses})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения пользователей с бизнесами: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/network-locations', methods=['GET'])
+def get_network_locations(business_id):
+    """Получить все точки сети для бизнеса (если пользователь является владельцем сети)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        
+        # Получаем бизнес
+        business = db.get_business_by_id(business_id)
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        user_id = user_data['user_id']
+        
+        # Проверяем, является ли пользователь владельцем сети
+        # Получаем все сети пользователя
+        user_networks = db.get_user_networks(user_id)
+        
+        if not user_networks or len(user_networks) == 0:
+            db.close()
+            # Если у пользователя нет сетей, возвращаем пустой список
+            return jsonify({"success": True, "is_network": False, "locations": []})
+        
+        # Получаем все точки всех сетей пользователя
+        all_locations = []
+        for network in user_networks:
+            network_id = network['id']
+            locations = db.get_businesses_by_network(network_id)
+            all_locations.extend(locations)
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "is_network": len(user_networks) > 0,
+            "locations": all_locations
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения точек сети: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/business/<business_id>/data', methods=['GET'])
 def get_business_data(business_id):
     """Получить полные данные конкретного бизнеса"""
