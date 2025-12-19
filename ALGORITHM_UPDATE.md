@@ -4,29 +4,33 @@
 
 ### 1️⃣ Изменения в **Frontend** (React/TypeScript)
 
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** После **ЛЮБЫХ** изменений в `frontend/src/*` **ОБЯЗАТЕЛЬНО** пересобрать фронтенд, иначе изменения не появятся в браузере!
+
 #### Шаг 1: Пересобрать фронтенд
 ```bash
 cd frontend
-rm -rf dist
+rm -rf dist  # ОБЯЗАТЕЛЬНО удалить старую сборку!
 npm run build
 ```
 
 #### Шаг 2: Проверить сборку
 ```bash
 ls -lh dist/assets/index-*.js
-# Должен быть свежий файл с текущей датой
+# Должен быть свежий файл с текущей датой и временем
+# Если дата старая - сборка не прошла или используется старый файл
 ```
 
-#### Шаг 3: Перезапустить Flask сервер
+#### Шаг 3: Если бэкенд отдаёт статику - перезапустить Flask сервер
 ```bash
 # Остановить старый процесс
-PID=$(lsof -tiTCP:8000 -sTCP:LISTEN -P)
-kill -9 $PID
+pkill -9 -f "python.*main.py" || true
+sleep 2
 
 # Запустить новый
 cd ..
 source venv/bin/activate
-python src/main.py &
+python src/main.py >/tmp/seo_main.out 2>&1 &
+sleep 3
 ```
 
 #### Шаг 4: Проверить сервер
@@ -36,8 +40,9 @@ lsof -iTCP:8000 -sTCP:LISTEN
 ```
 
 #### Шаг 5: Очистить кеш браузера
-- Жесткая перезагрузка: **Cmd+Shift+R** (Mac) или **Ctrl+Shift+R** (Windows/Linux)
-- Или режим инкогнито: **Cmd+Shift+N**
+- **Жесткая перезагрузка:** **Cmd+Shift+R** (Mac) или **Ctrl+Shift+R** (Windows/Linux)
+- **Или режим инкогнито:** **Cmd+Shift+N**
+- **Или очистить кеш вручную:** DevTools → Network → Disable cache
 
 ---
 
