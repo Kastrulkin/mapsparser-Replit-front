@@ -43,33 +43,44 @@ lsof -iTCP:8000 -sTCP:LISTEN
 
 ### 2️⃣ Изменения в **Backend** (Python/Flask)
 
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** После **ЛЮБЫХ** изменений в файлах `src/*.py` (включая `main.py`, `database_manager.py`, `auth_system.py`, `worker.py` и т.д.) **ОБЯЗАТЕЛЬНО** перезапустить процессы, иначе изменения не применятся!
+
 #### Шаг 1: Остановить старый процесс
 ```bash
-PID=$(lsof -tiTCP:8000 -sTCP:LISTEN -P)
-kill -9 $PID
+# Найти и убить все процессы main.py и worker.py
+pkill -9 -f "python.*main.py" || true
+pkill -9 -f "python.*worker.py" || true
 sleep 2
-```
 
-#### Шаг 2: Проверить, что процесс остановлен
-```bash
+# Проверить, что порт свободен
 lsof -iTCP:8000 -sTCP:LISTEN
 # Не должно быть вывода
 ```
 
-#### Шаг 3: Запустить новый процесс
+#### Шаг 2: Запустить новый процесс
 ```bash
+cd "/path/to/project"  # Замени на свой путь
 source venv/bin/activate
 python src/main.py >/tmp/seo_main.out 2>&1 &
 sleep 3
 ```
 
-#### Шаг 4: Проверить запуск
+#### Шаг 3: Проверить запуск
 ```bash
 # Проверка порта
 lsof -iTCP:8000 -sTCP:LISTEN
+# Должен показать новый процесс с новым PID
 
-# Проверка логов
-tail -10 /tmp/seo_main.out
+# Проверка логов на ошибки
+tail -20 /tmp/seo_main.out | grep -E "ERROR|Traceback|AssertionError" || tail -10 /tmp/seo_main.out
+# Должно быть "SEO анализатор запущен на порту 8000" без ошибок
+```
+
+#### Шаг 4: Если есть worker - запустить его тоже
+```bash
+python src/worker.py >/tmp/seo_worker.out 2>&1 &
+sleep 2
+ps aux | grep "python.*worker" | grep -v grep
 ```
 
 #### Шаг 5: Если изменялась БД - очистить старые сессии
@@ -177,15 +188,46 @@ ps aux | grep "python.*main.py" | grep -v grep
 
 **Причина 1: Кеш браузера**
 - Решение: Жесткая перезагрузка (Cmd+Shift+R) или режим инкогнито
+- Проверка: Открой DevTools → Network → Disable cache → перезагрузи страницу
 
-**Причина 2: Старый процесс Flask**
-- Решение: Явно убить процесс и запустить заново
+**Причина 2: Старый процесс Flask (САМАЯ ЧАСТАЯ ПРОБЛЕМА!)**
+- Симптомы: Ошибки в консоли браузера, старые данные, 500 ошибки
+- Решение: 
+  ```bash
+  # Найти PID процесса
+  lsof -iTCP:8000 -sTCP:LISTEN
+  # Убить процесс
+  kill -9 <PID>
+  # Или убить все процессы main.py
+  pkill -9 -f "python.*main.py"
+  # Запустить заново
+  source venv/bin/activate
+  python src/main.py >/tmp/seo_main.out 2>&1 &
+  ```
+- Проверка: `tail -20 /tmp/seo_main.out` - должны быть свежие логи без старых ошибок
 
-**Причина 3: Старая сессия в БД**
+**Причина 3: Фронтенд не пересобран**
+- Симптомы: Изменения в React компонентах не видны
+- Решение: 
+  ```bash
+  cd frontend
+  rm -rf dist  # ОБЯЗАТЕЛЬНО!
+  npm run build
+  ls -lh dist/assets/index-*.js  # Проверить дату файла
+  ```
+- Проверка: Файл должен иметь текущую дату/время
+
+**Причина 4: Старая сессия в БД**
+- Симптомы: Проблемы с авторизацией, старые данные пользователя
 - Решение: Удалить старые сессии и войти заново
+  ```bash
+  sqlite3 src/reports.db "DELETE FROM UserSessions WHERE user_id = (SELECT id FROM Users WHERE email='ВАШ_EMAIL');"
+  ```
 
-**Причина 4: Фронтенд не пересобран**
-- Решение: Убедиться, что `dist/` пересобран (`rm -rf dist && npm run build`)
+**Причина 5: Используется старая версия кода из памяти Python**
+- Симптомы: Изменения в Python файлах не работают, но код в файле правильный
+- Решение: Перезапустить процесс (см. Причина 2)
+- Проверка: `ps aux | grep "python.*main"` - проверить время запуска процесса
 
 ---
 
