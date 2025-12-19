@@ -18,4 +18,6 @@ node_modules/
 
 # Other
 *.sqlite3
-*.db 
+*.db
+*.db-shm
+*.db-wal 
