@@ -144,7 +144,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not is_subscribed:
         # Показываем просьбу подписаться
-        keyboard = [[InlineKeyboardButton("Я подписался. Проверить", callback_data="check_subscription")]]
+        keyboard = [
+            [InlineKeyboardButton("Я подписался. Проверить", callback_data="check_subscription")],
+            [InlineKeyboardButton("🔄 Начать заново", callback_data="start_over")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
@@ -220,6 +223,127 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
+
+async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки 'Начать заново'"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Создаём фейковый update для вызова start
+    class FakeMessage:
+        def __init__(self, user):
+            self.from_user = user
+            self.reply_text = None
+    
+    class FakeUpdate:
+        def __init__(self, query):
+            self.effective_user = query.from_user
+            self.message = FakeMessage(query.from_user)
+            self.callback_query = query
+    
+    fake_update = FakeUpdate(query)
+    # Вызываем start через бота напрямую
+    user_id = str(query.from_user.id)
+    username = query.from_user.username or ''
+    
+    # Инициализируем таблицы
+    init_review_exchange_tables()
+    
+    # Проверяем подписку на канал
+    is_subscribed = await check_channel_subscription(context.bot, query.from_user.id)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем, есть ли пользователь в базе
+    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    participant = cursor.fetchone()
+    
+    if not is_subscribed:
+        # Показываем просьбу подписаться
+        keyboard = [
+            [InlineKeyboardButton("Я подписался. Проверить", callback_data="check_subscription")],
+            [InlineKeyboardButton("🔄 Начать заново", callback_data="start_over")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "👋 Привет!\n\n"
+            "Отзывы очень важны для продвижения бизнеса, но люди не любят тратить время для оставления хороших отзывов.\n\n"
+            "Как помощь мы сделали этот сервис, где владельцы малого бизнеса могут помогать друг другу и обмениваться отзывами.\n\n"
+            "📢 Для участия в обмене отзывами необходимо подписаться на наш канал:\n"
+            f"👉 {CHANNEL_USERNAME}\n\n"
+            "После подписки вы сможете оставить ссылку на ваш бизнес на картах, комментарий, какой отзыв вы хотите увидеть. "
+            "Другие участники получат это сообщение и оставят хороший отзыв о вас, а вам придут ссылки на бизнесы других участников и их пожелания.",
+            reply_markup=reply_markup
+        )
+        conn.close()
+        return
+    
+    # Пользователь подписан - проверяем согласие на обработку персональных данных
+    if participant:
+        participant_id = participant[0]
+        consent_given = participant[1] == 1
+        
+        # Обновляем статус подписки
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (participant_id,))
+        
+        if not consent_given:
+            # Нужно получить согласие
+            keyboard = [[InlineKeyboardButton("✅ Согласен", callback_data="consent_yes")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "👋 Привет! Рады видеть вас среди нас!\n\n"
+                "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
+                "Подробнее: https://beautybot.pro/policy",
+                reply_markup=reply_markup
+            )
+            user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
+            conn.commit()
+            conn.close()
+            return
+    else:
+        # Создаём нового участника
+        participant_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO ReviewExchangeParticipants 
+            (id, telegram_id, telegram_username, subscribed_to_channel)
+            VALUES (?, ?, ?, 1)
+        """, (participant_id, user_id, username))
+        conn.commit()
+        
+        # Просим согласие
+        keyboard = [[InlineKeyboardButton("✅ Согласен", callback_data="consent_yes")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "👋 Привет! Рады видеть вас среди нас!\n\n"
+            "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
+            "Подробнее: https://beautybot.pro/policy",
+            reply_markup=reply_markup
+        )
+        conn.close()
+        user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
+        return
+    
+    conn.close()
+    
+    # Согласие уже дано - просим ссылку
+    await query.edit_message_text(
+        "👋 Привет! Рады видеть вас среди нас!\n\n"
+        "📝 Пожалуйста, отправьте ссылку на карточку вашей компании на картах, где надо будет оставлять отзывы."
+    )
+    
+    user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
+
+async def start_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстового сообщения 'Старт' или 'start'"""
+    await start(update, context)
 
 async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопки проверки подписки"""
@@ -642,6 +766,9 @@ def main():
         application.add_handler(CommandHandler("force_send_links", force_send_links))
         application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="check_subscription"))
         application.add_handler(CallbackQueryHandler(consent_callback, pattern="consent_yes"))
+        application.add_handler(CallbackQueryHandler(start_over_callback, pattern="start_over"))
+        # Обработчик текста "Старт" или "start" (без слэша)
+        application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(Старт|старт|start|Start)$'), start_text_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         # Запускаем планировщик ежедневной рассылки в отдельном потоке
