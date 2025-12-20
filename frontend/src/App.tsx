@@ -21,6 +21,7 @@ import { SettingsPage } from "./pages/dashboard/SettingsPage";
 import { AdminPage } from "./pages/dashboard/AdminPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
+import Policy from "./pages/Policy";
 import WizardYandex from "./pages/WizardYandex";
 import Sprint from "./pages/Sprint";
 import ServicePhrases from "./pages/ServicePhrases";
@@ -45,6 +46,7 @@ const AppContent = () => {
           <Route path="/" element={<Index />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/policy" element={<Policy />} />
           <Route path="/login" element={<Login />} />
 
           <Route path="/dashboard" element={<DashboardLayout />}>
