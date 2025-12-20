@@ -85,14 +85,31 @@ async def check_channel_subscription(bot, user_id: int) -> bool:
     """Проверка подписки пользователя на канал"""
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        # Проверяем все возможные статусы подписки, включая CREATOR
-        is_subscribed = member.status in [
+        # Получаем статус как строку для совместимости с разными версиями библиотеки
+        status = str(member.status).upper() if hasattr(member.status, 'name') else str(member.status)
+        
+        # Проверяем все возможные статусы подписки
+        # Используем как константы, так и строковые значения для совместимости
+        subscribed_statuses = [
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.CREATOR,
-            ChatMemberStatus.OWNER
         ]
-        print(f"🔍 Проверка подписки для {user_id}: статус={member.status}, подписан={is_subscribed}")
+        
+        # Добавляем CREATOR и OWNER, если они доступны в этой версии библиотеки
+        if hasattr(ChatMemberStatus, 'CREATOR'):
+            subscribed_statuses.append(ChatMemberStatus.CREATOR)
+        if hasattr(ChatMemberStatus, 'OWNER'):
+            subscribed_statuses.append(ChatMemberStatus.OWNER)
+        
+        # Проверяем по константам
+        is_subscribed = member.status in subscribed_statuses
+        
+        # Если не нашли по константам, проверяем строковые значения (для создателя канала)
+        if not is_subscribed:
+            status_str = status.lower()
+            is_subscribed = status_str in ['member', 'administrator', 'creator', 'owner']
+        
+        print(f"🔍 Проверка подписки для {user_id}: статус={status}, подписан={is_subscribed}")
         return is_subscribed
     except Exception as e:
         print(f"⚠️ Ошибка проверки подписки для {user_id}: {e}")
