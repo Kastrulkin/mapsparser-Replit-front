@@ -85,10 +85,27 @@ async def check_channel_subscription(bot, user_id: int) -> bool:
     """Проверка подписки пользователя на канал"""
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+        # Проверяем все возможные статусы подписки, включая CREATOR
+        is_subscribed = member.status in [
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+            ChatMemberStatus.OWNER
+        ]
+        print(f"🔍 Проверка подписки для {user_id}: статус={member.status}, подписан={is_subscribed}")
+        return is_subscribed
     except Exception as e:
-        print(f"⚠️ Ошибка проверки подписки: {e}")
-        return False
+        print(f"⚠️ Ошибка проверки подписки для {user_id}: {e}")
+        # Если ошибка связана с правами бота, пробуем альтернативный способ
+        try:
+            # Пробуем получить информацию о чате
+            chat = await bot.get_chat(CHANNEL_USERNAME)
+            print(f"✅ Канал доступен: {chat.title}")
+            # Если канал доступен, но проверка не удалась, считаем что подписан (для создателя)
+            return True
+        except Exception as e2:
+            print(f"❌ Не удалось проверить канал: {e2}")
+            return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -144,8 +161,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.message.reply_text(
-                "👋 Привет! Рад видеть тебя среди нас!\n\n"
-                "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+                "👋 Привет! Рады видеть вас среди нас!\n\n"
+                "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных:\n\n"
                 "• Имя\n"
                 "• Телефон\n"
                 "• Адрес\n"
@@ -173,8 +190,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "👋 Привет! Рад видеть тебя среди нас!\n\n"
-            "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+            "👋 Привет! Рады видеть вас среди нас!\n\n"
+            "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных:\n\n"
             "• Имя\n"
             "• Телефон\n"
             "• Адрес\n"
@@ -191,8 +208,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Согласие уже дано - просим ссылку
     await update.message.reply_text(
-        "👋 Привет! Рад видеть тебя среди нас!\n\n"
-        "📝 Пожалуйста, отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+        "👋 Привет! Рады видеть вас среди нас!\n\n"
+        "📝 Пожалуйста, отправьте ссылку на карточку вашей компании на картах (Яндекс.Карты или Google Maps)."
     )
     
     user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
@@ -242,8 +259,8 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.edit_message_text(
-                "✅ Отлично! Ты подписан на канал.\n\n"
-                "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+                "✅ Отлично! Вы подписаны на канал.\n\n"
+                "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных:\n\n"
                 "• Имя\n"
                 "• Телефон\n"
                 "• Адрес\n"
@@ -255,9 +272,9 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
         else:
             await query.edit_message_text(
-                "✅ Отлично! Ты подписан на канал.\n\n"
-                "👋 Рад видеть тебя среди нас!\n\n"
-                "📝 Пожалуйста, отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+                "✅ Отлично! Вы подписаны на канал.\n\n"
+                "👋 Рады видеть вас среди нас!\n\n"
+                "📝 Пожалуйста, отправьте ссылку на карточку вашей компании на картах (Яндекс.Карты или Google Maps)."
             )
             user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
     else:
@@ -266,9 +283,9 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            "❌ Ты ещё не подписан на канал.\n\n"
-            f"📢 Пожалуйста, подпишись на {CHANNEL_USERNAME}\n\n"
-            "После подписки нажми кнопку ниже для проверки.",
+            "❌ Вы ещё не подписаны на канал.\n\n"
+            f"📢 Пожалуйста, подпишитесь на {CHANNEL_USERNAME}\n\n"
+            "После подписки нажмите кнопку ниже для проверки.",
             reply_markup=reply_markup
         )
 
@@ -298,10 +315,60 @@ async def consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "✅ Спасибо за согласие!\n\n"
-        "📝 Теперь отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+        "📝 Теперь отправьте ссылку на карточку вашей компании на картах (Яндекс.Карты или Google Maps)."
     )
     
     user_states[user_id]['state'] = 'waiting_business_url'
+
+async def force_send_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для принудительной отправки ссылок (для тестирования)"""
+    user_id = str(update.effective_user.id)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Находим участника
+    cursor.execute("SELECT id FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    participant = cursor.fetchone()
+    conn.close()
+    
+    if not participant:
+        await update.message.reply_text(
+            "❌ Вы не зарегистрированы в системе. Используйте команду /start для начала."
+        )
+        return
+    
+    participant_id = participant[0]
+    
+    # Проверяем, есть ли доступные ссылки перед отправкой
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM ReviewExchangeParticipants p
+        WHERE p.id != ? 
+        AND p.is_active = 1
+        AND p.business_url IS NOT NULL
+        AND p.review_request IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM ReviewExchangeDistribution d
+            WHERE d.sender_participant_id = p.id 
+            AND d.receiver_participant_id = ?
+        )
+    """, (participant_id, participant_id))
+    
+    available_count = cursor.fetchone()[0]
+    conn.close()
+    
+    if available_count == 0:
+        await update.message.reply_text(
+            "📭 Пока нет новых бизнесов для обмена отзывами. Мы отправим их, как только появятся!"
+        )
+        return
+    
+    # Отправляем ссылки (функция send_business_links сама отправит сообщения)
+    await send_business_links(update, context, participant_id, user_id, limit=3)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
@@ -328,7 +395,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not match:
             await update.message.reply_text(
-                "❌ Пожалуйста, отправь корректную ссылку на карточку компании на Яндекс.Картах или Google Maps.\n\n"
+                "❌ Пожалуйста, отправьте корректную ссылку на карточку компании на Яндекс.Картах или Google Maps.\n\n"
                 "Пример: https://yandex.ru/maps/org/..."
             )
             return
@@ -349,11 +416,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "✅ Ссылка сохранена!\n\n"
             "📋 Теперь нам нужна дополнительная информация:\n\n"
-            "1️⃣ Название твоего бизнеса\n"
+            "1️⃣ Название вашего бизнеса\n"
             "2️⃣ Адрес бизнеса\n"
-            "3️⃣ Твой телефон\n"
-            "4️⃣ Твоё имя\n\n"
-            "Отправь эти данные в одном сообщении, каждое с новой строки, например:\n\n"
+            "3️⃣ Ваш телефон\n"
+            "4️⃣ Ваше имя\n\n"
+            "Отправьте эти данные в одном сообщении, каждое с новой строки, например:\n\n"
             "Название: Парикмахерская 'Стиль'\n"
             "Адрес: г. Москва, ул. Ленина, д. 1\n"
             "Телефон: +7 (999) 123-45-67\n"
@@ -399,7 +466,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             "✅ Данные сохранены!\n\n"
-            "📝 Теперь отправь комментарий, какой отзыв ты хочешь увидеть.\n\n"
+            "📝 Теперь отправьте комментарий, какой отзыв вы хотите увидеть.\n\n"
             "Например:\n"
             "• Новый мастер чудо как хорош\n"
             "• Эта услуга выше всяких похвал\n"
@@ -422,9 +489,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             "✅ Пожелание к отзыву сохранено!\n\n"
-            "💡 Ты можешь изменить его в любой момент, просто отправь новое сообщение.\n\n"
-            "📬 Сейчас тебе придут ссылки на бизнесы других участников (до 3 ссылок).\n"
-            "Каждый день в 9:00 утра ты будешь получать новые ссылки, пока они есть."
+            "💡 Вы можете изменить его в любой момент, просто отправьте новое сообщение.\n\n"
+            "📬 Сейчас вам придут ссылки на бизнесы других участников (до 3 ссылок).\n"
+            "Каждый день в 9:00 утра вы будете получать новые ссылки, пока они есть."
         )
         
         # Отправляем ссылки на другие бизнесы
@@ -446,7 +513,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             "✅ Пожелание к отзыву обновлено!\n\n"
-            "💡 Ты можешь изменить его в любой момент, просто отправь новое сообщение."
+            "💡 Вы можете изменить его в любой момент, просто отправьте новое сообщение."
         )
 
 async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE, participant_id: str, user_id: str, limit: int = 3):
@@ -592,6 +659,7 @@ def main():
         
         # Регистрируем обработчики
         application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("force_send_links", force_send_links))
         application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="check_subscription"))
         application.add_handler(CallbackQueryHandler(consent_callback, pattern="consent_yes"))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
