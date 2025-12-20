@@ -1,0 +1,21 @@
+[Unit]
+Description=BeautyBot Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/mapsparser-Replit-front
+Environment=PYTHONPATH=/root/mapsparser-Replit-front/src
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/root/mapsparser-Replit-front/.env
+ExecStart=/root/mapsparser-Replit-front/venv/bin/python /root/mapsparser-Replit-front/src/telegram_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

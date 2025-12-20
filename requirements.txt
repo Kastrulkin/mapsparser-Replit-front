@@ -18,4 +18,5 @@ flask-cors>=4.0.0
 gunicorn>=21.2.0
 
 # Telegram-бот
-python-telegram-bot>=20.0 
+python-telegram-bot>=20.0
+schedule>=1.2.0 

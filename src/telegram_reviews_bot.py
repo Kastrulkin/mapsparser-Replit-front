@@ -1,0 +1,623 @@
+#!/usr/bin/env python3
+"""
+Telegram-бот для обмена отзывами (@beautyreviewexchange_bot)
+Функционал:
+- Обмен отзывами между пользователями
+- Проверка подписки на канал
+- Распределение ссылок на бизнесы
+- Ежедневная рассылка в 9 утра
+"""
+import os
+import json
+import uuid
+import re
+from datetime import datetime, time, timedelta
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.constants import ChatMemberStatus
+from safe_db_utils import get_db_connection
+import asyncio
+import threading
+
+# Автоматически подгружаем переменные окружения из .env
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("⚠️ Для автоматической загрузки .env установите пакет python-dotenv")
+
+# Токен бота для обмена отзывами
+TELEGRAM_REVIEWS_BOT_TOKEN = os.getenv('TELEGRAM_REVIEWS_BOT_TOKEN', '')
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
+CHANNEL_USERNAME = '@beautybotpro'  # Канал для проверки подписки
+
+# Словарь для хранения состояния пользователей (telegram_id -> state)
+user_states = {}
+
+def init_review_exchange_tables():
+    """Инициализация таблиц для обмена отзывами"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Таблица участников обмена отзывами
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ReviewExchangeParticipants (
+                id TEXT PRIMARY KEY,
+                telegram_id TEXT UNIQUE NOT NULL,
+                telegram_username TEXT,
+                name TEXT,
+                phone TEXT,
+                business_name TEXT,
+                business_address TEXT,
+                business_url TEXT,
+                review_request TEXT,
+                consent_personal_data INTEGER DEFAULT 0,
+                subscribed_to_channel INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Таблица распределения ссылок (чтобы не отправлять одну ссылку дважды)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ReviewExchangeDistribution (
+                id TEXT PRIMARY KEY,
+                sender_participant_id TEXT NOT NULL,
+                receiver_participant_id TEXT NOT NULL,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
+                FOREIGN KEY (receiver_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
+                UNIQUE(sender_participant_id, receiver_participant_id)
+            )
+        """)
+        
+        conn.commit()
+        print("✅ Таблицы для обмена отзывами созданы/проверены")
+    except Exception as e:
+        print(f"❌ Ошибка создания таблиц: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+async def check_channel_subscription(bot, user_id: int) -> bool:
+    """Проверка подписки пользователя на канал"""
+    try:
+        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+    except Exception as e:
+        print(f"⚠️ Ошибка проверки подписки: {e}")
+        return False
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start"""
+    user_id = str(update.effective_user.id)
+    username = update.effective_user.username or ''
+    
+    # Инициализируем таблицы
+    init_review_exchange_tables()
+    
+    # Проверяем подписку на канал
+    is_subscribed = await check_channel_subscription(context.bot, update.effective_user.id)
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем, есть ли пользователь в базе
+    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    participant = cursor.fetchone()
+    
+    if not is_subscribed:
+        # Показываем просьбу подписаться
+        keyboard = [[InlineKeyboardButton("Я подписался. Проверить", callback_data="check_subscription")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "👋 Привет!\n\n"
+            "Отзывы очень важны для продвижения бизнеса, но люди не любят тратить время для оставления хороших отзывов.\n\n"
+            "Как помощь мы сделали этот сервис, где владельцы малого бизнеса могут помогать друг другу и обмениваться отзывами.\n\n"
+            "📢 Для участия в обмене отзывами необходимо подписаться на наш канал:\n"
+            f"👉 {CHANNEL_USERNAME}\n\n"
+            "После подписки вы сможете оставить ссылку на ваш бизнес на картах, комментарий, какой отзыв вы хотите увидеть. "
+            "Другие участники получат это сообщение и оставят хороший отзыв о вас, а вам придут ссылки на бизнесы других участников и их пожелания.",
+            reply_markup=reply_markup
+        )
+        conn.close()
+        return
+    
+    # Пользователь подписан - проверяем согласие на обработку персональных данных
+    if participant:
+        participant_id = participant[0]
+        consent_given = participant[1] == 1
+        
+        # Обновляем статус подписки
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (participant_id,))
+        
+        if not consent_given:
+            # Нужно получить согласие
+            keyboard = [[InlineKeyboardButton("✅ Согласен", callback_data="consent_yes")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "👋 Привет! Рад видеть тебя среди нас!\n\n"
+                "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+                "• Имя\n"
+                "• Телефон\n"
+                "• Адрес\n"
+                "• Название бизнеса\n"
+                "• Ссылка на бизнес на картах\n\n"
+                "Эти данные будут использоваться только для обмена отзывами между участниками сервиса.",
+                reply_markup=reply_markup
+            )
+            user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
+            conn.commit()
+            conn.close()
+            return
+    else:
+        # Создаём нового участника
+        participant_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO ReviewExchangeParticipants 
+            (id, telegram_id, telegram_username, subscribed_to_channel)
+            VALUES (?, ?, ?, 1)
+        """, (participant_id, user_id, username))
+        conn.commit()
+        
+        # Просим согласие
+        keyboard = [[InlineKeyboardButton("✅ Согласен", callback_data="consent_yes")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "👋 Привет! Рад видеть тебя среди нас!\n\n"
+            "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+            "• Имя\n"
+            "• Телефон\n"
+            "• Адрес\n"
+            "• Название бизнеса\n"
+            "• Ссылка на бизнес на картах\n\n"
+            "Эти данные будут использоваться только для обмена отзывами между участниками сервиса.",
+            reply_markup=reply_markup
+        )
+        conn.close()
+        user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
+        return
+    
+    conn.close()
+    
+    # Согласие уже дано - просим ссылку
+    await update.message.reply_text(
+        "👋 Привет! Рад видеть тебя среди нас!\n\n"
+        "📝 Пожалуйста, отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+    )
+    
+    user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
+
+async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки проверки подписки"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(update.effective_user.id)
+    
+    # Проверяем подписку
+    is_subscribed = await check_channel_subscription(context.bot, update.effective_user.id)
+    
+    if is_subscribed:
+        # Пользователь подписан
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        username = update.effective_user.username or ''
+        cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+        participant = cursor.fetchone()
+        
+        if participant:
+            participant_id = participant[0]
+            consent_given = participant[1] == 1
+            cursor.execute("""
+                UPDATE ReviewExchangeParticipants 
+                SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (participant_id,))
+        else:
+            participant_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO ReviewExchangeParticipants 
+                (id, telegram_id, telegram_username, subscribed_to_channel)
+                VALUES (?, ?, ?, 1)
+            """, (participant_id, user_id, username))
+            consent_given = False
+        
+        conn.commit()
+        conn.close()
+        
+        if not consent_given:
+            # Просим согласие
+            keyboard = [[InlineKeyboardButton("✅ Согласен", callback_data="consent_yes")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "✅ Отлично! Ты подписан на канал.\n\n"
+                "📋 Для участия в обмене отзывами нам необходимо твоё согласие на обработку персональных данных:\n\n"
+                "• Имя\n"
+                "• Телефон\n"
+                "• Адрес\n"
+                "• Название бизнеса\n"
+                "• Ссылка на бизнес на картах\n\n"
+                "Эти данные будут использоваться только для обмена отзывами между участниками сервиса.",
+                reply_markup=reply_markup
+            )
+            user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
+        else:
+            await query.edit_message_text(
+                "✅ Отлично! Ты подписан на канал.\n\n"
+                "👋 Рад видеть тебя среди нас!\n\n"
+                "📝 Пожалуйста, отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+            )
+            user_states[user_id] = {'state': 'waiting_business_url', 'participant_id': participant_id}
+    else:
+        # Пользователь не подписан
+        keyboard = [[InlineKeyboardButton("Я подписался. Проверить", callback_data="check_subscription")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "❌ Ты ещё не подписан на канал.\n\n"
+            f"📢 Пожалуйста, подпишись на {CHANNEL_USERNAME}\n\n"
+            "После подписки нажми кнопку ниже для проверки.",
+            reply_markup=reply_markup
+        )
+
+async def consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик согласия на обработку персональных данных"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(update.effective_user.id)
+    
+    if user_id not in user_states:
+        await query.edit_message_text("❌ Ошибка. Начни с команды /start")
+        return
+    
+    participant_id = user_states[user_id].get('participant_id')
+    
+    # Сохраняем согласие
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE ReviewExchangeParticipants 
+        SET consent_personal_data = 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (participant_id,))
+    conn.commit()
+    conn.close()
+    
+    await query.edit_message_text(
+        "✅ Спасибо за согласие!\n\n"
+        "📝 Теперь отправь ссылку на карточку твоей компании на картах (Яндекс.Карты или Google Maps)."
+    )
+    
+    user_states[user_id]['state'] = 'waiting_business_url'
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстовых сообщений"""
+    user_id = str(update.effective_user.id)
+    text = update.message.text
+    
+    if user_id not in user_states:
+        await start(update, context)
+        return
+    
+    state = user_states[user_id].get('state', '')
+    participant_id = user_states[user_id].get('participant_id')
+    
+    if state == 'waiting_consent':
+        await update.message.reply_text(
+            "Пожалуйста, нажми кнопку '✅ Согласен' для продолжения."
+        )
+        return
+    
+    if state == 'waiting_business_url':
+        # Проверяем, что это ссылка на карты
+        url_pattern = r'(https?://(?:yandex\.ru/maps|maps\.yandex\.ru|maps\.google\.com|google\.ru/maps)/[^\s]+)'
+        match = re.search(url_pattern, text)
+        
+        if not match:
+            await update.message.reply_text(
+                "❌ Пожалуйста, отправь корректную ссылку на карточку компании на Яндекс.Картах или Google Maps.\n\n"
+                "Пример: https://yandex.ru/maps/org/..."
+            )
+            return
+        
+        business_url = match.group(1)
+        
+        # Сохраняем ссылку и просим персональные данные
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET business_url = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (business_url, participant_id))
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(
+            "✅ Ссылка сохранена!\n\n"
+            "📋 Теперь нам нужна дополнительная информация:\n\n"
+            "1️⃣ Название твоего бизнеса\n"
+            "2️⃣ Адрес бизнеса\n"
+            "3️⃣ Твой телефон\n"
+            "4️⃣ Твоё имя\n\n"
+            "Отправь эти данные в одном сообщении, каждое с новой строки, например:\n\n"
+            "Название: Парикмахерская 'Стиль'\n"
+            "Адрес: г. Москва, ул. Ленина, д. 1\n"
+            "Телефон: +7 (999) 123-45-67\n"
+            "Имя: Иван"
+        )
+        
+        user_states[user_id]['state'] = 'waiting_personal_data'
+        
+    elif state == 'waiting_personal_data':
+        # Парсим персональные данные
+        name = ''
+        phone = ''
+        business_name = ''
+        business_address = ''
+        
+        lines = text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if ':' in line:
+                key, value = line.split(':', 1)
+                key = key.strip().lower()
+                value = value.strip()
+                
+                if 'имя' in key or 'name' in key:
+                    name = value
+                elif 'телефон' in key or 'phone' in key:
+                    phone = value
+                elif 'название' in key or 'business' in key:
+                    business_name = value
+                elif 'адрес' in key or 'address' in key:
+                    business_address = value
+        
+        # Сохраняем персональные данные
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET name = ?, phone = ?, business_name = ?, business_address = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (name, phone, business_name, business_address, participant_id))
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(
+            "✅ Данные сохранены!\n\n"
+            "📝 Теперь отправь комментарий, какой отзыв ты хочешь увидеть.\n\n"
+            "Например:\n"
+            "• Новый мастер чудо как хорош\n"
+            "• Эта услуга выше всяких похвал\n"
+            "• Отличное обслуживание и качество"
+        )
+        
+        user_states[user_id]['state'] = 'waiting_review_request'
+        
+    elif state == 'waiting_review_request':
+        # Сохраняем пожелание к отзыву
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET review_request = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (text, participant_id))
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(
+            "✅ Пожелание к отзыву сохранено!\n\n"
+            "💡 Ты можешь изменить его в любой момент, просто отправь новое сообщение.\n\n"
+            "📬 Сейчас тебе придут ссылки на бизнесы других участников (до 3 ссылок).\n"
+            "Каждый день в 9:00 утра ты будешь получать новые ссылки, пока они есть."
+        )
+        
+        # Отправляем ссылки на другие бизнесы
+        await send_business_links(update, context, participant_id, user_id)
+        
+        user_states[user_id]['state'] = 'active'
+        
+    elif state == 'active':
+        # Пользователь может изменить пожелание к отзыву
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ReviewExchangeParticipants 
+            SET review_request = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (text, participant_id))
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(
+            "✅ Пожелание к отзыву обновлено!\n\n"
+            "💡 Ты можешь изменить его в любой момент, просто отправь новое сообщение."
+        )
+
+async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE, participant_id: str, user_id: str, limit: int = 3):
+    """Отправка ссылок на бизнесы других участников с равномерным распределением"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем участников, которым ещё не отправляли ссылку на этого пользователя
+    # И которые ещё не получили слишком много ссылок (равномерное распределение)
+    cursor.execute("""
+        SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
+        FROM ReviewExchangeParticipants p
+        WHERE p.id != ? 
+        AND p.is_active = 1
+        AND p.business_url IS NOT NULL
+        AND p.review_request IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM ReviewExchangeDistribution d
+            WHERE d.sender_participant_id = p.id 
+            AND d.receiver_participant_id = ?
+        )
+        AND (
+            SELECT COUNT(*) FROM ReviewExchangeDistribution d2
+            WHERE d2.sender_participant_id = p.id
+        ) < (
+            SELECT AVG(sent_count) FROM (
+                SELECT COUNT(*) as sent_count
+                FROM ReviewExchangeDistribution
+                GROUP BY sender_participant_id
+            )
+        ) + 5
+        ORDER BY (
+            SELECT COUNT(*) FROM ReviewExchangeDistribution d3
+            WHERE d3.sender_participant_id = p.id
+        ) ASC, RANDOM()
+        LIMIT ?
+    """, (participant_id, participant_id, limit))
+    
+    businesses = cursor.fetchall()
+    
+    if not businesses:
+        message = "📭 Пока нет новых бизнесов для обмена отзывами. Мы отправим их, как только появятся!"
+        if update and update.message:
+            await update.message.reply_text(message)
+        else:
+            await context.bot.send_message(chat_id=user_id, text=message)
+        conn.close()
+        return
+    
+    # Отправляем ссылки
+    for business in businesses:
+        other_participant_id, business_url, review_request, business_name, business_address = business
+        
+        # Записываем, что отправили
+        distribution_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO ReviewExchangeDistribution 
+            (id, sender_participant_id, receiver_participant_id)
+            VALUES (?, ?, ?)
+        """, (distribution_id, other_participant_id, participant_id))
+        
+        message_text = f"📝 Новый бизнес для обмена отзывами:\n\n"
+        if business_name:
+            message_text += f"🏢 {business_name}\n"
+        if business_address:
+            message_text += f"📍 {business_address}\n"
+        message_text += f"\n🔗 {business_url}\n\n"
+        if review_request:
+            message_text += f"💬 Пожелание к отзыву:\n{review_request}"
+        
+        if update and update.message:
+            await update.message.reply_text(message_text)
+        else:
+            await context.bot.send_message(chat_id=user_id, text=message_text)
+    
+    conn.commit()
+    conn.close()
+
+async def daily_distribution_task(bot):
+    """Ежедневная рассылка ссылок в 9:00 утра"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем всех активных участников
+    cursor.execute("""
+        SELECT id, telegram_id 
+        FROM ReviewExchangeParticipants 
+        WHERE is_active = 1 
+        AND business_url IS NOT NULL
+        AND review_request IS NOT NULL
+    """)
+    
+    participants = cursor.fetchall()
+    conn.close()
+    
+    # Создаём контекст для отправки
+    class FakeContext:
+        def __init__(self, bot):
+            self.bot = bot
+    
+    context = FakeContext(bot)
+    
+    for participant_id, telegram_id in participants:
+        try:
+            await send_business_links(None, context, participant_id, telegram_id, limit=3)
+        except Exception as e:
+            print(f"❌ Ошибка отправки ссылок пользователю {telegram_id}: {e}")
+
+def run_daily_scheduler():
+    """Запуск планировщика ежедневной рассылки"""
+    import schedule
+    import time
+    
+    def run_distribution():
+        if not TELEGRAM_REVIEWS_BOT_TOKEN:
+            return
+        
+        # Создаём приложение для рассылки
+        application = Application.builder().token(TELEGRAM_REVIEWS_BOT_TOKEN).build()
+        
+        # Запускаем рассылку
+        asyncio.run(daily_distribution_task(application.bot))
+    
+    schedule.every().day.at("09:00").do(run_distribution)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)  # Проверяем каждую минуту
+
+def main():
+    """Запуск бота"""
+    if not TELEGRAM_REVIEWS_BOT_TOKEN:
+        print("⚠️  TELEGRAM_REVIEWS_BOT_TOKEN не установлен. Бот не будет запущен.")
+        print("💡 Установите токен: export TELEGRAM_REVIEWS_BOT_TOKEN='ваш_токен'")
+        print("💡 Или добавьте в .env файл: TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен")
+        return
+    
+    # Инициализируем таблицы
+    init_review_exchange_tables()
+    
+    try:
+        application = Application.builder().token(TELEGRAM_REVIEWS_BOT_TOKEN).build()
+        
+        # Регистрируем обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="check_subscription"))
+        application.add_handler(CallbackQueryHandler(consent_callback, pattern="consent_yes"))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        
+        # Запускаем планировщик ежедневной рассылки в отдельном потоке
+        try:
+            import schedule
+            scheduler_thread = threading.Thread(target=run_daily_scheduler, daemon=True)
+            scheduler_thread.start()
+            print("⏰ Ежедневная рассылка настроена на 9:00 утра")
+        except ImportError:
+            print("⚠️ Библиотека schedule не установлена. Ежедневная рассылка не будет работать.")
+            print("💡 Установите: pip install schedule")
+        
+        print("🤖 Telegram-бот для обмена отзывами запущен...")
+        print(f"📡 API Base URL: {API_BASE_URL}")
+        print("✅ Бот готов к работе. Ожидаю сообщения...")
+        
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    except Exception as e:
+        print(f"❌ Ошибка запуска бота: {e}")
+        print(f"💡 Проверьте:")
+        print(f"   1. Правильность токена TELEGRAM_REVIEWS_BOT_TOKEN")
+        print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
+        print(f"   3. Доступность интернета для подключения к Telegram API")
+        raise
+
+if __name__ == "__main__":
+    main()

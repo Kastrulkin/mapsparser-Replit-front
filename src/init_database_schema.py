@@ -106,9 +106,11 @@ def init_database_schema():
                 map_type TEXT,
                 rating TEXT,
                 reviews_count INTEGER DEFAULT 0,
+                unanswered_reviews_count INTEGER DEFAULT 0,
                 news_count INTEGER DEFAULT 0,
                 photos_count INTEGER DEFAULT 0,
                 report_path TEXT,
+                analysis_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
             )
@@ -246,6 +248,43 @@ def init_database_schema():
             )
         """)
         print("✅ Таблица TelegramBindTokens создана/проверена")
+        
+        # ===== ОБМЕН ОТЗЫВАМИ =====
+        
+        # ReviewExchangeParticipants - участники обмена отзывами
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ReviewExchangeParticipants (
+                id TEXT PRIMARY KEY,
+                telegram_id TEXT UNIQUE NOT NULL,
+                telegram_username TEXT,
+                name TEXT,
+                phone TEXT,
+                business_name TEXT,
+                business_address TEXT,
+                business_url TEXT,
+                review_request TEXT,
+                consent_personal_data INTEGER DEFAULT 0,
+                subscribed_to_channel INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Таблица ReviewExchangeParticipants создана/проверена")
+        
+        # ReviewExchangeDistribution - распределение ссылок (чтобы не отправлять одну ссылку дважды)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ReviewExchangeDistribution (
+                id TEXT PRIMARY KEY,
+                sender_participant_id TEXT NOT NULL,
+                receiver_participant_id TEXT NOT NULL,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
+                FOREIGN KEY (receiver_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
+                UNIQUE(sender_participant_id, receiver_participant_id)
+            )
+        """)
+        print("✅ Таблица ReviewExchangeDistribution создана/проверена")
         
         # ===== ОПТИМИЗАЦИЯ =====
         

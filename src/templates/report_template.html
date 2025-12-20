@@ -316,6 +316,16 @@
             padding: 0.75rem;
             text-align: left;
             border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        
+        .table td.review-text,
+        .table td.org-reply {
+            max-width: 300px;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            overflow-wrap: break-word;
         }
         
         .table th {
@@ -699,10 +709,10 @@
                                     ⭐ {{ review.score or '—' }}
                                 </div>
                             </td>
-                            <td class="text-sm max-w-xs truncate">
+                            <td class="text-sm review-text">
                                 {{ review.text or '—' }}
                             </td>
-                            <td class="text-sm max-w-xs truncate">
+                            <td class="text-sm org-reply">
                                 {{ review.org_reply or '—' }}
                             </td>
                         </tr>

@@ -2022,12 +2022,26 @@ def get_map_parses(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        cursor.execute("""
-            SELECT id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at
-            FROM MapParseResults
-            WHERE business_id = ?
-            ORDER BY datetime(created_at) DESC
-        """, (business_id,))
+        # Проверяем наличие колонки unanswered_reviews_count
+        cursor.execute("PRAGMA table_info(MapParseResults)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_unanswered_col = 'unanswered_reviews_count' in columns
+        
+        if has_unanswered_col:
+            cursor.execute("""
+                SELECT id, url, map_type, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, report_path, created_at
+                FROM MapParseResults
+                WHERE business_id = ?
+                ORDER BY datetime(created_at) DESC
+            """, (business_id,))
+        else:
+            cursor.execute("""
+                SELECT id, url, map_type, rating, reviews_count, 0 as unanswered_reviews_count, news_count, photos_count, report_path, created_at
+                FROM MapParseResults
+                WHERE business_id = ?
+                ORDER BY datetime(created_at) DESC
+            """, (business_id,))
+        
         rows = cursor.fetchall()
         db.close()
 
@@ -2039,10 +2053,11 @@ def get_map_parses(business_id):
                 "mapType": r[2],
                 "rating": r[3],
                 "reviewsCount": r[4],
-                "newsCount": r[5],
-                "photosCount": r[6],
-                "reportPath": r[7],
-                "createdAt": r[8]
+                "unansweredReviewsCount": r[5] if has_unanswered_col else 0,
+                "newsCount": r[6] if has_unanswered_col else r[5],
+                "photosCount": r[7] if has_unanswered_col else r[6],
+                "reportPath": r[8] if has_unanswered_col else r[7],
+                "createdAt": r[9] if has_unanswered_col else r[8]
             })
 
         return jsonify({"success": True, "items": items})

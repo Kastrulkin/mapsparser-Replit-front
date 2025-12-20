@@ -1,6 +1,7 @@
 import { useOutletContext } from 'react-router-dom';
 import ProgressTracker from '@/components/ProgressTracker';
 import MapParseTable from '@/components/MapParseTable';
+import MapRecommendations from '@/components/MapRecommendations';
 
 export const ProgressPage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
@@ -13,6 +14,7 @@ export const ProgressPage = () => {
       </div>
 
       <ProgressTracker />
+      <MapRecommendations businessId={currentBusinessId} />
       <MapParseTable businessId={currentBusinessId} />
     </div>
   );

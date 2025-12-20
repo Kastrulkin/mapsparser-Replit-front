@@ -138,30 +138,68 @@ def process_queue():
                     analysis = analyze_card(card_data)
                     report_path = generate_html_report(card_data, analysis, {})
                     
+                    # Сохраняем анализ для использования в рекомендациях
+                    analysis_json = json.dumps(analysis, ensure_ascii=False)
+                    
                     rating = card_data.get('overview', {}).get('rating', '') or ''
                     reviews_count = card_data.get('reviews_count') or card_data.get('overview', {}).get('reviews_count') or 0
                     news_count = len(card_data.get('news') or [])
                     photos_count = card_data.get('photos_count') or 0
                     
+                    # Подсчитываем неотвеченные отзывы
+                    reviews = card_data.get('reviews', [])
+                    if isinstance(reviews, dict) and 'items' in reviews:
+                        reviews_list = reviews['items']
+                    elif isinstance(reviews, list):
+                        reviews_list = reviews
+                    else:
+                        reviews_list = []
+                    
+                    unanswered_reviews_count = sum(1 for r in reviews_list if not r.get('org_reply') or r.get('org_reply', '').strip() == '' or r.get('org_reply', '').strip() == '—')
+                    
                     url_lower = (queue_dict["url"] or '').lower()
                     map_type = 'yandex' if 'yandex' in url_lower else ('google' if 'google' in url_lower else 'other')
                     
                     parse_result_id = str(uuid.uuid4())
-                    cursor.execute("""
-                        INSERT INTO MapParseResults
-                        (id, business_id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    """, (
-                        parse_result_id,
-                        business_id,
-                        queue_dict["url"],
-                        map_type,
-                        str(rating),
-                        int(reviews_count or 0),
-                        int(news_count or 0),
-                        int(photos_count or 0),
-                        report_path
-                    ))
+                    
+                    # Проверяем наличие колонки unanswered_reviews_count
+                    cursor.execute("PRAGMA table_info(MapParseResults)")
+                    columns = [row[1] for row in cursor.fetchall()]
+                    has_unanswered_col = 'unanswered_reviews_count' in columns
+                    
+                    if has_unanswered_col:
+                        cursor.execute("""
+                            INSERT INTO MapParseResults
+                            (id, business_id, url, map_type, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, report_path, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        """, (
+                            parse_result_id,
+                            business_id,
+                            queue_dict["url"],
+                            map_type,
+                            str(rating),
+                            int(reviews_count or 0),
+                            int(unanswered_reviews_count),
+                            int(news_count or 0),
+                            int(photos_count or 0),
+                            report_path
+                        ))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO MapParseResults
+                            (id, business_id, url, map_type, rating, reviews_count, news_count, photos_count, report_path, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        """, (
+                            parse_result_id,
+                            business_id,
+                            queue_dict["url"],
+                            map_type,
+                            str(rating),
+                            int(reviews_count or 0),
+                            int(news_count or 0),
+                            int(photos_count or 0),
+                            report_path
+                        ))
                     
                     print(f"✅ Результаты сохранены в MapParseResults: {parse_result_id}")
                     

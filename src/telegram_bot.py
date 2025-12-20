@@ -889,21 +889,32 @@ def main():
     if not TELEGRAM_BOT_TOKEN:
         print("⚠️  TELEGRAM_BOT_TOKEN не установлен. Бот не будет запущен.")
         print("💡 Установите токен: export TELEGRAM_BOT_TOKEN='ваш_токен'")
+        print("💡 Или добавьте в .env файл: TELEGRAM_BOT_TOKEN=ваш_токен")
         return
     
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    # Регистрируем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("cancel", lambda u, c: u.message.reply_text("❌ Операция отменена")))
-    application.add_handler(CallbackQueryHandler(button_callback))
-    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    
-    print("🤖 Telegram-бот запущен...")
-    print(f"📡 API Base URL: {API_BASE_URL}")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        
+        # Регистрируем обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("cancel", lambda u, c: u.message.reply_text("❌ Операция отменена")))
+        application.add_handler(CallbackQueryHandler(button_callback))
+        application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+        
+        print("🤖 Telegram-бот запущен...")
+        print(f"📡 API Base URL: {API_BASE_URL}")
+        print("✅ Бот готов к работе. Ожидаю сообщения...")
+        
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    except Exception as e:
+        print(f"❌ Ошибка запуска бота: {e}")
+        print(f"💡 Проверьте:")
+        print(f"   1. Правильность токена TELEGRAM_BOT_TOKEN")
+        print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
+        print(f"   3. Доступность интернета для подключения к Telegram API")
+        raise
 
 if __name__ == "__main__":
     main()

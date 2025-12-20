@@ -7,6 +7,7 @@ interface MapParseItem {
   mapType: string;
   rating: string;
   reviewsCount: number;
+  unansweredReviewsCount?: number;
   newsCount: number;
   photosCount: number;
   reportPath: string | null;
@@ -92,6 +93,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                 <th className="px-3 py-2 border-b text-left">Тип</th>
                 <th className="px-3 py-2 border-b text-right">Рейтинг</th>
                 <th className="px-3 py-2 border-b text-right">Отзывы</th>
+                <th className="px-3 py-2 border-b text-right">Без ответа</th>
                 <th className="px-3 py-2 border-b text-right">Новости</th>
                 <th className="px-3 py-2 border-b text-right">Фото</th>
                 <th className="px-3 py-2 border-b text-right">Отчет</th>
@@ -112,6 +114,13 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                   <td className="px-3 py-2 border-b capitalize">{item.mapType || '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.rating || '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.reviewsCount ?? '—'}</td>
+                  <td className="px-3 py-2 border-b text-right">
+                    {item.unansweredReviewsCount !== undefined ? (
+                      <span className={item.unansweredReviewsCount > 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+                        {item.unansweredReviewsCount}
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td className="px-3 py-2 border-b text-right">{item.newsCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.photosCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">

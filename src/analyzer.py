@@ -67,52 +67,57 @@ def analyze_card(card_data: dict) -> dict:
     recommendations = []
 
     # Название
-    if card_data.get('title'):
+    if card_data.get('title') or (card_data.get('overview') and card_data['overview'].get('title')):
         score += 1
     else:
         recommendations.append('Добавьте название компании.')
     # Адрес
-    if card_data.get('address'):
+    if card_data.get('address') or (card_data.get('overview') and card_data['overview'].get('address')):
         score += 1
     else:
         recommendations.append('Укажите полный адрес компании.')
     # Телефон
-    if card_data.get('phone'):
+    if card_data.get('phone') or (card_data.get('overview') and card_data['overview'].get('phone')):
         score += 1
     else:
         recommendations.append('Добавьте номер телефона.')
     # Сайт
-    if card_data.get('site'):
+    if card_data.get('site') or (card_data.get('overview') and card_data['overview'].get('site')):
         score += 1
     else:
         recommendations.append('Добавьте сайт компании.')
     # Часы работы
-    if card_data.get('hours'):
+    if card_data.get('hours') or (card_data.get('overview') and card_data['overview'].get('hours')):
         score += 1
     else:
         recommendations.append('Укажите часы работы.')
     # Категории
-    if card_data.get('categories'):
+    if card_data.get('categories') or (card_data.get('overview') and card_data['overview'].get('categories')):
         score += 1
     else:
         recommendations.append('Добавьте категории деятельности.')
     # Рейтинг
-    if card_data.get('rating'):
+    rating = card_data.get('rating') or (card_data.get('overview') and card_data['overview'].get('rating'))
+    if rating:
         score += 1
     else:
         recommendations.append('Получите первые отзывы для появления рейтинга.')
     # Количество отзывов
-    if card_data.get('reviews_count') and card_data['reviews_count'] != '0':
+    reviews_count = card_data.get('reviews_count') or (card_data.get('overview') and card_data['overview'].get('reviews_count')) or 0
+    if reviews_count and str(reviews_count) != '0':
         score += 1
     else:
         recommendations.append('Попросите клиентов оставить отзывы.')
     # Описание
-    if card_data.get('description') and len(card_data['description']) >= 100:
+    description = card_data.get('description') or (card_data.get('overview') and card_data['overview'].get('description')) or ''
+    if description and len(description) >= 100:
         score += 1
     else:
         recommendations.append('Заполните подробное описание компании (не менее 100 символов).')
     # Фото
     photos_count = card_data.get('photos_count', 0)
+    if isinstance(photos_count, dict) and 'photos_count' in photos_count:
+        photos_count = photos_count['photos_count']
     try:
         photos_count = int(photos_count) if photos_count else 0
     except (ValueError, TypeError):
@@ -128,10 +133,26 @@ def analyze_card(card_data: dict) -> dict:
     else:
         recommendations.append('Добавьте ссылки на соцсети (VK, Instagram, Facebook).')
     # Новости/лента
-    if card_data.get('news_count', 0) > 0:
+    news_count = len(card_data.get('news', [])) if isinstance(card_data.get('news'), list) else 0
+    if news_count > 0:
         score += 0.5
     else:
         recommendations.append('Публикуйте новости и акции в ленте компании.')
+    
+    # Дополнительные рекомендации на основе динамики данных
+    reviews = card_data.get('reviews', [])
+    if isinstance(reviews, dict) and 'items' in reviews:
+        reviews_list = reviews['items']
+    elif isinstance(reviews, list):
+        reviews_list = reviews
+    else:
+        reviews_list = []
+    
+    # Проверка неотвеченных отзывов
+    unanswered_count = sum(1 for r in reviews_list if not r.get('org_reply') or r.get('org_reply', '').strip() == '' or r.get('org_reply', '').strip() == '—')
+    if unanswered_count > 0:
+        count_text = 'отзыв' if unanswered_count == 1 else ('отзыва' if unanswered_count < 5 else 'отзывов')
+        recommendations.append(f'{unanswered_count} неотвеченных {count_text}! Ответьте на отзывы клиентов.')
 
     # Итоговая оценка в процентах
     final_score = int((score / (max_score + 1)) * 100)
