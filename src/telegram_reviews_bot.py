@@ -317,7 +317,7 @@ async def consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "✅ Спасибо за согласие!\n\n"
-        "📝 Теперь отправьте ссылку на карточку вашей компании на картах (Яндекс.Карты или Google Maps)."
+        "📝 Пожалуйста, отправьте ссылку на карточку вашей компании на картах, где надо будет оставлять отзывы."
     )
     
     user_states[user_id]['state'] = 'waiting_business_url'
@@ -474,34 +474,63 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Получаем участников, которым ещё не отправляли ссылку на этого пользователя
     # И которые ещё не получили слишком много ссылок (равномерное распределение)
+    # Сначала проверяем, сколько всего участников
     cursor.execute("""
-        SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
-        FROM ReviewExchangeParticipants p
-        WHERE p.id != ? 
-        AND p.is_active = 1
-        AND p.business_url IS NOT NULL
-        AND p.review_request IS NOT NULL
-        AND NOT EXISTS (
-            SELECT 1 FROM ReviewExchangeDistribution d
-            WHERE d.sender_participant_id = p.id 
-            AND d.receiver_participant_id = ?
-        )
-        AND (
-            SELECT COUNT(*) FROM ReviewExchangeDistribution d2
-            WHERE d2.sender_participant_id = p.id
-        ) < (
-            SELECT AVG(sent_count) FROM (
-                SELECT COUNT(*) as sent_count
-                FROM ReviewExchangeDistribution
-                GROUP BY sender_participant_id
+        SELECT COUNT(*) 
+        FROM ReviewExchangeParticipants 
+        WHERE is_active = 1 
+        AND business_url IS NOT NULL 
+        AND review_request IS NOT NULL
+    """)
+    total_participants = cursor.fetchone()[0]
+    
+    # Если участников мало (меньше 5), упрощаем логику - просто ищем тех, кому ещё не отправляли
+    if total_participants < 5:
+        cursor.execute("""
+            SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
+            FROM ReviewExchangeParticipants p
+            WHERE p.id != ? 
+            AND p.is_active = 1
+            AND p.business_url IS NOT NULL
+            AND p.review_request IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM ReviewExchangeDistribution d
+                WHERE d.sender_participant_id = p.id 
+                AND d.receiver_participant_id = ?
             )
-        ) + 5
-        ORDER BY (
-            SELECT COUNT(*) FROM ReviewExchangeDistribution d3
-            WHERE d3.sender_participant_id = p.id
-        ) ASC, RANDOM()
-        LIMIT ?
-    """, (participant_id, participant_id, limit))
+            ORDER BY RANDOM()
+            LIMIT ?
+        """, (participant_id, participant_id, limit))
+    else:
+        # Для большого количества участников используем равномерное распределение
+        cursor.execute("""
+            SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
+            FROM ReviewExchangeParticipants p
+            WHERE p.id != ? 
+            AND p.is_active = 1
+            AND p.business_url IS NOT NULL
+            AND p.review_request IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM ReviewExchangeDistribution d
+                WHERE d.sender_participant_id = p.id 
+                AND d.receiver_participant_id = ?
+            )
+            AND (
+                SELECT COUNT(*) FROM ReviewExchangeDistribution d2
+                WHERE d2.sender_participant_id = p.id
+            ) < (
+                SELECT COALESCE(AVG(sent_count), 0) FROM (
+                    SELECT COUNT(*) as sent_count
+                    FROM ReviewExchangeDistribution
+                    GROUP BY sender_participant_id
+                )
+            ) + 5
+            ORDER BY (
+                SELECT COUNT(*) FROM ReviewExchangeDistribution d3
+                WHERE d3.sender_participant_id = p.id
+            ) ASC, RANDOM()
+            LIMIT ?
+        """, (participant_id, participant_id, limit))
     
     businesses = cursor.fetchall()
     
