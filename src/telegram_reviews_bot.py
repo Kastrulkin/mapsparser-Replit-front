@@ -67,11 +67,24 @@ def init_review_exchange_tables():
                 sender_participant_id TEXT NOT NULL,
                 receiver_participant_id TEXT NOT NULL,
                 sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                review_confirmed INTEGER DEFAULT 0,
+                confirmed_at TIMESTAMP,
                 FOREIGN KEY (sender_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
                 FOREIGN KEY (receiver_participant_id) REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
                 UNIQUE(sender_participant_id, receiver_participant_id)
             )
         """)
+        
+        # Добавляем поле review_confirmed, если его ещё нет (для существующих таблиц)
+        try:
+            cursor.execute("ALTER TABLE ReviewExchangeDistribution ADD COLUMN review_confirmed INTEGER DEFAULT 0")
+        except:
+            pass  # Поле уже существует
+        
+        try:
+            cursor.execute("ALTER TABLE ReviewExchangeDistribution ADD COLUMN confirmed_at TIMESTAMP")
+        except:
+            pass  # Поле уже существует
         
         conn.commit()
         print("✅ Таблицы для обмена отзывами созданы/проверены")
@@ -415,6 +428,67 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             reply_markup=reply_markup
         )
 
+async def review_left_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки 'Я оставил отзыв'"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Извлекаем distribution_id из callback_data
+    distribution_id = query.data.replace("review_left_", "")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем, что эта запись существует и принадлежит этому пользователю
+    cursor.execute("""
+        SELECT receiver_participant_id, review_confirmed
+        FROM ReviewExchangeDistribution
+        WHERE id = ?
+    """, (distribution_id,))
+    
+    result = cursor.fetchone()
+    
+    if not result:
+        await query.edit_message_text("❌ Ошибка: запись не найдена.")
+        conn.close()
+        return
+    
+    receiver_participant_id, already_confirmed = result
+    
+    # Проверяем, что это действительно этот пользователь
+    user_id = str(query.from_user.id)
+    cursor.execute("""
+        SELECT id FROM ReviewExchangeParticipants 
+        WHERE telegram_id = ? AND id = ?
+    """, (user_id, receiver_participant_id))
+    
+    participant_check = cursor.fetchone()
+    
+    if not participant_check:
+        await query.edit_message_text("❌ Ошибка: вы не можете подтвердить этот отзыв.")
+        conn.close()
+        return
+    
+    if already_confirmed:
+        await query.edit_message_text("✅ Вы уже подтвердили этот отзыв ранее. Спасибо!")
+        conn.close()
+        return
+    
+    # Отмечаем отзыв как подтверждённый
+    cursor.execute("""
+        UPDATE ReviewExchangeDistribution 
+        SET review_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (distribution_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    # Обновляем сообщение
+    await query.edit_message_text(
+        query.message.text + "\n\n✅ Спасибо! Ваше подтверждение получено. Это откроет вам доступ к следующим ссылкам, а ваша компания также продолжит рассылаться дальше."
+    )
+
 async def consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик согласия на обработку персональных данных"""
     query = update.callback_query
@@ -686,12 +760,17 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
             message_text += f"📍 {business_address}\n"
         message_text += f"\n🔗 {business_url}\n\n"
         if review_request:
-            message_text += f"💬 Пожелание к отзыву:\n{review_request}"
+            message_text += f"💬 Пожелание к отзыву:\n{review_request}\n\n"
+        message_text += "ℹ️ Пожалуйста, после того, как оставите отзыв, кликните по кнопке, чтобы подтвердить. Это откроет вам доступ к следующим, а ваша компания также продолжит рассылаться дальше."
+        
+        # Создаём кнопку "Я оставил отзыв" с callback_data, содержащим distribution_id
+        keyboard = [[InlineKeyboardButton("✅ Я оставил отзыв", callback_data=f"review_left_{distribution_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
         if update and update.message:
-            await update.message.reply_text(message_text)
+            await update.message.reply_text(message_text, reply_markup=reply_markup)
         else:
-            await context.bot.send_message(chat_id=user_id, text=message_text)
+            await context.bot.send_message(chat_id=user_id, text=message_text, reply_markup=reply_markup)
     
     conn.commit()
     conn.close()
@@ -767,6 +846,7 @@ def main():
         application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="check_subscription"))
         application.add_handler(CallbackQueryHandler(consent_callback, pattern="consent_yes"))
         application.add_handler(CallbackQueryHandler(start_over_callback, pattern="start_over"))
+        application.add_handler(CallbackQueryHandler(review_left_callback, pattern="^review_left_"))
         # Обработчик текста "Старт" или "start" (без слэша)
         application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^(Старт|старт|start|Start)$'), start_text_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
