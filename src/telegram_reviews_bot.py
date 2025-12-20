@@ -404,70 +404,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         business_url = match.group(1)
         
-        # Сохраняем ссылку и просим персональные данные
+        # Сохраняем ссылку и имя пользователя из Telegram
+        user_name = update.effective_user.first_name or update.effective_user.username or ''
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
-            SET business_url = ?, updated_at = CURRENT_TIMESTAMP
+            SET business_url = ?, name = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (business_url, participant_id))
+        """, (business_url, user_name, participant_id))
         conn.commit()
         conn.close()
         
         await update.message.reply_text(
             "✅ Ссылка сохранена!\n\n"
-            "📋 Теперь нам нужна дополнительная информация:\n\n"
-            "1️⃣ Название вашего бизнеса\n"
-            "2️⃣ Адрес бизнеса\n"
-            "3️⃣ Ваш телефон\n"
-            "4️⃣ Ваше имя\n\n"
-            "Отправьте эти данные в одном сообщении, каждое с новой строки, например:\n\n"
-            "Название: Парикмахерская 'Стиль'\n"
-            "Адрес: г. Москва, ул. Ленина, д. 1\n"
-            "Телефон: +7 (999) 123-45-67\n"
-            "Имя: Иван"
-        )
-        
-        user_states[user_id]['state'] = 'waiting_personal_data'
-        
-    elif state == 'waiting_personal_data':
-        # Парсим персональные данные
-        name = ''
-        phone = ''
-        business_name = ''
-        business_address = ''
-        
-        lines = text.split('\n')
-        for line in lines:
-            line = line.strip()
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip().lower()
-                value = value.strip()
-                
-                if 'имя' in key or 'name' in key:
-                    name = value
-                elif 'телефон' in key or 'phone' in key:
-                    phone = value
-                elif 'название' in key or 'business' in key:
-                    business_name = value
-                elif 'адрес' in key or 'address' in key:
-                    business_address = value
-        
-        # Сохраняем персональные данные
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE ReviewExchangeParticipants 
-            SET name = ?, phone = ?, business_name = ?, business_address = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (name, phone, business_name, business_address, participant_id))
-        conn.commit()
-        conn.close()
-        
-        await update.message.reply_text(
-            "✅ Данные сохранены!\n\n"
             "📝 Теперь отправьте комментарий, какой отзыв вы хотите увидеть.\n\n"
             "Например:\n"
             "• Новый мастер чудо как хорош\n"
@@ -476,7 +426,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         user_states[user_id]['state'] = 'waiting_review_request'
-        
     elif state == 'waiting_review_request':
         # Сохраняем пожелание к отзыву
         conn = get_db_connection()
