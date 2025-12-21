@@ -15,6 +15,7 @@ from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_t
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
+from chatgpt_api import chatgpt_bp
 import uuid
 import base64
 import os
@@ -5756,6 +5757,9 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
+    # Регистрируем Blueprint для ChatGPT интеграции
+    app.register_blueprint(chatgpt_bp)
+    
     # Инициализируем схему базы данных при первом запуске
     print("🔄 Проверка схемы базы данных...")
     init_database_schema()

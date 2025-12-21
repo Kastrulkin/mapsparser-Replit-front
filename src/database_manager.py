@@ -439,7 +439,8 @@ class DatabaseManager:
     
     def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
                        business_type: str = None, address: str = None, working_hours: str = None,
-                       phone: str = None, email: str = None, website: str = None, yandex_url: str = None) -> str:
+                       phone: str = None, email: str = None, website: str = None, yandex_url: str = None,
+                       city: str = None, country: str = 'US', moderation_status: str = 'pending') -> str:
         """Создать новый бизнес"""
         if not owner_id:
             raise ValueError("owner_id обязателен для создания бизнеса")
@@ -447,10 +448,34 @@ class DatabaseManager:
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         try:
-            cursor.execute("""
-                INSERT INTO Businesses (id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (business_id, name, description, industry, business_type, address, working_hours, phone, email, website, owner_id, yandex_url))
+            # Проверяем, есть ли новые поля в таблице
+            cursor.execute("PRAGMA table_info(Businesses)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Формируем список полей и значений динамически
+            base_fields = ['id', 'name', 'description', 'industry', 'business_type', 'address', 'working_hours', 
+                          'phone', 'email', 'website', 'owner_id', 'yandex_url']
+            base_values = [business_id, name, description, industry, business_type, address, working_hours, 
+                          phone, email, website, owner_id, yandex_url]
+            
+            # Добавляем новые поля, если они есть в таблице
+            if 'city' in columns:
+                base_fields.append('city')
+                base_values.append(city)
+            if 'country' in columns:
+                base_fields.append('country')
+                base_values.append(country)
+            if 'moderation_status' in columns:
+                base_fields.append('moderation_status')
+                base_values.append(moderation_status)
+            
+            fields_str = ', '.join(base_fields)
+            placeholders = ', '.join(['?' for _ in base_fields])
+            
+            cursor.execute(f"""
+                INSERT INTO Businesses ({fields_str})
+                VALUES ({placeholders})
+            """, base_values)
             # НЕ коммитим здесь - вызывающий код должен сделать commit
             return business_id
         except Exception as e:

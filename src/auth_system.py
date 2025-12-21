@@ -4,6 +4,7 @@
 """
 import sqlite3
 import uuid
+from typing import Optional, Dict, Any
 import hashlib
 import secrets
 import time

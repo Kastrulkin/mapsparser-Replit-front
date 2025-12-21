@@ -19,4 +19,9 @@ gunicorn>=21.2.0
 
 # Telegram-бот
 python-telegram-bot>=20.0
-schedule>=1.2.0 
+schedule>=1.2.0
+
+# ChatGPT интеграция + Stripe + тарифы
+stripe>=7.0.0
+googlemaps>=4.10.0
+pytz>=2024.1 
