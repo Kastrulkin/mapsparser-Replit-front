@@ -216,23 +216,8 @@ def chatgpt_book():
         db.conn.commit()
         
         # Отправляем уведомления (через Telegram и/или WhatsApp)
-        notification_sent = False
-        notification_channel = None
-        
-        # TODO: Реализовать отправку уведомлений
-        # if telegram_username:
-        #     send_telegram_notification(...)
-        # if whatsapp:
-        #     send_whatsapp_notification(...)
-        
-        # Помечаем, что уведомление отправлено (когда реализуем)
-        if notification_sent:
-            cursor.execute("""
-                UPDATE Bookings 
-                SET notification_sent = 1, notification_channel = ?
-                WHERE id = ?
-            """, (notification_channel, booking_id))
-            db.conn.commit()
+        from notifications import send_booking_notification
+        notification_sent = send_booking_notification(business_id, booking_id)
         
         db.close()
         
