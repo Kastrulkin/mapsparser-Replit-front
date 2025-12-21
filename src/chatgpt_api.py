@@ -56,7 +56,7 @@ def register_with_business():
         
         user_id = result['id']
         
-        # Определяем часовой пояс по адресу
+        # Определяем часовой пояс по адресу (асинхронно, не блокируем регистрацию)
         timezone_result = get_timezone_from_address(business_address, business_city)
         
         # Создаём бизнес
@@ -73,31 +73,31 @@ def register_with_business():
             )
             
             # Обновляем часовой пояс и координаты, если они определены
-            if timezone_result.get('timezone'):
-                cursor = db.conn.cursor()
-                update_fields = []
-                update_values = []
-                
-                if timezone_result.get('timezone'):
-                    update_fields.append('timezone = ?')
-                    update_values.append(timezone_result['timezone'])
-                if timezone_result.get('latitude'):
-                    update_fields.append('latitude = ?')
-                    update_values.append(timezone_result['latitude'])
-                if timezone_result.get('longitude'):
-                    update_fields.append('longitude = ?')
-                    update_values.append(timezone_result['longitude'])
-                
-                if update_fields:
-                    update_values.append(business_id)
-                    cursor.execute(f"""
-                        UPDATE Businesses 
-                        SET {', '.join(update_fields)}
-                        WHERE id = ?
-                    """, update_values)
-                
-                db.conn.commit()
+            cursor = db.conn.cursor()
+            update_fields = []
+            update_values = []
             
+            if timezone_result.get('timezone') and not timezone_result.get('error'):
+                update_fields.append('timezone = ?')
+                update_values.append(timezone_result['timezone'])
+            
+            if timezone_result.get('latitude'):
+                update_fields.append('latitude = ?')
+                update_values.append(timezone_result['latitude'])
+            
+            if timezone_result.get('longitude'):
+                update_fields.append('longitude = ?')
+                update_values.append(timezone_result['longitude'])
+            
+            if update_fields:
+                update_values.append(business_id)
+                cursor.execute(f"""
+                    UPDATE Businesses 
+                    SET {', '.join(update_fields)}
+                    WHERE id = ?
+                """, update_values)
+            
+            db.conn.commit()
             db.close()
         except Exception as e:
             db.close()
