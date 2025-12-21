@@ -23,12 +23,12 @@ API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
 WHATSAPP_PHONE_ID = os.getenv('WHATSAPP_PHONE_ID', '')
 WHATSAPP_ACCESS_TOKEN = os.getenv('WHATSAPP_ACCESS_TOKEN', '')
 
-def send_telegram_notification(telegram_username: str, booking_data: dict) -> bool:
+def send_telegram_notification(telegram_id: str, booking_data: dict) -> bool:
     """
     Отправка уведомления о новом бронировании через Telegram
     
     Args:
-        telegram_username: Username в Telegram (без @)
+        telegram_id: Telegram ID пользователя (не username!)
         booking_data: Данные бронирования
     
     Returns:
@@ -38,19 +38,16 @@ def send_telegram_notification(telegram_username: str, booking_data: dict) -> bo
         print("⚠️ TELEGRAM_BOT_TOKEN не установлен")
         return False
     
-    if not telegram_username:
+    if not telegram_id:
         return False
     
     try:
-        # Получаем telegram_id по username через API бота
-        # Или используем существующий механизм привязки
-        
         # Формируем сообщение
         message = f"""🔔 Новое бронирование!
 
 👤 Клиент: {booking_data.get('client_name', 'Не указано')}
 📞 Телефон: {booking_data.get('client_phone', 'Не указано')}
-📧 Email: {booking_data.get('client_email', 'Не указано')}
+📧 Email: {booking_data.get('client_email', 'Не указано') or 'Не указано'}
 
 🕐 Время: {booking_data.get('booking_time_local', booking_data.get('booking_time', 'Не указано'))}
 
@@ -65,21 +62,27 @@ def send_telegram_notification(telegram_username: str, booking_data: dict) -> bo
         message += f"\nID бронирования: {booking_data.get('booking_id', '')}"
         
         # Отправляем через Telegram Bot API
-        # Используем существующий бот @BeautyBotPro_bot
-        # Нужно получить chat_id по username или использовать существующую привязку
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         
-        # Временное решение: отправляем через внутренний API бота
-        # В реальности нужно использовать telegram_id из таблицы Users
+        payload = {
+            'chat_id': telegram_id,
+            'text': message,
+            'parse_mode': 'HTML'
+        }
         
-        print(f"📱 Telegram уведомление для @{telegram_username}: {message[:50]}...")
+        response = requests.post(url, json=payload, timeout=10)
         
-        # TODO: Реализовать отправку через telegram_bot.py
-        # Можно использовать существующий механизм отправки сообщений
-        
-        return True
+        if response.status_code == 200:
+            print(f"✅ Telegram уведомление отправлено на {telegram_id}")
+            return True
+        else:
+            print(f"❌ Ошибка отправки Telegram: {response.status_code} - {response.text}")
+            return False
         
     except Exception as e:
         print(f"❌ Ошибка отправки Telegram уведомления: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def send_whatsapp_notification(phone: str, booking_data: dict) -> bool:
@@ -220,14 +223,12 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
         whatsapp_sent = False
         
         # Telegram уведомление
-        if telegram_username:
-            # Получаем telegram_id владельца из Users
-            cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (owner_id,))
-            user = cursor.fetchone()
-            if user and user[0]:
-                # TODO: Использовать telegram_id для отправки
-                # Пока используем username
-                telegram_sent = send_telegram_notification(telegram_username, booking_data)
+        # Получаем telegram_id владельца из Users
+        cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (owner_id,))
+        user = cursor.fetchone()
+        if user and user[0]:
+            telegram_id = user[0]
+            telegram_sent = send_telegram_notification(telegram_id, booking_data)
         
         # WhatsApp уведомление
         if whatsapp_phone and whatsapp_verified:

@@ -18,6 +18,7 @@ from init_database_schema import init_database_schema
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
+from admin_moderation import admin_moderation_bp
 import uuid
 import base64
 import os
@@ -5765,6 +5766,8 @@ if __name__ == "__main__":
     app.register_blueprint(chatgpt_search_bp)
     # Регистрируем Blueprint для Stripe интеграции
     app.register_blueprint(stripe_bp)
+    # Регистрируем Blueprint для модерации (суперадмин)
+    app.register_blueprint(admin_moderation_bp)
     
     # Инициализируем схему базы данных при первом запуске
     print("🔄 Проверка схемы базы данных...")
