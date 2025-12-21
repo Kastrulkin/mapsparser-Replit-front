@@ -16,6 +16,7 @@ from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
 from chatgpt_api import chatgpt_bp
+from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
 import uuid
 import base64
@@ -5760,6 +5761,8 @@ def handle_exception(e):
 if __name__ == "__main__":
     # Регистрируем Blueprint для ChatGPT интеграции
     app.register_blueprint(chatgpt_bp)
+    # Регистрируем Blueprint для публичного ChatGPT API (поиск и бронирование)
+    app.register_blueprint(chatgpt_search_bp)
     # Регистрируем Blueprint для Stripe интеграции
     app.register_blueprint(stripe_bp)
     
