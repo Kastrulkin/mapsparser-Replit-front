@@ -7,7 +7,16 @@ import { useNavigate } from "react-router-dom";
 const Login = () => {
   const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ name: '', phone: '', email: '', password: '', yandexUrl: '' });
+  const [registerForm, setRegisterForm] = useState({ 
+    name: '', 
+    phone: '', 
+    email: '', 
+    password: '', 
+    business_name: '', 
+    business_address: '', 
+    business_city: '', 
+    business_country: 'US' 
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -45,9 +54,22 @@ const Login = () => {
     setError(null);
     setInfo(null);
     
+    // Валидация
+    if (!registerForm.email || !registerForm.password) {
+      setError('Email и пароль обязательны');
+      setLoading(false);
+      return;
+    }
+    
+    if (!registerForm.business_name || !registerForm.business_address || !registerForm.business_city) {
+      setError('Название бизнеса, адрес и город обязательны');
+      setLoading(false);
+      return;
+    }
+    
     try {
-      // Отправляем заявку на регистрацию
-      const response = await fetch('/api/public/request-registration', {
+      // Используем новый endpoint для регистрации с бизнесом
+      const response = await fetch('/api/auth/register-with-business', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,21 +78,36 @@ const Login = () => {
           name: registerForm.name,
           email: registerForm.email,
           phone: registerForm.phone,
-          yandex_url: registerForm.yandexUrl
+          password: registerForm.password,
+          business_name: registerForm.business_name,
+          business_address: registerForm.business_address,
+          business_city: registerForm.business_city,
+          business_country: registerForm.business_country
         })
       });
       
       const data = await response.json();
       
-      if (response.ok) {
-        setInfo(data.message || 'Заявка на регистрацию принята. Мы свяжемся с вами в ближайшее время.');
-        // Очищаем форму
-        setRegisterForm({ name: '', phone: '', email: '', password: '', yandexUrl: '' });
+      if (response.ok && data.success) {
+        // Сохраняем токен
+        if (data.token) {
+          localStorage.setItem('auth_token', data.token);
+        }
+        
+        // Перенаправляем на страницу оплаты или в личный кабинет
+        if (data.business?.moderation_status === 'pending') {
+          setInfo('Регистрация успешна! Ваш бизнес ожидает модерации. Перенаправляем в личный кабинет...');
+          setTimeout(() => {
+            navigate('/dashboard/settings?payment=required');
+          }, 2000);
+        } else {
+          navigate('/dashboard/settings?payment=required');
+        }
       } else {
-        setError(data.error || 'Ошибка отправки заявки на регистрацию');
+        setError(data.error || 'Ошибка регистрации');
       }
     } catch (error) {
-      setError('Ошибка отправки заявки: ' + (error as Error).message);
+      setError('Ошибка регистрации: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -207,64 +244,138 @@ const Login = () => {
 
           {/* Форма регистрации */}
           {tab === 'register' && (
-            <form className="space-y-6" onSubmit={handleRegister}>
-              <div>
-                <label htmlFor="register-name" className="block text-sm font-medium text-gray-700">
-                  Имя
-                </label>
-                <input
-                  id="register-name"
-                  type="text"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
+            <form className="space-y-4" onSubmit={handleRegister}>
+              <div className="border-b border-gray-200 pb-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Личные данные</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="register-name" className="block text-sm font-medium text-gray-700">
+                      Имя
+                    </label>
+                    <input
+                      id="register-name"
+                      type="text"
+                      value={registerForm.name}
+                      onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="register-email" className="block text-sm font-medium text-gray-700">
+                      Email *
+                    </label>
+                    <input
+                      id="register-email"
+                      type="email"
+                      required
+                      value={registerForm.email}
+                      onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="register-password" className="block text-sm font-medium text-gray-700">
+                      Пароль *
+                    </label>
+                    <input
+                      id="register-password"
+                      type="password"
+                      required
+                      value={registerForm.password}
+                      onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="register-phone" className="block text-sm font-medium text-gray-700">
+                      Телефон
+                    </label>
+                    <input
+                      id="register-phone"
+                      type="tel"
+                      value={registerForm.phone}
+                      onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label htmlFor="register-email" className="block text-sm font-medium text-gray-700">
-                  Email
-                </label>
-                <input
-                  id="register-email"
-                  type="email"
-                  required
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
+
+              <div className="border-b border-gray-200 pb-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Данные бизнеса</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="register-business-name" className="block text-sm font-medium text-gray-700">
+                      Название бизнеса *
+                    </label>
+                    <input
+                      id="register-business-name"
+                      type="text"
+                      required
+                      value={registerForm.business_name}
+                      onChange={(e) => setRegisterForm({...registerForm, business_name: e.target.value})}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="register-business-address" className="block text-sm font-medium text-gray-700">
+                      Адрес *
+                    </label>
+                    <input
+                      id="register-business-address"
+                      type="text"
+                      required
+                      value={registerForm.business_address}
+                      onChange={(e) => setRegisterForm({...registerForm, business_address: e.target.value})}
+                      placeholder="Например: 123 Main St"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="register-business-city" className="block text-sm font-medium text-gray-700">
+                        Город *
+                      </label>
+                      <input
+                        id="register-business-city"
+                        type="text"
+                        required
+                        value={registerForm.business_city}
+                        onChange={(e) => setRegisterForm({...registerForm, business_city: e.target.value})}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="register-business-country" className="block text-sm font-medium text-gray-700">
+                        Страна
+                      </label>
+                      <select
+                        id="register-business-country"
+                        value={registerForm.business_country}
+                        onChange={(e) => setRegisterForm({...registerForm, business_country: e.target.value})}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        <option value="US">США</option>
+                        <option value="RU">Россия</option>
+                        <option value="UA">Украина</option>
+                        <option value="KZ">Казахстан</option>
+                        <option value="BY">Беларусь</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label htmlFor="register-phone" className="block text-sm font-medium text-gray-700">
-                  Телефон
-                </label>
-                <input
-                  id="register-phone"
-                  type="tel"
-                  value={registerForm.phone}
-                  onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="register-yandex-url" className="block text-sm font-medium text-gray-700">
-                  Ссылка на карты
-                </label>
-                <input
-                  id="register-yandex-url"
-                  type="url"
-                  value={registerForm.yandexUrl}
-                  onChange={(e) => setRegisterForm({...registerForm, yandexUrl: e.target.value})}
-                  placeholder="https://yandex.ru/maps/org/..."
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
+
               <Button
                 type="submit"
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? 'Отправка заявки...' : 'Отправить заявку на регистрацию'}
+                {loading ? 'Регистрация...' : 'Зарегистрироваться'}
               </Button>
+              <p className="text-xs text-gray-500 text-center">
+                После регистрации вам будет предложено выбрать тариф и оплатить подписку
+              </p>
             </form>
           )}
 

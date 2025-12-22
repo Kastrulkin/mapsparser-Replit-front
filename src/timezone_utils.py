@@ -10,7 +10,10 @@ import pytz
 # Загружаем переменные окружения
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    try:
+        load_dotenv()
+    except Exception:
+        pass  # Игнорируем ошибки загрузки .env
 except ImportError:
     pass
 

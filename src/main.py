@@ -19,6 +19,9 @@ from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
 from admin_moderation import admin_moderation_bp
+from bookings_api import bookings_bp
+from ai_agent_webhooks import ai_webhooks_bp
+from ai_agents_api import ai_agents_api_bp
 import uuid
 import base64
 import os
@@ -37,6 +40,15 @@ except ImportError:
 app = Flask(__name__)
 # Разрешаем CORS для локального фронтенда
 CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+
+# Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
+app.register_blueprint(chatgpt_bp)
+app.register_blueprint(chatgpt_search_bp)
+app.register_blueprint(stripe_bp)
+app.register_blueprint(admin_moderation_bp)
+app.register_blueprint(bookings_bp)
+app.register_blueprint(ai_webhooks_bp)
+app.register_blueprint(ai_agents_api_bp)
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
@@ -575,7 +587,7 @@ def services_optimize():
                     .replace('{content}', str(content[:4000]))
                 )
 
-            result = analyze_text_with_gigachat(prompt)
+            result = analyze_text_with_gigachat(prompt, task_type="service_optimization")
         # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
         if 'error' in result:
             error_msg = result.get('error', 'Ошибка оптимизации')
@@ -815,7 +827,7 @@ def news_generate():
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}
 """
 
-        result = analyze_text_with_gigachat(prompt)
+        result = analyze_text_with_gigachat(prompt, task_type="news_generation")
         if 'error' in result:
             db.close()
             return jsonify({"error": result['error']}), 500
@@ -1190,7 +1202,7 @@ def reviews_reply():
 
 Отзыв клиента: {review_text[:1000]}
 """
-        result = analyze_text_with_gigachat(prompt)
+        result = analyze_text_with_gigachat(prompt, task_type="review_reply")
         if 'error' in result:
             return jsonify({"error": result['error']}), 500
         return jsonify({"success": True, "result": result})
@@ -5760,15 +5772,6 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    # Регистрируем Blueprint для ChatGPT интеграции
-    app.register_blueprint(chatgpt_bp)
-    # Регистрируем Blueprint для публичного ChatGPT API (поиск и бронирование)
-    app.register_blueprint(chatgpt_search_bp)
-    # Регистрируем Blueprint для Stripe интеграции
-    app.register_blueprint(stripe_bp)
-    # Регистрируем Blueprint для модерации (суперадмин)
-    app.register_blueprint(admin_moderation_bp)
-    
     # Инициализируем схему базы данных при первом запуске
     print("🔄 Проверка схемы базы данных...")
     init_database_schema()

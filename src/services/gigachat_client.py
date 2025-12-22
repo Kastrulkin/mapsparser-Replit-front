@@ -197,8 +197,15 @@ class GigaChatClient:
             print(f"DEBUG: Исключение в upload_file_simple: {str(e)}")
             raise Exception(f"Ошибка загрузки файла: {str(e)}")
 
-    def analyze_screenshot(self, image_base64: str, prompt: str) -> str:
-        """Анализ скриншота карточки"""
+    def analyze_screenshot(self, image_base64: str, prompt: str, task_type: str = None) -> str:
+        """Анализ скриншота карточки
+        
+        Args:
+            image_base64: Base64 изображения
+            prompt: Текст промпта
+            task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
+                      news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+        """
         try:
             print(f"🚨 DEBUG: Начинаем анализ скриншота")
             print(f"🚨 DEBUG: Размер base64: {len(image_base64)} символов")
@@ -219,7 +226,7 @@ class GigaChatClient:
                 "Content-Type": "application/json"
             }
             
-            model_config = self.config.get_model_config()
+            model_config = self.config.get_model_config(task_type=task_type)
             # Для анализа скриншотов увеличиваем max_tokens до максимума (4000)
             # чтобы избежать обрезания JSON при большом количестве услуг
             max_tokens_for_screenshot = min(model_config.get("max_tokens", 4000), 4000)
@@ -288,8 +295,14 @@ class GigaChatClient:
             print(f"🚨 DEBUG: Исключение в analyze_screenshot: {str(e)}")
             raise Exception(f"Ошибка анализа скриншота: {str(e)}")
     
-    def analyze_text(self, prompt: str) -> str:
-        """Анализ текста"""
+    def analyze_text(self, prompt: str, task_type: str = None) -> str:
+        """Анализ текста
+        
+        Args:
+            prompt: Текст промпта
+            task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
+                      news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+        """
         try:
             token = self.get_access_token()
             
@@ -299,7 +312,7 @@ class GigaChatClient:
                 "Content-Type": "application/json"
             }
             
-            model_config = self.config.get_model_config()
+            model_config = self.config.get_model_config(task_type=task_type)
             data = {
                 "model": model_config["model"],
                 "messages": [
@@ -477,11 +490,18 @@ def get_gigachat_client() -> GigaChatClient:
         _gigachat_client = GigaChatClient()
     return _gigachat_client
 
-def analyze_screenshot_with_gigachat(image_base64: str, prompt: str) -> Dict[str, Any]:
-    """Анализ скриншота через GigaChat"""
+def analyze_screenshot_with_gigachat(image_base64: str, prompt: str, task_type: str = None) -> Dict[str, Any]:
+    """Анализ скриншота через GigaChat
+    
+    Args:
+        image_base64: Base64 изображения
+        prompt: Текст промпта
+        task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
+                  news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+    """
     try:
         client = get_gigachat_client()
-        response = client.analyze_screenshot(image_base64, prompt)
+        response = client.analyze_screenshot(image_base64, prompt, task_type=task_type)
         return client.parse_json_response(response)
     except Exception as e:
         return {
@@ -489,11 +509,17 @@ def analyze_screenshot_with_gigachat(image_base64: str, prompt: str) -> Dict[str
             "fallback": True
         }
 
-def analyze_text_with_gigachat(prompt: str) -> Dict[str, Any]:
-    """Анализ текста через GigaChat"""
+def analyze_text_with_gigachat(prompt: str, task_type: str = None) -> Dict[str, Any]:
+    """Анализ текста через GigaChat
+    
+    Args:
+        prompt: Текст промпта
+        task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
+                  news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+    """
     try:
         client = get_gigachat_client()
-        response = client.analyze_text(prompt)
+        response = client.analyze_text(prompt, task_type=task_type)
         return client.parse_json_response(response)
     except Exception as e:
         return {

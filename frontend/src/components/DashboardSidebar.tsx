@@ -5,6 +5,7 @@ import {
   TrendingUp, 
   DollarSign, 
   Settings,
+  Calendar,
   Menu,
   X
 } from 'lucide-react';
@@ -44,6 +45,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: 'Прогресс',
       icon: TrendingUp,
       path: '/dashboard/progress',
+    },
+    {
+      id: 'bookings',
+      label: 'Бронирования',
+      icon: Calendar,
+      path: '/dashboard/bookings',
     },
     {
       id: 'finance',

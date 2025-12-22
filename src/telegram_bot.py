@@ -469,7 +469,7 @@ async def handle_optimize_photo(update: Update, context: ContextTypes.DEFAULT_TY
         except:
             prompt = "Оптимизируй прайс-лист услуг для локального SEO."
         
-        result = analyze_screenshot_with_gigachat(image_base64, prompt)
+        result = analyze_screenshot_with_gigachat(image_base64, prompt, task_type="service_optimization")
         
         if 'error' in result:
             await update.message.reply_text(f"❌ Ошибка анализа: {result['error']}")
@@ -772,7 +772,7 @@ async def handle_optimize_text(update: Update, context: ContextTypes.DEFAULT_TYP
             prompt = "Оптимизируй список услуг для локального SEO."
         
         full_prompt = f"{prompt}\n\nСписок услуг:\n{text}"
-        result = analyze_text_with_gigachat(full_prompt)
+        result = analyze_text_with_gigachat(full_prompt, task_type="service_optimization")
         
         if 'error' in result:
             await update.message.reply_text(f"❌ Ошибка анализа: {result['error']}")

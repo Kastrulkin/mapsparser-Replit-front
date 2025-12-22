@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
+import { AIAgentsManagement } from '../../components/AIAgentsManagement';
 
 interface Business {
   id: string;
@@ -86,6 +87,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -332,16 +334,46 @@ export const AdminPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Административная панель</h1>
-          <p className="text-gray-600">Управление пользователями и их бизнесами</p>
-        </div>
-        <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
-          <Plus className="w-4 h-4" />
-          <span>Создать аккаунт</span>
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Административная панель</h1>
+        <p className="text-gray-600">Управление пользователями, бизнесами и ИИ агентами</p>
       </div>
+
+      {/* Табы */}
+      <div className="flex space-x-1 mb-6 border-b">
+        <button
+          onClick={() => setActiveTab('businesses')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'businesses'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Пользователи и бизнесы
+        </button>
+        <button
+          onClick={() => setActiveTab('agents')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'agents'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Bot className="h-4 w-4 inline mr-2" />
+          ИИ агенты
+        </button>
+      </div>
+
+      {activeTab === 'agents' ? (
+        <AIAgentsManagement />
+      ) : (
+        <>
+          <div className="mb-6 flex items-center justify-end">
+            <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>Создать аккаунт</span>
+            </Button>
+          </div>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <table className="w-full">
@@ -580,6 +612,8 @@ export const AdminPage: React.FC = () => {
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
         variant={confirmDialog.variant}
       />
+        </>
+      )}
     </div>
   );
 };

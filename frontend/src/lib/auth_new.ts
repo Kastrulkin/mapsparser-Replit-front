@@ -123,6 +123,58 @@ export class NewAuth {
     }
   }
 
+  async signUpWithBusiness(
+    email: string, 
+    password: string, 
+    name?: string, 
+    phone?: string,
+    business_name?: string,
+    business_address?: string,
+    business_city?: string,
+    business_country?: string
+  ): Promise<{ user: User | null; business: any | null; error: any }> {
+    try {
+      const response = await this.makeRequest('/auth/register-with-business', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          name, 
+          phone,
+          business_name,
+          business_address,
+          business_city,
+          business_country
+        }),
+      });
+
+      if (response.error) {
+        return { user: null, business: null, error: response.error };
+      }
+
+      const u = response.user || response;
+      this.currentUser = {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        phone: u.phone,
+      };
+
+      if (response.token) {
+        this.token = response.token;
+        localStorage.setItem('auth_token', this.token);
+      }
+
+      return { 
+        user: this.currentUser, 
+        business: response.business || null, 
+        error: null 
+      };
+    } catch (error) {
+      return { user: null, business: null, error: error.message };
+    }
+  }
+
   async signIn(email: string, password: string): Promise<{ user: User | null; error: any }> {
     try {
       const response = await this.makeRequest('/auth/login', {

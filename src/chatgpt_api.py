@@ -210,6 +210,41 @@ def update_business_profile():
             update_fields.append('website = ?')
             update_values.append(data['website'])
         
+        # WABA credentials
+        if 'waba_phone_id' in data:
+            update_fields.append('waba_phone_id = ?')
+            update_values.append(data['waba_phone_id'])
+        
+        if 'waba_access_token' in data:
+            update_fields.append('waba_access_token = ?')
+            update_values.append(data['waba_access_token'])
+        
+        # Telegram bot token
+        if 'telegram_bot_token' in data:
+            update_fields.append('telegram_bot_token = ?')
+            update_values.append(data['telegram_bot_token'])
+        
+        # AI Agent settings
+        if 'ai_agent_enabled' in data:
+            update_fields.append('ai_agent_enabled = ?')
+            update_values.append(data['ai_agent_enabled'])
+        
+        if 'ai_agent_type' in data:
+            update_fields.append('ai_agent_type = ?')
+            update_values.append(data['ai_agent_type'])
+        
+        if 'ai_agent_id' in data:
+            update_fields.append('ai_agent_id = ?')
+            update_values.append(data['ai_agent_id'] if data['ai_agent_id'] else None)
+        
+        if 'ai_agent_tone' in data:
+            update_fields.append('ai_agent_tone = ?')
+            update_values.append(data['ai_agent_tone'])
+        
+        if 'ai_agent_restrictions' in data:
+            update_fields.append('ai_agent_restrictions = ?')
+            update_values.append(data['ai_agent_restrictions'])
+        
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
         update_values.append(business_id)
         
@@ -289,11 +324,12 @@ def verify_whatsapp():
         
         data = request.get_json()
         business_id = data.get('business_id')
-        phone = data.get('phone', '').strip()
+        # Поддерживаем оба варианта для совместимости
+        phone = data.get('whatsapp_phone', '').strip() or data.get('phone', '').strip()
         verification_code = data.get('verification_code', '').strip()
         
         if not business_id or not phone:
-            return jsonify({"error": "business_id и phone обязательны"}), 400
+            return jsonify({"error": "business_id и whatsapp_phone обязательны"}), 400
         
         # Проверяем доступ
         db = DatabaseManager()
@@ -325,7 +361,8 @@ def verify_whatsapp():
             
             return jsonify({
                 "success": True,
-                "message": "Код отправлен на WhatsApp",
+                "message": "Номер WhatsApp сохранён",
+                "verified": False,
                 "verification_required": True
             })
         else:
@@ -341,7 +378,8 @@ def verify_whatsapp():
             
             return jsonify({
                 "success": True,
-                "message": "WhatsApp номер верифицирован"
+                "message": "WhatsApp номер верифицирован",
+                "verified": True
             })
         
     except Exception as e:

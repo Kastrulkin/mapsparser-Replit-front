@@ -19,6 +19,7 @@ import { ProgressPage } from "./pages/dashboard/ProgressPage";
 import { FinancePage } from "./pages/dashboard/FinancePage";
 import { SettingsPage } from "./pages/dashboard/SettingsPage";
 import { AdminPage } from "./pages/dashboard/AdminPage";
+import { BookingsPage } from "./pages/dashboard/BookingsPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import Policy from "./pages/Policy";
@@ -56,6 +57,7 @@ const AppContent = () => {
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="bookings" element={<BookingsPage />} />
             <Route path="bazich" element={<AdminPage />} />
           </Route>
           {/* Legacy route - keep for backward compatibility */}
