@@ -317,6 +317,45 @@ def health():
     """Проверка здоровья сервера"""
     return jsonify({"status": "ok", "message": "SEO анализатор работает"})
 
+# ==================== ХЕЛПЕР: ПОЛУЧЕНИЕ ЯЗЫКА ПОЛЬЗОВАТЕЛЯ ====================
+def get_user_language(user_id: str, requested_language: str = None) -> str:
+    """
+    Получить язык пользователя из профиля бизнеса или использовать запрошенный язык.
+    
+    Args:
+        user_id: ID пользователя
+        requested_language: Язык, указанный в запросе (если есть)
+    
+    Returns:
+        Код языка (ru, en, es, de, fr, it, pt, zh)
+    """
+    # Если язык указан в запросе - используем его
+    if requested_language:
+        return requested_language.lower()
+    
+    # Иначе получаем язык из профиля бизнеса пользователя
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        # Получаем первый активный бизнес пользователя
+        cursor.execute("""
+            SELECT ai_agent_language 
+            FROM Businesses 
+            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (user_id,))
+        row = cursor.fetchone()
+        db.close()
+        
+        if row and row[0]:
+            return row[0].lower()
+    except Exception as e:
+        print(f"⚠️ Ошибка получения языка пользователя: {e}")
+    
+    # Fallback на русский, если ничего не найдено
+    return 'ru'
+
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
 def services_optimize():
@@ -341,6 +380,21 @@ def services_optimize():
         region = request.form.get('region') or (request.json.get('region') if request.is_json else None)
         business_name = request.form.get('business_name') or (request.json.get('business_name') if request.is_json else None)
         length = request.form.get('description_length') or (request.json.get('description_length') if request.is_json else 150)
+
+        # Язык результата: получаем из запроса или из профиля пользователя
+        requested_language = request.form.get('language') or (request.json.get('language') if request.is_json else None)
+        language = get_user_language(user_data['user_id'], requested_language)
+        language_names = {
+            'ru': 'Russian',
+            'en': 'English',
+            'es': 'Spanish',
+            'de': 'German',
+            'fr': 'French',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'zh': 'Chinese'
+        }
+        language_name = language_names.get(language, 'Russian')
 
         # Источник: файл или текст
         file = request.files.get('file') if 'file' in request.files else None
@@ -554,6 +608,7 @@ def services_optimize():
 Регион: {region}
 Название бизнеса: {business_name}
 Тон: {tone}
+Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
 Длина описания: {length} символов
 Дополнительные инструкции: {instructions}
 
@@ -583,6 +638,7 @@ def services_optimize():
                     .replace('{region}', str(region or 'не указан'))
                     .replace('{business_name}', str(business_name or 'салон красоты'))
                     .replace('{tone}', str(tone or 'профессиональный'))
+                    .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
                     .replace('{instructions}', str(instructions or '—'))
                     .replace('{frequent_queries}', str(frequent_queries))
@@ -762,6 +818,21 @@ def news_generate():
         selected_service_id = data.get('service_id')
         raw_info = (data.get('raw_info') or '').strip()
 
+        # Язык новости: получаем из запроса или из профиля пользователя
+        requested_language = data.get('language')
+        language = get_user_language(user_data['user_id'], requested_language)
+        language_names = {
+            'ru': 'Russian',
+            'en': 'English',
+            'es': 'Spanish',
+            'de': 'German',
+            'fr': 'French',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'zh': 'Chinese'
+        }
+        language_name = language_names.get(language, 'Russian')
+
         db = DatabaseManager()
         cur = db.conn.cursor()
         # ensure table
@@ -822,6 +893,7 @@ def news_generate():
         prompt = f"""
 Ты — маркетолог для локального бизнеса. Сгенерируй короткую новость для публикации на картах (Google, Яндекс).
 Требования: 1-2 предложения, до 300 символов, без эмодзи и хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
 Контекст услуги (может отсутствовать): {service_context}
@@ -1169,6 +1241,21 @@ def reviews_reply():
         data = request.get_json() or {}
         review_text = (data.get('review') or '').strip()
         tone = (data.get('tone') or 'профессиональный').strip()
+
+        # Язык ответа: получаем из запроса или из профиля пользователя
+        requested_language = data.get('language')
+        language = get_user_language(user_data['user_id'], requested_language)
+        language_names = {
+            'ru': 'Russian',
+            'en': 'English',
+            'es': 'Spanish',
+            'de': 'German',
+            'fr': 'French',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'zh': 'Chinese'
+        }
+        language_name = language_names.get(language, 'Russian')
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
 
@@ -1199,6 +1286,7 @@ def reviews_reply():
         prompt = f"""
 Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 

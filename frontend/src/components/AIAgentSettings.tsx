@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface AIAgentSettingsProps {
   businessId: string | null;
@@ -27,13 +28,26 @@ const AGENT_TYPES = [
   { value: 'booking', label: 'Агент для записи' },
 ];
 
+const LANGUAGE_OPTIONS = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'pt', label: 'Português' },
+  { value: 'zh', label: '中文' },
+];
+
 // Специальное значение для "дефолтного" агента, Radix Select запрещает пустую строку
 const DEFAULT_AGENT_VALUE = '__default__';
 
 export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) => {
+  const { language: interfaceLanguage } = useLanguage();
   const [enabled, setEnabled] = useState(false);
   const [agentType, setAgentType] = useState('booking');
   const [tone, setTone] = useState('professional');
+  const [agentLanguage, setAgentLanguage] = useState<string>(interfaceLanguage);
   const [variables, setVariables] = useState<Record<string, string>>({});
   // Значения переменных для конкретного бизнеса (что именно будет подставляться в промпты)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
@@ -49,6 +63,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       setAgentType(business.ai_agent_type || 'booking');
       setTone(business.ai_agent_tone || 'professional');
       setSelectedAgentId(business.ai_agent_id || '');
+      // Язык агента: из бизнеса или язык интерфейса по умолчанию
+      setAgentLanguage(business.ai_agent_language || interfaceLanguage);
       
        // Инициализируем значения переменных из ограничений бизнеса (ai_agent_restrictions)
       if (business.ai_agent_restrictions) {
@@ -73,9 +89,12 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       if (business.ai_agent_id) {
         loadAgentVariables(business.ai_agent_id);
       }
+    } else {
+      // Если бизнес не загружен, используем язык интерфейса
+      setAgentLanguage(interfaceLanguage);
     }
     loadAvailableAgents();
-  }, [business]);
+  }, [business, interfaceLanguage]);
 
   const loadAvailableAgents = async () => {
     try {
@@ -180,6 +199,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           ai_agent_type: agentType,
           ai_agent_id: selectedAgentId || null,
           ai_agent_tone: tone,
+          ai_agent_language: agentLanguage,
           // Сохраняем значения переменных как JSON
           ai_agent_restrictions: JSON.stringify(variableValues || {})
         })
@@ -297,6 +317,25 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
               </Select>
               <p className="text-xs text-gray-500">
                 Выберите стиль общения ИИ агента с клиентами
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-agent-language">Язык агента</Label>
+              <Select value={agentLanguage} onValueChange={setAgentLanguage}>
+                <SelectTrigger id="ai-agent-language">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                Язык, на котором ИИ агент будет писать свои мысли и действия. По умолчанию используется язык интерфейса ({LANGUAGE_OPTIONS.find(l => l.value === interfaceLanguage)?.label || interfaceLanguage})
               </p>
             </div>
 

@@ -245,6 +245,10 @@ def update_business_profile():
             update_fields.append('ai_agent_restrictions = ?')
             update_values.append(data['ai_agent_restrictions'])
         
+        if 'ai_agent_language' in data:
+            update_fields.append('ai_agent_language = ?')
+            update_values.append(data['ai_agent_language'])
+        
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
         update_values.append(business_id)
         

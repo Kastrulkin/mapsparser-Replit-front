@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 type ServiceLite = { id: string; name: string };
 
@@ -14,6 +16,19 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
   const [news, setNews] = useState<any[]>([]);
   const [exampleInput, setExampleInput] = useState('');
   const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
+  const { language: interfaceLanguage } = useLanguage();
+  const [language, setLanguage] = useState<string>(interfaceLanguage);
+
+  const LANGUAGE_OPTIONS = [
+    { value: 'ru', label: 'Русский' },
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Español' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'fr', label: 'Français' },
+    { value: 'it', label: 'Italiano' },
+    { value: 'pt', label: 'Português' },
+    { value: 'zh', label: '中文' },
+  ];
 
   const loadNews = async () => {
     try {
@@ -43,7 +58,7 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
       const res = await fetch(`${window.location.origin}/api/news/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ use_service: useService, service_id: serviceId || undefined, raw_info: rawInfo })
+        body: JSON.stringify({ use_service: useService, service_id: serviceId || undefined, raw_info: rawInfo, language })
       });
       const data = await res.json();
       if (data.success) {
@@ -152,6 +167,26 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
       <div className="mb-3">
         <label className="block text-sm text-gray-600 mb-1">Неотформатированная информация (необязательно)</label>
         <Textarea rows={3} value={rawInfo} onChange={(e)=> setRawInfo(e.target.value)} placeholder="Например: Новый сотрудник, акция, праздник и т.п." />
+      </div>
+
+      <div className="mb-3">
+        <label className="block text-sm text-gray-600 mb-1">Язык новости</label>
+        <Select value={language} onValueChange={setLanguage}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-gray-500 mt-1">
+          Язык, на котором будет сгенерирована новость. По умолчанию — язык интерфейса (
+          {LANGUAGE_OPTIONS.find((l) => l.value === interfaceLanguage)?.label || interfaceLanguage}).
+        </p>
       </div>
       <Button onClick={generate} disabled={loading}>{loading ? 'Генерация…' : 'Сгенерировать новость'}</Button>
 

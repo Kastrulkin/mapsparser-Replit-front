@@ -37,13 +37,27 @@ def get_ai_agents():
         rows = cursor.fetchall()
         agents = []
         for row in rows:
+            workflow_raw = row[5] or ''
+            # Пытаемся определить, это JSON или текст
+            workflow_value = workflow_raw
+            if workflow_raw:
+                try:
+                    # Если это валидный JSON массив, парсим его
+                    parsed = json.loads(workflow_raw)
+                    if isinstance(parsed, list):
+                        workflow_value = parsed
+                    else:
+                        workflow_value = workflow_raw  # Оставляем как текст
+                except:
+                    workflow_value = workflow_raw  # Оставляем как текст
+            
             agents.append({
                 'id': row[0],
                 'name': row[1],
                 'type': row[2],
                 'description': row[3],
                 'personality': row[4] or '',
-                'workflow': json.loads(row[5]) if row[5] else [],
+                'workflow': workflow_value,
                 'task': row[6] or '',
                 'identity': row[7] or '',
                 'speech_style': row[8] or '',
@@ -76,7 +90,13 @@ def create_ai_agent():
         agent_type = data.get('type', '').strip()
         description = data.get('description', '').strip()
         personality = data.get('personality', '').strip()
-        workflow = data.get('workflow', [])
+        workflow = data.get('workflow', '')
+        # Если workflow - это строка, сохраняем как есть, иначе конвертируем в JSON
+        if isinstance(workflow, str):
+            workflow_json = workflow
+        else:
+            workflow_json = json.dumps(workflow, ensure_ascii=False) if workflow else ''
+        
         task = data.get('task', '').strip()
         identity = data.get('identity', '').strip()
         speech_style = data.get('speech_style', '').strip()
@@ -100,7 +120,7 @@ def create_ai_agent():
             agent_type,
             description,
             personality,
-            json.dumps(workflow, ensure_ascii=False),
+            workflow_json,
             task,
             identity,
             speech_style,
@@ -161,7 +181,11 @@ def update_ai_agent(agent_id: str):
         
         if 'workflow' in data:
             update_fields.append('workflow_json = ?')
-            update_values.append(json.dumps(data['workflow'], ensure_ascii=False))
+            # Если workflow - это строка, сохраняем как есть, иначе конвертируем в JSON
+            if isinstance(data['workflow'], str):
+                update_values.append(data['workflow'])
+            else:
+                update_values.append(json.dumps(data['workflow'], ensure_ascii=False))
         
         if 'task' in data:
             update_fields.append('task = ?')

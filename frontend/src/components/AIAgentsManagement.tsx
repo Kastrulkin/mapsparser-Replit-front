@@ -168,7 +168,7 @@ export const AIAgentsManagement = () => {
           type: editingAgent.type,
           description: editingAgent.description,
           personality: editingAgent.personality || '',
-          workflow: editingAgent.workflow || [],
+          workflow: typeof editingAgent.workflow === 'string' ? editingAgent.workflow : (editingAgent.workflow || ''),
           task: editingAgent.task || '',
           identity: editingAgent.identity || '',
           speech_style: editingAgent.speech_style || '',
@@ -567,174 +567,33 @@ export const AIAgentsManagement = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Workflow States (Стейты workflow)</Label>
-                  <Button variant="outline" size="sm" onClick={addWorkflowState}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить стейт
-                  </Button>
-                </div>
-                <div className="space-y-4 border rounded-lg p-4">
-                  {(editingAgent.workflow || []).map((state, index) => (
-                    <div key={index} className="border-b pb-4 last:border-b-0 last:pb-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Label className="font-semibold">{state.name}</Label>
-                          {state.init_state && (
-                            <Badge variant="outline" className="text-xs">Начальный</Badge>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeWorkflowState(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Name</Label>
-                            <Input
-                              value={state.name || ''}
-                              onChange={(e) => updateWorkflowState(index, 'name', e.target.value)}
-                              placeholder="HandleIncompleteBasicInfoState"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Process Name</Label>
-                            <Input
-                              value={state.process_name || ''}
-                              onChange={(e) => updateWorkflowState(index, 'process_name', e.target.value)}
-                              placeholder="CollectionArrivalsInfoProcess"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={state.init_state || false}
-                            onChange={(e) => {
-                              // Снимаем init_state с других стейтов
-                              const newWorkflow = [...(editingAgent.workflow || [])];
-                              if (e.target.checked) {
-                                newWorkflow.forEach((s, i) => {
-                                  if (i !== index) s.init_state = false;
-                                });
-                              }
-                              updateWorkflowState(index, 'init_state', e.target.checked);
-                            }}
-                          />
-                          <Label className="text-xs">Начальный стейт (init_state)</Label>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Description</Label>
-                          <Textarea
-                            value={state.description || ''}
-                            onChange={(e) => updateWorkflowState(index, 'description', e.target.value)}
-                            placeholder="Politely ask the passenger to provide missing information..."
-                            rows={4}
-                          />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <Label className="text-xs">State Scenarios (Переходы)</Label>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => addScenario(index)}
-                              className="h-6 text-xs"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Добавить
-                            </Button>
-                          </div>
-                          <div className="space-y-2 border rounded p-2">
-                            {(state.state_scenarios || []).map((scenario, sIdx) => (
-                              <div key={sIdx} className="flex gap-2 items-start">
-                                <div className="flex-1 space-y-1">
-                                  <Input
-                                    placeholder="Transition Name"
-                                    value={scenario.transition_name || ''}
-                                    onChange={(e) => {
-                                      const newWorkflow = [...(editingAgent.workflow || [])];
-                                      if (newWorkflow[index].state_scenarios) {
-                                        newWorkflow[index].state_scenarios![sIdx].transition_name = e.target.value;
-                                        setEditingAgent({ ...editingAgent, workflow: newWorkflow });
-                                      }
-                                    }}
-                                    className="text-xs"
-                                  />
-                                  <Input
-                                    placeholder="Next State"
-                                    value={scenario.next_state || ''}
-                                    onChange={(e) => {
-                                      const newWorkflow = [...(editingAgent.workflow || [])];
-                                      if (newWorkflow[index].state_scenarios) {
-                                        newWorkflow[index].state_scenarios![sIdx].next_state = e.target.value;
-                                        setEditingAgent({ ...editingAgent, workflow: newWorkflow });
-                                      }
-                                    }}
-                                    className="text-xs"
-                                  />
-                                  <Textarea
-                                    placeholder="Description"
-                                    value={scenario.description || ''}
-                                    onChange={(e) => {
-                                      const newWorkflow = [...(editingAgent.workflow || [])];
-                                      if (newWorkflow[index].state_scenarios) {
-                                        newWorkflow[index].state_scenarios![sIdx].description = e.target.value;
-                                        setEditingAgent({ ...editingAgent, workflow: newWorkflow });
-                                      }
-                                    }}
-                                    rows={2}
-                                    className="text-xs"
-                                  />
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeScenario(index, sIdx)}
-                                  className="h-6"
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                            {(!state.state_scenarios || state.state_scenarios.length === 0) && (
-                              <p className="text-xs text-gray-500 text-center py-2">
-                                Нет переходов. Нажмите "Добавить" для создания.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Available Tools</Label>
-                          <Textarea
-                            value={JSON.stringify(state.available_tools || {}, null, 2)}
-                            onChange={(e) => {
-                              try {
-                                const tools = JSON.parse(e.target.value);
-                                updateWorkflowState(index, 'available_tools', tools);
-                              } catch {
-                                // Игнорируем ошибки парсинга
-                              }
-                            }}
-                            placeholder='{"SingleStatefulOutboundAgent": ["ForwardSpeech", "CheckFlightDetails"]}'
-                            rows={3}
-                            className="font-mono text-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(!editingAgent.workflow || editingAgent.workflow.length === 0) && (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      Нет стейтов. Нажмите "Добавить стейт" для создания.
-                    </p>
-                  )}
-                </div>
+                <Label htmlFor="agent-workflow">Workflow (Воркфлоу)</Label>
+                <Textarea
+                  id="agent-workflow"
+                  value={typeof editingAgent.workflow === 'string' ? editingAgent.workflow : (editingAgent.workflow ? JSON.stringify(editingAgent.workflow, null, 2) : '')}
+                  onChange={(e) => setEditingAgent({ ...editingAgent, workflow: e.target.value })}
+                  placeholder={`- name: GreetingState
+  kind: StateConfig
+  process_name: MarketingEngagementProcess
+  init_state: true
+  description: >
+    Warmly greet the client and introduce yourself as the marketing assistant for {salon_name}.
+    Create a friendly first impression.
+  state_scenarios:
+    - next_state: PromotionState
+      transition_name: GreetingComplete
+      description: The client has been greeted and the conversation is ready to proceed.
+  available_tools:
+    SingleStatefulOutboundAgent:
+      - ForwardSpeech
+      - notify_operator
+      - create_booking`}
+                  rows={20}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Определите workflow агента в формате YAML или текста. Доступные tools: <strong>notify_operator</strong> (вызов оператора), <strong>create_booking</strong> (создание бронирования), <strong>send_message</strong> (отправка сообщения клиенту), <strong>get_client_info</strong> (получение информации о клиенте), <strong>get_services</strong> (получение списка услуг), <strong>check_availability</strong> (проверка доступного времени).
+                </p>
               </div>
 
               <div>

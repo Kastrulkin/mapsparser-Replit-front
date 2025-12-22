@@ -4,6 +4,7 @@
 """
 import os
 import json
+import re
 import uuid
 from datetime import datetime
 from database_manager import DatabaseManager
@@ -16,7 +17,7 @@ def get_agent_config(business_id: str) -> dict:
         cursor = db.conn.cursor()
         # Получаем тип агента и ID агента из бизнеса
         cursor.execute("""
-            SELECT ai_agent_type, ai_agent_id, ai_agent_tone, ai_agent_restrictions
+            SELECT ai_agent_type, ai_agent_id, ai_agent_tone, ai_agent_restrictions, ai_agent_language
             FROM Businesses
             WHERE id = ?
         """, (business_id,))
@@ -29,6 +30,7 @@ def get_agent_config(business_id: str) -> dict:
         agent_id = row[1]
         tone = row[2] or 'professional'
         restrictions_raw = row[3] or '{}'
+        language = row[4] or 'ru'  # По умолчанию русский
         try:
             business_restrictions = json.loads(restrictions_raw) if restrictions_raw else {}
         except Exception:
@@ -37,25 +39,43 @@ def get_agent_config(business_id: str) -> dict:
         # Если указан конкретный агент, получаем его конфигурацию
         if agent_id:
             cursor.execute("""
-                SELECT states_json, restrictions_json, personality
+                SELECT workflow_json, task, identity, speech_style, restrictions_json
                 FROM AIAgents
                 WHERE id = ? AND is_active = 1
             """, (agent_id,))
             agent_row = cursor.fetchone()
             
             if agent_row:
-                agent_restrictions = json.loads(agent_row[1]) if agent_row[1] else {}
+                agent_restrictions = json.loads(agent_row[4]) if agent_row[4] else {}
                 merged_restrictions = {**agent_restrictions, **business_restrictions}
+                
+                # Пытаемся определить, это JSON или текст
+                workflow_raw = agent_row[0] or ''
+                workflow_value = workflow_raw
+                if workflow_raw:
+                    try:
+                        # Если это валидный JSON массив, парсим его
+                        parsed = json.loads(workflow_raw)
+                        if isinstance(parsed, list):
+                            workflow_value = parsed
+                        else:
+                            workflow_value = workflow_raw  # Оставляем как текст
+                    except:
+                        workflow_value = workflow_raw  # Оставляем как текст
+                
                 return {
-                    'states': json.loads(agent_row[0]) if agent_row[0] else {},
+                    'workflow': workflow_value,
+                    'task': agent_row[1] or '',
+                    'identity': agent_row[2] or '',
+                    'speech_style': agent_row[3] or '',
                     'restrictions': merged_restrictions,
-                    'personality': agent_row[2] or '',
-                    'tone': tone
+                    'tone': tone,
+                    'language': language
                 }
         
         # Иначе получаем дефолтного агента по типу
         cursor.execute("""
-            SELECT states_json, restrictions_json, personality
+            SELECT workflow_json, task, identity, speech_style, restrictions_json
             FROM AIAgents
             WHERE type = ? AND is_active = 1
             ORDER BY created_at DESC
@@ -64,21 +84,42 @@ def get_agent_config(business_id: str) -> dict:
         agent_row = cursor.fetchone()
         
         if agent_row:
-            agent_restrictions = json.loads(agent_row[1]) if agent_row[1] else {}
+            agent_restrictions = json.loads(agent_row[4]) if agent_row[4] else {}
             merged_restrictions = {**agent_restrictions, **business_restrictions}
+            
+            # Пытаемся определить, это JSON или текст
+            workflow_raw = agent_row[0] or ''
+            workflow_value = workflow_raw
+            if workflow_raw:
+                try:
+                    # Если это валидный JSON массив, парсим его
+                    parsed = json.loads(workflow_raw)
+                    if isinstance(parsed, list):
+                        workflow_value = parsed
+                    else:
+                        workflow_value = workflow_raw  # Оставляем как текст
+                except:
+                    workflow_value = workflow_raw  # Оставляем как текст
+            
             return {
-                'states': json.loads(agent_row[0]) if agent_row[0] else {},
+                'workflow': workflow_value,
+                'task': agent_row[1] or '',
+                'identity': agent_row[2] or '',
+                'speech_style': agent_row[3] or '',
                 'restrictions': merged_restrictions,
-                'personality': agent_row[2] or '',
-                'tone': tone
+                'tone': tone,
+                'language': language
             }
         
         # Если агент не найден, возвращаем конфигурацию только с бизнес-ограничениями
         return {
-            'states': {},
+            'workflow': [],
+            'task': '',
+            'identity': '',
+            'speech_style': '',
             'restrictions': business_restrictions,
-            'personality': '',
-            'tone': tone
+            'tone': tone,
+            'language': language
         }
     finally:
         db.close()
@@ -114,7 +155,7 @@ def get_business_info(business_id: str) -> dict:
     try:
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT name, address, city, phone, email, ai_agent_type, ai_agent_tone, ai_agent_restrictions
+            SELECT name, address, city, phone, email, ai_agent_type, ai_agent_tone, ai_agent_restrictions, ai_agent_language
             FROM Businesses
             WHERE id = ?
         """, (business_id,))
@@ -136,8 +177,9 @@ def get_business_info(business_id: str) -> dict:
             'phone': row[3],
             'email': row[4],
             'ai_agent_type': row[5] or 'booking',
-            'tone': row[5] or 'professional',
-            'restrictions': restrictions.get('text', '')
+            'tone': row[6] or 'professional',
+            'restrictions': restrictions.get('text', ''),
+            'language': row[8] or 'ru'  # По умолчанию русский
         }
     finally:
         db.close()
@@ -212,26 +254,36 @@ def update_conversation_state(conversation_id: str, new_state: str):
         db.close()
 
 def build_prompt(business_info: dict, services: list, current_state: str, message: str, conversation_history: list, agent_config: dict) -> str:
-    """Построить промпт для ИИ на основе workflow структуры"""
+    """Построить промпт для ИИ на основе workflow (текст или структура)"""
     
-    # Получаем workflow и текущий стейт
+    # Получаем workflow (может быть строкой или структурой)
     workflow = agent_config.get('workflow', [])
-    current_state_config = None
-    for state in workflow:
-        if state.get('name') == current_state:
-            current_state_config = state
-            break
+    workflow_text = None
+    workflow_structure = None
     
-    # Если стейт не найден, используем первый init_state или первый стейт
-    if not current_state_config:
+    if isinstance(workflow, str):
+        # Workflow как текст - используем напрямую
+        workflow_text = workflow
+    elif isinstance(workflow, list) and len(workflow) > 0:
+        # Workflow как структура - ищем текущий стейт
+        workflow_structure = workflow
+        current_state_config = None
         for state in workflow:
-            if state.get('init_state'):
+            if isinstance(state, dict) and state.get('name') == current_state:
                 current_state_config = state
-                current_state = state.get('name', current_state)
                 break
-        if not current_state_config and workflow:
-            current_state_config = workflow[0]
-            current_state = current_state_config.get('name', current_state)
+        
+        # Если стейт не найден, используем первый init_state или первый стейт
+        if not current_state_config:
+            for state in workflow:
+                if isinstance(state, dict) and state.get('init_state'):
+                    current_state_config = state
+                    current_state = state.get('name', current_state)
+                    break
+            if not current_state_config and workflow:
+                current_state_config = workflow[0] if isinstance(workflow[0], dict) else None
+                if current_state_config:
+                    current_state = current_state_config.get('name', current_state)
     
     # Строим промпт
     prompt = ""
@@ -248,8 +300,60 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     
     # Speech style (стиль речи)
     speech_style = agent_config.get('speech_style', '')
+    language = agent_config.get('language', 'ru')
+    
+    # Маппинг кодов языков на названия
+    language_names = {
+        'ru': 'Russian',
+        'en': 'English',
+        'es': 'Spanish',
+        'de': 'German',
+        'fr': 'French',
+        'it': 'Italian',
+        'pt': 'Portuguese',
+        'zh': 'Chinese'
+    }
+    language_name = language_names.get(language, 'Russian')
+    
     if speech_style:
-        prompt += f"##### **Стиль речи:**\n{speech_style}\n\n"
+        # Заменяем упоминания языка в speech_style на выбранный язык
+        speech_style_modified = re.sub(
+            r'in\s+(Russian|English|Spanish|German|French|Italian|Portuguese|Chinese)',
+            f'in {language_name}',
+            speech_style,
+            flags=re.IGNORECASE
+        )
+        speech_style_modified = re.sub(
+            r'Write\s+your\s+thoughts\s+and\s+actions\s+in\s+(Russian|English|Spanish|German|French|Italian|Portuguese|Chinese)',
+            f'Write your thoughts and actions in {language_name}',
+            speech_style_modified,
+            flags=re.IGNORECASE
+        )
+        prompt += f"##### **Стиль речи:**\n{speech_style_modified}\n\n"
+    
+    # Workflow (если это текст, вставляем целиком)
+    if workflow_text:
+        prompt += f"##### **Workflow:**\n{workflow_text}\n\n"
+    elif workflow_structure and current_state_config:
+        # Если workflow - структура, используем старую логику
+        prompt += f"##### **Текущий стейт:** {current_state_config.get('name', current_state)}\n"
+        description = current_state_config.get('description', '')
+        if description:
+            prompt += f"{description}\n\n"
+        
+        scenarios = current_state_config.get('state_scenarios', [])
+        if scenarios:
+            prompt += f"##### **Возможные переходы:**\n"
+            for scenario in scenarios:
+                prompt += f"- {scenario.get('transition_name', '')}: {scenario.get('description', '')} → {scenario.get('next_state', '')}\n"
+            prompt += "\n"
+        
+        tools = current_state_config.get('available_tools', {})
+        if tools:
+            prompt += f"##### **Доступные инструменты:**\n"
+            for tool_type, tool_list in tools.items():
+                prompt += f"- {tool_type}: {', '.join(tool_list)}\n"
+            prompt += "\n"
     
     # Информация о бизнесе
     prompt += f"##### **Информация о бизнесе:**\n"
@@ -276,28 +380,20 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     if restrictions.get('text'):
         prompt += f"##### **Ограничения:**\n{restrictions['text']}\n\n"
     
-    # Текущий стейт
-    if current_state_config:
-        prompt += f"##### **Текущий стейт:** {current_state_config.get('name', current_state)}\n"
-        description = current_state_config.get('description', '')
-        if description:
-            prompt += f"{description}\n\n"
-        
-        # Доступные переходы
-        scenarios = current_state_config.get('state_scenarios', [])
-        if scenarios:
-            prompt += f"##### **Возможные переходы:**\n"
-            for scenario in scenarios:
-                prompt += f"- {scenario.get('transition_name', '')}: {scenario.get('description', '')} → {scenario.get('next_state', '')}\n"
-            prompt += "\n"
-        
-        # Доступные инструменты
-        tools = current_state_config.get('available_tools', {})
-        if tools:
-            prompt += f"##### **Доступные инструменты:**\n"
-            for tool_type, tool_list in tools.items():
-                prompt += f"- {tool_type}: {', '.join(tool_list)}\n"
-            prompt += "\n"
+    # Доступные tools (всегда добавляем список доступных tools)
+    prompt += f"##### **Доступные инструменты (tools):**\n"
+    prompt += "- notify_operator: Уведомить оператора о необходимости его участия. Используй, когда нужна помощь человека.\n"
+    prompt += "- create_booking: Создать бронирование/заказ. Параметры: service_id, service_name, booking_date, booking_time, notes.\n"
+    prompt += "- send_message: Отправить сообщение клиенту через WhatsApp/Telegram. Параметры: message, channel (whatsapp/telegram).\n"
+    prompt += "- get_client_info: Получить информацию о клиенте (история, бронирования).\n"
+    prompt += "- get_services: Получить список услуг бизнеса.\n"
+    prompt += "- check_availability: Проверить доступное время для записи. Параметры: date (YYYY-MM-DD), service_duration (минуты).\n"
+    prompt += "\n"
+    prompt += "**Важно:** Если тебе нужно использовать tool, укажи это в ответе в формате:\n"
+    prompt += "```json\n"
+    prompt += "{\"tool\": \"tool_name\", \"params\": {\"param1\": \"value1\", \"param2\": \"value2\"}}\n"
+    prompt += "```\n"
+    prompt += "После использования tool, продолжай общение с клиентом.\n\n"
     
     # История разговора
     prompt += f"##### **История разговора:**\n"
@@ -314,8 +410,9 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     prompt += f"##### **Сообщение клиента:**\n{message}\n\n"
     
     # Инструкция
-    prompt += "Ответь на сообщение клиента, учитывая текущий стейт, задачи, ограничения и историю разговора.\n"
+    prompt += "Ответь на сообщение клиента, учитывая workflow, задачи, ограничения и историю разговора.\n"
     prompt += "Следуй стилю речи, указанному выше.\n"
+    prompt += "Если нужно использовать tool, укажи это в формате JSON, как описано выше.\n"
     
     return prompt
 
@@ -345,15 +442,18 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         
         # Определяем начальный стейт из конфигурации агента
         workflow = agent_config.get('workflow', [])
-        default_state = None
-        for state in workflow:
-            if state.get('init_state'):
-                default_state = state.get('name')
-                break
-        if not default_state and workflow:
-            default_state = workflow[0].get('name', 'greeting')
-        if not default_state:
-            default_state = 'greeting'
+        default_state = 'greeting'  # По умолчанию
+        
+        # Если workflow - это структура (список), ищем init_state
+        if isinstance(workflow, list) and len(workflow) > 0:
+            for state in workflow:
+                if isinstance(state, dict) and state.get('init_state'):
+                    default_state = state.get('name', 'greeting')
+                    break
+            if default_state == 'greeting' and workflow:
+                first_state = workflow[0]
+                if isinstance(first_state, dict):
+                    default_state = first_state.get('name', 'greeting')
         
         current_state = row[0] if row and row[0] else default_state
         conversation_history = json.loads(row[1]) if row and row[1] else []
@@ -387,9 +487,58 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
             print(f"❌ Ошибка генерации ответа через GigaChat: {e}")
             response_text = "Извините, произошла ошибка. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
         
-        # Сохраняем ответ агента
-        save_message(conversation_id, 'text', response_text, 'agent')
-        conversation_history.append({'sender': 'agent', 'content': response_text, 'timestamp': datetime.now().isoformat()})
+        # Парсим и выполняем tools из ответа
+        from ai_agent_tools import execute_tool
+        tools_executed = []
+        final_response_text = response_text
+        
+        # Ищем JSON блоки с вызовами tools
+        import re
+        tool_pattern = r'```json\s*\{\s*"tool"\s*:\s*"([^"]+)"\s*,\s*"params"\s*:\s*(\{[^}]+\})\s*\}\s*```'
+        tool_matches = re.finditer(tool_pattern, response_text, re.IGNORECASE | re.DOTALL)
+        
+        for match in tool_matches:
+            tool_name = match.group(1)
+            params_json = match.group(2)
+            
+            try:
+                params = json.loads(params_json)
+                # Выполняем tool
+                tool_result = execute_tool(
+                    tool_name=tool_name,
+                    business_id=business_id,
+                    client_phone=client_phone,
+                    client_name=client_name,
+                    conversation_id=conversation_id,
+                    **params
+                )
+                
+                tools_executed.append({
+                    'tool': tool_name,
+                    'params': params,
+                    'result': tool_result
+                })
+                
+                # Удаляем JSON блок из ответа
+                final_response_text = final_response_text.replace(match.group(0), '')
+                
+                print(f"✅ Tool {tool_name} выполнен: {tool_result}")
+                
+            except Exception as e:
+                print(f"❌ Ошибка выполнения tool {tool_name}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Очищаем лишние пробелы и переносы строк
+        final_response_text = re.sub(r'\n\s*\n\s*\n', '\n\n', final_response_text).strip()
+        
+        # Сохраняем ответ агента (без JSON блоков с tools)
+        save_message(conversation_id, 'text', final_response_text, 'agent')
+        conversation_history.append({'sender': 'agent', 'content': final_response_text, 'timestamp': datetime.now().isoformat()})
+        
+        # Сохраняем информацию о выполненных tools
+        if tools_executed:
+            save_message(conversation_id, 'tool', json.dumps(tools_executed, ensure_ascii=False), 'agent')
         
         # Обновляем историю и стейт (простая логика определения следующего стейта)
         # В будущем можно использовать ИИ для определения следующего стейта
@@ -410,9 +559,10 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         
         return {
             'success': True,
-            'response': response_text,
+            'response': final_response_text,
             'conversation_id': conversation_id,
-            'state': next_state
+            'state': next_state,
+            'tools_executed': tools_executed
         }
         
     except Exception as e:

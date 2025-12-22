@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 
@@ -24,6 +26,19 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
   const [saving, setSaving] = useState(false);
   const [exampleInput, setExampleInput] = useState('');
   const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
+  const { language: interfaceLanguage } = useLanguage();
+  const [language, setLanguage] = useState<string>(interfaceLanguage);
+
+  const LANGUAGE_OPTIONS = [
+    { value: 'ru', label: 'Русский' },
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Español' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'fr', label: 'Français' },
+    { value: 'it', label: 'Italiano' },
+    { value: 'pt', label: 'Português' },
+    { value: 'zh', label: '中文' },
+  ];
 
   const loadExamples = async () => {
     try {
@@ -72,7 +87,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
       const res = await fetch(`${window.location.origin}/api/reviews/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ review, tone, business_name: businessName || '' })
+        body: JSON.stringify({ review, tone, business_name: businessName || '', language })
       });
       const data = await res.json();
       if (!res.ok || data.error){ setError(data.error || 'Ошибка генерации'); }
@@ -137,13 +152,39 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900">Ответы на отзывы</h3>
       <p className="text-sm text-gray-600">Вставьте отзыв клиента, выберите тон и сгенерируйте краткий корректный ответ. Без “воды” и лишних рассуждений.</p>
-      <div className="flex flex-wrap gap-2">
-        {tones.map(t => (
-          <button key={t.key} type="button" onClick={()=> setTone(t.key)}
-            className={`text-xs px-3 py-1 rounded-full border ${tone===t.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700'}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {tones.map(t => (
+              <button key={t.key} type="button" onClick={()=> setTone(t.key)}
+                className={`text-xs px-3 py-1 rounded-full border ${tone===t.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Тон, в котором будет написан ответ.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm text-gray-700 mb-1">Язык ответа</label>
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">
+            Язык, на котором будет сгенерирован ответ. По умолчанию — язык интерфейса (
+            {LANGUAGE_OPTIONS.find((l) => l.value === interfaceLanguage)?.label || interfaceLanguage}).
+          </p>
+        </div>
       </div>
 
       {/* Примеры ответов (до 5) */}
