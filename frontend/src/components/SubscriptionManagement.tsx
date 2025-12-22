@@ -122,9 +122,9 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
       const data = await response.json();
 
-      if (response.ok && data.checkout_url) {
+      if (response.ok && data.url) {
         // Перенаправляем на Stripe Checkout
-        window.location.href = data.checkout_url;
+        window.location.href = data.url;
       } else {
         toast({
           title: 'Ошибка',

@@ -36,22 +36,37 @@ TIERS = {
         'features': ['chatgpt', 'personal_cabinet']
     },
     'basic': {
-        'price_id': None,
+        # Starter - prod_TeNh5zujNnytAG
+        'price_id': 'price_1Sh4wZFtze6qZAEfkLuuUqVV',
         'amount': 500,  # $5.00 в центах
-        'name': 'Basic',
-        'features': ['chatgpt']
+        'name': 'STARTER',
+        'features': [
+            'Подключение к профессиональной сети BeautyBot',
+            'ChatGPT для лидогенерации',
+        ]
     },
     'pro': {
-        'price_id': None,
+        # Professional - prod_TeNjDaAx8sLlRc
+        'price_id': 'price_1Sh4xqFtze6qZAEfFy3DvFXJ',
         'amount': 6500,  # $65.00 в центах
-        'name': 'Pro',
-        'features': ['chatgpt', 'personal_cabinet', 'crm']
+        'name': 'PROFESSIONAL',
+        'features': [
+            'Всё из STARTER',
+            'Полный доступ к личному кабинету',
+            'Управление клиентами и автоматизация переписки',
+            'Интеграция с CRM',
+        ]
     },
     'enterprise': {
-        'price_id': None,
+        # CONCIERGE - prod_TeNl40dsmBXYVM
+        'price_id': 'price_1Sh4zyFtze6qZAEftqNTRZoD',
         'amount': 31000,  # $310.00 в центах
-        'name': 'Enterprise',
-        'features': ['all', 'human_support']
+        'name': 'CONCIERGE',
+        'features': [
+            'Мы делаем всё за вас',
+            'Персональная настройка и приоритетная поддержка',
+            'Стратегия развития бизнеса',
+        ]
     }
 }
 
@@ -137,35 +152,11 @@ def create_stripe_checkout():
             db.conn.commit()
             db.close()
         
-        # Создаём цену, если её ещё нет
+        # Берём готовую цену из конфигурации (мы используем заранее созданные Price ID)
         tier_info = TIERS[tier]
-        price_amount = tier_info['amount']
-        
-        # Создаём продукт и цену в Stripe
-        try:
-            # Ищем существующий продукт
-            products = stripe.Product.list(limit=100)
-            product = None
-            for p in products:
-                if p.name == 'BeautyBot Subscription':
-                    product = p
-                    break
-            
-            if not product:
-                product = stripe.Product.create(name='BeautyBot Subscription')
-            
-            # Создаём цену для этого тарифа
-            price = stripe.Price.create(
-                unit_amount=price_amount,
-                currency='usd',
-                recurring={'interval': 'month'},
-                product=product.id,
-                metadata={'tier': tier}
-            )
-            
-        except Exception as e:
-            print(f"❌ Ошибка создания цены в Stripe: {e}")
-            return jsonify({"error": f"Ошибка создания цены: {str(e)}"}), 500
+        price_id = tier_info.get('price_id')
+        if not price_id:
+            return jsonify({"error": f\"Для тарифа '{tier}' не настроен price_id\"}), 500
         
         # Создаём Checkout Session
         try:
@@ -173,12 +164,12 @@ def create_stripe_checkout():
                 customer=customer.id,
                 payment_method_types=['card'],
                 line_items=[{
-                    'price': price.id,
+                    'price': price_id,
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=f"{os.getenv('API_BASE_URL', 'http://localhost:8000')}/api/stripe/success?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{os.getenv('API_BASE_URL', 'http://localhost:8000')}/api/stripe/cancel",
+                success_url=f"{os.getenv('FRONTEND_URL', 'https://beautybot.pro')}/dashboard?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{os.getenv('FRONTEND_URL', 'https://beautybot.pro')}/dashboard?payment=cancelled",
                 metadata={
                     'business_id': business_id,
                     'tier': tier
