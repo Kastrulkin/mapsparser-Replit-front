@@ -30,10 +30,12 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 
-# Автоматическая загрузка переменных окружения из .env
+# Автоматическая загрузка переменных окружения из .env / .env.test
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Если FLASK_ENV=test|testing — используем .env.test, иначе обычный .env
+    env_file = ".env.test" if os.getenv("FLASK_ENV", "").lower() in ("test", "testing") else ".env"
+    load_dotenv(env_file)
 except ImportError:
     print('Внимание: для автоматической загрузки .env установите пакет python-dotenv')
 
