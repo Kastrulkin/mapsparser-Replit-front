@@ -156,7 +156,7 @@ def create_stripe_checkout():
         tier_info = TIERS[tier]
         price_id = tier_info.get('price_id')
         if not price_id:
-            return jsonify({"error": f\"Для тарифа '{tier}' не настроен price_id\"}), 500
+            return jsonify({"error": f"Для тарифа '{tier}' не настроен price_id"}), 500
         
         # Создаём Checkout Session
         try:
