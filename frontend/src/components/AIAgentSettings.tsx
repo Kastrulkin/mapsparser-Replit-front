@@ -98,7 +98,10 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const loadAvailableAgents = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const { newAuth } = await import('@/lib/auth_new');
+      const token = await newAuth.getToken();
+      if (!token) return;
+      
       const response = await fetch('/api/admin/ai-agents', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -119,7 +122,10 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const loadAgentVariables = async (agentId: string) => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const { newAuth } = await import('@/lib/auth_new');
+      const token = await newAuth.getToken();
+      if (!token) return;
+      
       const response = await fetch(`/api/admin/ai-agents/${agentId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -140,19 +146,18 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const handleAgentTypeChange = (newType: string) => {
     setAgentType(newType);
-    // Находим дефолтного агента для этого типа
+    // При смене типа сбрасываем выбор агента на дефолтный
+    setSelectedAgentId('');
+    // Загружаем переменные дефолтного агента для нового типа, если он есть
     if (Array.isArray(availableAgents) && availableAgents.length > 0) {
       const defaultAgent = availableAgents.find(a => a && a.type === newType && a.is_active);
       if (defaultAgent) {
-        setSelectedAgentId(defaultAgent.id || '');
-        setVariables(defaultAgent.variables && typeof defaultAgent.variables === 'object' ? defaultAgent.variables : {});
+        loadAgentVariables(defaultAgent.id);
       } else {
-        setSelectedAgentId('');
         setVariables({});
         setVariableValues({});
       }
     } else {
-      setSelectedAgentId('');
       setVariables({});
       setVariableValues({});
     }
@@ -186,7 +191,17 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('auth_token');
+      const { newAuth } = await import('@/lib/auth_new');
+      const token = await newAuth.getToken();
+      if (!token) {
+        toast({
+          title: 'Ошибка',
+          description: 'Требуется авторизация',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
       const response = await fetch('/api/business/profile', {
         method: 'PUT',
         headers: {
@@ -212,6 +227,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           title: 'Успешно',
           description: 'Настройки ИИ агента сохранены',
         });
+        // Обновляем локальное состояние бизнеса через пропсы
+        // Компонент получит обновленные данные через useEffect при следующем рендере
       } else {
         toast({
           title: 'Ошибка',
@@ -288,7 +305,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                     Использовать дефолтного агента
                   </SelectItem>
                   {availableAgents
-                    .filter(a => a.type === agentType && a.is_active)
+                    .filter(a => a && a.type === agentType && a.is_active)
                     .map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         {agent.name}
@@ -297,7 +314,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
-                Выберите конкретного агента или используйте дефолтного для выбранного типа
+                Выберите конкретного агента для типа "{agentType === 'marketing' ? 'маркетинговый' : 'запись'}" или используйте дефолтного
               </p>
             </div>
 

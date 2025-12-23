@@ -3,7 +3,11 @@
 Stripe интеграция для обработки платежей и подписок
 """
 import os
-import stripe
+try:
+    import stripe
+except ImportError:
+    stripe = None
+    print("⚠️ Модуль stripe не установлен. Функции Stripe будут недоступны.")
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
@@ -22,8 +26,10 @@ STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 
 # Инициализируем Stripe
-if STRIPE_SECRET_KEY:
+if STRIPE_SECRET_KEY and stripe:
     stripe.api_key = STRIPE_SECRET_KEY
+elif STRIPE_SECRET_KEY and not stripe:
+    print("⚠️ STRIPE_SECRET_KEY установлен, но модуль stripe не установлен. Установите: pip install stripe")
 
 stripe_bp = Blueprint('stripe', __name__)
 
@@ -81,6 +87,8 @@ def require_auth():
 
 @stripe_bp.route('/api/stripe/create-checkout', methods=['POST'])
 def create_stripe_checkout():
+    if not stripe:
+        return jsonify({"error": "Stripe не настроен. Установите модуль: pip install stripe"}), 503
     """Создание Stripe Checkout сессии"""
     try:
         if not STRIPE_SECRET_KEY:

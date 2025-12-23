@@ -71,9 +71,20 @@ class GigaChatAnalyzer:
             client_id, client_secret = self._get_current_credentials()
             url = f"{self.base_url}/oauth"
             data = {"scope": "GIGACHAT_API_PERS"}
-            headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+            
+            # Согласно документации GigaChat: нужно закодировать Client ID:Client Secret в base64
+            import base64
+            auth_string = f"{client_id}:{client_secret}"
+            auth_bytes = auth_string.encode('utf-8')
+            auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
+            
+            headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+                "Authorization": f"Basic {auth_base64}"
+            }
             try:
-                response = requests.post(url, data=data, headers=headers, auth=(client_id, client_secret), timeout=30)
+                response = requests.post(url, data=data, headers=headers, timeout=30)
                 if response.status_code in (401, 403):
                     # Неверный/просроченный ключ — пробуем следующий
                     last_error = RuntimeError(f"Auth failed for key index {self.current_index}: {response.status_code}")

@@ -314,7 +314,12 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
         except:
             prompt = "Проанализируй фото и извлеки информацию о транзакции (дата, сумма, услуги, мастер)."
         
-        result = analyze_screenshot_with_gigachat(image_base64, prompt)
+        result = analyze_screenshot_with_gigachat(
+            image_base64, 
+            prompt,
+            business_id=business_id,
+            user_id=db_user_id
+        )
         
         if 'error' in result:
             await update.message.reply_text(f"❌ Ошибка анализа: {result['error']}")
@@ -469,7 +474,13 @@ async def handle_optimize_photo(update: Update, context: ContextTypes.DEFAULT_TY
         except:
             prompt = "Оптимизируй прайс-лист услуг для локального SEO."
         
-        result = analyze_screenshot_with_gigachat(image_base64, prompt, task_type="service_optimization")
+        result = analyze_screenshot_with_gigachat(
+            image_base64, 
+            prompt, 
+            task_type="service_optimization",
+            business_id=business_id,
+            user_id=db_user_id
+        )
         
         if 'error' in result:
             await update.message.reply_text(f"❌ Ошибка анализа: {result['error']}")
@@ -772,7 +783,12 @@ async def handle_optimize_text(update: Update, context: ContextTypes.DEFAULT_TYP
             prompt = "Оптимизируй список услуг для локального SEO."
         
         full_prompt = f"{prompt}\n\nСписок услуг:\n{text}"
-        result = analyze_text_with_gigachat(full_prompt, task_type="service_optimization")
+        result = analyze_text_with_gigachat(
+            full_prompt, 
+            task_type="service_optimization",
+            business_id=business_id,
+            user_id=db_user_id
+        )
         
         if 'error' in result:
             await update.message.reply_text(f"❌ Ошибка анализа: {result['error']}")

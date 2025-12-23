@@ -6,6 +6,7 @@ import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AIAgentsManagement } from '../../components/AIAgentsManagement';
+import { TokenUsageStats } from '../../components/TokenUsageStats';
 
 interface Business {
   id: string;
@@ -87,7 +88,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -362,10 +363,22 @@ export const AdminPage: React.FC = () => {
           <Bot className="h-4 w-4 inline mr-2" />
           ИИ агенты
         </button>
+        <button
+          onClick={() => setActiveTab('tokens')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'tokens'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📊 Статистика токенов
+        </button>
       </div>
 
       {activeTab === 'agents' ? (
         <AIAgentsManagement />
+      ) : activeTab === 'tokens' ? (
+        <TokenUsageStats />
       ) : (
         <>
           <div className="mb-6 flex items-center justify-end">

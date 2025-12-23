@@ -9,6 +9,7 @@ import random
 import base64
 import requests
 from typing import Dict, Any, List, Tuple, Optional
+import json
 from datetime import datetime, timedelta
 from gigachat_config import get_gigachat_config
 
@@ -102,13 +103,17 @@ class GigaChatClient:
                 import uuid
                 rquid = str(uuid.uuid4())
                 
-                # Согласно документации GigaChat: Authorization: Bearer <ключ_авторизации>
-                # client_secret уже является готовым ключом авторизации
+                # Согласно документации GigaChat: нужно закодировать Client ID:Client Secret в base64
+                # и передать в заголовке Authorization как Basic Auth
+                auth_string = f"{client_id}:{client_secret}"
+                auth_bytes = auth_string.encode('utf-8')
+                auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
+                
                 headers = {
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Accept": "application/json",
                     "RqUID": rquid,
-                    "Authorization": f"Bearer {client_secret}"
+                    "Authorization": f"Basic {auth_base64}"
                 }
                 
                 response = requests.post(
@@ -197,7 +202,8 @@ class GigaChatClient:
             print(f"DEBUG: Исключение в upload_file_simple: {str(e)}")
             raise Exception(f"Ошибка загрузки файла: {str(e)}")
 
-    def analyze_screenshot(self, image_base64: str, prompt: str, task_type: str = None) -> str:
+    def analyze_screenshot(self, image_base64: str, prompt: str, task_type: str = None,
+                          business_id: str = None, user_id: str = None) -> str:
         """Анализ скриншота карточки
         
         Args:
@@ -251,6 +257,33 @@ class GigaChatClient:
             result = self._post_with_retry(url, headers, data, max_retries=3, timeout=180)
             print(f"🚨 DEBUG: Полный ответ от GigaChat: {result}")
             
+            # Извлекаем usage из ответа
+            usage_info = {}
+            if "usage" in result:
+                usage_info = {
+                    "prompt_tokens": result["usage"].get("prompt_tokens", 0),
+                    "completion_tokens": result["usage"].get("completion_tokens", 0),
+                    "total_tokens": result["usage"].get("total_tokens", 0)
+                }
+            elif "alternatives" in result and len(result["alternatives"]) > 0:
+                if "usage" in result["alternatives"][0]:
+                    usage_info = {
+                        "prompt_tokens": result["alternatives"][0]["usage"].get("prompt_tokens", 0),
+                        "completion_tokens": result["alternatives"][0]["usage"].get("completion_tokens", 0),
+                        "total_tokens": result["alternatives"][0]["usage"].get("total_tokens", 0)
+                    }
+            
+            # Сохраняем использование токенов в БД
+            if usage_info and (business_id or user_id):
+                self._save_token_usage(
+                    business_id=business_id,
+                    user_id=user_id,
+                    task_type=task_type or "service_optimization",
+                    model=model_config["model"],
+                    usage_info=usage_info,
+                    endpoint="chat/completions"
+                )
+            
             # Исправляем согласно документации GigaChat
             if "alternatives" in result:
                 content = result["alternatives"][0]["message"]["content"]
@@ -295,13 +328,20 @@ class GigaChatClient:
             print(f"🚨 DEBUG: Исключение в analyze_screenshot: {str(e)}")
             raise Exception(f"Ошибка анализа скриншота: {str(e)}")
     
-    def analyze_text(self, prompt: str, task_type: str = None) -> str:
-        """Анализ текста
+    def analyze_text(self, prompt: str, task_type: str = None, functions: List[Dict] = None, 
+                     business_id: str = None, user_id: str = None) -> Tuple[str, Dict[str, Any]]:
+        """Анализ текста с поддержкой Function Calling
         
         Args:
             prompt: Текст промпта
             task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
                       news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+            functions: Список функций для Function Calling (опционально)
+            business_id: ID бизнеса для сохранения статистики токенов (опционально)
+            user_id: ID пользователя для сохранения статистики токенов (опционально)
+        
+        Returns:
+            Tuple[str, Dict]: (content, usage_info) - содержимое ответа и информация об использовании токенов
         """
         try:
             token = self.get_access_token()
@@ -330,28 +370,124 @@ class GigaChatClient:
                 }
             }
             
+            # Добавляем функции для Function Calling, если они указаны
+            if functions:
+                data["functions"] = functions
+                data["parameters"]["function_call"] = "auto"
+            
             result = self._post_with_retry(url, headers, data, max_retries=3)
             
-            # Исправляем согласно документации GigaChat
+            # Извлекаем usage из ответа
+            usage_info = {}
+            if "usage" in result:
+                usage_info = {
+                    "prompt_tokens": result["usage"].get("prompt_tokens", 0),
+                    "completion_tokens": result["usage"].get("completion_tokens", 0),
+                    "total_tokens": result["usage"].get("total_tokens", 0)
+                }
+            elif "alternatives" in result and len(result["alternatives"]) > 0:
+                if "usage" in result["alternatives"][0]:
+                    usage_info = {
+                        "prompt_tokens": result["alternatives"][0]["usage"].get("prompt_tokens", 0),
+                        "completion_tokens": result["alternatives"][0]["usage"].get("completion_tokens", 0),
+                        "total_tokens": result["alternatives"][0]["usage"].get("total_tokens", 0)
+                    }
+            
+            # Сохраняем использование токенов в БД
+            if usage_info and (business_id or user_id):
+                self._save_token_usage(
+                    business_id=business_id,
+                    user_id=user_id,
+                    task_type=task_type or "unknown",
+                    model=model_config["model"],
+                    usage_info=usage_info,
+                    endpoint="chat/completions"
+                )
+            
+            # Извлекаем содержимое ответа
             if "alternatives" in result:
-                content = result["alternatives"][0]["message"]["content"]
+                message = result["alternatives"][0]["message"]
+                content = message.get("content", "")
+                
+                # Проверяем, есть ли вызов функции
+                if "function_call" in message:
+                    function_call = message["function_call"]
+                    # Возвращаем информацию о вызове функции
+                    return json.dumps({
+                        "function_call": {
+                            "name": function_call.get("name"),
+                            "arguments": function_call.get("arguments", {})
+                        }
+                    }), usage_info
             elif "choices" in result:
-                content = result["choices"][0]["message"]["content"]
+                message = result["choices"][0]["message"]
+                content = message.get("content", "")
+                
+                # Проверяем, есть ли вызов функции
+                if "function_call" in message:
+                    function_call = message["function_call"]
+                    return json.dumps({
+                        "function_call": {
+                            "name": function_call.get("name"),
+                            "arguments": function_call.get("arguments", {})
+                        }
+                    }), usage_info
             else:
                 raise Exception("Неизвестная структура ответа от GigaChat")
             
-            # Очищаем JSON от лишних символов
+            # Очищаем JSON от лишних символов (для обратной совместимости)
             import re
-            # Убираем все символы после последней закрывающей скобки }
-            cleaned_content = re.sub(r'}[^}]*$', '}', content)
-            print(f"🚨 DEBUG: Оригинальный ответ: {content[:100]}...")
-            print(f"🚨 DEBUG: Очищенный ответ: {cleaned_content[:100]}...")
+            cleaned_content = re.sub(r'}[^}]*$', '}', content) if content else ""
             
-            return cleaned_content
+            return cleaned_content, usage_info
             
         except Exception as e:
             print(f"❌ Ошибка анализа текста: {e}")
             raise
+    
+    def _save_token_usage(self, business_id: str = None, user_id: str = None, 
+                         task_type: str = "unknown", model: str = "unknown",
+                         usage_info: Dict[str, Any] = None, endpoint: str = "unknown"):
+        """Сохранить информацию об использовании токенов в БД"""
+        try:
+            import uuid
+            from database_manager import DatabaseManager
+            
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            
+            # Проверяем, существует ли таблица
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='TokenUsage'
+            """)
+            if not cursor.fetchone():
+                db.close()
+                return  # Таблица еще не создана
+            
+            usage_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO TokenUsage 
+                (id, business_id, user_id, task_type, model, prompt_tokens, completion_tokens, total_tokens, endpoint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                usage_id,
+                business_id,
+                user_id,
+                task_type,
+                model,
+                usage_info.get("prompt_tokens", 0),
+                usage_info.get("completion_tokens", 0),
+                usage_info.get("total_tokens", 0),
+                endpoint
+            ))
+            
+            db.conn.commit()
+            db.close()
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка сохранения использования токенов: {e}")
+            # Не прерываем выполнение, если не удалось сохранить статистику
     
     def parse_json_response(self, response_text: str) -> Dict[str, Any]:
         """Парсинг JSON ответа с автокоррекцией"""
@@ -490,39 +626,47 @@ def get_gigachat_client() -> GigaChatClient:
         _gigachat_client = GigaChatClient()
     return _gigachat_client
 
-def analyze_screenshot_with_gigachat(image_base64: str, prompt: str, task_type: str = None) -> Dict[str, Any]:
-    """Анализ скриншота через GigaChat
+# Функции-хелперы для обратной совместимости
+def analyze_text_with_gigachat(prompt: str, task_type: str = None, 
+                               business_id: str = None, user_id: str = None) -> str:
+    """
+    Упрощенная функция для анализа текста (обратная совместимость)
+    Возвращает только строку, без информации об использовании токенов
+    
+    Args:
+        prompt: Текст промпта
+        task_type: Тип задачи для выбора модели
+        business_id: ID бизнеса для отслеживания токенов (опционально)
+        user_id: ID пользователя для отслеживания токенов (опционально)
+    """
+    client = get_gigachat_client()
+    content, _ = client.analyze_text(
+        prompt, 
+        task_type=task_type,
+        business_id=business_id,
+        user_id=user_id
+    )
+    return content
+
+def analyze_screenshot_with_gigachat(image_base64: str, prompt: str, task_type: str = None,
+                                     business_id: str = None, user_id: str = None) -> str:
+    """
+    Упрощенная функция для анализа скриншота (обратная совместимость)
+    Возвращает только строку, без информации об использовании токенов
     
     Args:
         image_base64: Base64 изображения
         prompt: Текст промпта
-        task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
-                  news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
+        task_type: Тип задачи для выбора модели
+        business_id: ID бизнеса для отслеживания токенов (опционально)
+        user_id: ID пользователя для отслеживания токенов (опционально)
     """
-    try:
-        client = get_gigachat_client()
-        response = client.analyze_screenshot(image_base64, prompt, task_type=task_type)
-        return client.parse_json_response(response)
-    except Exception as e:
-        return {
-            "error": f"Ошибка анализа скриншота: {str(e)}",
-            "fallback": True
-        }
+    client = get_gigachat_client()
+    return client.analyze_screenshot(
+        image_base64, 
+        prompt, 
+        task_type=task_type,
+        business_id=business_id,
+        user_id=user_id
+    )
 
-def analyze_text_with_gigachat(prompt: str, task_type: str = None) -> Dict[str, Any]:
-    """Анализ текста через GigaChat
-    
-    Args:
-        prompt: Текст промпта
-        task_type: Тип задачи для выбора модели (service_optimization, review_reply, 
-                  news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
-    """
-    try:
-        client = get_gigachat_client()
-        response = client.analyze_text(prompt, task_type=task_type)
-        return client.parse_json_response(response)
-    except Exception as e:
-        return {
-            "error": f"Ошибка анализа текста: {str(e)}",
-            "fallback": True
-        }

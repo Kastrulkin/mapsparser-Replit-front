@@ -39,7 +39,7 @@ def get_agent_config(business_id: str) -> dict:
         # Если указан конкретный агент, получаем его конфигурацию
         if agent_id:
             cursor.execute("""
-                SELECT workflow_json, task, identity, speech_style, restrictions_json
+                SELECT workflow, task, identity, speech_style, restrictions_json
                 FROM AIAgents
                 WHERE id = ? AND is_active = 1
             """, (agent_id,))
@@ -75,7 +75,7 @@ def get_agent_config(business_id: str) -> dict:
         
         # Иначе получаем дефолтного агента по типу
         cursor.execute("""
-            SELECT workflow_json, task, identity, speech_style, restrictions_json
+            SELECT workflow, task, identity, speech_style, restrictions_json
             FROM AIAgents
             WHERE type = ? AND is_active = 1
             ORDER BY created_at DESC
@@ -429,16 +429,26 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         # Получаем конфигурацию агента
         agent_config = get_agent_config(business_id)
         
-        # Получаем текущий стейт и историю
+        # Получаем текущий стейт, историю и статус паузы
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT current_state, conversation_history
+            SELECT current_state, conversation_history, COALESCE(is_agent_paused, 0)
             FROM AIAgentConversations
             WHERE id = ?
         """, (conversation_id,))
         row = cursor.fetchone()
         db.close()
+        
+        # Если агент остановлен, не обрабатываем сообщение
+        if row and row[2] == 1:
+            return {
+                'success': False,
+                'response': 'Агент временно остановлен. Оператор свяжется с вами в ближайшее время.',
+                'conversation_id': conversation_id,
+                'state': row[0] if row else 'greeting',
+                'agent_paused': True
+            }
         
         # Определяем начальный стейт из конфигурации агента
         workflow = agent_config.get('workflow', [])
@@ -476,60 +486,113 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         else:
             task_type = 'ai_agent_booking'  # По умолчанию
         
-        # Генерируем ответ через GigaChat
+        # Генерируем ответ через GigaChat с Function Calling
         try:
+            from ai_agent_functions import get_ai_agent_functions
+            from ai_agent_tools import execute_tool
+            
             client = get_gigachat_client()
-            response_text = client.analyze_text(prompt, task_type=task_type)
+            functions = get_ai_agent_functions()
+            
+            # Получаем user_id из business_info
+            user_id = business_info.get('owner_id')
+            
+            # Вызываем GigaChat с функциями
+            response_text, usage_info = client.analyze_text(
+                prompt=prompt,
+                task_type=task_type,
+                functions=functions,
+                business_id=business_id,
+                user_id=user_id
+            )
             
             if not response_text:
                 response_text = "Извините, произошла ошибка. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
         except Exception as e:
             print(f"❌ Ошибка генерации ответа через GigaChat: {e}")
+            import traceback
+            traceback.print_exc()
             response_text = "Извините, произошла ошибка. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону."
+            usage_info = {}
         
-        # Парсим и выполняем tools из ответа
+        # Обрабатываем Function Calling (если GigaChat вызвал функцию)
         from ai_agent_tools import execute_tool
         tools_executed = []
         final_response_text = response_text
+        max_function_iterations = 3  # Максимум итераций для цепочки вызовов функций
+        iteration = 0
         
-        # Ищем JSON блоки с вызовами tools
-        import re
-        tool_pattern = r'```json\s*\{\s*"tool"\s*:\s*"([^"]+)"\s*,\s*"params"\s*:\s*(\{[^}]+\})\s*\}\s*```'
-        tool_matches = re.finditer(tool_pattern, response_text, re.IGNORECASE | re.DOTALL)
-        
-        for match in tool_matches:
-            tool_name = match.group(1)
-            params_json = match.group(2)
+        while iteration < max_function_iterations:
+            iteration += 1
             
+            # Проверяем, есть ли вызов функции в ответе
             try:
-                params = json.loads(params_json)
-                # Выполняем tool
-                tool_result = execute_tool(
-                    tool_name=tool_name,
-                    business_id=business_id,
-                    client_phone=client_phone,
-                    client_name=client_name,
-                    conversation_id=conversation_id,
-                    **params
-                )
-                
-                tools_executed.append({
-                    'tool': tool_name,
-                    'params': params,
-                    'result': tool_result
-                })
-                
-                # Удаляем JSON блок из ответа
-                final_response_text = final_response_text.replace(match.group(0), '')
-                
-                print(f"✅ Tool {tool_name} выполнен: {tool_result}")
-                
+                response_data = json.loads(response_text) if response_text.strip().startswith('{') else None
+                if response_data and 'function_call' in response_data:
+                    function_call = response_data['function_call']
+                    function_name = function_call.get('name')
+                    function_args = function_call.get('arguments', {})
+                    
+                    if isinstance(function_args, str):
+                        function_args = json.loads(function_args)
+                    
+                    print(f"🔧 Вызов функции: {function_name} с параметрами: {function_args}")
+                    
+                    # Выполняем функцию
+                    tool_result = execute_tool(
+                        tool_name=function_name,
+                        business_id=business_id,
+                        client_phone=client_phone,
+                        client_name=client_name,
+                        conversation_id=conversation_id,
+                        **function_args
+                    )
+                    
+                    tools_executed.append({
+                        'tool': function_name,
+                        'params': function_args,
+                        'result': tool_result
+                    })
+                    
+                    # Добавляем результат функции в историю и запрашиваем финальный ответ
+                    conversation_history.append({
+                        'sender': 'agent',
+                        'content': f"[Вызвана функция {function_name}]",
+                        'timestamp': datetime.now().isoformat()
+                    })
+                    
+                    # Формируем новый промпт с результатом функции
+                    function_result_text = json.dumps(tool_result, ensure_ascii=False, indent=2)
+                    follow_up_prompt = f"{prompt}\n\nРезультат выполнения функции {function_name}: {function_result_text}\n\nПродолжи диалог с клиентом, используя результат функции."
+                    
+                    # Получаем финальный ответ от GigaChat
+                    response_text, usage_info = client.analyze_text(
+                        prompt=follow_up_prompt,
+                        task_type=task_type,
+                        functions=functions,
+                        business_id=business_id,
+                        user_id=user_id
+                    )
+                    
+                    # Если ответ снова содержит вызов функции, продолжаем цикл
+                    continue
+                else:
+                    # Нет вызова функции, выходим из цикла
+                    final_response_text = response_text
+                    break
+                    
+            except json.JSONDecodeError:
+                # Ответ не JSON, значит это обычный текстовый ответ
+                final_response_text = response_text
+                break
             except Exception as e:
-                print(f"❌ Ошибка выполнения tool {tool_name}: {e}")
+                print(f"❌ Ошибка обработки Function Calling: {e}")
                 import traceback
                 traceback.print_exc()
+                break
         
         # Очищаем лишние пробелы и переносы строк
+        import re
         final_response_text = re.sub(r'\n\s*\n\s*\n', '\n\n', final_response_text).strip()
         
         # Сохраняем ответ агента (без JSON блоков с tools)

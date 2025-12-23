@@ -22,6 +22,7 @@ from admin_moderation import admin_moderation_bp
 from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
+from chats_api import chats_bp
 import uuid
 import base64
 import os
@@ -51,6 +52,7 @@ app.register_blueprint(admin_moderation_bp)
 app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
+app.register_blueprint(chats_bp)
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
@@ -198,6 +200,160 @@ def serve_assets(filename):
     """Раздача ассетов Vite/SPA"""
     return send_from_directory(os.path.join(FRONTEND_DIST_DIR, 'assets'), filename)
 
+@app.route('/api/admin/token-usage', methods=['GET'])
+def get_token_usage_stats():
+    """Получить статистику использования токенов GigaChat по пользователям и бизнесам (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем, что это суперадмин
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Доступ запрещён"}), 403
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем, существует ли таблица TokenUsage
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='TokenUsage'
+        """)
+        if not cursor.fetchone():
+            db.close()
+            return jsonify({
+                "success": True,
+                "total": {
+                    "total_tokens": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "requests_count": 0
+                },
+                "by_user": [],
+                "by_business": [],
+                "by_task_type": []
+            })
+        
+        # Общая статистика
+        cursor.execute("""
+            SELECT 
+                SUM(total_tokens) as total,
+                SUM(prompt_tokens) as prompt_total,
+                SUM(completion_tokens) as completion_total,
+                COUNT(*) as requests_count
+            FROM TokenUsage
+        """)
+        total_stats = cursor.fetchone()
+        
+        # По пользователям
+        cursor.execute("""
+            SELECT 
+                u.id,
+                u.email,
+                u.name,
+                COALESCE(SUM(tu.total_tokens), 0) as total_tokens,
+                COALESCE(SUM(tu.prompt_tokens), 0) as prompt_tokens,
+                COALESCE(SUM(tu.completion_tokens), 0) as completion_tokens,
+                COUNT(tu.id) as requests_count
+            FROM Users u
+            LEFT JOIN TokenUsage tu ON u.id = tu.user_id
+            GROUP BY u.id, u.email, u.name
+            HAVING total_tokens > 0
+            ORDER BY total_tokens DESC
+        """)
+        users_stats = []
+        for row in cursor.fetchall():
+            users_stats.append({
+                "user_id": row[0],
+                "email": row[1],
+                "name": row[2],
+                "total_tokens": row[3] or 0,
+                "prompt_tokens": row[4] or 0,
+                "completion_tokens": row[5] or 0,
+                "requests_count": row[6] or 0
+            })
+        
+        # По бизнесам
+        cursor.execute("""
+            SELECT 
+                b.id,
+                b.name,
+                b.owner_id,
+                u.email as owner_email,
+                COALESCE(SUM(tu.total_tokens), 0) as total_tokens,
+                COALESCE(SUM(tu.prompt_tokens), 0) as prompt_tokens,
+                COALESCE(SUM(tu.completion_tokens), 0) as completion_tokens,
+                COUNT(tu.id) as requests_count
+            FROM Businesses b
+            LEFT JOIN TokenUsage tu ON b.id = tu.business_id
+            LEFT JOIN Users u ON b.owner_id = u.id
+            GROUP BY b.id, b.name, b.owner_id, u.email
+            HAVING total_tokens > 0
+            ORDER BY total_tokens DESC
+        """)
+        businesses_stats = []
+        for row in cursor.fetchall():
+            businesses_stats.append({
+                "business_id": row[0],
+                "business_name": row[1],
+                "owner_id": row[2],
+                "owner_email": row[3],
+                "total_tokens": row[4] or 0,
+                "prompt_tokens": row[5] or 0,
+                "completion_tokens": row[6] or 0,
+                "requests_count": row[7] or 0
+            })
+        
+        # По типам задач
+        cursor.execute("""
+            SELECT 
+                task_type,
+                COALESCE(SUM(total_tokens), 0) as total_tokens,
+                COALESCE(SUM(prompt_tokens), 0) as prompt_tokens,
+                COALESCE(SUM(completion_tokens), 0) as completion_tokens,
+                COUNT(*) as requests_count
+            FROM TokenUsage
+            GROUP BY task_type
+            ORDER BY total_tokens DESC
+        """)
+        task_types_stats = []
+        for row in cursor.fetchall():
+            task_types_stats.append({
+                "task_type": row[0] or "unknown",
+                "total_tokens": row[1] or 0,
+                "prompt_tokens": row[2] or 0,
+                "completion_tokens": row[3] or 0,
+                "requests_count": row[4] or 0
+            })
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "total": {
+                "total_tokens": total_stats[0] or 0,
+                "prompt_tokens": total_stats[1] or 0,
+                "completion_tokens": total_stats[2] or 0,
+                "requests_count": total_stats[3] or 0
+            },
+            "by_user": users_stats,
+            "by_business": businesses_stats,
+            "by_task_type": task_types_stats
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения статистики токенов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(FRONTEND_DIST_DIR, 'favicon.ico')
@@ -318,6 +474,37 @@ def health():
     return jsonify({"status": "ok", "message": "SEO анализатор работает"})
 
 # ==================== ХЕЛПЕР: ПОЛУЧЕНИЕ ЯЗЫКА ПОЛЬЗОВАТЕЛЯ ====================
+def get_business_id_from_user(user_id: str, business_id_from_request: str = None) -> str:
+    """Получить business_id для отслеживания токенов
+    
+    Args:
+        user_id: ID пользователя
+        business_id_from_request: business_id из запроса (если есть)
+    
+    Returns:
+        business_id или None
+    """
+    if business_id_from_request:
+        return business_id_from_request
+    
+    # Пытаемся получить первый бизнес пользователя
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT id FROM Businesses 
+            WHERE owner_id = ? 
+            LIMIT 1
+        """, (user_id,))
+        row = cursor.fetchone()
+        db.close()
+        if row:
+            return row[0] if isinstance(row, tuple) else row['id']
+    except Exception as e:
+        print(f"⚠️ Ошибка получения business_id: {e}")
+    
+    return None
+
 def get_user_language(user_id: str, requested_language: str = None) -> str:
     """
     Получить язык пользователя из профиля бизнеса или использовать запрошенный язык.
@@ -480,7 +667,14 @@ def services_optimize():
 }"""
                 
                 print(f"🔍 Анализ скриншота, размер base64: {len(image_base64)} символов")
-                result = analyze_screenshot_with_gigachat(image_base64, screenshot_prompt)
+                business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+                result = analyze_screenshot_with_gigachat(
+                    image_base64, 
+                    screenshot_prompt,
+                    task_type="service_optimization",
+                    business_id=business_id,
+                    user_id=user_data['user_id']
+                )
                 print(f"🔍 Результат анализа скриншота: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
             else:
                 # Для документов - анализ текста
@@ -645,7 +839,13 @@ def services_optimize():
                     .replace('{content}', str(content[:4000]))
                 )
 
-            result = analyze_text_with_gigachat(prompt, task_type="service_optimization")
+            business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+            result = analyze_text_with_gigachat(
+                prompt, 
+                task_type="service_optimization",
+                business_id=business_id,
+                user_id=user_data['user_id']
+            )
         # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
         if 'error' in result:
             error_msg = result.get('error', 'Ошибка оптимизации')
@@ -901,7 +1101,13 @@ Write all generated text in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}
 """
 
-        result = analyze_text_with_gigachat(prompt, task_type="news_generation")
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        result = analyze_text_with_gigachat(
+            prompt, 
+            task_type="news_generation",
+            business_id=business_id,
+            user_id=user_data['user_id']
+        )
         if 'error' in result:
             db.close()
             return jsonify({"error": result['error']}), 500
@@ -1292,7 +1498,13 @@ Write the reply in {language_name}.
 
 Отзыв клиента: {review_text[:1000]}
 """
-        result = analyze_text_with_gigachat(prompt, task_type="review_reply")
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        result = analyze_text_with_gigachat(
+            prompt, 
+            task_type="review_reply",
+            business_id=business_id,
+            user_id=user_data['user_id']
+        )
         if 'error' in result:
             return jsonify({"error": result['error']}), 500
         return jsonify({"success": True, "result": result})
@@ -2286,7 +2498,13 @@ def analyze_screenshot():
         image_base64 = base64.b64encode(image_data).decode('utf-8')
         
         # Анализируем через GigaChat
-        result = analyze_screenshot_with_gigachat(image_base64, prompt)
+        business_id = get_business_id_from_user(user_data['user_id'])
+        result = analyze_screenshot_with_gigachat(
+            image_base64, 
+            prompt,
+            business_id=business_id,
+            user_id=user_data['user_id']
+        )
         
         if 'error' in result:
             return jsonify({"error": result['error']}), 500
@@ -2899,7 +3117,13 @@ def upload_transaction_file():
             image_data = file.read()
             image_base64 = base64.b64encode(image_data).decode('utf-8')
             
-            result = analyze_screenshot_with_gigachat(image_base64, prompt_content)
+            business_id = get_business_id_from_user(user_data['user_id'])
+            result = analyze_screenshot_with_gigachat(
+                image_base64, 
+                prompt_content,
+                business_id=business_id,
+                user_id=user_data['user_id']
+            )
             
             if 'error' in result:
                 return jsonify({"error": result['error']}), 500
@@ -2913,7 +3137,12 @@ def upload_transaction_file():
         else:
             # Для текстовых файлов - читаем содержимое и анализируем
             file_content = file.read().decode('utf-8', errors='ignore')
-            result = analyze_text_with_gigachat(prompt_content + "\n\nСодержимое файла:\n" + file_content)
+            business_id = get_business_id_from_user(user_data['user_id'])
+            result = analyze_text_with_gigachat(
+                prompt_content + "\n\nСодержимое файла:\n" + file_content,
+                business_id=business_id,
+                user_id=user_data['user_id']
+            )
             
             if 'error' in result:
                 return jsonify({"error": result['error']}), 500

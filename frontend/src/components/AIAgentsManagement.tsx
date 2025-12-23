@@ -7,8 +7,10 @@ import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
-import { Plus, Edit, Trash2, Save, X, Bot } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Bot, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { ScrollArea } from './ui/scroll-area';
 
 interface WorkflowState {
   name: string;
@@ -47,6 +49,9 @@ export const AIAgentsManagement = () => {
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [sandboxMessages, setSandboxMessages] = useState<Array<{sender: 'client' | 'agent', content: string}>>([]);
+  const [sandboxInput, setSandboxInput] = useState('');
+  const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -112,6 +117,49 @@ export const AIAgentsManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Функция для конвертации workflow объекта в YAML формат
+  const convertWorkflowToYAML = (workflow: any): string => {
+    if (typeof workflow === 'string') {
+      return workflow;
+    }
+    
+    if (!Array.isArray(workflow)) {
+      return '';
+    }
+    
+    // Конвертируем массив стейтов в YAML формат
+    return workflow.map((state: any) => {
+      let yaml = `- name: ${state.name || ''}\n`;
+      yaml += `  kind: ${state.kind || 'StateConfig'}\n`;
+      yaml += `  process_name: ${state.process_name || ''}\n`;
+      yaml += `  init_state: ${state.init_state || false}\n`;
+      yaml += `  description: >\n    ${(state.description || '').replace(/\n/g, '\n    ')}\n`;
+      
+      if (state.state_scenarios && Array.isArray(state.state_scenarios) && state.state_scenarios.length > 0) {
+        yaml += `  state_scenarios:\n`;
+        state.state_scenarios.forEach((scenario: any) => {
+          yaml += `    - next_state: ${scenario.next_state || ''}\n`;
+          yaml += `      transition_name: ${scenario.transition_name || ''}\n`;
+          yaml += `      description: ${scenario.description || ''}\n`;
+        });
+      }
+      
+      if (state.available_tools && typeof state.available_tools === 'object') {
+        yaml += `  available_tools:\n`;
+        Object.entries(state.available_tools).forEach(([key, tools]: [string, any]) => {
+          yaml += `    ${key}:\n`;
+          if (Array.isArray(tools)) {
+            tools.forEach((tool: string) => {
+              yaml += `      - ${tool}\n`;
+            });
+          }
+        });
+      }
+      
+      return yaml;
+    }).join('\n');
   };
 
   const handleEdit = (agent: AIAgent) => {
@@ -201,6 +249,57 @@ export const AIAgentsManagement = () => {
         description: 'Ошибка при сохранении агента',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleSandboxSend = async () => {
+    if (!editingAgent || !sandboxInput.trim() || sandboxLoading) return;
+    
+    const clientMessage = sandboxInput.trim();
+    setSandboxInput('');
+    setSandboxMessages(prev => [...prev, { sender: 'client', content: clientMessage }]);
+    setSandboxLoading(true);
+    
+    try {
+      const token = await newAuth.getToken();
+      if (!token) {
+        throw new Error('Требуется авторизация');
+      }
+      
+      const response = await fetch(`/api/admin/ai-agents/${editingAgent.id}/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: clientMessage,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSandboxMessages(prev => [...prev, { sender: 'agent', content: data.response }]);
+        } else {
+          throw new Error(data.error || 'Ошибка получения ответа');
+        }
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || 'Ошибка запроса');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось получить ответ от агента',
+        variant: 'destructive',
+      });
+      setSandboxMessages(prev => [...prev, { 
+        sender: 'agent', 
+        content: `Ошибка: ${error.message || 'Не удалось получить ответ'}` 
+      }]);
+    } finally {
+      setSandboxLoading(false);
     }
   };
 
@@ -489,7 +588,15 @@ export const AIAgentsManagement = () => {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-6 py-4">
+            <Tabs defaultValue="settings" className="w-full">
+              <TabsList className={`grid w-full ${showCreateDialog ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                <TabsTrigger value="settings">Настройки</TabsTrigger>
+                {!showCreateDialog && (
+                  <TabsTrigger value="sandbox">Песочница</TabsTrigger>
+                )}
+              </TabsList>
+              
+              <TabsContent value="settings" className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="agent-name">Название</Label>
@@ -570,7 +677,11 @@ export const AIAgentsManagement = () => {
                 <Label htmlFor="agent-workflow">Workflow (Воркфлоу)</Label>
                 <Textarea
                   id="agent-workflow"
-                  value={typeof editingAgent.workflow === 'string' ? editingAgent.workflow : (editingAgent.workflow ? JSON.stringify(editingAgent.workflow, null, 2) : '')}
+                  value={typeof editingAgent.workflow === 'string' 
+                    ? editingAgent.workflow 
+                    : (editingAgent.workflow 
+                      ? convertWorkflowToYAML(editingAgent.workflow) 
+                      : '')}
                   onChange={(e) => setEditingAgent({ ...editingAgent, workflow: e.target.value })}
                   placeholder={`- name: GreetingState
   kind: StateConfig
@@ -649,13 +760,90 @@ export const AIAgentsManagement = () => {
                   )}
                 </div>
               </div>
-            </div>
+              </TabsContent>
+              
+              {!showCreateDialog && (
+                <TabsContent value="sandbox" className="py-4">
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600 mb-4">
+                    Протестируйте настройки агента. Вы пишете от лица клиента, агент отвечает в соответствии с настройками.
+                  </div>
+                  
+                  <ScrollArea className="h-96 border rounded-lg p-4 mb-4">
+                    <div className="space-y-4">
+                      {sandboxMessages.length === 0 ? (
+                        <div className="text-center text-gray-500 py-8">
+                          Начните диалог, отправив сообщение
+                        </div>
+                      ) : (
+                        sandboxMessages.map((msg, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex ${
+                              msg.sender === 'client' ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[80%] rounded-lg p-3 ${
+                                msg.sender === 'client'
+                                  ? 'bg-blue-100 text-blue-900'
+                                  : 'bg-gray-100 text-gray-900'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                {msg.sender === 'client' ? (
+                                  <span className="text-xs font-medium">Вы (клиент)</span>
+                                ) : (
+                                  <>
+                                    <Bot className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Агент</span>
+                                  </>
+                                )}
+                              </div>
+                              <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                  
+                  <div className="flex gap-2">
+                    <Input
+                      value={sandboxInput}
+                      onChange={(e) => setSandboxInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSandboxSend();
+                        }
+                      }}
+                      placeholder="Введите сообщение от лица клиента..."
+                      disabled={sandboxLoading}
+                    />
+                    <Button
+                      onClick={handleSandboxSend}
+                      disabled={sandboxLoading || !sandboxInput.trim() || !editingAgent}
+                    >
+                      {sandboxLoading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+              )}
+            </Tabs>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => {
                 setShowEditDialog(false);
                 setShowCreateDialog(false);
                 setEditingAgent(null);
+                setSandboxMessages([]);
+                setSandboxInput('');
               }}>
                 Отмена
               </Button>

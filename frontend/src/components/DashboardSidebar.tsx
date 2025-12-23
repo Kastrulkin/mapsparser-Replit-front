@@ -6,6 +6,7 @@ import {
   DollarSign, 
   Settings,
   Calendar,
+  MessageSquare,
   Menu,
   X
 } from 'lucide-react';
@@ -51,6 +52,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: 'Бронирования',
       icon: Calendar,
       path: '/dashboard/bookings',
+    },
+    {
+      id: 'chats',
+      label: 'Чаты',
+      icon: MessageSquare,
+      path: '/dashboard/chats',
     },
     {
       id: 'finance',

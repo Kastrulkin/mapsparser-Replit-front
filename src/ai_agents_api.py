@@ -28,7 +28,7 @@ def get_ai_agents():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT id, name, type, description, personality, workflow_json, task, identity, speech_style,
+            SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
                    restrictions_json, variables_json, is_active, created_at, updated_at
             FROM AIAgents
             ORDER BY type, name
@@ -38,18 +38,9 @@ def get_ai_agents():
         agents = []
         for row in rows:
             workflow_raw = row[5] or ''
-            # Пытаемся определить, это JSON или текст
+            # Всегда возвращаем workflow как строку (YAML текст), чтобы сохранить форматирование
+            # Не парсим JSON, чтобы не потерять YAML форматирование
             workflow_value = workflow_raw
-            if workflow_raw:
-                try:
-                    # Если это валидный JSON массив, парсим его
-                    parsed = json.loads(workflow_raw)
-                    if isinstance(parsed, list):
-                        workflow_value = parsed
-                    else:
-                        workflow_value = workflow_raw  # Оставляем как текст
-                except:
-                    workflow_value = workflow_raw  # Оставляем как текст
             
             agents.append({
                 'id': row[0],
@@ -57,7 +48,7 @@ def get_ai_agents():
                 'type': row[2],
                 'description': row[3],
                 'personality': row[4] or '',
-                'workflow': workflow_value,
+                'workflow': workflow_value,  # Всегда строка (YAML)
                 'task': row[6] or '',
                 'identity': row[7] or '',
                 'speech_style': row[8] or '',
@@ -91,11 +82,12 @@ def create_ai_agent():
         description = data.get('description', '').strip()
         personality = data.get('personality', '').strip()
         workflow = data.get('workflow', '')
-        # Если workflow - это строка, сохраняем как есть, иначе конвертируем в JSON
+        # Workflow всегда сохраняем как строку (YAML текст)
         if isinstance(workflow, str):
-            workflow_json = workflow
+            workflow_value = workflow
         else:
-            workflow_json = json.dumps(workflow, ensure_ascii=False) if workflow else ''
+            # Если это объект, конвертируем в JSON строку (для обратной совместимости)
+            workflow_value = json.dumps(workflow, ensure_ascii=False) if workflow else ''
         
         task = data.get('task', '').strip()
         identity = data.get('identity', '').strip()
@@ -112,7 +104,7 @@ def create_ai_agent():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO AIAgents 
-            (id, name, type, description, personality, workflow_json, task, identity, speech_style, restrictions_json, variables_json, created_by)
+            (id, name, type, description, personality, workflow, task, identity, speech_style, restrictions_json, variables_json, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             agent_id,
@@ -120,7 +112,7 @@ def create_ai_agent():
             agent_type,
             description,
             personality,
-            workflow_json,
+            workflow_value,
             task,
             identity,
             speech_style,
@@ -180,11 +172,12 @@ def update_ai_agent(agent_id: str):
             update_values.append(data['personality'])
         
         if 'workflow' in data:
-            update_fields.append('workflow_json = ?')
-            # Если workflow - это строка, сохраняем как есть, иначе конвертируем в JSON
+            update_fields.append('workflow = ?')
+            # Workflow всегда сохраняем как строку (YAML текст)
             if isinstance(data['workflow'], str):
                 update_values.append(data['workflow'])
             else:
+                # Если это объект, конвертируем в JSON строку (для обратной совместимости)
                 update_values.append(json.dumps(data['workflow'], ensure_ascii=False))
         
         if 'task' in data:
@@ -282,7 +275,7 @@ def get_ai_agent(agent_id: str):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT id, name, type, description, personality, workflow_json, task, identity, speech_style,
+            SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
                    restrictions_json, variables_json, is_active, created_at, updated_at
             FROM AIAgents
             WHERE id = ?
@@ -294,13 +287,16 @@ def get_ai_agent(agent_id: str):
         if not row:
             return jsonify({"error": "Агент не найден"}), 404
         
+        # Workflow всегда возвращаем как строку (YAML), чтобы сохранить форматирование
+        workflow_raw = row[5] or ''
+        
         return jsonify({
             'id': row[0],
             'name': row[1],
             'type': row[2],
             'description': row[3],
             'personality': row[4] or '',
-            'workflow': json.loads(row[5]) if row[5] else [],
+            'workflow': workflow_raw,  # Всегда строка (YAML), не парсим JSON
             'task': row[6] or '',
             'identity': row[7] or '',
             'speech_style': row[8] or '',

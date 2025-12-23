@@ -13,7 +13,7 @@ def migrate_workflow_agents(cursor):
     
     # Добавляем новые поля для workflow структуры
     new_fields = [
-        ('workflow_json', 'TEXT'),  # Workflow структура (стейты с scenarios, tools)
+        ('workflow', 'TEXT'),  # Workflow структура (YAML текст со стейтами, scenarios, tools)
         ('task', 'TEXT'),  # Задачи агента (markdown)
         ('identity', 'TEXT'),  # Личность агента
         ('speech_style', 'TEXT'),  # Стиль речи
@@ -78,7 +78,7 @@ def migrate_workflow_agents(cursor):
             # Сохраняем workflow структуру
             cursor.execute("""
                 UPDATE AIAgents 
-                SET workflow_json = ?
+                SET workflow = ?
                 WHERE id = ?
             """, (json.dumps(workflow_states, ensure_ascii=False, indent=2), agent_id))
             
