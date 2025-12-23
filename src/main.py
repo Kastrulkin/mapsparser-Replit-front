@@ -3,6 +3,12 @@ main.py — Веб-сервер для SEO-анализатора Яндекс.�
 """
 import os
 import sys
+import json
+import sqlite3
+import uuid
+import base64
+import random
+from datetime import datetime, timedelta
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
@@ -23,13 +29,6 @@ from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
-import uuid
-import base64
-import os
-import json
-import sqlite3
-from datetime import datetime, timedelta
-import random
 
 # Автоматическая загрузка переменных окружения из .env / .env.test
 try:
