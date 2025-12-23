@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -16,6 +16,7 @@ interface Business {
   industry?: string;
   created_at?: string;
   is_active?: number;
+  subscription_tier?: string;
 }
 
 interface Network {
@@ -318,6 +319,37 @@ export const AdminPage: React.FC = () => {
     });
   };
 
+  const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
+    try {
+      const token = await newAuth.getToken();
+      const response = await fetch(`/api/admin/businesses/${businessId}/promo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_promo: !isPromo }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Успешно',
+          description: !isPromo ? 'Промо тариф установлен' : 'Промо тариф отключен',
+        });
+        loadUsers();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка установки промо тарифа');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось изменить промо тариф',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCreateSuccess = () => {
     loadUsers();
   };
@@ -541,6 +573,19 @@ export const AdminPage: React.FC = () => {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              const isPromo = item.business.subscription_tier === 'promo';
+                              handlePromo(item.business.id, item.name, isPromo);
+                            }}
+                            className={item.business.subscription_tier === 'promo' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : ''}
+                          >
+                            <Gift className="w-4 h-4 mr-1" />
+                            {item.business.subscription_tier === 'promo' ? 'Отключить Промо' : 'Промо'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               // Если бизнес активен (is_active === 1), хотим заблокировать (isBlocked = true)
                               // Если бизнес заблокирован (is_active !== 1), хотим разблокировать (isBlocked = false)
                               handleBlock(item.business.id, item.name, item.business.is_active === 1);
@@ -569,6 +614,19 @@ export const AdminPage: React.FC = () => {
                             <div className="space-y-2">
                               {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
                                 <div key={business.id} className="flex items-center justify-end space-x-2 mb-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const isPromo = business.subscription_tier === 'promo';
+                                      handlePromo(business.id, business.name, isPromo);
+                                    }}
+                                    className={business.subscription_tier === 'promo' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : ''}
+                                  >
+                                    <Gift className="w-4 h-4 mr-1" />
+                                    {business.subscription_tier === 'promo' ? 'Отключить Промо' : 'Промо'}
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"

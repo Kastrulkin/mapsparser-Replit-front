@@ -9,7 +9,8 @@ import { useLanguage } from "@/i18n/LanguageContext";
 const About = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRu = language === "ru";
   
   useEffect(() => {
     const scrollToPricing = () => {
@@ -220,11 +221,44 @@ const About = () => {
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.pricingTitle}</h2>
 
-          <div className="grid lg:grid-cols-3 gap-8 mb-8">
-            {/* Option 0 - Новый раздел */}
+          <div className="grid lg:grid-cols-4 gap-8 mb-8">
+            {/* Starter */}
             <Card className="p-8 flex flex-col">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption0Title}</div>
+                <div className="text-2xl font-bold text-primary mb-1">
+                  {isRu ? "Начальный" : "Starter"}
+                </div>
+                <div className="text-sm text-gray-600 mb-4">
+                  {isRu ? "400 рублей в месяц" : "$5 / month"}
+                </div>
+                <div className="space-y-2 text-muted-foreground mb-6 flex-1">
+                  <div>- {t.about.pricingStarterPoint1}</div>
+                  <div>- {t.about.pricingStarterPoint2}</div>
+                  <div>- {t.about.pricingStarterPoint3}</div>
+                  <div>- {t.about.pricingStarterPoint4}</div>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  onClick={() => {
+                    navigate('/contact');
+                  }}
+                >
+                  {t.about.pricingStarterButton}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Option 0 - 5000 рублей в месяц */}
+            <Card className="p-8 flex flex-col">
+              <CardContent className="p-0 flex flex-col flex-1">
+                <div className="text-2xl font-bold text-primary mb-1">
+                  {isRu ? "Профессиональный" : "Professional"}
+                </div>
+                <div className="text-sm text-gray-600 mb-4">
+                  {isRu ? "5000 рублей в месяц" : "$55 / month"}
+                </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption0Point1}</div>
                   <div>- {t.about.pricingOption0Point2}</div>
@@ -247,7 +281,12 @@ const About = () => {
             {/* Option 1 */}
             <Card className="p-8 flex flex-col">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption1Title}</div>
+                <div className="text-2xl font-bold text-primary mb-1">
+                  {isRu ? "Консьерж" : "Concierge"}
+                </div>
+                <div className="text-sm text-gray-600 mb-4">
+                  {isRu ? "25000 рублей в месяц" : "$275 / month"}
+                </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption1Point1}</div>
                   <div>- {t.about.pricingOption1Point2}</div>
@@ -271,8 +310,10 @@ const About = () => {
             {/* Option 2 */}
             <Card className="p-8 border-primary">
               <CardContent className="p-0">
-                <div className="text-2xl font-bold text-primary mb-4">{t.about.pricingOption2Title}</div>
-                <h3 className="text-xl font-semibold text-foreground mb-4">{t.about.pricingOption2Subtitle}</h3>
+                <div className="text-2xl font-bold text-primary mb-1">
+                  {isRu ? "Особый" : "Elite"}
+                </div>
+                <div className="text-sm text-gray-600 mb-4">{t.about.pricingOption2Subtitle}</div>
                 <div className="space-y-2 text-muted-foreground mb-6">
                   <div>- {t.about.pricingOption2Point1}</div>
                   <div>- {t.about.pricingOption2Point2}</div>

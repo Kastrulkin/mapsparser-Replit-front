@@ -41,38 +41,65 @@ TIERS = {
         'name': 'Trial (First Month)',
         'features': ['chatgpt', 'personal_cabinet']
     },
-    'basic': {
-        # Starter - prod_TeNh5zujNnytAG
-        'price_id': 'price_1Sh4wZFtze6qZAEfkLuuUqVV',
-        'amount': 500,  # $5.00 в центах
-        'name': 'STARTER',
+    'starter': {
+        # Starter (Начальный) - 5$ или 400₽
+        'price_id': 'price_1Sh4wZFtze6qZAEfkLuuUqVV',  # Нужно обновить в Stripe
+        'amount': 500,  # $5.00 в центах (400₽ ≈ $4.5)
+        'name': 'Starter (Начальный)',
+        'display_name': 'Starter',
+        'display_price_usd': 5,
+        'display_price_rub': 400,
         'features': [
             'Подключение к профессиональной сети BeautyBot',
             'ChatGPT для лидогенерации',
         ]
     },
-    'pro': {
-        # Professional - prod_TeNjDaAx8sLlRc
-        'price_id': 'price_1Sh4xqFtze6qZAEfFy3DvFXJ',
-        'amount': 6500,  # $65.00 в центах
-        'name': 'PROFESSIONAL',
+    'professional': {
+        # Professional (Профессиональный) - 5000₽
+        'price_id': 'price_1Sh4xqFtze6qZAEfFy3DvFXJ',  # Нужно обновить в Stripe
+        'amount': 5500,  # $55.00 в центах (5000₽ ≈ $55)
+        'name': 'Professional (Профессиональный)',
+        'display_name': 'Профессиональный',
+        'display_price_usd': 55,
+        'display_price_rub': 5000,
         'features': [
-            'Всё из STARTER',
+            'Всё из Starter',
             'Полный доступ к личному кабинету',
             'Управление клиентами и автоматизация переписки',
             'Интеграция с CRM',
         ]
     },
-    'enterprise': {
-        # CONCIERGE - prod_TeNl40dsmBXYVM
-        'price_id': 'price_1Sh4zyFtze6qZAEftqNTRZoD',
-        'amount': 31000,  # $310.00 в центах
-        'name': 'CONCIERGE',
+    'concierge': {
+        # Concierge (Консьерж) - 25000₽
+        'price_id': 'price_1Sh4zyFtze6qZAEftqNTRZoD',  # Нужно обновить в Stripe
+        'amount': 27500,  # $275.00 в центах (25000₽ ≈ $275)
+        'name': 'Concierge (Консьерж)',
+        'display_name': 'Консьерж',
+        'display_price_usd': 275,
+        'display_price_rub': 25000,
         'features': [
             'Мы делаем всё за вас',
             'Персональная настройка и приоритетная поддержка',
             'Стратегия развития бизнеса',
         ]
+    },
+    'elite': {
+        # Elite (Особый) - 7% от оплат привлечённых клиентов
+        'price_id': None,  # Специальный тариф, оплата по факту
+        'amount': 0,  # Оплата по факту результата
+        'name': 'Elite (Особый)',
+        'display_name': 'Особый (Elite)',
+        'display_price_usd': 0,
+        'display_price_rub': 0,
+        'display_price_percent': 7,
+        'features': [
+            'Привлечение клиентов онлайн',
+            'Коммуникация с клиентами',
+            'Привлечение клиентов оффлайн',
+            'Оптимизация бизнес-процессов',
+            'Выделенный менеджер',
+        ],
+        'note': 'Доступно после 3 месяцев подписки или по рекомендации'
     }
 }
 
@@ -105,8 +132,21 @@ def create_stripe_checkout():
         if not business_id:
             return jsonify({"error": "business_id обязателен"}), 400
         
+        # Маппинг старых названий на новые
+        tier_mapping = {
+            'basic': 'starter',
+            'pro': 'professional',
+            'enterprise': 'concierge'
+        }
+        if tier in tier_mapping:
+            tier = tier_mapping[tier]
+        
         if tier not in TIERS:
             return jsonify({"error": f"Неверный тариф: {tier}"}), 400
+        
+        # Elite тариф не оплачивается через Stripe
+        if tier == 'elite':
+            return jsonify({"error": "Elite тариф оплачивается по факту результата. Свяжитесь с нами для подключения."}), 400
         
         # Проверяем доступ к бизнесу
         db = DatabaseManager()

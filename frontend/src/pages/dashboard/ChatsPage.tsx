@@ -4,7 +4,7 @@ import { newAuth } from '@/lib/auth_new';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X } from 'lucide-react';
+import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Conversation {
@@ -42,6 +42,9 @@ export const ChatsPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sandboxMessages, setSandboxMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [sandboxInput, setSandboxInput] = useState('');
+  const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,11 +57,16 @@ export const ChatsPage: React.FC = () => {
   useEffect(() => {
     if (selectedAgentId && currentBusinessId) {
       loadConversations();
+      // Очищаем песочницу при смене агента
+      if (isSandbox) {
+        setSandboxMessages([]);
+      }
     }
   }, [selectedAgentId, currentBusinessId]);
 
   useEffect(() => {
-    if (selectedConversationId) {
+    // Не загружаем сообщения для песочницы
+    if (selectedConversationId && selectedConversationId !== 'sandbox') {
       loadMessages();
       // Автообновление сообщений каждые 3 секунды
       const interval = setInterval(loadMessages, 3000);
@@ -232,6 +240,67 @@ export const ChatsPage: React.FC = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
+  const isSandbox = selectedConversationId === 'sandbox';
+  
+  const handleSandboxSend = async () => {
+    if (!sandboxInput.trim() || !selectedAgentId || sandboxLoading) return;
+    
+    try {
+      setSandboxLoading(true);
+      const token = await newAuth.getToken();
+      if (!token) return;
+      
+      // Добавляем сообщение пользователя в историю
+      const userMessage = { role: 'user' as const, content: sandboxInput };
+      const updatedHistory = [...sandboxMessages, userMessage];
+      setSandboxMessages(updatedHistory);
+      setSandboxInput('');
+      
+      // Формируем историю для отправки
+      const conversationHistory = updatedHistory.slice(0, -1).map(msg => ({
+        role: msg.role === 'user' ? 'client' : 'agent',
+        content: msg.content
+      }));
+      
+      const response = await fetch(
+        `/api/business/${currentBusinessId}/ai-agents/${selectedAgentId}/test`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: sandboxInput,
+            conversation_history: conversationHistory,
+          }),
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Добавляем ответ агента в историю
+          setSandboxMessages([...updatedHistory, { role: 'assistant', content: data.response }]);
+        } else {
+          throw new Error(data.error || 'Ошибка получения ответа');
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка отправки сообщения');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось отправить сообщение',
+        variant: 'destructive',
+      });
+      // Удаляем последнее сообщение пользователя при ошибке
+      setSandboxMessages(sandboxMessages);
+    } finally {
+      setSandboxLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -283,6 +352,29 @@ export const ChatsPage: React.FC = () => {
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2">
+            {/* Песочница - всегда первый элемент */}
+            {selectedAgentId && (
+              <button
+                onClick={() => {
+                  setSelectedConversationId('sandbox');
+                  setSandboxMessages([]);
+                }}
+                className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${
+                  isSandbox
+                    ? 'bg-blue-50 border-blue-200'
+                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="w-4 h-4 text-purple-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900">Песочница</div>
+                    <div className="text-xs text-gray-500">Тестирование агента</div>
+                  </div>
+                </div>
+              </button>
+            )}
+            
             {conversations.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 Нет активных чатов
@@ -320,7 +412,97 @@ export const ChatsPage: React.FC = () => {
 
       {/* Правая панель: Детали чата */}
       <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col">
-        {selectedConversation ? (
+        {isSandbox ? (
+          <>
+            <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-purple-500" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Песочница</h3>
+                <div className="text-sm text-gray-500">
+                  Тестирование агента: {selectedAgent?.name || 'Не выбран'}
+                </div>
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {sandboxMessages.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    Начните диалог с агентом. Отправьте первое сообщение.
+                  </div>
+                ) : (
+                  sandboxMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${
+                        msg.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[70%] rounded-lg p-3 ${
+                          msg.role === 'user'
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'bg-green-100 text-green-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          {msg.role === 'user' ? (
+                            <UserIcon className="w-4 h-4" />
+                          ) : (
+                            <Bot className="w-4 h-4" />
+                          )}
+                          <span className="text-xs font-medium">
+                            {msg.role === 'user' ? 'Вы' : 'Агент'}
+                          </span>
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {sandboxLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <Bot className="w-4 h-4" />
+                        <span className="text-xs font-medium">Агент печатает...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex gap-2">
+                <Input
+                  value={sandboxInput}
+                  onChange={(e) => setSandboxInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSandboxSend();
+                    }
+                  }}
+                  placeholder="Введите сообщение для тестирования..."
+                  disabled={sandboxLoading || !selectedAgentId}
+                />
+                <Button
+                  onClick={handleSandboxSend}
+                  disabled={sandboxLoading || !sandboxInput.trim() || !selectedAgentId}
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+              {!selectedAgentId && (
+                <div className="text-xs text-orange-600 mt-2">
+                  ⚠️ Выберите агента для тестирования
+                </div>
+              )}
+            </div>
+          </>
+        ) : selectedConversation ? (
           <>
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
               <div>
@@ -429,7 +611,7 @@ export const ChatsPage: React.FC = () => {
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            Выберите чат для просмотра
+            {selectedAgentId ? 'Выберите чат или песочницу для просмотра' : 'Выберите агента'}
           </div>
         )}
       </div>

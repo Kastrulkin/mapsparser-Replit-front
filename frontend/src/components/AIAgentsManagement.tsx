@@ -589,10 +589,13 @@ export const AIAgentsManagement = () => {
             </DialogHeader>
 
             <Tabs defaultValue="settings" className="w-full">
-              <TabsList className={`grid w-full ${showCreateDialog ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              <TabsList className={`grid w-full ${showCreateDialog ? 'grid-cols-1' : 'grid-cols-3'}`}>
                 <TabsTrigger value="settings">Настройки</TabsTrigger>
                 {!showCreateDialog && (
-                  <TabsTrigger value="sandbox">Песочница</TabsTrigger>
+                  <>
+                    <TabsTrigger value="tools">Tools</TabsTrigger>
+                    <TabsTrigger value="sandbox">Песочница</TabsTrigger>
+                  </>
                 )}
               </TabsList>
               
@@ -761,6 +764,157 @@ export const AIAgentsManagement = () => {
                 </div>
               </div>
               </TabsContent>
+              
+              {!showCreateDialog && (
+                <TabsContent value="tools" className="py-4">
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-600 mb-4">
+                      Доступные функции (Tools) для Function Calling в GigaChat. Эти функции автоматически доступны агенту при общении с клиентами.
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">notify_operator</CardTitle>
+                          <CardDescription>
+                            Уведомить оператора/владельца бизнеса о необходимости его участия в диалоге
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li><code className="bg-gray-100 px-1 rounded">message</code> (string, обязательный) - Сообщение для оператора с описанием ситуации</li>
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium mb-1">Использование:</p>
+                              <p className="text-sm text-gray-600">
+                                Используется когда клиент задает сложный вопрос, требует персонального внимания или когда нужно подтверждение заказа.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">create_booking</CardTitle>
+                          <CardDescription>
+                            Создать бронирование/заказ на услугу
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li><code className="bg-gray-100 px-1 rounded">service_name</code> (string, обязательный) - Название услуги</li>
+                                <li><code className="bg-gray-100 px-1 rounded">booking_date</code> (string, обязательный) - Дата в формате YYYY-MM-DD</li>
+                                <li><code className="bg-gray-100 px-1 rounded">booking_time</code> (string, обязательный) - Время в формате HH:MM</li>
+                                <li><code className="bg-gray-100 px-1 rounded">notes</code> (string, опционально) - Дополнительные заметки</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">send_message</CardTitle>
+                          <CardDescription>
+                            Отправить сообщение клиенту через WhatsApp или Telegram
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li><code className="bg-gray-100 px-1 rounded">message</code> (string, обязательный) - Текст сообщения</li>
+                                <li><code className="bg-gray-100 px-1 rounded">channel</code> (string, обязательный) - Канал: "whatsapp" или "telegram"</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">get_client_info</CardTitle>
+                          <CardDescription>
+                            Получить информацию о клиенте: историю разговоров, бронирований и предпочтения
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <p className="text-sm text-gray-600">Нет параметров</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium mb-1">Использование:</p>
+                              <p className="text-sm text-gray-600">
+                                Используется для персонализации общения с клиентом.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">get_services</CardTitle>
+                          <CardDescription>
+                            Получить список доступных услуг бизнеса с ценами и описаниями
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <p className="text-sm text-gray-600">Нет параметров</p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium mb-1">Использование:</p>
+                              <p className="text-sm text-gray-600">
+                                Используется когда клиент спрашивает об услугах или ценах.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">check_availability</CardTitle>
+                          <CardDescription>
+                            Проверить доступное время для записи на указанную дату
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium mb-1">Параметры:</p>
+                              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li><code className="bg-gray-100 px-1 rounded">date</code> (string, обязательный) - Дата в формате YYYY-MM-DD</li>
+                                <li><code className="bg-gray-100 px-1 rounded">service_duration</code> (integer, опционально) - Длительность услуги в минутах (по умолчанию 30)</li>
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium mb-1">Использование:</p>
+                              <p className="text-sm text-gray-600">
+                                Используется при бронировании для предложения свободных слотов.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </TabsContent>
+              )}
               
               {!showCreateDialog && (
                 <TabsContent value="sandbox" className="py-4">

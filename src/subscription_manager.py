@@ -65,6 +65,15 @@ def check_access(business_id: str, feature: str) -> bool:
             except:
                 pass
         
+        # Маппинг старых названий на новые
+        tier_mapping = {
+            'basic': 'starter',
+            'pro': 'professional',
+            'enterprise': 'concierge'
+        }
+        if tier in tier_mapping:
+            tier = tier_mapping[tier]
+        
         # Проверяем доступ по тарифу
         if tier == 'trial':
             # Trial даёт доступ к chatgpt и personal_cabinet
@@ -73,24 +82,37 @@ def check_access(business_id: str, feature: str) -> bool:
                 return True
             return False
         
-        elif tier == 'basic':
-            # Basic - только chatgpt
+        elif tier == 'starter':
+            # Starter - только chatgpt
             if feature == 'chatgpt':
                 db.close()
                 return True
             return False
         
-        elif tier == 'pro':
-            # Pro - chatgpt, personal_cabinet, crm
+        elif tier == 'professional':
+            # Professional - chatgpt, personal_cabinet, crm
             if feature in ['chatgpt', 'personal_cabinet', 'crm']:
                 db.close()
                 return True
             return False
         
-        elif tier == 'enterprise':
-            # Enterprise - всё
+        elif tier == 'concierge':
+            # Concierge - всё
             db.close()
             return True
+        
+        elif tier == 'elite':
+            # Elite - всё
+            db.close()
+            return True
+        
+        elif tier == 'promo':
+            # Промо - бесплатный доступ к системе в ручном режиме (всё, кроме автоматизации)
+            # Даёт доступ к chatgpt, personal_cabinet, но не к автоматизации
+            if feature in ['chatgpt', 'personal_cabinet', 'crm']:
+                db.close()
+                return True
+            return False
         
         db.close()
         return False

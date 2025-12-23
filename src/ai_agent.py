@@ -129,22 +129,69 @@ def get_business_services(business_id: str) -> list:
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id, name, price, duration, description
-            FROM UserServices
-            WHERE business_id = ?
-            ORDER BY name
-        """, (business_id,))
-        rows = cursor.fetchall()
-        services = []
-        for row in rows:
-            services.append({
-                'id': row[0],
-                'name': row[1],
-                'price': row[2] / 100 if row[2] else None,  # Конвертируем из центов
-                'duration': row[3],
-                'description': row[4]
-            })
+        # Проверяем наличие колонки duration
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_duration = 'duration' in columns
+        
+        if has_duration:
+            cursor.execute("""
+                SELECT id, name, price, duration, description
+                FROM UserServices
+                WHERE business_id = ? AND is_active = 1
+                ORDER BY name
+            """, (business_id,))
+            rows = cursor.fetchall()
+            services = []
+            for row in rows:
+                # Парсим price из строки или числа
+                price_value = row[2]
+                if isinstance(price_value, str):
+                    try:
+                        price_value = float(price_value) / 100 if price_value else None
+                    except:
+                        price_value = None
+                elif price_value:
+                    price_value = price_value / 100
+                else:
+                    price_value = None
+                
+                services.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'price': price_value,
+                    'duration': row[3],
+                    'description': row[4]
+                })
+        else:
+            cursor.execute("""
+                SELECT id, name, price, description
+                FROM UserServices
+                WHERE business_id = ? AND is_active = 1
+                ORDER BY name
+            """, (business_id,))
+            rows = cursor.fetchall()
+            services = []
+            for row in rows:
+                # Парсим price из строки или числа
+                price_value = row[2]
+                if isinstance(price_value, str):
+                    try:
+                        price_value = float(price_value) / 100 if price_value else None
+                    except:
+                        price_value = None
+                elif price_value:
+                    price_value = price_value / 100
+                else:
+                    price_value = None
+                
+                services.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'price': price_value,
+                    'duration': None,
+                    'description': row[3]
+                })
         return services
     finally:
         db.close()

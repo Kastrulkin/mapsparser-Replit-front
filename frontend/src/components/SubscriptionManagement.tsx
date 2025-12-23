@@ -23,8 +23,8 @@ interface BusinessSubscription {
 
 const TIERS: SubscriptionTier[] = [
   {
-    id: 'basic',
-    name: 'STARTER',
+    id: 'starter',
+    name: 'Starter (Начальный)',
     price: 5,
     features: [
       'Подключитесь к профессиональной сети Beautybot',
@@ -33,25 +33,38 @@ const TIERS: SubscriptionTier[] = [
     ]
   },
   {
-    id: 'pro',
-    name: 'PROFESSIONAL (Most Popular)',
-    price: 65,
+    id: 'professional',
+    name: 'Профессиональный',
+    price: 55,
     features: [
-      'Полный набор инструментов для растущего бизнеса',
-      'Управление клиентами и автоматизация переписки',
-      'Интеграция с CRM',
-      'Выбирают 70% специалистов'
+      'Работайте над карточкой, подскажем каждый шаг',
+      'Оптимизируйте процесс на основе лучших практик',
+      'Генерация новостей',
+      'Генерация ответов на отзывы'
     ]
   },
   {
-    id: 'enterprise',
-    name: 'CONCIERGE',
-    price: 310,
+    id: 'concierge',
+    name: 'Консьерж',
+    price: 275,
     features: [
-      'Мы делаем всё за вас',
-      'Персональная настройка и приоритетная поддержка',
-      'Стратегия развития вашего бизнеса',
-      'Идеально для амбициозных лидеров'
+      'Карточка компании на картах',
+      'Коммуникация с клиентами',
+      'Допродажи и кросс-продажи',
+      'Оптимизация бизнес-процессов',
+      'Выделенный менеджер'
+    ]
+  },
+  {
+    id: 'elite',
+    name: 'Особый (Elite)',
+    price: 0,
+    features: [
+      'Привлечение клиентов онлайн',
+      'Коммуникация с клиентами',
+      'Привлечение клиентов оффлайн',
+      'Оптимизация бизнес-процессов',
+      'Выделенный менеджер'
     ]
   }
 ];
@@ -238,7 +251,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {TIERS.map((tier) => {
               const isCurrentTier = subscription?.tier === tier.id;
               const isActive = subscription?.status === 'active' && isCurrentTier;
@@ -248,9 +261,23 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                   <CardHeader>
                     <CardTitle className="text-xl">{tier.name}</CardTitle>
                     <div className="mt-2">
-                      <span className="text-3xl font-bold">${tier.price}</span>
-                      <span className="text-gray-500">/месяц</span>
+                      {tier.id === 'elite' ? (
+                        <>
+                          <span className="text-3xl font-bold">7%</span>
+                          <span className="text-gray-500"> от оплат привлечённых клиентов</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-3xl font-bold">${tier.price}</span>
+                          <span className="text-gray-500">/месяц</span>
+                        </>
+                      )}
                     </div>
+                    {tier.id === 'elite' && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Доступно после 3 месяцев подписки или по рекомендации
+                      </p>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <ul className="space-y-2">
@@ -264,10 +291,21 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                     <Button
                       className="w-full"
                       variant={isCurrentTier ? 'outline' : 'default'}
-                      disabled={isActive || processing || isModerationPending}
-                      onClick={() => handleSubscribe(tier.id)}
+                      disabled={isActive || processing || isModerationPending || tier.id === 'elite'}
+                      onClick={() => {
+                        if (tier.id === 'elite') {
+                          toast({
+                            title: 'Особый тариф',
+                            description: 'Для подключения тарифа Elite свяжитесь с нами. Доступно после 3 месяцев подписки или по рекомендации.',
+                          });
+                        } else {
+                          handleSubscribe(tier.id);
+                        }
+                      }}
                     >
-                      {isActive
+                      {tier.id === 'elite'
+                        ? 'Связаться с нами'
+                        : isActive
                         ? 'Текущий тариф'
                         : isCurrentTier
                         ? 'Обновить'

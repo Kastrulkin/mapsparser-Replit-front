@@ -106,6 +106,28 @@ def get_ai_agent_functions() -> List[Dict[str, Any]]:
                 },
                 "required": ["date"]
             }
+        },
+        {
+            "name": "request_human_support",
+            "description": "Призвать в чат представителя салона красоты. Используется когда клиент хочет поговорить с живым человеком, задает сложный вопрос или требует персонального внимания.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "salon_id": {
+                        "type": "string",
+                        "description": "ID салона красоты, представителя которого нужно призвать"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Причина запроса поддержки (например: 'Клиент хочет обсудить детали заказа', 'Сложный вопрос о услугах', 'Требуется консультация')"
+                    },
+                    "client_message": {
+                        "type": "string",
+                        "description": "Последнее сообщение клиента для контекста"
+                    }
+                },
+                "required": ["salon_id", "reason"]
+            }
         }
     ]
 

@@ -309,3 +309,94 @@ def get_salon_details(salon_id):
         print(f"❌ Ошибка получения информации о салоне: {e}")
         return jsonify({"error": str(e)}), 500
 
+@chatgpt_search_bp.route('/api/chatgpt/request-support', methods=['POST'])
+def request_human_support():
+    """
+    Запрос на призыв представителя салона в чат ChatGPT
+    
+    Body:
+        - salonId: ID салона (обязательно)
+        - reason: причина запроса (обязательно)
+        - clientMessage: последнее сообщение клиента (опционально)
+        - clientName: имя клиента (опционально)
+        - clientPhone: телефон клиента (опционально)
+    """
+    try:
+        data = request.get_json()
+        
+        salon_id = data.get('salonId')
+        reason = data.get('reason', '').strip()
+        client_message = data.get('clientMessage', '').strip()
+        client_name = data.get('clientName', '').strip()
+        client_phone = data.get('clientPhone', '').strip()
+        
+        if not salon_id or not reason:
+            return jsonify({"error": "salonId и reason обязательны"}), 400
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Получаем информацию о салоне и владельце
+        cursor.execute("""
+            SELECT id, name, owner_id, phone, whatsapp_phone, telegram_username, email, telegram_bot_token
+            FROM Businesses
+            WHERE id = ? AND moderation_status = 'approved' AND chatgpt_enabled = 1
+        """, (salon_id,))
+        
+        salon = cursor.fetchone()
+        if not salon:
+            db.close()
+            return jsonify({"error": "Салон не найден или не доступен"}), 404
+        
+        business_id, salon_name, owner_id, phone, whatsapp, telegram_username, email, telegram_bot_token = salon
+        
+        # Получаем информацию о владельце
+        cursor.execute("""
+            SELECT id, email, telegram_id
+            FROM Users
+            WHERE id = ?
+        """, (owner_id,))
+        
+        owner = cursor.fetchone()
+        if not owner:
+            db.close()
+            return jsonify({"error": "Владелец салона не найден"}), 404
+        
+        user_id, user_email, telegram_id = owner
+        
+        # Отправляем уведомления владельцу
+        from notifications import send_support_request_notification
+        
+        notification_sent = send_support_request_notification(
+            business_id=business_id,
+            salon_name=salon_name,
+            reason=reason,
+            client_message=client_message,
+            client_name=client_name,
+            client_phone=client_phone,
+            telegram_id=telegram_id,
+            email=user_email,
+            phone=phone,
+            whatsapp=whatsapp,
+            telegram_bot_token=telegram_bot_token  # Токен бота конкретного бизнеса
+        )
+        
+        db.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Запрос на поддержку отправлен. Представитель салона получит уведомление и свяжется с вами.',
+            'salon': {
+                'name': salon_name,
+                'phone': phone,
+                'whatsapp': whatsapp
+            },
+            'notification_sent': notification_sent
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Ошибка запроса поддержки: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+

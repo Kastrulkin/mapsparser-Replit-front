@@ -4964,9 +4964,12 @@ def block_business(business_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         
-        # Проверяем, что это именно demyanovap@yandex.ru
-        if user_data.get('email') != 'demyanovap@yandex.ru':
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
             return jsonify({"error": "Доступ запрещён"}), 403
+        db.close()
         
         data = request.get_json()
         is_blocked = data.get('is_blocked', True)
@@ -4982,6 +4985,72 @@ def block_business(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка блокировки бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/businesses/<business_id>/promo', methods=['POST'])
+def set_promo_tier(business_id):
+    """Установить/отключить промо тариф для бизнеса (только для суперадмина)"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Доступ запрещён"}), 403
+        
+        data = request.get_json()
+        is_promo = data.get('is_promo', True)
+        
+        cursor = db.conn.cursor()
+        
+        # Проверяем, что бизнес существует
+        cursor.execute("SELECT id FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+        
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        # Устанавливаем или отключаем промо тариф
+        if is_promo:
+            # Устанавливаем промо тариф
+            cursor.execute("""
+                UPDATE Businesses 
+                SET subscription_tier = 'promo',
+                    subscription_status = 'active',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (business_id,))
+            message = "Промо тариф установлен"
+        else:
+            # Отключаем промо тариф (возвращаем к trial или basic)
+            cursor.execute("""
+                UPDATE Businesses 
+                SET subscription_tier = 'trial',
+                    subscription_status = 'inactive',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (business_id,))
+            message = "Промо тариф отключен"
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": message})
+        
+    except Exception as e:
+        print(f"❌ Ошибка установки промо тарифа: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

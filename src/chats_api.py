@@ -495,3 +495,139 @@ def test_ai_agent(agent_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@chats_bp.route('/api/business/<business_id>/ai-agents/<agent_id>/test', methods=['POST'])
+def test_business_ai_agent(business_id, agent_id):
+    """Тестирование агента в песочнице (для пользователя)"""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        # Проверяем доступ к бизнесу
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+        
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+        
+        # Проверяем, что агент принадлежит бизнесу или доступен
+        cursor.execute("""
+            SELECT ai_agent_id FROM Businesses WHERE id = ?
+        """, (business_id,))
+        business_agent = cursor.fetchone()
+        
+        if business_agent and business_agent[0] != agent_id:
+            db.close()
+            return jsonify({"error": "Агент не принадлежит этому бизнесу"}), 403
+        
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        conversation_history = data.get('conversation_history', [])  # История для песочницы
+        
+        if not message:
+            return jsonify({"error": "Сообщение не может быть пустым"}), 400
+        
+        # Импортируем функции для работы с агентом
+        from ai_agent import build_prompt, get_business_info, get_business_services
+        from services.gigachat_client import GigaChatClient
+        from ai_agent_functions import get_ai_agent_functions
+        import json
+        
+        # Получаем конфигурацию агента
+        cursor.execute("""
+            SELECT name, type, description, workflow, task, identity, speech_style, restrictions_json, variables_json
+            FROM AIAgents
+            WHERE id = ?
+        """, (agent_id,))
+        
+        agent_row = cursor.fetchone()
+        if not agent_row:
+            db.close()
+            return jsonify({"error": "Агент не найден"}), 404
+        
+        # Используем данные бизнеса
+        business_info = get_business_info(business_id)
+        services = get_business_services(business_id)
+        
+        # Формируем конфигурацию агента
+        workflow_data = agent_row[3]
+        workflow = workflow_data if workflow_data else ''
+        if isinstance(workflow_data, str) and workflow_data.strip():
+            try:
+                parsed = json.loads(workflow_data)
+                if isinstance(parsed, list):
+                    workflow = parsed
+            except:
+                pass
+        
+        agent_config = {
+            'workflow': workflow,
+            'task': agent_row[4] or '',
+            'identity': agent_row[5] or '',
+            'speech_style': agent_row[6] or '',
+            'restrictions': json.loads(agent_row[7]) if agent_row[7] else {},
+            'variables': json.loads(agent_row[8]) if agent_row[8] else {}
+        }
+        
+        # Определяем начальный стейт
+        default_state = 'greeting'
+        if isinstance(workflow, list) and len(workflow) > 0:
+            for state in workflow:
+                if isinstance(state, dict) and state.get('init_state'):
+                    default_state = state.get('name', 'greeting')
+                    break
+        elif isinstance(workflow, str) and workflow.strip():
+            if 'init_state: true' in workflow or 'init_state: True' in workflow:
+                import re
+                match = re.search(r'- name:\s*(\w+).*?init_state:\s*true', workflow, re.DOTALL | re.IGNORECASE)
+                if match:
+                    default_state = match.group(1)
+        
+        # Строим промпт
+        prompt = build_prompt(
+            business_info,
+            services,
+            default_state,
+            message,
+            conversation_history,
+            agent_config
+        )
+        
+        # Генерируем ответ через GigaChat
+        client = GigaChatClient()
+        functions = get_ai_agent_functions()
+        
+        task_type = 'ai_agent_marketing' if agent_row[1] == 'marketing' else 'ai_agent_booking'
+        
+        response_text, usage_info = client.analyze_text(
+            prompt=prompt,
+            task_type=task_type,
+            functions=functions,
+            business_id=business_id,
+            user_id=user_data['user_id']
+        )
+        
+        if not response_text:
+            response_text = "Извините, произошла ошибка при генерации ответа."
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "response": response_text,
+            "usage": usage_info,
+            "state": default_state
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
