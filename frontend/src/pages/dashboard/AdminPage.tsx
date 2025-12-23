@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AIAgentsManagement } from '../../components/AIAgentsManagement';
 import { TokenUsageStats } from '../../components/TokenUsageStats';
+import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
 
 interface Business {
   id: string;
@@ -94,6 +95,15 @@ export const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState<{
+    isOpen: boolean;
+    businessId: string | null;
+    businessName: string;
+  }>({
+    isOpen: false,
+    businessId: null,
+    businessName: '',
+  });
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -573,6 +583,21 @@ export const AdminPage: React.FC = () => {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSettingsModal({
+                                isOpen: true,
+                                businessId: item.business.id,
+                                businessName: item.name,
+                              });
+                            }}
+                          >
+                            <Settings className="w-4 h-4 mr-1" />
+                            Настройки
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const isPromo = item.business.subscription_tier === 'promo';
                               handlePromo(item.business.id, item.name, isPromo);
                             }}
@@ -614,6 +639,21 @@ export const AdminPage: React.FC = () => {
                             <div className="space-y-2">
                               {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
                                 <div key={business.id} className="flex items-center justify-end space-x-2 mb-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSettingsModal({
+                                        isOpen: true,
+                                        businessId: business.id,
+                                        businessName: business.name,
+                                      });
+                                    }}
+                                  >
+                                    <Settings className="w-4 h-4 mr-1" />
+                                    Настройки
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -683,6 +723,30 @@ export const AdminPage: React.FC = () => {
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
         variant={confirmDialog.variant}
       />
+
+      {/* Модальное окно настроек внешних кабинетов */}
+      {settingsModal.isOpen && settingsModal.businessId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Настройки внешних кабинетов</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSettingsModal({ isOpen: false, businessId: null, businessName: '' })}
+                >
+                  ✕
+                </Button>
+              </div>
+              <AdminExternalCabinetSettings
+                businessId={settingsModal.businessId}
+                businessName={settingsModal.businessName}
+              />
+            </div>
+          </div>
+        </div>
+      )}
         </>
       )}
     </div>

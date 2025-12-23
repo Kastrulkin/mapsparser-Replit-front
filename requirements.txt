@@ -24,4 +24,7 @@ schedule>=1.2.0
 # ChatGPT интеграция + Stripe + тарифы
 stripe>=7.0.0
 googlemaps>=4.10.0
-pytz>=2024.1 
+pytz>=2024.1
+
+# Шифрование для внешних интеграций (Яндекс.Бизнес, Google Business, 2ГИС)
+cryptography>=41.0.0 

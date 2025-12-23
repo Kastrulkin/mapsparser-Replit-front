@@ -26,6 +26,8 @@ from typing import List
 
 from database_manager import DatabaseManager
 from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint, make_stats_id
+from auth_encryption import decrypt_auth_data
+from yandex_business_parser import YandexBusinessParser
 
 
 class YandexBusinessSyncWorker:
@@ -171,9 +173,29 @@ class YandexBusinessSyncWorker:
             print(f"[YandexBusinessSyncWorker] Активных аккаунтов: {len(accounts)}")
             for acc in accounts:
                 try:
-                    # Пока используем заглушечные методы
-                    reviews = self._fake_fetch_reviews(acc)
-                    stats = self._fake_fetch_stats(acc)
+                    # Расшифровываем auth_data
+                    auth_data_encrypted = acc.get("auth_data_encrypted")
+                    if not auth_data_encrypted:
+                        print(f"⚠️ Нет auth_data для аккаунта {acc['id']}, пропускаем")
+                        continue
+                    
+                    auth_data_plain = decrypt_auth_data(auth_data_encrypted)
+                    if not auth_data_plain:
+                        print(f"⚠️ Не удалось расшифровать auth_data для аккаунта {acc['id']}, пропускаем")
+                        continue
+                    
+                    # Парсим JSON auth_data
+                    try:
+                        auth_data_dict = json.loads(auth_data_plain)
+                    except json.JSONDecodeError:
+                        # Если не JSON, предполагаем что это просто cookies строка
+                        auth_data_dict = {"cookies": auth_data_plain}
+                    
+                    # Создаём парсер и получаем данные
+                    parser = YandexBusinessParser(auth_data_dict)
+                    reviews = parser.fetch_reviews(acc)
+                    stats = parser.fetch_stats(acc)
+                    
                     self._upsert_reviews(db, reviews)
                     self._upsert_stats(db, stats)
 
@@ -187,7 +209,7 @@ class YandexBusinessSyncWorker:
                         (datetime.utcnow(), acc["id"]),
                     )
                     db.conn.commit()
-                    print(f"[YandexBusinessSyncWorker] Синк демо-данных для аккаунта {acc['id']} завершён")
+                    print(f"[YandexBusinessSyncWorker] Синк данных для аккаунта {acc['id']} завершён")
                 except Exception as e:  # noqa: BLE001
                     db.conn.rollback()
                     cursor = db.conn.cursor()

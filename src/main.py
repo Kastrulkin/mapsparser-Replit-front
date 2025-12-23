@@ -546,6 +546,17 @@ def upsert_external_account(business_id):
 
         import uuid
         from datetime import datetime
+        from auth_encryption import encrypt_auth_data
+
+        # Шифруем auth_data перед сохранением
+        auth_data_encrypted = None
+        if auth_data:
+            try:
+                auth_data_encrypted = encrypt_auth_data(auth_data)
+            except Exception as e:
+                print(f"❌ Ошибка шифрования auth_data: {e}")
+                db.close()
+                return jsonify({"error": f"Ошибка шифрования данных: {str(e)}"}), 500
 
         # Для простоты: один активный аккаунт на source + business
         cursor.execute(
@@ -571,7 +582,7 @@ def upsert_external_account(business_id):
                 (
                     external_id,
                     display_name,
-                    auth_data,  # TODO: заменить на шифрование
+                    auth_data_encrypted,
                     1 if is_active else 0,
                     now,
                     account_id,
@@ -593,7 +604,7 @@ def upsert_external_account(business_id):
                     source,
                     external_id,
                     display_name,
-                    auth_data,  # TODO: заменить на шифрование
+                    auth_data_encrypted,
                     1 if is_active else 0,
                     now,
                     now,
@@ -4994,252 +5005,7 @@ def create_business():
 
 
 # ===== EXTERNAL SOURCES API (Яндекс.Бизнес / Google Business / 2ГИС) =====
-
-@app.route("/api/business/<business_id>/external-accounts", methods=["GET"])
-def get_external_accounts(business_id):
-    """
-    Получить все подключённые внешние аккаунты (Яндекс.Бизнес, Google Business, 2ГИС)
-    для конкретного бизнеса.
-    """
-    try:
-        # Авторизация: владелец бизнеса или суперадмин
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = row[0]
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        cursor.execute(
-            """
-            SELECT id, source, external_id, display_name, is_active,
-                   last_sync_at, last_error, created_at, updated_at
-            FROM ExternalBusinessAccounts
-            WHERE business_id = ?
-            ORDER BY source, created_at DESC
-            """,
-            (business_id,),
-        )
-        rows = cursor.fetchall()
-        db.close()
-
-        accounts = []
-        for r in rows:
-            accounts.append(
-                {
-                    "id": r[0],
-                    "source": r[1],
-                    "external_id": r[2],
-                    "display_name": r[3],
-                    "is_active": r[4],
-                    "last_sync_at": r[5],
-                    "last_error": r[6],
-                    "created_at": r[7],
-                    "updated_at": r[8],
-                }
-            )
-
-        return jsonify({"success": True, "accounts": accounts})
-
-    except Exception as e:
-        print(f"❌ Ошибка получения внешних аккаунтов: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/business/<business_id>/external-accounts", methods=["POST"])
-def upsert_external_account(business_id):
-    """
-    Создать или обновить внешний аккаунт источника для бизнеса.
-
-    Body:
-      - source: 'yandex_business' | 'google_business' | '2gis'
-      - external_id: string (опционально)
-      - display_name: string (опционально)
-      - auth_data: string (cookie / refresh_token / token) - будет зашифрован позже
-      - is_active: bool (опционально, по умолчанию True)
-    """
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json() or {}
-        source = (data.get("source") or "").strip()
-        external_id = (data.get("external_id") or "").strip() or None
-        display_name = (data.get("display_name") or "").strip() or None
-        auth_data = (data.get("auth_data") or "").strip() or None
-        is_active = data.get("is_active", True)
-
-        if source not in ("yandex_business", "google_business", "2gis"):
-            return jsonify({"error": "Некорректный source"}), 400
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = row[0]
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        import uuid
-        from datetime import datetime
-
-        # Для простоты: один активный аккаунт на source + business
-        cursor.execute(
-            """
-            SELECT id FROM ExternalBusinessAccounts
-            WHERE business_id = ? AND source = ?
-            """,
-            (business_id, source),
-        )
-        existing = cursor.fetchone()
-
-        now = datetime.utcnow().isoformat()
-
-        if existing:
-            account_id = existing[0]
-            cursor.execute(
-                """
-                UPDATE ExternalBusinessAccounts
-                SET external_id = ?, display_name = ?, 
-                    auth_data_encrypted = ?, is_active = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    external_id,
-                    display_name,
-                    auth_data,  # TODO: заменить на шифрование
-                    1 if is_active else 0,
-                    now,
-                    account_id,
-                ),
-            )
-        else:
-            account_id = str(uuid.uuid4())
-            cursor.execute(
-                """
-                INSERT INTO ExternalBusinessAccounts (
-                    id, business_id, source, external_id, display_name,
-                    auth_data_encrypted, is_active, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    account_id,
-                    business_id,
-                    source,
-                    external_id,
-                    display_name,
-                    auth_data,  # TODO: заменить на шифрование
-                    1 if is_active else 0,
-                    now,
-                    now,
-                ),
-            )
-
-        db.conn.commit()
-        db.close()
-
-        return jsonify({"success": True, "account_id": account_id})
-
-    except Exception as e:
-        print(f"❌ Ошибка сохранения внешнего аккаунта: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/external-accounts/<account_id>", methods=["DELETE"])
-def delete_external_account(account_id):
-    """Отключить внешний аккаунт (делаем is_active = 0, но не удаляем записи отзывов/статистики)."""
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        # Находим аккаунт и соответствующий бизнес
-        cursor.execute(
-            "SELECT business_id FROM ExternalBusinessAccounts WHERE id = ?", (account_id,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Аккаунт не найден"}), 404
-
-        business_id = row[0]
-
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        b_row = cursor.fetchone()
-        if not b_row:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = b_row[0]
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа"}), 403
-
-        cursor.execute(
-            """
-            UPDATE ExternalBusinessAccounts
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (account_id,),
-        )
-        db.conn.commit()
-        db.close()
-
-        return jsonify({"success": True})
-
-    except Exception as e:
-        print(f"❌ Ошибка отключения внешнего аккаунта: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+# ДУБЛИКАТ УДАЛЁН - см. определения выше (строки 429, 500, 627)
 
 @app.route('/api/superadmin/businesses/<business_id>', methods=['PUT'])
 def update_business(business_id):
