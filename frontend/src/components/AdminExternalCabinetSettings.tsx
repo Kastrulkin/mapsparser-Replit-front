@@ -71,7 +71,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           setYandexForm({
             external_id: yandex.external_id || '',
             display_name: yandex.display_name || '',
-            auth_data: '', // Не показываем зашифрованные данные
+            auth_data: '', // Не показываем зашифрованные данные (из соображений безопасности)
+          });
+        } else {
+          // Если аккаунта нет, очищаем форму
+          setYandexForm({
+            external_id: '',
+            display_name: '',
+            auth_data: '',
           });
         }
         
@@ -79,7 +86,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           setTwoGisForm({
             external_id: twoGis.external_id || '',
             display_name: twoGis.display_name || '',
-            auth_data: '', // Не показываем зашифрованные данные
+            auth_data: '', // Не показываем зашифрованные данные (из соображений безопасности)
+          });
+        } else {
+          // Если аккаунта нет, очищаем форму
+          setTwoGisForm({
+            external_id: '',
+            display_name: '',
+            auth_data: '',
           });
         }
       }
@@ -95,11 +109,27 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     try {
       const token = await newAuth.getToken();
       
-      // Формируем JSON для auth_data (cookies или токен)
-      const authDataJson = JSON.stringify({
-        cookies: formData.auth_data,
-        headers: {},
-      });
+      const account = source === 'yandex_business' ? yandexAccount : twoGisAccount;
+      
+      // Если cookies пустые, но аккаунт уже существует - не отправляем auth_data (чтобы не перезаписать существующие)
+      let authDataJson = undefined;
+      if (formData.auth_data && formData.auth_data.trim()) {
+        // Формируем JSON для auth_data (cookies или токен)
+        authDataJson = JSON.stringify({
+          cookies: formData.auth_data.trim(),
+          headers: {},
+        });
+      } else if (!account) {
+        // Если аккаунта нет и cookies пустые - ошибка
+        toast({
+          title: 'Ошибка',
+          description: 'Cookies обязательны для нового аккаунта',
+          variant: 'destructive',
+        });
+        setSaving(false);
+        return;
+      }
+      // Если аккаунт есть и cookies пустые - просто обновляем другие поля, не трогая cookies
 
       const response = await fetch(`/api/business/${businessId}/external-accounts`, {
         method: 'POST',
@@ -111,7 +141,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           source,
           external_id: formData.external_id || undefined,
           display_name: formData.display_name || undefined,
-          auth_data: authDataJson,
+          ...(authDataJson ? { auth_data: authDataJson } : {}), // Отправляем auth_data только если указаны новые cookies
           is_active: true,
         }),
       });
@@ -182,13 +212,22 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             </div>
             <div>
               <Label htmlFor="yandex-auth-data">Cookies (обязательно) *</Label>
+              {yandexAccount && yandexAccount.last_sync_at && (
+                <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                  ✅ Cookies сохранены (последняя синхронизация: {new Date(yandexAccount.last_sync_at).toLocaleString('ru-RU')})
+                  <br />
+                  <span className="text-xs text-green-600">Чтобы обновить cookies, вставьте новые данные ниже и нажмите "Обновить"</span>
+                </div>
+              )}
               <Textarea
                 id="yandex-auth-data"
                 value={yandexForm.auth_data}
                 onChange={(e) => setYandexForm({ ...yandexForm, auth_data: e.target.value })}
-                placeholder="Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"
+                placeholder={yandexAccount && yandexAccount.last_sync_at 
+                  ? "Вставьте новые cookies для обновления (или оставьте пустым, чтобы не менять)"
+                  : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"}
                 rows={6}
-                required
+                required={!yandexAccount || !yandexAccount.last_sync_at}
               />
               <p className="text-xs text-gray-500 mt-1">
                 <strong>Как скопировать cookies:</strong>
@@ -200,6 +239,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 3. Скопируйте все cookies в одну строку через точку с запятой
                 <br />
                 <strong>Важно:</strong> Cookies должны быть скопированы после входа в личный кабинет Яндекс.Бизнес
+                {yandexAccount && yandexAccount.last_sync_at && (
+                  <>
+                    <br />
+                    <span className="text-green-600">💡 Cookies уже сохранены. Вставьте новые только если нужно обновить.</span>
+                  </>
+                )}
               </p>
             </div>
             {yandexAccount && (

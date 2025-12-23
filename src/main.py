@@ -571,23 +571,47 @@ def upsert_external_account(business_id):
 
         if existing:
             account_id = existing[0]
-            cursor.execute(
-                """
-                UPDATE ExternalBusinessAccounts
-                SET external_id = ?, display_name = ?, 
-                    auth_data_encrypted = ?, is_active = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    external_id,
-                    display_name,
-                    auth_data_encrypted,
-                    1 if is_active else 0,
-                    now,
-                    account_id,
-                ),
-            )
+            # Если auth_data не передан, не обновляем его (сохраняем существующий)
+            if auth_data_encrypted is not None:
+                cursor.execute(
+                    """
+                    UPDATE ExternalBusinessAccounts
+                    SET external_id = ?, display_name = ?, 
+                        auth_data_encrypted = ?, is_active = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        external_id,
+                        display_name,
+                        auth_data_encrypted,
+                        1 if is_active else 0,
+                        now,
+                        account_id,
+                    ),
+                )
+            else:
+                # Обновляем только другие поля, не трогая auth_data_encrypted
+                cursor.execute(
+                    """
+                    UPDATE ExternalBusinessAccounts
+                    SET external_id = ?, display_name = ?, 
+                        is_active = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        external_id,
+                        display_name,
+                        1 if is_active else 0,
+                        now,
+                        account_id,
+                    ),
+                )
         else:
+            # При создании нового аккаунта auth_data обязателен
+            if not auth_data_encrypted:
+                db.close()
+                return jsonify({"error": "auth_data обязателен для нового аккаунта"}), 400
+            
             account_id = str(uuid.uuid4())
             cursor.execute(
                 """

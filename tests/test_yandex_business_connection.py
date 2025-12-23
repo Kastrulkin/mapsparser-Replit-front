@@ -13,8 +13,10 @@ import sys
 import os
 from datetime import datetime
 
-# Добавляем src в путь
-sys.path.insert(0, os.path.dirname(__file__))
+# Добавляем src в путь (тест находится в tests/, а модули в src/)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(project_root, 'src')
+sys.path.insert(0, src_path)
 
 from database_manager import DatabaseManager
 from auth_encryption import decrypt_auth_data
