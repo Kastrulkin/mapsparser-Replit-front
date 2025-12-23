@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams } from 'react-router-dom';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface SubscriptionTier {
   id: string;
@@ -46,7 +47,7 @@ const TIERS: SubscriptionTier[] = [
   {
     id: 'concierge',
     name: 'Консьерж',
-    price: 275,
+    price: 310,
     features: [
       'Карточка компании на картах',
       'Коммуникация с клиентами',
@@ -76,6 +77,9 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const paymentStatus = searchParams.get('payment');
+  const selectedTierFromUrl = searchParams.get('tier');
+  const autoCheckoutStartedRef = useRef(false);
+  const { language } = useLanguage();
 
   useEffect(() => {
     if (paymentStatus === 'success') {
@@ -107,6 +111,25 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
       setLoading(false);
     }
   }, [business]);
+
+  // Если пользователь пришёл из лендинга с выбранным тарифом и флагом payment=required,
+  // автоматически запускаем создание checkout-сессии для этого тарифа.
+  useEffect(() => {
+    if (autoCheckoutStartedRef.current) return;
+    if (processing) return;
+    if (paymentStatus !== 'required') return;
+
+    const tierId = selectedTierFromUrl || 'starter';
+    if (!tierId) return;
+
+    // Если подписка уже активна на этом тарифе — не запускаем оплату повторно
+    if (subscription && subscription.status === 'active' && subscription.tier === tierId) {
+      return;
+    }
+
+    autoCheckoutStartedRef.current = true;
+    handleSubscribe(tierId);
+  }, [paymentStatus, selectedTierFromUrl, subscription, processing]);
 
   const handleSubscribe = async (tierId: string) => {
     if (!businessId) {
@@ -157,7 +180,33 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   };
 
   const getTierName = (tierId: string) => {
-    return TIERS.find(t => t.id === tierId)?.name || tierId;
+    if (language === 'ru') {
+      switch (tierId) {
+        case 'starter':
+          return 'Начальный';
+        case 'professional':
+          return 'Профессиональный';
+        case 'concierge':
+          return 'Консьерж';
+        case 'elite':
+          return 'Особый';
+        default:
+          return tierId;
+      }
+    }
+    // Для всех не-русских языков используем английские названия
+    switch (tierId) {
+      case 'starter':
+        return 'Starter';
+      case 'professional':
+        return 'Professional';
+      case 'concierge':
+        return 'Concierge';
+      case 'elite':
+        return 'Elite';
+      default:
+        return tierId;
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -196,26 +245,18 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isModerationPending && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                ⏳ Ваш бизнес ожидает модерации. После одобрения вы сможете выбрать тариф.
-              </p>
-            </div>
-          )}
-
           {subscription && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Тариф:</span>
                 <span className="text-sm">{getTierName(subscription.tier)}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Статус:</span>
                 {getStatusBadge(subscription.status)}
               </div>
               {subscription.trial_ends_at && (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Триал до:</span>
                   <span className="text-sm">
                     {new Date(subscription.trial_ends_at).toLocaleDateString('ru-RU')}
@@ -223,7 +264,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                 </div>
               )}
               {subscription.subscription_ends_at && (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Подписка до:</span>
                   <span className="text-sm">
                     {new Date(subscription.subscription_ends_at).toLocaleDateString('ru-RU')}
@@ -251,79 +292,85 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
             {TIERS.map((tier) => {
               const isCurrentTier = subscription?.tier === tier.id;
               const isActive = subscription?.status === 'active' && isCurrentTier;
 
               return (
-                <Card key={tier.id} className={isCurrentTier ? 'border-indigo-500 border-2' : ''}>
-                  <CardHeader>
-                    <CardTitle className="text-xl">{tier.name}</CardTitle>
-                    <div className="mt-2">
-                      {tier.id === 'elite' ? (
-                        <>
-                          <span className="text-3xl font-bold">7%</span>
-                          <span className="text-gray-500"> от оплат привлечённых клиентов</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-3xl font-bold">${tier.price}</span>
-                          <span className="text-gray-500">/месяц</span>
-                        </>
-                      )}
+                <Card
+                  key={tier.id}
+                  className={`${isCurrentTier ? 'border-indigo-500 border-2' : ''} h-full`}
+                >
+                  <div className="flex flex-col h-full">
+                    {/* Верхний невидимый блок: заголовок + особенности */}
+                    <div className="flex-1 flex flex-col">
+                      <CardHeader>
+                        <CardTitle className="text-xl">{getTierName(tier.id)}</CardTitle>
+                        <div className="mt-2">
+                          {tier.id === 'elite' ? (
+                            <>
+                              <span className="text-3xl font-bold">7%</span>
+                              <span className="text-gray-500"> от оплат привлечённых клиентов</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-3xl font-bold">${tier.price}</span>
+                              <span className="text-gray-500">/месяц</span>
+                            </>
+                          )}
+                        </div>
+                        {tier.id === 'elite' && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Доступно после 3 месяцев подписки или по рекомендации
+                          </p>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-4 flex-1">
+                        <ul className="space-y-2">
+                          {tier.features.map((feature, idx) => (
+                            <li key={idx} className="text-sm flex items-start">
+                              <span className="text-green-500 mr-2">✓</span>
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
                     </div>
-                    {tier.id === 'elite' && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Доступно после 3 месяцев подписки или по рекомендации
-                      </p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <ul className="space-y-2">
-                      {tier.features.map((feature, idx) => (
-                        <li key={idx} className="text-sm flex items-start">
-                          <span className="text-green-500 mr-2">✓</span>
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      className="w-full"
-                      variant={isCurrentTier ? 'outline' : 'default'}
-                      disabled={isActive || processing || isModerationPending || tier.id === 'elite'}
-                      onClick={() => {
-                        if (tier.id === 'elite') {
-                          toast({
-                            title: 'Особый тариф',
-                            description: 'Для подключения тарифа Elite свяжитесь с нами. Доступно после 3 месяцев подписки или по рекомендации.',
-                          });
-                        } else {
-                          handleSubscribe(tier.id);
-                        }
-                      }}
-                    >
-                      {tier.id === 'elite'
-                        ? 'Связаться с нами'
-                        : isActive
-                        ? 'Текущий тариф'
-                        : isCurrentTier
-                        ? 'Обновить'
-                        : processing
-                        ? 'Обработка...'
-                        : 'Выбрать'}
-                    </Button>
-                  </CardContent>
+
+                    {/* Нижний невидимый блок: кнопка */}
+                    <CardFooter className="mt-auto pt-2">
+                      <Button
+                        className="w-full"
+                        variant={isCurrentTier ? 'outline' : 'default'}
+                        disabled={isActive || processing || isModerationPending || tier.id === 'elite'}
+                        onClick={() => {
+                          if (tier.id === 'elite') {
+                            toast({
+                              title: 'Особый тариф',
+                              description:
+                                'Для подключения тарифа Elite свяжитесь с нами. Доступно после 3 месяцев подписки или по рекомендации.',
+                            });
+                          } else {
+                            handleSubscribe(tier.id);
+                          }
+                        }}
+                      >
+                        {tier.id === 'elite'
+                          ? 'Связаться с нами'
+                          : isActive
+                          ? 'Текущий тариф'
+                          : isCurrentTier
+                          ? 'Обновить'
+                          : processing
+                          ? 'Обработка...'
+                          : 'Выбрать'}
+                      </Button>
+                    </CardFooter>
+                  </div>
                 </Card>
               );
             })}
-          </div>
-
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800">
-              💡 <strong>Специальное предложение:</strong> Первый месяц полного доступа (как в тарифе "Профессиональный") 
-              всего за $5! После первого месяца функции вернутся к базовому тарифу, если вы не перейдёте на тариф $65.
-            </p>
           </div>
         </CardContent>
       </Card>

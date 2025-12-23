@@ -6,6 +6,7 @@ import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
+import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 
 export const SettingsPage = () => {
   const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
@@ -28,6 +29,8 @@ export const SettingsPage = () => {
         <WABACredentials businessId={currentBusinessId} business={currentBusiness} />
         <TelegramBotCredentials businessId={currentBusinessId} business={currentBusiness} />
       </div>
+
+      <ExternalIntegrations currentBusinessId={currentBusinessId} />
 
       <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
 

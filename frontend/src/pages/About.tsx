@@ -5,12 +5,26 @@ import Footer from "@/components/Footer";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { newAuth } from "@/lib/auth_new";
 
 const About = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useLanguage();
   const isRu = language === "ru";
+
+  const handleSubscribeLanding = (tierId: "starter" | "professional" | "concierge") => {
+    const token = newAuth.getToken();
+
+    // Если пользователь не авторизован — ведём на регистрацию с выбранным тарифом
+    if (!token) {
+      navigate(`/login?tab=register&tier=${tierId}&source=pricing`);
+      return;
+    }
+
+    // Если уже авторизован — ведём в личный кабинет на страницу подписки
+    navigate(`/dashboard/settings?payment=required&tier=${tierId}&source=pricing`);
+  };
   
   useEffect(() => {
     const scrollToPricing = () => {
@@ -221,9 +235,9 @@ const About = () => {
         <div className="max-w-7xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.pricingTitle}</h2>
 
-          <div className="grid lg:grid-cols-4 gap-8 mb-8">
+          <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
-            <Card className="p-8 flex flex-col">
+            <Card className="p-8 flex flex-col h-full">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Начальный" : "Starter"}
@@ -241,9 +255,7 @@ const About = () => {
                   variant="default"
                   size="lg"
                   className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
-                  onClick={() => {
-                    navigate('/contact');
-                  }}
+                  onClick={() => handleSubscribeLanding("starter")}
                 >
                   {t.about.pricingStarterButton}
                 </Button>
@@ -251,8 +263,8 @@ const About = () => {
             </Card>
 
             {/* Option 0 - 5000 рублей в месяц */}
-            <Card className="p-8 flex flex-col">
-              <CardContent className="p-0 flex flex-col flex-1">
+            <Card className="p-8 flex flex-col h-full">
+            <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Профессиональный" : "Professional"}
                 </div>
@@ -269,9 +281,7 @@ const About = () => {
                   variant="default"
                   size="lg"
                   className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
-                  onClick={() => {
-                    navigate('/contact');
-                  }}
+                  onClick={() => handleSubscribeLanding("professional")}
                 >
                   {t.about.pricingOption0Button}
                 </Button>
@@ -279,13 +289,13 @@ const About = () => {
             </Card>
 
             {/* Option 1 */}
-            <Card className="p-8 flex flex-col">
-              <CardContent className="p-0 flex flex-col flex-1">
+            <Card className="p-8 flex flex-col h-full">
+            <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Консьерж" : "Concierge"}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "25000 рублей в месяц" : "$275 / month"}
+                  {isRu ? "25000 рублей в месяц" : "$310 / month"}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption1Point1}</div>
@@ -298,9 +308,7 @@ const About = () => {
                   variant="default"
                   size="lg"
                   className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
-                  onClick={() => {
-                    navigate('/contact');
-                  }}
+                  onClick={() => handleSubscribeLanding("concierge")}
                 >
                   {t.about.pricingOption1Button}
                 </Button>
@@ -308,13 +316,13 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="p-8 border-primary">
-              <CardContent className="p-0">
+            <Card className="p-8 flex flex-col h-full border-primary">
+            <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Особый" : "Elite"}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">{t.about.pricingOption2Subtitle}</div>
-                <div className="space-y-2 text-muted-foreground mb-6">
+                <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption2Point1}</div>
                   <div>- {t.about.pricingOption2Point2}</div>
                   <div>- {t.about.pricingOption2Point3}</div>
@@ -324,8 +332,25 @@ const About = () => {
                 <div className="text-sm text-muted-foreground italic mt-4">
                   {t.about.pricingOption2Note}
                 </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  onClick={() => navigate("/contact")}
+                >
+                  {t.about.contactUs}
+                </Button>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Специальное предложение под условиями тарифов (на всю ширину блока тарифов) */}
+          <div className="mt-6">
+            <p className="text-sm text-blue-800 bg-blue-50 rounded-lg p-4">
+              💡 <strong>Специальное предложение:</strong> Первый месяц полного доступа (как в тарифе
+              &nbsp;«Профессиональный») всего за $5! После первого месяца функции вернутся к базовому тарифу,
+              если вы не перейдёте на тариф $65.
+            </p>
           </div>
         </div>
       </section>

@@ -1,26 +1,78 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Footer from "../components/Footer";
 import { Button } from "../components/ui/button";
 import { newAuth } from "../lib/auth_new";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLanguage } from "@/i18n/LanguageContext";
+
+// Список популярных стран для автодополнения при регистрации
+const COUNTRY_OPTIONS = [
+  'Россия',
+  'США',
+  'Украина',
+  'Казахстан',
+  'Беларусь',
+  'Германия',
+  'Франция',
+  'Испания',
+  'Италия',
+  'Турция',
+  'ОАЭ',
+  'Израиль',
+  'Польша',
+  'Чехия',
+  'Латвия',
+  'Литва',
+  'Эстония',
+  'Канада',
+  'Великобритания',
+  'Австралия',
+  'Швейцария',
+  'Сербия',
+  'Грузия',
+  'Армения',
+  'Кыргызстан',
+  'Узбекистан',
+  'Таджикистан',
+  'Азербайджан',
+];
 
 const Login = () => {
+  const [searchParams] = useSearchParams();
+
   const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ 
-    name: '', 
-    phone: '', 
-    email: '', 
-    password: '', 
-    business_name: '', 
-    business_address: '', 
-    business_city: '', 
-    business_country: 'US' 
+  const [registerForm, setRegisterForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    password: '',
+    business_name: '',
+    business_address: '',
+    business_city: '',
+    business_country: 'Россия',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const isRu = language === 'ru';
+
+  // Инициализация вкладки и запоминание выбранного тарифа из URL
+  useEffect(() => {
+    const initialTab = searchParams.get('tab');
+    const tierFromUrl = searchParams.get('tier');
+
+    if (initialTab === 'register') {
+      setTab('register');
+    }
+
+    if (tierFromUrl) {
+      // Запоминаем выбранный тариф для последующего редиректа на оплату
+      localStorage.setItem('selectedTier', tierFromUrl);
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +91,15 @@ const Login = () => {
           setError(error);
         }
       } else if (user) {
-        navigate('/dashboard');
+        const tierFromUrl = searchParams.get('tier');
+        const source = searchParams.get('source');
+
+        if (tierFromUrl && source === 'pricing') {
+          localStorage.setItem('selectedTier', tierFromUrl);
+          navigate(`/dashboard/settings?payment=required&tier=${tierFromUrl}`);
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       setError('Ошибка входа: ' + (error as Error).message);
@@ -89,19 +149,29 @@ const Login = () => {
       const data = await response.json();
       
       if (response.ok && data.success) {
+        const tierFromUrl = searchParams.get('tier');
+
         // Сохраняем токен
         if (data.token) {
           localStorage.setItem('auth_token', data.token);
         }
-        
-        // Перенаправляем на страницу оплаты или в личный кабинет
+
+        if (tierFromUrl) {
+          localStorage.setItem('selectedTier', tierFromUrl);
+        }
+
+        // Перенаправляем на страницу оплаты/подписки
+        const targetUrl = tierFromUrl
+          ? `/dashboard/settings?payment=required&tier=${tierFromUrl}`
+          : '/dashboard/settings?payment=required';
+
         if (data.business?.moderation_status === 'pending') {
           setInfo('Регистрация успешна! Ваш бизнес ожидает модерации. Перенаправляем в личный кабинет...');
           setTimeout(() => {
-            navigate('/dashboard/settings?payment=required');
+            navigate(targetUrl);
           }, 2000);
         } else {
-          navigate('/dashboard/settings?payment=required');
+          navigate(targetUrl);
         }
       } else {
         setError(data.error || 'Ошибка регистрации');
@@ -149,10 +219,10 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Вход в систему
+            {isRu ? 'Вход в систему' : 'Sign in'}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Новые клиенты для вашего бизнеса
+            {isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business'}
           </p>
         </div>
 
@@ -167,7 +237,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Вход
+              {isRu ? 'Вход' : 'Login'}
             </button>
             <button
               onClick={() => setTab('register')}
@@ -177,7 +247,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Регистрация
+              {isRu ? 'Регистрация' : 'Register'}
             </button>
             <button
               onClick={() => setTab('reset')}
@@ -187,7 +257,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Восстановление
+              {isRu ? 'Восстановление' : 'Reset'}
             </button>
           </div>
 
@@ -237,7 +307,7 @@ const Login = () => {
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? 'Вход...' : 'Войти'}
+                {loading ? (isRu ? 'Вход...' : 'Signing in...') : (isRu ? 'Войти' : 'Sign in')}
               </Button>
             </form>
           )}
@@ -349,18 +419,24 @@ const Login = () => {
                       <label htmlFor="register-business-country" className="block text-sm font-medium text-gray-700">
                         Страна
                       </label>
-                      <select
+                      <input
                         id="register-business-country"
+                        list="business-country-options"
                         value={registerForm.business_country}
-                        onChange={(e) => setRegisterForm({...registerForm, business_country: e.target.value})}
+                        onChange={(e) =>
+                          setRegisterForm({ ...registerForm, business_country: e.target.value })
+                        }
+                        placeholder="Начните вводить название страны"
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="US">США</option>
-                        <option value="RU">Россия</option>
-                        <option value="UA">Украина</option>
-                        <option value="KZ">Казахстан</option>
-                        <option value="BY">Беларусь</option>
-                      </select>
+                      />
+                      <datalist id="business-country-options">
+                        {COUNTRY_OPTIONS.map((country) => (
+                          <option key={country} value={country} />
+                        ))}
+                      </datalist>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Можно выбрать из списка или вписать страну вручную.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -371,10 +447,12 @@ const Login = () => {
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+                {loading ? (isRu ? 'Регистрация...' : 'Registering...') : (isRu ? 'Зарегистрироваться' : 'Sign up')}
               </Button>
               <p className="text-xs text-gray-500 text-center">
-                После регистрации вам будет предложено выбрать тариф и оплатить подписку
+                {isRu
+                  ? 'После регистрации вам будет предложено выбрать тариф и оплатить подписку'
+                  : 'After registration you will be able to choose a plan and pay for your subscription.'}
               </p>
             </form>
           )}

@@ -14,6 +14,7 @@ import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { NetworkSwitcher } from "@/components/NetworkSwitcher";
 import { NetworkDashboard } from "@/components/NetworkDashboard";
 import TelegramConnection from "@/components/TelegramConnection";
+import { ExternalIntegrations } from "@/components/ExternalIntegrations";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
@@ -1222,6 +1223,7 @@ const Dashboard = () => {
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">⚙️ Настройки</h2>
               <TelegramConnection />
+              <ExternalIntegrations currentBusinessId={currentBusinessId} />
             </div>
           )}
 
