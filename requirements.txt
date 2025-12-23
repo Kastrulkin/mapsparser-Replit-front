@@ -9,8 +9,6 @@ fake-useragent>=1.5.1
 python-dotenv>=1.0.1 
 requests>=2.31.0
 playwright>=1.40.0
-transformers>=4.35.0
-torch>=2.1.0
 flask>=2.3.0
 flask-cors>=4.0.0
 
