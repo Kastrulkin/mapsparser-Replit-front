@@ -65,6 +65,33 @@ class ExternalStatsPoint:
     raw_payload: Optional[Dict[str, Any]] = None
 
 
+@dataclass
+class ExternalPost:
+    """Новость/пост организации из внешнего источника."""
+    id: str
+    business_id: str
+    source: str
+    external_post_id: Optional[str]
+    title: Optional[str]
+    text: Optional[str]
+    published_at: Optional[datetime]
+    image_url: Optional[str] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class ExternalPhoto:
+    """Фотография организации из внешнего источника."""
+    id: str
+    business_id: str
+    source: str
+    external_photo_id: Optional[str]
+    url: Optional[str]
+    thumbnail_url: Optional[str] = None
+    uploaded_at: Optional[datetime] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+
+
 class ExternalSourceAdapter(Protocol):
     """
     Базовый протокол для адаптеров внешних источников.

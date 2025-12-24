@@ -5,6 +5,29 @@
 Нужно найти правильные API endpoints для получения:
 1. **Отзывов** из личного кабинета
 2. **Статистики** (просмотры, клики, действия, рейтинг)
+3. **Публикаций/новостей** из личного кабинета
+4. **Фотографий** (количество) из личного кабинета
+
+## ✅ Найденные Endpoints
+
+### Публикации/Новости и Фотографии
+
+**Правильный endpoint для публикаций и фотографий:**
+```
+https://yandex.ru/business/server-components/sidebar?permalink={ORG_ID}
+```
+
+Где `{ORG_ID}` - это ID организации (например, `203293742306`)
+
+**Как найти в Network tab:**
+1. Откройте страницу публикаций: `https://yandex.ru/sprav/{ORG_ID}/p/edit/posts/`
+2. Или страницу фотографий: `https://yandex.ru/sprav/{ORG_ID}/p/edit/photos/`
+3. Откройте DevTools → Network tab
+4. Найдите запрос в **Request initiator chain**:
+   - Страница → JavaScript файл → `https://yandex.ru/business/server-components/sidebar?permalink={ORG_ID}`
+5. Этот endpoint возвращает данные как для публикаций, так и для фотографий
+
+**Примечание:** Один и тот же endpoint используется для получения данных о публикациях и фотографиях. Данные находятся в структуре ответа `sidebar`.
 
 ## Способ 1: Через DevTools браузера (рекомендуется)
 
@@ -144,13 +167,20 @@ Object.keys(window).filter(k => k.toLowerCase().includes('review') || k.toLowerC
 1. **Обновите `src/yandex_business_parser.py`:**
    - Добавьте найденный URL в начало списка `possible_urls` в методе `fetch_reviews()`
    - Или в `fetch_stats()` для статистики
+   - Для публикаций: обновите `sidebar_url` в методе `fetch_posts()`
+   - Для фотографий: обновите `sidebar_url` в методе `fetch_photos_count()`
 
 2. **Проверьте структуру ответа:**
    - Откройте Response в DevTools
    - Убедитесь, что понимаете структуру JSON
-   - Обновите код парсинга в `fetch_reviews()` или `fetch_stats()`, если структура отличается
+   - Обновите код парсинга в соответствующих методах, если структура отличается
+   - Для `sidebar` endpoint: данные могут быть вложены в структуру, используйте рекурсивный поиск
 
 3. **Протестируйте:**
+   ```bash
+   python scripts/test_oliver_yandex.py
+   ```
+   Или для конкретного бизнеса:
    ```bash
    python tests/test_yandex_business_connection.py <BUSINESS_ID>
    ```
@@ -193,6 +223,32 @@ Object.keys(window).filter(k => k.toLowerCase().includes('review') || k.toLowerC
   ]
 }
 ```
+
+### Sidebar (публикации и фотографии):
+```json
+{
+  "sidebar": {
+    "posts": [
+      {
+        "id": "123",
+        "title": "Новая акция",
+        "text": "Описание акции",
+        "published_at": "2024-01-01T00:00:00Z",
+        "image_url": "https://..."
+      }
+    ],
+    "photos": {
+      "total": 62,
+      "categories": [
+        {"count": 9},
+        {"count": 2}
+      ]
+    }
+  }
+}
+```
+
+**Важно:** Структура `sidebar` может быть вложенной и отличаться. Парсер использует рекурсивный поиск для нахождения данных о публикациях и фотографиях в любом месте структуры ответа.
 
 Но структура может отличаться! Всегда проверяйте реальный ответ в DevTools.
 

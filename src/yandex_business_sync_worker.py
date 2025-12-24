@@ -25,7 +25,7 @@ from datetime import datetime, date
 from typing import List
 
 from database_manager import DatabaseManager
-from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint, make_stats_id
+from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint, ExternalPost, ExternalPhoto, make_stats_id
 from auth_encryption import decrypt_auth_data
 from yandex_business_parser import YandexBusinessParser
 
@@ -165,6 +165,68 @@ class YandexBusinessSyncWorker:
                 ),
             )
 
+    def _upsert_posts(self, db: DatabaseManager, posts: List[ExternalPost]) -> None:
+        cursor = db.conn.cursor()
+        for p in posts:
+            cursor.execute(
+                """
+                INSERT INTO ExternalBusinessPosts (
+                    id, business_id, account_id, source, external_post_id,
+                    title, text, published_at, image_url, raw_payload,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    text=excluded.text,
+                    published_at=excluded.published_at,
+                    image_url=excluded.image_url,
+                    raw_payload=excluded.raw_payload,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    p.id,
+                    p.business_id,
+                    p.source,
+                    p.external_post_id,
+                    p.title,
+                    p.text,
+                    p.published_at,
+                    p.image_url,
+                    json.dumps(p.raw_payload or {}),
+                ),
+            )
+
+    def _upsert_photos(self, db: DatabaseManager, photos: List[ExternalPhoto]) -> None:
+        cursor = db.conn.cursor()
+        for p in photos:
+            cursor.execute(
+                """
+                INSERT INTO ExternalBusinessPhotos (
+                    id, business_id, account_id, source, external_photo_id,
+                    url, thumbnail_url, uploaded_at, raw_payload,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    url=excluded.url,
+                    thumbnail_url=excluded.thumbnail_url,
+                    uploaded_at=excluded.uploaded_at,
+                    raw_payload=excluded.raw_payload,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    p.id,
+                    p.business_id,
+                    p.source,
+                    p.external_photo_id,
+                    p.url,
+                    p.thumbnail_url,
+                    p.uploaded_at,
+                    json.dumps(p.raw_payload or {}),
+                ),
+            )
+
     def run_once(self) -> None:
         """Один проход синхронизации по всем активным аккаунтам Яндекс.Бизнес."""
         db = DatabaseManager()
@@ -201,6 +263,16 @@ class YandexBusinessSyncWorker:
                     # Получаем статистику
                     stats = parser.fetch_stats(acc)
                     self._upsert_stats(db, stats)
+                    
+                    # Получаем посты/новости
+                    posts = parser.fetch_posts(acc)
+                    self._upsert_posts(db, posts)
+                    
+                    # Получаем только количество фотографий (детали не нужны)
+                    # Метод fetch_photos() возвращает пустой список, количество получаем через fetch_photos_count()
+                    photos_count = parser.fetch_photos_count(acc)
+                    print(f"[YandexBusinessSyncWorker] Количество фотографий: {photos_count}")
+                    # Детали фотографий не сохраняем, только количество используется в org_info
                     
                     # Получаем общую информацию об организации (рейтинг, количество новостей, фото)
                     org_info = parser.fetch_organization_info(acc)
