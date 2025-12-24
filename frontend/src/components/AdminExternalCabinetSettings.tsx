@@ -30,18 +30,22 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  // Формы для Яндекс.Бизнес
+  // Ключи для sessionStorage
+  const yandexCookiesKey = `yandex_cookies_${businessId}`;
+  const twoGisCookiesKey = `2gis_cookies_${businessId}`;
+
+  // Формы для Яндекс.Бизнес (загружаем cookies из sessionStorage при инициализации)
   const [yandexForm, setYandexForm] = useState({
     external_id: '',
     display_name: '',
-    auth_data: '',
+    auth_data: typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '',
   });
 
-  // Формы для 2ГИС
+  // Формы для 2ГИС (загружаем cookies из sessionStorage при инициализации)
   const [twoGisForm, setTwoGisForm] = useState({
     external_id: '',
     display_name: '',
-    auth_data: '',
+    auth_data: typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '',
   });
 
   useEffect(() => {
@@ -68,32 +72,48 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         setTwoGisAccount(twoGis || null);
         
         if (yandex) {
-          setYandexForm({
-            external_id: yandex.external_id || '',
-            display_name: yandex.display_name || '',
-            auth_data: '', // Не показываем зашифрованные данные (из соображений безопасности)
+          setYandexForm(prev => {
+            // Загружаем cookies из sessionStorage, если они там есть
+            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
+            return {
+              external_id: yandex.external_id || '',
+              display_name: yandex.display_name || '',
+              // Используем сохраненные cookies из sessionStorage или текущие из формы
+              auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
+            };
           });
         } else {
-          // Если аккаунта нет, очищаем форму
-          setYandexForm({
-            external_id: '',
-            display_name: '',
-            auth_data: '',
+          // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
+          setYandexForm(prev => {
+            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
+            return {
+              external_id: '',
+              display_name: '',
+              auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
+            };
           });
         }
         
         if (twoGis) {
-          setTwoGisForm({
-            external_id: twoGis.external_id || '',
-            display_name: twoGis.display_name || '',
-            auth_data: '', // Не показываем зашифрованные данные (из соображений безопасности)
+          setTwoGisForm(prev => {
+            // Загружаем cookies из sessionStorage, если они там есть
+            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
+            return {
+              external_id: twoGis.external_id || '',
+              display_name: twoGis.display_name || '',
+              // Используем сохраненные cookies из sessionStorage или текущие из формы
+              auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
+            };
           });
         } else {
-          // Если аккаунта нет, очищаем форму
-          setTwoGisForm({
-            external_id: '',
-            display_name: '',
-            auth_data: '',
+          // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
+          setTwoGisForm(prev => {
+            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
+            return {
+              external_id: '',
+              display_name: '',
+              auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
+            };
           });
         }
       }
@@ -111,12 +131,16 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       
       const account = source === 'yandex_business' ? yandexAccount : twoGisAccount;
       
+      // Сохраняем введенные cookies перед сохранением (чтобы не потерять их после перезагрузки)
+      const hasNewCookies = formData.auth_data && formData.auth_data.trim().length > 0;
+      const savedCookies = hasNewCookies ? formData.auth_data.trim() : null;
+      
       // Если cookies пустые, но аккаунт уже существует - не отправляем auth_data (чтобы не перезаписать существующие)
       let authDataJson = undefined;
-      if (formData.auth_data && formData.auth_data.trim()) {
+      if (hasNewCookies) {
         // Формируем JSON для auth_data (cookies или токен)
         authDataJson = JSON.stringify({
-          cookies: formData.auth_data.trim(),
+          cookies: savedCookies,
           headers: {},
         });
       } else if (!account) {
@@ -151,7 +175,24 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           title: 'Успешно',
           description: `Аккаунт ${source === 'yandex_business' ? 'Яндекс.Бизнес' : '2ГИС'} сохранён`,
         });
+        
+        // Перезагружаем аккаунты
         await loadAccounts();
+        
+        // Если были введены новые cookies, сохраняем их в форме и sessionStorage (чтобы они не пропали)
+        if (savedCookies) {
+          if (source === 'yandex_business') {
+            setYandexForm(prev => ({ ...prev, auth_data: savedCookies }));
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem(yandexCookiesKey, savedCookies);
+            }
+          } else if (source === '2gis') {
+            setTwoGisForm(prev => ({ ...prev, auth_data: savedCookies }));
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem(twoGisCookiesKey, savedCookies);
+            }
+          }
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Ошибка сохранения');
@@ -222,7 +263,18 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               <Textarea
                 id="yandex-auth-data"
                 value={yandexForm.auth_data}
-                onChange={(e) => setYandexForm({ ...yandexForm, auth_data: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setYandexForm({ ...yandexForm, auth_data: value });
+                  // Сохраняем cookies в sessionStorage при вводе
+                  if (typeof window !== 'undefined') {
+                    if (value.trim()) {
+                      sessionStorage.setItem(yandexCookiesKey, value);
+                    } else {
+                      sessionStorage.removeItem(yandexCookiesKey);
+                    }
+                  }
+                }}
                 placeholder={yandexAccount && yandexAccount.last_sync_at 
                   ? "Вставьте новые cookies для обновления (или оставьте пустым, чтобы не менять)"
                   : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"}
@@ -260,7 +312,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             )}
             <Button
               onClick={() => saveAccount('yandex_business', yandexForm)}
-              disabled={saving || !yandexForm.auth_data}
+              disabled={saving || (!yandexAccount && !yandexForm.auth_data)}
             >
               {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
             </Button>
@@ -294,7 +346,18 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               <Textarea
                 id="2gis-auth-data"
                 value={twoGisForm.auth_data}
-                onChange={(e) => setTwoGisForm({ ...twoGisForm, auth_data: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setTwoGisForm({ ...twoGisForm, auth_data: value });
+                  // Сохраняем cookies в sessionStorage при вводе
+                  if (typeof window !== 'undefined') {
+                    if (value.trim()) {
+                      sessionStorage.setItem(twoGisCookiesKey, value);
+                    } else {
+                      sessionStorage.removeItem(twoGisCookiesKey);
+                    }
+                  }
+                }}
                 placeholder="Вставьте cookies из браузера или токен сессии 2ГИС"
                 rows={4}
                 required

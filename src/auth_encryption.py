@@ -102,7 +102,14 @@ def decrypt_auth_data(encrypted_text: str) -> Optional[str]:
         else:
             # Fallback: просто base64 decode
             return base64.b64decode(encrypted_text.encode()).decode()
+    except base64.binascii.Error as e:
+        print(f"❌ Ошибка base64 декодирования: {e}")
+        print(f"   Возможно, данные не зашифрованы или в другом формате")
+        return None
     except Exception as e:
-        print(f"❌ Ошибка расшифровки auth_data: {e}")
+        print(f"❌ Ошибка расшифровки auth_data: {type(e).__name__}: {e}")
+        import traceback
+        if os.getenv("DEBUG_AUTH_DECRYPT", "0") == "1":
+            traceback.print_exc()
         return None
 

@@ -13,6 +13,19 @@ import sys
 import os
 from datetime import datetime
 
+# Загружаем переменные окружения из .env
+try:
+    from dotenv import load_dotenv
+    # Загружаем .env из корня проекта
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(project_root, '.env')
+    load_dotenv(env_path)
+    print(f"✅ Загружен .env из {env_path}")
+except ImportError:
+    print("⚠️ python-dotenv не установлен, переменные окружения не загружены из .env")
+except Exception as e:
+    print(f"⚠️ Ошибка загрузки .env: {e}")
+
 # Добавляем src в путь (тест находится в tests/, а модули в src/)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(project_root, 'src')
@@ -79,12 +92,23 @@ def test_business_connection(business_id: str):
             print(f"   Добавьте cookies через админскую панель")
             return
         
+        # Проверяем ключ шифрования
+        secret_key = os.getenv("EXTERNAL_AUTH_SECRET_KEY", "").strip()
+        if secret_key:
+            print(f"✅ EXTERNAL_AUTH_SECRET_KEY найден (длина: {len(secret_key)})")
+        else:
+            print(f"⚠️ EXTERNAL_AUTH_SECRET_KEY не найден в переменных окружения")
+            print(f"   Проверьте .env файл в корне проекта")
+        
         # Расшифровываем auth_data
         print(f"\n🔓 Расшифровка auth_data...")
         auth_data_plain = decrypt_auth_data(auth_data_encrypted)
         if not auth_data_plain:
             print(f"❌ Не удалось расшифровать auth_data")
-            print(f"   Проверьте EXTERNAL_AUTH_SECRET_KEY в .env")
+            print(f"\n💡 ВОЗМОЖНЫЕ РЕШЕНИЯ:")
+            print(f"   1. Проверьте, что EXTERNAL_AUTH_SECRET_KEY в .env совпадает с ключом, который использовался при шифровании")
+            print(f"   2. Если ключ изменился, пересохраните cookies в админской панели (чтобы зашифровать с новым ключом)")
+            print(f"   3. Или используйте тот же ключ, который был при сохранении")
             return
         
         print(f"✅ auth_data расшифрован успешно")
@@ -158,6 +182,29 @@ def test_business_connection(business_id: str):
             print(f"❌ Ошибка при получении статистики: {e}")
             import traceback
             traceback.print_exc()
+        
+        # Получаем общую информацию об организации
+        print(f"\n📋 Получение информации об организации...")
+        try:
+            org_info = parser.fetch_organization_info(account_row)
+            print(f"✅ Информация об организации:")
+            print(f"   - Рейтинг: {org_info.get('rating')}")
+            print(f"   - Количество отзывов: {org_info.get('reviews_count')}")
+            print(f"   - Количество новостей: {org_info.get('news_count')}")
+            print(f"   - Количество фото: {org_info.get('photos_count')}")
+        except Exception as e:
+            print(f"❌ Ошибка при получении информации об организации: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Показываем статистику по отзывам
+        if reviews:
+            reviews_with_response = sum(1 for r in reviews if r.response_text)
+            reviews_without_response = len(reviews) - reviews_with_response
+            print(f"\n📊 Статистика по отзывам:")
+            print(f"   - Всего отзывов: {len(reviews)}")
+            print(f"   - С ответами: {reviews_with_response}")
+            print(f"   - Без ответов: {reviews_without_response}")
         
         print(f"\n" + "=" * 60)
         print(f"✅ Тест завершён")

@@ -193,11 +193,32 @@ class YandexBusinessSyncWorker:
                     
                     # Создаём парсер и получаем данные
                     parser = YandexBusinessParser(auth_data_dict)
-                    reviews = parser.fetch_reviews(acc)
-                    stats = parser.fetch_stats(acc)
                     
+                    # Получаем отзывы (с ответами и без)
+                    reviews = parser.fetch_reviews(acc)
                     self._upsert_reviews(db, reviews)
+                    
+                    # Получаем статистику
+                    stats = parser.fetch_stats(acc)
                     self._upsert_stats(db, stats)
+                    
+                    # Получаем общую информацию об организации (рейтинг, количество новостей, фото)
+                    org_info = parser.fetch_organization_info(acc)
+                    print(f"[YandexBusinessSyncWorker] Информация об организации:")
+                    print(f"   Рейтинг: {org_info.get('rating')}")
+                    print(f"   Отзывов: {org_info.get('reviews_count')}")
+                    print(f"   Новостей: {org_info.get('news_count')}")
+                    print(f"   Фото: {org_info.get('photos_count')}")
+                    
+                    # Сохраняем информацию об организации в raw_payload последней статистики
+                    if stats and org_info:
+                        last_stat = stats[-1]
+                        if last_stat.raw_payload:
+                            last_stat.raw_payload.update(org_info)
+                        else:
+                            last_stat.raw_payload = org_info
+                        # Обновляем статистику с новой информацией
+                        self._upsert_stats(db, [last_stat])
 
                     cursor = db.conn.cursor()
                     cursor.execute(
