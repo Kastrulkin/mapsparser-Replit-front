@@ -28,6 +28,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   const [twoGisAccount, setTwoGisAccount] = useState<ExternalAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingCookies, setTestingCookies] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const { toast } = useToast();
 
   // Ключи для sessionStorage
@@ -121,6 +123,97 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       console.error('Ошибка загрузки аккаунтов:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testCookies = async (source: 'yandex_business' | '2gis', formData: typeof yandexForm) => {
+    if (!formData.auth_data || !formData.auth_data.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите cookies для тестирования',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (source === 'yandex_business' && !formData.external_id) {
+      toast({
+        title: 'Ошибка',
+        description: 'Укажите ID организации для тестирования',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setTestingCookies(true);
+    try {
+      const token = await newAuth.getToken();
+      const authDataJson = JSON.stringify({
+        cookies: formData.auth_data.trim(),
+        headers: {},
+      });
+
+      const response = await fetch(`/api/business/${businessId}/external-accounts/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source,
+          auth_data: authDataJson,
+          external_id: formData.external_id || undefined,
+        }),
+      });
+
+      // Проверяем статус ответа
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Ошибка ответа сервера:', response.status, errorText);
+        toast({
+          title: '❌ Ошибка сервера',
+          description: `Статус ${response.status}: ${errorText.substring(0, 200)}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Парсим JSON ответ
+      let result;
+      try {
+        result = await response.json();
+      } catch (e) {
+        console.error('Ошибка парсинга JSON:', e);
+        const text = await response.text();
+        toast({
+          title: '❌ Ошибка',
+          description: `Сервер вернул не JSON ответ: ${text.substring(0, 200)}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Обрабатываем результат
+      if (result.success) {
+        toast({
+          title: '✅ Успешно',
+          description: result.message || 'Cookies работают корректно!',
+        });
+      } else {
+        toast({
+          title: '❌ Ошибка',
+          description: result.message || result.error || 'Cookies не работают',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось протестировать cookies',
+        variant: 'destructive',
+      });
+    } finally {
+      setTestingCookies(false);
     }
   };
 
@@ -253,13 +346,33 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             </div>
             <div>
               <Label htmlFor="yandex-auth-data">Cookies (обязательно) *</Label>
-              {yandexAccount && yandexAccount.last_sync_at && (
-                <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                  ✅ Cookies сохранены (последняя синхронизация: {new Date(yandexAccount.last_sync_at).toLocaleString('ru-RU')})
-                  <br />
-                  <span className="text-xs text-green-600">Чтобы обновить cookies, вставьте новые данные ниже и нажмите "Обновить"</span>
-                </div>
-              )}
+              {yandexAccount && yandexAccount.last_sync_at && (() => {
+                const lastSync = new Date(yandexAccount.last_sync_at);
+                const daysSinceSync = Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
+                const isOld = daysSinceSync > 14;
+                
+                return (
+                  <div className={`mb-2 p-2 border rounded text-sm ${
+                    isOld 
+                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800' 
+                      : 'bg-green-50 border-green-200 text-green-800'
+                  }`}>
+                    {isOld ? (
+                      <>
+                        ⚠️ Cookies сохранены {daysSinceSync} дней назад (последняя синхронизация: {lastSync.toLocaleString('ru-RU')})
+                        <br />
+                        <span className="text-xs">Рекомендуется обновить cookies, если прошло больше 2 недель</span>
+                      </>
+                    ) : (
+                      <>
+                        ✅ Cookies сохранены (последняя синхронизация: {lastSync.toLocaleString('ru-RU')})
+                        <br />
+                        <span className="text-xs text-green-600">Чтобы обновить cookies, вставьте новые данные ниже и нажмите "Обновить"</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
               <Textarea
                 id="yandex-auth-data"
                 value={yandexForm.auth_data}
@@ -281,23 +394,38 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 rows={6}
                 required={!yandexAccount || !yandexAccount.last_sync_at}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                <strong>Как скопировать cookies:</strong>
-                <br />
-                1. Откройте DevTools (F12) → вкладка "Application" (Chrome) или "Storage" (Firefox)
-                <br />
-                2. Слева: Cookies → выберите домен <code className="bg-gray-100 px-1 rounded">business.yandex.ru</code> или <code className="bg-gray-100 px-1 rounded">yandex.ru</code>
-                <br />
-                3. Скопируйте все cookies в одну строку через точку с запятой
-                <br />
-                <strong>Важно:</strong> Cookies должны быть скопированы после входа в личный кабинет Яндекс.Бизнес
-                {yandexAccount && yandexAccount.last_sync_at && (
-                  <>
-                    <br />
-                    <span className="text-green-600">💡 Cookies уже сохранены. Вставьте новые только если нужно обновить.</span>
-                  </>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInstructions(!showInstructions)}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  {showInstructions ? '▼ Скрыть инструкцию' : '▶ Показать инструкцию по копированию cookies'}
+                </button>
+                {showInstructions && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-xs text-gray-700">
+                    <strong className="block mb-2">📋 Пошаговая инструкция:</strong>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Откройте личный кабинет Яндекс.Бизнес в браузере: <code className="bg-gray-100 px-1 rounded">https://yandex.ru/sprav/</code></li>
+                      <li>Убедитесь, что вы авторизованы (вошли в аккаунт)</li>
+                      <li>Откройте DevTools: нажмите <kbd className="bg-gray-200 px-1 rounded">F12</kbd> или <kbd className="bg-gray-200 px-1 rounded">Cmd+Option+I</kbd> (Mac)</li>
+                      <li>Перейдите на вкладку <strong>"Application"</strong> (Chrome) или <strong>"Storage"</strong> (Firefox)</li>
+                      <li>В левом меню найдите <strong>"Cookies"</strong> → выберите домен <code className="bg-gray-100 px-1 rounded">yandex.ru</code></li>
+                      <li>Скопируйте все cookies в формате: <code className="bg-gray-100 px-1 rounded">key1=value1; key2=value2; ...</code></li>
+                      <li>Вставьте скопированную строку в поле выше</li>
+                      <li>Нажмите <strong>"Проверить cookies"</strong> для тестирования перед сохранением</li>
+                    </ol>
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                      <strong>⚠️ Важно:</strong>
+                      <ul className="list-disc list-inside ml-2 mt-1 space-y-1">
+                        <li>Cookies должны быть скопированы <strong>после входа</strong> в личный кабинет</li>
+                        <li>Обязательные cookies: <code className="bg-gray-100 px-1 rounded">Session_id</code>, <code className="bg-gray-100 px-1 rounded">yandexuid</code>, <code className="bg-gray-100 px-1 rounded">sessionid2</code></li>
+                        <li>Обновляйте cookies раз в 1-2 недели или при ошибках 401/302</li>
+                      </ul>
+                    </div>
+                  </div>
                 )}
-              </p>
+              </div>
             </div>
             {yandexAccount && (
               <div className="text-sm text-gray-600">
@@ -310,12 +438,21 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 )}
               </div>
             )}
-            <Button
-              onClick={() => saveAccount('yandex_business', yandexForm)}
-              disabled={saving || (!yandexAccount && !yandexForm.auth_data)}
-            >
-              {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => testCookies('yandex_business', yandexForm)}
+                disabled={testingCookies || saving || !yandexForm.auth_data || !yandexForm.external_id}
+                variant="outline"
+              >
+                {testingCookies ? 'Проверка...' : 'Проверить cookies'}
+              </Button>
+              <Button
+                onClick={() => saveAccount('yandex_business', yandexForm)}
+                disabled={saving || testingCookies || (!yandexAccount && !yandexForm.auth_data)}
+              >
+                {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
+              </Button>
+            </div>
           </div>
         </div>
 

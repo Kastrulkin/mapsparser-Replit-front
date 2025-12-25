@@ -707,6 +707,262 @@ def delete_external_account(account_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/business/<business_id>/external-accounts/test", methods=["POST"])
+def test_external_account_cookies(business_id):
+    """
+    Тестирует cookies для внешнего аккаунта без сохранения.
+    
+    Body:
+      - source: 'yandex_business' | '2gis'
+      - auth_data: string (cookies в формате строки)
+      - external_id: string (опционально, для Яндекс.Бизнес)
+    """
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json() or {}
+        source = (data.get("source") or "").strip()
+        auth_data = (data.get("auth_data") or "").strip()
+        external_id = (data.get("external_id") or "").strip() or None
+
+        if not source or not auth_data:
+            return jsonify({"error": "source и auth_data обязательны"}), 400
+
+        if source not in ("yandex_business", "2gis"):
+            return jsonify({"error": "Некорректный source"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем доступ к бизнесу
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = row[0]
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+
+        db.close()
+
+        # Парсим auth_data
+        try:
+            auth_data_dict = json.loads(auth_data)
+            cookies_str = auth_data_dict.get("cookies", auth_data)
+        except json.JSONDecodeError:
+            cookies_str = auth_data
+
+        # Парсим cookies в словарь
+        cookies_dict = {}
+        for item in cookies_str.split(";"):
+            item = item.strip()
+            if "=" in item:
+                key, value = item.split("=", 1)
+                cookies_dict[key.strip()] = value.strip()
+
+        if not cookies_dict:
+            return jsonify({
+                "success": False,
+                "error": "Не удалось распарсить cookies",
+                "message": "Проверьте формат cookies. Должен быть: key1=value1; key2=value2; ..."
+            }), 200
+
+        # Проверяем наличие критичных cookies для Яндекс.Бизнес
+        required_cookies = ["Session_id", "yandexuid", "sessionid2"]
+        missing_cookies = [cookie for cookie in required_cookies if cookie not in cookies_dict]
+        
+        if missing_cookies:
+            return jsonify({
+                "success": False,
+                "error": "Отсутствуют обязательные cookies",
+                "message": f"Не найдены критичные cookies: {', '.join(missing_cookies)}. Эти cookies обязательны для доступа к личному кабинету Яндекс.Бизнес. Скопируйте их из DevTools → Application → Cookies → yandex.ru",
+                "missing_cookies": missing_cookies,
+            }), 200
+
+        # Тестируем cookies в зависимости от source
+        if source == "yandex_business":
+            # Для Яндекс.Бизнес тестируем простой запрос к API отзывов
+            if not external_id:
+                return jsonify({"error": "external_id обязателен для Яндекс.Бизнес"}), 400
+
+            test_url = f"https://yandex.ru/sprav/api/{external_id}/reviews"
+            test_params = {"ranking": "by_time"}
+
+            try:
+                # Импортируем requests (должен быть установлен)
+                try:
+                    import requests
+                except ImportError:
+                    return jsonify({
+                        "success": False,
+                        "error": "Библиотека requests не установлена",
+                        "message": "Установите библиотеку requests: pip install requests",
+                    }), 500
+                
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "Accept": "application/json",
+                    "Referer": f"https://yandex.ru/sprav/{external_id}/p/edit/reviews/",
+                }
+                response = requests.get(test_url, params=test_params, cookies=cookies_dict, headers=headers, timeout=10, allow_redirects=False)
+                
+                # Логируем для отладки
+                print(f"🔍 Тест cookies: URL={test_url}, статус={response.status_code}, content-type={response.headers.get('Content-Type', 'N/A')}")
+                if response.status_code != 200:
+                    print(f"   Ответ (первые 200 символов): {response.text[:200]}")
+
+                # Проверяем content-type ответа
+                content_type = response.headers.get('Content-Type', '').lower()
+                
+                # Если получили HTML вместо JSON - это признак того, что cookies устарели
+                if 'text/html' in content_type or 'html' in response.text[:100].lower():
+                    # Проверяем, есть ли в ответе признаки капчи или авторизации
+                    response_text_lower = response.text.lower()
+                    if 'captcha' in response_text_lower or 'робот' in response_text_lower:
+                        return jsonify({
+                            "success": False,
+                            "error": "Капча",
+                            "message": "Яндекс показал капчу. Cookies могут быть недействительны или запросы похожи на автоматические.",
+                            "status_code": 200,
+                        }), 200
+                    elif 'авторизац' in response_text_lower or 'login' in response_text_lower or 'passport.yandex.ru' in response.text:
+                        return jsonify({
+                            "success": False,
+                            "error": "Требуется авторизация",
+                            "message": "Cookies устарели. Яндекс перенаправляет на страницу авторизации. Обновите cookies в личном кабинете.",
+                            "status_code": 401,
+                        }), 200
+                    else:
+                        return jsonify({
+                            "success": False,
+                            "error": "HTML ответ вместо JSON",
+                            "message": "Сервер вернул HTML вместо JSON. Cookies устарели или требуется авторизация.",
+                            "status_code": response.status_code,
+                        }), 200
+
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        # Проверяем, что это не ошибка
+                        if "error" in data:
+                            error_msg = data.get("error", {}).get("message", "Неизвестная ошибка")
+                            if error_msg == "NEED_RESET":
+                                return jsonify({
+                                    "success": False,
+                                    "error": "Сессия истекла (NEED_RESET)",
+                                    "message": "Cookies устарели. Обновите cookies в личном кабинете Яндекс.Бизнес.",
+                                    "status_code": 401,
+                                }), 200
+                            return jsonify({
+                                "success": False,
+                                "error": error_msg,
+                                "status_code": response.status_code,
+                            }), 200
+                        return jsonify({
+                            "success": True,
+                            "message": "Cookies работают корректно!",
+                            "status_code": 200,
+                        }), 200
+                    except json.JSONDecodeError as e:
+                        # Если не JSON, проверяем, что это за ответ
+                        content_type = response.headers.get('Content-Type', '').lower()
+                        response_text = response.text[:500]  # Первые 500 символов
+                        
+                        # Проверяем на капчу или HTML
+                        if 'captcha' in response_text.lower() or 'робот' in response_text.lower():
+                            return jsonify({
+                                "success": False,
+                                "error": "Капча",
+                                "message": "Яндекс показал капчу. Cookies могут быть недействительны или запросы похожи на автоматические.",
+                                "status_code": 200,
+                            }), 200
+                        
+                        return jsonify({
+                            "success": False,
+                            "error": "Получен не JSON ответ",
+                            "message": f"Сервер вернул {content_type}. Возможно, требуется авторизация или cookies устарели.",
+                            "status_code": response.status_code,
+                            "content_type": content_type,
+                        }), 200
+                    except Exception as e:
+                        return jsonify({
+                            "success": False,
+                            "error": f"Ошибка парсинга ответа: {str(e)}",
+                            "status_code": response.status_code,
+                        }), 200
+                elif response.status_code == 401:
+                    return jsonify({
+                        "success": False,
+                        "error": "Не авторизован (401)",
+                        "message": "Cookies устарели или недействительны. Обновите cookies.",
+                        "status_code": 401,
+                    }), 200
+                elif response.status_code == 302:
+                    return jsonify({
+                        "success": False,
+                        "error": "Редирект (302)",
+                        "message": "Cookies устарели. Яндекс перенаправляет на страницу авторизации.",
+                        "status_code": 302,
+                    }), 200
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Ошибка {response.status_code}",
+                        "status_code": response.status_code,
+                    }), 200
+            except requests.exceptions.RequestException as e:
+                error_msg = str(e)
+                # Определяем тип ошибки для более понятного сообщения
+                if "Exceeded" in error_msg and "redirects" in error_msg:
+                    return jsonify({
+                        "success": False,
+                        "error": "Редирект (302)",
+                        "message": "Cookies устарели. Яндекс перенаправляет на страницу авторизации (слишком много редиректов).",
+                        "status_code": 302,
+                    }), 200
+                elif "timeout" in error_msg.lower():
+                    return jsonify({
+                        "success": False,
+                        "error": "Таймаут",
+                        "message": "Превышено время ожидания ответа от сервера Яндекс.",
+                    }), 200
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": f"Ошибка запроса: {error_msg}",
+                        "message": "Не удалось выполнить запрос к API Яндекс.Бизнес.",
+                    }), 200
+        elif source == "2gis":
+            # Для 2ГИС можно добавить тестирование позже
+            return jsonify({
+                "success": True,
+                "message": "Cookies приняты (тестирование 2ГИС пока не реализовано)",
+            }), 200
+
+        return jsonify({"error": "Неизвестный source"}), 400
+
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Ошибка в test_external_account_cookies: {e}")
+        print(error_trace)
+        return jsonify({
+            "success": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}",
+            "message": "Произошла ошибка при тестировании cookies. Проверьте логи сервера.",
+        }), 500
+
+
 # SPA-фолбэк: любые не-API пути возвращают index.html
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
 def spa_fallback(path):

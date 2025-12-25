@@ -130,6 +130,19 @@ class YandexBusinessParser:
                 **kwargs,
             )
             
+            # Проверяем статус код перед парсингом
+            if response.status_code == 401:
+                try:
+                    error_data = response.json()
+                    if error_data.get("error", {}).get("message") == "NEED_RESET":
+                        print(f"⚠️ Сессия истекла (401 NEED_RESET) для {url}")
+                        print(f"   🔐 Cookies устарели, нужно обновить авторизацию")
+                        print(f"   Решение: Обновите cookies в админской панели")
+                        print(f"   Redirect: {error_data.get('error', {}).get('redirectPath', 'N/A')}")
+                        return None
+                except:
+                    pass
+            
             # Проверяем на капчу
             response_text_lower = response.text.lower()
             if "captcha" in response_text_lower or "робот" in response_text_lower or "smartcaptcha" in response_text_lower:
@@ -159,19 +172,23 @@ class YandexBusinessParser:
             if hasattr(e, 'response') and e.response is not None:
                 print(f"   Статус код: {e.response.status_code}")
                 if e.response.status_code == 401:
-                    print(f"   ⚠️ Не авторизован - возможно:")
-                    print(f"      1. Cookies устарели (нужно обновить в админской панели)")
-                    print(f"      2. Cookies не передаются правильно")
-                    print(f"      3. Нужны дополнительные headers")
-                    # Показываем начало ответа для отладки
+                    print(f"   ⚠️ Не авторизован (401) - сессия истекла")
                     try:
-                        response_text = e.response.text[:200]
-                        if "captcha" in response_text.lower() or "робот" in response_text.lower():
-                            print(f"   🔐 Яндекс показал капчу")
+                        error_data = e.response.json()
+                        if error_data.get("error", {}).get("message") == "NEED_RESET":
+                            print(f"   🔐 Cookies устарели (NEED_RESET)")
+                            print(f"   Решение: Обновите cookies в админской панели")
+                            print(f"   Redirect: {error_data.get('error', {}).get('redirectPath', 'N/A')}")
                     except:
-                        pass
+                        print(f"   ⚠️ Возможные причины:")
+                        print(f"      1. Cookies устарели (нужно обновить в админской панели)")
+                        print(f"      2. Cookies не передаются правильно")
+                        print(f"      3. Нужны дополнительные headers")
+                elif e.response.status_code == 302:
+                    print(f"   ⚠️ Редирект (302) - возможно, сессия истекла")
+                    print(f"   Решение: Обновите cookies в админской панели")
                 elif e.response.status_code == 403:
-                    print(f"   ⚠️ Доступ запрещён - возможно, нужны свежие cookies")
+                    print(f"   ⚠️ Доступ запрещён (403) - возможно, нужны свежие cookies")
             return None
         except Exception as e:
             print(f"❌ Неожиданная ошибка при запросе к {url}: {e}")
@@ -190,59 +207,75 @@ class YandexBusinessParser:
         business_id = account_row["business_id"]
         external_id = account_row.get("external_id")
         
-        # Если включен фейковый режим, возвращаем демо-данные
+        # Если включен фейковый режим, возвращаем демо-данные (только для тестирования)
         if os.getenv("YANDEX_BUSINESS_FAKE", "0") == "1":
             return self._fake_fetch_reviews(account_row)
         
         reviews = []
         
         if not external_id:
-            print(f"⚠️ Нет external_id для бизнеса {business_id}, используем демо-данные")
-            return self._fake_fetch_reviews(account_row)
+            print(f"❌ Нет external_id для бизнеса {business_id}")
+            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            return []
         
         # Правильный endpoint для отзывов (найден через Network tab браузера)
-        # Формат: https://yandex.ru/sprav/api/{org_id}/reviews?ranking=by_time&continue_token=...
+        # Формат пагинации: 
+        #   Страница 1: ?ranking=by_time
+        #   Страница 2: ?ranking=by_time&page=2&source=pagination
+        #   Страница 3+: ?ranking=by_time&page=3&type=company&source=pagination
         # Получаем ВСЕ отзывы (не фильтруем по unread) - мы и так увидим, есть ли ответ
         base_url = f"https://yandex.ru/sprav/api/{external_id}/reviews"
         
         # Собираем все отзывы через пагинацию
         all_reviews_data = []
         seen_review_ids = set()  # Для отслеживания дубликатов
-        continue_token = None
-        current_offset = 0  # Текущий offset для пагинации
+        # Проверяем, нужно ли загружать только новые отзывы
+        only_new = account_row.get("only_new_reviews", False)
+        last_sync_date = account_row.get("last_sync_at")
+        
         total_reviews_expected = None  # Общее количество отзывов из pager
         limit = 20  # Лимит на страницу (обычно 20)
         max_pages = 30  # Ограничение на случай бесконечного цикла (30 страниц = ~600 отзывов)
+        current_page = 1  # Текущая страница (начинаем с 1)
         
-        while max_pages > 0:
+        if only_new and last_sync_date:
+            print(f"🔄 Режим: загрузка только новых отзывов (после {last_sync_date})")
+        while max_pages > 0 and current_page <= max_pages:
             # Query параметры для получения отзывов
             # Получаем ВСЕ отзывы, не фильтруем по unread - мы увидим наличие ответа по полю response
             params = {
                 "ranking": "by_time",
             }
             
-            # Если есть токен продолжения, добавляем его (для пагинации)
-            if continue_token:
-                params["continue_token"] = continue_token
-            # Если нет токена, используем offset для пагинации
-            elif current_offset > 0:
-                params["offset"] = current_offset
+            # Начиная со 2 страницы добавляем параметры пагинации
+            if current_page > 1:
+                params["page"] = current_page
+                params["source"] = "pagination"
+                # Начиная с 3 страницы добавляется type=company
+                if current_page >= 3:
+                    params["type"] = "company"
             
-            print(f"🔍 Загружаем отзывы (уже получено уникальных: {len(seen_review_ids)}, offset: {current_offset})...")
+            print(f"🔍 Страница {current_page}: Загружаем отзывы...")
+            print(f"   Уже получено уникальных: {len(seen_review_ids)}, ожидается всего: {total_reviews_expected or 'неизвестно'}")
             
-            # Имитация человека: случайная задержка между запросами
-            if continue_token or current_offset > 0:
+            # Имитация человека: случайная задержка между запросами (кроме первой страницы)
+            # Это важно, чтобы избежать капчи Яндекс
+            if current_page > 1:
                 page_delay = random.uniform(2.0, 4.0)
-                print(f"   ⏳ Пауза {page_delay:.1f} сек (имитация человека)...")
+                print(f"   ⏳ Пауза {page_delay:.1f} сек (имитация человека, чтобы избежать капчи)...")
                 time.sleep(page_delay)
             
             result = self._make_request(base_url, params=params)
             
             if not result:
-                print(f"⚠️ Не удалось получить данные")
+                print(f"❌ Не удалось получить данные со страницы {current_page}")
                 if len(all_reviews_data) == 0:
-                    # Если первая страница не загрузилась, возвращаем демо-данные
-                    return self._fake_fetch_reviews(account_row)
+                    # Если первая страница не загрузилась, возвращаем пустой список
+                    print(f"   Возможные причины:")
+                    print(f"   1. Cookies устарели - обновите их в админской панели")
+                    print(f"   2. Сессия истекла (401 NEED_RESET)")
+                    print(f"   3. Проблемы с сетью или API Яндекс изменился")
+                    return []
                 break
             
             # Логируем структуру ответа для отладки (только для первого запроса)
@@ -320,45 +353,61 @@ class YandexBusinessParser:
                     print(f"✅ Загружены все отзывы (достигнут total: {total_reviews_expected})")
                     break
             
-            # Получаем токен продолжения для следующей страницы
-            continue_token = result.get("continue_token") or result.get("next_token")
+            # Если режим "только новые" и мы нашли старый отзыв, останавливаемся
+            if only_new and last_sync_date:
+                # Проверяем дату последнего отзыва на странице
+                oldest_review_date = None
+                for review in page_reviews:
+                    review_date_str = review.get("published_at")
+                    if review_date_str:
+                        try:
+                            review_date = datetime.fromisoformat(review_date_str.replace("Z", "+00:00"))
+                            if oldest_review_date is None or review_date < oldest_review_date:
+                                oldest_review_date = review_date
+                        except:
+                            pass
+                
+                if oldest_review_date:
+                    # Преобразуем last_sync_date в datetime для сравнения
+                    if isinstance(last_sync_date, str):
+                        try:
+                            last_sync_dt = datetime.fromisoformat(last_sync_date.replace("Z", "+00:00"))
+                        except:
+                            last_sync_dt = None
+                    elif isinstance(last_sync_date, datetime):
+                        last_sync_dt = last_sync_date
+                    else:
+                        last_sync_dt = None
+                    
+                    if last_sync_dt and oldest_review_date < last_sync_dt:
+                        print(f"✅ Все новые отзывы загружены (найдены отзывы старше {last_sync_date})")
+                        break
             
-            # Если нет токена продолжения, используем offset для следующей страницы
-            if not continue_token:
-                if pager:
-                    # Обновляем current_offset для следующего запроса
-                    current_offset = pager.get("offset", 0) + len(page_reviews)
-                    
-                    # Если на странице меньше лимита, это последняя страница
-                    if len(page_reviews) < limit:
-                        print(f"✅ Загружены все отзывы (последняя страница, меньше лимита)")
-                        break
-                    
-                    # Если offset + количество отзывов >= total, это последняя страница
-                    if total_reviews_expected and current_offset >= total_reviews_expected:
-                        print(f"✅ Загружены все отзывы (достигнут total по offset: {current_offset} >= {total_reviews_expected})")
-                        break
-                else:
-                    # Если нет pager, увеличиваем offset вручную
-                    current_offset += len(page_reviews)
-                    
-                    # Если нет pager и нет токена, проверяем общее количество
-                    total = result.get("total") or result.get("count")
-                    if total and len(seen_review_ids) >= total:
-                        print(f"✅ Загружены все отзывы (всего: {total})")
-                        break
-                    if len(page_reviews) < 20:  # Обычно на странице 20 отзывов
-                        print(f"✅ Загружены все отзывы (последняя страница)")
-                        break
+            # Проверяем условия остановки пагинации
+            # Если на странице меньше лимита, это последняя страница
+            if len(page_reviews) < limit:
+                print(f"✅ Загружены все отзывы (последняя страница, меньше лимита: {len(page_reviews)} < {limit})")
+                break
             
+            # Если достигли общего количества отзывов
+            if total_reviews_expected and len(seen_review_ids) >= total_reviews_expected:
+                print(f"✅ Загружены все отзывы (достигнут total: {total_reviews_expected})")
+                break
+            
+            # Переходим на следующую страницу
+            current_page += 1
             max_pages -= 1
         
         reviews_list = all_reviews_data
         print(f"📊 Всего загружено уникальных отзывов: {len(reviews_list)} (ожидалось: {total_reviews_expected})")
         
         if not reviews_list:
-            print(f"⚠️ Не удалось получить отзывы для {business_id}")
-            return self._fake_fetch_reviews(account_row)
+            print(f"❌ Не удалось получить отзывы для {business_id}")
+            print(f"   Возможные причины:")
+            print(f"   1. Cookies устарели - обновите их в админской панели")
+            print(f"   2. Сессия истекла (401 NEED_RESET)")
+            print(f"   3. Проблемы с сетью или API Яндекс изменился")
+            return []
         
         # Парсим отзывы
         for idx, review_data in enumerate(reviews_list):
@@ -506,15 +555,16 @@ class YandexBusinessParser:
         business_id = account_row["business_id"]
         external_id = account_row.get("external_id")
         
-        # Если включен фейковый режим, возвращаем демо-данные
+        # Если включен фейковый режим, возвращаем демо-данные (только для тестирования)
         if os.getenv("YANDEX_BUSINESS_FAKE", "0") == "1":
             return self._fake_fetch_stats(account_row)
         
         stats = []
         
         if not external_id:
-            print(f"⚠️ Нет external_id для бизнеса {business_id}, используем демо-данные")
-            return self._fake_fetch_stats(account_row)
+            print(f"❌ Нет external_id для бизнеса {business_id}")
+            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            return []
         
         # Пробуем несколько возможных вариантов endpoints
         possible_urls = [
@@ -539,9 +589,12 @@ class YandexBusinessParser:
                 break
         
         if not data:
-            print(f"⚠️ Не удалось получить статистику для {business_id} ни с одного endpoint")
-            print(f"   Попробуйте найти правильный URL через DevTools → Network tab")
-            return self._fake_fetch_stats(account_row)
+            print(f"❌ Не удалось получить статистику для {business_id} ни с одного endpoint")
+            print(f"   Возможные причины:")
+            print(f"   1. Cookies устарели - обновите их в админской панели")
+            print(f"   2. Сессия истекла (401 NEED_RESET)")
+            print(f"   3. API endpoint изменился - проверьте через DevTools → Network tab")
+            return []
         
         # Парсим ответ (структура зависит от реального API)
         # Возможные варианты структуры:
@@ -718,15 +771,16 @@ class YandexBusinessParser:
         business_id = account_row["business_id"]
         external_id = account_row.get("external_id")
         
-        # Если включен фейковый режим, возвращаем демо-данные
+        # Если включен фейковый режим, возвращаем демо-данные (только для тестирования)
         if os.getenv("YANDEX_BUSINESS_FAKE", "0") == "1":
             return self._fake_fetch_posts(account_row)
         
         posts = []
         
         if not external_id:
-            print(f"⚠️ Нет external_id для бизнеса {business_id}, используем демо-данные")
-            return self._fake_fetch_posts(account_row)
+            print(f"❌ Нет external_id для бизнеса {business_id}")
+            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            return []
         
         # Endpoint для постов (публикаций/новостей)
         # URL страницы: https://yandex.ru/sprav/{org_id}/p/edit/posts/
@@ -906,26 +960,13 @@ class YandexBusinessParser:
                     print(f"✅ Успешно получены данные постов с {url}")
                     break
         
-        result = None
-        working_url = None
-        
-        for url in possible_urls:
-            print(f"🔍 Пробуем endpoint постов (предположение): {url}")
-            
-            # Имитация человека: случайная задержка перед запросом
-            delay = random.uniform(1.5, 3.5)
-            time.sleep(delay)
-            
-            result = self._make_request(url)
-            if result:
-                working_url = url
-                print(f"✅ Успешно получены данные постов с {url}")
-                break
-        
         if not result:
-            print(f"⚠️ Не удалось получить посты для {business_id} ни с одного endpoint")
-            print(f"   Попробуйте найти правильный URL через DevTools → Network tab")
-            return self._fake_fetch_posts(account_row)
+            print(f"❌ Не удалось получить посты для {business_id} ни с одного endpoint")
+            print(f"   Возможные причины:")
+            print(f"   1. Cookies устарели - обновите их в админской панели")
+            print(f"   2. Сессия истекла (401 NEED_RESET)")
+            print(f"   3. API endpoint изменился - проверьте через DevTools → Network tab")
+            return []
         
         # Парсим структуру ответа
         # Возможные варианты для sidebar: 
@@ -934,11 +975,6 @@ class YandexBusinessParser:
         # - {"list": {"items": [...]}}
         # - Вложенные структуры внутри sidebar
         posts_data = []
-        
-        if not result:
-            print(f"⚠️ Не удалось получить посты для {business_id} ни с одного endpoint")
-            print(f"   Попробуйте найти правильный URL через DevTools → Network tab")
-            return self._fake_fetch_posts(account_row)
         
         # Рекурсивная функция для поиска постов в структуре
         def find_posts_in_structure(obj, path=""):
