@@ -7,9 +7,13 @@ import { useLanguage } from '@/i18n/LanguageContext';
 
 type ServiceLite = { id: string; name: string };
 
-export default function NewsGenerator({ services }: { services: ServiceLite[] }) {
+export default function NewsGenerator({ services, businessId }: { services: ServiceLite[]; businessId?: string }) {
   const [useService, setUseService] = useState(false);
+  const [useTransaction, setUseTransaction] = useState(false);
   const [serviceId, setServiceId] = useState<string>('');
+  const [transactionId, setTransactionId] = useState<string>('');
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [rawInfo, setRawInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState<string>('');
@@ -50,6 +54,32 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
       if (data.success) setExamples((data.examples||[]).map((e:any)=>({ id: e.id, text: e.text })));
     } catch {}
   })(); }, []);
+  
+  // Загрузка транзакций
+  const loadTransactions = async () => {
+    if (!businessId) return;
+    setLoadingTransactions(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/finance/transactions?business_id=${businessId}&limit=20`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTransactions(data.transactions || []);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки транзакций:', e);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+  
+  useEffect(() => {
+    if (useTransaction && businessId) {
+      loadTransactions();
+    }
+  }, [useTransaction, businessId]);
 
   const generate = async () => {
     setLoading(true);
@@ -58,7 +88,14 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
       const res = await fetch(`${window.location.origin}/api/news/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ use_service: useService, service_id: serviceId || undefined, raw_info: rawInfo, language })
+        body: JSON.stringify({ 
+          use_service: useService, 
+          use_transaction: useTransaction,
+          service_id: serviceId || undefined, 
+          transaction_id: transactionId || undefined,
+          raw_info: rawInfo, 
+          language 
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -151,19 +188,45 @@ export default function NewsGenerator({ services }: { services: ServiceLite[] })
           </ul>
         )}
       </div>
-      <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
-        <input type="checkbox" checked={useService} onChange={(e)=> setUseService(e.target.checked)} />
-        Сгенерировать новость на основе услуг
-      </label>
-      {useService && (
-        <div className="mb-3">
-          <label className="block text-sm text-gray-600 mb-1">Выберите услугу</label>
-          <select className="border rounded px-2 py-2 w-full" value={serviceId} onChange={(e)=> setServiceId(e.target.value)}>
-            <option value="">— выбрать —</option>
-            {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-      )}
+      <div className="space-y-3 mb-3">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={useService} onChange={(e)=> { setUseService(e.target.checked); if (e.target.checked) setUseTransaction(false); }} />
+          Сгенерировать новость на основе услуги
+        </label>
+        {useService && (
+          <div className="ml-6">
+            <label className="block text-sm text-gray-600 mb-1">Выберите услугу</label>
+            <select className="border rounded px-2 py-2 w-full" value={serviceId} onChange={(e)=> setServiceId(e.target.value)}>
+              <option value="">— выбрать —</option>
+              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+        
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={useTransaction} onChange={(e)=> { setUseTransaction(e.target.checked); if (e.target.checked) setUseService(false); }} />
+          Сгенерировать новость на основе выполненной работы (из транзакций)
+        </label>
+        {useTransaction && (
+          <div className="ml-6">
+            <label className="block text-sm text-gray-600 mb-1">Выберите транзакцию</label>
+            {loadingTransactions ? (
+              <div className="text-sm text-gray-500">Загрузка транзакций...</div>
+            ) : transactions.length === 0 ? (
+              <div className="text-sm text-gray-500">Нет транзакций. Добавьте транзакции во вкладке Финансы.</div>
+            ) : (
+              <select className="border rounded px-2 py-2 w-full" value={transactionId} onChange={(e)=> setTransactionId(e.target.value)}>
+                <option value="">— выбрать —</option>
+                {transactions.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.transaction_date} - {t.services?.join(', ') || 'Услуги'} - {t.amount}₽ {t.notes ? `(${t.notes})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+      </div>
       <div className="mb-3">
         <label className="block text-sm text-gray-600 mb-1">Неотформатированная информация (необязательно)</label>
         <Textarea rows={3} value={rawInfo} onChange={(e)=> setRawInfo(e.target.value)} placeholder="Например: Новый сотрудник, акция, праздник и т.п." />

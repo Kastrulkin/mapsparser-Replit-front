@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-import ServiceOptimizer from '@/components/ServiceOptimizer';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
 import NewsGenerator from '@/components/NewsGenerator';
-import InviteFriendForm from '@/components/InviteFriendForm';
+import ServiceOptimizer from '@/components/ServiceOptimizer';
 
 export const CardOverviewPage = () => {
-  const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
+  const context = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness } = context || {};
+  
+  // Состояния для рейтинга и отзывов
+  const [rating, setRating] = useState<number | null>(null);
+  const [reviewsTotal, setReviewsTotal] = useState<number>(0);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  
+  // Состояния для услуг
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
@@ -20,24 +28,53 @@ export const CardOverviewPage = () => {
     keywords: '',
     price: ''
   });
-  const [clientInfo, setClientInfo] = useState({
-    businessName: '',
-    businessType: '',
-    address: '',
-    workingHours: ''
-  });
+  const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
+  
+  // Состояния для отзывов
+  const [externalReviews, setExternalReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  
+  // Состояния для новостей
+  const [externalPosts, setExternalPosts] = useState<any[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  
+  // Состояния для парсера
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued'>('idle');
+  
+  // Общие состояния
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [yandexCardUrl, setYandexCardUrl] = useState<string>('');
+  // Настройки для мастера оптимизации
+  const [wizardTone, setWizardTone] = useState<'friendly' | 'professional' | 'premium' | 'youth' | 'business'>('professional');
+  const [wizardRegion, setWizardRegion] = useState('');
+  const [wizardLength, setWizardLength] = useState(150);
+  const [wizardInstructions, setWizardInstructions] = useState('');
 
-  useEffect(() => {
-    loadUserServices();
-    loadClientInfo();
-  }, [currentBusinessId]);
+  // Загрузка сводки (рейтинг, количество отзывов)
+  const loadSummary = async () => {
+    if (!currentBusinessId) return;
+    setLoadingSummary(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/summary`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRating(data.rating);
+        setReviewsTotal(data.reviews_total || 0);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки сводки:', e);
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
 
+  // Загрузка услуг
   const loadUserServices = async () => {
     if (!currentBusinessId) {
       setUserServices([]);
@@ -62,38 +99,103 @@ export const CardOverviewPage = () => {
     }
   };
 
-  const loadClientInfo = async () => {
-    if (!currentBusinessId) {
-      setClientInfo({
-        businessName: '',
-        businessType: '',
-        address: '',
-        workingHours: ''
-      });
-      return;
-    }
-    
+  // Загрузка отзывов из парсера
+  const loadExternalReviews = async () => {
+    if (!currentBusinessId) return;
+    setLoadingReviews(true);
     try {
-      const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
-      const response = await fetch(`${window.location.origin}/api/client-info${qs}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/reviews`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (response.ok) {
-        const data = await response.json();
-        setClientInfo({
-          businessName: data.businessName || '',
-          businessType: data.businessType || '',
-          address: data.address || '',
-          workingHours: data.workingHours || ''
-        });
+      const data = await res.json();
+      if (data.success) {
+        setExternalReviews(data.reviews || []);
       }
-    } catch (error) {
-      console.error('Ошибка загрузки информации о бизнесе:', error);
+    } catch (e) {
+      console.error('Ошибка загрузки отзывов:', e);
+    } finally {
+      setLoadingReviews(false);
     }
   };
 
+  // Загрузка новостей из парсера
+  const loadExternalPosts = async () => {
+    if (!currentBusinessId) return;
+    setLoadingPosts(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/posts`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExternalPosts(data.posts || []);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки новостей:', e);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentBusinessId && context) {
+      loadSummary();
+      loadUserServices();
+      loadExternalReviews();
+      loadExternalPosts();
+    }
+  }, [currentBusinessId, context]);
+  
+  // Если контекст не загружен, показываем загрузку
+  if (!context) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Запуск парсера
+  const handleRunParser = async () => {
+    if (!currentBusinessId) {
+      setError('Сначала выберите бизнес');
+      return;
+    }
+    
+    setParseStatus('processing');
+    setError(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${currentBusinessId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setParseStatus('done');
+        setSuccess('Парсер запущен успешно');
+        // Перезагружаем данные
+        setTimeout(() => {
+          loadSummary();
+          loadExternalReviews();
+          loadExternalPosts();
+        }, 2000);
+      } else {
+        setParseStatus('error');
+        setError(data.error || 'Ошибка запуска парсера');
+      }
+    } catch (e: any) {
+      setParseStatus('error');
+      setError('Ошибка запуска парсера: ' + e.message);
+    }
+  };
+
+  // Добавление услуги
   const addService = async () => {
     if (!newService.name.trim()) {
       setError('Название услуги обязательно');
@@ -132,6 +234,48 @@ export const CardOverviewPage = () => {
     }
   };
 
+  // Оптимизация услуги
+  const optimizeService = async (serviceId: string) => {
+    const service = userServices.find(s => s.id === serviceId);
+    if (!service) return;
+    
+    setOptimizingServiceId(serviceId);
+    setError(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/optimize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: service.name + (service.description ? '\n' + service.description : ''),
+          business_id: currentBusinessId
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success && data.result?.services?.length > 0) {
+        const optimized = data.result.services[0];
+        // Обновляем услугу
+        await updateService(serviceId, {
+          name: optimized.optimized_name || service.name,
+          description: optimized.seo_description || service.description,
+          keywords: optimized.keywords || service.keywords
+        });
+        setSuccess('Услуга оптимизирована');
+      } else {
+        setError(data.error || 'Ошибка оптимизации');
+      }
+    } catch (e: any) {
+      setError('Ошибка оптимизации: ' + e.message);
+    } finally {
+      setOptimizingServiceId(null);
+    }
+  };
+
+  // Обновление услуги
   const updateService = async (serviceId: string, updatedData: any) => {
     try {
       const token = localStorage.getItem('auth_token');
@@ -157,6 +301,7 @@ export const CardOverviewPage = () => {
     }
   };
 
+  // Удаление услуги
   const deleteService = async (serviceId: string) => {
     if (!confirm('Вы уверены, что хотите удалить эту услугу?')) return;
 
@@ -179,45 +324,6 @@ export const CardOverviewPage = () => {
     }
   };
 
-  const handleSaveYandexLink = async () => {
-    if (!currentBusinessId) {
-      setError('Сначала выберите бизнес');
-      return;
-    }
-    if (!yandexCardUrl.trim()) {
-      setError('Введите ссылку на карточку на картах');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/yandex-link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({ yandex_url: yandexCardUrl })
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setSuccess('Ссылка на карты сохранена и синхронизация запущена');
-      } else {
-        setError(data.error || 'Не удалось сохранить ссылку на карты');
-      }
-    } catch (e: any) {
-      setError('Ошибка сохранения ссылки на карты: ' + e.message);
-    }
-  };
-
-  const wizardNext = () => {
-    if (wizardStep === 1) {
-      handleSaveYandexLink();
-    }
-    setWizardStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
-  };
-  const wizardPrev = () => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s));
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -225,7 +331,16 @@ export const CardOverviewPage = () => {
           <h1 className="text-2xl font-bold text-gray-900">Обзор карточки</h1>
           <p className="text-gray-600 mt-1">Управляйте услугами и оптимизируйте карточку организации</p>
         </div>
-        <Button onClick={() => setShowWizard(true)}>Мастер оптимизации</Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleRunParser} 
+            disabled={parseStatus === 'processing' || !currentBusinessId}
+            variant="outline"
+          >
+            {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
+          </Button>
+          <Button onClick={() => setShowWizard(true)}>Мастер оптимизации</Button>
+        </div>
       </div>
 
       {error && (
@@ -240,20 +355,67 @@ export const CardOverviewPage = () => {
         </div>
       )}
 
-      {/* Услуги */}
+      {/* Блок с рейтингом и количеством отзывов */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center gap-4">
+          {loadingSummary ? (
+            <div className="text-gray-500">Загрузка...</div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-bold text-gray-900">
+                  {rating !== null ? rating.toFixed(1) : '—'}
+                </span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span
+                      key={star}
+                      className={`text-2xl ${
+                        rating !== null && star <= Math.floor(rating)
+                          ? 'text-yellow-400'
+                          : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
+                          ? 'text-yellow-400'
+                          : 'text-gray-300'
+                      }`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="text-gray-600">
+                <span className="font-medium">{reviewsTotal}</span> отзывов
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Услуги */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
         <div className="flex justify-between items-center mb-4">
-          <div className="flex-1 pr-4">
+          <div>
             <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
             <p className="text-sm text-gray-600 mt-1">
-              📋 Ниже в блоке "Настройте описания услуг для карточки компании на картах" загрузите ваш прайс-лист, мы обработаем наименования и описания услуг так, чтобы чаще появляться в поиске.
-              <br/><br/>
-              Эти наименования сохранятся в ваш список услуг автоматически.
-              <br/><br/>
-              Вы также можете внести их вручную или потом отредактировать.
+              Текущий вид формулировок услуг на картах. Если есть подключение к парсеру, данные добавляются автоматически.
             </p>
           </div>
-          <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+            {userServices.length > 0 && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  // Оптимизировать все услуги
+                  userServices.forEach(s => optimizeService(s.id));
+                }}
+              >
+                Оптимизировать все
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Форма добавления услуги */}
@@ -319,6 +481,19 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
+        {/* Функционал оптимизатора услуг (из ServiceOptimizer) */}
+        <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <ServiceOptimizer 
+            businessName={currentBusiness?.name} 
+            businessId={currentBusinessId}
+            tone={wizardTone}
+            region={wizardRegion}
+            descriptionLength={wizardLength}
+            instructions={wizardInstructions}
+          />
+        </div>
+
+        {/* Список услуг */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -351,6 +526,14 @@ export const CardOverviewPage = () => {
                         <Button 
                           size="sm" 
                           variant="outline" 
+                          onClick={() => optimizeService(service.id)}
+                          disabled={optimizingServiceId === service.id}
+                        >
+                          {optimizingServiceId === service.id ? 'Оптимизация...' : 'Оптимизировать'}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
                           onClick={() => setEditingService(service.id)}
                         >
                           Редактировать
@@ -373,42 +556,27 @@ export const CardOverviewPage = () => {
         </div>
       </div>
 
-      {/* Работа с картами */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <Accordion type="single" collapsible defaultValue="yamaps-tools">
-          <AccordionItem value="yamaps-tools">
-            <AccordionTrigger className="px-6">
-              <span className="text-xl font-semibold text-gray-900">Работа с картами</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-6 p-6">
-                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                  <ServiceOptimizer businessName={clientInfo.businessName} businessId={currentBusinessId} />
-                </div>
-                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                  <ReviewReplyAssistant businessName={clientInfo.businessName} />
-                </div>
-                <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                  <NewsGenerator services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} />
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+      {/* Отзывы */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Отзывы</h2>
+        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+          <ReviewReplyAssistant businessName={currentBusiness?.name} />
+        </div>
       </div>
 
-      {/* Приглашения */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Пригласить друга</h2>
-        <InviteFriendForm
-          onSuccess={() => setInviteSuccess(true)}
-          onError={(error) => setError(error)}
-        />
-        {inviteSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mt-4">
-            Приглашение отправлено!
-          </div>
-        )}
+      {/* Новости */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Новости</h2>
+        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+          <NewsGenerator 
+            services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} 
+            businessId={currentBusinessId}
+          />
+        </div>
       </div>
 
       {/* Модальное окно мастера оптимизации */}
@@ -477,23 +645,85 @@ export const CardOverviewPage = () => {
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <p className="text-gray-600 mb-4">Опишите, как вы хотите звучать и чего избегать. Это задаст тон для всех текстов.</p>
+                  
+                  {/* Тон */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Тон</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { key: 'friendly', label: 'Дружелюбный' },
+                        { key: 'professional', label: 'Профессиональный' },
+                        { key: 'premium', label: 'Премиум' },
+                        { key: 'youth', label: 'Молодёжный' },
+                        { key: 'business', label: 'Деловой' }
+                      ].map(tone => (
+                        <button 
+                          key={tone.key} 
+                          type="button"
+                          onClick={() => setWizardTone(tone.key as any)}
+                          className={`text-xs px-3 py-1 rounded-full border ${
+                            wizardTone === tone.key 
+                              ? 'bg-blue-600 text-white border-blue-600' 
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {tone.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Примеры формулировок для выбранного тона появятся автоматически в подсказках.</p>
+                  </div>
+
+                  {/* Регион и длина описания */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">What do you like?</label>
-                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Лаконично, экспертно, заботливо, премиально…" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Регион (для локального SEO)</label>
+                      <input 
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="Санкт‑Петербург, м. Чернышевская"
+                        value={wizardRegion}
+                        onChange={(e) => setWizardRegion(e.target.value)}
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">What do you dislike?</label>
-                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Без клише, без канцелярита, без агрессивных продаж…" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Длина описания (символов)</label>
+                      <input 
+                        type="number"
+                        min={80}
+                        max={200}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        value={wizardLength}
+                        onChange={(e) => setWizardLength(Number(e.target.value) || 150)}
+                      />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки (до 5)</label>
-                      <div className="space-y-2">
-                        {[1,2,3,4,5].map(i => (
-                          <input key={i} className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Например: Стрижка, которая держит форму и не требует укладки" />
-                        ))}
-                      </div>
+                  </div>
+
+                  {/* Дополнительные инструкции */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Дополнительные инструкции (необязательно)</label>
+                    <textarea 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      rows={3}
+                      placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи."
+                      value={wizardInstructions}
+                      onChange={(e) => setWizardInstructions(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Формулировки ответов на отзывы */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки ответов на отзывы (до 5)</label>
+                    <div className="space-y-2">
+                      {[1,2,3,4,5].map(i => (
+                        <input 
+                          key={i} 
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                          placeholder="Например: Спасибо за отзыв! Нам важно ваше мнение" 
+                        />
+                      ))}
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">Эти формулировки будут использоваться при генерации ответов на отзывы.</p>
                   </div>
                 </div>
               )}
@@ -538,9 +768,9 @@ export const CardOverviewPage = () => {
                 </div>
               )}
               <div className="mt-6 flex justify-between pt-4 border-t border-gray-200">
-                <Button variant="outline" onClick={wizardPrev} disabled={wizardStep===1}>Назад</Button>
+                <Button variant="outline" onClick={() => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))} disabled={wizardStep===1}>Назад</Button>
                 {wizardStep < 3 ? (
-                  <Button onClick={wizardNext}>Продолжить</Button>
+                  <Button onClick={() => setWizardStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s))}>Продолжить</Button>
                 ) : (
                   <Button onClick={() => {setShowWizard(false); window.location.href = "/sprint";}}>Сформировать план</Button>
                 )}
@@ -552,4 +782,3 @@ export const CardOverviewPage = () => {
     </div>
   );
 };
-

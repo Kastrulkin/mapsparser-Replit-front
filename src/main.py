@@ -963,6 +963,230 @@ def test_external_account_cookies(business_id):
         }), 500
 
 
+@app.route("/api/business/<business_id>/external/reviews", methods=["GET"])
+def get_external_reviews(business_id):
+    """
+    Получить все спарсенные отзывы из внешних источников (Яндекс.Бизнес, Google Business, 2ГИС)
+    для конкретного бизнеса.
+    """
+    try:
+        # Авторизация: владелец бизнеса или суперадмин
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем, что пользователь владелец бизнеса или суперадмин
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = row[0]
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Получаем все отзывы для этого бизнеса, отсортированные по дате публикации (новые сначала)
+        cursor.execute(
+            """
+            SELECT id, source, external_review_id, rating, author_name, text,
+                   response_text, response_at, published_at, created_at
+            FROM ExternalBusinessReviews
+            WHERE business_id = ?
+            ORDER BY published_at DESC, created_at DESC
+            """,
+            (business_id,),
+        )
+        rows = cursor.fetchall()
+        db.close()
+
+        reviews = []
+        for r in rows:
+            reviews.append({
+                "id": r[0],
+                "source": r[1],
+                "external_review_id": r[2],
+                "rating": r[3],
+                "author_name": r[4] or "Анонимный пользователь",
+                "text": r[5] or "",
+                "response_text": r[6],
+                "response_at": r[7],
+                "published_at": r[8],
+                "created_at": r[9],
+                "has_response": bool(r[6]),  # Есть ли ответ организации
+            })
+
+        return jsonify({
+            "success": True,
+            "reviews": reviews,
+            "total": len(reviews),
+            "with_response": sum(1 for r in reviews if r["has_response"]),
+            "without_response": sum(1 for r in reviews if not r["has_response"]),
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения внешних отзывов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/business/<business_id>/external/summary", methods=["GET"])
+def get_external_summary(business_id):
+    """
+    Получить сводку данных из внешних источников (рейтинг, количество отзывов, статистика).
+    """
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем доступ
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = row[0]
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Получаем последнюю статистику
+        cursor.execute(
+            """
+            SELECT rating, reviews_total, date
+            FROM ExternalBusinessStats
+            WHERE business_id = ? AND source = 'yandex_business'
+            ORDER BY date DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        stats_row = cursor.fetchone()
+        
+        # Получаем количество отзывов
+        cursor.execute(
+            """
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN response_text IS NOT NULL THEN 1 ELSE 0 END) as with_response,
+                   SUM(CASE WHEN response_text IS NULL THEN 1 ELSE 0 END) as without_response
+            FROM ExternalBusinessReviews
+            WHERE business_id = ? AND source = 'yandex_business'
+            """,
+            (business_id,),
+        )
+        reviews_row = cursor.fetchone()
+        
+        db.close()
+
+        rating = stats_row[0] if stats_row else None
+        reviews_total = stats_row[1] if stats_row else (reviews_row[0] if reviews_row else 0)
+        reviews_with_response = reviews_row[1] if reviews_row else 0
+        reviews_without_response = reviews_row[2] if reviews_row else 0
+
+        return jsonify({
+            "success": True,
+            "rating": float(rating) if rating else None,
+            "reviews_total": reviews_total,
+            "reviews_with_response": reviews_with_response,
+            "reviews_without_response": reviews_without_response,
+            "last_sync_date": stats_row[2] if stats_row else None,
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения сводки внешних данных: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/business/<business_id>/external/posts", methods=["GET"])
+def get_external_posts(business_id):
+    """
+    Получить все спарсенные посты/новости из внешних источников.
+    """
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем доступ
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = row[0]
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Получаем все посты
+        cursor.execute(
+            """
+            SELECT id, source, external_post_id, title, text, published_at, created_at
+            FROM ExternalBusinessPosts
+            WHERE business_id = ?
+            ORDER BY published_at DESC, created_at DESC
+            """,
+            (business_id,),
+        )
+        rows = cursor.fetchall()
+        db.close()
+
+        posts = []
+        for r in rows:
+            posts.append({
+                "id": r[0],
+                "source": r[1],
+                "external_post_id": r[2],
+                "title": r[3] or "",
+                "text": r[4] or "",
+                "published_at": r[5],
+                "created_at": r[6],
+            })
+
+        return jsonify({
+            "success": True,
+            "posts": posts,
+            "total": len(posts),
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения внешних постов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 # SPA-фолбэк: любые не-API пути возвращают index.html
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
 def spa_fallback(path):
@@ -1612,7 +1836,9 @@ def news_generate():
 
         data = request.get_json(silent=True) or {}
         use_service = bool(data.get('use_service'))
+        use_transaction = bool(data.get('use_transaction'))
         selected_service_id = data.get('service_id')
+        selected_transaction_id = data.get('transaction_id')
         raw_info = (data.get('raw_info') or '').strip()
 
         # Язык новости: получаем из запроса или из профиля пользователя
@@ -1650,6 +1876,8 @@ def news_generate():
         )
 
         service_context = ''
+        transaction_context = ''
+        
         if use_service:
             if selected_service_id:
                 cur.execute("SELECT name, description FROM UserServices WHERE id = ? AND user_id = ?", (selected_service_id, user_data['user_id']))
@@ -1664,6 +1892,52 @@ def news_generate():
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
+        
+        if use_transaction:
+            if selected_transaction_id:
+                # Получаем транзакцию
+                cur.execute("""
+                    SELECT transaction_date, amount, services, notes, client_type
+                    FROM FinancialTransactions
+                    WHERE id = ? AND user_id = ?
+                """, (selected_transaction_id, user_data['user_id']))
+                row = cur.fetchone()
+                if row:
+                    tx_date, amount, services_raw, notes, client_type = row
+                    services_list = []
+                    if services_raw:
+                        try:
+                            services_list = json.loads(services_raw) if isinstance(services_raw, str) else services_raw
+                            if not isinstance(services_list, list):
+                                services_list = []
+                        except Exception:
+                            services_list = []
+                    
+                    services_str = ', '.join(services_list) if services_list else 'Услуги'
+                    transaction_context = f"Выполнена работа: {services_str}. Дата: {tx_date}. Сумма: {amount}₽. {notes if notes else ''}"
+            else:
+                # Выбираем последнюю транзакцию
+                cur.execute("""
+                    SELECT transaction_date, amount, services, notes
+                    FROM FinancialTransactions
+                    WHERE user_id = ?
+                    ORDER BY transaction_date DESC, created_at DESC
+                    LIMIT 1
+                """, (user_data['user_id'],))
+                row = cur.fetchone()
+                if row:
+                    tx_date, amount, services_raw, notes = row
+                    services_list = []
+                    if services_raw:
+                        try:
+                            services_list = json.loads(services_raw) if isinstance(services_raw, str) else services_raw
+                            if not isinstance(services_list, list):
+                                services_list = []
+                        except Exception:
+                            services_list = []
+                    
+                    services_str = ', '.join(services_list) if services_list else 'Услуги'
+                    transaction_context = f"Выполнена работа: {services_str}. Дата: {tx_date}. Сумма: {amount}₽. {notes if notes else ''}"
 
         # Подтянем примеры новостей пользователя (до 5)
         news_examples = ""
@@ -1694,6 +1968,7 @@ Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
 Контекст услуги (может отсутствовать): {service_context}
+Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info[:800]}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}
 """
@@ -2063,28 +2338,36 @@ def reviews_reply():
             return jsonify({"error": "Не передан текст отзыва"}), 400
 
         # Подтянем примеры ответов пользователя (до 5)
+        # Сначала проверяем, переданы ли примеры в запросе
+        examples_from_request = data.get('examples', [])
         examples_text = ""
-        try:
-            db = DatabaseManager()
-            cur = db.conn.cursor()
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS UserReviewExamples (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    example_text TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+        
+        if examples_from_request and isinstance(examples_from_request, list):
+            # Используем примеры из запроса
+            examples_text = "\n".join(examples_from_request[:5])
+        else:
+            # Иначе загружаем из БД
+            try:
+                db = DatabaseManager()
+                cur = db.conn.cursor()
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS UserReviewExamples (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        example_text TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+                    )
+                    """
                 )
-                """
-            )
-            cur.execute("SELECT example_text FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
-            rows = cur.fetchall(); db.close()
-            examples = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
-            if examples:
-                examples_text = "\n".join(examples)
-        except Exception:
-            examples_text = ""
+                cur.execute("SELECT example_text FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                rows = cur.fetchall(); db.close()
+                examples = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
+                if examples:
+                    examples_text = "\n".join(examples)
+            except Exception:
+                examples_text = ""
 
         prompt = f"""
 Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
@@ -2096,15 +2379,37 @@ Write the reply in {language_name}.
 Отзыв клиента: {review_text[:1000]}
 """
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
-        result = analyze_text_with_gigachat(
+        result_text = analyze_text_with_gigachat(
             prompt, 
             task_type="review_reply",
             business_id=business_id,
             user_id=user_data['user_id']
         )
-        if 'error' in result:
-            return jsonify({"error": result['error']}), 500
-        return jsonify({"success": True, "result": result})
+        
+        # Парсим JSON из ответа GigaChat
+        import json
+        try:
+            # Пытаемся найти JSON в ответе
+            if isinstance(result_text, str):
+                # Ищем JSON объект в строке
+                start_idx = result_text.find('{')
+                end_idx = result_text.rfind('}') + 1
+                if start_idx != -1 and end_idx != -1:
+                    json_str = result_text[start_idx:end_idx]
+                    parsed_result = json.loads(json_str)
+                    # Извлекаем reply из JSON
+                    reply_text = parsed_result.get('reply', result_text)
+                else:
+                    # Если JSON не найден, используем весь текст
+                    reply_text = result_text
+            else:
+                reply_text = result_text
+        except (json.JSONDecodeError, AttributeError) as e:
+            # Если не удалось распарсить JSON, используем весь текст
+            print(f"⚠️ Не удалось распарсить JSON из ответа GigaChat: {e}")
+            reply_text = result_text if isinstance(result_text, str) else str(result_text)
+        
+        return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
         print(f"❌ Ошибка генерации ответа на отзыв: {e}")
         return jsonify({"error": str(e)}), 500

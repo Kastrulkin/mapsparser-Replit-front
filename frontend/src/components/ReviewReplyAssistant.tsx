@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -15,7 +16,19 @@ const tones: { key: Tone; label: string }[] = [
   { key: 'business', label: 'Деловой' },
 ];
 
+interface ExternalReview {
+  id: string;
+  source: string;
+  rating: number | null;
+  author_name: string;
+  text: string;
+  response_text: string | null;
+  published_at: string | null;
+  has_response: boolean;
+}
+
 export default function ReviewReplyAssistant({ businessName }: { businessName?: string }){
+  const { currentBusinessId } = useOutletContext<any>();
   const [tone, setTone] = useState<Tone>('professional');
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +41,10 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
   const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
   const { language: interfaceLanguage } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
+  const [externalReviews, setExternalReviews] = useState<ExternalReview[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [generatingForReviewId, setGeneratingForReviewId] = useState<string | null>(null);
+  const [generatedReplies, setGeneratedReplies] = useState<Record<string, string>>({});
 
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
@@ -50,7 +67,30 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
       if (data.success) setExamples((data.examples||[]).map((e:any)=>({ id: e.id, text: e.text })));
     } catch {}
   };
-  useEffect(()=>{ loadExamples(); }, []);
+
+  const loadExternalReviews = async () => {
+    if (!currentBusinessId) return;
+    setLoadingReviews(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/reviews`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExternalReviews(data.reviews || []);
+      }
+    } catch (e: any) {
+      console.error('Ошибка загрузки отзывов:', e);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  useEffect(()=>{ 
+    loadExamples();
+    loadExternalReviews();
+  }, [currentBusinessId]);
 
   const addExample = async () => {
     const text = exampleInput.trim();
@@ -80,25 +120,68 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     } catch (e:any) { setError(e.message || 'Ошибка удаления примера'); }
   };
 
-  const handleGenerate = async () => {
-    setLoading(true); setError(null); setReply('');
+  const handleGenerate = async (reviewText?: string, reviewId?: string) => {
+    const textToGenerate = reviewText || review;
+    if (!textToGenerate.trim()) return;
+
+    if (reviewId) {
+      setGeneratingForReviewId(reviewId);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+    
     try {
       const token = localStorage.getItem('auth_token');
       const res = await fetch(`${window.location.origin}/api/reviews/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ review, tone, business_name: businessName || '', language })
+        body: JSON.stringify({ 
+          review: textToGenerate, 
+          tone, 
+          business_name: businessName || '', 
+          language,
+          examples: examples.map(e => e.text) // Передаём примеры для генерации
+        })
       });
       const data = await res.json();
-      if (!res.ok || data.error){ setError(data.error || 'Ошибка генерации'); }
-      else { 
-        const generatedReply = data.result?.reply || '';
-        setReply(generatedReply);
-        setEditableReply(generatedReply);
-        setIsEditing(false);
+      console.log('Ответ API генерации:', data); // Для отладки
+      if (!res.ok || data.error){ 
+        setError(data.error || 'Ошибка генерации'); 
+      } else { 
+        // Проверяем разные форматы ответа
+        let generatedReply = '';
+        if (data.result?.reply) {
+          generatedReply = data.result.reply;
+        } else if (data.reply) {
+          generatedReply = data.reply;
+        } else if (typeof data.result === 'string') {
+          generatedReply = data.result;
+        } else if (data.result && typeof data.result === 'object' && 'text' in data.result) {
+          generatedReply = data.result.text;
+        }
+        
+        console.log('Извлечённый ответ:', generatedReply); // Для отладки
+        
+        if (reviewId) {
+          // Сохраняем ответ для конкретного отзыва
+          setGeneratedReplies(prev => ({ ...prev, [reviewId]: generatedReply }));
+        } else {
+          // Для ручного ввода
+          setReply(generatedReply);
+          setEditableReply(generatedReply);
+          setIsEditing(false);
+        }
       }
-    } catch (e: any) { setError(e.message || 'Ошибка запроса'); }
-    finally { setLoading(false); }
+    } catch (e: any) { 
+      setError(e.message || 'Ошибка запроса'); 
+    } finally { 
+      if (reviewId) {
+        setGeneratingForReviewId(null);
+      } else {
+        setLoading(false);
+      }
+    }
   };
 
   const handleEditReply = () => {
@@ -263,6 +346,77 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
           )}
         </div>
       )}
+
+      {/* Блок со спарсенными отзывами */}
+      <div className="mt-8 pt-6 border-t border-gray-300">
+        <h4 className="text-md font-semibold text-gray-900 mb-3">Отзывы из ваших карт</h4>
+        {loadingReviews ? (
+          <div className="text-sm text-gray-500">Загрузка отзывов...</div>
+        ) : externalReviews.length === 0 ? (
+          <div className="text-sm text-gray-500">Нет спарсенных отзывов. Запустите синхронизацию в настройках внешних аккаунтов.</div>
+        ) : (
+          <div className="space-y-4">
+            {externalReviews.map((reviewItem) => (
+              <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-gray-900">{reviewItem.author_name}</span>
+                      {reviewItem.rating && (
+                        <span className="text-sm text-gray-600">⭐ {reviewItem.rating}</span>
+                      )}
+                      {reviewItem.published_at && (
+                        <span className="text-xs text-gray-500">
+                          {new Date(reviewItem.published_at).toLocaleDateString('ru-RU')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-700 mb-3">{reviewItem.text}</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Ответ организации:</label>
+                  {reviewItem.has_response && reviewItem.response_text ? (
+                    <div className="bg-green-50 border border-green-200 rounded p-3">
+                      <div className="text-sm text-gray-900">{reviewItem.response_text}</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Textarea 
+                        rows={3}
+                        value={generatedReplies[reviewItem.id] || ''}
+                        onChange={(e) => setGeneratedReplies(prev => ({ ...prev, [reviewItem.id]: e.target.value }))}
+                        placeholder="Ответ организации..."
+                        className="w-full"
+                      />
+                      <Button
+                        onClick={() => handleGenerate(reviewItem.text, reviewItem.id)}
+                        disabled={generatingForReviewId === reviewItem.id}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {generatingForReviewId === reviewItem.id ? 'Генерируем…' : 'Сгенерировать ответ'}
+                      </Button>
+                      {generatedReplies[reviewItem.id] && (
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            onClick={() => navigator.clipboard.writeText(generatedReplies[reviewItem.id])}
+                            size="sm"
+                            variant="outline"
+                          >
+                            Копировать
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

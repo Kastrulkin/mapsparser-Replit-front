@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
@@ -22,16 +22,36 @@ const tonePresets: { key: Tone; label: string; example: string }[] = [
   { key: 'business', label: 'Деловой', example: "Экспресс-стрижка для занятых. Без ожидания" },
 ];
 
-export default function ServiceOptimizer({ businessName, businessId }: { businessName?: string; businessId?: string }) {
+export default function ServiceOptimizer({ 
+  businessName, 
+  businessId,
+  tone: externalTone,
+  region: externalRegion,
+  descriptionLength: externalLength,
+  instructions: externalInstructions
+}: { 
+  businessName?: string; 
+  businessId?: string;
+  tone?: Tone;
+  region?: string;
+  descriptionLength?: number;
+  instructions?: string;
+}) {
   const [mode, setMode] = useState<'text' | 'file'>('text');
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [tone, setTone] = useState<Tone>('professional');
-  const [instructions, setInstructions] = useState('');
-  const [exampleInput, setExampleInput] = useState('');
-  const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
-  const [region, setRegion] = useState('');
-  const [length, setLength] = useState(150);
+  const [tone, setTone] = useState<Tone>(externalTone || 'professional');
+  const [instructions, setInstructions] = useState(externalInstructions || '');
+  const [region, setRegion] = useState(externalRegion || '');
+  const [length, setLength] = useState(externalLength || 150);
+  
+  // Обновляем значения при изменении пропсов
+  useEffect(() => {
+    if (externalTone) setTone(externalTone);
+    if (externalRegion !== undefined) setRegion(externalRegion);
+    if (externalLength !== undefined) setLength(externalLength);
+    if (externalInstructions !== undefined) setInstructions(externalInstructions);
+  }, [externalTone, externalRegion, externalLength, externalInstructions]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizeResultService[] | null>(null);
@@ -51,7 +71,7 @@ export default function ServiceOptimizer({ businessName, businessId }: { busines
     } catch {}
   };
 
-  React.useEffect(()=>{ loadExamples(); }, []);
+  useEffect(()=>{ loadExamples(); }, []);
 
   const addExample = async () => {
     const text = exampleInput.trim();
@@ -239,52 +259,6 @@ export default function ServiceOptimizer({ businessName, businessId }: { busines
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Тон</label>
-          <div className="flex flex-wrap gap-2">
-            {tonePresets.map(p => (
-              <button key={p.key} type="button" onClick={()=>setTone(p.key)}
-                className={`text-xs px-3 py-1 rounded-full border ${tone===p.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700'}`}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-2">Примеры формулировок для выбранного тона появятся автоматически в подсказках.</p>
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Регион (для локального SEO)</label>
-          <Input value={region} onChange={(e)=>setRegion(e.target.value)} placeholder="Санкт‑Петербург, м. Чернышевская" />
-        </div>
-        <div>
-          <label className="block text-sm text-gray-600 mb-1">Длина описания (символов)</label>
-          <Input type="number" min={80} max={200} value={length} onChange={(e)=> setLength(Number(e.target.value)||150)} />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm text-gray-600 mb-1">Дополнительные инструкции (необязательно)</label>
-        <Textarea rows={3} value={instructions} onChange={(e)=> setInstructions(e.target.value)} placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи." />
-      </div>
-
-      <div>
-        <label className="block text-sm text-gray-600 mb-1">Примеры формулировок услуг (до 5)</label>
-        <div className="flex gap-2">
-          <Input value={exampleInput} onChange={(e)=> setExampleInput(e.target.value)} placeholder="Например: Женская стрижка любой сложности. Консультация включена" />
-          <Button onClick={addExample} variant="outline">Добавить</Button>
-        </div>
-        {examples.length>0 && (
-          <ul className="mt-2 space-y-1">
-            {examples.map(e => (
-              <li key={e.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">
-                <span className="mr-2 truncate">{e.text}</span>
-                <button className="text-xs text-red-600" onClick={()=> deleteExample(e.id)}>Удалить</button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-gray-500 mt-1">Эти примеры сохраняются в вашем аккаунте и будут использоваться ИИ при оптимизации.</p>
-      </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}
 
