@@ -45,8 +45,7 @@ export const CardOverviewPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
-  const [yandexCardUrl, setYandexCardUrl] = useState<string>('');
+  const [wizardStep, setWizardStep] = useState<2>(2);
   // Настройки для мастера оптимизации
   const [wizardTone, setWizardTone] = useState<'friendly' | 'professional' | 'premium' | 'youth' | 'business'>('professional');
   const [wizardRegion, setWizardRegion] = useState('');
@@ -328,7 +327,7 @@ export const CardOverviewPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Обзор карточки</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Работа с картами</h1>
           <p className="text-gray-600 mt-1">Управляйте услугами и оптимизируйте карточку организации</p>
         </div>
         <div className="flex gap-2">
@@ -339,9 +338,17 @@ export const CardOverviewPage = () => {
           >
             {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
           </Button>
-          <Button onClick={() => setShowWizard(true)}>Мастер оптимизации</Button>
+          <Button onClick={() => setShowWizard(true)}>Мастер оптимизации карт</Button>
         </div>
       </div>
+
+      {/* Пояснение о парсинге */}
+      <p className="text-xs text-gray-500 text-right">
+        Раз в неделю мы будем получать данные, чтобы отслеживать прогресс и давать советы по оптимизации. Данные с карт будут сохраняться тут, а статистика на{' '}
+        <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
+          вкладке Прогресс
+        </a>.
+      </p>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -585,62 +592,11 @@ export const CardOverviewPage = () => {
           <div className="bg-white/95 backdrop-blur-md rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden shadow-2xl border-2 border-gray-300" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации бизнеса</h2>
-                <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">Шаг {wizardStep}/3</span>
+                <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации карт</h2>
               </div>
               <Button onClick={() => setShowWizard(false)} variant="outline" size="sm">✕</Button>
             </div>
             <div className="p-6 overflow-auto max-h-[calc(90vh-120px)] bg-gradient-to-br from-white to-gray-50/50">
-              {/* Шаг 1 */}
-              {wizardStep === 1 && (
-                <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Соберём ключевые данные по карточке, чтобы дать точные рекомендации.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Вставьте ссылку на карточку вашего салона на картах.
-                      </label>
-                      <input
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder="https://yandex.ru/maps/org/..."
-                        value={yandexCardUrl}
-                        onChange={(e) => setYandexCardUrl(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Рейтинг (0–5)</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="4.6" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Количество отзывов</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="128" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Частота обновления фото</label>
-                      <div className="flex flex-wrap gap-2">
-                        {['Еженедельно','Ежемесячно','Раз в квартал','Редко','Не знаю'].map(x => (
-                          <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Новости (наличие/частота)</label>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {['Да','Нет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {['Еженедельно','Ежемесячно','Реже','По событию'].map(x => (
-                          <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Текущие тексты/услуги</label>
-                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={5} placeholder={"Стрижка мужская\nСтрижка женская\nОкрашивание"} />
-                    </div>
-                  </div>
-                </div>
-              )}
               {/* Шаг 2 */}
               {wizardStep === 2 && (
                 <div className="space-y-4">
@@ -727,53 +683,8 @@ export const CardOverviewPage = () => {
                   </div>
                 </div>
               )}
-              {/* Шаг 3 */}
-              {wizardStep === 3 && (
-                <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Немного цифр, чтобы план был реалистичным. Можно заполнить позже.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Как давно работаете</label>
-                      <div className="flex flex-wrap gap-2">
-                        {['0–6 мес','6–12 мес','1–3 года','3+ лет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Постоянные клиенты</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="например, 150" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CRM</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Например: Yclients" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Расположение</label>
-                      <div className="flex flex-wrap gap-2">
-                        {['Дом','ТЦ','Двор','Магистраль','Центр','Спальник','Около метро'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm cursor-pointer hover:bg-gray-200">{x}</span>))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Средний чек (₽)</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="2200" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Выручка в месяц (₽)</label>
-                      <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="350000" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Что нравится/не нравится в карточке</label>
-                      <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows={4} placeholder="Нравится: фото, тон. Не нравится: мало отзывов, нет новостей…" />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="mt-6 flex justify-between pt-4 border-t border-gray-200">
-                <Button variant="outline" onClick={() => setWizardStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))} disabled={wizardStep===1}>Назад</Button>
-                {wizardStep < 3 ? (
-                  <Button onClick={() => setWizardStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s))}>Продолжить</Button>
-                ) : (
-                  <Button onClick={() => {setShowWizard(false); window.location.href = "/sprint";}}>Сформировать план</Button>
-                )}
+              <div className="mt-6 flex justify-end pt-4 border-t border-gray-200">
+                <Button onClick={() => setShowWizard(false)}>Готово</Button>
               </div>
             </div>
           </div>

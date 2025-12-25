@@ -8,6 +8,7 @@ import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AIAgentsManagement } from '../../components/AIAgentsManagement';
 import { TokenUsageStats } from '../../components/TokenUsageStats';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
+import { GrowthPlan } from '../../components/GrowthPlan';
 
 interface Business {
   id: string;
@@ -90,7 +91,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -415,12 +416,26 @@ export const AdminPage: React.FC = () => {
         >
           📊 Статистика токенов
         </button>
+        <button
+          onClick={() => setActiveTab('growth')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'growth'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📈 Схема роста
+        </button>
       </div>
 
       {activeTab === 'agents' ? (
         <AIAgentsManagement />
       ) : activeTab === 'tokens' ? (
         <TokenUsageStats />
+      ) : activeTab === 'growth' ? (
+        <React.Suspense fallback={<div className="p-6">Загрузка схемы роста...</div>}>
+          <GrowthPlan />
+        </React.Suspense>
       ) : (
         <>
           <div className="mb-6 flex items-center justify-end">
@@ -469,16 +484,21 @@ export const AdminPage: React.FC = () => {
                   });
                 });
                 
-                // Добавляем сети
+                // Добавляем сети (каждая сеть - одна строка, бизнесы внутри раскрываются)
                 user.networks.forEach(network => {
-                  allBusinesses.push({
-                    id: network.id,
-                    name: network.name,
-                    type: 'network',
-                    networkId: network.id,
-                    networkName: network.name,
-                    business: network.businesses[0] || {} as Business
-                  });
+                  const networkBusinesses = network.businesses || [];
+                  console.log(`🔍 DEBUG Frontend: Сеть ${network.name}, бизнесов: ${networkBusinesses.length}`);
+                  // Добавляем сеть как отдельный элемент (показываем первый бизнес или название сети)
+                  if (networkBusinesses.length > 0) {
+                    allBusinesses.push({
+                      id: network.id,
+                      name: network.name,
+                      type: 'network',
+                      networkId: network.id,
+                      networkName: network.name,
+                      business: networkBusinesses[0] // Используем первый бизнес для отображения в строке
+                    });
+                  }
                 });
 
                 return allBusinesses.map((item, index) => (

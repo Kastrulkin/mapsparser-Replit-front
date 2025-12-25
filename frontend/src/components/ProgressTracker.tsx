@@ -18,14 +18,26 @@ interface ProgressStage {
   completed_at: string | null;
 }
 
-interface ProgressTrackerProps {
-  onUpdate?: () => void;
+interface SprintTask {
+  id: string;
+  title: string;
+  description: string;
+  expected_effect: string;
+  deadline: string;
+  status: 'pending' | 'done' | 'postponed' | 'help_needed';
 }
 
-const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate }) => {
+interface ProgressTrackerProps {
+  onUpdate?: () => void;
+  businessId?: string | null;
+}
+
+const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate, businessId }) => {
   const [stages, setStages] = useState<ProgressStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sprint, setSprint] = useState<{ tasks: SprintTask[] } | null>(null);
+  const [loadingSprint, setLoadingSprint] = useState(false);
 
   // Моковые данные для демонстрации
   const mockStages: ProgressStage[] = [
@@ -102,6 +114,35 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate }) => {
       setLoading(false);
     }, 1000);
   }, []);
+
+  useEffect(() => {
+    const loadSprint = async () => {
+      if (!businessId) return;
+      
+      setLoadingSprint(true);
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/business/${businessId}/sprint`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.sprint && data.sprint.tasks) {
+            setSprint({ tasks: data.sprint.tasks });
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки спринта:', err);
+      } finally {
+        setLoadingSprint(false);
+      }
+    };
+
+    loadSprint();
+  }, [businessId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -243,6 +284,65 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate }) => {
           </div>
         ))}
       </div>
+
+      {/* Спринт на неделю */}
+      {sprint && sprint.tasks.length > 0 && (
+        <div className="mt-6 bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+          boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+        }}>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">📋 Спринт на неделю</h3>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.location.href = `/sprint?business_id=${businessId}`}
+            >
+              Открыть спринт
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {sprint.tasks.slice(0, 3).map((task) => (
+              <div key={task.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{task.title}</div>
+                    <div className="text-sm text-gray-600 mt-1">{task.description}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {task.expected_effect} · Дедлайн: {task.deadline}
+                    </div>
+                  </div>
+                  {task.status === 'done' && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full ml-2">
+                      ✓ Сделано
+                    </span>
+                  )}
+                  {task.status === 'postponed' && (
+                    <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full ml-2">
+                      ⏸ Перенесено
+                    </span>
+                  )}
+                  {task.status === 'help_needed' && (
+                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full ml-2">
+                      ❓ Нужна помощь
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {sprint.tasks.length > 3 && (
+            <div className="mt-3 text-center">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = `/sprint?business_id=${businessId}`}
+              >
+                Показать все задачи ({sprint.tasks.length})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4">
         <div className="text-center">

@@ -37,7 +37,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'card',
-      label: 'Обзор карточки',
+      label: 'Работа с картами',
       icon: FileText,
       path: '/dashboard/card',
     },

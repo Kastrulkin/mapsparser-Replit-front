@@ -9,6 +9,23 @@ export const ProfilePage = () => {
   const { user, currentBusinessId, currentBusiness, updateBusiness, businesses } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
+
+  // Функция для преобразования значения типа бизнеса в читаемый текст
+  const getBusinessTypeLabel = (type: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'beauty_salon': 'Салон красоты',
+      'barbershop': 'Барбершоп',
+      'spa': 'SPA/Wellness',
+      'nail_studio': 'Ногтевая студия',
+      'cosmetology': 'Косметология',
+      'massage': 'Массаж',
+      'brows_lashes': 'Брови и ресницы',
+      'makeup': 'Макияж',
+      'tanning': 'Солярий',
+      'other': 'Другое'
+    };
+    return typeMap[type] || type || '';
+  };
   const [savingClientInfo, setSavingClientInfo] = useState(false);
   const [form, setForm] = useState({ email: "", phone: "", name: "" });
   const [clientInfo, setClientInfo] = useState({
@@ -108,10 +125,6 @@ export const ProfilePage = () => {
             loadNetworkLocations();
           }
           
-          // Проверяем статус парсинга при загрузке страницы
-          if (currentBusinessId) {
-            checkParseStatus();
-          }
           // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
           const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
             ? data.mapLinks.map((link: any) => ({
@@ -121,8 +134,16 @@ export const ProfilePage = () => {
               }))
             : []);
           console.log('📋 Нормализованные mapLinks:', normalizedMapLinks);
+          console.log('📋 businessType из API:', data.businessType);
+          console.log('📋 Все данные из API:', data);
+          // Если businessType не пришел из API, проверяем currentBusiness
+          const businessType = data.businessType || currentBusiness?.business_type || '';
+          console.log('📋 Используемый businessType:', businessType);
           setClientInfo({
-            ...data,
+            businessName: data.businessName || '',
+            businessType: businessType,
+            address: data.address || '',
+            workingHours: data.workingHours || 'ежедневно 9:00-21:00',
             mapLinks: normalizedMapLinks
           });
         } else {
@@ -243,8 +264,6 @@ export const ProfilePage = () => {
     }
 
     console.log('✅ Бизнес выбран, начинаю сохранение...');
-    setParseStatus('processing');
-    setParseErrors([]);
     setSavingClientInfo(true);
     try {
       // Фильтруем пустые ссылки перед отправкой
@@ -255,10 +274,13 @@ export const ProfilePage = () => {
       const payload = {
         ...clientInfo,
         businessId: effectiveBusinessId,
+        workingHours: clientInfo.workingHours || 'ежедневно 9:00-21:00',
         mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
       };
       
-      console.log('Отправляю данные:', payload);
+      console.log('📤 Отправляю данные:', payload);
+      console.log('📤 businessType в payload:', payload.businessType);
+      console.log('📤 clientInfo.businessType:', clientInfo.businessType);
 
       const response = await fetch(`${window.location.origin}/api/client-info`, {
         method: 'POST',
@@ -283,6 +305,7 @@ export const ProfilePage = () => {
         if (reloadResponse.ok) {
           const reloadData = await reloadResponse.json();
           console.log('🔄 Перезагруженные данные:', reloadData);
+          console.log('🔄 businessType из перезагруженных данных:', reloadData.businessType);
           // Нормализуем mapLinks
           const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks) 
             ? reloadData.mapLinks.map((link: any) => ({
@@ -291,22 +314,31 @@ export const ProfilePage = () => {
                 mapType: link.mapType || link.map_type
               }))
             : []);
-          console.log('📋 Нормализованные mapLinks после перезагрузки:', normalizedMapLinks);
+          // Используем businessType из перезагруженных данных или из currentBusiness
+          const businessType = reloadData.businessType || currentBusiness?.business_type || '';
+          console.log('🔄 Устанавливаем businessType:', businessType);
           setClientInfo({
-            ...reloadData,
+            businessName: reloadData.businessName || '',
+            businessType: businessType,
+            address: reloadData.address || '',
+            workingHours: reloadData.workingHours || 'ежедневно 9:00-21:00',
             mapLinks: normalizedMapLinks
           });
         } else {
           // Если перезагрузка не удалась, используем данные из ответа
           console.log('⚠️ Перезагрузка не удалась, использую данные из ответа');
-          if (Array.isArray(data.mapLinks)) {
-            const normalizedMapLinks = data.mapLinks.map((link: any) => ({
-              id: link.id,
-              url: link.url || '',
-              mapType: link.mapType || link.map_type
-            }));
-            setClientInfo({ ...clientInfo, mapLinks: normalizedMapLinks });
-          }
+          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
+            ? data.mapLinks.map((link: any) => ({
+                id: link.id,
+                url: link.url || '',
+                mapType: link.mapType || link.map_type
+              }))
+            : []);
+          setClientInfo({ 
+            ...clientInfo, 
+            businessType: data.businessType || clientInfo.businessType,
+            mapLinks: normalizedMapLinks 
+          });
         }
         
         setEditClientInfo(false);
@@ -316,22 +348,10 @@ export const ProfilePage = () => {
         if (effectiveBusinessId && updateBusiness) {
           updateBusiness(effectiveBusinessId, {
             name: clientInfo.businessName,
+            business_type: clientInfo.businessType,
             address: clientInfo.address,
             working_hours: clientInfo.workingHours
           });
-        }
-
-        // Проверяем статус парсинга
-        if (data.parseStatus === 'queued') {
-          setParseStatus('queued');
-          // Начинаем периодическую проверку статуса
-          checkParseStatus();
-        } else if (data.parseStatus === 'error') {
-          setParseStatus('error');
-          setParseErrors(data.parseErrors || []);
-          setError('Парсер завершился с ошибкой');
-        } else {
-          setParseStatus('done');
         }
       } else {
         // Проверяем, не истёк ли токен
@@ -346,12 +366,10 @@ export const ProfilePage = () => {
           const errorData = await response.json();
           setError(errorData.error || 'Ошибка сохранения информации');
         }
-        setParseStatus('error');
       }
     } catch (error) {
       console.error('Ошибка сохранения информации:', error);
       setError('Ошибка сохранения информации');
-      setParseStatus('error');
     } finally {
       setSavingClientInfo(false);
     }
@@ -370,10 +388,6 @@ export const ProfilePage = () => {
       // Проверяем, не закончилось ли время
       if (currentHours === 0 && currentMinutes === 0) {
         setRetryCountdown(null);
-        // Когда отсчёт закончился, проверяем статус снова
-        if (currentBusinessId) {
-          setTimeout(() => checkParseStatus(), 1000);
-        }
         return;
       }
       
@@ -681,10 +695,11 @@ export const ProfilePage = () => {
             ) : (
               <input
                 type="text"
-                value={clientInfo.businessType}
+                value={clientInfo.businessType ? getBusinessTypeLabel(clientInfo.businessType) : ''}
                 disabled
                 className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                 readOnly
+                placeholder="Не указан"
               />
             )}
           </div>
@@ -700,13 +715,63 @@ export const ProfilePage = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Режим работы</label>
-            <input 
-              type="text" 
-              value={clientInfo.workingHours} 
-              onChange={(e) => setClientInfo({...clientInfo, workingHours: e.target.value})}
-              disabled={!editClientInfo}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-2">
+              <div className="text-xs text-gray-500 mb-1">Время работы</div>
+              <input 
+                type="text" 
+                value={clientInfo.workingHours} 
+                onChange={(e) => setClientInfo({...clientInfo, workingHours: e.target.value})}
+                disabled={!editClientInfo}
+                className="w-full text-base font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none"
+                placeholder="ежедневно 9:00-21:00"
+              />
+            </div>
+            {editClientInfo && (
+              <div className="flex flex-wrap gap-2">
+                {['Будни', 'Ежедневно', 'Круглосуточно', 'Выходные', 'Перерыв'].map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      let newValue = clientInfo.workingHours || '';
+                      
+                      if (option === 'Ежедневно') {
+                        newValue = 'ежедневно 9:00-21:00';
+                      } else if (option === 'Будни') {
+                        newValue = 'будни 9:00-21:00';
+                      } else if (option === 'Круглосуточно') {
+                        newValue = 'круглосуточно';
+                      } else if (option === 'Выходные') {
+                        // Добавляем через запятую, если уже есть время работы
+                        if (newValue && !newValue.includes('выходные')) {
+                          newValue = newValue + ', выходные 10:00-18:00';
+                        } else if (!newValue) {
+                          newValue = 'выходные 10:00-18:00';
+                        } else {
+                          // Если уже есть, заменяем
+                          newValue = newValue.replace(/выходные\s+\d{1,2}:\d{2}-\d{1,2}:\d{2}/g, 'выходные 10:00-18:00');
+                        }
+                      } else if (option === 'Перерыв') {
+                        // Добавляем через запятую, если уже есть время работы
+                        if (newValue && !newValue.includes('перерыв')) {
+                          newValue = newValue + ', перерыв 12:00-13:00';
+                        } else if (!newValue) {
+                          newValue = 'перерыв 12:00-13:00';
+                        } else {
+                          // Если уже есть, заменяем
+                          newValue = newValue.replace(/перерыв\s+\d{1,2}:\d{2}-\d{1,2}:\d{2}/g, 'перерыв 12:00-13:00');
+                        }
+                      }
+                      
+                      setClientInfo({...clientInfo, workingHours: newValue});
+                    }}
+                    className="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="md:col-span-2">
             <div className="flex items-center justify-between mb-2">
@@ -726,14 +791,6 @@ export const ProfilePage = () => {
                 </Button>
               )}
             </div>
-            <p className="text-xs text-gray-500 mb-2">
-              Добавьте ссылку на ваш бизнес на картах — раз в неделю мы будем получать данные, чтобы отслеживать прогресс и давать советы по оптимизации.
-              {' '}
-              Данные с карт будут сохраняться на вкладке{' '}
-              <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
-                Прогресс
-              </a>.
-            </p>
             <div className="space-y-2">
               {(clientInfo.mapLinks && clientInfo.mapLinks.length ? clientInfo.mapLinks : [{ url: '' }]).map((link, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
@@ -769,56 +826,6 @@ export const ProfilePage = () => {
                   )}
                 </div>
               ))}
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700"
-                  disabled={savingClientInfo}
-                  onClick={() => {
-                    console.log('🔵 Кнопка "Запустить парсер данных" нажата, savingClientInfo:', savingClientInfo);
-                    // Парсер запускается вместе с сохранением ссылок
-                    handleSaveClientInfo();
-                  }}
-                >
-                  Запустить парсер данных
-                </Button>
-              </div>
-              <div className="text-xs text-gray-600">
-                Статус парсинга:{' '}
-                {parseStatus === 'queued' && <span className="text-yellow-600">в очереди...</span>}
-                {parseStatus === 'processing' && <span className="text-blue-600">в процессе...</span>}
-                {parseStatus === 'done' && <span className="text-green-600">завершён</span>}
-                {parseStatus === 'error' && <span className="text-red-600">ошибка</span>}
-                {parseStatus === 'captcha' && (
-                  <div className="text-orange-600">
-                    <div className="font-medium mb-1">
-                      ⚠️ На странице по ссылке потребовалась капча
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      Мы не можем в данный момент спарсить данные. Предпримем повторную попытку через{' '}
-                      {retryCountdown ? (
-                        <span className="font-semibold text-orange-700">
-                          {retryCountdown.hours > 0 ? `${retryCountdown.hours} ч ` : ''}
-                          {retryCountdown.minutes > 0 ? `${retryCountdown.minutes} мин` : 'менее минуты'}
-                        </span>
-                      ) : retryInfo ? (
-                        <span className="font-semibold text-orange-700">
-                          {retryInfo.hours > 0 ? `${retryInfo.hours} ч ` : ''}
-                          {retryInfo.minutes > 0 ? `${retryInfo.minutes} мин` : 'менее минуты'}
-                        </span>
-                      ) : (
-                        'несколько часов'
-                      )}
-                    </div>
-                  </div>
-                )}
-                {parseStatus === 'idle' && <span className="text-gray-500">ожидает запуска</span>}
-              </div>
-              {parseErrors.length > 0 && (
-                <div className="text-xs text-red-600">
-                  Ошибки: {parseErrors.join('; ')}
-                </div>
-              )}
             </div>
           </div>
         </div>

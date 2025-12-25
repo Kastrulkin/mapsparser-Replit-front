@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface AIAgentSettingsProps {
@@ -55,11 +54,17 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (business) {
-      setEnabled(business.ai_agent_enabled === 1);
+      const newEnabled = business.ai_agent_enabled === 1;
+      // Если агент только что включен, разворачиваем настройки
+      if (!enabled && newEnabled) {
+        setIsSettingsCollapsed(false);
+      }
+      setEnabled(newEnabled);
       setAgentType(business.ai_agent_type || 'booking');
       setTone(business.ai_agent_tone || 'professional');
       setSelectedAgentId(business.ai_agent_id || '');
@@ -146,6 +151,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const handleAgentTypeChange = (newType: string) => {
     setAgentType(newType);
+    // При смене типа разворачиваем настройки, чтобы пользователь видел изменения
+    setIsSettingsCollapsed(false);
     // При смене типа сбрасываем выбор агента на дефолтный
     setSelectedAgentId('');
     // Загружаем переменные дефолтного агента для нового типа, если он есть
@@ -172,6 +179,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     }
 
     setSelectedAgentId(value);
+    // При выборе агента разворачиваем настройки
+    setIsSettingsCollapsed(false);
     if (value) {
       loadAgentVariables(value);
     } else {
@@ -227,6 +236,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           title: 'Успешно',
           description: 'Настройки ИИ агента сохранены',
         });
+        // Сворачиваем настройки после сохранения
+        setIsSettingsCollapsed(true);
         // Обновляем локальное состояние бизнеса через пропсы
         // Компонент получит обновленные данные через useEffect при следующем рендере
       } else {
@@ -248,14 +259,13 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Настройки ИИ агента</CardTitle>
-        <CardDescription>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">Настройки ИИ агента</h2>
+        <p className="text-sm text-gray-600 mt-1">
           Настройте ИИ агента для автоматического консультирования клиентов
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </p>
+      </div>
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="ai-agent-enabled">Включить ИИ агента</Label>
@@ -266,12 +276,52 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           <Switch
             id="ai-agent-enabled"
             checked={enabled}
-            onCheckedChange={setEnabled}
+            onCheckedChange={(checked) => {
+              setEnabled(checked);
+              // При включении агента разворачиваем настройки
+              if (checked) {
+                setIsSettingsCollapsed(false);
+              }
+            }}
           />
         </div>
 
         {enabled && (
           <>
+            {/* Заголовок секции настроек с кнопкой сворачивания */}
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Настройки {AGENT_TYPES.find(t => t.value === agentType)?.label || 'агента'}
+                </h3>
+                {selectedAgentId && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {availableAgents.find(a => a.id === selectedAgentId)?.name || 'Дефолтный агент'}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
+                className="flex items-center gap-2"
+              >
+                {isSettingsCollapsed ? (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Развернуть
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Свернуть
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {!isSettingsCollapsed && (
+              <>
             <div className="space-y-2">
               <Label htmlFor="ai-agent-type">Тип агента</Label>
               <Select value={agentType} onValueChange={handleAgentTypeChange}>
@@ -391,25 +441,29 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                 <strong>Настройка агента:</strong> пожалуйста, выберите тон общения, добавьте название акции, размер скидки и описание.
               </AlertDescription>
             </Alert>
+              </>
+            )}
           </>
         )}
 
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading}
-          className="w-full"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Сохранение...
-            </>
-          ) : (
-            'Сохранить настройки'
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+        <div className="flex justify-start">
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Сохранение...
+              </>
+            ) : (
+              'Сохранить настройки'
+            )}
+          </Button>
+        </div>
+    </div>
   );
 };
 

@@ -62,7 +62,7 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
     if (latest.unansweredReviewsCount && latest.unansweredReviewsCount > 0) {
       const countText = latest.unansweredReviewsCount === 1 ? 'отзыв' : 
                        latest.unansweredReviewsCount < 5 ? 'отзыва' : 'отзывов';
-      recs.push(`${latest.unansweredReviewsCount} неотвеченных ${countText}! Ответ можно сгенерировать на вкладке "Обзор карточки".`);
+      recs.push(`${latest.unansweredReviewsCount} неотвеченных ${countText}! Ответ можно сгенерировать на вкладке "Работа с картами".`);
     }
 
     // 2. Проверка частоты отзывов (нужен хотя бы 1 в неделю)
@@ -99,11 +99,11 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
       
       // Если новости не увеличились и прошло больше 2 недель
       if (latestNews === prevNews && daysBetween > 14) {
-        recs.push(`Давно не обновлялись новости — новости лучше постить раз в неделю. Можно сгенерировать новую на вкладке "Обзор карточки".`);
+        recs.push(`Давно не обновлялись новости — новости лучше постить раз в неделю. Можно сгенерировать новую на вкладке "Работа с картами".`);
       }
     } else if (daysSinceLatest > 14) {
       // Если только один парсинг и прошло больше 2 недель
-      recs.push(`Давно не обновлялись новости — новости лучше постить раз в неделю. Можно сгенерировать новую на вкладке "Обзор карточки".`);
+      recs.push(`Давно не обновлялись новости — новости лучше постить раз в неделю. Можно сгенерировать новую на вкладке "Работа с картами".`);
     }
 
     // 4. Проверка фото (должны обновляться не реже раз в 2 недели)

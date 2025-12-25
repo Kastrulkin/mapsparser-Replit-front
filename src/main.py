@@ -2918,6 +2918,7 @@ def client_info():
                 data.get('services') or ""
             )
         )
+        print(f"📋 Сохранено в ClientInfo: businessType = {data.get('businessType') or ''}")
         db.conn.commit()
 
         # Сохраняем ссылки на карты, если переданы (чтобы не стирать при отсутствии поля)
@@ -2938,8 +2939,8 @@ def client_info():
                 return 'google'
             return 'other'
 
-        parse_errors = []
-        parse_status = "skipped"
+        # Парсер больше не запускается автоматически при сохранении ссылок
+        # Он запускается только вручную через кнопку "Запустить парсер" на странице "Обзор карточки"
 
         # Обновляем ссылки, только если поле пришло в payload
         if business_id and isinstance(map_links, list):
@@ -2966,27 +2967,6 @@ def client_info():
                 print(f"✅ Сохранена ссылка: {url} (тип: {map_type})")
             
             db.conn.commit()
-
-            # Если есть Яндекс карты — добавляем в очередь парсинга
-            yandex_urls = [url for url in valid_links if detect_map_type(url) == 'yandex']
-            if yandex_urls:
-                parse_status = "queued"
-                
-                # Добавляем задачи в очередь
-                for url in yandex_urls:
-                    try:
-                        queue_id = str(uuid.uuid4())
-                        cursor.execute("""
-                            INSERT INTO ParseQueue (id, url, user_id, business_id, status, created_at)
-                            VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
-                        """, (queue_id, url, user_id, business_id))
-                        print(f"✅ Добавлена задача в очередь: {queue_id} для URL: {url}")
-                    except Exception as e:
-                        print(f"⚠️ Ошибка добавления в очередь: {e}")
-                        parse_errors.append(f"Ошибка добавления {url} в очередь: {str(e)}")
-                        parse_status = "error"
-                
-                db.conn.commit()
 
         # Всегда возвращаем текущие ссылки для бизнеса
         current_links = []
@@ -3058,7 +3038,9 @@ def client_info():
                     if data.get('workingHours') is not None:
                         updates.append('working_hours = ?'); params.append(data.get('workingHours'))
                     if data.get('businessType') is not None:
-                        updates.append('business_type = ?'); params.append(data.get('businessType'))
+                        business_type_value = data.get('businessType')
+                        print(f"📋 Сохраняем businessType в Businesses: {business_type_value}")
+                        updates.append('business_type = ?'); params.append(business_type_value)
                     if updates:
                         updates.append('updated_at = CURRENT_TIMESTAMP')
                         params.append(business_id)
@@ -3070,8 +3052,28 @@ def client_info():
             import traceback
             traceback.print_exc()
 
+        # Возвращаем полные данные бизнеса после сохранения
+        response_data = {
+            "success": True,
+            "mapLinks": current_links
+        }
+        
+        # Если есть business_id, добавляем обновленные данные бизнеса
+        if business_id:
+            cursor.execute("SELECT name, business_type, address, working_hours FROM Businesses WHERE id = ?", (business_id,))
+            business_row = cursor.fetchone()
+            if business_row:
+                business_type = business_row[1] or ""
+                print(f"📋 POST /api/client-info: businessType из Businesses = '{business_type}' для business_id={business_id}")
+                response_data.update({
+                    "businessName": business_row[0] or "",
+                    "businessType": business_type,
+                    "address": business_row[2] or "",
+                    "workingHours": business_row[3] or ""
+                })
+
         db.close()
-        return jsonify({"success": True, "parseStatus": parse_status, "parseErrors": parse_errors, "mapLinks": current_links})
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"❌ Ошибка сохранения клиентской информации: {e}")
@@ -6011,6 +6013,288 @@ def get_network_locations(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка получения точек сети: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/optimization-wizard', methods=['POST', 'GET', 'OPTIONS'])
+def business_optimization_wizard(business_id):
+    """Сохранить или получить данные мастера оптимизации бизнеса"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Создаем таблицу если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                step INTEGER DEFAULT 1,
+                data TEXT,
+                completed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Проверяем доступ к бизнесу
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        owner_id = business_row[0]
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+        
+        if request.method == 'POST':
+            # Сохраняем данные мастера
+            data = request.get_json(silent=True) or {}
+            wizard_data = {
+                'experience': data.get('experience', ''),
+                'clients': data.get('clients', ''),
+                'crm': data.get('crm', ''),
+                'location': data.get('location', ''),
+                'average_check': data.get('average_check', ''),
+                'revenue': data.get('revenue', '')
+            }
+            
+            # Проверяем, есть ли уже запись
+            cursor.execute("SELECT id FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Обновляем существующую запись
+                cursor.execute("""
+                    UPDATE BusinessOptimizationWizard 
+                    SET data = ?, completed = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE business_id = ?
+                """, (json.dumps(wizard_data, ensure_ascii=False), business_id))
+            else:
+                # Создаем новую запись
+                wizard_id = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO BusinessOptimizationWizard (id, business_id, step, data, completed)
+                    VALUES (?, ?, 3, ?, 1)
+                """, (wizard_id, business_id, json.dumps(wizard_data, ensure_ascii=False)))
+            
+            db.conn.commit()
+            db.close()
+            
+            return jsonify({
+                "success": True,
+                "message": "Данные мастера оптимизации сохранены"
+            })
+        
+        else:  # GET
+            # Получаем данные мастера
+            cursor.execute("""
+                SELECT data, completed FROM BusinessOptimizationWizard 
+                WHERE business_id = ? 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            """, (business_id,))
+            row = cursor.fetchone()
+            
+            db.close()
+            
+            if row:
+                wizard_data = json.loads(row[0]) if row[0] else {}
+                return jsonify({
+                    "success": True,
+                    "data": wizard_data,
+                    "completed": row[1] == 1
+                })
+            else:
+                return jsonify({
+                    "success": True,
+                    "data": {},
+                    "completed": False
+                })
+    
+    except Exception as e:
+        print(f"❌ Ошибка работы с мастером оптимизации: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<business_id>/sprint', methods=['GET', 'POST', 'OPTIONS'])
+def business_sprint(business_id):
+    """Получить или сгенерировать спринт для бизнеса"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Создаем таблицу спринтов если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessSprints (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                week_start DATE NOT NULL,
+                tasks TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Проверяем доступ к бизнесу
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        
+        owner_id = business_row[0]
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+        
+        # Получаем текущую неделю (понедельник)
+        today = datetime.now().date()
+        days_since_monday = today.weekday()
+        week_start = today - timedelta(days=days_since_monday)
+        
+        if request.method == 'POST':
+            # Генерируем новый спринт на основе данных мастера
+            # Получаем данные мастера
+            cursor.execute("""
+                SELECT data FROM BusinessOptimizationWizard 
+                WHERE business_id = ? AND completed = 1
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            """, (business_id,))
+            wizard_row = cursor.fetchone()
+            
+            wizard_data = {}
+            if wizard_row and wizard_row[0]:
+                wizard_data = json.loads(wizard_row[0])
+            
+            # Генерируем задачи на основе данных мастера
+            tasks = []
+            
+            # Базовая задача для всех
+            tasks.append({
+                'id': str(uuid.uuid4()),
+                'title': 'Оптимизировать описание услуг на картах',
+                'description': 'Обновить формулировки услуг для лучшего SEO',
+                'expected_effect': '+5% к выручке',
+                'deadline': 'Пт',
+                'status': 'pending'
+            })
+            
+            # Если есть данные о клиентах
+            if wizard_data.get('clients'):
+                tasks.append({
+                    'id': str(uuid.uuid4()),
+                    'title': 'Настроить систему напоминаний для постоянных клиентов',
+                    'description': f'Использовать CRM ({wizard_data.get("crm", "любую")}) для автоматических напоминаний',
+                    'expected_effect': '+10% к повторным визитам',
+                    'deadline': 'Пт',
+                    'status': 'pending'
+                })
+            
+            # Если указан средний чек
+            if wizard_data.get('average_check'):
+                tasks.append({
+                    'id': str(uuid.uuid4()),
+                    'title': 'Проанализировать и оптимизировать ценообразование',
+                    'description': f'Текущий средний чек: {wizard_data.get("average_check")}₽. Проверить конкурентов и оптимизировать',
+                    'expected_effect': '+7% к среднему чеку',
+                    'deadline': 'Пт',
+                    'status': 'pending'
+                })
+            
+            # Если указана выручка
+            if wizard_data.get('revenue'):
+                revenue = int(wizard_data.get('revenue', 0)) if str(wizard_data.get('revenue', '')).isdigit() else 0
+                if revenue > 0:
+                    target_increase = int(revenue * 0.1)  # 10% прирост
+                    tasks.append({
+                        'id': str(uuid.uuid4()),
+                        'title': 'Увеличить выручку на 10%',
+                        'description': f'Текущая выручка: {revenue}₽. Цель: +{target_increase}₽ за месяц',
+                        'expected_effect': f'+{target_increase}₽ к выручке',
+                        'deadline': 'Пт',
+                        'status': 'pending'
+                    })
+            
+            # Сохраняем спринт
+            sprint_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT OR REPLACE INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
+            
+            db.conn.commit()
+            db.close()
+            
+            return jsonify({
+                "success": True,
+                "sprint": {
+                    "id": sprint_id,
+                    "week_start": week_start.isoformat(),
+                    "tasks": tasks
+                }
+            })
+        
+        else:  # GET
+            # Получаем спринт на текущую неделю
+            cursor.execute("""
+                SELECT id, tasks, updated_at FROM BusinessSprints 
+                WHERE business_id = ? AND week_start = ?
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            """, (business_id, week_start.isoformat()))
+            row = cursor.fetchone()
+            
+            db.close()
+            
+            if row:
+                tasks = json.loads(row[1]) if row[1] else []
+                return jsonify({
+                    "success": True,
+                    "sprint": {
+                        "id": row[0],
+                        "week_start": week_start.isoformat(),
+                        "tasks": tasks
+                    }
+                })
+            else:
+                return jsonify({
+                    "success": True,
+                    "sprint": None
+                })
+    
+    except Exception as e:
+        print(f"❌ Ошибка работы со спринтом: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

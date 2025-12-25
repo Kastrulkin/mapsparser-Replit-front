@@ -18,23 +18,48 @@ export const SettingsPage = () => {
         <p className="text-gray-600 mt-1">Управляйте настройками аккаунта и интеграциями</p>
       </div>
 
-      <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <TelegramConnection currentBusinessId={currentBusinessId} />
-        <WhatsAppConnection currentBusinessId={currentBusinessId} business={currentBusiness} />
+      {/* Блок 1: Текущая подписка и доступные тарифы */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <WABACredentials businessId={currentBusinessId} business={currentBusiness} />
-        <TelegramBotCredentials businessId={currentBusinessId} business={currentBusiness} />
+      {/* Блок 2: Подключения к Telegram и WhatsApp */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Подключения к мессенджерам</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <TelegramConnection currentBusinessId={currentBusinessId} />
+          <WhatsAppConnection currentBusinessId={currentBusinessId} business={currentBusiness} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <WABACredentials businessId={currentBusinessId} business={currentBusiness} />
+          <TelegramBotCredentials businessId={currentBusinessId} business={currentBusiness} />
+        </div>
       </div>
 
-      <ExternalIntegrations currentBusinessId={currentBusinessId} />
+      {/* Блок 3: Интеграции с внешними источниками */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <ExternalIntegrations currentBusinessId={currentBusinessId} />
+      </div>
 
-      <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+      {/* Блок 4: Настройки ИИ агента */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+      </div>
 
-      <NetworkManagement />
+      {/* Блок 5: Управление сетью */}
+      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+      }}>
+        <NetworkManagement />
+      </div>
     </div>
   );
 };
