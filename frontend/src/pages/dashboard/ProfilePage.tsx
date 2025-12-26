@@ -45,6 +45,7 @@ export const ProfilePage = () => {
   const [networkLocations, setNetworkLocations] = useState<any[]>([]);
   const [isNetwork, setIsNetwork] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const [businessTypes, setBusinessTypes] = useState<Array<{type_key: string; label: string}>>([]);
 
   useEffect(() => {
     // Если есть currentBusiness и это не наш бизнес, загружаем данные владельца
@@ -96,6 +97,27 @@ export const ProfilePage = () => {
       console.error('Ошибка загрузки данных владельца:', error);
     }
   };
+
+  useEffect(() => {
+    // Загружаем типы бизнеса
+    const loadBusinessTypes = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${window.location.origin}/api/business-types`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBusinessTypes(data.types || []);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки типов бизнеса:', error);
+      }
+    };
+    loadBusinessTypes();
+  }, []);
 
   useEffect(() => {
     const loadClientInfo = async () => {
@@ -680,16 +702,25 @@ export const ProfilePage = () => {
                   <SelectValue placeholder="Выберите тип" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="beauty_salon">Салон красоты</SelectItem>
-                  <SelectItem value="barbershop">Барбершоп</SelectItem>
-                  <SelectItem value="spa">SPA/Wellness</SelectItem>
-                  <SelectItem value="nail_studio">Ногтевая студия</SelectItem>
-                  <SelectItem value="cosmetology">Косметология</SelectItem>
-                  <SelectItem value="massage">Массаж</SelectItem>
-                  <SelectItem value="brows_lashes">Брови и ресницы</SelectItem>
-                  <SelectItem value="makeup">Макияж</SelectItem>
-                  <SelectItem value="tanning">Солярий</SelectItem>
-                  <SelectItem value="other">Другое</SelectItem>
+                  {businessTypes.map(type => (
+                    <SelectItem key={type.type_key} value={type.type_key}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                  {businessTypes.length === 0 && (
+                    <>
+                      <SelectItem value="beauty_salon">Салон красоты</SelectItem>
+                      <SelectItem value="barbershop">Барбершоп</SelectItem>
+                      <SelectItem value="spa">SPA/Wellness</SelectItem>
+                      <SelectItem value="nail_studio">Ногтевая студия</SelectItem>
+                      <SelectItem value="cosmetology">Косметология</SelectItem>
+                      <SelectItem value="massage">Массаж</SelectItem>
+                      <SelectItem value="brows_lashes">Брови и ресницы</SelectItem>
+                      <SelectItem value="makeup">Макияж</SelectItem>
+                      <SelectItem value="tanning">Солярий</SelectItem>
+                      <SelectItem value="other">Другое</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             ) : (

@@ -45,6 +45,8 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [generatingForReviewId, setGeneratingForReviewId] = useState<string | null>(null);
   const [generatedReplies, setGeneratedReplies] = useState<Record<string, string>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
@@ -69,6 +71,8 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
   };
 
   const loadExternalReviews = async () => {
+    // Сбрасываем страницу при загрузке новых отзывов
+    setCurrentPage(1);
     if (!currentBusinessId) return;
     setLoadingReviews(true);
     try {
@@ -356,7 +360,39 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
           <div className="text-sm text-gray-500">Нет спарсенных отзывов. Запустите синхронизацию в настройках внешних аккаунтов.</div>
         ) : (
           <div className="space-y-4">
-            {externalReviews.map((reviewItem) => (
+            {/* Пагинация сверху */}
+            {externalReviews.length > itemsPerPage && (
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                <div className="text-sm text-gray-600">
+                  Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} из {externalReviews.length}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Назад
+                  </Button>
+                  <span className="px-3 py-1 text-sm text-gray-700">
+                    Страница {currentPage} из {Math.ceil(externalReviews.length / itemsPerPage)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(externalReviews.length / itemsPerPage), prev + 1))}
+                    disabled={currentPage >= Math.ceil(externalReviews.length / itemsPerPage)}
+                  >
+                    Вперед
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {externalReviews
+              .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+              .map((reviewItem) => (
               <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="font-medium text-gray-900">{reviewItem.author_name || 'Анонимный пользователь'}</span>
@@ -430,6 +466,36 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
                 </div>
               </div>
             ))}
+            
+            {/* Пагинация внизу */}
+            {externalReviews.length > itemsPerPage && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                <div className="text-sm text-gray-600">
+                  Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} из {externalReviews.length}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Назад
+                  </Button>
+                  <span className="px-3 py-1 text-sm text-gray-700">
+                    Страница {currentPage} из {Math.ceil(externalReviews.length / itemsPerPage)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(externalReviews.length / itemsPerPage), prev + 1))}
+                    disabled={currentPage >= Math.ceil(externalReviews.length / itemsPerPage)}
+                  >
+                    Вперед
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

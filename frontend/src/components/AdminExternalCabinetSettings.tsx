@@ -54,6 +54,44 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     loadAccounts();
   }, [businessId]);
 
+  const handleRunParser = async () => {
+    if (!businessId) return;
+    
+    setParseStatus('processing');
+    try {
+      const token = await newAuth.getToken();
+      const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${businessId}`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: 'Успешно',
+          description: data.message || 'Парсинг выполнен',
+        });
+        // Перезагружаем данные аккаунта
+        loadAccounts();
+      } else {
+        throw new Error(data.error || 'Ошибка парсинга');
+      }
+    } catch (error: any) {
+      console.error('Ошибка парсинга:', error);
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось запустить парсер',
+        variant: 'destructive',
+      });
+    } finally {
+      setParseStatus('idle');
+    }
+  };
+
   const loadAccounts = async () => {
     try {
       const token = await newAuth.getToken();
@@ -438,7 +476,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 )}
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Button
                 onClick={() => testCookies('yandex_business', yandexForm)}
                 disabled={testingCookies || saving || !yandexForm.auth_data || !yandexForm.external_id}
@@ -451,6 +489,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 disabled={saving || testingCookies || (!yandexAccount && !yandexForm.auth_data)}
               >
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
+              </Button>
+              <Button
+                onClick={handleRunParser}
+                disabled={parseStatus === 'processing' || !businessId || !yandexAccount}
+                variant="default"
+                className="ml-auto"
+              >
+                {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
               </Button>
             </div>
           </div>

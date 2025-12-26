@@ -9,6 +9,8 @@ import { AIAgentsManagement } from '../../components/AIAgentsManagement';
 import { TokenUsageStats } from '../../components/TokenUsageStats';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
 import { GrowthPlan } from '../../components/GrowthPlan';
+import { GrowthPlanEditor } from '../../components/GrowthPlanEditor';
+import { PromptsManagement } from '../../components/PromptsManagement';
 
 interface Business {
   id: string;
@@ -91,7 +93,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -426,6 +428,16 @@ export const AdminPage: React.FC = () => {
         >
           📈 Схема роста
         </button>
+        <button
+          onClick={() => setActiveTab('prompts')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'prompts'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📝 Промпты анализа
+        </button>
       </div>
 
       {activeTab === 'agents' ? (
@@ -433,9 +445,9 @@ export const AdminPage: React.FC = () => {
       ) : activeTab === 'tokens' ? (
         <TokenUsageStats />
       ) : activeTab === 'growth' ? (
-        <React.Suspense fallback={<div className="p-6">Загрузка схемы роста...</div>}>
-          <GrowthPlan />
-        </React.Suspense>
+        <GrowthPlanEditor />
+      ) : activeTab === 'prompts' ? (
+        <PromptsManagement />
       ) : (
         <>
           <div className="mb-6 flex items-center justify-end">
@@ -759,10 +771,12 @@ export const AdminPage: React.FC = () => {
                   ✕
                 </Button>
               </div>
-              <AdminExternalCabinetSettings
-                businessId={settingsModal.businessId}
-                businessName={settingsModal.businessName}
-              />
+              {settingsModal.businessId && (
+                <AdminExternalCabinetSettings
+                  businessId={settingsModal.businessId}
+                  businessName={settingsModal.businessName}
+                />
+              )}
             </div>
           </div>
         </div>

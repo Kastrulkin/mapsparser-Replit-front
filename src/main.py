@@ -1645,7 +1645,7 @@ def services_optimize():
                 
             except FileNotFoundError:
                 # Fallback на старый промпт
-                prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                default_prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -1675,6 +1675,9 @@ def services_optimize():
 
 Исходные услуги/контент:
 {content}"""
+                
+                # Пытаемся получить промпт из БД, если не получилось - используем дефолтный
+                prompt_template = get_prompt_from_db('service_optimization', default_prompt_template)
 
                 prompt = (
                     prompt_template
@@ -1999,17 +2002,25 @@ def news_generate():
         except Exception:
             news_examples = ""
 
-        prompt = f"""
-Ты — маркетолог для локального бизнеса. Сгенерируй короткую новость для публикации на картах (Google, Яндекс).
-Требования: 1-2 предложения, до 300 символов, без эмодзи и хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+        # Получаем промпт из БД или используем дефолтный
+        default_prompt = f"""Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
 Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
 Контекст услуги (может отсутствовать): {service_context}
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info[:800]}
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}
-"""
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}"""
+        
+        prompt_template = get_prompt_from_db('news_generation', default_prompt)
+        prompt = prompt_template.format(
+            language_name=language_name,
+            service_context=service_context,
+            transaction_context=transaction_context,
+            raw_info=raw_info[:800],
+            news_examples=news_examples
+        )
 
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result = analyze_text_with_gigachat(
@@ -2018,11 +2029,34 @@ Write all generated text in {language_name}.
             business_id=business_id,
             user_id=user_data['user_id']
         )
-        if 'error' in result:
-            db.close()
-            return jsonify({"error": result['error']}), 500
-
-        generated_text = result.get('news') or result.get('text') or json.dumps(result, ensure_ascii=False)
+        
+        # Обрабатываем результат - может быть словарем или строкой
+        # Сначала проверяем тип, потом наличие ошибки
+        if isinstance(result, dict):
+            # Если результат - словарь, проверяем наличие ошибки
+            if 'error' in result:
+                db.close()
+                return jsonify({"error": result['error']}), 500
+            # Извлекаем текст из словаря
+            generated_text = result.get('news') or result.get('text') or result.get('response') or json.dumps(result, ensure_ascii=False)
+        elif isinstance(result, str):
+            # Если результат - строка, пробуем распарсить как JSON
+            try:
+                parsed_result = json.loads(result)
+                if isinstance(parsed_result, dict):
+                    # Проверяем наличие ошибки в распарсенном JSON
+                    if 'error' in parsed_result:
+                        db.close()
+                        return jsonify({"error": parsed_result['error']}), 500
+                    generated_text = parsed_result.get('news') or parsed_result.get('text') or result
+                else:
+                    generated_text = result
+            except json.JSONDecodeError:
+                # Если не JSON, используем строку как есть
+                generated_text = result
+        else:
+            # Если другой тип, конвертируем в строку
+            generated_text = str(result)
 
         news_id = str(uuid.uuid4())
         cur.execute(
@@ -2412,15 +2446,22 @@ def reviews_reply():
             except Exception:
                 examples_text = ""
 
-        prompt = f"""
-Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+        # Получаем промпт из БД или используем дефолтный
+        default_prompt = f"""Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
-Отзыв клиента: {review_text[:1000]}
-"""
+Отзыв клиента: {review_text[:1000]}"""
+        
+        prompt_template = get_prompt_from_db('review_reply', default_prompt)
+        prompt = prompt_template.format(
+            tone=tone,
+            language_name=language_name,
+            examples_text=examples_text,
+            review_text=review_text[:1000]
+        )
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
             prompt, 
@@ -6010,6 +6051,572 @@ def update_business(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка обновления бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ПРОМПТЫ ДЛЯ AI ====================
+@app.route('/api/admin/prompts', methods=['GET', 'OPTIONS'])
+def get_prompts():
+    """Получить все промпты (только для суперадмина)"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        # Проверяем, существует ли таблица, если нет - создаём
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AIPrompts (
+                id TEXT PRIMARY KEY,
+                prompt_type TEXT UNIQUE NOT NULL,
+                prompt_text TEXT NOT NULL,
+                description TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_by TEXT,
+                FOREIGN KEY (updated_by) REFERENCES Users(id) ON DELETE SET NULL
+            )
+        """)
+        db.conn.commit()
+        
+        cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+        rows = cursor.fetchall()
+        
+        # Если таблица пустая, инициализируем дефолтные промпты
+        if not rows:
+            default_prompts = [
+                ('service_optimization', 
+                 """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
+
+Регион: {region}
+Название бизнеса: {business_name}
+Тон: {tone}
+Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
+Длина описания: {length} символов
+Дополнительные инструкции: {instructions}
+
+ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
+{frequent_queries}
+
+Формат ответа СТРОГО В JSON:
+{{
+  "services": [
+    {{
+      "original_name": "...",
+      "optimized_name": "...",              
+      "seo_description": "...",             
+      "keywords": ["...", "...", "..."], 
+      "price": null,
+      "category": "hair|nails|spa|barber|massage|other"
+    }}
+  ],
+  "general_recommendations": ["...", "..."]
+}}
+
+Исходные услуги/контент:
+{content}""",
+                 'Промпт для оптимизации услуг и прайс-листа'),
+                ('review_reply',
+                 """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Write the reply in {language_name}.
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
+Верни СТРОГО JSON: {{"reply": "текст ответа"}}
+
+Отзыв клиента: {review_text[:1000]}""",
+                 'Промпт для генерации ответов на отзывы'),
+                ('news_generation',
+                 """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+Write all generated text in {language_name}.
+Верни СТРОГО JSON: {{"news": "текст новости"}}
+
+Контекст услуги (может отсутствовать): {service_context}
+Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
+Свободная информация (может отсутствовать): {raw_info[:800]}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
+                 'Промпт для генерации новостей')
+            ]
+            
+            for prompt_type, prompt_text, description in default_prompts:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
+                    VALUES (?, ?, ?, ?)
+                """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
+            
+            db.conn.commit()
+            # Перечитываем после вставки
+            cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+            rows = cursor.fetchall()
+        
+        prompts = []
+        for row in rows:
+            prompts.append({
+                'type': row[0],
+                'text': row[1],
+                'description': row[2],
+                'updated_at': row[3],
+                'updated_by': row[4]
+            })
+        
+        db.close()
+        return jsonify({"prompts": prompts})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения промптов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/prompts/<prompt_type>', methods=['PUT', 'OPTIONS'])
+def update_prompt(prompt_type):
+    """Обновить промпт (только для суперадмина)"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.get_json()
+        prompt_text = data.get('text', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not prompt_text:
+            return jsonify({"error": "Текст промпта не может быть пустым"}), 400
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            UPDATE AIPrompts 
+            SET prompt_text = ?, description = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+            WHERE prompt_type = ?
+        """, (prompt_text, description, user_data['user_id'], prompt_type))
+        
+        if cursor.rowcount == 0:
+            # Если промпта нет, создаём его
+            cursor.execute("""
+                INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description, user_data['user_id']))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления промпта: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
+    """Получить промпт из БД или использовать fallback"""
+    try:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = ?", (prompt_type,))
+        row = cursor.fetchone()
+        db.close()
+        
+        if row:
+            return row[0]
+        elif fallback:
+            return fallback
+        else:
+            return ""
+    except Exception as e:
+        print(f"⚠️ Ошибка получения промпта из БД: {e}")
+        return fallback or ""
+
+# ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
+@app.route('/api/business-types', methods=['GET'])
+def get_business_types_public():
+    """Получить все активные типы бизнеса (для всех пользователей)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT type_key, label FROM BusinessTypes WHERE is_active = 1 ORDER BY label")
+        rows = cursor.fetchall()
+        
+        types = []
+        for row in rows:
+            types.append({
+                'type_key': row[0],
+                'label': row[1]
+            })
+        
+        db.close()
+        return jsonify({"types": types})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения типов бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/business-types', methods=['GET', 'OPTIONS'])
+def get_business_types():
+    """Получить все типы бизнеса (только для суперадмина)"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, type_key, label, description, is_active FROM BusinessTypes ORDER BY label")
+        rows = cursor.fetchall()
+        
+        types = []
+        for row in rows:
+            types.append({
+                'id': row[0],
+                'type_key': row[1],
+                'label': row[2],
+                'description': row[3],
+                'is_active': bool(row[4])
+            })
+        
+        db.close()
+        return jsonify({"types": types})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения типов бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/business-types', methods=['POST', 'OPTIONS'])
+def create_business_type():
+    """Создать новый тип бизнеса (только для суперадмина)"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.get_json()
+        type_key = data.get('type_key', '').strip()
+        label = data.get('label', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not type_key or not label:
+            return jsonify({"error": "type_key и label обязательны"}), 400
+        
+        import uuid
+        type_id = f"bt_{uuid.uuid4().hex[:12]}"
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            INSERT INTO BusinessTypes (id, type_key, label, description)
+            VALUES (?, ?, ?, ?)
+        """, (type_id, type_key, label, description))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "id": type_id})
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания типа бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/business-types/<type_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+def update_or_delete_business_type(type_id):
+    """Обновить или удалить тип бизнеса (только для суперадмина)"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        
+        if request.method == 'DELETE':
+            cursor.execute("DELETE FROM BusinessTypes WHERE id = ?", (type_id,))
+            db.conn.commit()
+            db.close()
+            return jsonify({"success": True})
+        
+        # PUT - обновление
+        data = request.get_json()
+        label = data.get('label', '').strip()
+        description = data.get('description', '').strip()
+        is_active = data.get('is_active', True)
+        
+        if not label:
+            return jsonify({"error": "label обязателен"}), 400
+        
+        cursor.execute("""
+            UPDATE BusinessTypes 
+            SET label = ?, description = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (label, description, 1 if is_active else 0, type_id))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления/удаления типа бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/growth-stages/<business_type_id>', methods=['GET', 'OPTIONS'])
+def get_growth_stages(business_type_id):
+    """Получить этапы роста для типа бизнеса"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
+            FROM GrowthStages
+            WHERE business_type_id = ?
+            ORDER BY stage_number
+        """, (business_type_id,))
+        stages_rows = cursor.fetchall()
+        
+        stages = []
+        for stage_row in stages_rows:
+            stage_id = stage_row[0]
+            # Получаем задачи для этапа
+            cursor.execute("""
+                SELECT id, task_number, task_text
+                FROM GrowthTasks
+                WHERE stage_id = ?
+                ORDER BY task_number
+            """, (stage_id,))
+            tasks_rows = cursor.fetchall()
+            
+            tasks = [{'id': t[0], 'number': t[1], 'text': t[2]} for t in tasks_rows]
+            
+            stages.append({
+                'id': stage_id,
+                'stage_number': stage_row[1],
+                'title': stage_row[2],
+                'description': stage_row[3],
+                'goal': stage_row[4],
+                'expected_result': stage_row[5],
+                'duration': stage_row[6],
+                'is_permanent': bool(stage_row[7]),
+                'tasks': tasks
+            })
+        
+        db.close()
+        return jsonify({"stages": stages})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения этапов роста: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/growth-stages', methods=['POST', 'OPTIONS'])
+def create_growth_stage():
+    """Создать этап роста"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.get_json()
+        business_type_id = data.get('business_type_id')
+        stage_number = data.get('stage_number')
+        title = data.get('title', '').strip()
+        description = data.get('description', '').strip()
+        goal = data.get('goal', '').strip()
+        expected_result = data.get('expected_result', '').strip()
+        duration = data.get('duration', '').strip()
+        is_permanent = data.get('is_permanent', False)
+        tasks = data.get('tasks', [])
+        
+        if not business_type_id or stage_number is None or not title:
+            return jsonify({"error": "business_type_id, stage_number и title обязательны"}), 400
+        
+        stage_id = f"gs_{uuid.uuid4().hex[:12]}"
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (stage_id, business_type_id, stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0))
+        
+        # Добавляем задачи
+        for task_idx, task_text in enumerate(tasks, 1):
+            task_id = f"gt_{uuid.uuid4().hex[:12]}"
+            cursor.execute("""
+                INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
+                VALUES (?, ?, ?, ?)
+            """, (task_id, stage_id, task_idx, task_text.strip()))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "id": stage_id})
+        
+    except Exception as e:
+        print(f"❌ Ошибка создания этапа роста: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/growth-stages/<stage_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+def update_or_delete_growth_stage(stage_id):
+    """Обновить или удалить этап роста"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        
+        if request.method == 'DELETE':
+            cursor.execute("DELETE FROM GrowthStages WHERE id = ?", (stage_id,))
+            db.conn.commit()
+            db.close()
+            return jsonify({"success": True})
+        
+        # PUT - обновление
+        data = request.get_json()
+        stage_number = data.get('stage_number')
+        title = data.get('title', '').strip()
+        description = data.get('description', '').strip()
+        goal = data.get('goal', '').strip()
+        expected_result = data.get('expected_result', '').strip()
+        duration = data.get('duration', '').strip()
+        is_permanent = data.get('is_permanent', False)
+        tasks = data.get('tasks', [])
+        
+        if stage_number is None or not title:
+            return jsonify({"error": "stage_number и title обязательны"}), 400
+        
+        cursor.execute("""
+            UPDATE GrowthStages 
+            SET stage_number = ?, title = ?, description = ?, goal = ?, expected_result = ?, duration = ?, is_permanent = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0, stage_id))
+        
+        # Удаляем старые задачи и добавляем новые
+        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = ?", (stage_id,))
+        for task_idx, task_text in enumerate(tasks, 1):
+            task_id = f"gt_{uuid.uuid4().hex[:12]}"
+            cursor.execute("""
+                INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
+                VALUES (?, ?, ?, ?)
+            """, (task_id, stage_id, task_idx, task_text.strip()))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления/удаления этапа роста: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/superadmin/businesses/<business_id>/send-credentials', methods=['POST'])

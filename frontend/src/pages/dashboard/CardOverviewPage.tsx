@@ -19,6 +19,8 @@ export const CardOverviewPage = () => {
   // Состояния для услуг
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [servicesCurrentPage, setServicesCurrentPage] = useState(1);
+  const servicesItemsPerPage = 10;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [newService, setNewService] = useState({
@@ -353,13 +355,6 @@ export const CardOverviewPage = () => {
           <p className="text-gray-600 mt-1">Управляйте услугами и оптимизируйте карточку организации</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            onClick={handleRunParser} 
-            disabled={parseStatus === 'processing' || !currentBusinessId}
-            variant="outline"
-          >
-            {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
-          </Button>
           <Button onClick={() => setShowWizard(true)}>Мастер оптимизации карт</Button>
         </div>
       </div>
@@ -544,7 +539,9 @@ export const CardOverviewPage = () => {
                   <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
                 </tr>
               ) : (
-                userServices.map((service, index) => (
+                userServices
+                  .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
+                  .map((service, index) => (
                   <tr key={service.id || index}>
                     <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
@@ -582,6 +579,36 @@ export const CardOverviewPage = () => {
               )}
             </tbody>
           </table>
+          
+          {/* Пагинация для услуг */}
+          {userServices.length > servicesItemsPerPage && (
+            <div className="flex items-center justify-between mt-4 px-4">
+              <div className="text-sm text-gray-600">
+                Показано {((servicesCurrentPage - 1) * servicesItemsPerPage) + 1}-{Math.min(servicesCurrentPage * servicesItemsPerPage, userServices.length)} из {userServices.length}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setServicesCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={servicesCurrentPage === 1}
+                >
+                  Назад
+                </Button>
+                <span className="px-3 py-1 text-sm text-gray-700">
+                  Страница {servicesCurrentPage} из {Math.ceil(userServices.length / servicesItemsPerPage)}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setServicesCurrentPage(prev => Math.min(Math.ceil(userServices.length / servicesItemsPerPage), prev + 1))}
+                  disabled={servicesCurrentPage >= Math.ceil(userServices.length / servicesItemsPerPage)}
+                >
+                  Вперед
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

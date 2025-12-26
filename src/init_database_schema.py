@@ -359,6 +359,155 @@ def init_database_schema():
         
         print("✅ Индексы созданы/проверены")
         
+        # Prompts - промпты для AI (редактируемые через админку)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AIPrompts (
+                id TEXT PRIMARY KEY,
+                prompt_type TEXT UNIQUE NOT NULL,
+                prompt_text TEXT NOT NULL,
+                description TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_by TEXT,
+                FOREIGN KEY (updated_by) REFERENCES Users(id) ON DELETE SET NULL
+            )
+        """)
+        print("✅ Таблица AIPrompts создана/проверена")
+        
+        # Инициализируем дефолтные промпты, если их нет
+        default_prompts = [
+            ('service_optimization', 
+             """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
+
+Регион: {region}
+Название бизнеса: {business_name}
+Тон: {tone}
+Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
+Длина описания: {length} символов
+Дополнительные инструкции: {instructions}
+
+ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
+{frequent_queries}
+
+Формат ответа СТРОГО В JSON:
+{{
+  "services": [
+    {{
+      "original_name": "...",
+      "optimized_name": "...",              
+      "seo_description": "...",             
+      "keywords": ["...", "...", "..."], 
+      "price": null,
+      "category": "hair|nails|spa|barber|massage|other"
+    }}
+  ],
+  "general_recommendations": ["...", "..."]
+}}
+
+Исходные услуги/контент:
+{content}""",
+             'Промпт для оптимизации услуг и прайс-листа'),
+            ('review_reply',
+             """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Write the reply in {language_name}.
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
+Верни СТРОГО JSON: {{"reply": "текст ответа"}}
+
+Отзыв клиента: {review_text[:1000]}""",
+             'Промпт для генерации ответов на отзывы'),
+            ('news_generation',
+             """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+Write all generated text in {language_name}.
+Верни СТРОГО JSON: {{"news": "текст новости"}}
+
+Контекст услуги (может отсутствовать): {service_context}
+Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
+Свободная информация (может отсутствовать): {raw_info[:800]}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
+             'Промпт для генерации новостей')
+        ]
+        
+        for prompt_type, prompt_text, description in default_prompts:
+            cursor.execute("""
+                INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
+                VALUES (?, ?, ?, ?)
+            """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
+        
+        print("✅ Дефолтные промпты инициализированы")
+        
+        # BusinessTypes - типы бизнеса (редактируемые)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessTypes (
+                id TEXT PRIMARY KEY,
+                type_key TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                description TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Таблица BusinessTypes создана/проверена")
+        
+        # GrowthStages - этапы роста для типов бизнеса
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS GrowthStages (
+                id TEXT PRIMARY KEY,
+                business_type_id TEXT NOT NULL,
+                stage_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                goal TEXT,
+                expected_result TEXT,
+                duration TEXT,
+                is_permanent INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_type_id) REFERENCES BusinessTypes(id) ON DELETE CASCADE,
+                UNIQUE(business_type_id, stage_number)
+            )
+        """)
+        print("✅ Таблица GrowthStages создана/проверена")
+        
+        # GrowthTasks - задачи для этапов
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS GrowthTasks (
+                id TEXT PRIMARY KEY,
+                stage_id TEXT NOT NULL,
+                task_number INTEGER NOT NULL,
+                task_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (stage_id) REFERENCES GrowthStages(id) ON DELETE CASCADE,
+                UNIQUE(stage_id, task_number)
+            )
+        """)
+        print("✅ Таблица GrowthTasks создана/проверена")
+        
+        # Инициализируем дефолтные типы бизнеса, если их нет
+        default_business_types = [
+            ('beauty_salon', 'Салон красоты', 'Салон красоты с полным спектром услуг'),
+            ('barbershop', 'Барбершоп', 'Мужской барбершоп'),
+            ('spa', 'SPA/Wellness', 'SPA и wellness центр'),
+            ('nail_studio', 'Ногтевая студия', 'Студия маникюра и педикюра'),
+            ('cosmetology', 'Косметология', 'Косметологический кабинет'),
+            ('massage', 'Массаж', 'Массажный салон'),
+            ('brows_lashes', 'Брови и ресницы', 'Студия бровей и ресниц'),
+            ('makeup', 'Макияж', 'Студия макияжа'),
+            ('tanning', 'Солярий', 'Студия загара'),
+            ('other', 'Другое', 'Другой тип бизнеса')
+        ]
+        
+        for type_key, label, description in default_business_types:
+            cursor.execute("""
+                INSERT OR IGNORE INTO BusinessTypes (id, type_key, label, description)
+                VALUES (?, ?, ?, ?)
+            """, (f"bt_{type_key}", type_key, label, description))
+        
+        print("✅ Дефолтные типы бизнеса инициализированы")
+        
         conn.commit()
         
         print()

@@ -22,6 +22,8 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
   const { language: interfaceLanguage } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
@@ -35,6 +37,8 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   ];
 
   const loadNews = async () => {
+    // Сбрасываем страницу при загрузке новых новостей
+    setCurrentPage(1);
     try {
       const token = localStorage.getItem('auth_token');
       const res = await fetch(`${window.location.origin}/api/news/list`, {
@@ -272,71 +276,149 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         <div className="text-sm font-medium text-gray-900 mb-2">Ваши новости</div>
         {(news.length === 0 && (!externalPosts || externalPosts.length === 0)) ? (
           <div className="text-sm text-gray-500">Пока нет новостей</div>
-        ) : (
-          <ul className="space-y-2">
-            {/* Спарсенные публикации из внешних источников */}
-            {externalPosts && externalPosts.length > 0 && (
-              <>
-                {externalPosts.map((post: any) => (
-                  <li key={`external-${post.id}`} className="border border-blue-200 rounded p-3 text-sm bg-blue-50">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        {post.title && (
-                          <div className="font-semibold text-gray-900 mb-1">{post.title}</div>
-                        )}
-                        <div className="text-gray-700 whitespace-pre-wrap">{post.text || 'Без текста'}</div>
-                        {post.published_at && (
-                          <div className="text-xs text-gray-500 mt-2">
-                            Опубликовано: {new Date(post.published_at).toLocaleDateString('ru-RU')}
-                          </div>
-                        )}
-                        {post.source && (
-                          <div className="text-xs text-gray-500">
-                            Источник: {post.source === 'yandex_business' ? 'Яндекс.Бизнес' : post.source}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </>
-            )}
-            {/* Сгенерированные новости */}
-            {news.map((n:any) => (
-              <li key={n.id} className="border border-gray-200 rounded p-2 text-sm">
-                <Textarea 
-                  id={`news-textarea-${n.id}`}
-                  rows={3} 
-                  defaultValue={n.generated_text} 
-                  onBlur={(e)=> saveEdited(n.id, e.target.value)} 
-                />
-                <div className="mt-2 flex gap-2">
-                  {!n.approved && (
-                    <Button size="sm" variant="outline" onClick={()=> approve(n.id)}>Принять</Button>
-                  )}
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={() => {
-                      const textarea = document.getElementById(`news-textarea-${n.id}`) as HTMLTextAreaElement;
-                      textarea?.focus();
-                    }}
-                  >
-                    Редактировать
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    onClick={() => deleteNews(n.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    Удалить
-                  </Button>
+        ) : (() => {
+          // Объединяем все новости в один список для пагинации
+          const allNews: any[] = [];
+          if (externalPosts && externalPosts.length > 0) {
+            externalPosts.forEach((post: any) => {
+              allNews.push({ ...post, isExternal: true });
+            });
+          }
+          news.forEach((n: any) => {
+            allNews.push({ ...n, isExternal: false });
+          });
+          const totalItems = allNews.length;
+          const paginatedNews = allNews.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+          
+          return (
+            <>
+              {/* Пагинация сверху */}
+              {totalItems > itemsPerPage && (
+                <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Назад
+                    </Button>
+                    <span className="px-3 py-1 text-sm text-gray-700">
+                      Страница {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
+                      disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                    >
+                      Вперед
+                    </Button>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
+              )}
+              
+              <ul className="space-y-2">
+                {paginatedNews.map((item: any) => {
+                  if (item.isExternal) {
+                    // Спарсенные публикации из внешних источников
+                    return (
+                      <li key={`external-${item.id}`} className="border border-blue-200 rounded p-3 text-sm bg-blue-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            {item.title && (
+                              <div className="font-semibold text-gray-900 mb-1">{item.title}</div>
+                            )}
+                            <div className="text-gray-700 whitespace-pre-wrap">{item.text || 'Без текста'}</div>
+                            {item.published_at && (
+                              <div className="text-xs text-gray-500 mt-2">
+                                Опубликовано: {new Date(item.published_at).toLocaleDateString('ru-RU')}
+                              </div>
+                            )}
+                            {item.source && (
+                              <div className="text-xs text-gray-500">
+                                Источник: {item.source === 'yandex_business' ? 'Яндекс.Бизнес' : item.source}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  } else {
+                    // Сгенерированные новости
+                    return (
+                      <li key={item.id} className="border border-gray-200 rounded p-2 text-sm">
+                        <Textarea 
+                          id={`news-textarea-${item.id}`}
+                          rows={3} 
+                          defaultValue={item.generated_text} 
+                          onBlur={(e)=> saveEdited(item.id, e.target.value)} 
+                        />
+                        <div className="mt-2 flex gap-2">
+                          {!item.approved && (
+                            <Button size="sm" variant="outline" onClick={()=> approve(item.id)}>Принять</Button>
+                          )}
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => {
+                              const textarea = document.getElementById(`news-textarea-${item.id}`) as HTMLTextAreaElement;
+                              textarea?.focus();
+                            }}
+                          >
+                            Редактировать
+                          </Button>
+                          <Button 
+                            size="sm"
+                            variant="outline" 
+                            onClick={() => deleteNews(item.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Удалить
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  }
+                })}
+              </ul>
+              
+              {/* Пагинация внизу */}
+              {totalItems > itemsPerPage && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Назад
+                    </Button>
+                    <span className="px-3 py-1 text-sm text-gray-700">
+                      Страница {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
+                      disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                    >
+                      Вперед
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );
