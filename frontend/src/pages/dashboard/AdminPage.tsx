@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -65,29 +66,32 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className={`p-2 rounded-full ${variant === 'delete' ? 'bg-red-100' : 'bg-orange-100'}`}>
-              <AlertTriangle className={`w-6 h-6 ${variant === 'delete' ? 'text-red-600' : 'text-orange-600'}`} />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+      <Card className="max-w-md w-full mx-4 shadow-2xl border-0 animate-in zoom-in-95 duration-200">
+        <CardContent className="p-6">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className={`p-3 rounded-xl ${variant === 'delete' ? 'bg-red-50' : 'bg-primary/10'}`}>
+              <AlertTriangle className={`w-6 h-6 ${variant === 'delete' ? 'text-red-600' : 'text-primary'}`} />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <div className="flex-1">
+              <h3 className="text-xl font-semibold text-foreground mb-2">{title}</h3>
+              <p className="text-muted-foreground leading-relaxed">{message}</p>
+            </div>
           </div>
-          <p className="text-gray-600 mb-6">{message}</p>
-          <div className="flex justify-end space-x-3">
-            <Button variant="outline" onClick={onCancel}>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={onCancel} className="min-w-[100px]">
               {cancelText}
             </Button>
             <Button
               variant={variant === 'delete' ? 'destructive' : 'default'}
               onClick={onConfirm}
+              className="min-w-[100px]"
             >
               {confirmText}
             </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
@@ -369,76 +373,66 @@ export const AdminPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Загрузка данных...</p>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary/20 border-t-primary mx-auto"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-r-primary/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+          </div>
+          <p className="text-muted-foreground font-medium">Загрузка данных...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Административная панель</h1>
-        <p className="text-gray-600">Управление пользователями, бизнесами и ИИ агентами</p>
-      </div>
+  const tabs = [
+    { id: 'businesses' as const, label: 'Пользователи и бизнесы', icon: User },
+    { id: 'agents' as const, label: 'ИИ агенты', icon: Bot },
+    { id: 'tokens' as const, label: 'Статистика токенов', icon: BarChart3 },
+    { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
+    { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
+  ];
 
-      {/* Табы */}
-      <div className="flex space-x-1 mb-6 border-b">
-        <button
-          onClick={() => setActiveTab('businesses')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'businesses'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Пользователи и бизнесы
-        </button>
-        <button
-          onClick={() => setActiveTab('agents')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'agents'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Bot className="h-4 w-4 inline mr-2" />
-          ИИ агенты
-        </button>
-        <button
-          onClick={() => setActiveTab('tokens')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'tokens'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          📊 Статистика токенов
-        </button>
-        <button
-          onClick={() => setActiveTab('growth')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'growth'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          📈 Схема роста
-        </button>
-        <button
-          onClick={() => setActiveTab('prompts')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'prompts'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          📝 Промпты анализа
-        </button>
-      </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <div className="mb-8 space-y-2">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            Административная панель
+          </h1>
+          <p className="text-muted-foreground text-lg">Управление пользователями, бизнесами и ИИ агентами</p>
+        </div>
+
+        {/* Modern Tab Navigation */}
+        <div className="mb-8">
+          <div className="flex flex-wrap gap-2 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 shadow-sm">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    relative flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm
+                    transition-all duration-200 ease-out
+                    ${isActive
+                      ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }
+                  `}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'scale-110' : ''} transition-transform duration-200`} />
+                  <span>{tab.label}</span>
+                  {isActive && (
+                    <div className="absolute inset-0 rounded-lg bg-primary/10 animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
       {activeTab === 'agents' ? (
         <AIAgentsManagement />
@@ -450,35 +444,39 @@ export const AdminPage: React.FC = () => {
         <PromptsManagement />
       ) : (
         <>
-          <div className="mb-6 flex items-center justify-end">
-            <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
-              <Plus className="w-4 h-4" />
-              <span>Создать аккаунт</span>
+          {/* Action Bar */}
+          <div className="mb-6 flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+            </div>
+            <Button 
+              onClick={() => setShowCreateModal(true)} 
+              className="shadow-md hover:shadow-lg transition-shadow duration-200"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Создать аккаунт
             </Button>
           </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Имя пользователя
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Бизнес
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Действия
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          {/* Modern Card-based Layout */}
+          <div className="space-y-6">
             {users.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
-                  Пользователи не найдены
-                </td>
-              </tr>
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <div className="p-4 rounded-full bg-muted mb-4">
+                    <User className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
+                  <Button 
+                    onClick={() => setShowCreateModal(true)} 
+                    variant="outline" 
+                    className="mt-4"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Создать первого пользователя
+                  </Button>
+                </CardContent>
+              </Card>
             ) : (
               users.map((user) => {
                 const allBusinesses: Array<{ id: string; name: string; type: 'direct' | 'network'; networkId?: string; networkName?: string; business: Business }> = [];
@@ -513,230 +511,123 @@ export const AdminPage: React.FC = () => {
                   }
                 });
 
-                return allBusinesses.map((item, index) => (
-                  <tr key={`${user.id}-${item.id}-${index}`} className="hover:bg-gray-50">
-                    {index === 0 && (
-                      <td
-                        rowSpan={allBusinesses.length}
-                        className="px-6 py-4 whitespace-nowrap align-top"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <User className="h-5 w-5 text-gray-400" />
+                return (
+                  <Card 
+                    key={user.id} 
+                    className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm"
+                  >
+                    <CardHeader className="pb-4 border-b border-border/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-primary/10">
+                            <User className="w-5 h-5 text-primary" />
+                          </div>
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.name || user.email}
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-foreground">
+                                {user.name || user.email}
+                              </h3>
                               {user.is_superadmin && (
-                                <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
                                   Админ
                                 </span>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
+                            <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
                           </div>
                         </div>
-                      </td>
-                    )}
-                    <td className="px-6 py-4">
-                      {item.type === 'network' ? (
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <Network className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm font-medium text-gray-900">{item.networkName}</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => toggleNetwork(item.networkId!)}
-                            >
-                              {expandedNetworks.has(item.networkId!) ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                          {expandedNetworks.has(item.networkId!) && (
-                            <div className="mt-2 ml-6 space-y-2">
-                              {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
-                                <div
-                                  key={business.id}
-                                  className="p-2 border border-gray-200 rounded hover:bg-blue-50 cursor-pointer"
-                                  onClick={() => handleBusinessClick(business.id)}
+                        <div className="text-xs text-muted-foreground">
+                          {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <div className="space-y-4">
+                        {allBusinesses.map((item, index) => (
+                          <div 
+                            key={`${item.id}-${index}`}
+                            className="group relative"
+                          >
+                            {item.type === 'network' ? (
+                              <div className="space-y-3">
+                                <div 
+                                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                  onClick={() => toggleNetwork(item.networkId!)}
                                 >
-                                  <div className="flex items-center space-x-2">
-                                    <div className={`text-sm font-medium ${business.is_active === 0 ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                                      {business.name}
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-primary/10">
+                                      <Network className="w-4 h-4 text-primary" />
                                     </div>
-                                    {business.is_active === 0 && (
-                                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                                        Заблокирован
-                                      </span>
-                                    )}
+                                    <div>
+                                      <h4 className="font-semibold text-foreground">{item.networkName}</h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
+                                      </p>
+                                    </div>
                                   </div>
-                                  {business.address && (
-                                    <div className="text-xs text-gray-500 flex items-center mt-1">
-                                      <MapPin className="h-3 w-3 mr-1" />
-                                      {business.address}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className="flex items-center space-x-2 cursor-pointer hover:text-blue-600"
-                          onClick={() => handleBusinessClick(item.business.id)}
-                        >
-                          <Building2 className="h-4 w-4 text-gray-400" />
-                          <span className={`text-sm font-medium ${item.business.is_active === 0 ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                            {item.name}
-                          </span>
-                          {item.business.is_active === 0 && (
-                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                              Заблокирован
-                            </span>
-                          )}
-                          {item.business.address && (
-                            <span className="text-xs text-gray-500 flex items-center">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              {item.business.address}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right align-top">
-                      {item.type === 'direct' ? (
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSettingsModal({
-                                isOpen: true,
-                                businessId: item.business.id,
-                                businessName: item.name,
-                              });
-                            }}
-                          >
-                            <Settings className="w-4 h-4 mr-1" />
-                            Настройки
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const isPromo = item.business.subscription_tier === 'promo';
-                              handlePromo(item.business.id, item.name, isPromo);
-                            }}
-                            className={item.business.subscription_tier === 'promo' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : ''}
-                          >
-                            <Gift className="w-4 h-4 mr-1" />
-                            {item.business.subscription_tier === 'promo' ? 'Отключить Промо' : 'Промо'}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Если бизнес активен (is_active === 1), хотим заблокировать (isBlocked = true)
-                              // Если бизнес заблокирован (is_active !== 1), хотим разблокировать (isBlocked = false)
-                              handleBlock(item.business.id, item.name, item.business.is_active === 1);
-                            }}
-                            className={item.business.is_active !== 1 ? 'bg-green-50 text-green-700 hover:bg-green-100' : ''}
-                          >
-                            <Ban className="w-4 h-4 mr-1" />
-                            {item.business.is_active !== 1 ? 'Разблокировать' : 'Заблокировать'}
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(item.business.id, item.name);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Удалить
-                          </Button>
-                        </div>
-                      ) : (
-                        <div>
-                          {/* Для сетей показываем действия для точек сети только когда раскрыта */}
-                          {expandedNetworks.has(item.networkId!) && (
-                            <div className="space-y-2">
-                              {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
-                                <div key={business.id} className="flex items-center justify-end space-x-2 mb-2">
                                   <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSettingsModal({
-                                        isOpen: true,
-                                        businessId: business.id,
-                                        businessName: business.name,
-                                      });
-                                    }}
+                                    className="h-8 w-8 p-0"
                                   >
-                                    <Settings className="w-4 h-4 mr-1" />
-                                    Настройки
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const isPromo = business.subscription_tier === 'promo';
-                                      handlePromo(business.id, business.name, isPromo);
-                                    }}
-                                    className={business.subscription_tier === 'promo' ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : ''}
-                                  >
-                                    <Gift className="w-4 h-4 mr-1" />
-                                    {business.subscription_tier === 'promo' ? 'Отключить Промо' : 'Промо'}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Если бизнес активен (is_active === 1), хотим заблокировать (isBlocked = true)
-                                      // Если бизнес заблокирован (is_active !== 1), хотим разблокировать (isBlocked = false)
-                                      handleBlock(business.id, business.name, business.is_active === 1);
-                                    }}
-                                    className={business.is_active !== 1 ? 'bg-green-50 text-green-700 hover:bg-green-100' : ''}
-                                  >
-                                    <Ban className="w-4 h-4 mr-1" />
-                                    {business.is_active !== 1 ? 'Разблокировать' : 'Заблокировать'}
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(business.id, business.name);
-                                    }}
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-1" />
-                                    Удалить
+                                    {expandedNetworks.has(item.networkId!) ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
                                   </Button>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ));
+                                {expandedNetworks.has(item.networkId!) && (
+                                  <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
+                                    {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
+                                      <BusinessCard
+                                        key={business.id}
+                                        business={business}
+                                        onSettingsClick={() => setSettingsModal({
+                                          isOpen: true,
+                                          businessId: business.id,
+                                          businessName: business.name,
+                                        })}
+                                        onPromoClick={() => {
+                                          const isPromo = business.subscription_tier === 'promo';
+                                          handlePromo(business.id, business.name, isPromo);
+                                        }}
+                                        onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
+                                        onDeleteClick={() => handleDelete(business.id, business.name)}
+                                        onClick={() => handleBusinessClick(business.id)}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <BusinessCard
+                                business={item.business}
+                                onSettingsClick={() => setSettingsModal({
+                                  isOpen: true,
+                                  businessId: item.business.id,
+                                  businessName: item.name,
+                                })}
+                                onPromoClick={() => {
+                                  const isPromo = item.business.subscription_tier === 'promo';
+                                  handlePromo(item.business.id, item.name, isPromo);
+                                }}
+                                onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
+                                onDeleteClick={() => handleDelete(item.business.id, item.name)}
+                                onClick={() => handleBusinessClick(item.business.id)}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
               })
             )}
-          </tbody>
-        </table>
+          </div>
+        </>
+      )}
       </div>
 
       <CreateBusinessModal
@@ -758,31 +649,134 @@ export const AdminPage: React.FC = () => {
 
       {/* Модальное окно настроек внешних кабинетов */}
       {settingsModal.isOpen && settingsModal.businessId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Настройки внешних кабинетов</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <Card className="max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl border-0 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-border/50 bg-gradient-to-r from-card to-card/50">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-2xl">Настройки внешних кабинетов</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{settingsModal.businessName}</p>
+                </div>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
                   onClick={() => setSettingsModal({ isOpen: false, businessId: null, businessName: '' })}
+                  className="rounded-full"
                 >
-                  ✕
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[calc(90vh-120px)] p-6">
               {settingsModal.businessId && (
                 <AdminExternalCabinetSettings
                   businessId={settingsModal.businessId}
                   businessName={settingsModal.businessName}
                 />
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       )}
-        </>
-      )}
+    </div>
+  );
+};
+
+// Business Card Component
+interface BusinessCardProps {
+  business: Business;
+  onSettingsClick: () => void;
+  onPromoClick: () => void;
+  onBlockClick: () => void;
+  onDeleteClick: () => void;
+  onClick: () => void;
+}
+
+const BusinessCard: React.FC<BusinessCardProps> = ({
+  business,
+  onSettingsClick,
+  onPromoClick,
+  onBlockClick,
+  onDeleteClick,
+  onClick,
+}) => {
+  const isBlocked = business.is_active === 0;
+  const isPromo = business.subscription_tier === 'promo';
+
+  return (
+    <div 
+      className="group relative p-4 rounded-lg border border-border/50 bg-card hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1.5 rounded-md bg-primary/10">
+              <Building2 className="w-4 h-4 text-primary" />
+            </div>
+            <h4 className={`font-semibold text-foreground ${isBlocked ? 'line-through text-muted-foreground' : ''}`}>
+              {business.name}
+            </h4>
+            {isBlocked && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
+                Заблокирован
+              </span>
+            )}
+            {isPromo && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
+                Промо
+              </span>
+            )}
+          </div>
+          {business.address && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-7">
+              <MapPin className="w-3.5 h-3.5" />
+              <span className="truncate">{business.address}</span>
+            </div>
+          )}
+        </div>
+        <div 
+          className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSettingsClick}
+            className="h-8 w-8 p-0"
+            title="Настройки"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onPromoClick}
+            className={`h-8 w-8 p-0 ${isPromo ? 'text-primary bg-primary/10' : ''}`}
+            title={isPromo ? 'Отключить Промо' : 'Включить Промо'}
+          >
+            <Gift className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBlockClick}
+            className={`h-8 w-8 p-0 ${!isBlocked ? 'hover:text-destructive' : 'text-green-600 hover:text-green-700'}`}
+            title={isBlocked ? 'Разблокировать' : 'Заблокировать'}
+          >
+            <Ban className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDeleteClick}
+            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+            title="Удалить"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
