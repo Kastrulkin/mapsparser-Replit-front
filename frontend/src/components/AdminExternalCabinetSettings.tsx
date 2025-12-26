@@ -30,6 +30,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   const [saving, setSaving] = useState(false);
   const [testingCookies, setTestingCookies] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing'>('idle');
   const { toast } = useToast();
 
   // Ключи для sessionStorage
@@ -51,7 +52,11 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   });
 
   useEffect(() => {
-    loadAccounts();
+    if (businessId) {
+      loadAccounts();
+    } else {
+      setLoading(false);
+    }
   }, [businessId]);
 
   const handleRunParser = async () => {
@@ -93,7 +98,13 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   };
 
   const loadAccounts = async () => {
+    if (!businessId) {
+      setLoading(false);
+      return;
+    }
+    
     try {
+      setLoading(true);
       const token = await newAuth.getToken();
       const response = await fetch(`/api/business/${businessId}/external-accounts`, {
         headers: {
@@ -159,6 +170,11 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       }
     } catch (error: any) {
       console.error('Ошибка загрузки аккаунтов:', error);
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось загрузить данные аккаунтов',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -338,6 +354,10 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       setSaving(false);
     }
   };
+
+  if (!businessId) {
+    return <div className="text-center py-4 text-red-500">Ошибка: не указан ID бизнеса</div>;
+  }
 
   if (loading) {
     return <div className="text-center py-4">Загрузка...</div>;
