@@ -292,7 +292,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
       <Textarea rows={5} value={review} onChange={(e)=> setReview(e.target.value)} placeholder="Текст отзыва клиента..." />
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}
       <div className="flex gap-2">
-        <Button onClick={handleGenerate} disabled={loading || !review.trim()}>{loading ? 'Генерируем…' : 'Сгенерировать ответ'}</Button>
+        <Button onClick={() => handleGenerate()} disabled={loading || !review.trim()}>{loading ? 'Генерируем…' : 'Сгенерировать ответ'}</Button>
       </div>
       {reply && (
         <div className="bg-gray-50 border border-gray-200 p-3 rounded">
@@ -358,59 +358,75 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
           <div className="space-y-4">
             {externalReviews.map((reviewItem) => (
               <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-900">{reviewItem.author_name}</span>
-                      {reviewItem.rating && (
-                        <span className="text-sm text-gray-600">⭐ {reviewItem.rating}</span>
-                      )}
-                      {reviewItem.published_at && (
-                        <span className="text-xs text-gray-500">
-                          {new Date(reviewItem.published_at).toLocaleDateString('ru-RU')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-700 mb-3">{reviewItem.text}</div>
-                  </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="font-medium text-gray-900">{reviewItem.author_name || 'Анонимный пользователь'}</span>
+                  {reviewItem.rating && (
+                    <span className="text-sm text-gray-600">⭐ {reviewItem.rating}</span>
+                  )}
+                  {reviewItem.published_at && (
+                    <span className="text-xs text-gray-500">
+                      {new Date(reviewItem.published_at).toLocaleDateString('ru-RU')}
+                    </span>
+                  )}
                 </div>
                 
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">Ответ организации:</label>
-                  {reviewItem.has_response && reviewItem.response_text ? (
-                    <div className="bg-green-50 border border-green-200 rounded p-3">
-                      <div className="text-sm text-gray-900">{reviewItem.response_text}</div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Textarea 
-                        rows={3}
-                        value={generatedReplies[reviewItem.id] || ''}
-                        onChange={(e) => setGeneratedReplies(prev => ({ ...prev, [reviewItem.id]: e.target.value }))}
-                        placeholder="Ответ организации..."
-                        className="w-full"
-                      />
-                      <Button
-                        onClick={() => handleGenerate(reviewItem.text, reviewItem.id)}
-                        disabled={generatingForReviewId === reviewItem.id}
-                        size="sm"
-                        variant="outline"
-                      >
-                        {generatingForReviewId === reviewItem.id ? 'Генерируем…' : 'Сгенерировать ответ'}
-                      </Button>
-                      {generatedReplies[reviewItem.id] && (
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            onClick={() => navigator.clipboard.writeText(generatedReplies[reviewItem.id])}
-                            size="sm"
-                            variant="outline"
-                          >
-                            Копировать
-                          </Button>
-                        </div>
+                {/* Два столбца: отзыв слева, ответ справа */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Левая колонка: Отзыв клиента */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Отзыв клиента:</label>
+                    <div className="bg-gray-50 border border-gray-200 rounded p-3 min-h-[100px]">
+                      {reviewItem.text ? (
+                        <div className="text-sm text-gray-900 whitespace-pre-wrap">{reviewItem.text}</div>
+                      ) : (
+                        <div className="text-sm text-gray-400 italic">Текст отзыва не найден</div>
                       )}
                     </div>
-                  )}
+                  </div>
+                  
+                  {/* Правая колонка: Ответ организации */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Ответ организации:</label>
+                    {reviewItem.has_response && reviewItem.response_text ? (
+                      <div className="bg-green-50 border border-green-200 rounded p-3 min-h-[100px]">
+                        <div className="text-sm text-gray-900 whitespace-pre-wrap">{reviewItem.response_text}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Textarea 
+                          rows={4}
+                          value={generatedReplies[reviewItem.id] || ''}
+                          onChange={(e) => setGeneratedReplies(prev => ({ ...prev, [reviewItem.id]: e.target.value }))}
+                          placeholder="Ответ организации..."
+                          className="w-full min-h-[100px]"
+                        />
+                        <Button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleGenerate(reviewItem.text || '', reviewItem.id);
+                          }}
+                          disabled={generatingForReviewId === reviewItem.id || !reviewItem.text}
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                        >
+                          {generatingForReviewId === reviewItem.id ? 'Генерируем…' : 'Сгенерировать ответ'}
+                        </Button>
+                        {generatedReplies[reviewItem.id] && (
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              onClick={() => navigator.clipboard.writeText(generatedReplies[reviewItem.id])}
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                            >
+                              Копировать
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

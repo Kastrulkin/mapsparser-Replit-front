@@ -30,6 +30,23 @@ from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 
+# Импорт YandexSyncService с обработкой ошибок
+try:
+    from yandex_sync_service import YandexSyncService
+except ImportError as e:
+    print(f"⚠️ Предупреждение: не удалось импортировать YandexSyncService: {e}")
+    YandexSyncService = None
+
+# Импорт YandexBusinessParser для парсинга из личного кабинета
+try:
+    from yandex_business_parser import YandexBusinessParser
+    from yandex_business_sync_worker import YandexBusinessSyncWorker
+    from auth_encryption import decrypt_auth_data
+except ImportError as e:
+    print(f"⚠️ Предупреждение: не удалось импортировать YandexBusinessParser: {e}")
+    YandexBusinessParser = None
+    YandexBusinessSyncWorker = None
+
 # Автоматическая загрузка переменных окружения из .env / .env.test
 try:
     from dotenv import load_dotenv
@@ -1149,12 +1166,15 @@ def get_external_posts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Получаем все посты
+        # Получаем все посты, исключая некорректные (метаданные)
         cursor.execute(
             """
             SELECT id, source, external_post_id, title, text, published_at, created_at
             FROM ExternalBusinessPosts
             WHERE business_id = ?
+            AND title NOT IN ('working_intervals', 'urls', 'phone', 'photos', 'price_lists', 'logo', 'features', 'english_name')
+            AND (title IS NOT NULL OR text IS NOT NULL)
+            AND (title != '' OR text != '')
             ORDER BY published_at DESC, created_at DESC
             """,
             (business_id,),
@@ -1164,12 +1184,20 @@ def get_external_posts(business_id):
 
         posts = []
         for r in rows:
+            # Дополнительная проверка - пропускаем метаданные
+            title = r[3] or ""
+            text = r[4] or ""
+            metadata_titles = ["working_intervals", "urls", "phone", "photos", "price_lists", "logo", "features", "english_name"]
+            
+            if title in metadata_titles or (not title and not text):
+                continue  # Пропускаем метаданные
+            
             posts.append({
                 "id": r[0],
                 "source": r[1],
                 "external_post_id": r[2],
-                "title": r[3] or "",
-                "text": r[4] or "",
+                "title": title,
+                "text": text,
                 "published_at": r[5],
                 "created_at": r[6],
             })
@@ -1703,6 +1731,16 @@ def services_optimize():
         with open(raw_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
+        # Проверяем, что result - это словарь
+        if not isinstance(result, dict):
+            print(f"❌ Ошибка: result не является словарём, тип: {type(result)}")
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except:
+                    result = {}
+            else:
+                result = {}
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
@@ -1998,6 +2036,11 @@ Write all generated text in {language_name}.
         db.close()
 
         return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
+    except Exception as e:
+        print(f"❌ Ошибка генерации новости: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
     except Exception as e:
         print(f"❌ Ошибка генерации новости: {e}")
         return jsonify({"error": str(e)}), 500
@@ -4846,8 +4889,17 @@ def admin_sync_network_yandex(network_id):
 
         db.close()
 
-        sync_service = YandexSyncService()
-        synced_count = sync_service.sync_network(network_id)
+        if YandexSyncService is None:
+            return jsonify({"error": "YandexSyncService не доступен. Проверьте логи сервера."}), 500
+        
+        try:
+            sync_service = YandexSyncService()
+            synced_count = sync_service.sync_network(network_id)
+        except Exception as e:
+            import traceback
+            print(f"❌ Ошибка при синхронизации сети {network_id}: {e}")
+            traceback.print_exc()
+            return jsonify({"error": f"Ошибка синхронизации: {str(e)}"}), 500
 
         return jsonify(
             {
@@ -4866,42 +4918,372 @@ def admin_sync_business_yandex(business_id):
     Ручной запуск синхронизации Яндекс-данных для одного бизнеса.
     Требует действующей сессии и прав суперадмина или владельца бизнеса.
     """
+    print(f"🔄 Запрос на синхронизацию бизнеса {business_id}")
+    import traceback
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
+            print("❌ Отсутствует заголовок авторизации")
             return jsonify({"error": "Требуется авторизация"}), 401
 
         token = auth_header.split(' ')[1]
         user_data = verify_session(token)
         if not user_data:
+            print("❌ Недействительный токен")
             return jsonify({"error": "Недействительный токен"}), 401
+
+        print(f"✅ Пользователь авторизован: {user_data.get('email', 'unknown')}")
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, name FROM Businesses WHERE id = ?", (business_id,))
         business = cursor.fetchone()
 
         if not business:
             db.close()
+            print(f"❌ Бизнес {business_id} не найден")
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if business[0] != user_data["user_id"] and not user_data.get("is_superadmin"):
+        business_owner_id = business[0]
+        business_name = business[1] if len(business) > 1 else 'Unknown'
+        print(f"📊 Бизнес найден: {business_name}, владелец: {business_owner_id}")
+
+        if business_owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
+            print(f"❌ Нет доступа: пользователь {user_data['user_id']} не является владельцем бизнеса")
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        # Ищем аккаунт Яндекс.Бизнес для этого бизнеса
+        print(f"🔍 Поиск аккаунта Яндекс.Бизнес для бизнеса {business_id}...")
+        cursor.execute("""
+            SELECT id, auth_data_encrypted, external_id 
+            FROM ExternalBusinessAccounts 
+            WHERE business_id = ? AND source = 'yandex_business' AND is_active = 1
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (business_id,))
+        account_row = cursor.fetchone()
+        
+        print(f"🔍 Результат поиска аккаунта: {account_row}")
+        
         db.close()
 
-        sync_service = YandexSyncService()
-        ok = sync_service.sync_business(business_id)
+        if not account_row:
+            print(f"❌ Не найден активный аккаунт Яндекс.Бизнес для бизнеса {business_id}")
+            return jsonify({
+                "success": False,
+                "error": "Не найден активный аккаунт Яндекс.Бизнес",
+                "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
+            }), 400
 
-        return jsonify(
-            {
-                "success": bool(ok),
-                "message": "Синхронизация выполнена" if ok else "Не удалось синхронизировать бизнес",
+        account_id, auth_data_encrypted, external_id = account_row
+        print(f"✅ Найден аккаунт: {account_id}, external_id: {external_id}")
+        
+        if YandexBusinessParser is None:
+            print("❌ YandexBusinessParser не доступен")
+            return jsonify({"error": "YandexBusinessParser не доступен. Проверьте логи сервера."}), 500
+        
+        print(f"🔄 Запуск парсинга через YandexBusinessParser для бизнеса {business_id}, аккаунт {account_id}")
+        try:
+            # Расшифровываем auth_data
+            auth_data_plain = decrypt_auth_data(auth_data_encrypted)
+            if not auth_data_plain:
+                print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
+                return jsonify({
+                    "success": False,
+                    "error": "Не удалось расшифровать данные авторизации",
+                    "message": "Обновите cookies в настройках внешних интеграций"
+                }), 400
+            
+            # Парсим JSON auth_data
+            import json
+            try:
+                auth_data_dict = json.loads(auth_data_plain)
+            except json.JSONDecodeError:
+                # Если не JSON, предполагаем что это просто cookies строка
+                auth_data_dict = {"cookies": auth_data_plain}
+            
+            # Создаём парсер
+            parser = YandexBusinessParser(auth_data_dict)
+            
+            # Получаем данные
+            account_data = {
+                "id": account_id,
+                "business_id": business_id,
+                "external_id": external_id
             }
-        )
+            
+            print(f"📥 Получение отзывов...")
+            reviews = parser.fetch_reviews(account_data)
+            print(f"✅ Получено отзывов: {len(reviews)}")
+            
+            print(f"📥 Получение статистики...")
+            stats = parser.fetch_stats(account_data)
+            print(f"✅ Получено точек статистики: {len(stats)}")
+            
+            print(f"📥 Получение публикаций...")
+            posts = parser.fetch_posts(account_data)
+            print(f"✅ Получено публикаций: {len(posts)}")
+            
+            # Получаем услуги/прайс-лист
+            print(f"📥 Получение услуг/прайс-листа...")
+            services = parser.fetch_services(account_data)
+            print(f"✅ Получено услуг: {len(services)}")
+            
+            # Получаем информацию об организации (рейтинг, количество отзывов, новостей, фото)
+            print(f"📥 Получение информации об организации...")
+            org_info = parser.fetch_organization_info(account_data)
+            print(f"✅ Информация об организации:")
+            print(f"   Рейтинг: {org_info.get('rating')}")
+            print(f"   Отзывов: {org_info.get('reviews_count')}")
+            print(f"   Новостей: {org_info.get('news_count')}")
+            print(f"   Фото: {org_info.get('photos_count')}")
+            
+            # Сохраняем данные
+            db = DatabaseManager()
+            worker = YandexBusinessSyncWorker()
+            
+            if reviews:
+                worker._upsert_reviews(db, reviews)
+                print(f"💾 Сохранено отзывов: {len(reviews)}")
+            
+            # Создаём статистику с информацией об организации, если её нет
+            if not stats and org_info:
+                from external_sources import ExternalStatsPoint, make_stats_id
+                from datetime import date
+                today_str = date.today().isoformat()
+                stat_id = make_stats_id(business_id, "yandex_business", today_str)
+                stat = ExternalStatsPoint(
+                    id=stat_id,
+                    business_id=business_id,
+                    source="yandex_business",
+                    date=today_str,
+                    views_total=0,
+                    clicks_total=0,
+                    actions_total=0,
+                    rating=org_info.get('rating'),
+                    reviews_total=org_info.get('reviews_count') or len(reviews),
+                    raw_payload=org_info,
+                )
+                stats = [stat]
+            
+            if stats:
+                # Обновляем последнюю статистику информацией об организации
+                if org_info and stats:
+                    last_stat = stats[-1]
+                    if last_stat.raw_payload:
+                        last_stat.raw_payload.update(org_info)
+                    else:
+                        last_stat.raw_payload = org_info
+                    # Обновляем рейтинг и количество отзывов из org_info
+                    if org_info.get('rating'):
+                        last_stat.rating = org_info.get('rating')
+                    if org_info.get('reviews_count'):
+                        last_stat.reviews_total = org_info.get('reviews_count')
+                
+                worker._upsert_stats(db, stats)
+                print(f"💾 Сохранено точек статистики: {len(stats)}")
+            
+            if posts:
+                worker._upsert_posts(db, posts)
+                print(f"💾 Сохранено публикаций: {len(posts)}")
+            
+            # Сохраняем услуги в UserServices
+            if services:
+                try:
+                    cursor = db.conn.cursor()
+                    user_id = user_data.get("user_id")
+                    if not user_id:
+                        print(f"⚠️ Нет user_id для сохранения услуг")
+                    else:
+                        saved_count = 0
+                        updated_count = 0
+                        for service in services:
+                            try:
+                                # Проверяем, что service - это словарь
+                                if not isinstance(service, dict):
+                                    print(f"⚠️ Услуга не является словарём: {type(service)}")
+                                    continue
+                                
+                                # Проверяем наличие обязательного поля name
+                                if "name" not in service or not service["name"]:
+                                    print(f"⚠️ Услуга без названия, пропускаем")
+                                    continue
+                                
+                                # Проверяем, есть ли уже такая услуга
+                                cursor.execute("""
+                                    SELECT id FROM UserServices 
+                                    WHERE business_id = ? AND name = ? 
+                                    LIMIT 1
+                                """, (business_id, service["name"]))
+                                existing = cursor.fetchone()
+                                
+                                # Преобразуем description в строку, если это dict (делаем это один раз в начале)
+                                description = service.get("description", "")
+                                if isinstance(description, dict):
+                                    description = description.get("text") or description.get("value") or description.get("content") or str(description)
+                                elif not isinstance(description, str):
+                                    description = str(description) if description else ""
+                                
+                                # Преобразуем category в строку, если это dict
+                                category = service.get("category", "Общие услуги")
+                                if isinstance(category, dict):
+                                    category = category.get("name") or category.get("title") or str(category)
+                                elif not isinstance(category, str):
+                                    category = str(category) if category else "Общие услуги"
+                                
+                                if not existing:
+                                    # Добавляем новую услугу
+                                    service_id = str(uuid.uuid4())
+                                    cursor.execute("""
+                                        INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    """, (
+                                        service_id,
+                                        user_id,
+                                        business_id,
+                                        category,
+                                        service["name"],
+                                        description,
+                                        json.dumps(service.get("keywords", [])),
+                                        service.get("price", "")
+                                    ))
+                                    saved_count += 1
+                                else:
+                                    # Обновляем существующую услугу
+                                    cursor.execute("""
+                                        UPDATE UserServices 
+                                        SET category = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                                        WHERE business_id = ? AND name = ?
+                                    """, (
+                                        category,
+                                        description,
+                                        json.dumps(service.get("keywords", [])),
+                                        service.get("price", ""),
+                                        business_id,
+                                        service["name"]
+                                    ))
+                                    updated_count += 1
+                            except Exception as e:
+                                print(f"⚠️ Ошибка сохранения услуги '{service.get('name', 'unknown')}': {e}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
+                        
+                        db.conn.commit()
+                        print(f"💾 Сохранено услуг: {saved_count} новых, {updated_count} обновлено")
+                except Exception as e:
+                    print(f"❌ Критическая ошибка при сохранении услуг: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Обновляем last_sync_at
+            cursor = db.conn.cursor()
+            cursor.execute("""
+                UPDATE ExternalBusinessAccounts 
+                SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
+                WHERE id = ?
+            """, (account_id,))
+            # Сохраняем историю парсинга в MapParseResults
+            try:
+                cursor = db.conn.cursor()
+                # Получаем yandex_url для бизнеса или формируем из external_id
+                cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (business_id,))
+                yandex_url_row = cursor.fetchone()
+                yandex_url = yandex_url_row[0] if yandex_url_row else None
+                
+                # Если yandex_url нет, формируем из external_id
+                # account_row может быть sqlite3.Row или dict
+                external_id = account_row.get('external_id') if hasattr(account_row, 'get') else (account_row['external_id'] if 'external_id' in account_row else None)
+                if not yandex_url and external_id:
+                    yandex_url = f"https://yandex.ru/sprav/{external_id}"
+                
+                # Сохраняем даже если нет yandex_url (используем external_id или пустой URL)
+                parse_id = str(uuid.uuid4())
+                # Подсчитываем отзывы без ответов
+                reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else 0
+                
+                cursor.execute("""
+                    INSERT INTO MapParseResults (
+                        id, business_id, url, map_type, rating, reviews_count, 
+                        unanswered_reviews_count, news_count, photos_count, 
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    parse_id,
+                    business_id,
+                    yandex_url or f"https://yandex.ru/sprav/{account_row.get('external_id', 'unknown')}",
+                    'yandex',
+                    org_info.get('rating') if org_info else None,
+                    len(reviews) if reviews else 0,
+                    reviews_without_response,
+                    len(posts) if posts else 0,
+                    org_info.get('photos_count', 0) if org_info else 0,
+                ))
+                db.conn.commit()
+                print(f"💾 Сохранена история парсинга: {parse_id} (отзывов: {len(reviews) if reviews else 0}, новостей: {len(posts) if posts else 0})")
+            except Exception as e:
+                print(f"⚠️ Ошибка сохранения истории парсинга: {e}")
+                import traceback
+                traceback.print_exc()
+                import traceback
+                traceback.print_exc()
+            
+            db.conn.commit()
+            db.close()
+            
+            print(f"✅ Парсинг завершен успешно для бизнеса {business_name}")
+            
+            return jsonify({
+                "success": True,
+                "message": f"Парсинг выполнен: {len(reviews)} отзывов, {len(stats)} точек статистики, {len(posts)} публикаций, {len(services)} услуг",
+                "stats": {
+                    "reviews": len(reviews),
+                    "stats": len(stats),
+                    "posts": len(posts),
+                    "services": len(services)
+                }
+            })
+        except Exception as e:
+            error_details = traceback.format_exc()
+            print(f"❌ Ошибка при парсинге бизнеса {business_id}: {e}")
+            print(f"❌ Детали ошибки:\n{error_details}")
+            
+            # Сохраняем ошибку в аккаунт
+            try:
+                db = DatabaseManager()
+                cursor = db.conn.cursor()
+                cursor.execute("""
+                    UPDATE ExternalBusinessAccounts 
+                    SET last_error = ?
+                    WHERE id = ?
+                """, (str(e), account_id))
+                db.conn.commit()
+                db.close()
+            except Exception as save_error:
+                print(f"⚠️ Не удалось сохранить ошибку в БД: {save_error}")
+            
+            return jsonify({
+                "success": False,
+                "error": f"Ошибка парсинга: {str(e)}",
+                "message": str(e)
+            }), 500
     except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Критическая ошибка в admin_sync_business_yandex: {e}")
+        print(f"❌ Детали ошибки:\n{error_details}")
+        return jsonify({
+            "success": False,
+            "error": f"Критическая ошибка: {str(e)}",
+            "message": str(e)
+        }), 500
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ Ошибка синхронизации Яндекс для бизнеса {business_id}: {e}")
+        print(f"❌ Детали ошибки:\n{error_details}")
         return jsonify({"error": f"Ошибка синхронизации Яндекс для бизнеса: {str(e)}"}), 500
 
 
@@ -5389,8 +5771,12 @@ def get_user_info():
     except Exception as e:
         print(f"❌ Ошибка получения информации о пользователе: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        error_traceback = traceback.format_exc()
+        print(f"❌ Полный traceback:\n{error_traceback}")
+        return jsonify({
+            "error": str(e),
+            "details": error_traceback if app.debug else None
+        }), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
@@ -6476,7 +6862,7 @@ def update_business_yandex_link(business_id):
         # Пытаемся запустить синхронизацию (если есть org_id и настроен адаптер)
         synced = False
         try:
-            if org_id:
+            if org_id and YandexSyncService is not None:
                 sync_service = YandexSyncService()
                 synced = sync_service.sync_business(business_id)
         except Exception as sync_err:

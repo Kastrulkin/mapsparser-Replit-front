@@ -8,6 +8,7 @@ type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 interface OptimizeResultService {
   original_name: string;
   optimized_name: string;
+  original_description?: string;
   seo_description: string;
   keywords: string[];
   price?: string | null;
@@ -57,6 +58,8 @@ export default function ServiceOptimizer({
   const [result, setResult] = useState<OptimizeResultService[] | null>(null);
   const [recs, setRecs] = useState<string[] | null>(null);
   const [addedServices, setAddedServices] = useState<Set<number>>(new Set());
+  const [examples, setExamples] = useState<Array<{id: string, text: string}>>([]);
+  const [exampleInput, setExampleInput] = useState('');
 
   const loadExamples = async () => {
     try {
@@ -283,9 +286,10 @@ export default function ServiceOptimizer({
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-600">
-                  <th className="p-2">Исходное</th>
-                  <th className="p-2">SEO название</th>
-                  <th className="p-2">SEO описание</th>
+                  <th className="p-2">Исходное название</th>
+                  <th className="p-2">Оптимизированное название</th>
+                  <th className="p-2">Исходное описание</th>
+                  <th className="p-2">Оптимизированное описание</th>
                   <th className="p-2">Ключевые слова</th>
                   <th className="p-2">Цена</th>
                   <th className="p-2">Действие</th>
@@ -296,6 +300,7 @@ export default function ServiceOptimizer({
                   <tr key={i} className="border-t">
                     <td className="p-2 align-top text-gray-800">{s.original_name}</td>
                     <td className="p-2 align-top text-green-700 font-medium">{s.optimized_name}</td>
+                    <td className="p-2 align-top text-gray-600 text-sm">{s.original_description || '-'}</td>
                     <td className="p-2 align-top text-gray-700">{s.seo_description}</td>
                     <td className="p-2 align-top text-gray-600">{(s.keywords||[]).join(', ')}</td>
                     <td className="p-2 align-top text-gray-600">{s.price || ''}</td>

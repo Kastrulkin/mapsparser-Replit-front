@@ -451,7 +451,6 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
             onClick={handleSave}
             disabled={saving || loading}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
           >
             {saving ? (
               <>

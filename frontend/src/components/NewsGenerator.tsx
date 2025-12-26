@@ -7,7 +7,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 
 type ServiceLite = { id: string; name: string };
 
-export default function NewsGenerator({ services, businessId }: { services: ServiceLite[]; businessId?: string }) {
+export default function NewsGenerator({ services, businessId, externalPosts }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[] }) {
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
   const [serviceId, setServiceId] = useState<string>('');
@@ -270,10 +270,38 @@ export default function NewsGenerator({ services, businessId }: { services: Serv
 
       <div className="mt-4">
         <div className="text-sm font-medium text-gray-900 mb-2">Ваши новости</div>
-        {news.length === 0 ? (
+        {(news.length === 0 && (!externalPosts || externalPosts.length === 0)) ? (
           <div className="text-sm text-gray-500">Пока нет новостей</div>
         ) : (
           <ul className="space-y-2">
+            {/* Спарсенные публикации из внешних источников */}
+            {externalPosts && externalPosts.length > 0 && (
+              <>
+                {externalPosts.map((post: any) => (
+                  <li key={`external-${post.id}`} className="border border-blue-200 rounded p-3 text-sm bg-blue-50">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        {post.title && (
+                          <div className="font-semibold text-gray-900 mb-1">{post.title}</div>
+                        )}
+                        <div className="text-gray-700 whitespace-pre-wrap">{post.text || 'Без текста'}</div>
+                        {post.published_at && (
+                          <div className="text-xs text-gray-500 mt-2">
+                            Опубликовано: {new Date(post.published_at).toLocaleDateString('ru-RU')}
+                          </div>
+                        )}
+                        {post.source && (
+                          <div className="text-xs text-gray-500">
+                            Источник: {post.source === 'yandex_business' ? 'Яндекс.Бизнес' : post.source}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </>
+            )}
+            {/* Сгенерированные новости */}
             {news.map((n:any) => (
               <li key={n.id} className="border border-gray-200 rounded p-2 text-sm">
                 <Textarea 

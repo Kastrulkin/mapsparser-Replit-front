@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import random
 from datetime import datetime, date
@@ -494,12 +495,22 @@ class YandexBusinessParser:
                 author_name = None
                 author_data = review_data.get("author") or review_data.get("user") or review_data.get("reviewer")
                 if isinstance(author_data, dict):
-                    author_name = author_data.get("name") or author_data.get("display_name") or author_data.get("username")
+                    # В API Яндекс.Бизнес имя автора может быть в поле "user" внутри "author"
+                    author_name = author_data.get("user") or author_data.get("name") or author_data.get("display_name") or author_data.get("username")
+                    # Если user - это строка, используем её
+                    if isinstance(author_name, str):
+                        pass  # Уже строка
+                    elif isinstance(author_name, dict):
+                        author_name = author_name.get("name") or author_name.get("display_name") or author_name.get("username")
                 elif isinstance(author_data, str):
                     author_name = author_data
                 
                 # Парсим текст отзыва
-                text = review_data.get("text") or review_data.get("content") or review_data.get("message") or review_data.get("comment")
+                # В API Яндекс.Бизнес текст отзыва может быть в разных полях:
+                # - full_text (полный текст)
+                # - snippet (краткий текст)
+                # - text (обычный текст)
+                text = review_data.get("full_text") or review_data.get("snippet") or review_data.get("text") or review_data.get("content") or review_data.get("message") or review_data.get("comment")
                 
                 review = ExternalReview(
                     id=f"{business_id}_yandex_business_{review_id}",
@@ -693,6 +704,51 @@ class YandexBusinessParser:
                 print(f"✅ Получены данные организации с {org_url}")
                 break
         
+        # Также пробуем получить рейтинг со страницы отзывов (более точный)
+        reviews_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/reviews"
+        try:
+            delay = random.uniform(1.5, 3.5)
+            time.sleep(delay)
+            
+            reviews_headers = {
+                **self.session_headers,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+            
+            response = self.session.get(reviews_page_url, headers=reviews_headers, timeout=30)
+            if response.status_code == 200:
+                html_content = response.text
+                
+                # Парсим рейтинг из HTML используя селектор
+                # Селектор: #root > div > div.EditPage.EditPage_type_reviews > div.EditPage-Right > div > div.ReviewsPage > div.ReviewsPage-Content > div.ReviewsPage-Right > div.MainCard.MainCard_withoutBorder.RatingCard.ReviewsPage-RatingCardBlock > div > div.MainCard-Content > div > div > div.RatingCard-TopSection > span
+                import re
+                
+                # Ищем рейтинг в HTML - ищем паттерн типа "4.7" рядом с классом RatingCard
+                # Селектор: RatingCard-TopSection > span
+                rating_patterns = [
+                    r'RatingCard-TopSection[^>]*>.*?<span[^>]*>(\d+\.\d+)',  # Рейтинг в RatingCard-TopSection > span
+                    r'RatingCard[^>]*>.*?(\d+\.\d+)\s*★',  # Рейтинг в RatingCard с звездами
+                    r'rating["\']?\s*[:=]\s*["\']?(\d+\.\d+)',  # rating: "4.7"
+                    r'<span[^>]*class[^>]*RatingCard[^>]*>(\d+\.\d+)',  # <span class="RatingCard...">4.7
+                    r'(\d+\.\d+)\s*★',  # 4.7 ★
+                ]
+                
+                for pattern in rating_patterns:
+                    match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        try:
+                            rating_value = float(match.group(1))
+                            if 0 <= rating_value <= 5:  # Валидный рейтинг
+                                print(f"   📊 Рейтинг со страницы отзывов: {rating_value}")
+                                if not result:
+                                    result = {}
+                                result["rating"] = rating_value
+                                break
+                        except (ValueError, IndexError):
+                            continue
+        except Exception as e:
+            print(f"   ⚠️ Не удалось получить рейтинг со страницы отзывов: {e}")
+        
         info = {
             "rating": None,
             "reviews_count": 0,
@@ -701,8 +757,15 @@ class YandexBusinessParser:
         }
         
         if result:
-            # Парсим рейтинг
-            info["rating"] = result.get("rating") or result.get("average_rating") or result.get("score")
+            # Парсим рейтинг (приоритет: реальный рейтинг из API, затем вычисленный)
+            api_rating = result.get("rating") or result.get("average_rating") or result.get("score")
+            if api_rating:
+                try:
+                    info["rating"] = float(api_rating)
+                    if info["rating"] > 0:
+                        print(f"   📊 Рейтинг из API: {info['rating']}")
+                except (ValueError, TypeError):
+                    pass
             
             # Парсим количество отзывов
             info["reviews_count"] = result.get("reviews_count") or result.get("reviews_total") or result.get("total_reviews") or 0
@@ -734,11 +797,14 @@ class YandexBusinessParser:
         if info["reviews_count"] == 0:
             reviews = self.fetch_reviews(account_row)
             info["reviews_count"] = len(reviews)
-            # Вычисляем средний рейтинг из отзывов
-            if reviews:
-                ratings = [r.rating for r in reviews if r.rating]
+            # Вычисляем средний рейтинг из отзывов ТОЛЬКО если не получили из API
+            if not info["rating"] and reviews:
+                ratings = [r.rating for r in reviews if r.rating and isinstance(r.rating, (int, float))]
                 if ratings:
-                    info["rating"] = sum(ratings) / len(ratings)
+                    avg_rating = sum(ratings) / len(ratings)
+                    # Округляем до 1 знака после запятой
+                    info["rating"] = round(avg_rating, 1)
+                    print(f"   📊 Вычислен средний рейтинг из {len(ratings)} отзывов: {info['rating']}")
         
         # Получаем количество новостей и фото из реальных методов
         if info["news_count"] == 0:
@@ -815,14 +881,271 @@ class YandexBusinessParser:
         try:
             response = self.session.get(sidebar_url, headers=sidebar_headers, timeout=30)
             if response.status_code == 200:
-                try:
-                    result = response.json()
-                    working_url = sidebar_url
-                    print(f"✅ Успешно получены данные из sidebar API")
-                except json.JSONDecodeError:
-                    # Может быть HTML
-                    print(f"⚠️ Sidebar API вернул не JSON, пробуем HTML страницу...")
-                    result = None
+                content_type = response.headers.get('Content-Type', '').lower()
+                
+                # Пробуем JSON
+                if 'application/json' in content_type:
+                    try:
+                        result = response.json()
+                        working_url = sidebar_url
+                        print(f"✅ Успешно получены данные из sidebar API (JSON)")
+                    except json.JSONDecodeError:
+                        result = None
+                
+                # Если не JSON, пробуем извлечь из HTML/JavaScript
+                if not result and ('text/html' in content_type or 'text/javascript' in content_type or 'application/javascript' in content_type):
+                    html_content = response.text
+                    print(f"🔍 Sidebar API вернул HTML/JavaScript ({len(html_content)} символов), извлекаем данные...")
+                    
+                    # Ищем упоминания API endpoints в Response (может быть полезно для отладки)
+                    import re
+                    api_endpoint_patterns = [
+                        r'["\']https?://[^"\']*/(?:api|sprav|business)[^"\']*/(?:posts|news|publications|публикац|новост)[^"\']*["\']',
+                        r'["\']/api/[^"\']*/(?:posts|news|publications)[^"\']*["\']',
+                        r'["\']/sprav/[^"\']*/(?:posts|news|publications)[^"\']*["\']',
+                        r'["\']/business/[^"\']*/(?:posts|news|publications)[^"\']*["\']',
+                        r'url["\']?\s*[:=]\s*["\']([^"\']*/(?:posts|news|publications)[^"\']*)["\']',
+                        r'endpoint["\']?\s*[:=]\s*["\']([^"\']*/(?:posts|news|publications)[^"\']*)["\']',
+                        r'apiUrl["\']?\s*[:=]\s*["\']([^"\']*/(?:posts|news|publications)[^"\']*)["\']',
+                        r'fetch\(["\']([^"\']*/(?:posts|news|publications)[^"\']*)["\']',
+                        r'axios\.(?:get|post)\(["\']([^"\']*/(?:posts|news|publications)[^"\']*)["\']',
+                    ]
+                    found_endpoints = []
+                    for pattern in api_endpoint_patterns:
+                        matches = re.findall(pattern, html_content, re.IGNORECASE)
+                        if matches:
+                            found_endpoints.extend(matches)
+                    
+                    if found_endpoints:
+                        unique_endpoints = list(set(found_endpoints))[:10]  # Первые 10 уникальных
+                        print(f"   🔍 Найдены потенциальные API endpoints в Response:")
+                        for ep in unique_endpoints:
+                            print(f"      - {ep}")
+                        
+                        # Автоматически пробуем найденные endpoints, если они полные URL
+                        for endpoint in unique_endpoints:
+                            # Проверяем, что это полный URL (начинается с http)
+                            if endpoint.startswith('http://') or endpoint.startswith('https://'):
+                                full_url = endpoint
+                            elif endpoint.startswith('/'):
+                                # Относительный путь - делаем полный URL
+                                full_url = f"https://yandex.ru{endpoint}"
+                            else:
+                                # Пропускаем неполные пути
+                                continue
+                            
+                            print(f"   🚀 Пробуем найденный endpoint: {full_url}")
+                            try:
+                                delay = random.uniform(0.5, 1.5)
+                                time.sleep(delay)
+                                endpoint_response = self.session.get(full_url, headers=sidebar_headers, timeout=15)
+                                if endpoint_response.status_code == 200:
+                                    try:
+                                        endpoint_data = endpoint_response.json()
+                                        if endpoint_data and (isinstance(endpoint_data, dict) or isinstance(endpoint_data, list)):
+                                            # Проверяем, есть ли там посты
+                                            if isinstance(endpoint_data, list) and len(endpoint_data) > 0:
+                                                # Если это список, проверяем первый элемент
+                                                if isinstance(endpoint_data[0], dict) and any(k in endpoint_data[0] for k in ['title', 'text', 'content', 'published_at']):
+                                                    result = {"posts": endpoint_data} if not isinstance(endpoint_data, dict) else endpoint_data
+                                                    working_url = full_url
+                                                    print(f"   ✅ Успешно получены данные с найденного endpoint!")
+                                                    break
+                                            elif isinstance(endpoint_data, dict):
+                                                # Проверяем, есть ли ключи, связанные с постами
+                                                if any(k in endpoint_data for k in ['posts', 'publications', 'news', 'items', 'data']):
+                                                    result = endpoint_data
+                                                    working_url = full_url
+                                                    print(f"   ✅ Успешно получены данные с найденного endpoint!")
+                                                    break
+                                    except json.JSONDecodeError:
+                                        # Не JSON, пропускаем
+                                        pass
+                            except Exception as e:
+                                print(f"   ⚠️ Ошибка при запросе к найденному endpoint {full_url}: {e}")
+                                continue
+                    
+                    # Сохраняем сырой ответ для отладки (первые 5000 символов)
+                    debug_sample = html_content[:5000]
+                    print(f"   📝 Первые 5000 символов ответа:")
+                    print(f"   {debug_sample[:500]}...")
+                    
+                    # Ищем любые упоминания URL в ответе (для более широкого поиска)
+                    all_urls = re.findall(r'https?://[^\s"\'<>)]+', html_content[:20000])
+                    post_related_urls = [url for url in all_urls if any(word in url.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост', 'api', 'sprav'])]
+                    if post_related_urls:
+                        unique_urls = list(set(post_related_urls))[:15]
+                        print(f"   🔍 Найдены URL, связанные с постами/API:")
+                        for url in unique_urls:
+                            print(f"      - {url[:100]}")
+                    
+                    # Ищем window.__INITIAL__.sidebar в JavaScript коде
+                    import re
+                    initial_patterns = [
+                        # Приоритет 1: window.__INITIAL__.sidebar = {...} (многострочное присваивание)
+                        r'window\.__INITIAL__\s*=\s*window\.__INITIAL__\s*\|\|\s*\{\};\s*window\.__INITIAL__\.sidebar\s*=\s*({.+?});',
+                        # Приоритет 2: window.__INITIAL__.sidebar = {...} (однострочное)
+                        r'window\.__INITIAL__\.sidebar\s*=\s*({.+?});',
+                        # Приоритет 3: const STATE = {...}
+                        r'const\s+STATE\s*=\s*({.+?});',
+                        # Приоритет 4: window.__INITIAL__ = {...}
+                        r'window\.__INITIAL__\s*=\s*({.+?});',
+                        # Приоритет 5: __INITIAL__ = {...} (без window.)
+                        r'__INITIAL__\s*=\s*({.+?});',
+                        # Приоритет 6: Альтернативные варианты
+                        r'__INITIAL_STATE__\s*=\s*({.+?});',
+                        r'window\.__DATA__\s*=\s*({.+?});',
+                    ]
+                    
+                    for pattern_idx, pattern in enumerate(initial_patterns):
+                        match = re.search(pattern, html_content, re.DOTALL)
+                        if match:
+                            try:
+                                json_str = match.group(1)
+                                print(f"   🔍 Паттерн #{pattern_idx + 1} найден, длина JSON: {len(json_str)} символов")
+                                
+                                # Пробуем распарсить JSON
+                                initial_data = json.loads(json_str)
+                                print(f"   ✅ Успешно распарсен JSON из паттерна #{pattern_idx + 1}")
+                                
+                                # Извлекаем sidebar данные
+                                if isinstance(initial_data, dict):
+                                    # Если это STATE, ищем company или другие ключи
+                                    if "company" in initial_data or "tld" in initial_data:
+                                        # Это STATE объект, ищем посты внутри него
+                                        print(f"   📊 Найден STATE объект, ищем посты внутри...")
+                                        # STATE может содержать посты в разных местах
+                                        sidebar_data = (
+                                            initial_data.get("sidebar") or
+                                            initial_data.get("posts") or
+                                            initial_data.get("publications") or
+                                            initial_data.get("news") or
+                                            initial_data.get("data") or
+                                            initial_data  # Если весь объект - это данные
+                                        )
+                                    else:
+                                        # Пробуем разные пути к данным
+                                        sidebar_data = (
+                                            initial_data.get("sidebar") or 
+                                            initial_data.get("data") or
+                                            initial_data.get("posts") or
+                                            initial_data.get("publications") or
+                                            initial_data.get("news") or
+                                            initial_data  # Если весь объект - это данные
+                                        )
+                                    
+                                    if sidebar_data:
+                                        result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
+                                        working_url = sidebar_url
+                                        print(f"   ✅ Извлечены данные sidebar из JavaScript")
+                                        print(f"   📊 Структура данных: {list(result.keys())[:10] if isinstance(result, dict) else type(result)}")
+                                        # Показываем ключи, связанные с постами
+                                        if isinstance(result, dict):
+                                            post_keys = [k for k in result.keys() if any(word in k.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост'])]
+                                            if post_keys:
+                                                print(f"   🔍 Найдены ключи, связанные с постами: {post_keys}")
+                                        break
+                            except json.JSONDecodeError as e:
+                                # Пробуем найти JSON более гибко - ищем незакрытые скобки
+                                try:
+                                    # Ищем JSON объект, который может быть неполным из-за вложенности
+                                    # Пробуем найти баланс скобок (учитываем строки и экранирование)
+                                    bracket_count = 0
+                                    json_end = 0
+                                    in_string = False
+                                    escape_next = False
+                                    
+                                    for i, char in enumerate(json_str):
+                                        if escape_next:
+                                            escape_next = False
+                                            continue
+                                        
+                                        if char == '\\':
+                                            escape_next = True
+                                            continue
+                                        
+                                        if char == '"' and not escape_next:
+                                            in_string = not in_string
+                                            continue
+                                        
+                                        if not in_string:
+                                            if char == '{':
+                                                bracket_count += 1
+                                            elif char == '}':
+                                                bracket_count -= 1
+                                                if bracket_count == 0:
+                                                    json_end = i + 1
+                                                    break
+                                    
+                                    if json_end > 0 and json_end < len(json_str):
+                                        balanced_json = json_str[:json_end]
+                                        initial_data = json.loads(balanced_json)
+                                        print(f"   ✅ Найден сбалансированный JSON (длина: {len(balanced_json)})")
+                                        
+                                        if isinstance(initial_data, dict):
+                                            # Если это STATE, ищем посты внутри
+                                            if "company" in initial_data or "tld" in initial_data:
+                                                sidebar_data = (
+                                                    initial_data.get("sidebar") or
+                                                    initial_data.get("posts") or
+                                                    initial_data.get("publications") or
+                                                    initial_data.get("news") or
+                                                    initial_data.get("data") or
+                                                    initial_data
+                                                )
+                                            else:
+                                                sidebar_data = (
+                                                    initial_data.get("sidebar") or 
+                                                    initial_data.get("data") or
+                                                    initial_data.get("posts") or
+                                                    initial_data.get("publications") or
+                                                    initial_data.get("news") or
+                                                    initial_data
+                                                )
+                                            if sidebar_data:
+                                                result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
+                                                working_url = sidebar_url
+                                                print(f"   ✅ Извлечены данные sidebar (сбалансированный JSON)")
+                                                break
+                                    
+                                    # Если не получилось, пробуем найти JSON с постами напрямую
+                                    json_match = re.search(r'\{.*?["\']posts["\']\s*:\s*\[.*?\].*?\}', json_str, re.DOTALL)
+                                    if json_match:
+                                        initial_data = json.loads(json_match.group(0))
+                                        if "posts" in initial_data or "publications" in initial_data or "news" in initial_data:
+                                            result = initial_data
+                                            working_url = sidebar_url
+                                            print(f"   ✅ Найден JSON с постами (частичный парсинг)")
+                                            break
+                                except Exception as e2:
+                                    print(f"   ⚠️ Не удалось распарсить JSON даже после балансировки: {e2}")
+                                    pass
+                                continue
+                            except Exception as e:
+                                print(f"   ⚠️ Ошибка при парсинге паттерна #{pattern_idx + 1}: {e}")
+                                continue
+                    
+                    if not result:
+                        print(f"⚠️ Не удалось извлечь данные из HTML/JavaScript sidebar API")
+                        # Пробуем найти любые JSON объекты в тексте
+                        print(f"   🔍 Пробуем найти любые JSON объекты в ответе...")
+                        json_objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', html_content[:10000], re.DOTALL)
+                        print(f"   📊 Найдено потенциальных JSON объектов: {len(json_objects)}")
+                        for idx, json_obj in enumerate(json_objects[:5]):  # Проверяем первые 5
+                            try:
+                                parsed = json.loads(json_obj)
+                                if isinstance(parsed, dict):
+                                    # Проверяем, есть ли что-то связанное с постами
+                                    keys_str = str(list(parsed.keys())).lower()
+                                    if any(word in keys_str for word in ['post', 'publication', 'news', 'публикац', 'новост']):
+                                        print(f"   ✅ Найден JSON объект #{idx + 1} с ключами, связанными с постами: {list(parsed.keys())[:5]}")
+                                        result = parsed
+                                        working_url = sidebar_url
+                                        break
+                            except:
+                                pass
+                else:
+                    print(f"⚠️ Sidebar API вернул неожиданный Content-Type: {content_type}")
             else:
                 print(f"⚠️ Sidebar API вернул статус {response.status_code}, пробуем HTML страницу...")
                 result = None
@@ -831,116 +1154,241 @@ class YandexBusinessParser:
             result = None
         
         if not result:
-            # Пробуем через _make_request как fallback
-            result = self._make_request(sidebar_url)
-            if result:
-                working_url = sidebar_url
-                print(f"✅ Успешно получены данные из sidebar API (через _make_request)")
-        
-        # Если sidebar API не сработал, пробуем извлечь данные из HTML страницы
-        if not result:
-            print(f"🔍 Пробуем получить посты/новости из HTML страницы...")
-            posts_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
-            
-            # Делаем запрос к HTML странице
-            html_parsed = False
-            try:
-                delay = random.uniform(1.5, 3.5)
-                time.sleep(delay)
-                
-                # Обновляем headers для получения HTML (не JSON)
-                html_headers = {
-                    **self.session_headers,
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                }
-                
-                response = self.session.get(posts_page_url, headers=html_headers, timeout=30)
-                response.raise_for_status()
-                html_content = response.text
-                
-                # Пытаемся извлечь window.__INITIAL__.sidebar из HTML
-                import re
-                # Ищем паттерн window.__INITIAL__ = {...} или window.__INITIAL__.sidebar = {...}
-                initial_patterns = [
-                    r'window\.__INITIAL__\s*=\s*({.+?});',
-                    r'window\.__INITIAL__\.sidebar\s*=\s*({.+?});',
-                    r'__INITIAL__\.sidebar\s*=\s*({.+?});',
-                ]
-                
-                for pattern in initial_patterns:
-                    match = re.search(pattern, html_content, re.DOTALL)
+            # Пробуем через _make_request как fallback (может вернуть HTML)
+            response_data = self._make_request(sidebar_url)
+            if response_data:
+                # Если это строка (HTML), пробуем извлечь из неё
+                if isinstance(response_data, str):
+                    html_content = response_data
+                    import re
+                    match = re.search(r'window\.__INITIAL__\.sidebar\s*=\s*({.+?});', html_content, re.DOTALL)
                     if match:
                         try:
-                            import json
-                            initial_data = json.loads(match.group(1))
-                            print(f"   ✅ Найден window.__INITIAL__ в HTML")
-                            
-                            # Ищем sidebar в initial_data
-                            sidebar_data = None
-                            if isinstance(initial_data, dict):
-                                sidebar_data = initial_data.get("sidebar") or initial_data.get("data")
-                            
-                            if sidebar_data:
-                                print(f"   ✅ Найден sidebar в window.__INITIAL__")
-                                result = sidebar_data
+                            result = json.loads(match.group(1))
+                            working_url = sidebar_url
+                            print(f"✅ Успешно извлечены данные из sidebar API (через _make_request + парсинг HTML)")
+                        except:
+                            result = None
+                else:
+                    result = response_data
+                    working_url = sidebar_url
+                    print(f"✅ Успешно получены данные из sidebar API (через _make_request)")
+        
+        # Пробуем извлечь данные из HTML страницы (приоритет - здесь реальные посты)
+        print(f"🔍 Пробуем получить посты/новости из HTML страницы...")
+        posts_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
+        
+        # Делаем запрос к HTML странице
+        html_parsed = False
+        html_posts = []  # Объявляем вне try блока
+        
+        try:
+            delay = random.uniform(1.5, 3.5)
+            time.sleep(delay)
+            
+            # Обновляем headers для получения HTML (не JSON)
+            html_headers = {
+                **self.session_headers,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+            
+            response = self.session.get(posts_page_url, headers=html_headers, timeout=30)
+            response.raise_for_status()
+            html_content = response.text
+            
+            # Пытаемся извлечь window.__INITIAL__.sidebar из HTML
+            # Ищем паттерн window.__INITIAL__ = {...} или window.__INITIAL__.sidebar = {...}
+            # Также ищем другие варианты: __INITIAL_STATE__, __DATA__, window.__DATA__
+            initial_patterns = [
+                r'window\.__INITIAL__\s*=\s*({.+?});',
+                r'window\.__INITIAL__\.sidebar\s*=\s*({.+?});',
+                r'__INITIAL__\.sidebar\s*=\s*({.+?});',
+                r'window\.__INITIAL_STATE__\s*=\s*({.+?});',
+                r'window\.__DATA__\s*=\s*({.+?});',
+                r'__DATA__\s*=\s*({.+?});',
+                # Ищем JSON в script тегах
+                r'<script[^>]*>.*?({["\']posts["\']\s*:\s*\[.*?\]|["\']publications["\']\s*:\s*\[.*?\]|["\']news["\']\s*:\s*\[.*?\]}).*?</script>',
+            ]
+            
+            for pattern in initial_patterns:
+                match = re.search(pattern, html_content, re.DOTALL)
+                if match:
+                    try:
+                        import json
+                        json_str = match.group(1)
+                        # Пробуем распарсить JSON
+                        initial_data = json.loads(json_str)
+                        print(f"   ✅ Найден window.__INITIAL__ в HTML")
+                        
+                        # Ищем sidebar в initial_data
+                        sidebar_data = None
+                        if isinstance(initial_data, dict):
+                            sidebar_data = (
+                                initial_data.get("sidebar") or 
+                                initial_data.get("data") or
+                                initial_data.get("posts") or
+                                initial_data.get("publications") or
+                                initial_data.get("news")
+                            )
+                        
+                        if sidebar_data:
+                            print(f"   ✅ Найден sidebar/data в window.__INITIAL__")
+                            result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
+                            html_parsed = True
+                            break
+                    except json.JSONDecodeError as e:
+                        # Пробуем найти JSON более гибко
+                        try:
+                            # Ищем JSON объект, который может быть неполным
+                            json_match = re.search(r'\{.*?["\']posts["\']\s*:\s*\[.*?\].*?\}', json_str, re.DOTALL)
+                            if json_match:
+                                initial_data = json.loads(json_match.group(0))
+                                if "posts" in initial_data or "publications" in initial_data or "news" in initial_data:
+                                    result = initial_data
+                                    html_parsed = True
+                                    print(f"   ✅ Найден JSON с постами (частичный парсинг)")
+                                    break
+                        except:
+                            pass
+                        print(f"   ⚠️ Не удалось распарсить JSON из window.__INITIAL__: {e}")
+                        continue
+                    except Exception as e:
+                        print(f"   ⚠️ Ошибка при извлечении window.__INITIAL__: {e}")
+                        continue
+            
+            # Парсим HTML с помощью BeautifulSoup (приоритет - здесь реальные посты)
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html_content, 'html.parser')
+                print(f"   ✅ BeautifulSoup установлен, парсим HTML...")
+                
+                # Ищем реальные посты по селектору .Post (из структуры страницы)
+                post_elements = soup.select('div.Post')
+                print(f"   🔍 Найдено элементов .Post: {len(post_elements)}")
+                if post_elements:
+                    print(f"   ✅ Найдено постов в HTML: {len(post_elements)}")
+                    # html_posts уже объявлен выше
+                    html_posts.clear()  # Очищаем, если был заполнен ранее
+                    
+                    for idx, post_elem in enumerate(post_elements):
+                            try:
+                                # Извлекаем заголовок (название организации)
+                                title_elem = post_elem.select_one('.Post-Title')
+                                title = title_elem.get_text(strip=True) if title_elem else None
+                                
+                                # Извлекаем текст поста
+                                text_elem = post_elem.select_one('.Post-Text, .PostText')
+                                text = text_elem.get_text(strip=True) if text_elem else None
+                                
+                                # Извлекаем дату публикации
+                                date_elem = post_elem.select_one('.Post-Hint')
+                                date_str = date_elem.get_text(strip=True) if date_elem else None
+                                
+                                # Парсим дату (формат: "15.12.2025, 19:49")
+                                published_at = None
+                                if date_str:
+                                    try:
+                                        # Пробуем разные форматы даты
+                                        date_formats = [
+                                            "%d.%m.%Y, %H:%M",
+                                            "%d.%m.%Y",
+                                            "%Y-%m-%d %H:%M:%S",
+                                        ]
+                                        for fmt in date_formats:
+                                            try:
+                                                published_at = datetime.strptime(date_str, fmt)
+                                                break
+                                            except:
+                                                continue
+                                    except:
+                                        pass
+                                
+                                # Извлекаем изображение
+                                image_url = None
+                                img_elem = post_elem.select_one('.PostPhotos .Thumb-Image, .PostPhotos img')
+                                if img_elem:
+                                    image_url = img_elem.get('src') or img_elem.get('style', '')
+                                    # Извлекаем URL из style="background-image: url(...)"
+                                    if 'background-image' in image_url:
+                                        match = re.search(r'url\(["\']?([^"\']+)["\']?\)', image_url)
+                                        if match:
+                                            image_url = match.group(1)
+                                
+                                # Если есть хотя бы текст или заголовок - это пост
+                                if text or title:
+                                    html_posts.append({
+                                        "id": f"html_post_{idx}",
+                                        "title": title,
+                                        "text": text,
+                                        "published_at": published_at.isoformat() if published_at else None,
+                                        "date": date_str,
+                                        "image_url": image_url,
+                                    })
+                                    print(f"      Пост #{idx + 1}: {title or 'Без заголовка'} - {text[:50] if text else 'Без текста'}...")
+                            except Exception as e:
+                                print(f"      ⚠️ Ошибка парсинга поста #{idx + 1}: {e}")
+                                continue
+                    
+                    if html_posts:
+                        posts_data = html_posts
+                        result = {"posts": html_posts}
+                        html_parsed = True
+                        print(f"   ✅ Успешно извлечено {len(html_posts)} постов из HTML")
+                
+                # Если не нашли посты, ищем количество постов
+                if not html_posts:
+                    for selector in ['.PostsPage-Description', '.NewsPage-Description', '[class*="PostsPage"]', '[class*="NewsPage"]', '[class*="post"]', '[class*="news"]']:
+                        elements = soup.select(selector)
+                        for elem in elements:
+                            text = elem.get_text()
+                            # Ищем паттерны типа "5 новостей" или "5 публикаций"
+                            match = re.search(r'(\d+)\s*(?:новост|публикац|пост|news|post)', text, re.IGNORECASE)
+                            if match:
+                                posts_count = int(match.group(1))
+                                print(f"   ✅ Найдено количество постов/новостей (селектор {selector}): {posts_count}")
                                 html_parsed = True
                                 break
-                        except json.JSONDecodeError as e:
-                            print(f"   ⚠️ Не удалось распарсить JSON из window.__INITIAL__: {e}")
-                            continue
-                        except Exception as e:
-                            print(f"   ⚠️ Ошибка при извлечении window.__INITIAL__: {e}")
-                            continue
-                
-                # Если не нашли window.__INITIAL__, пробуем парсить HTML с помощью BeautifulSoup
-                if not html_parsed:
-                    try:
-                        from bs4 import BeautifulSoup
-                        soup = BeautifulSoup(html_content, 'html.parser')
-                        
-                        # Ищем элементы с постами/новостями
-                        for selector in ['.PostsPage-Description', '.NewsPage-Description', '[class*="PostsPage"]', '[class*="NewsPage"]', '[class*="post"]', '[class*="news"]']:
-                            elements = soup.select(selector)
-                            for elem in elements:
-                                text = elem.get_text()
-                                # Ищем паттерны типа "5 новостей" или "5 публикаций"
-                                match = re.search(r'(\d+)\s*(?:новост|публикац|пост|news|post)', text, re.IGNORECASE)
-                                if match:
-                                    posts_count = int(match.group(1))
-                                    print(f"   ✅ Найдено количество постов/новостей (селектор {selector}): {posts_count}")
-                                    html_parsed = True
-                                    break
-                            if html_parsed:
-                                break
-                    except ImportError:
-                        # Если BeautifulSoup не установлен, используем регулярные выражения
-                        print(f"   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
-                        # Ищем паттерны типа "5 новостей" или "5 публикаций" в HTML
-                        post_count_patterns = [
-                            r'(\d+)\s*(?:новост|публикац|пост|news|post)',
-                            r'(?:новост|публикац|пост|news|post)[^0-9]*(\d+)',
-                        ]
-                        for pattern in post_count_patterns:
-                            matches = re.findall(pattern, html_content, re.IGNORECASE)
-                            if matches:
-                                try:
-                                    posts_count = max(int(m) for m in matches)
-                                    print(f"   ✅ Найдено количество постов/новостей (regex): {posts_count}")
-                                    html_parsed = True
-                                    break
-                                except:
-                                    pass
-                    except Exception as e:
-                        print(f"   ⚠️ Ошибка при парсинге HTML: {e}")
-            
+                        if html_parsed:
+                            break
+            except ImportError:
+                # Если BeautifulSoup не установлен, используем регулярные выражения
+                print(f"   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
+                # Ищем паттерны типа "5 новостей" или "5 публикаций" в HTML
+                post_count_patterns = [
+                    r'(\d+)\s*(?:новост|публикац|пост|news|post)',
+                    r'(?:новост|публикац|пост|news|post)[^0-9]*(\d+)',
+                ]
+                for pattern in post_count_patterns:
+                    matches = re.findall(pattern, html_content, re.IGNORECASE)
+                    if matches:
+                        try:
+                            posts_count = max(int(m) for m in matches)
+                            print(f"   ✅ Найдено количество постов/новостей (regex): {posts_count}")
+                            html_parsed = True
+                            break
+                        except:
+                            pass
             except Exception as e:
-                print(f"   ⚠️ Ошибка при запросе HTML страницы: {e}")
+                print(f"   ⚠️ Ошибка при парсинге HTML: {e}")
+            
+        except Exception as e:
+            print(f"   ⚠️ Ошибка при запросе HTML страницы: {e}")
+        
+        # Если нашли посты в HTML, используем их (приоритет над sidebar)
+        if html_posts:
+            posts_data = html_posts
+            result = {"posts": html_posts}
+            print(f"✅ Используем посты из HTML страницы: {len(posts_data)} постов")
         
         # Если не получили данные, пробуем другие API endpoints (предположения)
-        if not result:
+        if not result and not html_posts:
             print(f"⚠️ Не удалось получить данные из sidebar/HTML, пробуем другие API endpoints (предположения)...")
             possible_urls = [
-                # Предполагаемые endpoints по аналогии с отзывами
+                # Правильный endpoint по аналогии с price-lists
+                f"https://yandex.ru/sprav/api/company/{external_id}/posts",
+                f"https://yandex.ru/sprav/api/company/{external_id}/news",
+                f"https://yandex.ru/sprav/api/company/{external_id}/publications",
+                # Старые варианты (на случай если правильный не работает)
                 f"https://yandex.ru/sprav/api/{external_id}/posts",
                 f"https://yandex.ru/sprav/api/{external_id}/news",
                 f"https://yandex.ru/sprav/api/{external_id}/publications",
@@ -977,29 +1425,70 @@ class YandexBusinessParser:
         posts_data = []
         
         # Рекурсивная функция для поиска постов в структуре
-        def find_posts_in_structure(obj, path=""):
+        def find_posts_in_structure(obj, path="", depth=0, max_depth=10):
             """Рекурсивно ищет массив постов в структуре данных"""
+            if depth > max_depth:
+                return None
+                
             if isinstance(obj, list):
                 # Если это список, проверяем, похож ли он на список постов
                 if len(obj) > 0 and isinstance(obj[0], dict):
                     # Проверяем, есть ли в первом элементе типичные поля поста
                     first_item = obj[0]
-                    post_fields = ["id", "title", "text", "content", "published_at", "created_at", "date", "name", "header", "message"]
-                    if any(field in first_item for field in post_fields):
+                    post_fields = ["id", "title", "text", "content", "published_at", "created_at", "date", "name", "header", "message", "body", "description"]
+                    # Также проверяем ключи, связанные с постами в названии
+                    post_indicators = ["post", "publication", "news", "публикац", "новост"]
+                    key_names = [k.lower() for k in first_item.keys()]
+                    
+                    has_post_fields = any(field in first_item for field in post_fields)
+                    has_post_indicators = any(any(indicator in key for indicator in post_indicators) for key in key_names)
+                    
+                    # ИСКЛЮЧАЕМ метаданные - если это factors или другие метаданные структуры
+                    metadata_indicators_in_path = ["factors", "counters", "extensions", "companyBonus", "leds", "accounts", "rubricsInfo"]
+                    is_metadata_path = any(indicator in path.lower() for indicator in metadata_indicators_in_path)
+                    
+                    # Также проверяем содержимое - если только метаданные ключи, это не посты
+                    metadata_keys_in_item = ["strength", "active", "status", "days_from_update", "isMain", "rubricId"]
+                    has_only_metadata = all(key in metadata_keys_in_item or key in ["name"] for key in first_item.keys() if key not in post_fields)
+                    
+                    if (has_post_fields or has_post_indicators) and not is_metadata_path and not has_only_metadata:
+                        print(f"   ✅ Найден массив постов в {path} (проверено {len(obj)} элементов)")
                         return obj
+                    elif is_metadata_path or has_only_metadata:
+                        print(f"   ⚠️ Пропущен массив в {path} - это метаданные, не посты")
                 return None
             elif isinstance(obj, dict):
-                # Проверяем прямые ключи
-                for key in ["posts", "publications", "news", "items"]:
+                # ИСКЛЮЧАЕМ известные структуры метаданных
+                metadata_structures = ["factors", "counters", "extensions", "companyBonus", "leds", "accounts", "company", "rubricsInfo"]
+                
+                # Проверяем прямые ключи (приоритет)
+                priority_keys = ["posts", "publications", "news", "items", "list", "data"]
+                for key in priority_keys:
                     if key in obj:
-                        found = find_posts_in_structure(obj[key], f"{path}.{key}")
+                        found = find_posts_in_structure(obj[key], f"{path}.{key}" if path else key, depth + 1, max_depth)
                         if found:
                             return found
                 
-                # Проверяем вложенные структуры
+                # Проверяем ключи, содержащие слова, связанные с постами
+                post_related_keys = [k for k in obj.keys() if any(word in k.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост', 'публик'])]
+                for key in post_related_keys:
+                    found = find_posts_in_structure(obj[key], f"{path}.{key}" if path else key, depth + 1, max_depth)
+                    if found:
+                        print(f"   ✅ Найдены посты через ключ '{key}' в {path}")
+                        return found
+                
+                # Проверяем вложенные структуры (если не нашли в приоритетных ключах)
+                # НО пропускаем структуры метаданных
                 for key, value in obj.items():
-                    if isinstance(value, (dict, list)):
-                        found = find_posts_in_structure(value, f"{path}.{key}")
+                    # Пропускаем метаданные
+                    if key in metadata_structures:
+                        continue
+                    # Пропускаем, если путь содержит метаданные (например, "factors.factors")
+                    if "factors" in path.lower() or "counter" in path.lower():
+                        continue
+                    
+                    if isinstance(value, (dict, list)) and key not in priority_keys:
+                        found = find_posts_in_structure(value, f"{path}.{key}" if path else key, depth + 1, max_depth)
                         if found:
                             return found
             return None
@@ -1025,24 +1514,162 @@ class YandexBusinessParser:
                     posts_data = result["data"]
                 elif isinstance(result["data"], dict):
                     posts_data = result["data"].get("posts") or result["data"].get("publications") or result["data"].get("news") or []
+            
+            # Дополнительные варианты поиска в sidebar структуре
+            if not posts_data and isinstance(result, dict):
+                # Пробуем найти в компонентах sidebar
+                for key in ["components", "widgets", "blocks", "sections", "content"]:
+                    if key in result and isinstance(result[key], dict):
+                        nested_posts = result[key].get("posts") or result[key].get("publications") or result[key].get("news")
+                        if nested_posts and isinstance(nested_posts, list):
+                            posts_data = nested_posts
+                            print(f"   ✅ Найдены посты в {key}")
+                            break
+                
+                # Пробуем найти в любых вложенных объектах, которые содержат массивы
+                if not posts_data:
+                    def find_any_posts_array(obj, depth=0, max_depth=5):
+                        """Ищет любой массив, похожий на список постов"""
+                        if depth > max_depth:
+                            return None
+                        if isinstance(obj, list) and len(obj) > 0:
+                            first = obj[0]
+                            if isinstance(first, dict):
+                                # Проверяем, есть ли типичные поля поста
+                                post_indicators = ["title", "text", "content", "published_at", "created_at", "date", "header", "message", "body"]
+                                # Исключаем метаданные - это НЕ посты
+                                metadata_indicators = ["working_intervals", "urls", "phone", "photos", "price_lists", "logo", "features", "english_name", "strength", "active", "status", "days_from_update"]
+                                
+                                # Проверяем, что это НЕ метаданные
+                                has_metadata = any(indicator in first for indicator in metadata_indicators)
+                                if has_metadata:
+                                    return None  # Это метаданные, не посты
+                                
+                                # Проверяем, что это похоже на пост
+                                has_post_fields = any(indicator in first for indicator in post_indicators)
+                                if has_post_fields:
+                                    return obj
+                        elif isinstance(obj, dict):
+                            # Пропускаем известные структуры метаданных
+                            skip_keys = ["factors", "counters", "extensions", "companyBonus", "leds", "accounts", "company"]
+                            for key, value in obj.items():
+                                if key in skip_keys:
+                                    continue  # Пропускаем метаданные
+                                found = find_any_posts_array(value, depth + 1, max_depth)
+                                if found:
+                                    return found
+                        return None
+                    
+                    found_posts = find_any_posts_array(result)
+                    if found_posts:
+                        posts_data = found_posts
+                        print(f"   ✅ Найдены посты через глубокий поиск")
         
         print(f"📊 Найдено постов в ответе: {len(posts_data)}")
+        
+        # Если список пустой, пробуем найти посты в HTML странице напрямую
+        if not posts_data:
+            print(f"⚠️ Посты не найдены в sidebar ответе, пробуем парсить HTML страницу напрямую...")
+            try:
+                posts_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
+                delay = random.uniform(1.5, 3.5)
+                time.sleep(delay)
+                
+                html_headers = {
+                    **self.session_headers,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                }
+                
+                response = self.session.get(posts_page_url, headers=html_headers, timeout=30)
+                if response.status_code == 200:
+                    html_content = response.text
+                    
+                    # Ищем все возможные упоминания постов в HTML
+                    # Ищем fetch/axios вызовы к API endpoints
+                    import re
+                    api_calls = re.findall(r'(?:fetch|axios\.(?:get|post))\(["\']([^"\']*/(?:posts|publications|news|публикац|новост)[^"\']*)["\']', html_content, re.IGNORECASE)
+                    if api_calls:
+                        print(f"   🔍 Найдены API вызовы для постов: {api_calls[:5]}")
+                        # Пробуем вызвать найденные endpoints
+                        for api_url in api_calls[:3]:  # Пробуем первые 3
+                            if not api_url.startswith('http'):
+                                if api_url.startswith('/'):
+                                    api_url = f"https://yandex.ru{api_url}"
+                                else:
+                                    api_url = f"https://yandex.ru/sprav/{external_id}/{api_url}"
+                            
+                            print(f"   🚀 Пробуем endpoint: {api_url}")
+                            try:
+                                delay = random.uniform(0.5, 1.5)
+                                time.sleep(delay)
+                                api_response = self.session.get(api_url, headers=html_headers, timeout=15)
+                                if api_response.status_code == 200:
+                                    try:
+                                        api_data = api_response.json()
+                                        if isinstance(api_data, (dict, list)):
+                                            # Проверяем, есть ли там посты
+                                            if isinstance(api_data, list) and len(api_data) > 0:
+                                                if isinstance(api_data[0], dict) and any(k in api_data[0] for k in ['title', 'text', 'content', 'published_at']):
+                                                    posts_data = api_data
+                                                    print(f"   ✅ Найдены посты через API endpoint!")
+                                                    break
+                                            elif isinstance(api_data, dict):
+                                                if any(k in api_data for k in ['posts', 'publications', 'news', 'items']):
+                                                    posts_data = api_data.get('posts') or api_data.get('publications') or api_data.get('news') or api_data.get('items') or []
+                                                    if posts_data:
+                                                        print(f"   ✅ Найдены посты через API endpoint!")
+                                                        break
+                                    except json.JSONDecodeError:
+                                        pass
+                            except Exception as e:
+                                print(f"   ⚠️ Ошибка при запросе к {api_url}: {e}")
+                                continue
+            except Exception as e:
+                print(f"   ⚠️ Ошибка при парсинге HTML страницы: {e}")
         
         # Если список пустой, выводим структуру для отладки
         if not posts_data:
             print(f"⚠️ Список постов пуст. Структура ответа:")
             print(f"   Тип: {type(result)}")
             if isinstance(result, dict):
-                print(f"   Ключи верхнего уровня: {list(result.keys())[:20]}")
-                # Показываем первые 2000 символов JSON для отладки
-                result_str = json.dumps(result, ensure_ascii=False, indent=2)[:2000]
-                print(f"   Первые 2000 символов JSON:\n{result_str}...")
+                print(f"   Ключи верхнего уровня: {list(result.keys())[:30]}")
+                
+                # Показываем все ключи, которые могут содержать посты (даже вложенные)
+                def find_all_post_keys(obj, path="", depth=0, max_depth=3):
+                    keys = []
+                    if depth > max_depth:
+                        return keys
+                    if isinstance(obj, dict):
+                        for key, value in obj.items():
+                            if any(word in key.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост']):
+                                keys.append(f"{path}.{key}" if path else key)
+                            if isinstance(value, (dict, list)) and depth < max_depth:
+                                keys.extend(find_all_post_keys(value, f"{path}.{key}" if path else key, depth + 1, max_depth))
+                    return keys
+                
+                all_post_keys = find_all_post_keys(result)
+                if all_post_keys:
+                    print(f"   🔍 Найдены ключи, связанные с постами (включая вложенные): {all_post_keys[:20]}")
+                
+                # Ищем любые ключи, связанные с постами/новостями
+                post_related_keys = [k for k in result.keys() if any(word in k.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост', 'публик'])]
+                if post_related_keys:
+                    print(f"   🔍 Найдены ключи, связанные с постами: {post_related_keys}")
+                    for key in post_related_keys:
+                        value = result[key]
+                        value_str = str(value)[:200] if not isinstance(value, (dict, list)) else f'{type(value).__name__} с {len(value) if isinstance(value, (list, dict)) else "данными"}'
+                        print(f"      {key}: тип={type(value)}, значение={value_str}")
+                
+                # Показываем первые 3000 символов JSON для отладки
+                result_str = json.dumps(result, ensure_ascii=False, indent=2)[:3000]
+                print(f"   Первые 3000 символов JSON:\n{result_str}...")
+                
                 # Также пробуем найти любые вложенные массивы
-                def find_arrays(obj, path="", max_depth=3):
+                def find_arrays(obj, path="", max_depth=4):
                     """Находит все массивы в структуре для отладки"""
                     arrays = []
                     if isinstance(obj, list):
-                        arrays.append((path, len(obj), type(obj[0]).__name__ if obj else "empty"))
+                        arrays.append((path, len(obj), type(obj[0]).__name__ if obj and len(obj) > 0 else "empty"))
                     elif isinstance(obj, dict) and max_depth > 0:
                         for key, value in obj.items():
                             arrays.extend(find_arrays(value, f"{path}.{key}" if path else key, max_depth - 1))
@@ -1050,11 +1677,42 @@ class YandexBusinessParser:
                 arrays = find_arrays(result)
                 if arrays:
                     print(f"   Найдены массивы в структуре:")
-                    for arr_path, arr_len, arr_type in arrays[:10]:
+                    for arr_path, arr_len, arr_type in arrays[:15]:
                         print(f"      {arr_path}: {arr_len} элементов (тип: {arr_type})")
+                        
+                        # Если это массив с постами, показываем структуру первого элемента
+                        if arr_len > 0 and any(word in arr_path.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост']):
+                            arr_value = result
+                            for part in arr_path.split('.'):
+                                if isinstance(arr_value, dict):
+                                    arr_value = arr_value.get(part)
+                                elif isinstance(arr_value, list) and part.isdigit():
+                                    arr_value = arr_value[int(part)]
+                                else:
+                                    break
+                            if isinstance(arr_value, list) and len(arr_value) > 0:
+                                first_item = arr_value[0]
+                                if isinstance(first_item, dict):
+                                    print(f"         Структура первого элемента: {list(first_item.keys())[:10]}")
         
         # Парсим посты
         for idx, post_data in enumerate(posts_data):
+            # Пропускаем метаданные - проверяем, что это действительно пост
+            # Но НЕ пропускаем, если есть хотя бы одно поле поста
+            metadata_keys = ["working_intervals", "urls", "phone", "photos", "price_lists", "logo", "features", "english_name", "strength", "active", "status", "days_from_update"]
+            post_fields = ["title", "text", "content", "published_at", "created_at", "header", "message", "body", "description"]
+            
+            # Если есть поля поста - это пост, даже если есть метаданные
+            has_post_fields = any(key in post_data for key in post_fields)
+            
+            # Пропускаем ТОЛЬКО если это чисто метаданные (нет полей поста) И есть специфичные метаданные
+            if not has_post_fields:
+                # Проверяем, не является ли это метаданными
+                is_metadata = any(key in post_data for key in metadata_keys) and len(post_data) <= 3
+                if is_metadata:
+                    print(f"   ⚠️ Пропущен элемент #{idx + 1} - это метаданные, не пост: {list(post_data.keys())[:5]}")
+                    continue
+            
             post_id = post_data.get("id") or f"{business_id}_post_{idx}"
             try:
                 published_at_str = post_data.get("published_at") or post_data.get("created_at") or post_data.get("date")
@@ -1068,6 +1726,11 @@ class YandexBusinessParser:
                 # Парсим заголовок и текст
                 title = post_data.get("title") or post_data.get("name") or post_data.get("header")
                 text = post_data.get("text") or post_data.get("content") or post_data.get("message") or post_data.get("description")
+                
+                # Если нет ни заголовка, ни текста - это не пост
+                if not title and not text:
+                    print(f"   ⚠️ Пропущен элемент #{idx + 1} - нет заголовка и текста")
+                    continue
                 
                 # Парсим изображение
                 image_url = None
@@ -1383,6 +2046,200 @@ class YandexBusinessParser:
         print(f"✅ Общее количество фотографий: {photos_count}")
         return photos_count
 
+    def fetch_services(self, account_row: dict) -> List[Dict[str, Any]]:
+        """
+        Получить услуги/прайс-лист из кабинета Яндекс.Бизнес.
+        
+        Args:
+            account_row: Строка из ExternalBusinessAccounts с полями business_id, external_id и т.д.
+        
+        Returns:
+            Список словарей с услугами: [{"category": "...", "name": "...", "description": "...", "price": "..."}, ...]
+        """
+        business_id = account_row["business_id"]
+        external_id = account_row.get("external_id")
+        
+        services = []
+        
+        if not external_id:
+            print(f"❌ Нет external_id для бизнеса {business_id}")
+            return []
+        
+        # API endpoint для прайс-листов (услуг)
+        # URL: https://yandex.ru/sprav/api/company/{external_id}/price-lists?page={page}
+        base_url = f"https://yandex.ru/sprav/api/company/{external_id}/price-lists"
+        
+        all_services_data = []
+        current_page = 1
+        max_pages = 20  # Ограничение на случай бесконечного цикла
+        
+        while current_page <= max_pages:
+            params = {"page": current_page}
+            
+            print(f"🔍 Страница {current_page}: Загружаем услуги...")
+            
+            # Имитация человека: случайная задержка между запросами (кроме первой страницы)
+            if current_page > 1:
+                page_delay = random.uniform(2.0, 4.0)
+                print(f"   ⏳ Пауза {page_delay:.1f} сек (имитация человека, чтобы избежать капчи)...")
+                time.sleep(page_delay)
+            
+            result = self._make_request(base_url, params=params)
+            
+            if not result:
+                print(f"❌ Не удалось получить данные со страницы {current_page}")
+                if len(all_services_data) == 0:
+                    print(f"   Возможные причины:")
+                    print(f"   1. Cookies устарели - обновите их в админской панели")
+                    print(f"   2. Капча (SmartCaptcha) - нужно обновить cookies или увеличить задержки")
+                    print(f"   3. Проблемы с сетью или API Яндекс изменился")
+                    return []
+                break
+            
+            # Парсим структуру ответа
+            # Предполагаемая структура: {"list": {"items": [...], "pager": {"total": 10, "page": 1}}}
+            page_services = []
+            if isinstance(result, list):
+                page_services = result
+            elif "list" in result and isinstance(result["list"], dict):
+                if "items" in result["list"]:
+                    page_services = result["list"]["items"]
+            elif "items" in result:
+                page_services = result["items"]
+            elif "data" in result:
+                if isinstance(result["data"], list):
+                    page_services = result["data"]
+                elif isinstance(result["data"], dict) and "items" in result["data"]:
+                    page_services = result["data"]["items"]
+            
+            if not page_services:
+                print(f"⚠️ Нет услуг на странице {current_page}")
+                if len(all_services_data) == 0:
+                    # Для первого запроса выводим полную структуру для отладки
+                    print(f"🔍 Полная структура ответа (для отладки):")
+                    result_str = json.dumps(result, ensure_ascii=False, indent=2)[:2000]
+                    print(f"{result_str}...")
+                break
+            
+            print(f"✅ Получено {len(page_services)} услуг на странице {current_page}")
+            all_services_data.extend(page_services)
+            
+            # Проверяем, есть ли следующая страница
+            has_next_page = False
+            if "list" in result and isinstance(result["list"], dict):
+                pager = result["list"].get("pager", {})
+                total = pager.get("total", 0)
+                limit = pager.get("limit", 20)
+                if total > len(all_services_data):
+                    has_next_page = True
+            elif "pager" in result:
+                pager = result["pager"]
+                total = pager.get("total", 0)
+                if total > len(all_services_data):
+                    has_next_page = True
+            
+            if not has_next_page:
+                print(f"✅ Все услуги загружены (всего: {len(all_services_data)})")
+                break
+            
+            current_page += 1
+        
+        # Парсим услуги из данных
+        for service_data in all_services_data:
+            try:
+                # Парсим категорию (пробуем разные варианты)
+                category = (
+                    service_data.get("category") or 
+                    service_data.get("category_name") or 
+                    service_data.get("categoryName") or
+                    service_data.get("group") or 
+                    service_data.get("group_name") or
+                    service_data.get("groupName") or
+                    service_data.get("section") or
+                    service_data.get("section_name") or
+                    service_data.get("sectionName") or
+                    # Если категория вложена в объект
+                    (service_data.get("category_obj", {}).get("name") if isinstance(service_data.get("category_obj"), dict) else None) or
+                    (service_data.get("group_obj", {}).get("name") if isinstance(service_data.get("group_obj"), dict) else None) or
+                    (service_data.get("section_obj", {}).get("name") if isinstance(service_data.get("section_obj"), dict) else None) or
+                    "Общие услуги"  # Значение по умолчанию
+                )
+                
+                # Парсим название
+                name = (
+                    service_data.get("name") or 
+                    service_data.get("title") or 
+                    service_data.get("service_name") or
+                    service_data.get("serviceName") or
+                    service_data.get("item_name") or
+                    service_data.get("itemName") or
+                    ""
+                )
+                if not name:
+                    continue  # Пропускаем услуги без названия
+                
+                # Парсим описание
+                description = (
+                    service_data.get("description") or 
+                    service_data.get("text") or 
+                    service_data.get("comment") or
+                    service_data.get("details") or
+                    service_data.get("content") or
+                    ""
+                )
+                # Если description - это dict, извлекаем текст
+                if isinstance(description, dict):
+                    description = description.get("text") or description.get("value") or description.get("content") or str(description)
+                elif not isinstance(description, str):
+                    description = str(description) if description else ""
+                
+                # Парсим цену
+                price = None
+                price_data = (
+                    service_data.get("price") or 
+                    service_data.get("cost") or 
+                    service_data.get("amount") or
+                    service_data.get("price_value") or
+                    service_data.get("priceValue")
+                )
+                if price_data:
+                    if isinstance(price_data, (int, float)):
+                        price = str(price_data)
+                    elif isinstance(price_data, dict):
+                        price = str(price_data.get("value") or price_data.get("amount") or price_data.get("price") or "")
+                    else:
+                        price = str(price_data)
+                
+                # Парсим ключевые слова (если есть)
+                keywords = service_data.get("keywords") or service_data.get("tags") or service_data.get("tag_list") or []
+                if isinstance(keywords, str):
+                    keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+                elif not isinstance(keywords, list):
+                    keywords = []
+                
+                # Логируем первую услугу для отладки структуры
+                if len(services) == 0:
+                    print(f"🔍 Пример структуры услуги (для отладки):")
+                    print(f"   Ключи верхнего уровня: {list(service_data.keys())[:15]}")
+                    print(f"   Извлечённая категория: {category}")
+                    print(f"   Извлечённое название: {name}")
+                
+                services.append({
+                    "category": category,
+                    "name": name,
+                    "description": description,
+                    "price": price or "",
+                    "keywords": keywords,
+                })
+            except Exception as e:
+                print(f"⚠️ Ошибка парсинга услуги: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        print(f"✅ Всего спарсено услуг: {len(services)}")
+        return services
+
     def fetch_photos(self, account_row: dict) -> List[ExternalPhoto]:
         """
         Получить фотографии из кабинета Яндекс.Бизнес.
@@ -1471,4 +2328,5 @@ class YandexBusinessParser:
                 raw_payload={"demo": True},
             )
         ]
+
 

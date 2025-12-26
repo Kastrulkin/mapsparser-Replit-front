@@ -168,16 +168,35 @@ export const CardOverviewPage = () => {
     
     setParseStatus('processing');
     setError(null);
+    setSuccess(null);
     try {
       const token = localStorage.getItem('auth_token');
+      console.log('🚀 Запуск парсера для бизнеса:', currentBusinessId);
       const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${currentBusinessId}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      const data = await response.json();
-      if (data.success) {
+      
+      console.log('📡 Ответ сервера:', response.status, response.statusText);
+      
+      let data;
+      try {
+        data = await response.json();
+        console.log('📦 Данные ответа:', data);
+      } catch (jsonError) {
+        const text = await response.text();
+        console.error('❌ Ошибка парсинга JSON:', text);
+        setParseStatus('error');
+        setError(`Ошибка сервера (${response.status}): ${text.substring(0, 200)}`);
+        return;
+      }
+      
+      if (response.ok && data.success) {
         setParseStatus('done');
-        setSuccess('Парсер запущен успешно');
+        setSuccess(data.message || 'Парсер запущен успешно');
         // Перезагружаем данные
         setTimeout(() => {
           loadSummary();
@@ -186,11 +205,14 @@ export const CardOverviewPage = () => {
         }, 2000);
       } else {
         setParseStatus('error');
-        setError(data.error || 'Ошибка запуска парсера');
+        const errorMsg = data.error || data.message || 'Ошибка запуска парсера';
+        console.error('❌ Ошибка парсера:', errorMsg);
+        setError(errorMsg);
       }
     } catch (e: any) {
+      console.error('❌ Исключение при запуске парсера:', e);
       setParseStatus('error');
-      setError('Ошибка запуска парсера: ' + e.message);
+      setError('Ошибка запуска парсера: ' + (e.message || String(e)));
     }
   };
 
@@ -582,6 +604,7 @@ export const CardOverviewPage = () => {
           <NewsGenerator 
             services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} 
             businessId={currentBusinessId}
+            externalPosts={externalPosts}
           />
         </div>
       </div>
