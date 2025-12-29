@@ -21,6 +21,7 @@ import { SettingsPage } from "./pages/dashboard/SettingsPage";
 import { AdminPage } from "./pages/dashboard/AdminPage";
 import { BookingsPage } from "./pages/dashboard/BookingsPage";
 import { ChatsPage } from "./pages/dashboard/ChatsPage";
+import { AIChatPromotionPage } from "./pages/dashboard/AIChatPromotionPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import Policy from "./pages/Policy";
@@ -57,6 +58,7 @@ const AppContent = () => {
             <Route path="card" element={<CardOverviewPage />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
+            <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />

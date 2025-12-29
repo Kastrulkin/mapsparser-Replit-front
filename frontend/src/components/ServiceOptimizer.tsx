@@ -60,6 +60,10 @@ export default function ServiceOptimizer({
   const [addedServices, setAddedServices] = useState<Set<number>>(new Set());
   const [examples, setExamples] = useState<Array<{id: string, text: string}>>([]);
   const [exampleInput, setExampleInput] = useState('');
+  // Состояние для отслеживания принятых оптимизаций
+  const [acceptedOptimizations, setAcceptedOptimizations] = useState<Map<number, {name?: boolean, description?: boolean}>>(new Map());
+  // Состояние для редактируемых значений
+  const [editableValues, setEditableValues] = useState<Map<number, {name?: string, description?: string}>>(new Map());
 
   const loadExamples = async () => {
     try {
@@ -175,13 +179,55 @@ export default function ServiceOptimizer({
     URL.revokeObjectURL(url);
   };
 
+  // Принять оптимизированное название
+  const acceptOptimizedName = (serviceIndex: number) => {
+    setAcceptedOptimizations(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(serviceIndex) || {};
+      newMap.set(serviceIndex, { ...current, name: true });
+      return newMap;
+    });
+  };
+
+  // Принять оптимизированное описание
+  const acceptOptimizedDescription = (serviceIndex: number) => {
+    setAcceptedOptimizations(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(serviceIndex) || {};
+      newMap.set(serviceIndex, { ...current, description: true });
+      return newMap;
+    });
+  };
+
+  // Обновить редактируемое значение
+  const updateEditableValue = (serviceIndex: number, field: 'name' | 'description', value: string) => {
+    setEditableValues(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(serviceIndex) || {};
+      newMap.set(serviceIndex, { ...current, [field]: value });
+      return newMap;
+    });
+  };
+
   const addServiceToList = async (serviceIndex: number) => {
     if (!result) return;
     const service = result[serviceIndex];
+    const accepted = acceptedOptimizations.get(serviceIndex) || {};
+    const editable = editableValues.get(serviceIndex) || {};
+    
     try {
       const token = localStorage.getItem('auth_token');
       // Получаем business_id из пропсов или из localStorage
       const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
+      
+      // Используем принятые оптимизированные значения или оригинальные
+      const finalName = accepted.name 
+        ? (editable.name !== undefined ? editable.name : service.optimized_name)
+        : service.original_name;
+      
+      const finalDescription = accepted.description
+        ? (editable.description !== undefined ? editable.description : service.seo_description)
+        : (service.original_description || service.seo_description);
       
       const response = await fetch(`${window.location.origin}/api/services/add`, {
         method: 'POST',
@@ -191,8 +237,8 @@ export default function ServiceOptimizer({
         },
         body: JSON.stringify({
           category: service.category || 'Общие услуги',
-          name: service.optimized_name,
-          description: service.seo_description,
+          name: finalName,
+          description: finalDescription,
           keywords: service.keywords,
           price: service.price,
           business_id: currentBusinessId
@@ -286,40 +332,123 @@ export default function ServiceOptimizer({
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-600">
-                  <th className="p-2">Исходное название</th>
-                  <th className="p-2">Оптимизированное название</th>
-                  <th className="p-2">Исходное описание</th>
-                  <th className="p-2">Оптимизированное описание</th>
+                  <th className="p-2">Название</th>
+                  <th className="p-2">Статус названия</th>
+                  <th className="p-2">Описание</th>
+                  <th className="p-2">Статус описания</th>
                   <th className="p-2">Ключевые слова</th>
                   <th className="p-2">Цена</th>
                   <th className="p-2">Действие</th>
                 </tr>
               </thead>
               <tbody>
-                {result.map((s, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="p-2 align-top text-gray-800">{s.original_name}</td>
-                    <td className="p-2 align-top text-green-700 font-medium">{s.optimized_name}</td>
-                    <td className="p-2 align-top text-gray-600 text-sm">{s.original_description || '-'}</td>
-                    <td className="p-2 align-top text-gray-700">{s.seo_description}</td>
-                    <td className="p-2 align-top text-gray-600">{(s.keywords||[]).join(', ')}</td>
-                    <td className="p-2 align-top text-gray-600">{s.price || ''}</td>
-                    <td className="p-2 align-top">
-                      {addedServices.has(i) ? (
-                        <span className="text-green-600 text-sm">✓ Добавлено</span>
-                      ) : (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => addServiceToList(i)}
-                          className="text-xs"
-                        >
-                          Добавить в список услуг
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {result.map((s, i) => {
+                  const accepted = acceptedOptimizations.get(i) || {};
+                  const editable = editableValues.get(i) || {};
+                  const displayName = accepted.name 
+                    ? (editable.name !== undefined ? editable.name : s.optimized_name)
+                    : s.original_name;
+                  const displayDescription = accepted.description
+                    ? (editable.description !== undefined ? editable.description : s.seo_description)
+                    : (s.original_description || s.seo_description);
+                  
+                  return (
+                    <tr key={i} className="border-t">
+                      <td className="p-2 align-top">
+                        <div className="space-y-2">
+                          <div className="text-gray-800 font-medium">{s.original_name}</div>
+                          {!accepted.name && (
+                            <div className="space-y-1">
+                              <div className="text-sm text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                                <div className="font-medium mb-1">SEO название:</div>
+                                <Textarea
+                                  value={editable.name !== undefined ? editable.name : s.optimized_name}
+                                  onChange={(e) => updateEditableValue(i, 'name', e.target.value)}
+                                  rows={2}
+                                  className="text-sm"
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => acceptOptimizedName(i)}
+                                  className="mt-1 text-xs"
+                                >
+                                  ✓ Принять
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          {accepted.name && (
+                            <div className="text-sm text-green-600">
+                              ✓ Используется: {displayName}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-2 align-top">
+                        {accepted.name ? (
+                          <span className="text-green-600 text-sm">✓ Принято</span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">Ожидает принятия</span>
+                        )}
+                      </td>
+                      <td className="p-2 align-top">
+                        <div className="space-y-2">
+                          <div className="text-gray-600 text-sm">{s.original_description || '-'}</div>
+                          {!accepted.description && s.seo_description && (
+                            <div className="space-y-1">
+                              <div className="text-sm text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                                <div className="font-medium mb-1">SEO описание:</div>
+                                <Textarea
+                                  value={editable.description !== undefined ? editable.description : s.seo_description}
+                                  onChange={(e) => updateEditableValue(i, 'description', e.target.value)}
+                                  rows={3}
+                                  className="text-sm"
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => acceptOptimizedDescription(i)}
+                                  className="mt-1 text-xs"
+                                >
+                                  ✓ Принять
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          {accepted.description && (
+                            <div className="text-sm text-green-600">
+                              ✓ Используется: {displayDescription.substring(0, 50)}...
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-2 align-top">
+                        {accepted.description ? (
+                          <span className="text-green-600 text-sm">✓ Принято</span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">Ожидает принятия</span>
+                        )}
+                      </td>
+                      <td className="p-2 align-top text-gray-600">{(s.keywords||[]).join(', ')}</td>
+                      <td className="p-2 align-top text-gray-600">{s.price || ''}</td>
+                      <td className="p-2 align-top">
+                        {addedServices.has(i) ? (
+                          <span className="text-green-600 text-sm">✓ Добавлено</span>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => addServiceToList(i)}
+                            className="text-xs"
+                          >
+                            Добавить в список услуг
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

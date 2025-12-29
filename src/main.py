@@ -5659,8 +5659,14 @@ Email: {email}
         send_email(email, welcome_subject, welcome_body)
         
         # Создаем сессию
-        session_token = create_session(result['id'])
-        if not session_token:
+        try:
+            session_token = create_session(result['id'])
+            if not session_token:
+                return jsonify({"error": "Ошибка создания сессии"}), 500
+        except Exception as session_error:
+            print(f"❌ Ошибка создания сессии: {session_error}")
+            import traceback
+            traceback.print_exc()
             return jsonify({"error": "Ошибка создания сессии"}), 500
         
         return jsonify({
@@ -5683,6 +5689,9 @@ def login():
     """Вход пользователя"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Неверный формат запроса"}), 400
+            
         email = data.get('email', '').strip()
         password = data.get('password', '').strip()
         
@@ -5697,37 +5706,60 @@ def login():
         
         # Проверяем, есть ли у пользователя хотя бы один активный бизнес
         # Если все бизнесы заблокированы, пользователь не может войти
-        db = DatabaseManager()
-        is_superadmin = db.is_superadmin(result['id'])
-        
-        if not is_superadmin:
-            # Проверяем активные бизнесы для обычных пользователей
-            businesses = db.get_businesses_by_owner(result['id'])
-            if len(businesses) == 0:
+        db = None
+        try:
+            db = DatabaseManager()
+            is_superadmin = db.is_superadmin(result['id'])
+            
+            if not is_superadmin:
+                # Проверяем активные бизнесы для обычных пользователей
+                businesses = db.get_businesses_by_owner(result['id'])
+                if len(businesses) == 0:
+                    if db:
+                        db.close()
+                    return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
+        except Exception as db_error:
+            print(f"❌ Ошибка проверки бизнесов: {db_error}")
+            import traceback
+            traceback.print_exc()
+            if db:
                 db.close()
-                return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
-        
-        db.close()
+            return jsonify({"error": "Ошибка проверки данных пользователя"}), 500
+        finally:
+            if db:
+                db.close()
         
         # Создаем сессию
-        session_token = create_session(result['id'])
-        if not session_token:
+        try:
+            session_token = create_session(result['id'])
+            if not session_token:
+                return jsonify({"error": "Ошибка создания сессии"}), 500
+        except Exception as session_error:
+            print(f"❌ Ошибка создания сессии: {session_error}")
+            import traceback
+            traceback.print_exc()
             return jsonify({"error": "Ошибка создания сессии"}), 500
         
         return jsonify({
             "success": True,
             "user": {
                 "id": result['id'],
-                "email": result['email'],
-                "name": result['name'],
-                "phone": result['phone']
+                "email": result.get('email', ''),
+                "name": result.get('name', ''),
+                "phone": result.get('phone', '')
             },
             "token": session_token
         })
         
     except Exception as e:
         print(f"❌ Ошибка входа: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ Полный traceback:\n{error_traceback}")
+        return jsonify({
+            "error": str(e),
+            "details": error_traceback if app.debug else None
+        }), 500
 
 @app.route('/api/auth/me', methods=['GET'])
 def get_user_info():

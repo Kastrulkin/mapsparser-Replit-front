@@ -1,0 +1,714 @@
+openapi: 3.1.0
+info:
+  title: BeautyBot ChatGPT Actions API
+  description: |
+    API для интеграции с ChatGPT App Store. Позволяет ChatGPT искать салоны красоты,
+    получать информацию о них и создавать бронирования.
+    
+    **Основные функции:**
+    - Поиск салонов по городу и услуге
+    - Получение детальной информации о салоне
+    - Проверка доступных слотов для бронирования
+    - Создание бронирования
+    - Запрос на человеческую поддержку
+  version: 1.0.0
+  contact:
+    name: BeautyBot Support
+    email: support@beautybot.ai
+
+servers:
+  - url: https://your-domain.com
+    description: Production server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API ключ для аутентификации
+
+  schemas:
+    Salon:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Уникальный ID салона
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Название салона
+          example: "Салон красоты Оливер"
+        address:
+          type: string
+          description: Адрес салона
+          example: "ул. Тверская, д. 10"
+        city:
+          type: string
+          description: Город
+          example: "Москва"
+        phone:
+          type: string
+          description: Телефон
+          example: "+7-495-123-45-67"
+        whatsapp:
+          type: string
+          nullable: true
+          description: WhatsApp номер
+          example: "+7-495-123-45-67"
+        timezone:
+          type: string
+          description: Часовой пояс
+          example: "Europe/Moscow"
+        latitude:
+          type: number
+          nullable: true
+          description: Широта
+          example: 55.7558
+        longitude:
+          type: number
+          nullable: true
+          description: Долгота
+          example: 37.6173
+        working_hours:
+          type: object
+          nullable: true
+          description: Рабочие часы
+          additionalProperties:
+            type: string
+          example:
+            monday: "09:00-21:00"
+            tuesday: "09:00-21:00"
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+          description: Список услуг салона
+        distance:
+          type: number
+          nullable: true
+          description: Расстояние до салона в километрах (если указаны координаты пользователя)
+          example: 2.5
+        chatgpt_context:
+          type: string
+          nullable: true
+          description: Дополнительный контекст для ChatGPT о салоне (специализация, особенности, стиль работы)
+          example: "Премиальный салон красоты с акцентом на натуральные материалы и индивидуальный подход"
+
+    Network:
+      type: object
+      properties:
+        network_id:
+          type: string
+          description: ID сети
+          example: "network-123"
+        network_name:
+          type: string
+          description: Название сети
+          example: "Сеть салонов красоты"
+        salons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Salon'
+          description: Список салонов в сети
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID услуги
+        name:
+          type: string
+          description: Название услуги
+          example: "Стрижка женская"
+        price:
+          type: number
+          nullable: true
+          description: Цена в долларах
+          example: 50.0
+        duration:
+          type: integer
+          nullable: true
+          description: Длительность в минутах
+          example: 60
+        description:
+          type: string
+          nullable: true
+          description: Описание услуги
+        chatgpt_context:
+          type: string
+          nullable: true
+          description: Дополнительный контекст для ChatGPT об услуге (техники, материалы, особенности)
+          example: "Используется японская техника стрижки с акцентом на текстуру и объем"
+
+    SalonDetails:
+      allOf:
+        - $ref: '#/components/schemas/Salon'
+        - type: object
+          properties:
+            email:
+              type: string
+              nullable: true
+            website:
+              type: string
+              nullable: true
+            rating:
+              type: number
+              nullable: true
+              description: Рейтинг салона (1-5)
+              example: 4.7
+            reviews_count:
+              type: integer
+              nullable: true
+              description: Количество отзывов
+              example: 64
+            photos:
+              type: array
+              items:
+                type: string
+                format: uri
+              description: Ссылки на фото салона
+            recent_reviews:
+              type: array
+              items:
+                $ref: '#/components/schemas/Review'
+              description: Последние отзывы (до 10)
+
+    Review:
+      type: object
+      properties:
+        author_name:
+          type: string
+          example: "Анна"
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        text:
+          type: string
+          example: "Отличный салон, очень довольна!"
+        date:
+          type: string
+          format: date-time
+          example: "2025-12-20T10:30:00Z"
+
+    AvailableSlot:
+      type: object
+      properties:
+        datetime:
+          type: string
+          format: date-time
+          description: Доступное время для бронирования
+          example: "2025-12-27T14:00:00Z"
+        datetime_local:
+          type: string
+          description: Время в локальном часовом поясе салона
+          example: "2025-12-27 17:00:00 MSK"
+        available:
+          type: boolean
+          description: Доступен ли слот
+          example: true
+
+    BookingRequest:
+      type: object
+      required:
+        - salonId
+        - clientName
+        - clientPhone
+        - bookingTime
+      properties:
+        salonId:
+          type: string
+          description: ID салона
+        serviceId:
+          type: string
+          nullable: true
+          description: ID услуги (опционально)
+        clientName:
+          type: string
+          description: Имя клиента
+          example: "Иван Петров"
+        clientPhone:
+          type: string
+          description: Телефон клиента
+          example: "+7-900-123-45-67"
+        clientEmail:
+          type: string
+          nullable: true
+          format: email
+          description: Email клиента
+        bookingTime:
+          type: string
+          format: date-time
+          description: Время бронирования в ISO 8601 формате
+          example: "2025-12-27T14:00:00Z"
+        notes:
+          type: string
+          nullable: true
+          description: Дополнительные заметки
+
+    BookingResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        bookingId:
+          type: string
+          description: ID созданного бронирования
+        message:
+          type: string
+        salon:
+          type: object
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Сообщение об ошибке
+
+paths:
+  /api/chatgpt/search:
+    get:
+      operationId: searchSalons
+      summary: Поиск салонов
+      description: |
+        Поиск салонов красоты по городу и услуге. Возвращает список салонов,
+        соответствующих критериям поиска.
+      tags:
+        - Search
+      parameters:
+        - name: city
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Город для поиска
+          example: "Москва"
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Название услуги или ключевое слово
+          example: "стрижка"
+        - name: budget
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Максимальный бюджет в долларах
+          example: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 5
+            minimum: 1
+            maximum: 20
+          description: Максимальное количество результатов
+        - name: latitude
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Широта пользователя (для сортировки по расстоянию)
+          example: 55.7558
+        - name: longitude
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Долгота пользователя (для сортировки по расстоянию)
+          example: 37.6173
+        - name: min_rating
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+          description: Минимальный рейтинг салона (1-5)
+          example: 4.0
+        - name: keywords
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Ключевые слова для поиска в описании услуг
+          example: "маникюр педикюр"
+        - name: available_now
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Показывать только салоны, которые работают сейчас
+      responses:
+        '200':
+          description: Успешный поиск
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  networks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Network'
+                    description: Группированные результаты по сетям
+                  standalone_salons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Salon'
+                    description: Салоны без сети
+                  count:
+                    type: integer
+                    description: Общее количество найденных салонов
+                    example: 5
+                  networks_count:
+                    type: integer
+                    description: Количество сетей в результатах
+                    example: 2
+                  standalone_count:
+                    type: integer
+                    description: Количество салонов без сети
+                    example: 1
+        '400':
+          description: Неверные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/chatgpt/salon/{salonId}:
+    get:
+      operationId: getSalonInfo
+      summary: Получить информацию о салоне
+      description: |
+        Возвращает детальную информацию о салоне, включая услуги, рабочие часы,
+        контакты, фото, отзывы и рейтинг.
+      tags:
+        - Salon
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID салона
+      responses:
+        '200':
+          description: Информация о салоне
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  salon:
+                    $ref: '#/components/schemas/SalonDetails'
+        '404':
+          description: Салон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/chatgpt/salon/{salonId}/available-slots:
+    get:
+      operationId: getAvailableSlots
+      summary: Получить доступные слоты для бронирования
+      description: |
+        Возвращает список доступных временных слотов для бронирования в салоне.
+        Учитывает рабочие часы, длительность услуги и уже забронированные слоты.
+      tags:
+        - Booking
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID салона
+        - name: serviceId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ID услуги (для учета длительности)
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Дата для поиска слотов (по умолчанию - сегодня и следующие 7 дней)
+          example: "2025-12-27"
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 7
+            minimum: 1
+            maximum: 30
+          description: Количество дней для поиска слотов
+      responses:
+        '200':
+          description: Список доступных слотов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  slots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailableSlot'
+        '404':
+          description: Салон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/chatgpt/book:
+    post:
+      operationId: bookAppointment
+      summary: Создать бронирование
+      description: |
+        Создает новое бронирование в салоне. Салон получит уведомление
+        через Telegram и/или WhatsApp.
+      tags:
+        - Booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+      responses:
+        '201':
+          description: Бронирование создано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Неверные данные запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Салон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/chatgpt/request-support:
+    post:
+      operationId: requestHumanSupport
+      summary: Запрос на человеческую поддержку
+      description: |
+        Отправляет запрос на призыв представителя салона в чат ChatGPT.
+        Владелец салона получит уведомление.
+      tags:
+        - Support
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - salonId
+                - reason
+              properties:
+                salonId:
+                  type: string
+                reason:
+                  type: string
+                  description: Причина запроса поддержки
+                clientMessage:
+                  type: string
+                  nullable: true
+                  description: Последнее сообщение клиента
+                clientName:
+                  type: string
+                  nullable: true
+                clientPhone:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Запрос отправлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  salon:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      phone:
+                        type: string
+                      whatsapp:
+                        type: string
+                        nullable: true
+        '400':
+          description: Неверные данные запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Салон не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/chatgpt/user/preferences:
+    get:
+      operationId: getUserPreferences
+      summary: Получить предпочтения пользователя
+      description: |
+        Возвращает предпочтения пользователя ChatGPT на основе истории взаимодействий:
+        предпочтительный город, типы услуг, последние поиски и бронирования.
+      tags:
+        - Personalization
+      parameters:
+        - name: X-ChatGPT-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+          description: ID пользователя в ChatGPT
+      responses:
+        '200':
+          description: Предпочтения пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  preferences:
+                    type: object
+                    properties:
+                      preferred_city:
+                        type: string
+                        nullable: true
+                        description: Предпочтительный город
+                      preferred_service_types:
+                        type: string
+                        nullable: true
+                        description: Предпочтительные типы услуг
+                      recent_searches:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            city:
+                              type: string
+                            service:
+                              type: string
+                            results_count:
+                              type: integer
+                            timestamp:
+                              type: string
+                              format: date-time
+                        description: Последние 5 поисков
+                      recent_bookings:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            business_id:
+                              type: string
+                            service_id:
+                              type: string
+                              nullable: true
+                            booking_id:
+                              type: string
+                              nullable: true
+                            timestamp:
+                              type: string
+                              format: date-time
+                        description: Последние 5 бронирований
+                      total_interactions:
+                        type: integer
+                        description: Общее количество взаимодействий
+        '400':
+          description: Неверные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+

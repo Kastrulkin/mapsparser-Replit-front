@@ -8,7 +8,8 @@ import {
   Calendar,
   MessageSquare,
   Menu,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -64,6 +65,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: 'Финансы',
       icon: DollarSign,
       path: '/dashboard/finance',
+    },
+    {
+      id: 'ai-chat-promotion',
+      label: 'Продвижение через ИИ чаты',
+      icon: Sparkles,
+      path: '/dashboard/ai-chat-promotion',
     },
     {
       id: 'settings',
