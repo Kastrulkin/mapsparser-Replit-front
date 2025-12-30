@@ -38,6 +38,7 @@ interface UserWithBusinesses {
   name?: string;
   phone?: string;
   is_superadmin?: boolean;
+  is_active?: number;
   direct_businesses: Business[];
   networks: Network[];
 }
@@ -336,6 +337,93 @@ export const AdminPage: React.FC = () => {
     });
   };
 
+  const handlePauseUser = (userId: string, userEmail: string, isPaused: boolean) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: isPaused ? 'Подтверждение приостановки' : 'Подтверждение возобновления',
+      message: isPaused
+        ? `Вы уверены, что хотите приостановить пользователя "${userEmail}"? Все его бизнесы также будут приостановлены.`
+        : `Вы уверены, что хотите возобновить пользователя "${userEmail}"? Все его бизнесы также будут возобновлены.`,
+      confirmText: isPaused ? 'Приостановить' : 'Возобновить',
+      cancelText: 'Отмена',
+      variant: 'block',
+      onConfirm: async () => {
+        try {
+          const token = await newAuth.getToken();
+          const endpoint = isPaused ? `/api/superadmin/users/${userId}/pause` : `/api/superadmin/users/${userId}/unpause`;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            toast({
+              title: 'Успешно',
+              description: isPaused ? 'Пользователь приостановлен' : 'Пользователь возобновлен',
+            });
+            loadUsers();
+          } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Ошибка изменения статуса пользователя');
+          }
+        } catch (error: any) {
+          toast({
+            title: 'Ошибка',
+            description: error.message || 'Не удалось изменить статус пользователя',
+            variant: 'destructive',
+          });
+        } finally {
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+        }
+      },
+    });
+  };
+
+  const handleDeleteUser = (userId: string, userEmail: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Подтверждение удаления',
+      message: `Вы уверены, что хотите удалить пользователя "${userEmail}"? Это действие нельзя отменить. Все его бизнесы и данные будут удалены.`,
+      confirmText: 'Удалить',
+      cancelText: 'Отмена',
+      variant: 'delete',
+      onConfirm: async () => {
+        try {
+          const token = await newAuth.getToken();
+          const response = await fetch(`/api/superadmin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            toast({
+              title: 'Успешно',
+              description: 'Пользователь удалён',
+            });
+            loadUsers();
+          } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Ошибка удаления пользователя');
+          }
+        } catch (error: any) {
+          toast({
+            title: 'Ошибка',
+            description: error.message || 'Не удалось удалить пользователя',
+            variant: 'destructive',
+          });
+        } finally {
+          setConfirmDialog({ ...confirmDialog, isOpen: false });
+        }
+      },
+    });
+  };
+
   const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
     try {
       const token = await newAuth.getToken();
@@ -524,7 +612,7 @@ export const AdminPage: React.FC = () => {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="text-lg font-semibold text-foreground">
+                              <h3 className={`text-lg font-semibold ${user.is_active === 0 ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                                 {user.name || user.email}
                               </h3>
                               {user.is_superadmin && (
@@ -532,12 +620,49 @@ export const AdminPage: React.FC = () => {
                                   Админ
                                 </span>
                               )}
+                              {user.is_active === 0 && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
+                                  Приостановлен
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-muted-foreground">
+                            {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePauseUser(user.id, user.email, user.is_active !== 0);
+                              }}
+                              title={user.is_active === 0 ? "Возобновить пользователя" : "Приостановить пользователя"}
+                            >
+                              {user.is_active === 0 ? (
+                                <User className="h-4 w-4" />
+                              ) : (
+                                <Ban className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteUser(user.id, user.email);
+                              }}
+                              title="Удалить пользователя"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </CardHeader>

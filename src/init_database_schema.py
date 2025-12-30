@@ -58,6 +58,8 @@ def init_database_schema():
                 owner_id TEXT NOT NULL,
                 network_id TEXT,
                 is_active INTEGER DEFAULT 1,
+                subscription_tier TEXT DEFAULT 'trial',
+                subscription_status TEXT DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (owner_id) REFERENCES Users (id) ON DELETE CASCADE,
@@ -65,6 +67,21 @@ def init_database_schema():
             )
         """)
         print("✅ Таблица Businesses создана/проверена")
+        
+        # Добавляем колонки subscription_tier и subscription_status, если их нет (для существующих БД)
+        try:
+            cursor.execute("PRAGMA table_info(Businesses)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'subscription_tier' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_tier TEXT DEFAULT 'trial'")
+                print("✅ Добавлена колонка subscription_tier")
+            
+            if 'subscription_status' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_status TEXT DEFAULT 'active'")
+                print("✅ Добавлена колонка subscription_status")
+        except Exception as e:
+            print(f"⚠️ Ошибка при добавлении колонок subscription: {e}")
         
         # UserSessions - сессии пользователей
         cursor.execute("""
