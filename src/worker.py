@@ -9,7 +9,8 @@ def get_db_connection():
     from safe_db_utils import get_db_connection as _get_db_connection
     return _get_db_connection()
 
-from parser import parse_yandex_card
+# Используем parser_config для автоматического выбора парсера (interception или legacy)
+from parser_config import parse_yandex_card
 from gigachat_analyzer import analyze_business_data
 
 def process_queue():
