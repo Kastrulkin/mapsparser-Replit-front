@@ -391,6 +391,9 @@ export const AdminPage: React.FC = () => {
       cancelText: 'Отмена',
       variant: 'delete',
       onConfirm: async () => {
+        // Закрываем диалог сразу после подтверждения
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        
         try {
           const token = await newAuth.getToken();
           const response = await fetch(`/api/superadmin/users/${userId}`, {
@@ -417,8 +420,6 @@ export const AdminPage: React.FC = () => {
             description: error.message || 'Не удалось удалить пользователя',
             variant: 'destructive',
           });
-        } finally {
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
         }
       },
     });

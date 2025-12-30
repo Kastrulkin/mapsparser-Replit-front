@@ -2967,18 +2967,53 @@ def client_info():
         cursor = db.conn.cursor()
 
         # Таблица для бизнес-профиля
+        # Сначала создаем таблицу со старой структурой для обратной совместимости
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ClientInfo (
-                user_id TEXT PRIMARY KEY,
+                user_id TEXT,
+                business_id TEXT,
                 business_name TEXT,
                 business_type TEXT,
                 address TEXT,
                 working_hours TEXT,
                 description TEXT,
                 services TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, business_id)
             )
         """)
+        
+        # Миграция: добавляем business_id если его нет
+        try:
+            cursor.execute("PRAGMA table_info(ClientInfo)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'business_id' not in columns:
+                # Добавляем колонку business_id
+                cursor.execute("ALTER TABLE ClientInfo ADD COLUMN business_id TEXT")
+                # Обновляем существующие записи: устанавливаем business_id = user_id для обратной совместимости
+                cursor.execute("UPDATE ClientInfo SET business_id = user_id WHERE business_id IS NULL")
+                # Удаляем старый PRIMARY KEY и создаем новый составной
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS ClientInfo_new (
+                        user_id TEXT,
+                        business_id TEXT,
+                        business_name TEXT,
+                        business_type TEXT,
+                        address TEXT,
+                        working_hours TEXT,
+                        description TEXT,
+                        services TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, business_id)
+                    )
+                """)
+                cursor.execute("INSERT INTO ClientInfo_new SELECT * FROM ClientInfo")
+                cursor.execute("DROP TABLE ClientInfo")
+                cursor.execute("ALTER TABLE ClientInfo_new RENAME TO ClientInfo")
+                db.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка миграции ClientInfo: {e}")
+            # Если миграция не удалась, продолжаем работу
 
         # Таблица ссылок на карты (несколько на бизнес)
         cursor.execute("""
@@ -3094,8 +3129,21 @@ def client_info():
                     return jsonify({"error": "Бизнес не найден"}), 404
             
             # Старая логика для обратной совместимости (если business_id не передан)
-            cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ?", (user_id,))
-            row = cursor.fetchone()
+            # Пытаемся получить данные из ClientInfo по user_id и business_id (если есть)
+            current_business_id = request.args.get('business_id')
+            if current_business_id:
+                # Пытаемся получить по business_id
+                cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? AND business_id = ?", (user_id, current_business_id))
+                row = cursor.fetchone()
+                # Если не найдено, пытаемся получить из Businesses
+                if not row:
+                    cursor.execute("SELECT name, business_type, address, working_hours FROM Businesses WHERE id = ? AND owner_id = ?", (current_business_id, user_id))
+                    business_row = cursor.fetchone()
+                    if business_row:
+                        row = (business_row[0], business_row[1], business_row[2], business_row[3], "", "")
+            else:
+                cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
+                row = cursor.fetchone()
 
             # Получаем ссылки на карты (старая логика - по user_id)
             links = []
@@ -3142,11 +3190,24 @@ def client_info():
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return jsonify({"error": "Invalid JSON"}), 400
+        
+        # Получаем business_id из запроса или используем первый бизнес пользователя
+        business_id = request.args.get('business_id') or data.get('business_id')
+        if not business_id:
+            # Если business_id не передан, пытаемся найти первый бизнес пользователя
+            cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? AND is_active = 1 LIMIT 1", (user_id,))
+            business_row = cursor.fetchone()
+            if business_row:
+                business_id = business_row[0] if isinstance(business_row, tuple) else business_row['id']
+            else:
+                # Если бизнеса нет, используем user_id как business_id для обратной совместимости
+                business_id = user_id
+        
         cursor.execute(
             """
-            INSERT INTO ClientInfo (user_id, business_name, business_type, address, working_hours, description, services, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id) DO UPDATE SET
+            INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, business_id) DO UPDATE SET
                 business_name=excluded.business_name,
                 business_type=excluded.business_type,
                 address=excluded.address,
@@ -3157,6 +3218,7 @@ def client_info():
             """,
             (
                 user_id,
+                business_id,
                 data.get('businessName') or "",
                 data.get('businessType') or "",
                 data.get('address') or "",

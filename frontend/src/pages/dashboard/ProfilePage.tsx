@@ -6,7 +6,7 @@ import { newAuth } from '@/lib/auth_new';
 import { Network, MapPin } from 'lucide-react';
 
 export const ProfilePage = () => {
-  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
 
