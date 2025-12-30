@@ -115,6 +115,31 @@ export const DashboardLayout = () => {
     }
   };
 
+  const reloadBusinesses = async () => {
+    try {
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
+          setBusinesses(data.businesses);
+          // Обновляем текущий бизнес, если он был изменен
+          if (currentBusinessId) {
+            const updatedBusiness = data.businesses.find((b: any) => b.id === currentBusinessId);
+            if (updatedBusiness) {
+              setCurrentBusiness(updatedBusiness);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка перезагрузки бизнесов:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -142,7 +167,7 @@ export const DashboardLayout = () => {
           user={user}
         />
         <main className="flex-1 p-6">
-          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness }} />
+          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses }} />
         </main>
       </div>
       {/* Mobile sidebar overlay */}

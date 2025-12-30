@@ -6,7 +6,7 @@ import { newAuth } from '@/lib/auth_new';
 import { Network, MapPin } from 'lucide-react';
 
 export const ProfilePage = () => {
-  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
 
@@ -366,7 +366,7 @@ export const ProfilePage = () => {
         setEditClientInfo(false);
         setSuccess('Информация о бизнесе сохранена');
         
-        // Обновляем название бизнеса в списке businesses
+        // Обновляем название бизнеса в списке businesses локально
         if (effectiveBusinessId && updateBusiness) {
           updateBusiness(effectiveBusinessId, {
             name: clientInfo.businessName,
@@ -374,6 +374,11 @@ export const ProfilePage = () => {
             address: clientInfo.address,
             working_hours: clientInfo.workingHours
           });
+        }
+        
+        // Перезагружаем список бизнесов из API для синхронизации (особенно важно для суперадмина)
+        if (reloadBusinesses) {
+          await reloadBusinesses();
         }
       } else {
         // Проверяем, не истёк ли токен
