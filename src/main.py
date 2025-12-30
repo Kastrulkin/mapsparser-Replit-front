@@ -1214,6 +1214,169 @@ def get_external_posts(business_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# ==================== SUPERADMIN USER MANAGEMENT ====================
+# Эти маршруты должны быть ПЕРЕД SPA fallback, чтобы Flask их правильно обрабатывал
+
+@app.route('/api/superadmin/users/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    """Удалить пользователя - только для суперадмина"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        # Нельзя удалить самого себя
+        if user_id == user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нельзя удалить самого себя"}), 400
+        
+        # Проверяем, что пользователь существует
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, email FROM Users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            db.close()
+            return jsonify({"error": "Пользователь не найден"}), 404
+        
+        # Удаляем пользователя (каскадное удаление удалит все связанные данные)
+        cursor.execute("DELETE FROM Users WHERE id = ?", (user_id,))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Пользователь удален"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления пользователя: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/users/<user_id>/pause', methods=['POST'])
+def pause_user(user_id):
+    """Приостановить пользователя (деактивировать) - только для суперадмина"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        # Проверяем, что пользователь существует
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, email, is_active FROM Users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            db.close()
+            return jsonify({"error": "Пользователь не найден"}), 404
+        
+        # Нельзя деактивировать самого себя
+        if user_id == user_data['user_id']:
+            db.close()
+            return jsonify({"error": "Нельзя деактивировать самого себя"}), 400
+        
+        # Деактивируем пользователя
+        cursor.execute("""
+            UPDATE Users 
+            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (user_id,))
+        
+        # Деактивируем все бизнесы пользователя
+        cursor.execute("""
+            UPDATE Businesses 
+            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
+            WHERE owner_id = ?
+        """, (user_id,))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Пользователь приостановлен"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка приостановки пользователя: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/superadmin/users/<user_id>/unpause', methods=['POST'])
+def unpause_user(user_id):
+    """Возобновить пользователя (активировать) - только для суперадмина"""
+    try:
+        # Проверяем авторизацию
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем права суперадмина
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        # Проверяем, что пользователь существует
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id FROM Users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            db.close()
+            return jsonify({"error": "Пользователь не найден"}), 404
+        
+        # Активируем пользователя
+        cursor.execute("""
+            UPDATE Users 
+            SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (user_id,))
+        
+        # Активируем все бизнесы пользователя
+        cursor.execute("""
+            UPDATE Businesses 
+            SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
+            WHERE owner_id = ?
+        """, (user_id,))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Пользователь возобновлен"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка возобновления пользователя: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # SPA-фолбэк: любые не-API пути возвращают index.html
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
@@ -6832,167 +6995,6 @@ def get_all_users():
         
     except Exception as e:
         print(f"❌ Ошибка получения пользователей: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/superadmin/users/<user_id>/pause', methods=['POST'])
-def pause_user(user_id):
-    """Приостановить пользователя (деактивировать) - только для суперадмина"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        # Проверяем права суперадмина
-        db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            db.close()
-            return jsonify({"error": "Недостаточно прав"}), 403
-        
-        # Проверяем, что пользователь существует
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT id, email, is_active FROM Users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        
-        if not user:
-            db.close()
-            return jsonify({"error": "Пользователь не найден"}), 404
-        
-        # Нельзя деактивировать самого себя
-        if user_id == user_data['user_id']:
-            db.close()
-            return jsonify({"error": "Нельзя деактивировать самого себя"}), 400
-        
-        # Деактивируем пользователя
-        cursor.execute("""
-            UPDATE Users 
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        """, (user_id,))
-        
-        # Деактивируем все бизнесы пользователя
-        cursor.execute("""
-            UPDATE Businesses 
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = ?
-        """, (user_id,))
-        
-        db.conn.commit()
-        db.close()
-        
-        return jsonify({"success": True, "message": "Пользователь приостановлен"})
-        
-    except Exception as e:
-        print(f"❌ Ошибка приостановки пользователя: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/superadmin/users/<user_id>/unpause', methods=['POST'])
-def unpause_user(user_id):
-    """Возобновить пользователя (активировать) - только для суперадмина"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        # Проверяем права суперадмина
-        db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            db.close()
-            return jsonify({"error": "Недостаточно прав"}), 403
-        
-        # Проверяем, что пользователь существует
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT id FROM Users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        
-        if not user:
-            db.close()
-            return jsonify({"error": "Пользователь не найден"}), 404
-        
-        # Активируем пользователя
-        cursor.execute("""
-            UPDATE Users 
-            SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        """, (user_id,))
-        
-        # Активируем все бизнесы пользователя
-        cursor.execute("""
-            UPDATE Businesses 
-            SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = ?
-        """, (user_id,))
-        
-        db.conn.commit()
-        db.close()
-        
-        return jsonify({"success": True, "message": "Пользователь возобновлен"})
-        
-    except Exception as e:
-        print(f"❌ Ошибка возобновления пользователя: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/superadmin/users/<user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    """Удалить пользователя - только для суперадмина"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        # Проверяем права суперадмина
-        db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            db.close()
-            return jsonify({"error": "Недостаточно прав"}), 403
-        
-        # Нельзя удалить самого себя
-        if user_id == user_data['user_id']:
-            db.close()
-            return jsonify({"error": "Нельзя удалить самого себя"}), 400
-        
-        # Проверяем, что пользователь существует
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT id, email FROM Users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        
-        if not user:
-            db.close()
-            return jsonify({"error": "Пользователь не найден"}), 404
-        
-        # Удаляем пользователя (каскадное удаление удалит все связанные данные)
-        cursor.execute("DELETE FROM Users WHERE id = ?", (user_id,))
-        
-        db.conn.commit()
-        db.close()
-        
-        return jsonify({"success": True, "message": "Пользователь удален"})
-        
-    except Exception as e:
-        print(f"❌ Ошибка удаления пользователя: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/users-with-businesses', methods=['GET'])
