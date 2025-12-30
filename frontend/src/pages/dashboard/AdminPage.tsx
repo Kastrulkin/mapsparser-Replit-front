@@ -633,7 +633,7 @@ export const AdminPage: React.FC = () => {
                           <div className="text-xs text-muted-foreground">
                             {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 opacity-100">
                             <Button
                               variant="ghost"
                               size="sm"
