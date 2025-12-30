@@ -74,6 +74,9 @@ export const DashboardLayout = () => {
               localStorage.setItem('selectedBusinessId', businessToSelect.id);
             } else {
               console.warn('⚠️ Бизнесы не загружены или список пуст:', data.businesses);
+              setBusinesses([]);
+              // Если бизнесов нет, не устанавливаем currentBusinessId
+              // Пользователь сможет сохранить данные в ClientInfo, указав название бизнеса
             }
           } else {
             console.error('❌ Ошибка загрузки /api/auth/me:', response.status);

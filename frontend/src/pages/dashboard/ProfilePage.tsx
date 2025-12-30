@@ -273,16 +273,31 @@ export const ProfilePage = () => {
       }
     }
     
-    // Если бизнес всё ещё не определён - показываем ошибку
+    // Если бизнес не определён - проверяем, можно ли сохранить без него
     if (!effectiveBusinessId) {
-      console.error('❌ Бизнес не выбран и не может быть определён автоматически!');
+      // Если бизнесов много - просим выбрать
       if (businesses && businesses.length > 1) {
+        console.error('❌ Бизнес не выбран из списка!');
         setError('Пожалуйста, выберите бизнес из выпадающего списка в правом верхнем углу страницы перед сохранением');
-      } else {
-        setError('Не удалось определить бизнес. Пожалуйста, обратитесь в поддержку.');
+        setSavingClientInfo(false);
+        return;
       }
-      setSavingClientInfo(false);
-      return;
+      
+      // Если бизнесов нет, но есть название - разрешаем сохранение (сохранится в ClientInfo)
+      if ((!businesses || businesses.length === 0) && clientInfo.businessName && clientInfo.businessName.trim()) {
+        console.log('⚠️ Бизнесов нет, но есть название - сохраняю в ClientInfo');
+        // Продолжаем без businessId - данные сохранятся в ClientInfo
+      } else if (!clientInfo.businessName || !clientInfo.businessName.trim()) {
+        console.error('❌ Нет бизнеса и нет названия бизнеса!');
+        setError('Пожалуйста, введите название бизнеса для сохранения');
+        setSavingClientInfo(false);
+        return;
+      } else {
+        console.error('❌ Бизнес не выбран и не может быть определён автоматически!');
+        setError('Не удалось определить бизнес. Пожалуйста, обратитесь в поддержку.');
+        setSavingClientInfo(false);
+        return;
+      }
     }
 
     console.log('✅ Бизнес выбран, начинаю сохранение...');
@@ -293,12 +308,16 @@ export const ProfilePage = () => {
         .map(link => typeof link === 'string' ? link : link.url)
         .filter(url => url && url.trim());
       
-      const payload = {
+      const payload: any = {
         ...clientInfo,
-        businessId: effectiveBusinessId,
         workingHours: clientInfo.workingHours || 'ежедневно 9:00-21:00',
         mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
       };
+      
+      // Добавляем businessId только если он определён
+      if (effectiveBusinessId) {
+        payload.businessId = effectiveBusinessId;
+      }
       
       console.log('📤 Отправляю данные:', payload);
       console.log('📤 businessType в payload:', payload.businessType);
@@ -318,6 +337,7 @@ export const ProfilePage = () => {
         console.log('Ответ сервера:', data);
         
         // Всегда перезагружаем данные после сохранения для синхронизации
+        // Если businessId был определён - используем его, иначе загружаем без параметра
         const qs = effectiveBusinessId ? `?business_id=${effectiveBusinessId}` : '';
         const reloadResponse = await fetch(`${window.location.origin}/api/client-info${qs}`, {
           headers: {
