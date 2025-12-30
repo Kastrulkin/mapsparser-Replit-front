@@ -2967,53 +2967,84 @@ def client_info():
         cursor = db.conn.cursor()
 
         # Таблица для бизнес-профиля
-        # Сначала создаем таблицу со старой структурой для обратной совместимости
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ClientInfo (
-                user_id TEXT,
-                business_id TEXT,
-                business_name TEXT,
-                business_type TEXT,
-                address TEXT,
-                working_hours TEXT,
-                description TEXT,
-                services TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, business_id)
-            )
-        """)
+        # Проверяем существование таблицы и её структуру
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ClientInfo'")
+        table_exists = cursor.fetchone() is not None
         
-        # Миграция: добавляем business_id если его нет
-        try:
+        if not table_exists:
+            # Создаем таблицу с правильной структурой
+            cursor.execute("""
+                CREATE TABLE ClientInfo (
+                    user_id TEXT,
+                    business_id TEXT,
+                    business_name TEXT,
+                    business_type TEXT,
+                    address TEXT,
+                    working_hours TEXT,
+                    description TEXT,
+                    services TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, business_id)
+                )
+            """)
+            db.conn.commit()
+        else:
+            # Проверяем структуру существующей таблицы
             cursor.execute("PRAGMA table_info(ClientInfo)")
             columns = [col[1] for col in cursor.fetchall()]
-            if 'business_id' not in columns:
-                # Добавляем колонку business_id
-                cursor.execute("ALTER TABLE ClientInfo ADD COLUMN business_id TEXT")
-                # Обновляем существующие записи: устанавливаем business_id = user_id для обратной совместимости
-                cursor.execute("UPDATE ClientInfo SET business_id = user_id WHERE business_id IS NULL")
-                # Удаляем старый PRIMARY KEY и создаем новый составной
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS ClientInfo_new (
-                        user_id TEXT,
-                        business_id TEXT,
-                        business_name TEXT,
-                        business_type TEXT,
-                        address TEXT,
-                        working_hours TEXT,
-                        description TEXT,
-                        services TEXT,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, business_id)
-                    )
-                """)
-                cursor.execute("INSERT INTO ClientInfo_new SELECT * FROM ClientInfo")
-                cursor.execute("DROP TABLE ClientInfo")
-                cursor.execute("ALTER TABLE ClientInfo_new RENAME TO ClientInfo")
-                db.conn.commit()
-        except Exception as e:
-            print(f"⚠️ Ошибка миграции ClientInfo: {e}")
-            # Если миграция не удалась, продолжаем работу
+            
+            # Проверяем PRIMARY KEY
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='ClientInfo'")
+            table_sql = cursor.fetchone()
+            has_composite_pk = table_sql and ("PRIMARY KEY (user_id, business_id)" in table_sql[0] or "PRIMARY KEY(user_id,business_id)" in table_sql[0])
+            
+            if 'business_id' not in columns or not has_composite_pk:
+                # Нужна миграция
+                print(f"⚠️ Миграция ClientInfo: business_id exists={('business_id' in columns)}, composite PK={has_composite_pk}")
+                try:
+                    # Сохраняем данные
+                    cursor.execute("SELECT * FROM ClientInfo")
+                    existing_data = cursor.fetchall()
+                    
+                    # Удаляем старую таблицу
+                    cursor.execute("DROP TABLE ClientInfo")
+                    
+                    # Создаем новую с правильной структурой
+                    cursor.execute("""
+                        CREATE TABLE ClientInfo (
+                            user_id TEXT,
+                            business_id TEXT,
+                            business_name TEXT,
+                            business_type TEXT,
+                            address TEXT,
+                            working_hours TEXT,
+                            description TEXT,
+                            services TEXT,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (user_id, business_id)
+                        )
+                    """)
+                    
+                    # Восстанавливаем данные
+                    for row in existing_data:
+                        if len(row) >= 8:
+                            user_id = row[0]
+                            business_id = row[8] if len(row) > 8 else user_id
+                            cursor.execute("""
+                                INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (user_id, business_id, row[1] if len(row) > 1 else "", row[2] if len(row) > 2 else "", 
+                                  row[3] if len(row) > 3 else "", row[4] if len(row) > 4 else "", 
+                                  row[5] if len(row) > 5 else "", row[6] if len(row) > 6 else "", 
+                                  row[7] if len(row) > 7 else None))
+                    
+                    db.conn.commit()
+                    print("✅ Миграция ClientInfo выполнена успешно")
+                except Exception as e:
+                    print(f"❌ Ошибка миграции ClientInfo: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Если миграция не удалась, продолжаем работу
 
         # Таблица ссылок на карты (несколько на бизнес)
         cursor.execute("""
@@ -3133,8 +3164,22 @@ def client_info():
             current_business_id = request.args.get('business_id')
             if current_business_id:
                 # Пытаемся получить по business_id
-                cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? AND business_id = ?", (user_id, current_business_id))
-                row = cursor.fetchone()
+                try:
+                    cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? AND business_id = ?", (user_id, current_business_id))
+                    row = cursor.fetchone()
+                except Exception as e:
+                    # Если ошибка (например, колонка business_id не существует), проверяем структуру таблицы
+                    print(f"⚠️ Ошибка запроса ClientInfo с business_id: {e}")
+                    cursor.execute("PRAGMA table_info(ClientInfo)")
+                    columns = [col[1] for col in cursor.fetchall()]
+                    if 'business_id' not in columns:
+                        print(f"❌ Колонка business_id отсутствует в таблице! Колонки: {columns}")
+                        # Пытаемся получить без business_id
+                        cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
+                        row = cursor.fetchone()
+                    else:
+                        raise  # Если колонка есть, но ошибка другая - пробрасываем дальше
+                
                 # Если не найдено, пытаемся получить из Businesses
                 if not row:
                     cursor.execute("SELECT name, business_type, address, working_hours FROM Businesses WHERE id = ? AND owner_id = ?", (current_business_id, user_id))
