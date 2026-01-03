@@ -508,6 +508,18 @@ def get_external_accounts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        # Проверяем, существует ли таблица ExternalBusinessAccounts
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='ExternalBusinessAccounts'
+        """)
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Таблица не существует - возвращаем пустой список
+            db.close()
+            return jsonify({"success": True, "accounts": []})
+
         cursor.execute(
             """
             SELECT id, source, external_id, display_name, is_active,
@@ -1038,6 +1050,18 @@ def get_external_reviews(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        # Проверяем, существует ли таблица ExternalBusinessReviews
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='ExternalBusinessReviews'
+        """)
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Таблица не существует - возвращаем пустой список
+            db.close()
+            return jsonify({"success": True, "reviews": []})
+
         # Получаем все отзывы для этого бизнеса, отсортированные по дате публикации (новые сначала)
         cursor.execute(
             """
@@ -1110,6 +1134,25 @@ def get_external_summary(business_id):
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Проверяем, существуют ли таблицы
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name IN ('ExternalBusinessStats', 'ExternalBusinessReviews')
+        """)
+        tables = {row[0] for row in cursor.fetchall()}
+        
+        if 'ExternalBusinessStats' not in tables or 'ExternalBusinessReviews' not in tables:
+            # Таблицы не существуют - возвращаем пустую статистику
+            db.close()
+            return jsonify({
+                "success": True,
+                "rating": None,
+                "reviews_total": 0,
+                "reviews_with_response": 0,
+                "reviews_without_response": 0,
+                "last_update": None
+            })
 
         # Получаем последнюю статистику
         cursor.execute(
@@ -1187,6 +1230,18 @@ def get_external_posts(business_id):
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Проверяем, существует ли таблица ExternalBusinessPosts
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='ExternalBusinessPosts'
+        """)
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Таблица не существует - возвращаем пустой список
+            db.close()
+            return jsonify({"success": True, "posts": []})
 
         # Получаем все посты, исключая некорректные (метаданные)
         cursor.execute(
