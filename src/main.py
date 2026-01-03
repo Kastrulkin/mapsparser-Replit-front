@@ -14,6 +14,15 @@ from datetime import datetime, timedelta
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
+
+# Rate limiting для защиты от brute force и DDoS
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    RATE_LIMITER_AVAILABLE = True
+except ImportError:
+    RATE_LIMITER_AVAILABLE = False
+    print('⚠️ flask-limiter не установлен. Rate limiting отключен. Установите: pip install flask-limiter')
 from parser import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
@@ -29,6 +38,7 @@ from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
+from api.services_api import services_bp
 
 # Импорт YandexSyncService с обработкой ошибок
 try:
@@ -57,8 +67,33 @@ except ImportError:
     print('Внимание: для автоматической загрузки .env установите пакет python-dotenv')
 
 app = Flask(__name__)
-# Разрешаем CORS для локального фронтенда
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+
+# Настройка CORS для продакшена и разработки
+# В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+CORS(app, supports_credentials=True, origins=allowed_origins)
+
+# Настройка rate limiting
+if RATE_LIMITER_AVAILABLE:
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://"  # Для продакшена лучше использовать Redis
+    )
+    print("✅ Rate limiting включен")
+else:
+    limiter = None
+
+# Декоратор для применения rate limiting (если доступен)
+def rate_limit_if_available(limit_str):
+    """Декоратор для применения rate limiting, если limiter доступен"""
+    def decorator(f):
+        if limiter:
+            return limiter.limit(limit_str)(f)
+        return f
+    return decorator
 
 # Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
 app.register_blueprint(chatgpt_bp)
@@ -69,6 +104,7 @@ app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
+app.register_blueprint(services_bp)
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
@@ -463,13 +499,11 @@ def get_external_accounts(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -549,13 +583,11 @@ def upsert_external_account(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -692,13 +724,11 @@ def delete_external_account(account_id):
         business_id = row[0]
 
         # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        b_row = cursor.fetchone()
-        if not b_row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = b_row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
@@ -759,13 +789,11 @@ def test_external_account_cookies(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
@@ -1001,13 +1029,11 @@ def get_external_reviews(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем, что пользователь владелец бизнеса или суперадмин
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -1076,13 +1102,11 @@ def get_external_summary(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -1155,13 +1179,11 @@ def get_external_posts(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -1485,37 +1507,9 @@ def health():
     """Проверка здоровья сервера"""
     return jsonify({"status": "ok", "message": "SEO анализатор работает"})
 
-# ==================== ХЕЛПЕР: ПОЛУЧЕНИЕ ЯЗЫКА ПОЛЬЗОВАТЕЛЯ ====================
-def get_business_id_from_user(user_id: str, business_id_from_request: str = None) -> str:
-    """Получить business_id для отслеживания токенов
-    
-    Args:
-        user_id: ID пользователя
-        business_id_from_request: business_id из запроса (если есть)
-    
-    Returns:
-        business_id или None
-    """
-    if business_id_from_request:
-        return business_id_from_request
-    
-    # Пытаемся получить первый бизнес пользователя
-    try:
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id FROM Businesses 
-            WHERE owner_id = ? 
-            LIMIT 1
-        """, (user_id,))
-        row = cursor.fetchone()
-        db.close()
-        if row:
-            return row[0] if isinstance(row, tuple) else row['id']
-    except Exception as e:
-        print(f"⚠️ Ошибка получения business_id: {e}")
-    
-    return None
+# ==================== ХЕЛПЕР: РАБОТА С БИЗНЕСАМИ ====================
+# Импортируем helper функции из core модуля
+from core.helpers import get_business_owner_id, get_business_id_from_user, get_user_language, find_business_id_for_user
 
 def get_user_language(user_id: str, requested_language: str = None) -> str:
     """
@@ -2805,10 +2799,8 @@ def get_services():
         # Если передан business_id - фильтруем по нему, иначе по user_id
         if business_id:
             # Проверяем доступ к бизнесу
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ? AND is_active = 1", (business_id,))
-            business_row = cursor.fetchone()
-            if business_row:
-                owner_id = business_row[0]
+            owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+            if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
                     cursor.execute("""
                         SELECT id, category, name, description, keywords, price, created_at
@@ -2971,6 +2963,25 @@ def client_info():
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ClientInfo'")
         table_exists = cursor.fetchone() is not None
         
+        # #region agent log
+        log_data = {
+            "location": "src/main.py:2971",
+            "message": "client-info: проверка существования таблицы",
+            "data": {
+                "table_exists": table_exists,
+                "method": request.method
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "F"
+        }
+        try:
+            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except: pass
+        # #endregion
+        
         if not table_exists:
             # Создаем таблицу с правильной структурой
             cursor.execute("""
@@ -3001,7 +3012,31 @@ def client_info():
             if 'business_id' not in columns or not has_composite_pk:
                 # Нужна миграция
                 print(f"⚠️ Миграция ClientInfo: business_id exists={('business_id' in columns)}, composite PK={has_composite_pk}")
+                print(f"⚠️ Колонки таблицы: {columns}")
+                # #region agent log
+                log_data = {
+                    "location": "src/main.py:3001",
+                    "message": "client-info: начало миграции",
+                    "data": {
+                        "has_business_id": 'business_id' in columns,
+                        "has_composite_pk": has_composite_pk,
+                        "columns": columns
+                    },
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "G"
+                }
                 try:
+                    with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps(log_data) + '\n')
+                except: pass
+                # #endregion
+                try:
+                    # Сохраняем структуру колонок перед удалением таблицы
+                    cursor.execute("PRAGMA table_info(ClientInfo)")
+                    old_column_names = [col[1] for col in cursor.fetchall()]
+                    
                     # Сохраняем данные
                     cursor.execute("SELECT * FROM ClientInfo")
                     existing_data = cursor.fetchall()
@@ -3025,25 +3060,77 @@ def client_info():
                         )
                     """)
                     
-                    # Восстанавливаем данные
+                    # Восстанавливаем данные с правильным маппингом колонок
+                    restored_count = 0
                     for row in existing_data:
-                        if len(row) >= 8:
-                            user_id = row[0]
-                            business_id = row[8] if len(row) > 8 else user_id
-                            cursor.execute("""
-                                INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (user_id, business_id, row[1] if len(row) > 1 else "", row[2] if len(row) > 2 else "", 
-                                  row[3] if len(row) > 3 else "", row[4] if len(row) > 4 else "", 
-                                  row[5] if len(row) > 5 else "", row[6] if len(row) > 6 else "", 
-                                  row[7] if len(row) > 7 else None))
+                        # Преобразуем row в словарь для удобства
+                        row_dict = dict(zip(old_column_names, row))
+                        
+                        user_id = row_dict.get('user_id', '')
+                        # Если business_id нет в старых данных, пытаемся найти его в таблице Businesses
+                        business_id = row_dict.get('business_id')
+                        if not business_id:
+                            business_id = find_business_id_for_user(cursor, user_id)
+                            if business_id == user_id:
+                                print(f"⚠️ Не найден business_id для user_id={user_id}, используем user_id как fallback")
+                        
+                        cursor.execute("""
+                            INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            user_id,
+                            business_id,
+                            row_dict.get('business_name', ''),
+                            row_dict.get('business_type', ''),
+                            row_dict.get('address', ''),
+                            row_dict.get('working_hours', ''),
+                            row_dict.get('description', ''),
+                            row_dict.get('services', ''),
+                            row_dict.get('updated_at', None)
+                        ))
+                        restored_count += 1
                     
                     db.conn.commit()
-                    print("✅ Миграция ClientInfo выполнена успешно")
+                    print(f"✅ Миграция ClientInfo выполнена успешно! Восстановлено записей: {restored_count}")
+                    # #region agent log
+                    log_data = {
+                        "location": "src/main.py:3042",
+                        "message": "client-info: миграция успешна",
+                        "data": {
+                            "migration_success": True
+                        },
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H"
+                    }
+                    try:
+                        with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                            f.write(json.dumps(log_data) + '\n')
+                    except: pass
+                    # #endregion
                 except Exception as e:
                     print(f"❌ Ошибка миграции ClientInfo: {e}")
                     import traceback
                     traceback.print_exc()
+                    # #region agent log
+                    log_data = {
+                        "location": "src/main.py:3044",
+                        "message": "client-info: ошибка миграции",
+                        "data": {
+                            "migration_success": False,
+                            "error": str(e)
+                        },
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "I"
+                    }
+                    try:
+                        with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                            f.write(json.dumps(log_data) + '\n')
+                    except: pass
+                    # #endregion
                     # Если миграция не удалась, продолжаем работу
 
         # Таблица ссылок на карты (несколько на бизнес)
@@ -3167,6 +3254,27 @@ def client_info():
                 cursor.execute("PRAGMA table_info(ClientInfo)")
                 columns = [col[1] for col in cursor.fetchall()]
                 
+                # #region agent log
+                import json
+                log_data = {
+                    "location": "src/main.py:3167",
+                    "message": "GET client-info: проверка структуры таблицы",
+                    "data": {
+                        "columns": columns,
+                        "has_business_id": 'business_id' in columns,
+                        "current_business_id": current_business_id
+                    },
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "J"
+                }
+                try:
+                    with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps(log_data) + '\n')
+                except: pass
+                # #endregion
+                
                 if 'business_id' in columns:
                     # Колонка существует - используем запрос с business_id
                     try:
@@ -3253,6 +3361,93 @@ def client_info():
                 # Если бизнеса нет, используем user_id как business_id для обратной совместимости
                 business_id = user_id
         
+        # #region agent log
+        log_data = {
+            "location": "src/main.py:3256",
+            "message": "POST/PUT client-info: перед INSERT",
+            "data": {
+                "user_id": user_id,
+                "business_id": business_id,
+                "has_business_id_param": bool(request.args.get('business_id') or data.get('business_id'))
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A"
+        }
+        try:
+            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except: pass
+        # #endregion
+        
+        # Проверяем структуру таблицы перед INSERT (критично для POST/PUT)
+        # #region agent log
+        cursor.execute("PRAGMA table_info(ClientInfo)")
+        columns_after = [col[1] for col in cursor.fetchall()]
+        log_data = {
+            "location": "src/main.py:3270",
+            "message": "POST/PUT client-info: проверка структуры таблицы",
+            "data": {
+                "columns": columns_after,
+                "has_business_id": 'business_id' in columns_after
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "B"
+        }
+        try:
+            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except: pass
+        # #endregion
+        
+        if 'business_id' not in columns_after:
+            # Таблица не имеет business_id - это критическая ошибка
+            error_msg = f"Критическая ошибка: таблица ClientInfo не имеет колонки business_id. Колонки: {columns_after}"
+            print(f"❌ {error_msg}")
+            # #region agent log
+            log_data = {
+                "location": "src/main.py:3285",
+                "message": "POST/PUT client-info: ОШИБКА - нет business_id",
+                "data": {
+                    "columns": columns_after,
+                    "error": error_msg
+                },
+                "timestamp": int(datetime.now().timestamp() * 1000),
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C"
+            }
+            try:
+                with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps(log_data) + '\n')
+            except: pass
+            # #endregion
+            db.close()
+            return jsonify({"error": error_msg}), 500
+        
+        # #region agent log
+        log_data = {
+            "location": "src/main.py:3295",
+            "message": "POST/PUT client-info: выполнение INSERT",
+            "data": {
+                "user_id": user_id,
+                "business_id": business_id,
+                "will_use_business_id": True
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "D"
+        }
+        try:
+            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except: pass
+        # #endregion
+        
         cursor.execute(
             """
             INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
@@ -3277,6 +3472,25 @@ def client_info():
                 data.get('services') or ""
             )
         )
+        
+        # #region agent log
+        log_data = {
+            "location": "src/main.py:3330",
+            "message": "POST/PUT client-info: INSERT выполнен успешно",
+            "data": {
+                "user_id": user_id,
+                "business_id": business_id
+            },
+            "timestamp": int(datetime.now().timestamp() * 1000),
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "E"
+        }
+        try:
+            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps(log_data) + '\n')
+        except: pass
+        # #endregion
         print(f"📋 Сохранено в ClientInfo: businessType = {data.get('businessType') or ''}")
         db.conn.commit()
 
@@ -3380,9 +3594,7 @@ def client_info():
             # Обновляем бизнес, если найден
             if business_id:
                 # Проверяем доступ
-                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-                row = cursor.fetchone()
-                owner_id = row[0] if row else None
+                owner_id = get_business_owner_id(cursor, business_id)
                 if not owner_id or (owner_id != user_id and not user_data.get('is_superadmin')):
                     print(f"⚠️ Нет доступа к бизнесу {business_id}")
                     business_id = None
@@ -3455,12 +3667,10 @@ def get_parse_status(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем владельца
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        owner_id = row[0]
         if owner_id != user_id and not db.is_superadmin(user_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
@@ -3593,12 +3803,10 @@ def get_map_parses(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем владельца
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        owner_id = row[0]
         if owner_id != user_id and not db.is_superadmin(user_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
@@ -4661,12 +4869,10 @@ def get_financial_metrics():
         
         # Если передан business_id - проверяем доступ
         if business_id:
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ? AND is_active = 1", (business_id,))
-            business_row = cursor.fetchone()
-            if not business_row:
+            owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+            if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
-            owner_id = business_row[0]
             if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -5731,12 +5937,11 @@ def add_business_to_network(network_id):
         # Если business_id указан - добавляем существующий бизнес в сеть
         if business_id:
             # Проверяем, что бизнес принадлежит пользователю
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-            business = cursor.fetchone()
-            if not business:
+            owner_id = get_business_owner_id(cursor, business_id)
+            if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
-            if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+            if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
             
@@ -5889,6 +6094,7 @@ def calculate_roi():
         return jsonify({"error": f"Ошибка расчета ROI: {str(e)}"}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
+@rate_limit_if_available("10 per hour")
 def register():
     """Регистрация пользователя"""
     try:
@@ -5960,8 +6166,9 @@ Email: {email}
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
+@rate_limit_if_available("5 per minute")
 def login():
-    """Вход пользователя"""
+    """Вход пользователя с защитой от brute force атак"""
     try:
         data = request.get_json()
         if not data:
@@ -7365,13 +7572,11 @@ def business_optimization_wizard(business_id):
         """)
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        business_row = cursor.fetchone()
-        if not business_row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        owner_id = business_row[0]
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -7480,13 +7685,11 @@ def business_sprint(business_id):
         """)
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        business_row = cursor.fetchone()
-        if not business_row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        owner_id = business_row[0]
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -7758,13 +7961,11 @@ def update_business_yandex_link(business_id):
         cursor = db.conn.cursor()
 
         # Проверяем права доступа к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row:
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        owner_id = row[0]
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -7964,6 +8165,7 @@ Email: {email}
     return send_email(contact_email, subject, body)
 
 @app.route('/api/auth/reset-password', methods=['POST'])
+@rate_limit_if_available("5 per hour")
 def reset_password():
     """Запрос на восстановление пароля"""
     try:
@@ -8036,6 +8238,7 @@ BeautyBot
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/confirm-reset', methods=['POST'])
+@rate_limit_if_available("5 per hour")
 def confirm_reset():
     """Подтверждение сброса пароля с новым паролем"""
     try:

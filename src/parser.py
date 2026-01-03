@@ -8,6 +8,74 @@ import random
 import os
 from random import randint, uniform
 
+def _launch_browser(p):
+    """Пробует запустить браузер, возвращает (browser, name) или None"""
+    browsers = [
+        (
+            p.chromium,
+            "Chromium",
+            {
+                'headless': True,
+                'args': [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-extensions',
+                    '--disable-plugins',
+                    '--disable-sync',
+                    '--disable-translate',
+                    '--disable-notifications',
+                    '--disable-permissions-api',
+                    '--disable-default-apps',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-background-networking',
+                    '--single-process',
+                    '--disable-zygote'
+                ],
+                'ignore_default_args': ['--enable-automation'],
+                'chromium_sandbox': False
+            }
+        ),
+        (
+            p.firefox,
+            "Firefox",
+            {
+                'headless': True,
+                'args': ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+                'firefox_user_prefs': {
+                    'dom.webdriver.enabled': False,
+                    'useAutomationExtension': False
+                }
+            }
+        ),
+        (
+            p.webkit,
+            "WebKit",
+            {
+                'headless': True,
+                'args': ['--no-sandbox']
+            }
+        )
+    ]
+    
+    for browser_type, name, options in browsers:
+        try:
+            browser = browser_type.launch(**options)
+            print(f"Используем {name}")
+            return browser, name
+        except Exception as e:
+            print(f"{name} недоступен: {e}")
+            continue
+    
+    raise Exception("Не удалось запустить ни один браузер")
+
 def parse_reviews_from_main_page(page):
     """Парсинг отзывов с главной страницы, если вкладка не найдена"""
     reviews = {
@@ -45,107 +113,11 @@ def parse_yandex_card(url: str) -> dict:
 
     print("Используем парсинг через Playwright...")
 
-    cookies = [
-        {"name": "_yasc", "value": "+nRgeAgdQvcUzBXmoMj8pj3o4NAMqN+CCHHN8J9/1lgNfV+4kHD1Sh3zeyrGAQw5", "domain": ".yandex.net", "path": "/"},
-        {"name": "_yasc", "value": "biwmzqpVhmFOmsUovC7mHXedgeCta8YxIE4/1irJQVFGT+VWqh2xJNmwwC1OtCIXlpDhth57aht1oLEYU3XZbIItFHp3McubCw==", "domain": ".yandex.ru", "path": "/"},
-        {"name": "_ym_d", "value": "1752161744", "domain": ".yandex.ru", "path": "/"},
-        {"name": "_ym_d", "value": "1742889194", "domain": ".yandex.net", "path": "/"},
-        {"name": "_ym_isad", "value": "2", "domain": ".yandex.ru", "path": "/"},
-        {"name": "_ym_uid", "value": "1742128615416397392", "domain": ".yandex.ru", "path": "/"},
-        {"name": "_ym_uid", "value": "1742889187528829383", "domain": ".yandex.net", "path": "/"},
-        {"name": "amcuid", "value": "1494970031742211656", "domain": ".yandex.ru", "path": "/"},
-        {"name": "bh", "value": "ElAiQ2hyb21pdW0iO3Y9IjEzNiIsICJZYUJyb3dzZXIiO3Y9IjI1LjYiLCAiTm90LkEvQnJhbmQiO3Y9Ijk5IiwgIllvd3NlciI7dj0iMi41IhoFImFybSIiDSIyNS42LjAuMjM4MSIqAj8wMgIiIjoHIm1hY09TIkIIIjE1LjMuMSJKBCI2NCJSaSJDaHJvbWl1bSI7dj0iMTM2LjAuNzEwMy4yMzgxIiwgIllhQnJvd3NlciI7dj0iMjUuNi4wLjIzODEiLCAiTm90LkEvQnJhbmQiO3Y9Ijk5LjAuMC4wIiwgIllvd3NlciI7dj0iMi41IloCPzBgpYX+wwZqI9zK0bYBu/GfqwT61obMCNLR7esD/Lmv/wff/YeOBcKlzIcI", "domain": ".yandex.ru", "path": "/"},
-        {"name": "cycada", "value": "FosWRl/CE9m7GuKD+HrY+nNWP8IsOjyDVzRQaymebfk=", "domain": ".yandex.ru", "path": "/"},
-        {"name": "font_loaded", "value": "YSv1", "domain": ".yandex.ru", "path": "/"},
-        {"name": "gdpr", "value": "0", "domain": ".yandex.ru", "path": "/"},
-        {"name": "i", "value": "aUPEF2oX0tZg/pdYAB08PPX6cSczTEPRPXOJHjU4k0wRamyoxN7AT6XaGe6acYjbSYS8hD4v9LLj18HP0fT2ILylX28=", "domain": ".yandex.ru", "path": "/"},
-        {"name": "is_gdpr", "value": "0", "domain": ".yandex.ru", "path": "/"},
-        {"name": "is_gdpr", "value": "0", "domain": ".yandex.net", "path": "/"},
-        {"name": "is_gdpr_b", "value": "COOeNhDMygIoAg==", "domain": ".yandex.ru", "path": "/"},
-        {"name": "is_gdpr_b", "value": "CK6UEBCCwgI=", "domain": ".yandex.net", "path": "/"},
-        {"name": "isa", "value": "NrR3LcEnhMF7StFQ7o6IlzJvY2zvv52CT0KeFeVcja/oWGdOEojoUfHf9w4n/H3FaU/E2EXCaHkRoLtT9Dp4XOhCQKY=", "domain": ".yandex.ru", "path": "/"},
-        {"name": "k50lastvisit", "value": "db546baba3acb079f91946f80b9078ffa565e36d.204463680202e2ff8a52dd1d44716571487046c7.db546baba3acb079f91946f80b9078ffa565e36d.da39a3ee5e6b4b0d3255bfef95601890afd80709.1753094226494", "domain": ".yandex.ru", "path": "/"},
-        {"name": "k50uuid", "value": "261bec41-f700-4cb3-88b8-a00ca484a1cb", "domain": ".yandex.ru", "path": "/"},
-        {"name": "L", "value": "dVJ7AH1TY1JSQgt4TVhYQg1mAFxaRlNEMFMhMi5YCCEuGQ==.1752481335.16216.32052.a8e12b98e09951e444fe0b55b0f54db1", "domain": ".yandex.ru", "path": "/"},
-        {"name": "maps_routes_travel_mode", "value": "pedestrian", "domain": "yandex.ru", "path": "/"},
-        {"name": "maps_session_id", "value": "1753186801799142-17085193336313386887-balancer-l7leveler-kubr-yp-sas-249-BAL", "domain": ".yandex.ru", "path": "/"},
-        {"name": "my", "value": "YwA=", "domain": ".yandex.ru", "path": "/"},
-        {"name": "sae", "value": "0:8A53C863-815A-4C63-9430-588B5324FAAF:p:25.6.0.2381:m:d:RU:20220309", "domain": ".yandex.ru", "path": "/"},
-    ]
+    from parser_config_cookies import get_yandex_cookies
+    cookies = get_yandex_cookies()
     with sync_playwright() as p:
         try:
-            # Удалены переменные окружения для Replit, теперь Playwright использует стандартные пути к браузерам на VPS
-
-            browser = None
-            browser_name = ""
-
-            # Попытка запуска Chromium
-            try:
-                browser = p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox', 
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-web-security',
-                        '--disable-features=VizDisplayCompositor',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--disable-extensions',
-                        '--disable-plugins',
-                        '--disable-sync',
-                        '--disable-translate',
-                        '--disable-notifications',
-                        '--disable-permissions-api',
-                        '--disable-default-apps',
-                        '--no-first-run',
-                        '--no-default-browser-check',
-                        '--disable-background-networking',
-                        '--single-process',
-                        '--disable-zygote'
-                    ],
-                    ignore_default_args=['--enable-automation'],
-                    chromium_sandbox=False
-                )
-                browser_name = "Chromium"
-                print("Используем Chromium")
-            except Exception as e:
-                print(f"Chromium недоступен: {e}")
-
-                # Если Chromium не работает, пробуем Firefox
-                try:
-                    browser = p.firefox.launch(
-                        headless=True,
-                        args=[
-                            '--no-sandbox',
-                            '--disable-dev-shm-usage',
-                            '--disable-gpu'
-                        ],
-                        firefox_user_prefs={
-                            'dom.webdriver.enabled': False,
-                            'useAutomationExtension': False
-                        }
-                    )
-                    browser_name = "Firefox"
-                    print("Используем Firefox")
-                except Exception as e2:
-                    print(f"Firefox недоступен: {e2}")
-
-                    # В крайнем случае пробуем WebKit
-                    try:
-                        browser = p.webkit.launch(
-                            headless=True,
-                            args=['--no-sandbox']
-                        )
-                        browser_name = "WebKit"
-                        print("Используем WebKit")
-                    except Exception as e3:
-                        raise Exception(f"Все браузеры недоступны: Chromium={e}, Firefox={e2}, WebKit={e3}")
-
-            if not browser:
-                raise Exception("Не удалось запустить ни один браузер")
+            browser, browser_name = _launch_browser(p)
 
             # Создаем контекст с антидетектом
             context = browser.new_context(
@@ -264,12 +236,10 @@ def parse_yandex_card(url: str) -> dict:
             return data
 
         except PlaywrightTimeoutError as e:
-            if browser:
-                browser.close()
+            browser.close()
             raise Exception(f"Тайм-аут при загрузке страницы: {e}")
         except Exception as e:
-            if browser:
-                browser.close()
+            browser.close()
             raise Exception(f"Ошибка при парсинге: {e}")
 
 def parse_overview_data(page):

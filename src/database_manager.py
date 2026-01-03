@@ -79,23 +79,8 @@ class DatabaseManager:
         self.conn.commit()
         return user_id
     
-    def authenticate_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
-        """Аутентификация пользователя по email и паролю"""
-        import hashlib
-        
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
-        user = cursor.fetchone()
-        
-        if not user:
-            return None
-            
-        # Проверяем пароль
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        if user['password_hash'] != password_hash:
-            return None
-            
-        return dict(user)
+    # УДАЛЕНО: authenticate_user - используйте auth_system.authenticate_user вместо этого
+    # Метод был удален для унификации хеширования паролей (PBKDF2 вместо SHA256)
     
     def create_session(self, user_id: str) -> str:
         """Создать сессию для пользователя"""
@@ -608,10 +593,13 @@ class DatabaseManager:
         return [dict(row) for row in cursor.fetchall()]
     
     def get_all_users_with_businesses(self) -> List[Dict[str, Any]]:
-        """Получить всех пользователей с их бизнесами и сетями (для админской страницы)"""
+        """Получить всех пользователей с их бизнесами и сетями (для админской страницы)
+        
+        Оптимизировано: вместо N+1 запросов используется один запрос с JOIN и группировка в Python
+        """
         cursor = self.conn.cursor()
         
-        # Получаем всех пользователей
+        # Получаем всех пользователей одним запросом
         cursor.execute("""
             SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
             FROM Users 
@@ -619,6 +607,60 @@ class DatabaseManager:
         """)
         users = cursor.fetchall()
         
+        # Получаем все прямые бизнесы одним запросом (не в сети)
+        cursor.execute("""
+            SELECT * FROM Businesses 
+            WHERE network_id IS NULL
+            ORDER BY owner_id, created_at DESC
+        """)
+        all_direct_businesses = cursor.fetchall()
+        
+        # Получаем все сети одним запросом
+        cursor.execute("""
+            SELECT * FROM Networks 
+            ORDER BY owner_id, created_at DESC
+        """)
+        all_networks = cursor.fetchall()
+        
+        # Получаем все бизнесы в сетях одним запросом
+        cursor.execute("""
+            SELECT * FROM Businesses 
+            WHERE network_id IS NOT NULL
+            ORDER BY network_id, created_at DESC
+        """)
+        all_network_businesses = cursor.fetchall()
+        
+        # Группируем бизнесы по owner_id
+        businesses_by_owner = {}
+        for business_row in all_direct_businesses:
+            business = dict(business_row)
+            owner_id = business.get('owner_id')
+            if owner_id:
+                if owner_id not in businesses_by_owner:
+                    businesses_by_owner[owner_id] = []
+                businesses_by_owner[owner_id].append(business)
+        
+        # Группируем сети по owner_id
+        networks_by_owner = {}
+        for network_row in all_networks:
+            network = dict(network_row)
+            owner_id = network.get('owner_id')
+            if owner_id:
+                if owner_id not in networks_by_owner:
+                    networks_by_owner[owner_id] = []
+                networks_by_owner[owner_id].append(network)
+        
+        # Группируем бизнесы в сетях по network_id
+        businesses_by_network = {}
+        for business_row in all_network_businesses:
+            business = dict(business_row)
+            network_id = business.get('network_id')
+            if network_id:
+                if network_id not in businesses_by_network:
+                    businesses_by_network[network_id] = []
+                businesses_by_network[network_id].append(business)
+        
+        # Формируем результат
         result = []
         for user_row in users:
             user_id = user_row['id'] if hasattr(user_row, 'keys') else user_row[0]
@@ -630,31 +672,21 @@ class DatabaseManager:
                 columns = [desc[0] for desc in cursor.description]
                 user_dict = dict(zip(columns, user_row))
             
-            # Получаем прямые бизнесы пользователя (не в сети) - включая заблокированные
-            cursor.execute("""
-                SELECT * FROM Businesses 
-                WHERE owner_id = ? AND network_id IS NULL
-                ORDER BY created_at DESC
-            """, (user_id,))
-            direct_businesses = [dict(row) for row in cursor.fetchall()]
+            # Получаем прямые бизнесы пользователя
+            direct_businesses = businesses_by_owner.get(user_id, [])
             # Логируем для отладки
             blocked_count = sum(1 for b in direct_businesses if b.get('is_active') == 0)
             if blocked_count > 0:
                 print(f"🔍 DEBUG: Пользователь {user_id} имеет {blocked_count} заблокированных бизнесов из {len(direct_businesses)} всего")
             
             # Получаем сети пользователя
-            cursor.execute("""
-                SELECT * FROM Networks 
-                WHERE owner_id = ? 
-                ORDER BY created_at DESC
-            """, (user_id,))
-            networks = [dict(row) for row in cursor.fetchall()]
+            networks = networks_by_owner.get(user_id, [])
             
             # Для каждой сети получаем её точки (бизнесы)
             networks_with_businesses = []
             for network in networks:
                 network_id = network['id']
-                network_businesses = self.get_businesses_by_network(network_id)
+                network_businesses = businesses_by_network.get(network_id, [])
                 networks_with_businesses.append({
                     **network,
                     'businesses': network_businesses

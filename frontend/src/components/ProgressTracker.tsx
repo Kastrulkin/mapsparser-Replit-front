@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
+import { useApiData } from '../hooks/useApiData';
 
 interface ProgressStage {
   id: string;
@@ -33,116 +34,23 @@ interface ProgressTrackerProps {
 }
 
 const ProgressTracker: React.FC<ProgressTrackerProps> = ({ onUpdate, businessId }) => {
-  const [stages, setStages] = useState<ProgressStage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sprint, setSprint] = useState<{ tasks: SprintTask[] } | null>(null);
-  const [loadingSprint, setLoadingSprint] = useState(false);
-
-  // Моковые данные для демонстрации
-  const mockStages: ProgressStage[] = [
+  // Загружаем стадии прогресса
+  const { data: stagesData, loading, error } = useApiData<ProgressStage[]>(
+    businessId ? `/api/business/${businessId}/stages` : null,
     {
-      id: '1',
-      stage_number: 1,
-      stage_name: 'Диагностика',
-      stage_description: 'Анализ текущего состояния карточки и базовых показателей',
-      status: 'completed',
-      progress_percentage: 100,
-      target_revenue: 10000,
-      target_clients: 20,
-      target_roi: 0,
-      current_revenue: 12000,
-      current_clients: 25,
-      current_roi: 0,
-      started_at: '2024-01-01',
-      completed_at: '2024-01-07'
-    },
-    {
-      id: '2',
-      stage_number: 2,
-      stage_name: 'Оптимизация',
-      stage_description: 'Настройка карточки, оптимизация прайс-листа, улучшение фото',
-      status: 'active',
-      progress_percentage: 65,
-      target_revenue: 25000,
-      target_clients: 50,
-      target_roi: 25,
-      current_revenue: 18000,
-      current_clients: 35,
-      current_roi: 15,
-      started_at: '2024-01-08',
-      completed_at: null
-    },
-    {
-      id: '3',
-      stage_number: 3,
-      stage_name: 'Рост',
-      stage_description: 'Первые результаты оптимизации, рост клиентской базы',
-      status: 'pending',
-      progress_percentage: 0,
-      target_revenue: 50000,
-      target_clients: 100,
-      target_roi: 50,
-      current_revenue: 0,
-      current_clients: 0,
-      current_roi: 0,
-      started_at: null,
-      completed_at: null
-    },
-    {
-      id: '4',
-      stage_number: 4,
-      stage_name: 'Масштабирование',
-      stage_description: 'Устойчивый рост прибыли и автоматизация процессов',
-      status: 'pending',
-      progress_percentage: 0,
-      target_revenue: 100000,
-      target_clients: 200,
-      target_roi: 100,
-      current_revenue: 0,
-      current_clients: 0,
-      current_roi: 0,
-      started_at: null,
-      completed_at: null
+      transform: (data) => data.stages || []
     }
-  ];
+  );
+  const stages = stagesData || [];
 
-  useEffect(() => {
-    // Имитируем загрузку данных
-    setTimeout(() => {
-      setStages(mockStages);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  useEffect(() => {
-    const loadSprint = async () => {
-      if (!businessId) return;
-      
-      setLoadingSprint(true);
-      try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(`/api/business/${businessId}/sprint`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.sprint && data.sprint.tasks) {
-            setSprint({ tasks: data.sprint.tasks });
-          }
-        }
-      } catch (err) {
-        console.error('Ошибка загрузки спринта:', err);
-      } finally {
-        setLoadingSprint(false);
-      }
-    };
-
-    loadSprint();
-  }, [businessId]);
+  // Загружаем спринт
+  const { data: sprintData } = useApiData<{ tasks: SprintTask[] }>(
+    businessId ? `/api/business/${businessId}/sprint` : null,
+    {
+      transform: (data) => data.sprint || { tasks: [] }
+    }
+  );
+  const sprint = sprintData;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {

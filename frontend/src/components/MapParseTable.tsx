@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
+import { useApiData } from '../hooks/useApiData';
 
 interface MapParseItem {
   id: string;
@@ -19,37 +20,15 @@ interface MapParseTableProps {
 }
 
 const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
-  const [items, setItems] = useState<MapParseItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [viewHtml, setViewHtml] = useState<string | null>(null);
 
-  const load = async () => {
-    if (!businessId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${businessId}/map-parses`, {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setItems(data.items || []);
-      } else {
-        setError(data.error || 'Ошибка загрузки парсинга карт');
-      }
-    } catch (e) {
-      setError('Ошибка соединения с сервером');
-    } finally {
-      setLoading(false);
+  const { data, loading, error } = useApiData<MapParseItem[]>(
+    businessId ? `${window.location.origin}/api/business/${businessId}/map-parses` : null,
+    {
+      transform: (data) => data.items || []
     }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId]);
+  );
+  const items = data || [];
 
   const viewReport = async (id: string) => {
     try {
