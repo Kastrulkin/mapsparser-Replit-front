@@ -604,17 +604,39 @@ def upsert_external_account(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        # Проверяем, существует ли таблица ExternalBusinessAccounts
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='ExternalBusinessAccounts'
+        """)
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            # Таблица не существует - нужно применить миграцию
+            db.close()
+            return jsonify({
+                "error": "Таблица ExternalBusinessAccounts не существует. Необходимо применить миграцию migrate_external_sources.py"
+            }), 500
+
         import uuid
         from datetime import datetime
         from auth_encryption import encrypt_auth_data
+
+        # Логирование для отладки
+        print(f"🔍 POST /api/business/{business_id}/external-accounts:")
+        print(f"   source={source}, external_id={external_id}, display_name={display_name}")
+        print(f"   auth_data length={len(auth_data) if auth_data else 0}")
 
         # Шифруем auth_data перед сохранением
         auth_data_encrypted = None
         if auth_data:
             try:
                 auth_data_encrypted = encrypt_auth_data(auth_data)
+                print(f"✅ auth_data зашифрован, длина={len(auth_data_encrypted)}")
             except Exception as e:
                 print(f"❌ Ошибка шифрования auth_data: {e}")
+                import traceback
+                traceback.print_exc()
                 db.close()
                 return jsonify({"error": f"Ошибка шифрования данных: {str(e)}"}), 500
 
@@ -627,11 +649,13 @@ def upsert_external_account(business_id):
             (business_id, source),
         )
         existing = cursor.fetchone()
+        print(f"🔍 Существующий аккаунт: {existing[0] if existing else 'не найден'}")
 
         now = datetime.utcnow().isoformat()
 
         if existing:
             account_id = existing[0]
+            print(f"🔄 Обновление существующего аккаунта: {account_id}")
             # Если auth_data не передан, не обновляем его (сохраняем существующий)
             if auth_data_encrypted is not None:
                 cursor.execute(
@@ -650,6 +674,7 @@ def upsert_external_account(business_id):
                         account_id,
                     ),
                 )
+                print(f"✅ Аккаунт обновлен с auth_data: external_id={external_id}, display_name={display_name}")
             else:
                 # Обновляем только другие поля, не трогая auth_data_encrypted
                 cursor.execute(
@@ -667,6 +692,7 @@ def upsert_external_account(business_id):
                         account_id,
                     ),
                 )
+                print(f"✅ Аккаунт обновлен без auth_data: external_id={external_id}, display_name={display_name}")
         else:
             # При создании нового аккаунта auth_data обязателен
             if not auth_data_encrypted:
@@ -674,6 +700,7 @@ def upsert_external_account(business_id):
                 return jsonify({"error": "auth_data обязателен для нового аккаунта"}), 400
             
             account_id = str(uuid.uuid4())
+            print(f"🆕 Создание нового аккаунта: {account_id}")
             cursor.execute(
                 """
                 INSERT INTO ExternalBusinessAccounts (
@@ -694,8 +721,10 @@ def upsert_external_account(business_id):
                     now,
                 ),
             )
+            print(f"✅ Аккаунт создан: id={account_id}, external_id={external_id}, display_name={display_name}")
 
         db.conn.commit()
+        print(f"✅ Изменения закоммичены в БД")
         db.close()
 
         return jsonify({"success": True, "account_id": account_id})
