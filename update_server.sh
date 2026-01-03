@@ -35,22 +35,52 @@ else
     echo -e "${YELLOW}⚠️  Git репозиторий не найден, пропускаю git pull${NC}"
 fi
 
-# 2. Применить миграции БД (если есть)
+# 2. Определить путь к Python из venv
+PYTHON_BIN="${PROJECT_DIR}/venv/bin/python"
+if [ ! -f "$PYTHON_BIN" ]; then
+    # Попробовать python3 как fallback
+    PYTHON_BIN=$(which python3 || which python || echo "python3")
+    echo -e "${YELLOW}⚠️  venv/bin/python не найден, использую: $PYTHON_BIN${NC}"
+fi
+
+# 3. Применить миграции БД (если есть)
 echo -e "${YELLOW}🗄️  Проверяю миграции БД...${NC}"
 if [ -f "src/migrate_clientinfo_add_business_id.py" ]; then
     echo -e "${YELLOW}📦 Создаю бэкап БД...${NC}"
-    python src/safe_db_utils.py || cp src/reports.db db_backups/reports_$(date +%Y%m%d_%H%M%S).db.backup
+    $PYTHON_BIN src/safe_db_utils.py 2>/dev/null || cp src/reports.db db_backups/reports_$(date +%Y%m%d_%H%M%S).db.backup
     
     echo -e "${YELLOW}🔄 Применяю миграцию ClientInfo...${NC}"
-    python src/migrate_clientinfo_add_business_id.py || echo -e "${YELLOW}⚠️  Миграция не применена (возможно уже применена)${NC}"
+    if $PYTHON_BIN src/migrate_clientinfo_add_business_id.py; then
+        echo -e "${GREEN}✅ Миграция применена успешно${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Миграция не применена (возможно уже применена или ошибка)${NC}"
+    fi
     
     echo -e "${YELLOW}✅ Проверяю структуру таблицы ClientInfo...${NC}"
-    sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);" | grep business_id && echo -e "${GREEN}✅ Колонка business_id существует${NC}" || echo -e "${YELLOW}⚠️  Колонка business_id не найдена${NC}"
+    # Использовать Python для проверки структуры, если sqlite3 недоступен
+    if command -v sqlite3 >/dev/null 2>&1; then
+        sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);" | grep business_id && echo -e "${GREEN}✅ Колонка business_id существует${NC}" || echo -e "${YELLOW}⚠️  Колонка business_id не найдена${NC}"
+    else
+        # Проверка через Python
+        $PYTHON_BIN -c "
+import sqlite3
+conn = sqlite3.connect('src/reports.db')
+cursor = conn.cursor()
+cursor.execute('PRAGMA table_info(ClientInfo)')
+columns = [col[1] for col in cursor.fetchall()]
+if 'business_id' in columns:
+    print('✅ Колонка business_id существует')
+else:
+    print('⚠️  Колонка business_id не найдена')
+    print(f'Доступные колонки: {columns}')
+conn.close()
+" || echo -e "${YELLOW}⚠️  Не удалось проверить структуру таблицы${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠️  Миграция migrate_clientinfo_add_business_id.py не найдена${NC}"
 fi
 
-# 3. Пересобрать фронтенд
+# 4. Пересобрать фронтенд
 echo -e "${YELLOW}🏗️  Пересобираю фронтенд...${NC}"
 cd frontend
 npm install --silent
@@ -58,13 +88,13 @@ npm run build
 cd ..
 echo -e "${GREEN}✅ Фронтенд пересобран${NC}"
 
-# 4. Проверить что сборка прошла успешно
+# 5. Проверить что сборка прошла успешно
 if [ ! -f "frontend/dist/index.html" ]; then
     echo -e "${RED}❌ Ошибка: frontend/dist/index.html не найден${NC}"
     exit 1
 fi
 
-# 5. Перезапустить Flask API
+# 6. Перезапустить Flask API
 echo -e "${YELLOW}🔄 Перезапускаю Flask API...${NC}"
 # Остановить старые процессы
 pkill -9 -f "python.*main.py" 2>/dev/null || true
@@ -89,14 +119,14 @@ else
     echo -e "${GREEN}✅ Flask API запущен напрямую${NC}"
 fi
 
-# 6. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов)
+# 7. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов)
 # Раскомментируйте, если нужно перезапустить боты:
 # echo -e "${YELLOW}🔄 Перезапускаю Telegram боты...${NC}"
 # systemctl restart telegram-bot
 # systemctl restart telegram-reviews-bot
 # echo -e "${GREEN}✅ Telegram боты перезапущены${NC}"
 
-# 7. Проверить статус сервисов
+# 8. Проверить статус сервисов
 echo -e "${YELLOW}📊 Проверяю статус сервисов...${NC}"
 echo ""
 echo "=== seo-worker ==="
@@ -111,7 +141,7 @@ echo ""
 echo "=== nginx ==="
 systemctl status nginx --no-pager | head -5
 
-# 8. Проверить порты
+# 9. Проверить порты
 echo ""
 echo -e "${YELLOW}🔌 Проверяю порты...${NC}"
 echo "=== Порт 8000 (Flask API) ==="
@@ -120,17 +150,23 @@ echo ""
 echo "=== Порт 80 (Nginx HTTP) ==="
 lsof -i :80 || echo "⚠️  Порт 80 не слушается"
 
-# 9. Проверить API
+# 10. Проверить API
 echo ""
 echo -e "${YELLOW}🌐 Проверяю API...${NC}"
-API_RESPONSE=$(curl -s http://localhost:8000/api/health 2>&1 | head -c 100)
-if [ -n "$API_RESPONSE" ]; then
-    echo -e "${GREEN}✅ API отвечает: $API_RESPONSE${NC}"
+# Попробовать несколько эндпоинтов
+API_RESPONSE=$(curl -s http://localhost:8000/api/health 2>&1 | head -c 200)
+if echo "$API_RESPONSE" | grep -q "error\|Not Found"; then
+    # Попробовать корневой эндпоинт
+    API_RESPONSE=$(curl -s http://localhost:8000/ 2>&1 | head -c 200)
+fi
+if [ -n "$API_RESPONSE" ] && ! echo "$API_RESPONSE" | grep -q "Connection refused\|Failed to connect"; then
+    echo -e "${GREEN}✅ API отвечает: ${API_RESPONSE:0:100}${NC}"
 else
-    echo -e "${RED}❌ API не отвечает${NC}"
+    echo -e "${RED}❌ API не отвечает или недоступен${NC}"
+    echo -e "${YELLOW}Проверьте логи: journalctl -u seo-worker -n 20${NC}"
 fi
 
-# 10. Показать последние логи
+# 11. Показать последние логи
 echo ""
 echo -e "${YELLOW}📋 Последние логи seo-worker:${NC}"
 if systemctl is-active seo-worker >/dev/null 2>&1; then
@@ -139,7 +175,7 @@ else
     tail -20 /tmp/seo_main.out || echo "⚠️  Логи недоступны"
 fi
 
-# 11. Проверить, что боты всё ещё работают
+# 12. Проверить, что боты всё ещё работают
 echo ""
 echo -e "${YELLOW}🤖 Проверяю статус ботов после обновления...${NC}"
 systemctl status telegram-bot telegram-reviews-bot --no-pager | head -3 || echo "⚠️  Боты не настроены"
