@@ -122,65 +122,73 @@ def migrate_remove_duplicate_tables(cursor):
             except Exception as e:
                 print(f"⚠️ Ошибка при добавлении колонки: {e}")
         
-        # Формируем SQL в зависимости от наличия business_id в Cards
-        if 'business_id' in cards_columns:
+        # Проверяем количество записей
+        cursor.execute("SELECT COUNT(*) FROM Cards")
+        cards_count = cursor.fetchone()[0]
+        print(f"📊 Записей в Cards: {cards_count}")
+        
+        # Пытаемся мигрировать данные только если есть нужные колонки
+        migration_attempted = False
+        
+        if 'business_id' in cards_columns and cards_count > 0:
             # Есть business_id - используем его
-            migration_sql = """
-                INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
-                SELECT 
-                    id, business_id, url,
-                    'yandex' as map_type,
-                    NULL as rating,
-                    0 as reviews_count,
-                    report_path,
-                    json_object('seo_score', seo_score, 'ai_analysis', ai_analysis, 'recommendations', recommendations) as analysis_json,
-                    created_at
-                FROM Cards
-                WHERE business_id IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
-                )
-            """
-        elif 'user_id' in cards_columns:
+            print("✅ В Cards есть business_id, мигрирую данные...")
+            try:
+                cursor.execute("""
+                    INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
+                    SELECT 
+                        id, business_id, url,
+                        'yandex' as map_type,
+                        NULL as rating,
+                        0 as reviews_count,
+                        report_path,
+                        json_object('seo_score', seo_score, 'ai_analysis', ai_analysis, 'recommendations', recommendations) as analysis_json,
+                        created_at
+                    FROM Cards
+                    WHERE business_id IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
+                    )
+                """)
+                migrated_count = cursor.rowcount
+                print(f"✅ Перенесено записей в MapParseResults: {migrated_count}")
+                migration_attempted = True
+            except Exception as e:
+                print(f"⚠️ Ошибка миграции с business_id: {e}")
+        
+        if not migration_attempted and 'user_id' in cards_columns and cards_count > 0:
             # Нет business_id, но есть user_id - находим business_id из Businesses
             print("⚠️ В Cards нет business_id, но есть user_id. Ищу business_id из Businesses...")
-            migration_sql = """
-                INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
-                SELECT 
-                    Cards.id,
-                    (SELECT id FROM Businesses WHERE owner_id = Cards.user_id LIMIT 1) as business_id,
-                    Cards.url,
-                    'yandex' as map_type,
-                    NULL as rating,
-                    0 as reviews_count,
-                    Cards.report_path,
-                    json_object('seo_score', Cards.seo_score, 'ai_analysis', Cards.ai_analysis, 'recommendations', Cards.recommendations) as analysis_json,
-                    Cards.created_at
-                FROM Cards
-                WHERE Cards.user_id IS NOT NULL
-                AND EXISTS (SELECT 1 FROM Businesses WHERE owner_id = Cards.user_id)
-                AND NOT EXISTS (
-                    SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
-                )
-            """
-        else:
-            # Нет ни business_id, ни user_id - пропускаем миграцию данных, только удаляем таблицу
-            print("⚠️ В Cards нет ни business_id, ни user_id. Пропускаю миграцию данных, только удалю таблицу.")
-            migration_sql = None
+            try:
+                cursor.execute("""
+                    INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
+                    SELECT 
+                        Cards.id,
+                        (SELECT id FROM Businesses WHERE owner_id = Cards.user_id LIMIT 1) as business_id,
+                        Cards.url,
+                        'yandex' as map_type,
+                        NULL as rating,
+                        0 as reviews_count,
+                        Cards.report_path,
+                        json_object('seo_score', Cards.seo_score, 'ai_analysis', Cards.ai_analysis, 'recommendations', Cards.recommendations) as analysis_json,
+                        Cards.created_at
+                    FROM Cards
+                    WHERE Cards.user_id IS NOT NULL
+                    AND EXISTS (SELECT 1 FROM Businesses WHERE owner_id = Cards.user_id)
+                    AND NOT EXISTS (
+                        SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
+                    )
+                """)
+                migrated_count = cursor.rowcount
+                print(f"✅ Перенесено записей в MapParseResults: {migrated_count}")
+                migration_attempted = True
+            except Exception as e:
+                print(f"⚠️ Ошибка миграции с user_id: {e}")
         
-        if migration_sql:
-            _migrate_table_data(
-                cursor,
-                'Cards',
-                'MapParseResults',
-                migration_sql,
-                existing_tables
-            )
-        else:
-            cursor.execute("SELECT COUNT(*) FROM Cards")
-            count = cursor.fetchone()[0]
-            print(f"📊 Записей в Cards: {count} (данные не мигрируются)")
+        if not migration_attempted:
+            print("⚠️ Миграция данных не выполнена (нет нужных колонок или ошибка). Удаляю таблицу Cards без миграции.")
         
+        # Удаляем таблицу в любом случае
         cursor.execute("DROP TABLE IF EXISTS Cards")
         removed_tables.append("Cards")
         print("✅ Таблица Cards удалена")
