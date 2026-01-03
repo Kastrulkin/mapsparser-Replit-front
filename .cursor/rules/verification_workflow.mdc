@@ -127,19 +127,40 @@ curl http://localhost:8000/api/health
 
 **⚠️ ВАЖНО:** Следуй процессу из `ALGORITHM_UPDATE.md` для безопасного обновления!
 
-**0. Проверить статус ботов (если есть):**
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** Перед обновлением на сервере **ОБЯЗАТЕЛЬНО** убедиться, что изменения запушены на GitHub!
+
+**0. Проверить, что изменения запушены на GitHub (локально):**
+```bash
+# Проверить статус git
+git status
+# Должно быть "Your branch is up to date with 'origin/main'"
+
+# Если есть незапушенные коммиты - запушить:
+git push origin main
+```
+
+**1. Проверить статус ботов (если есть):**
 ```bash
 systemctl status telegram-bot telegram-reviews-bot
 # Должны быть "active (running)"
 ```
 
-**1. Получить последние изменения:**
+**2. Получить последние изменения на сервере:**
 ```bash
 cd /root/mapsparser-Replit-front
 git pull origin main
+
+# ⚠️ КРИТИЧЕСКИ ВАЖНО: Проверить, что код действительно обновился!
+# Проверить последний коммит:
+git log --oneline -1
+# Должен быть последний коммит с исправлениями
+
+# Или проверить конкретный файл:
+grep -A 5 "def get_business_by_id" src/database_manager.py
+# Должен быть актуальный код без старых колонок
 ```
 
-**2. Если есть миграции БД - применить их:**
+**3. Если есть миграции БД - применить их:**
 ```bash
 # Создать бэкап
 python src/safe_db_utils.py
@@ -154,7 +175,7 @@ sqlite3 src/reports.db "SELECT COUNT(*) FROM ClientInfo;"
 sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);"  # Проверить структуру таблицы
 ```
 
-**3. Пересобрать frontend:**
+**4. Пересобрать frontend:**
 ```bash
 cd /root/mapsparser-Replit-front/frontend
 rm -rf dist  # ОБЯЗАТЕЛЬНО удалить старую сборку!
@@ -166,10 +187,13 @@ ls -lh dist/assets/index-*.js
 # Должен быть свежий файл с текущей датой
 ```
 
-**4. Перезапустить Flask API (main.py):**
+**5. Перезапустить Flask API (main.py):**
 ```bash
 # ⚠️ КРИТИЧЕСКИ ВАЖНО: seo-worker запускает worker.py, а не main.py!
 # Flask API (main.py) запускается через seo-api.service или напрямую
+
+# ⚠️ КРИТИЧЕСКИ ВАЖНО: НЕ перезапускать Flask без обновления кода!
+# Код должен быть обновлен через git pull (см. шаг 2)
 
 # Остановить старые процессы main.py
 pkill -9 -f "python.*main.py" || true
@@ -193,23 +217,26 @@ fi
 # Проверить запуск
 lsof -iTCP:8000 -sTCP:LISTEN
 # Должен показать новый процесс
+
+# Проверить логи на ошибки
+tail -30 /tmp/seo_main.out | grep -E "ERROR|Traceback|AssertionError" || tail -10 /tmp/seo_main.out
 ```
 
-**5. Если есть worker - запустить его:**
+**6. Если есть worker - запустить его:**
 ```bash
 python src/worker.py >/tmp/seo_worker.out 2>&1 &
 sleep 2
 ps aux | grep "python.*worker" | grep -v grep
 ```
 
-**6. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов):**
+**7. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов):**
 ```bash
 # ⚠️ Только если изменялись telegram_bot.py или telegram_reviews_bot.py
 systemctl restart telegram-bot
 systemctl restart telegram-reviews-bot
 ```
 
-**7. Проверить что всё живо:**
+**8. Проверить что всё живо:**
 ```bash
 # Проверка порта
 lsof -iTCP:8000 -sTCP:LISTEN
@@ -229,14 +256,14 @@ tail -20 /tmp/seo_main.out | grep -E "ERROR|Traceback|AssertionError" || tail -1
 journalctl -u seo-worker -n 20 --no-pager
 ```
 
-**8. Если изменялась логика авторизации - очистить старые сессии:**
+**9. Если изменялась логика авторизации - очистить старые сессии:**
 ```bash
 sqlite3 src/reports.db "DELETE FROM UserSessions;"
 # Или для конкретного пользователя:
 sqlite3 src/reports.db "DELETE FROM UserSessions WHERE user_id = (SELECT id FROM Users WHERE email='ВАШ_EMAIL');"
 ```
 
-**9. Проверить, что боты всё ещё работают:**
+**10. Проверить, что боты всё ещё работают:**
 ```bash
 systemctl status telegram-bot telegram-reviews-bot
 # Должны быть "active (running)"
@@ -248,9 +275,9 @@ systemctl status telegram-bot telegram-reviews-bot
 
 **`.cursor/docs/VERIFICATION.md`**
 
-### ШАГ 5: Коммит после успешной проверки
+### ШАГ 5: Коммит и push после успешной проверки
 
-**КРИТИЧЕСКИ ВАЖНО**: После успешной проверки всех тестов (синтаксис, сборка, линтер) **ОБЯЗАТЕЛЬНО** закоммитить изменения на GitHub:
+**КРИТИЧЕСКИ ВАЖНО**: После успешной проверки всех тестов (синтаксис, сборка, линтер) **ОБЯЗАТЕЛЬНО** закоммитить и запушить изменения на GitHub:
 
 1. **Проверить статус git**:
    ```bash
@@ -269,10 +296,18 @@ systemctl status telegram-bot telegram-reviews-bot
    git commit -m "Описание изменений после успешной проверки"
    ```
 
-4. **Отправить на GitHub**:
+4. **ОБЯЗАТЕЛЬНО отправить на GitHub**:
    ```bash
    git push origin main
    ```
+
+5. **Проверить, что push выполнен**:
+   ```bash
+   git status
+   # Должно быть "Your branch is up to date with 'origin/main'"
+   ```
+
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** Без `git push` изменения не попадут на сервер, и Flask будет использовать старый код даже после перезапуска!
 
 **Правило**: Коммит создается ТОЛЬКО после успешного прохождения всех проверок:
 - ✅ Синтаксис Python: OK
