@@ -11,7 +11,12 @@
 """
 
 import sys
+import os
 import sqlite3
+
+# Добавляем путь к src для импорта модулей
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from safe_db_utils import safe_migrate, get_db_path
 
 
