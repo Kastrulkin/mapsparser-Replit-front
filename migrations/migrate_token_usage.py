@@ -5,6 +5,8 @@
 """
 import sys
 import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 import sqlite3
 from safe_db_utils import safe_migrate, get_db_path, backup_database
 

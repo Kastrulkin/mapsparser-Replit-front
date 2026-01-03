@@ -2,6 +2,10 @@
 """
 Миграция для создания таблицы AIAgents - шаблоны агентов, настраиваемые администратором
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from safe_db_utils import safe_migrate, get_db_connection
 import sqlite3
 import json
