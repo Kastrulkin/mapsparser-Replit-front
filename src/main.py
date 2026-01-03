@@ -3163,17 +3163,21 @@ def client_info():
 
         if request.method == 'GET':
             current_business_id = request.args.get('business_id')
+            print(f"🔍 GET /api/client-info: method=GET, business_id={current_business_id}, user_id={user_id}")
             
             # Если передан business_id - берём данные из таблицы Businesses
             if current_business_id:
+                print(f"🔍 GET /api/client-info: Ищу бизнес в таблице Businesses, business_id={current_business_id}")
                 # Проверяем доступ к бизнесу
                 cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM Businesses WHERE id = ? AND is_active = 1", (current_business_id,))
                 business_row = cursor.fetchone()
                 
                 if business_row:
                     owner_id = business_row[0]
+                    print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, user_id={user_id}, is_superadmin={user_data.get('is_superadmin')}")
                     # Проверяем права доступа
                     if owner_id == user_id or user_data.get('is_superadmin'):
+                        print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из Businesses")
                         # Получаем ссылки на карты для этого бизнеса
                         links = []
                         cursor.execute("""
@@ -3240,16 +3244,19 @@ def client_info():
                             "owner": owner_data  # Добавляем данные владельца
                         })
                     else:
+                        print(f"❌ GET /api/client-info: Нет доступа к бизнесу, owner_id={owner_id}, user_id={user_id}")
                         db.close()
                         return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
                 else:
-                    db.close()
-                    return jsonify({"error": "Бизнес не найден"}), 404
+                    print(f"⚠️ GET /api/client-info: Бизнес не найден в таблице Businesses, перехожу к ClientInfo")
+                    # Бизнес не найден в Businesses - пробуем получить из ClientInfo
+                    # НЕ закрываем db.close() здесь, продолжаем выполнение
             
-            # Старая логика для обратной совместимости (если business_id не передан)
+            # Старая логика для обратной совместимости (если business_id не передан ИЛИ бизнес не найден в Businesses)
             # Пытаемся получить данные из ClientInfo по user_id и business_id (если есть)
             current_business_id = request.args.get('business_id')
             if current_business_id:
+                print(f"🔍 GET /api/client-info: Пытаюсь получить данные из ClientInfo, business_id={current_business_id}")
                 # Сначала проверяем, что колонка business_id существует
                 cursor.execute("PRAGMA table_info(ClientInfo)")
                 columns = [col[1] for col in cursor.fetchall()]
