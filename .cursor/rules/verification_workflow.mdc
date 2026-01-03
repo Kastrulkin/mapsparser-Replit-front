@@ -125,37 +125,113 @@ curl http://localhost:8000/api/health
 
 **На сервере (продакшен):**
 
-**1. Пересобрать frontend:**
+**⚠️ ВАЖНО:** Следуй процессу из `ALGORITHM_UPDATE.md` для безопасного обновления!
+
+**0. Проверить статус ботов (если есть):**
 ```bash
-cd /root/mapsparser-Replit-front/frontend
-npm install
-npm run build
+systemctl status telegram-bot telegram-reviews-bot
+# Должны быть "active (running)"
 ```
 
-**2. Перезапустить Flask API:**
+**1. Получить последние изменения:**
 ```bash
+cd /root/mapsparser-Replit-front
+git pull origin main
+```
+
+**2. Если есть миграции БД - применить их:**
+```bash
+# Создать бэкап
+python src/safe_db_utils.py
+# Или вручную:
+cp src/reports.db db_backups/reports_$(date +%Y%m%d_%H%M%S).db.backup
+
+# Применить миграцию (например, migrate_clientinfo_add_business_id.py)
+python src/migrate_clientinfo_add_business_id.py
+
+# Проверить данные
+sqlite3 src/reports.db "SELECT COUNT(*) FROM ClientInfo;"
+sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);"  # Проверить структуру таблицы
+```
+
+**3. Пересобрать frontend:**
+```bash
+cd /root/mapsparser-Replit-front/frontend
+rm -rf dist  # ОБЯЗАТЕЛЬНО удалить старую сборку!
+npm install
+npm run build
+
+# Проверить сборку
+ls -lh dist/assets/index-*.js
+# Должен быть свежий файл с текущей датой
+```
+
+**4. Перезапустить Flask API:**
+```bash
+# Остановить старый процесс
+pkill -9 -f "python.*main.py" || true
+pkill -9 -f "python.*worker.py" || true
+sleep 2
+
+# Проверить, что порт свободен
+lsof -iTCP:8000 -sTCP:LISTEN
+# Не должно быть вывода
+
+# Запустить новый процесс
+cd /root/mapsparser-Replit-front
+source venv/bin/activate
+python src/main.py >/tmp/seo_main.out 2>&1 &
+sleep 3
+
+# Или через systemd (если настроен):
 systemctl restart seo-worker
 ```
 
-**3. Перезапустить Telegram боты:**
+**5. Если есть worker - запустить его:**
 ```bash
+python src/worker.py >/tmp/seo_worker.out 2>&1 &
+sleep 2
+ps aux | grep "python.*worker" | grep -v grep
+```
+
+**6. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов):**
+```bash
+# ⚠️ Только если изменялись telegram_bot.py или telegram_reviews_bot.py
 systemctl restart telegram-bot
 systemctl restart telegram-reviews-bot
 ```
 
-**4. Проверить логи:**
+**7. Проверить что всё живо:**
 ```bash
-journalctl -u seo-worker -n 20 --no-pager
-```
+# Проверка порта
+lsof -iTCP:8000 -sTCP:LISTEN
+# Должен показать новый процесс
 
-**5. Проверить что всё живо:**
-```bash
+# Проверка статуса сервисов
 systemctl status seo-worker
 systemctl status telegram-bot
 systemctl status telegram-reviews-bot
 systemctl status nginx
-lsof -i :8000
-lsof -i :80
+
+# Проверка API
+curl -s http://localhost:8000/api/health | head -c 100
+
+# Проверка логов на ошибки
+tail -20 /tmp/seo_main.out | grep -E "ERROR|Traceback|AssertionError" || tail -10 /tmp/seo_main.out
+journalctl -u seo-worker -n 20 --no-pager
+```
+
+**8. Если изменялась логика авторизации - очистить старые сессии:**
+```bash
+sqlite3 src/reports.db "DELETE FROM UserSessions;"
+# Или для конкретного пользователя:
+sqlite3 src/reports.db "DELETE FROM UserSessions WHERE user_id = (SELECT id FROM Users WHERE email='ВАШ_EMAIL');"
+```
+
+**9. Проверить, что боты всё ещё работают:**
+```bash
+systemctl status telegram-bot telegram-reviews-bot
+# Должны быть "active (running)"
 ```
 
 ### ШАГ 4: Запись результатов
@@ -263,10 +339,15 @@ systemctl restart seo-worker telegram-bot telegram-reviews-bot
 
 ### Если менялась База данных:
 
-- [ ] `cp reports.db reports.db.backup.$(date +%s)`
-- [ ] `python -c "from src.db import migrate; migrate()"`
-- [ ] `sqlite3 reports.db ".tables"`
-- [ ] `systemctl restart seo-worker`
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** Всегда создавать бэкап перед миграцией!
+
+- [ ] Проверить статус ботов: `systemctl status telegram-bot telegram-reviews-bot`
+- [ ] Создать бэкап: `python src/safe_db_utils.py` или `cp src/reports.db db_backups/reports_$(date +%Y%m%d_%H%M%S).db.backup`
+- [ ] Применить миграцию: `python src/migrate_clientinfo_add_business_id.py` (или другая миграция)
+- [ ] Проверить структуру таблицы: `sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);"`
+- [ ] Проверить данные: `sqlite3 src/reports.db "SELECT COUNT(*) FROM ClientInfo;"`
+- [ ] Перезапустить Flask: `systemctl restart seo-worker` или `pkill -9 -f "python.*main.py" && python src/main.py &`
+- [ ] Проверить, что боты всё ещё работают: `systemctl status telegram-bot telegram-reviews-bot`
 
 ### Если менялись Telegram боты:
 
@@ -296,22 +377,47 @@ echo "Frontend: http://localhost:3000"
 
 ### На сервере нужно развернуть изменения:
 
+**⚠️ ВАЖНО:** Следуй полному процессу из `ALGORITHM_UPDATE.md`!
+
 ```bash
+# 0. Проверить статус ботов
+systemctl status telegram-bot telegram-reviews-bot
+
+# 1. Получить изменения
 cd /root/mapsparser-Replit-front
 git pull origin main
-pip install -r requirements.txt
-python -m playwright install
-systemctl restart seo-worker
 
+# 2. Если есть миграции БД - применить их
+python src/safe_db_utils.py  # Создать бэкап
+python src/migrate_clientinfo_add_business_id.py  # Или другая миграция
+sqlite3 src/reports.db "PRAGMA table_info(ClientInfo);"  # Проверить структуру
+
+# 3. Пересобрать фронтенд
 cd frontend
+rm -rf dist  # ОБЯЗАТЕЛЬНО!
 npm install
 npm run build
+cd ..
 
-systemctl restart telegram-bot
-systemctl restart telegram-reviews-bot
+# 4. Перезапустить Flask API
+pkill -9 -f "python.*main.py" || true
+pkill -9 -f "python.*worker.py" || true
+sleep 2
+source venv/bin/activate
+python src/main.py >/tmp/seo_main.out 2>&1 &
+sleep 3
 
+# 5. Проверить запуск
+lsof -iTCP:8000 -sTCP:LISTEN
+tail -20 /tmp/seo_main.out
+
+# 6. Перезапустить боты (ТОЛЬКО если изменялись файлы ботов)
+# systemctl restart telegram-bot telegram-reviews-bot
+
+# 7. Проверить статус
 systemctl status seo-worker telegram-bot telegram-reviews-bot nginx
 journalctl -u seo-worker -n 10 --no-pager
+curl -s http://localhost:8000/api/health
 ```
 
 ### Быстрая проверка что всё живо на сервере:
