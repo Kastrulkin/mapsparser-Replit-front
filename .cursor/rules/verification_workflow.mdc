@@ -166,25 +166,33 @@ ls -lh dist/assets/index-*.js
 # Должен быть свежий файл с текущей датой
 ```
 
-**4. Перезапустить Flask API:**
+**4. Перезапустить Flask API (main.py):**
 ```bash
-# Остановить старый процесс
+# ⚠️ КРИТИЧЕСКИ ВАЖНО: seo-worker запускает worker.py, а не main.py!
+# Flask API (main.py) запускается через seo-api.service или напрямую
+
+# Остановить старые процессы main.py
 pkill -9 -f "python.*main.py" || true
-pkill -9 -f "python.*worker.py" || true
 sleep 2
 
 # Проверить, что порт свободен
 lsof -iTCP:8000 -sTCP:LISTEN
 # Не должно быть вывода
 
-# Запустить новый процесс
-cd /root/mapsparser-Replit-front
-source venv/bin/activate
-python src/main.py >/tmp/seo_main.out 2>&1 &
-sleep 3
+# Перезапустить через systemd (если настроен seo-api) или напрямую
+if systemctl is-enabled seo-api >/dev/null 2>&1; then
+    systemctl restart seo-api  # seo-api запускает main.py
+else
+    # Запустить напрямую
+    cd /root/mapsparser-Replit-front
+    source venv/bin/activate
+    python src/main.py >/tmp/seo_main.out 2>&1 &
+    sleep 3
+fi
 
-# Или через systemd (если настроен):
-systemctl restart seo-worker
+# Проверить запуск
+lsof -iTCP:8000 -sTCP:LISTEN
+# Должен показать новый процесс
 ```
 
 **5. Если есть worker - запустить его:**

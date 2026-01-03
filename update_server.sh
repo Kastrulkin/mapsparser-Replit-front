@@ -94,29 +94,57 @@ if [ ! -f "frontend/dist/index.html" ]; then
     exit 1
 fi
 
-# 6. Перезапустить Flask API
-echo -e "${YELLOW}🔄 Перезапускаю Flask API...${NC}"
-# Остановить старые процессы
+# 6. Перезапустить Flask API (main.py)
+echo -e "${YELLOW}🔄 Перезапускаю Flask API (main.py)...${NC}"
+
+# Найти процесс Flask API на порту 8000
+FLASK_PID=$(lsof -tiTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+if [ -n "$FLASK_PID" ]; then
+    echo -e "${YELLOW}Найден процесс Flask на порту 8000 (PID: $FLASK_PID)${NC}"
+fi
+
+# Остановить старые процессы main.py (Flask API)
 pkill -9 -f "python.*main.py" 2>/dev/null || true
-pkill -9 -f "python.*worker.py" 2>/dev/null || true
 sleep 2
 
 # Проверить, что порт свободен
 if lsof -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
     echo -e "${YELLOW}⚠️  Порт 8000 всё ещё занят, пытаюсь освободить...${NC}"
+    pkill -9 -f "python.*main.py" 2>/dev/null || true
     sleep 2
 fi
 
-# Запустить через systemd (если настроен) или напрямую
-if systemctl is-enabled seo-worker >/dev/null 2>&1; then
+# Перезапустить через systemd (если настроен seo-api) или напрямую
+if systemctl is-enabled seo-api >/dev/null 2>&1; then
+    # seo-api.service запускает main.py
+    systemctl restart seo-api
+    echo -e "${GREEN}✅ Flask API перезапущен через systemd (seo-api.service)${NC}"
+elif systemctl is-enabled seo-worker >/dev/null 2>&1; then
+    # seo-worker запускает worker.py, но проверим, может он тоже запускает main.py
+    # В любом случае, перезапустим worker (для обработки очереди)
     systemctl restart seo-worker
-    echo -e "${GREEN}✅ Flask API перезапущен через systemd${NC}"
+    echo -e "${YELLOW}⚠️  seo-worker перезапущен (но он запускает worker.py, не main.py)${NC}"
+    echo -e "${YELLOW}Запускаю main.py напрямую...${NC}"
+    source venv/bin/activate
+    $PYTHON_BIN src/main.py >/tmp/seo_main.out 2>&1 &
+    sleep 3
+    echo -e "${GREEN}✅ Flask API (main.py) запущен напрямую${NC}"
 else
     # Запустить напрямую
     source venv/bin/activate
-    python src/main.py >/tmp/seo_main.out 2>&1 &
+    $PYTHON_BIN src/main.py >/tmp/seo_main.out 2>&1 &
     sleep 3
     echo -e "${GREEN}✅ Flask API запущен напрямую${NC}"
+fi
+
+# Проверить, что Flask API запустился
+sleep 2
+if lsof -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+    NEW_PID=$(lsof -tiTCP:8000 -sTCP:LISTEN 2>/dev/null || echo "")
+    echo -e "${GREEN}✅ Flask API запущен на порту 8000 (PID: $NEW_PID)${NC}"
+else
+    echo -e "${RED}❌ Flask API не запустился на порту 8000!${NC}"
+    echo -e "${YELLOW}Проверьте логи: tail -50 /tmp/seo_main.out${NC}"
 fi
 
 # 7. Перезапустить Telegram боты (ТОЛЬКО если изменялись файлы ботов)
@@ -129,7 +157,15 @@ fi
 # 8. Проверить статус сервисов
 echo -e "${YELLOW}📊 Проверяю статус сервисов...${NC}"
 echo ""
-echo "=== seo-worker ==="
+echo "=== seo-api (Flask API - main.py) ==="
+if systemctl is-enabled seo-api >/dev/null 2>&1; then
+    systemctl status seo-api --no-pager | head -5
+else
+    echo "⚠️  Сервис seo-api не настроен, Flask API запущен напрямую"
+    lsof -iTCP:8000 -sTCP:LISTEN || echo "⚠️  Flask API не запущен"
+fi
+echo ""
+echo "=== seo-worker (worker.py) ==="
 systemctl status seo-worker --no-pager | head -5
 echo ""
 echo "=== telegram-bot ==="
@@ -168,11 +204,19 @@ fi
 
 # 11. Показать последние логи
 echo ""
-echo -e "${YELLOW}📋 Последние логи seo-worker:${NC}"
+echo -e "${YELLOW}📋 Последние логи Flask API (main.py):${NC}"
+if systemctl is-active seo-api >/dev/null 2>&1; then
+    journalctl -u seo-api -n 10 --no-pager || echo "⚠️  Логи недоступны"
+elif [ -f "/tmp/seo_main.out" ]; then
+    tail -20 /tmp/seo_main.out || echo "⚠️  Логи недоступны"
+else
+    echo "⚠️  Логи недоступны (файл /tmp/seo_main.out не найден)"
+fi
+
+echo ""
+echo -e "${YELLOW}📋 Последние логи seo-worker (worker.py):${NC}"
 if systemctl is-active seo-worker >/dev/null 2>&1; then
     journalctl -u seo-worker -n 10 --no-pager || echo "⚠️  Логи недоступны"
-else
-    tail -20 /tmp/seo_main.out || echo "⚠️  Логи недоступны"
 fi
 
 # 12. Проверить, что боты всё ещё работают
