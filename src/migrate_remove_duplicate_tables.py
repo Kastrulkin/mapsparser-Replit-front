@@ -103,6 +103,20 @@ def migrate_remove_duplicate_tables(cursor):
     # Cards → MapParseResults
     if 'Cards' in existing_tables:
         print("📋 Проверяю таблицу Cards...")
+        
+        # Проверяем структуру MapParseResults
+        cursor.execute("PRAGMA table_info(MapParseResults)")
+        map_columns = {row[1] for row in cursor.fetchall()}
+        
+        # Если колонки analysis_json нет - добавляем
+        if 'analysis_json' not in map_columns:
+            print("⚠️ Колонка analysis_json отсутствует в MapParseResults, добавляю...")
+            try:
+                cursor.execute("ALTER TABLE MapParseResults ADD COLUMN analysis_json TEXT")
+                print("✅ Колонка analysis_json добавлена")
+            except Exception as e:
+                print(f"⚠️ Ошибка при добавлении колонки: {e}")
+        
         _migrate_table_data(
             cursor,
             'Cards',

@@ -41,8 +41,18 @@ def migrate_merge_examples_tables(cursor):
     
     if 'UserExamples' not in existing_tables:
         print("📋 Создаю таблицу UserExamples...")
-        from core.db_helpers import ensure_user_examples_table
-        ensure_user_examples_table(cursor)
+        # Создаем таблицу напрямую (без импорта core.db_helpers)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS UserExamples (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                example_type TEXT NOT NULL,
+                example_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_examples_user_type ON UserExamples(user_id, example_type)")
         print("✅ Таблица UserExamples создана")
     else:
         print("⚠️ Таблица UserExamples уже существует")
