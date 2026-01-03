@@ -3278,15 +3278,26 @@ def client_info():
                 if 'business_id' in columns:
                     # Колонка существует - используем запрос с business_id
                     try:
+                        print(f"🔍 GET /api/client-info: Выполняю запрос с business_id={current_business_id}, user_id={user_id}")
                         cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? AND business_id = ?", (user_id, current_business_id))
                         row = cursor.fetchone()
+                        print(f"✅ GET /api/client-info: Запрос выполнен успешно, row={row is not None}")
                     except Exception as e:
-                        print(f"⚠️ Ошибка запроса ClientInfo с business_id: {e}")
+                        error_msg = str(e)
+                        print(f"❌ Ошибка запроса ClientInfo с business_id: {error_msg}")
                         import traceback
                         traceback.print_exc()
-                        # Пытаемся получить без business_id
-                        cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
-                        row = cursor.fetchone()
+                        # Если ошибка "no such column: business_id" - значит проверка колонки не сработала
+                        if "no such column: business_id" in error_msg.lower():
+                            print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Колонка business_id не найдена, хотя проверка показала, что она есть!")
+                            print(f"🚨 Колонки из проверки: {columns}")
+                            # Пытаемся получить без business_id
+                            cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
+                            row = cursor.fetchone()
+                        else:
+                            # Другая ошибка - пробуем без business_id
+                            cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
+                            row = cursor.fetchone()
                 else:
                     # Колонка не существует - используем запрос без business_id
                     print(f"⚠️ Колонка business_id отсутствует, используем запрос без неё. Колонки: {columns}")
