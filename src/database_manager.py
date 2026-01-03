@@ -732,12 +732,16 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT id, name, description, industry, business_type, address, working_hours, 
-                   phone, email, website, owner_id, owner_name, owner_email, is_active, 
+                   phone, email, website, owner_id, is_active, 
                    created_at, updated_at
             FROM Businesses WHERE id = ?
         """, (business_id,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        
+        columns = [desc[0] for desc in cursor.description]
+        return dict(zip(columns, row))
     
     def update_business(self, business_id: str, name: str = None, description: str = None, industry: str = None):
         """Обновить информацию о бизнесе"""
