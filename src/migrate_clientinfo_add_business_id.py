@@ -7,7 +7,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from safe_db_utils import safe_migrate, get_db_connection
-from core.helpers import find_business_id_for_user
 import sqlite3
 
 def migrate_clientinfo_add_business_id(cursor):
@@ -60,8 +59,14 @@ def migrate_clientinfo_add_business_id(cursor):
         # Если business_id нет в старых данных, пытаемся найти его в таблице Businesses
         business_id = row_dict.get('business_id')
         if not business_id:
-            business_id = find_business_id_for_user(cursor, user_id)
-            if business_id == user_id:
+            # Пытаемся найти business_id из таблицы Businesses
+            cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_id,))
+            business_row = cursor.fetchone()
+            if business_row:
+                business_id = business_row[0]
+            else:
+                # Fallback: используем user_id (временное решение)
+                business_id = user_id
                 print(f"⚠️ Не найден business_id для user_id={user_id}, используем user_id как fallback")
         
         cursor.execute("""

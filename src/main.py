@@ -1852,18 +1852,9 @@ def services_optimize():
                 try:
                     db = DatabaseManager()
                     cur = db.conn.cursor()
-                    cur.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS UserServiceExamples (
-                            id TEXT PRIMARY KEY,
-                            user_id TEXT NOT NULL,
-                            example_text TEXT NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-                        )
-                        """
-                    )
-                    cur.execute("SELECT example_text FROM UserServiceExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                    from core.db_helpers import ensure_user_examples_table
+                    ensure_user_examples_table(cur)
+                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                     rows = cur.fetchall()
                     db.close()
                     examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
@@ -2029,21 +2020,11 @@ def user_service_examples():
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        # Обеспечим таблицу
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserServiceExamples (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                example_text TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-            )
-            """
-        )
+        from core.db_helpers import ensure_user_examples_table
+        ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserServiceExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall()
             db.close()
             examples = []
@@ -2062,13 +2043,13 @@ def user_service_examples():
             db.close()
             return jsonify({"error": "Текст примера обязателен"}), 400
         # Ограничим 5 примеров на пользователя
-        cur.execute("SELECT COUNT(*) FROM UserServiceExamples WHERE user_id = ?", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'service'", (user_data['user_id'],))
         count = cur.fetchone()[0]
         if count >= 5:
             db.close()
             return jsonify({"error": "Максимум 5 примеров"}), 400
         example_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserServiceExamples (id, user_id, example_text) VALUES (?, ?, ?)", (example_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'service', ?)", (example_id, user_data['user_id'], text))
         db.conn.commit()
         db.close()
         return jsonify({"success": True, "id": example_id})
@@ -2091,7 +2072,7 @@ def delete_user_service_example(example_id: str):
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserServiceExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'service'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -2224,18 +2205,9 @@ def news_generate():
         # Подтянем примеры новостей пользователя (до 5)
         news_examples = ""
         try:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS UserNewsExamples (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    example_text TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-                )
-                """
-            )
-            cur.execute("SELECT example_text FROM UserNewsExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            from core.db_helpers import ensure_user_examples_table
+            ensure_user_examples_table(cur)
+            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
             r = cur.fetchall()
             ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
             if ex:
@@ -2487,20 +2459,11 @@ def review_examples():
             return jsonify({"error": "Недействительный токен"}), 401
 
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserReviewExamples (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                example_text TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-            )
-            """
-        )
+        from core.db_helpers import ensure_user_examples_table
+        ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -2511,12 +2474,12 @@ def review_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserReviewExamples WHERE user_id = ?", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'review'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserReviewExamples (id, user_id, example_text) VALUES (?, ?, ?)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'review', ?)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -2536,7 +2499,7 @@ def review_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserReviewExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'review'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -2560,20 +2523,11 @@ def news_examples():
             return jsonify({"error": "Недействительный токен"}), 401
 
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNewsExamples (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                example_text TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-            )
-            """
-        )
+        from core.db_helpers import ensure_user_examples_table
+        ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserNewsExamples WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -2584,12 +2538,12 @@ def news_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserNewsExamples WHERE user_id = ?", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'news'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserNewsExamples (id, user_id, example_text) VALUES (?, ?, ?)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'news', ?)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -2609,7 +2563,7 @@ def news_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserNewsExamples WHERE id = ? AND user_id = ?", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'news'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -2668,18 +2622,9 @@ def reviews_reply():
             try:
                 db = DatabaseManager()
                 cur = db.conn.cursor()
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS UserReviewExamples (
-                        id TEXT PRIMARY KEY,
-                        user_id TEXT NOT NULL,
-                        example_text TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-                    )
-                    """
-                )
-                cur.execute("SELECT example_text FROM UserReviewExamples WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                from core.db_helpers import ensure_user_examples_table
+                ensure_user_examples_table(cur)
+                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                 rows = cur.fetchall(); db.close()
                 examples = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
                 if examples:
@@ -5604,14 +5549,87 @@ def admin_sync_business_yandex(business_id):
         account_id, auth_data_encrypted, external_id = account_row
         print(f"✅ Найден аккаунт: {account_id}, external_id: {external_id}")
         
-        if YandexBusinessParser is None:
-            print("❌ YandexBusinessParser не доступен")
-            return jsonify({"error": "YandexBusinessParser не доступен. Проверьте логи сервера."}), 500
+        print(f"🔄 Добавление задачи синхронизации в очередь для бизнеса {business_id}, аккаунт {account_id}")
         
-        print(f"🔄 Запуск парсинга через YandexBusinessParser для бизнеса {business_id}, аккаунт {account_id}")
+        sync_id = str(uuid.uuid4())
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
         try:
-            # Расшифровываем auth_data
-            auth_data_plain = decrypt_auth_data(auth_data_encrypted)
+            # Получаем user_id из авторизованного пользователя
+            user_id = user_data["user_id"]
+            
+            cursor.execute("""
+                INSERT INTO ParseQueue (
+                    id, business_id, account_id, task_type, source, 
+                    status, user_id, url, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'sync_yandex_business', 'yandex_business', 
+                        'pending', ?, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, (sync_id, business_id, account_id, user_id))
+            db.conn.commit()
+            print(f"✅ Задача синхронизации добавлена в очередь: {sync_id}")
+        except Exception as e:
+            db.close()
+            print(f"❌ Ошибка при добавлении задачи в очередь: {e}")
+            return jsonify({
+                "success": False,
+                "error": f"Ошибка при добавлении задачи в очередь: {str(e)}"
+            }), 500
+        finally:
+            db.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Синхронизация запущена, обработка в фоне",
+            "sync_id": sync_id
+        })
+    
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Критическая ошибка в admin_sync_business_yandex: {e}")
+        print(f"❌ Детали ошибки:\n{error_details}")
+        return jsonify({
+            "success": False,
+            "error": f"Критическая ошибка: {str(e)}",
+            "message": str(e)
+        }), 500
+
+def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
+    """Внутренняя функция для выполнения синхронизации (вызывается из worker)"""
+    if YandexBusinessParser is None:
+        print("❌ YandexBusinessParser не доступен")
+        return False
+    
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT auth_data_encrypted, external_id 
+            FROM ExternalBusinessAccounts 
+            WHERE id = ?
+        """, (account_id,))
+        account_row = cursor.fetchone()
+        
+        if not account_row:
+            print(f"❌ Аккаунт {account_id} не найден")
+            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+                         ("Аккаунт не найден", sync_id))
+            db.conn.commit()
+            return False
+        
+        auth_data_encrypted = account_row[0]
+        external_id = account_row[1] if len(account_row) > 1 else None
+        
+        cursor.execute("SELECT name FROM Businesses WHERE id = ?", (business_id,))
+        business_row = cursor.fetchone()
+        business_name = business_row[0] if business_row else 'Unknown'
+        
+        db.close()
+        
+        # Расшифровываем auth_data
+        auth_data_plain = decrypt_auth_data(auth_data_encrypted)
             if not auth_data_plain:
                 print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
                 return jsonify({
@@ -5620,60 +5638,60 @@ def admin_sync_business_yandex(business_id):
                     "message": "Обновите cookies в настройках внешних интеграций"
                 }), 400
             
-            # Парсим JSON auth_data
-            import json
-            try:
-                auth_data_dict = json.loads(auth_data_plain)
-            except json.JSONDecodeError:
-                # Если не JSON, предполагаем что это просто cookies строка
-                auth_data_dict = {"cookies": auth_data_plain}
+        # Парсим JSON auth_data
+        import json
+        try:
+            auth_data_dict = json.loads(auth_data_plain)
+        except json.JSONDecodeError:
+            # Если не JSON, предполагаем что это просто cookies строка
+            auth_data_dict = {"cookies": auth_data_plain}
+        
+        # Создаём парсер
+        parser = YandexBusinessParser(auth_data_dict)
+        
+        # Получаем данные
+        account_data = {
+            "id": account_id,
+            "business_id": business_id,
+            "external_id": external_id
+        }
             
-            # Создаём парсер
-            parser = YandexBusinessParser(auth_data_dict)
+        print(f"📥 Получение отзывов...")
+        reviews = parser.fetch_reviews(account_data)
+        print(f"✅ Получено отзывов: {len(reviews)}")
+        
+        print(f"📥 Получение статистики...")
+        stats = parser.fetch_stats(account_data)
+        print(f"✅ Получено точек статистики: {len(stats)}")
+        
+        print(f"📥 Получение публикаций...")
+        posts = parser.fetch_posts(account_data)
+        print(f"✅ Получено публикаций: {len(posts)}")
+        
+        # Получаем услуги/прайс-лист
+        print(f"📥 Получение услуг/прайс-листа...")
+        services = parser.fetch_services(account_data)
+        print(f"✅ Получено услуг: {len(services)}")
+        
+        # Получаем информацию об организации (рейтинг, количество отзывов, новостей, фото)
+        print(f"📥 Получение информации об организации...")
+        org_info = parser.fetch_organization_info(account_data)
+        print(f"✅ Информация об организации:")
+        print(f"   Рейтинг: {org_info.get('rating')}")
+        print(f"   Отзывов: {org_info.get('reviews_count')}")
+        print(f"   Новостей: {org_info.get('news_count')}")
+        print(f"   Фото: {org_info.get('photos_count')}")
+        
+        # Сохраняем данные
+        db = DatabaseManager()
+        worker = YandexBusinessSyncWorker()
             
-            # Получаем данные
-            account_data = {
-                "id": account_id,
-                "business_id": business_id,
-                "external_id": external_id
-            }
-            
-            print(f"📥 Получение отзывов...")
-            reviews = parser.fetch_reviews(account_data)
-            print(f"✅ Получено отзывов: {len(reviews)}")
-            
-            print(f"📥 Получение статистики...")
-            stats = parser.fetch_stats(account_data)
-            print(f"✅ Получено точек статистики: {len(stats)}")
-            
-            print(f"📥 Получение публикаций...")
-            posts = parser.fetch_posts(account_data)
-            print(f"✅ Получено публикаций: {len(posts)}")
-            
-            # Получаем услуги/прайс-лист
-            print(f"📥 Получение услуг/прайс-листа...")
-            services = parser.fetch_services(account_data)
-            print(f"✅ Получено услуг: {len(services)}")
-            
-            # Получаем информацию об организации (рейтинг, количество отзывов, новостей, фото)
-            print(f"📥 Получение информации об организации...")
-            org_info = parser.fetch_organization_info(account_data)
-            print(f"✅ Информация об организации:")
-            print(f"   Рейтинг: {org_info.get('rating')}")
-            print(f"   Отзывов: {org_info.get('reviews_count')}")
-            print(f"   Новостей: {org_info.get('news_count')}")
-            print(f"   Фото: {org_info.get('photos_count')}")
-            
-            # Сохраняем данные
-            db = DatabaseManager()
-            worker = YandexBusinessSyncWorker()
-            
-            if reviews:
-                worker._upsert_reviews(db, reviews)
-                print(f"💾 Сохранено отзывов: {len(reviews)}")
-            
-            # Создаём статистику с информацией об организации, если её нет
-            if not stats and org_info:
+        if reviews:
+            worker._upsert_reviews(db, reviews)
+            print(f"💾 Сохранено отзывов: {len(reviews)}")
+        
+        # Создаём статистику с информацией об организации, если её нет
+        if not stats and org_info:
                 from external_sources import ExternalStatsPoint, make_stats_id
                 from datetime import date
                 today_str = date.today().isoformat()
@@ -5692,32 +5710,34 @@ def admin_sync_business_yandex(business_id):
                 )
                 stats = [stat]
             
-            if stats:
-                # Обновляем последнюю статистику информацией об организации
-                if org_info and stats:
-                    last_stat = stats[-1]
-                    if last_stat.raw_payload:
-                        last_stat.raw_payload.update(org_info)
-                    else:
-                        last_stat.raw_payload = org_info
-                    # Обновляем рейтинг и количество отзывов из org_info
-                    if org_info.get('rating'):
-                        last_stat.rating = org_info.get('rating')
-                    if org_info.get('reviews_count'):
-                        last_stat.reviews_total = org_info.get('reviews_count')
-                
-                worker._upsert_stats(db, stats)
-                print(f"💾 Сохранено точек статистики: {len(stats)}")
+        if stats:
+            # Обновляем последнюю статистику информацией об организации
+            if org_info and stats:
+                last_stat = stats[-1]
+                if last_stat.raw_payload:
+                    last_stat.raw_payload.update(org_info)
+                else:
+                    last_stat.raw_payload = org_info
+                # Обновляем рейтинг и количество отзывов из org_info
+                if org_info.get('rating'):
+                    last_stat.rating = org_info.get('rating')
+                if org_info.get('reviews_count'):
+                    last_stat.reviews_total = org_info.get('reviews_count')
             
-            if posts:
-                worker._upsert_posts(db, posts)
-                print(f"💾 Сохранено публикаций: {len(posts)}")
-            
-            # Сохраняем услуги в UserServices
-            if services:
-                try:
-                    cursor = db.conn.cursor()
-                    user_id = user_data.get("user_id")
+            worker._upsert_stats(db, stats)
+            print(f"💾 Сохранено точек статистики: {len(stats)}")
+        
+        if posts:
+            worker._upsert_posts(db, posts)
+            print(f"💾 Сохранено публикаций: {len(posts)}")
+        
+        # Сохраняем услуги в UserServices
+        if services:
+            try:
+                cursor = db.conn.cursor()
+                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+                owner_row = cursor.fetchone()
+                user_id = owner_row[0] if owner_row else None
                     if not user_id:
                         print(f"⚠️ Нет user_id для сохранения услуг")
                     else:
@@ -5795,105 +5815,84 @@ def admin_sync_business_yandex(business_id):
                                 traceback.print_exc()
                                 continue
                         
-                        db.conn.commit()
-                        print(f"💾 Сохранено услуг: {saved_count} новых, {updated_count} обновлено")
-                except Exception as e:
-                    print(f"❌ Критическая ошибка при сохранении услуг: {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Обновляем last_sync_at
-            cursor = db.conn.cursor()
-            cursor.execute("""
-                UPDATE ExternalBusinessAccounts 
-                SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
-                WHERE id = ?
-            """, (account_id,))
-            # Сохраняем историю парсинга в MapParseResults
-            try:
-                cursor = db.conn.cursor()
-                # Получаем yandex_url для бизнеса или формируем из external_id
-                cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (business_id,))
-                yandex_url_row = cursor.fetchone()
-                yandex_url = yandex_url_row[0] if yandex_url_row else None
-                
-                # Если yandex_url нет, формируем из external_id
-                # account_row может быть sqlite3.Row или dict
-                external_id = account_row.get('external_id') if hasattr(account_row, 'get') else (account_row['external_id'] if 'external_id' in account_row else None)
-                if not yandex_url and external_id:
-                    yandex_url = f"https://yandex.ru/sprav/{external_id}"
-                
-                # Сохраняем даже если нет yandex_url (используем external_id или пустой URL)
-                parse_id = str(uuid.uuid4())
-                # Подсчитываем отзывы без ответов
-                reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else 0
-                
-                cursor.execute("""
-                    INSERT INTO MapParseResults (
-                        id, business_id, url, map_type, rating, reviews_count, 
-                        unanswered_reviews_count, news_count, photos_count, 
-                        created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (
-                    parse_id,
-                    business_id,
-                    yandex_url or f"https://yandex.ru/sprav/{account_row.get('external_id', 'unknown')}",
-                    'yandex',
-                    org_info.get('rating') if org_info else None,
-                    len(reviews) if reviews else 0,
-                    reviews_without_response,
-                    len(posts) if posts else 0,
-                    org_info.get('photos_count', 0) if org_info else 0,
-                ))
                 db.conn.commit()
-                print(f"💾 Сохранена история парсинга: {parse_id} (отзывов: {len(reviews) if reviews else 0}, новостей: {len(posts) if posts else 0})")
+                print(f"💾 Сохранено услуг: {saved_count} новых, {updated_count} обновлено")
             except Exception as e:
-                print(f"⚠️ Ошибка сохранения истории парсинга: {e}")
+                print(f"❌ Критическая ошибка при сохранении услуг: {e}")
                 import traceback
                 traceback.print_exc()
-                import traceback
-                traceback.print_exc()
+        
+        # Обновляем last_sync_at
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            UPDATE ExternalBusinessAccounts 
+            SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
+            WHERE id = ?
+        """, (account_id,))
+        
+        # Сохраняем историю парсинга в MapParseResults
+        try:
+            cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (business_id,))
+            yandex_url_row = cursor.fetchone()
+            yandex_url = yandex_url_row[0] if yandex_url_row else None
             
+            if not yandex_url and external_id:
+                yandex_url = f"https://yandex.ru/sprav/{external_id}"
+            
+            parse_id = str(uuid.uuid4())
+            reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else 0
+            
+            cursor.execute("""
+                INSERT INTO MapParseResults (
+                    id, business_id, url, map_type, rating, reviews_count, 
+                    unanswered_reviews_count, news_count, photos_count, 
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                parse_id,
+                business_id,
+                yandex_url or f"https://yandex.ru/sprav/{external_id or 'unknown'}",
+                'yandex',
+                org_info.get('rating') if org_info else None,
+                len(reviews) if reviews else 0,
+                reviews_without_response,
+                len(posts) if posts else 0,
+                org_info.get('photos_count', 0) if org_info else 0,
+            ))
+            db.conn.commit()
+            print(f"💾 Сохранена история парсинга: {parse_id}")
+        except Exception as e:
+            print(f"⚠️ Ошибка сохранения истории парсинга: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Обновляем статус задачи на completed
+        cursor.execute("UPDATE SyncQueue SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (sync_id,))
+        db.conn.commit()
+        db.close()
+        
+        print(f"✅ Синхронизация завершена успешно для бизнеса {business_name}")
+        return True
+        
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ Ошибка при синхронизации бизнеса {business_id}: {e}")
+        print(f"❌ Детали ошибки:\n{error_details}")
+        
+        # Сохраняем ошибку в SyncQueue и ExternalBusinessAccounts
+        try:
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+                         (str(e), sync_id))
+            cursor.execute("UPDATE ExternalBusinessAccounts SET last_error = ? WHERE id = ?", (str(e), account_id))
             db.conn.commit()
             db.close()
-            
-            print(f"✅ Парсинг завершен успешно для бизнеса {business_name}")
-            
-            return jsonify({
-                "success": True,
-                "message": f"Парсинг выполнен: {len(reviews)} отзывов, {len(stats)} точек статистики, {len(posts)} публикаций, {len(services)} услуг",
-                "stats": {
-                    "reviews": len(reviews),
-                    "stats": len(stats),
-                    "posts": len(posts),
-                    "services": len(services)
-                }
-            })
-        except Exception as e:
-            error_details = traceback.format_exc()
-            print(f"❌ Ошибка при парсинге бизнеса {business_id}: {e}")
-            print(f"❌ Детали ошибки:\n{error_details}")
-            
-            # Сохраняем ошибку в аккаунт
-            try:
-                db = DatabaseManager()
-                cursor = db.conn.cursor()
-                cursor.execute("""
-                    UPDATE ExternalBusinessAccounts 
-                    SET last_error = ?
-                    WHERE id = ?
-                """, (str(e), account_id))
-                db.conn.commit()
-                db.close()
-            except Exception as save_error:
-                print(f"⚠️ Не удалось сохранить ошибку в БД: {save_error}")
-            
-            return jsonify({
-                "success": False,
-                "error": f"Ошибка парсинга: {str(e)}",
-                "message": str(e)
-            }), 500
+        except Exception as save_error:
+            print(f"⚠️ Не удалось сохранить ошибку в БД: {save_error}")
+        
+        return False
     except Exception as e:
         error_details = traceback.format_exc()
         print(f"❌ Критическая ошибка в admin_sync_business_yandex: {e}")
@@ -5910,6 +5909,59 @@ def admin_sync_business_yandex(business_id):
         print(f"❌ Детали ошибки:\n{error_details}")
         return jsonify({"error": f"Ошибка синхронизации Яндекс для бизнеса: {str(e)}"}), 500
 
+@app.route('/api/admin/yandex/sync/status/<string:sync_id>', methods=['GET'])
+def admin_sync_status(sync_id):
+    """Проверить статус синхронизации"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, business_id, account_id, source, status, error_message, created_at, updated_at
+            FROM ParseQueue 
+            WHERE id = ? AND task_type = 'sync_yandex_business'
+        """, (sync_id,))
+        sync_row = cursor.fetchone()
+        
+        if not sync_row:
+            db.close()
+            return jsonify({"error": "Синхронизация не найдена"}), 404
+        
+        sync_data = dict(sync_row)
+        
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (sync_data['business_id'],))
+        owner_row = cursor.fetchone()
+        owner_id = owner_row[0] if owner_row else None
+        
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "sync": {
+                "id": sync_data['id'],
+                "business_id": sync_data['business_id'],
+                "status": sync_data['status'],
+                "error_message": sync_data.get('error_message'),
+                "created_at": sync_data['created_at'],
+                "updated_at": sync_data['updated_at']
+            }
+        })
+    except Exception as e:
+        print(f"❌ Ошибка при проверке статуса синхронизации: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/networks', methods=['GET'])
 def get_user_networks():
@@ -6667,6 +6719,174 @@ def update_business(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка обновления бизнеса: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== УПРАВЛЕНИЕ ПРОКСИ ====================
+@app.route('/api/admin/proxies', methods=['GET'])
+def get_proxies():
+    """Получить список прокси (только для суперадмина)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT id, proxy_type, host, port, is_active, is_working, 
+                   success_count, failure_count, last_used_at, last_checked_at
+            FROM ProxyServers
+            ORDER BY created_at DESC
+        """)
+        
+        proxies = []
+        for row in cursor.fetchall():
+            proxies.append({
+                "id": row[0],
+                "type": row[1],
+                "host": row[2],
+                "port": row[3],
+                "is_active": bool(row[4]),
+                "is_working": bool(row[5]),
+                "success_count": row[6],
+                "failure_count": row[7],
+                "last_used_at": row[8],
+                "last_checked_at": row[9]
+            })
+        
+        db.close()
+        return jsonify({"proxies": proxies})
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения прокси: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/proxies', methods=['POST'])
+def add_proxy():
+    """Добавить прокси (только для суперадмина)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        data = request.json
+        proxy_id = str(uuid.uuid4())
+        
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            INSERT INTO ProxyServers (
+                id, proxy_type, host, port, username, password,
+                is_active, is_working, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (
+            proxy_id,
+            data.get('type', 'http'),
+            data['host'],
+            data['port'],
+            data.get('username'),
+            data.get('password')  # TODO: зашифровать
+        ))
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "proxy_id": proxy_id})
+        
+    except Exception as e:
+        print(f"❌ Ошибка добавления прокси: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/proxies/<proxy_id>', methods=['DELETE'])
+def delete_proxy(proxy_id):
+    """Удалить прокси (только для суперадмина)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        cursor.execute("DELETE FROM ProxyServers WHERE id = ?", (proxy_id,))
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления прокси: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/proxies/<proxy_id>/toggle', methods=['POST'])
+def toggle_proxy(proxy_id):
+    """Включить/выключить прокси (только для суперадмина)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+        
+        cursor = db.conn.cursor()
+        # Получаем текущий статус
+        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = ?", (proxy_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Прокси не найден"}), 404
+        
+        new_status = 0 if row[0] else 1
+        cursor.execute("""
+            UPDATE ProxyServers 
+            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (new_status, proxy_id))
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "is_active": bool(new_status)})
+        
+    except Exception as e:
+        print(f"❌ Ошибка переключения прокси: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # ==================== ПРОМПТЫ ДЛЯ AI ====================

@@ -98,21 +98,86 @@ def init_database_schema():
         
         # ===== ПАРСИНГ И ОЧЕРЕДЬ =====
         
-        # ParseQueue - очередь парсинга карт
+        # ParseQueue - очередь парсинга карт и синхронизации
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ParseQueue (
                 id TEXT PRIMARY KEY,
-                url TEXT NOT NULL,
+                url TEXT,
                 user_id TEXT NOT NULL,
                 business_id TEXT,
+                task_type TEXT DEFAULT 'parse_card',
+                account_id TEXT,
+                source TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 retry_after TEXT,
+                error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES Users (id) ON DELETE CASCADE,
                 FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
             )
         """)
         print("✅ Таблица ParseQueue создана/проверена")
+        
+        # Проверяем и добавляем недостающие поля для обратной совместимости
+        try:
+            cursor.execute("PRAGMA table_info(ParseQueue)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            fields_to_add = [
+                ("task_type", "TEXT DEFAULT 'parse_card'"),
+                ("account_id", "TEXT"),
+                ("source", "TEXT"),
+                ("error_message", "TEXT"),
+                ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            ]
+            
+            for field_name, field_type in fields_to_add:
+                if field_name not in columns:
+                    try:
+                        cursor.execute(f"ALTER TABLE ParseQueue ADD COLUMN {field_name} {field_type}")
+                        print(f"✅ Добавлено поле {field_name} в ParseQueue")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка при добавлении поля {field_name}: {e}")
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки структуры ParseQueue: {e}")
+        
+        # SyncQueue - очередь синхронизации внешних источников (Яндекс.Бизнес, Google Business, 2ГИС)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS SyncQueue (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                account_id TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'yandex_business',
+                status TEXT NOT NULL DEFAULT 'pending',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица SyncQueue создана/проверена")
+        
+        # ProxyServers - список прокси-серверов для ротации IP
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ProxyServers (
+                id TEXT PRIMARY KEY,
+                proxy_type TEXT NOT NULL,
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                username TEXT,
+                password TEXT,
+                is_active INTEGER DEFAULT 1,
+                last_used_at TIMESTAMP,
+                last_checked_at TIMESTAMP,
+                success_count INTEGER DEFAULT 0,
+                failure_count INTEGER DEFAULT 0,
+                is_working INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Таблица ProxyServers создана/проверена")
         
         # MapParseResults - результаты парсинга карт
         cursor.execute("""
@@ -343,6 +408,15 @@ def init_database_schema():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_business_id ON ParseQueue(business_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_user_id ON ParseQueue(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_parsequeue_created_at ON ParseQueue(created_at)")
+        
+        # Индексы для SyncQueue
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_syncqueue_status ON SyncQueue(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_syncqueue_business_id ON SyncQueue(business_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_syncqueue_created_at ON SyncQueue(created_at)")
+        
+        # Индексы для ProxyServers
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proxy_servers_active ON ProxyServers(is_active, is_working)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proxy_servers_last_used ON ProxyServers(last_used_at)")
         
         # Индексы для Businesses
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON Businesses(owner_id)")

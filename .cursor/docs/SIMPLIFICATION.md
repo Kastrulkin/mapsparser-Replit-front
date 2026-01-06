@@ -47,43 +47,127 @@
 
 ## История упрощений
 
-### 2025-01-03 (дополнительно) - Упрощение условий в миграциях
+### 2025-01-03 - Упрощение UI для управления прокси
 
-**Источник:** Проверка кода после корректировок архитектора и кодера
+**Источник:** `.cursor/docs/IMPLEMENTATION.md` - "UI для управления прокси в админ-панели"
 
 #### Файлы, которые упрощались
-- `src/migrate_merge_examples_tables.py` - упрощены условия в цикле удаления таблиц (guard clause)
+- `frontend/src/components/ProxyManagement.tsx` - упрощены условия, guard clauses, форматирование даты
+- `frontend/src/pages/dashboard/AdminPage.tsx` - исправлен баг (добавлена вкладка "proxies" в массив tabs)
 
 #### Что было упрощено
 
-**Упрощение условий в цикле удаления таблиц** (migrate_merge_examples_tables.py):
-- Было: вложенный if внутри цикла
-```python
-for table_name in source_tables.keys():
-    if table_name in existing_tables:
-        if table_name not in ALLOWED_TABLES:
-            raise ValueError(f"Неразрешенная таблица: {table_name}")
-        print(f"📋 Удаляю таблицу {table_name}...")
-        cursor.execute("DROP TABLE IF EXISTS " + table_name)
-        print(f"✅ Таблица {table_name} удалена")
-```
-- Стало: guard clause для раннего выхода
-```python
-for table_name in source_tables.keys():
-    if table_name not in existing_tables:
-        continue
-    
-    if table_name not in ALLOWED_TABLES:
-        raise ValueError(f"Неразрешенная таблица: {table_name}")
-    
-    print(f"📋 Удаляю таблицу {table_name}...")
-    cursor.execute("DROP TABLE IF EXISTS " + table_name)
-    print(f"✅ Таблица {table_name} удалена")
-```
+1. **Исправлен баг в AdminPage.tsx**:
+   - Было: вкладка "proxies" была в типе `activeTab`, но отсутствовала в массиве `tabs`
+   - Стало: добавлена вкладка `{ id: 'proxies' as const, label: 'Прокси', icon: Network }` в массив tabs
+
+2. **Упрощение условий в ProxyManagement.tsx** (guard clauses):
+   - Было: вложенные тернарные операторы для `statusColor` и `statusIcon`
+   ```typescript
+   const statusColor = proxy.is_active
+     ? proxy.is_working
+       ? 'bg-green-500/10...'
+       : 'bg-red-500/10...'
+     : 'bg-muted...';
+   ```
+   - Стало: явные условия с guard clauses
+   ```typescript
+   if (!proxy.is_active) {
+     statusColor = 'bg-muted...';
+     StatusIcon = Power;
+   } else if (proxy.is_working) {
+     statusColor = 'bg-green-500/10...';
+     StatusIcon = CheckCircle2;
+   } else {
+     statusColor = 'bg-red-500/10...';
+     StatusIcon = XCircle;
+   }
+   ```
+
+3. **Упрощение обработки ответов API** (guard clauses):
+   - Было: `if (response.ok) { ... } else { ... }` во всех функциях
+   - Стало: `if (!response.ok) { ... return; }` с ранним выходом в `loadProxies`, `handleAddProxy`, `handleDeleteProxy`, `handleToggleProxy`
+
+4. **Упрощение функции formatDate**:
+   - Было: try-catch блок для обработки ошибок парсинга даты
+   ```typescript
+   try {
+     const date = new Date(dateString);
+     return new Intl.DateTimeFormat(...).format(date);
+   } catch {
+     return dateString;
+   }
+   ```
+   - Стало: проверка через `isNaN(date.getTime())` (проще и явнее)
+   ```typescript
+   const date = new Date(dateString);
+   if (isNaN(date.getTime())) return dateString;
+   return new Intl.DateTimeFormat(...).format(date);
+   ```
 
 #### Результаты
-- Упрощена читаемость кода (guard clause вместо вложенного if)
-- Сохранена функциональность и безопасность
+- Исправлен баг: вкладка "Прокси" теперь отображается в навигации
+- Упрощена читаемость кода (guard clauses вместо вложенных тернарных операторов)
+- Улучшена обработка ошибок (ранний выход вместо вложенных if-else)
+- Упрощена функция форматирования даты (явная проверка вместо try-catch)
+
+---
+
+### 2025-01-03 - Упрощение кода после fallback-парсинга и инфраструктуры прокси
+
+**Источник:** `.cursor/docs/IMPLEMENTATION.md` - "2025-01-03 - Fallback парсинг через кабинет и ротация IP"
+
+#### Файлы, которые упрощались
+- `src/proxy_manager.py` - удалены неиспользуемые импорты и поля, упрощен конструктор
+- `src/worker.py` - проверены и подтверждены guard-clauses в `_is_parsing_successful` / `_has_cabinet_account`
+
+#### Что было упрощено
+
+1. **ProxyManager: конструктор и импорты**
+   - Было: лишние импорты и неиспользуемые поля
+   ```python
+   import random
+   import time
+   from typing import Optional, Dict, Any
+   from datetime import datetime, timedelta
+   from safe_db_utils import get_db_connection
+
+   class ProxyManager:
+       """Управление прокси-серверами"""
+       
+       def __init__(self):
+           self.current_proxy = None
+           self.proxy_cache = []
+           self.cache_ttl = 300  # 5 минут
+   ```
+   - Стало: только необходимые импорты и одно явное поле
+   ```python
+   from typing import Optional, Dict, Any
+   from safe_db_utils import get_db_connection
+
+   class ProxyManager:
+       """Управление прокси-серверами."""
+       
+       def __init__(self):
+           self.current_proxy: Optional[Dict[str, Any]] = None
+   ```
+
+2. **Worker: проверки успешности парсинга и наличия кабинета**
+   - Используются простые guard-clauses без лишней вложенности:
+   ```python
+   def _is_parsing_successful(card_data: dict, business_id: str = None) -> tuple:
+       if card_data.get("error") == "captcha_detected":
+           return False, "captcha_detected"
+       if card_data.get("error"):
+           return False, f"error: {card_data.get('error')}"
+       # ...
+   ```
+   - Логика уже соответствует правилам упрощения, доп. изменений не потребовалось.
+
+#### Результаты
+- Удалены неиспользуемые импорты и поля в `ProxyManager` (меньше шума, проще поддержка)
+- Конструктор `ProxyManager` стал очевидным и типобезопасным
+- Подтверждено, что fallback-логика в `worker.py` уже реализована через guard-clauses и не требует дополнительного упрощения
 
 ---
 

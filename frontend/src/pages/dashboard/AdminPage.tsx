@@ -12,6 +12,7 @@ import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabi
 import { GrowthPlan } from '../../components/GrowthPlan';
 import { GrowthPlanEditor } from '../../components/GrowthPlanEditor';
 import { PromptsManagement } from '../../components/PromptsManagement';
+import { ProxyManagement } from '../../components/ProxyManagement';
 
 interface Business {
   id: string;
@@ -98,7 +99,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -480,6 +481,7 @@ export const AdminPage: React.FC = () => {
     { id: 'tokens' as const, label: 'Статистика токенов', icon: BarChart3 },
     { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
     { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
+    { id: 'proxies' as const, label: 'Прокси', icon: Network },
   ];
 
   return (
@@ -531,6 +533,8 @@ export const AdminPage: React.FC = () => {
         <GrowthPlanEditor />
       ) : activeTab === 'prompts' ? (
         <PromptsManagement />
+      ) : activeTab === 'proxies' ? (
+        <ProxyManagement />
       ) : (
         <>
           {/* Action Bar */}
