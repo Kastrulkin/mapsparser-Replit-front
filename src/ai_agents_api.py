@@ -27,9 +27,45 @@ def get_ai_agents():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
-                   restrictions_json, variables_json, is_active, created_at, updated_at
+        
+        # Проверяем существование таблицы
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='AIAgents'")
+        if not cursor.fetchone():
+            db.close()
+            return jsonify({"error": "Таблица AIAgents не найдена. Выполните миграцию: python migrations/migrate_ai_agents_table.py"}), 500
+        
+        # Проверяем структуру таблицы
+        cursor.execute("PRAGMA table_info(AIAgents)")
+        columns = {row[1] for row in cursor.fetchall()}
+        
+        # Формируем SELECT в зависимости от наличия колонок
+        select_fields = ["id", "name", "type", "description", "personality"]
+        
+        # Добавляем новые поля, если они есть
+        if "workflow" in columns:
+            select_fields.append("workflow")
+        else:
+            select_fields.append("NULL as workflow")
+            
+        if "task" in columns:
+            select_fields.append("task")
+        else:
+            select_fields.append("NULL as task")
+            
+        if "identity" in columns:
+            select_fields.append("identity")
+        else:
+            select_fields.append("NULL as identity")
+            
+        if "speech_style" in columns:
+            select_fields.append("speech_style")
+        else:
+            select_fields.append("NULL as speech_style")
+        
+        select_fields.extend(["restrictions_json", "variables_json", "is_active", "created_at", "updated_at"])
+        
+        cursor.execute(f"""
+            SELECT {', '.join(select_fields)}
             FROM AIAgents
             ORDER BY type, name
         """)
@@ -37,26 +73,31 @@ def get_ai_agents():
         rows = cursor.fetchall()
         agents = []
         for row in rows:
-            workflow_raw = row[5] or ''
+            # Определяем индексы в зависимости от наличия колонок
+            idx = 0
+            workflow_raw = row[idx + 5] if "workflow" in columns else ''
+            task_value = row[idx + 6] if "task" in columns else ''
+            identity_value = row[idx + 7] if "identity" in columns else ''
+            speech_style_value = row[idx + 8] if "speech_style" in columns else ''
+            
             # Всегда возвращаем workflow как строку (YAML текст), чтобы сохранить форматирование
-            # Не парсим JSON, чтобы не потерять YAML форматирование
-            workflow_value = workflow_raw
+            workflow_value = workflow_raw or ''
             
             agents.append({
                 'id': row[0],
                 'name': row[1],
                 'type': row[2],
-                'description': row[3],
+                'description': row[3] or '',
                 'personality': row[4] or '',
                 'workflow': workflow_value,  # Всегда строка (YAML)
-                'task': row[6] or '',
-                'identity': row[7] or '',
-                'speech_style': row[8] or '',
+                'task': task_value or '',
+                'identity': identity_value or '',
+                'speech_style': speech_style_value or '',
                 'restrictions': json.loads(row[9]) if row[9] else {},
                 'variables': json.loads(row[10]) if row[10] else {},
-                'is_active': row[11] == 1,
-                'created_at': row[12],
-                'updated_at': row[13]
+                'is_active': row[11] == 1 if len(row) > 11 else True,
+                'created_at': row[12] if len(row) > 12 else None,
+                'updated_at': row[13] if len(row) > 13 else None
             })
         
         db.close()
