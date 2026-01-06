@@ -47,6 +47,117 @@
 
 ## История упрощений
 
+### 2025-01-06 - Исправление ошибок после упрощения кода
+
+**Проблемы после упрощения:**
+1. **Синтаксическая ошибка в генерации новостей** (main.py, строка 2282): лишний `else:` после `except`
+2. **Синтаксическая ошибка в генерации ответов** (main.py, строка 2701): `except` без соответствующего `try:`
+3. **Неправильная обработка результата оптимизации услуг**: проверка `if 'error' in result` для строки вместо словаря
+
+**Исправления:**
+1. Удален лишний `else:` в обработке результата генерации новостей
+2. Добавлен `try:` блок для обработки результата генерации ответов
+3. Добавлен парсинг JSON из строки для оптимизации услуг (как в новостях и ответах)
+
+**Файлы:**
+- `src/main.py` - исправлены синтаксические ошибки и обработка результатов
+
+### 2025-01-03 - Упрощение обработки результатов генерации и парсинга
+
+**Источник:** `.cursor/docs/IMPLEMENTATION.md` - "Исправление парсинга отзывов, дат и генерации"
+
+#### Файлы, которые упрощались
+- `src/main.py` - упрощена обработка результатов генерации (guard clauses, убрана вложенность)
+- `src/parser_interception.py` - упрощено логирование (убрано дублирование текста)
+- `src/parser.py` - упрощены условия в циклах парсинга ответов (guard clauses)
+
+#### Что было упрощено
+
+1. **Упрощение обработки результата генерации новостей** (main.py, строки 2250-2279):
+   - Было: вложенные if-else для проверки типов и парсинга JSON
+   ```python
+   if isinstance(result, str):
+       try:
+           if start_idx != -1 and end_idx != -1:
+               parsed_result = json.loads(json_str)
+               if isinstance(parsed_result, dict):
+                   if 'error' in parsed_result:
+                       ...
+   ```
+   - Стало: guard clauses с ранним выходом, проверка dict перед str
+   ```python
+   if isinstance(result, dict):
+       if 'error' in result:
+           return jsonify({"error": result['error']}), 500
+       generated_text = result.get('news') or ...
+   elif not isinstance(result, str):
+       generated_text = str(result)
+   else:
+       # парсинг JSON с guard clauses
+   ```
+
+2. **Упрощение обработки результата генерации ответов** (main.py, строки 2678-2704):
+   - Было: вложенные if-else для парсинга JSON
+   ```python
+   if isinstance(result_text, str):
+       if start_idx != -1 and end_idx != -1:
+           try:
+               parsed_result = json.loads(json_str)
+               if isinstance(parsed_result, dict):
+                   ...
+   ```
+   - Стало: guard clauses, упрощенная логика
+   ```python
+   if not isinstance(result_text, str):
+       reply_text = str(result_text)
+   else:
+       reply_text = result_text
+       if start_idx != -1 and end_idx != 0:
+           try:
+               parsed_result = json.loads(json_str)
+               if isinstance(parsed_result, dict):
+                   reply_text = parsed_result.get('reply', result_text)
+           except json.JSONDecodeError:
+               pass
+   ```
+
+3. **Упрощение логирования в parser_interception.py** (строки 535-536):
+   - Было: длинное сообщение "Отзыв с ответом организации"
+   - Стало: короткое "Отзыв с ответом" (убрано дублирование слова "организации")
+
+4. **Упрощение условий в циклах парсинга ответов** (parser.py, строки 902-918, 930-937):
+   - Было: вложенные if внутри циклов
+   ```python
+   for selector in reply_btn_selectors:
+       reply_btn = block.query_selector(selector)
+       if reply_btn and reply_btn.is_visible():
+           try:
+               ...
+           except:
+               continue
+       if reply_clicked:
+           break
+   ```
+   - Стало: guard clauses для раннего выхода
+   ```python
+   for selector in reply_btn_selectors:
+       reply_btn = block.query_selector(selector)
+       if not reply_btn or not reply_btn.is_visible():
+           continue
+       try:
+           ...
+       except:
+           continue
+   ```
+
+#### Результаты
+- Упрощена читаемость кода (guard clauses вместо вложенных if-else)
+- Улучшена обработка ошибок (ранний выход, меньше вложенности)
+- Убрано дублирование логики проверки типов
+- Упрощены циклы парсинга (guard clauses вместо вложенных условий)
+
+---
+
 ### 2025-01-03 - Упрощение UI для управления прокси
 
 **Источник:** `.cursor/docs/IMPLEMENTATION.md` - "UI для управления прокси в админ-панели"

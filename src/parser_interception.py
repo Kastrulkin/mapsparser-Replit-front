@@ -510,19 +510,31 @@ class YandexMapsInterceptionParser:
                         owner_comment.get('publishedAt') or
                         owner_comment.get('published_at')
                     )
+                    if response_text:
+                        print(f"✅ Извлечен ответ организации: {response_text[:100]}...")
                 else:
                     response_text = str(owner_comment)
+                    if response_text:
+                        print(f"✅ Извлечен ответ организации (строка): {response_text[:100]}...")
+            
+            # Логируем дату отзыва
+            if date:
+                print(f"📅 Дата отзыва: {date}")
             
             if text:
-                return {
+                review_data = {
                     'author': author_name or 'Анонимный пользователь',
                     'rating': rating,
                     'text': text,
                     'date': date,
-                    'response_text': response_text,
+                    'org_reply': response_text,  # Маппинг на org_reply для совместимости с worker.py
+                    'response_text': response_text,  # Оставляем для обратной совместимости
                     'response_date': response_date,
                     'has_response': bool(response_text)
                 }
+                if response_text:
+                    print(f"✅ Отзыв с ответом: автор={author_name}, рейтинг={rating}, ответ={response_text[:50]}...")
+                return review_data
             return None
         
         # Пытаемся найти массив отзывов в разных структурах

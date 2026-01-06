@@ -468,7 +468,11 @@ journalctl -u seo-worker -n 20 --no-pager
 
 ### Полная структура базы данных
 
-Всего таблиц: **46** (локально) / **38** (на сервере, после применения миграций будет 46)
+Всего таблиц: **48** (локально, после миграции ИИ агента) / **51+** (на сервере)
+
+**Обновление 2025-01-06:**
+- Добавлены таблицы: `AIAgentConversations`, `AIAgentMessages`
+- Добавлены поля в `Businesses`: `waba_phone_id`, `waba_access_token`, `telegram_bot_token`, `ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`
 
 ---
 
@@ -523,11 +527,15 @@ CREATE TABLE Businesses (
 **Логика:** Центральная таблица проекта. Все данные привязаны к `business_id`. `owner_id` определяет владельца бизнеса. Суперадмин видит все бизнесы.
 
 **Дополнительные поля (из миграций):**
-- `ai_agent_id` (migrate_ai_agents_table.py)
-- `ai_agent_type` (migrate_ai_agents_table.py)
-- `waba_phone_id`, `waba_access_token` (migrate_ai_agent_fields.py)
-- `telegram_bot_token` (migrate_ai_agent_fields.py)
-- `ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions` (migrate_ai_agent_fields.py)
+- `ai_agent_id` (migrate_ai_agents_table.py) - ссылка на AIAgents
+- `ai_agent_type` (migrate_ai_agents_table.py) - тип агента (marketing, booking)
+- **Поля для ИИ-агента (migrate_ai_agent_fields.py, применено 2025-01-06):**
+  - `waba_phone_id` (TEXT) - Phone ID для WhatsApp Business API
+  - `waba_access_token` (TEXT) - Access Token для WhatsApp Business API
+  - `telegram_bot_token` (TEXT) - Токен пользовательского Telegram бота для ИИ-агента
+  - `ai_agent_enabled` (INTEGER DEFAULT 0) - Включен ли ИИ агент
+  - `ai_agent_tone` (TEXT DEFAULT "professional") - Тон общения (professional, friendly, casual)
+  - `ai_agent_restrictions` (TEXT) - Ограничения для ИИ агента (JSON)
 - `chatgpt_enabled`, `chatgpt_api_key` (migrate_chatgpt_integration.py)
 - `telegram_bot_connected`, `telegram_username` (migrate_chatgpt_integration.py)
 - `whatsapp_phone`, `whatsapp_verified` (migrate_chatgpt_integration.py)
@@ -1033,7 +1041,9 @@ CREATE TABLE AIAgents (
 ---
 
 #### 27. **AIAgentConversations** - Разговоры с AI агентом
-**Источник:** `migrations/migrate_ai_agent_fields.py:33-48`
+**Источник:** `migrations/migrate_ai_agent_fields.py:38-51`
+**Статус:** ✅ Создана миграцией (применено 2025-01-06)
+
 ```sql
 CREATE TABLE AIAgentConversations (
     id TEXT PRIMARY KEY,
@@ -1048,17 +1058,24 @@ CREATE TABLE AIAgentConversations (
     FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
 )
 ```
-**Логика:** Хранит активные разговоры с AI-агентом. `current_state` определяет текущее состояние диалога.
+**Логика:** Хранит активные разговоры с AI-агентом через WhatsApp и Telegram. `current_state` определяет текущее состояние диалога (greeting, booking, support и т.д.). `conversation_history` хранит JSON с историей для контекста.
 
 **Индексы:**
-- `idx_ai_conversations_business_id`
-- `idx_ai_conversations_client_phone`
-- `idx_ai_conversations_state`
+- `idx_ai_conversations_business_id` - для быстрого поиска разговоров бизнеса
+- `idx_ai_conversations_client_phone` - для поиска разговора по телефону клиента
+- `idx_ai_conversations_state` - для фильтрации по состоянию диалога
+
+**Использование:**
+- Создается автоматически при первом сообщении от клиента
+- Обновляется при каждом сообщении (last_message_at, conversation_history)
+- Используется для восстановления контекста диалога
 
 ---
 
 #### 28. **AIAgentMessages** - Сообщения в разговорах
-**Источник:** `migrations/migrate_ai_agent_fields.py:59-71`
+**Источник:** `migrations/migrate_ai_agent_fields.py:64-74`
+**Статус:** ✅ Создана миграцией (применено 2025-01-06)
+
 ```sql
 CREATE TABLE AIAgentMessages (
     id TEXT PRIMARY KEY,
@@ -1070,11 +1087,16 @@ CREATE TABLE AIAgentMessages (
     FOREIGN KEY (conversation_id) REFERENCES AIAgentConversations(id) ON DELETE CASCADE
 )
 ```
-**Логика:** История сообщений в разговорах с AI-агентом.
+**Логика:** История всех сообщений в разговорах с AI-агентом. `sender` может быть: 'client', 'agent', 'operator'. `message_type` определяет тип сообщения (text, booking_request, service_info и т.д.).
 
 **Индексы:**
-- `idx_ai_messages_conversation_id`
-- `idx_ai_messages_created_at`
+- `idx_ai_messages_conversation_id` - для быстрого получения истории разговора
+- `idx_ai_messages_created_at` - для сортировки по времени
+
+**Использование:**
+- Сохраняется каждое сообщение клиента и ответ агента
+- Используется для построения истории диалога
+- Используется для подсчета непрочитанных сообщений
 
 ---
 

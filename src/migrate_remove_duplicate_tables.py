@@ -135,20 +135,20 @@ def migrate_remove_duplicate_tables(cursor):
             print("✅ В Cards есть business_id, мигрирую данные...")
             try:
                 cursor.execute("""
-                    INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
-                    SELECT 
-                        id, business_id, url,
-                        'yandex' as map_type,
-                        NULL as rating,
-                        0 as reviews_count,
-                        report_path,
-                        json_object('seo_score', seo_score, 'ai_analysis', ai_analysis, 'recommendations', recommendations) as analysis_json,
-                        created_at
-                    FROM Cards
-                    WHERE business_id IS NOT NULL
-                    AND NOT EXISTS (
-                        SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
-                    )
+                INSERT INTO MapParseResults (id, business_id, url, map_type, rating, reviews_count, report_path, analysis_json, created_at)
+                SELECT 
+                    id, business_id, url,
+                    'yandex' as map_type,
+                    NULL as rating,
+                    0 as reviews_count,
+                    report_path,
+                    json_object('seo_score', seo_score, 'ai_analysis', ai_analysis, 'recommendations', recommendations) as analysis_json,
+                    created_at
+                FROM Cards
+                WHERE business_id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM MapParseResults WHERE MapParseResults.id = Cards.id
+                )
                 """)
                 migrated_count = cursor.rowcount
                 print(f"✅ Перенесено записей в MapParseResults: {migrated_count}")

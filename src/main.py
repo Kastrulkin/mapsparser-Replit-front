@@ -1930,16 +1930,64 @@ def services_optimize():
                 business_id=business_id,
                 user_id=user_data['user_id']
             )
-        # Если парсинг не удался, вернем понятное сообщение и сырую выдачу для диагностики
-        if 'error' in result:
-            error_msg = result.get('error', 'Ошибка оптимизации')
-            print(f"❌ Ошибка в результате: {error_msg}")
-            print(f"❌ Полный результат: {result}")
+        
+        # ВАЖНО: analyze_text_with_gigachat всегда возвращает строку
+        print(f"🔍 DEBUG services_optimize: result type = {type(result)}")
+        print(f"🔍 DEBUG services_optimize: result = {result[:200] if isinstance(result, str) else result}")
+        
+        # Парсим JSON из ответа GigaChat
+        parsed_result = None
+        if isinstance(result, dict):
+            # Если словарь (на всякий случай), проверяем наличие ошибки
+            if 'error' in result:
+                error_msg = result.get('error', 'Ошибка оптимизации')
+                print(f"❌ Ошибка в результате: {error_msg}")
+                return jsonify({
+                    "success": False,
+                    "error": error_msg,
+                    "raw": result.get('raw_response')
+                }), 502
+            parsed_result = result
+        elif isinstance(result, str):
+            # Если строка, пробуем распарсить как JSON
+            try:
+                # Ищем JSON объект в строке
+                start_idx = result.find('{')
+                end_idx = result.rfind('}') + 1
+                if start_idx != -1 and end_idx != 0:
+                    json_str = result[start_idx:end_idx]
+                    parsed_result = json.loads(json_str)
+                    if isinstance(parsed_result, dict) and 'error' in parsed_result:
+                        error_msg = parsed_result.get('error', 'Ошибка оптимизации')
+                        print(f"❌ Ошибка в результате: {error_msg}")
+                        return jsonify({
+                            "success": False,
+                            "error": error_msg,
+                            "raw": result
+                        }), 502
+                else:
+                    # JSON не найден, пробуем распарсить всю строку
+                    parsed_result = json.loads(result)
+            except json.JSONDecodeError:
+                print(f"❌ Не удалось распарсить JSON из результата")
+                print(f"❌ Полный результат: {result[:500]}")
+                return jsonify({
+                    "success": False,
+                    "error": "Не удалось распарсить результат оптимизации",
+                    "raw": result
+                }), 502
+        else:
+            print(f"❌ Неожиданный тип результата: {type(result)}")
             return jsonify({
                 "success": False,
-                "error": error_msg,
-                "raw": result.get('raw_response')
+                "error": "Неожиданный формат результата",
+                "raw": str(result)
             }), 502
+
+        # Проверяем, что parsed_result - это словарь
+        if not isinstance(parsed_result, dict):
+            print(f"❌ Ошибка: parsed_result не является словарём, тип: {type(parsed_result)}")
+            parsed_result = {}
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
@@ -1966,16 +2014,7 @@ def services_optimize():
         with open(raw_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-        # Проверяем, что result - это словарь
-        if not isinstance(result, dict):
-            print(f"❌ Ошибка: result не является словарём, тип: {type(result)}")
-            if isinstance(result, str):
-                try:
-                    result = json.loads(result)
-                except:
-                    result = {}
-            else:
-                result = {}
+        result = parsed_result
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
@@ -2243,33 +2282,44 @@ Write all generated text in {language_name}.
             user_id=user_data['user_id']
         )
         
-        # Обрабатываем результат - может быть словарем или строкой
-        # Сначала проверяем тип, потом наличие ошибки
+        # ВАЖНО: analyze_text_with_gigachat всегда возвращает строку, не словарь
+        print(f"🔍 DEBUG news_generate: result type = {type(result)}")
+        print(f"🔍 DEBUG news_generate: result = {result[:200] if isinstance(result, str) else result}")
+        
+        # Обрабатываем результат - analyze_text_with_gigachat возвращает строку
         if isinstance(result, dict):
-            # Если результат - словарь, проверяем наличие ошибки
+            # Если словарь (на всякий случай), проверяем наличие ошибки
             if 'error' in result:
                 db.close()
                 return jsonify({"error": result['error']}), 500
-            # Извлекаем текст из словаря
-            generated_text = result.get('news') or result.get('text') or result.get('response') or json.dumps(result, ensure_ascii=False)
-        elif isinstance(result, str):
-            # Если результат - строка, пробуем распарсить как JSON
+            generated_text = result.get('news') or result.get('text') or json.dumps(result, ensure_ascii=False)
+        elif not isinstance(result, str):
+            # Если не строка и не словарь, конвертируем в строку
+            generated_text = str(result)
+        else:
+            # Если строка, пробуем распарсить как JSON
+            generated_text = result
             try:
-                parsed_result = json.loads(result)
-                if isinstance(parsed_result, dict):
-                    # Проверяем наличие ошибки в распарсенном JSON
-                    if 'error' in parsed_result:
-                        db.close()
-                        return jsonify({"error": parsed_result['error']}), 500
-                    generated_text = parsed_result.get('news') or parsed_result.get('text') or result
-                else:
-                    generated_text = result
+                # Ищем JSON объект в строке
+                start_idx = result.find('{')
+                end_idx = result.rfind('}') + 1
+                if start_idx != -1 and end_idx != 0:
+                    json_str = result[start_idx:end_idx]
+                    parsed_result = json.loads(json_str)
+                    if isinstance(parsed_result, dict):
+                        # Проверяем наличие ошибки
+                        if 'error' in parsed_result:
+                            db.close()
+                            return jsonify({"error": parsed_result['error']}), 500
+                        generated_text = parsed_result.get('news') or parsed_result.get('text') or result
             except json.JSONDecodeError:
                 # Если не JSON, используем строку как есть
-                generated_text = result
-        else:
-            # Если другой тип, конвертируем в строку
-            generated_text = str(result)
+                pass
+        
+        # Проверяем, что generated_text не пустой
+        if not generated_text or not generated_text.strip():
+            db.close()
+            return jsonify({"error": "Пустой результат генерации"}), 500
 
         news_id = str(uuid.uuid4())
         cur.execute(
@@ -2656,28 +2706,36 @@ Write the reply in {language_name}.
             user_id=user_data['user_id']
         )
         
+        # ВАЖНО: analyze_text_with_gigachat всегда возвращает строку
+        print(f"🔍 DEBUG reviews_reply: result_text type = {type(result_text)}")
+        print(f"🔍 DEBUG reviews_reply: result_text = {result_text[:200] if isinstance(result_text, str) else result_text}")
+        
         # Парсим JSON из ответа GigaChat
         import json
+        
         try:
-            # Пытаемся найти JSON в ответе
-            if isinstance(result_text, str):
+            # analyze_text_with_gigachat всегда возвращает строку
+            if not isinstance(result_text, str):
+                reply_text = str(result_text)
+            else:
+                reply_text = result_text
                 # Ищем JSON объект в строке
                 start_idx = result_text.find('{')
                 end_idx = result_text.rfind('}') + 1
-                if start_idx != -1 and end_idx != -1:
+                if start_idx != -1 and end_idx != 0:
                     json_str = result_text[start_idx:end_idx]
-                    parsed_result = json.loads(json_str)
-                    # Извлекаем reply из JSON
-                    reply_text = parsed_result.get('reply', result_text)
-                else:
-                    # Если JSON не найден, используем весь текст
-                    reply_text = result_text
-            else:
-                reply_text = result_text
-        except (json.JSONDecodeError, AttributeError) as e:
-            # Если не удалось распарсить JSON, используем весь текст
-            print(f"⚠️ Не удалось распарсить JSON из ответа GigaChat: {e}")
-            reply_text = result_text if isinstance(result_text, str) else str(result_text)
+                    try:
+                        parsed_result = json.loads(json_str)
+                        if isinstance(parsed_result, dict):
+                            # Извлекаем reply из JSON
+                            reply_text = parsed_result.get('reply', result_text)
+                    except json.JSONDecodeError:
+                        # Если не удалось распарсить JSON, используем весь текст
+                        pass
+        except Exception as e:
+            # Если любая ошибка, используем result_text как строку
+            print(f"⚠️ Ошибка обработки ответа GigaChat: {e}")
+            reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
         
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
@@ -5630,13 +5688,13 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         
         # Расшифровываем auth_data
         auth_data_plain = decrypt_auth_data(auth_data_encrypted)
-            if not auth_data_plain:
-                print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
-                return jsonify({
-                    "success": False,
-                    "error": "Не удалось расшифровать данные авторизации",
-                    "message": "Обновите cookies в настройках внешних интеграций"
-                }), 400
+        if not auth_data_plain:
+            print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
+            return jsonify({
+                "success": False,
+                "error": "Не удалось расшифровать данные авторизации",
+                "message": "Обновите cookies в настройках внешних интеграций"
+            }), 400
             
         # Парсим JSON auth_data
         import json
@@ -5738,9 +5796,9 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                 cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
                 owner_row = cursor.fetchone()
                 user_id = owner_row[0] if owner_row else None
-                    if not user_id:
-                        print(f"⚠️ Нет user_id для сохранения услуг")
-                    else:
+                if not user_id:
+                    print(f"⚠️ Нет user_id для сохранения услуг")
+                else:
                         saved_count = 0
                         updated_count = 0
                         for service in services:

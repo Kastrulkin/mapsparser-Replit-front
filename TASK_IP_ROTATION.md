@@ -492,9 +492,53 @@ class YandexMapsInterceptionParser:
 
 **Файл:** `src/parser.py`
 
-**Аналогичные изменения:**
-- Добавить `ProxyManager` в функцию `parse_yandex_card()`
-- Передавать прокси в `browser.new_context(proxy=...)`
+**ВАЖНО: Рекомендации упростителя (см. SIMPLIFICATION.md):**
+- Использовать тот же helper `get_playwright_proxy_or_none()` для единообразия
+- Четкий early-return: "нет прокси → работаем без них"
+
+**Изменения:**
+
+```python
+from proxy_manager import ProxyManager, get_playwright_proxy_or_none
+
+def parse_yandex_card(url: str) -> dict:
+    # Получаем прокси через helper (early-return если нет)
+    proxy_manager = ProxyManager()
+    playwright_proxy = get_playwright_proxy_or_none(proxy_manager)
+    
+    # ... существующий код ...
+    
+    with sync_playwright() as p:
+        try:
+            browser, browser_name = _launch_browser(p)
+            
+            # Настраиваем контекст: прокси опционально (early-return)
+            context_options = {
+                'user_agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'locale': 'ru-RU',
+                'timezone_id': 'Europe/Moscow',
+                'viewport': {'width': 1920, 'height': 1080},
+                # ... остальные опции ...
+            }
+            
+            if playwright_proxy:
+                context_options['proxy'] = playwright_proxy
+                print(f"🌐 Используем прокси: {playwright_proxy.get('server', 'unknown')}")
+            
+            context = browser.new_context(**context_options)
+            
+            # ... остальной код ...
+            
+            # После успешного парсинга
+            if proxy_manager.current_proxy:
+                proxy_manager.mark_proxy_success(proxy_manager.current_proxy['id'])
+            
+        except Exception as e:
+            # При ошибке отмечаем прокси как неработающий
+            if proxy_manager.current_proxy and "proxy" in str(e).lower():
+                proxy_manager.mark_proxy_failure(proxy_manager.current_proxy['id'], str(e))
+            raise
+```
 
 ---
 
@@ -649,11 +693,21 @@ def delete_proxy(proxy_id):
 ## Чеклист для кодера
 
 - [ ] Создать таблицу `ProxyServers` в `init_database_schema.py`
-- [ ] Создать модуль `src/proxy_manager.py` с классом `ProxyManager`
-- [ ] Интегрировать прокси в `parser_interception.py`
-- [ ] Интегрировать прокси в `parser.py`
-- [ ] Интегрировать прокси в `yandex_business_parser.py`
+- [ ] Создать модуль `src/proxy_manager.py` с классом `ProxyManager`:
+  - **ВАЖНО:** Только необходимые импорты (typing, safe_db_utils) - см. рекомендации упростителя в SIMPLIFICATION.md
+  - **ВАЖНО:** Только поле `current_proxy` (без proxy_cache, cache_ttl)
+  - Создать helper `get_playwright_proxy_or_none()` для единообразия
+- [ ] Интегрировать прокси в `parser_interception.py`:
+  - Использовать helper `get_playwright_proxy_or_none()`
+  - Early-return если нет прокси (не создавать лишних веток)
+- [ ] Интегрировать прокси в `parser.py`:
+  - Использовать тот же helper для единообразия
+  - Early-return если нет прокси
+- [ ] Интегрировать прокси в `yandex_business_parser.py`:
+  - Использовать `ProxyManager` для requests сессии
+  - Early-return если нет прокси
 - [ ] Создать эндпоинты для управления прокси в `main.py`
+- [ ] Создать UI компонент `ProxyManagement.tsx` (см. `FRONTEND_TASK_PROXY_UI.md`)
 - [ ] Протестировать ротацию прокси
 - [ ] Протестировать обработку неработающих прокси
 

@@ -902,20 +902,18 @@ def parse_reviews(page):
                         reply_clicked = False
                         for selector in reply_btn_selectors:
                             reply_btn = block.query_selector(selector)
-                            if reply_btn and reply_btn.is_visible():
-                                try:
-                                    reply_btn.click()
-                                    page.wait_for_timeout(500)  # Уменьшено время ожидания
-                                    reply_clicked = True
-                                    print(f"Клик по кнопке ответа: {selector}")
-                                    break
-                                except Exception as e:
-                                    print(f"Ошибка при клике по кнопке ответа {selector}: {e}")
-                                    continue
+                            if not reply_btn or not reply_btn.is_visible():
+                                continue
                             
-                            # Ограничиваем количество попыток клика
-                            if reply_clicked:
+                            try:
+                                reply_btn.click()
+                                page.wait_for_timeout(500)
+                                reply_clicked = True
+                                print(f"Клик по кнопке ответа: {selector}")
                                 break
+                            except Exception as e:
+                                print(f"Ошибка при клике по кнопке ответа {selector}: {e}")
+                                continue
                         
                         # Ищем текст ответа
                         reply_selectors = [
@@ -929,16 +927,24 @@ def parse_reviews(page):
                         
                         for selector in reply_selectors:
                             reply_el = block.query_selector(selector)
-                            if reply_el:
-                                reply_text = reply_el.inner_text().strip()
-                                if reply_text and len(reply_text) > 10:  # Минимальная длина ответа
-                                    reply = reply_text
-                                    print(f"Найден ответ организации: {reply[:50]}...")
-                                    break
+                            if not reply_el:
+                                continue
+                            
+                            reply_text = reply_el.inner_text().strip()
+                            if not reply_text or len(reply_text) <= 10:
+                                continue
+                            
+                            reply = reply_text
+                            print(f"✅ Найден ответ организации (HTML парсинг): {reply[:50]}...")
+                            break
                                     
                     except Exception as e:
-                        print(f"Ошибка при парсинге ответа организации: {e}")
+                        print(f"⚠️ Ошибка при парсинге ответа организации: {e}")
                         pass
+                    
+                    # Логируем, если ответ не найден
+                    if not reply:
+                        print(f"ℹ️ Ответ организации не найден для отзыва: {text[:50]}...")
 
                     reviews_data['items'].append({
                         "author": author,
