@@ -2753,12 +2753,24 @@ Write the reply in {language_name}.
             print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: prompt_template не строка: {type(prompt_template)}", flush=True)
             prompt_template = default_prompt_template
         
+        # Логируем все аргументы перед format
+        print(f"🔍 DEBUG reviews_reply: tone type = {type(tone)}, value = {tone}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: language_name type = {type(language_name)}, value = {language_name}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: examples_text type = {type(examples_text)}, value (первые 100) = {str(examples_text)[:100] if examples_text else 'None'}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: review_text type = {type(review_text)}, value (первые 100) = {str(review_text)[:100] if review_text else 'None'}", flush=True)
+        
+        # Принудительно преобразуем все аргументы в строки
+        tone_str = str(tone) if tone else ''
+        language_name_str = str(language_name) if language_name else 'Russian'
+        examples_text_str = str(examples_text) if examples_text else ''
+        review_text_str = str(review_text[:1000]) if review_text else ''
+        
         try:
             prompt = prompt_template.format(
-                tone=tone,
-                language_name=language_name,
-                examples_text=examples_text,
-                review_text=review_text[:1000]
+                tone=tone_str,
+                language_name=language_name_str,
+                examples_text=examples_text_str,
+                review_text=review_text_str
             )
         except (KeyError, ValueError, TypeError) as format_err:
             print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
@@ -2766,10 +2778,10 @@ Write the reply in {language_name}.
             traceback.print_exc()
             # Используем default_prompt_template как fallback
             prompt = default_prompt_template.format(
-                tone=tone,
-                language_name=language_name,
-                examples_text=examples_text,
-                review_text=review_text[:1000]
+                tone=tone_str,
+                language_name=language_name_str,
+                examples_text=examples_text_str,
+                review_text=review_text_str
             )
         # Логируем промпт для отладки
         print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
