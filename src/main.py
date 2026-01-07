@@ -2267,13 +2267,35 @@ Write all generated text in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}"""
         
         prompt_template = get_prompt_from_db('news_generation', default_prompt)
-        prompt = prompt_template.format(
-            language_name=language_name,
-            service_context=service_context,
-            transaction_context=transaction_context,
-            raw_info=raw_info[:800],
-            news_examples=news_examples
-        )
+        
+        # Логируем тип и значение prompt_template
+        print(f"🔍 DEBUG news_generate: prompt_template type = {type(prompt_template)}", flush=True)
+        print(f"🔍 DEBUG news_generate: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
+        
+        # Убеждаемся, что prompt_template - это строка
+        if not isinstance(prompt_template, str):
+            print(f"⚠️ prompt_template не строка, используем default_prompt. Type: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt
+        
+        # Форматируем промпт с обработкой ошибок
+        try:
+            prompt = prompt_template.format(
+                language_name=language_name,
+                service_context=service_context,
+                transaction_context=transaction_context,
+                raw_info=raw_info[:800],
+                news_examples=news_examples
+            )
+        except (KeyError, AttributeError, ValueError) as e:
+            print(f"⚠️ Ошибка форматирования промпта: {e}. Используем default_prompt", flush=True)
+            # Используем default_prompt как fallback
+            prompt = default_prompt.format(
+                language_name=language_name,
+                service_context=service_context,
+                transaction_context=transaction_context,
+                raw_info=raw_info[:800],
+                news_examples=news_examples
+            )
 
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result = analyze_text_with_gigachat(
