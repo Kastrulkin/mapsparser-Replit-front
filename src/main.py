@@ -3100,20 +3100,19 @@ def get_services():
                 "created_at": service['created_at']
             }
             
-            # Добавляем optimized_description и optimized_name, если они есть в результате запроса
-            # ПРОБЛЕМА: service_keys может быть пустым списком, нужно проверять по-другому
-            # Просто пытаемся получить значения напрямую - если их нет, будет KeyError
-            try:
-                if has_optimized_desc:
-                    service_dict['optimized_description'] = service.get('optimized_description') or service['optimized_description'] if 'optimized_description' in service_keys else None
-            except (KeyError, IndexError, TypeError):
-                pass
+            # Добавляем optimized_description и optimized_name, если они есть в таблице
+            # ПРОСТОЕ РЕШЕНИЕ: просто пытаемся получить значения, если поля есть в таблице
+            if has_optimized_name:
+                try:
+                    service_dict['optimized_name'] = service['optimized_name']
+                except (KeyError, IndexError):
+                    pass
             
-            try:
-                if has_optimized_name:
-                    service_dict['optimized_name'] = service.get('optimized_name') or service['optimized_name'] if 'optimized_name' in service_keys else None
-            except (KeyError, IndexError, TypeError):
-                pass
+            if has_optimized_desc:
+                try:
+                    service_dict['optimized_description'] = service['optimized_description']
+                except (KeyError, IndexError):
+                    pass
             
             # Альтернативный способ - обращение по индексу, если знаем порядок полей
             if has_optimized_name and 'optimized_name' not in service_dict:
