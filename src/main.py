@@ -2715,28 +2715,41 @@ Write the reply in {language_name}.
         # Парсим JSON из ответа GigaChat
         import json
         
-        try:
-            # analyze_text_with_gigachat всегда возвращает строку
-            if not isinstance(result_text, str):
-                reply_text = str(result_text)
-            else:
-                reply_text = result_text
-                # Ищем JSON объект в строке
-                start_idx = result_text.find('{')
-                end_idx = result_text.rfind('}') + 1
-                if start_idx != -1 and end_idx != 0:
-                    json_str = result_text[start_idx:end_idx]
-                    try:
-                        parsed_result = json.loads(json_str)
-                        if isinstance(parsed_result, dict):
-                            # Извлекаем reply из JSON
-                            reply_text = parsed_result.get('reply', result_text)
-                    except json.JSONDecodeError:
-                        # Если не удалось распарсить JSON, используем весь текст
-                        pass
-        except Exception as e:
-            # Если любая ошибка, используем result_text как строку
-            print(f"⚠️ Ошибка обработки ответа GigaChat: {e}")
+        # Проверяем тип result_text перед обработкой
+        if result_text is None:
+            print("⚠️ result_text is None")
+            reply_text = "Ошибка генерации ответа"
+        elif isinstance(result_text, dict):
+            # Если словарь (не должно быть, но на всякий случай)
+            print(f"⚠️ result_text is dict: {result_text}")
+            if 'error' in result_text:
+                print(f"❌ Ошибка в результате: {result_text.get('error')}")
+                return jsonify({"error": result_text.get('error', 'Ошибка генерации')}), 500
+            reply_text = result_text.get('reply') or str(result_text)
+        elif isinstance(result_text, str):
+            # Если строка - парсим JSON
+            reply_text = result_text
+            # Ищем JSON объект в строке
+            start_idx = result_text.find('{')
+            end_idx = result_text.rfind('}') + 1
+            if start_idx != -1 and end_idx != 0:
+                json_str = result_text[start_idx:end_idx]
+                try:
+                    parsed_result = json.loads(json_str)
+                    if isinstance(parsed_result, dict):
+                        # Проверяем наличие ошибки в распарсенном JSON
+                        if 'error' in parsed_result:
+                            print(f"❌ Ошибка в распарсенном JSON: {parsed_result.get('error')}")
+                            return jsonify({"error": parsed_result.get('error', 'Ошибка генерации')}), 500
+                        # Извлекаем reply из JSON
+                        reply_text = parsed_result.get('reply', result_text)
+                except json.JSONDecodeError as json_err:
+                    # Если не удалось распарсить JSON, используем весь текст
+                    print(f"⚠️ Ошибка парсинга JSON: {json_err}")
+                    pass
+        else:
+            # Если другой тип - конвертируем в строку
+            print(f"⚠️ Неожиданный тип result_text: {type(result_text)}")
             reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
         
         return jsonify({"success": True, "result": {"reply": reply_text}})
