@@ -496,12 +496,18 @@ class YandexBusinessParser:
                             except:
                                 pass
                 
-                # Логируем структуру только для первых нескольких отзывов с ответами (для отладки)
-                if idx < 3 and has_response:
-                    print(f"✅ Отзыв #{idx + 1} (ID: {review_id}): найден ответ")
-                    print(f"   Текст ответа: {response_text[:100]}...")
-                    if response_at:
-                        print(f"   Дата ответа: {response_at}")
+                # Логируем структуру только для первых нескольких отзывов (для отладки)
+                if idx < 3:
+                    print(f"🔍 Отзыв #{idx + 1} (ID: {review_id}):", flush=True)
+                    print(f"   Автор: {author_name}", flush=True)
+                    print(f"   Рейтинг: {rating}", flush=True)
+                    print(f"   Дата публикации: {published_at}", flush=True)
+                    if has_response:
+                        print(f"   ✅ Найден ответ: {response_text[:100]}...", flush=True)
+                        if response_at:
+                            print(f"   Дата ответа: {response_at}", flush=True)
+                    else:
+                        print(f"   ❌ Ответа нет", flush=True)
                 
                 # Парсим рейтинг (может быть в разных форматах)
                 rating = review_data.get("rating") or review_data.get("score") or review_data.get("stars")
