@@ -2998,25 +2998,25 @@ def get_services():
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    # Проверяем, есть ли поле optimized_description
+                    # Проверяем, есть ли поля optimized_description и optimized_name
                     cursor.execute("PRAGMA table_info(UserServices)")
                     columns = [col[1] for col in cursor.fetchall()]
-                    has_optimized = 'optimized_description' in columns
+                    has_optimized_desc = 'optimized_description' in columns
+                    has_optimized_name = 'optimized_name' in columns
                     
-                    if has_optimized:
-                        cursor.execute("""
-                            SELECT id, category, name, description, optimized_description, keywords, price, created_at
-                            FROM UserServices 
-                            WHERE business_id = ? 
-                            ORDER BY created_at DESC
-                        """, (business_id,))
-                    else:
-                        cursor.execute("""
-                            SELECT id, category, name, description, keywords, price, created_at
-                            FROM UserServices 
-                            WHERE business_id = ? 
-                            ORDER BY created_at DESC
-                        """, (business_id,))
+                    # Формируем SELECT с учетом наличия полей
+                    select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+                    if has_optimized_desc:
+                        select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
+                    if has_optimized_name:
+                        select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
+                    
+                    cursor.execute(f"""
+                        SELECT {', '.join(select_fields)}
+                        FROM UserServices 
+                        WHERE business_id = ? 
+                        ORDER BY created_at DESC
+                    """, (business_id,))
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -3025,25 +3025,25 @@ def get_services():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика для обратной совместимости
-            # Проверяем, есть ли поле optimized_description
+            # Проверяем, есть ли поля optimized_description и optimized_name
             cursor.execute("PRAGMA table_info(UserServices)")
             columns = [col[1] for col in cursor.fetchall()]
-            has_optimized = 'optimized_description' in columns
+            has_optimized_desc = 'optimized_description' in columns
+            has_optimized_name = 'optimized_name' in columns
             
-            if has_optimized:
-                cursor.execute("""
-                    SELECT id, category, name, description, optimized_description, keywords, price, created_at
-                    FROM UserServices 
-                    WHERE user_id = ? 
-                    ORDER BY created_at DESC
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    SELECT id, category, name, description, keywords, price, created_at
-                    FROM UserServices 
-                    WHERE user_id = ? 
-                    ORDER BY created_at DESC
-                """, (user_id,))
+            # Формируем SELECT с учетом наличия полей
+            select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+            if has_optimized_desc:
+                select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
+            if has_optimized_name:
+                select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
+            
+            cursor.execute(f"""
+                SELECT {', '.join(select_fields)}
+                FROM UserServices 
+                WHERE user_id = ? 
+                ORDER BY created_at DESC
+            """, (user_id,))
         
         services = cursor.fetchall()
         db.close()
@@ -3069,9 +3069,11 @@ def get_services():
                 "price": service['price'],
                 "created_at": service['created_at']
             }
-            # Добавляем optimized_description, если оно есть
+            # Добавляем optimized_description и optimized_name, если они есть
             if 'optimized_description' in service:
                 service_dict['optimized_description'] = service['optimized_description']
+            if 'optimized_name' in service:
+                service_dict['optimized_name'] = service['optimized_name']
             result.append(service_dict)
 
         return jsonify({"success": True, "services": result})

@@ -193,15 +193,32 @@ def update_service(service_id):
         else:
             keywords_str = json.dumps([])
         
-        # Проверяем, есть ли поле optimized_description в таблице
+        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
         cursor.execute("PRAGMA table_info(UserServices)")
         columns = [col[1] for col in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
+        has_optimized_name = 'optimized_name' in columns
         
         optimized_description = data.get('optimized_description', '')
+        optimized_name = data.get('optimized_name', '')
         
-        # Обновляем услугу
-        if has_optimized_description:
+        # Обновляем услугу с учетом наличия полей
+        if has_optimized_description and has_optimized_name:
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                optimized_name,
+                data.get('description', ''),
+                optimized_description,
+                keywords_str,
+                data.get('price', 0),
+                service_id
+            ))
+        elif has_optimized_description:
             cursor.execute("""
                 UPDATE UserServices 
                 SET category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
@@ -211,6 +228,20 @@ def update_service(service_id):
                 data.get('name', ''),
                 data.get('description', ''),
                 optimized_description,
+                keywords_str,
+                data.get('price', 0),
+                service_id
+            ))
+        elif has_optimized_name:
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                optimized_name,
+                data.get('description', ''),
                 keywords_str,
                 data.get('price', 0),
                 service_id

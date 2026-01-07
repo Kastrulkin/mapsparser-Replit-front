@@ -282,13 +282,37 @@ export const CardOverviewPage = () => {
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
         
-        // ВАЖНО: Сохраняем оригинальное описание, оптимизированное - отдельно
+        // ВАЖНО: Сохраняем оригинальное описание и название, оптимизированные - отдельно
+        // Исправляем keywords - убираем вложенные массивы и строки
+        let fixedKeywords = [];
+        if (Array.isArray(service.keywords)) {
+          fixedKeywords = service.keywords.map(k => {
+            if (typeof k === 'string') {
+              try {
+                const parsed = JSON.parse(k);
+                return Array.isArray(parsed) ? parsed : [k];
+              } catch {
+                return [k];
+              }
+            }
+            return Array.isArray(k) ? k : [k];
+          }).flat();
+        } else if (service.keywords) {
+          try {
+            const parsed = JSON.parse(service.keywords);
+            fixedKeywords = Array.isArray(parsed) ? parsed : [service.keywords];
+          } catch {
+            fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
+          }
+        }
+        
         const updateData = {
           category: service.category || '', // Сохраняем все оригинальные поля
           name: service.name || '', // Оригинальное название не меняем
+          optimized_name: optimized.optimized_name || '', // SEO название сохраняем отдельно
           description: service.description || '', // Оригинальное описание НЕ меняем - это ключевой момент!
           optimized_description: optimized.seo_description || '', // SEO описание сохраняем отдельно
-          keywords: Array.isArray(service.keywords) ? service.keywords : (service.keywords ? [service.keywords] : []), // Оригинальные ключевые слова
+          keywords: fixedKeywords, // Исправленные ключевые слова
           price: service.price || '' // Оригинальная цена
         };
         
@@ -575,7 +599,69 @@ export const CardOverviewPage = () => {
                   .map((service, index) => (
                   <tr key={service.id || index}>
                     <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <div className="space-y-2">
+                        {service.name && (
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Оригинальное название:</div>
+                            <div>{service.name}</div>
+                          </div>
+                        )}
+                        {service.optimized_name && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="text-xs text-green-600 font-medium mb-1">SEO название:</div>
+                            <div className="text-green-700 mb-2">{service.optimized_name}</div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  // Принять: заменяем оригинальное название на оптимизированное
+                                  await updateService(service.id, {
+                                    category: service.category,
+                                    name: service.optimized_name, // Заменяем оригинальное
+                                    optimized_name: '', // Удаляем оптимизированное
+                                    description: service.description,
+                                    optimized_description: service.optimized_description,
+                                    keywords: service.keywords,
+                                    price: service.price
+                                  });
+                                  setSuccess('Оптимизированное название принято');
+                                  await loadUserServices();
+                                }}
+                                className="text-xs h-7"
+                              >
+                                ✓ Принять
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  // Отклонить: удаляем оптимизированное название
+                                  await updateService(service.id, {
+                                    category: service.category,
+                                    name: service.name,
+                                    optimized_name: '', // Удаляем
+                                    description: service.description,
+                                    optimized_description: service.optimized_description,
+                                    keywords: service.keywords,
+                                    price: service.price
+                                  });
+                                  setSuccess('Оптимизированное название отклонено');
+                                  await loadUserServices();
+                                }}
+                                className="text-xs h-7 text-red-600 hover:text-red-700"
+                              >
+                                ✕ Отклонить
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        {!service.name && !service.optimized_name && (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       <div className="space-y-2">
                         {service.description && (
