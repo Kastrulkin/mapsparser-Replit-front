@@ -825,9 +825,35 @@ def parse_reviews(page):
                                 author = author_text
                                 break
 
-                    # Дата
-                    date_el = block.query_selector("div.business-review-view__date, span.business-review-view__date, span[class*='date']")
-                    date = date_el.inner_text().strip() if date_el else ""
+                    # Дата - расширенный парсинг
+                    date = ""
+                    date_selectors = [
+                        "div.business-review-view__date",
+                        "span.business-review-view__date",
+                        "span[class*='date']",
+                        "time[datetime]",
+                        "time",
+                        "[data-date]",
+                        "div[class*='review-date']",
+                        "span[class*='review-date']"
+                    ]
+                    for selector in date_selectors:
+                        date_el = block.query_selector(selector)
+                        if date_el:
+                            # Пробуем атрибут datetime (если есть)
+                            date_attr = date_el.get_attribute('datetime')
+                            if date_attr:
+                                date = date_attr.strip()
+                                break
+                            # Иначе берем текст
+                            date_text = date_el.inner_text().strip()
+                            if date_text:
+                                date = date_text
+                                break
+                    
+                    # Если не нашли, логируем
+                    if not date:
+                        print(f"ℹ️ Дата не найдена для отзыва: {text[:50] if 'text' in locals() else 'N/A'}...")
 
                     # Рейтинг (звёзды) - улучшенный парсинг
                     rating = 0

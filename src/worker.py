@@ -305,6 +305,110 @@ def process_queue():
                     
                     print(f"✅ Результаты сохранены в MapParseResults: {parse_result_id}")
                     
+                    # Сохраняем отзывы в ExternalBusinessReviews с датами и ответами организации
+                    if reviews_list:
+                        try:
+                            from external_sources import ExternalReview, ExternalSource
+                            from yandex_business_sync_worker import YandexBusinessSyncWorker
+                            from dateutil import parser as date_parser
+                            import re
+                            
+                            external_reviews = []
+                            for review in reviews_list:
+                                if not review.get('text'):
+                                    continue
+                                
+                                # Генерируем ID отзыва
+                                review_id = str(uuid.uuid4())
+                                external_review_id = review.get('id') or f"html_{review_id}"
+                                
+                                # Парсим дату
+                                published_at = None
+                                date_str = review.get('date', '').strip()
+                                if date_str:
+                                    try:
+                                        # Пробуем разные форматы дат
+                                        # "2 дня назад", "неделю назад", "15 января 2024", "2024-01-15"
+                                        if 'дня' in date_str or 'день' in date_str or 'дней' in date_str:
+                                            # Относительная дата
+                                            days_match = re.search(r'(\d+)', date_str)
+                                            if days_match:
+                                                days_ago = int(days_match.group(1))
+                                                published_at = datetime.now() - timedelta(days=days_ago)
+                                        elif 'неделю' in date_str or 'недели' in date_str or 'недель' in date_str:
+                                            weeks_match = re.search(r'(\d+)', date_str)
+                                            if weeks_match:
+                                                weeks_ago = int(weeks_match.group(1))
+                                                published_at = datetime.now() - timedelta(weeks=weeks_ago)
+                                            else:
+                                                published_at = datetime.now() - timedelta(weeks=1)
+                                        elif 'месяц' in date_str or 'месяца' in date_str or 'месяцев' in date_str:
+                                            months_match = re.search(r'(\d+)', date_str)
+                                            if months_match:
+                                                months_ago = int(months_match.group(1))
+                                                published_at = datetime.now() - timedelta(days=months_ago * 30)
+                                            else:
+                                                published_at = datetime.now() - timedelta(days=30)
+                                        elif 'год' in date_str or 'года' in date_str or 'лет' in date_str:
+                                            years_match = re.search(r'(\d+)', date_str)
+                                            if years_match:
+                                                years_ago = int(years_match.group(1))
+                                                published_at = datetime.now() - timedelta(days=years_ago * 365)
+                                            else:
+                                                published_at = datetime.now() - timedelta(days=365)
+                                        else:
+                                            # Пробуем распарсить как обычную дату
+                                            published_at = date_parser.parse(date_str, fuzzy=True)
+                                    except Exception as date_err:
+                                        print(f"⚠️ Не удалось распарсить дату '{date_str}': {date_err}")
+                                
+                                # Извлекаем ответ организации
+                                response_text = review.get('org_reply') or review.get('response_text') or ''
+                                response_text = response_text.strip() if response_text else None
+                                response_at = None
+                                
+                                # Парсим дату ответа (если есть)
+                                response_date_str = review.get('response_date')
+                                if response_date_str:
+                                    try:
+                                        response_at = date_parser.parse(response_date_str, fuzzy=True)
+                                    except:
+                                        pass
+                                
+                                # Конвертируем рейтинг
+                                rating = review.get('score') or review.get('rating')
+                                if rating:
+                                    try:
+                                        rating = int(rating)
+                                    except:
+                                        rating = None
+                                
+                                external_review = ExternalReview(
+                                    id=review_id,
+                                    business_id=business_id,
+                                    source=ExternalSource.YANDEX_MAPS,
+                                    external_review_id=external_review_id,
+                                    rating=rating,
+                                    author_name=review.get('author') or 'Анонимный пользователь',
+                                    text=review.get('text'),
+                                    published_at=published_at,
+                                    response_text=response_text,
+                                    response_at=response_at,
+                                    raw_payload=review
+                                )
+                                external_reviews.append(external_review)
+                            
+                            # Сохраняем в БД
+                            if external_reviews:
+                                db = DatabaseManager()
+                                worker = YandexBusinessSyncWorker()
+                                worker._upsert_reviews(db, external_reviews)
+                                print(f"💾 Сохранено {len(external_reviews)} отзывов в ExternalBusinessReviews с датами и ответами")
+                        except Exception as review_err:
+                            print(f"⚠️ Ошибка сохранения отзывов в ExternalBusinessReviews: {review_err}")
+                            import traceback
+                            traceback.print_exc()
+                    
                 except Exception as e:
                     print(f"⚠️ Ошибка сохранения в MapParseResults: {e}")
                     import traceback

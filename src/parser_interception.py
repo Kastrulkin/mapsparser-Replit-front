@@ -469,8 +469,26 @@ class YandexMapsInterceptionParser:
             # Извлекаем текст
             text = item.get('text') or item.get('comment') or item.get('message') or item.get('content', '')
             
-            # Извлекаем дату
-            date = item.get('date') or item.get('publishedAt') or item.get('published_at') or item.get('createdAt', '')
+            # Извлекаем дату (может быть в разных форматах)
+            date_raw = item.get('date') or item.get('publishedAt') or item.get('published_at') or item.get('createdAt') or item.get('created_at', '')
+            date = ''
+            if date_raw:
+                # Если это timestamp (число)
+                if isinstance(date_raw, (int, float)):
+                    try:
+                        from datetime import datetime
+                        # Проверяем, в миллисекундах или секундах
+                        if date_raw > 1e10:  # Вероятно миллисекунды
+                            date = datetime.fromtimestamp(date_raw / 1000.0).isoformat()
+                        else:  # Секунды
+                            date = datetime.fromtimestamp(date_raw).isoformat()
+                    except:
+                        date = str(date_raw)
+                # Если это строка ISO формата
+                elif isinstance(date_raw, str):
+                    date = date_raw
+                else:
+                    date = str(date_raw)
             
             # Извлекаем ответ организации (проверяем все возможные варианты)
             response_text = None
