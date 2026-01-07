@@ -2998,12 +2998,25 @@ def get_services():
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    cursor.execute("""
-                        SELECT id, category, name, description, keywords, price, created_at
-                        FROM UserServices 
-                        WHERE business_id = ? 
-                        ORDER BY created_at DESC
-                    """, (business_id,))
+                    # Проверяем, есть ли поле optimized_description
+                    cursor.execute("PRAGMA table_info(UserServices)")
+                    columns = [col[1] for col in cursor.fetchall()]
+                    has_optimized = 'optimized_description' in columns
+                    
+                    if has_optimized:
+                        cursor.execute("""
+                            SELECT id, category, name, description, optimized_description, keywords, price, created_at
+                            FROM UserServices 
+                            WHERE business_id = ? 
+                            ORDER BY created_at DESC
+                        """, (business_id,))
+                    else:
+                        cursor.execute("""
+                            SELECT id, category, name, description, keywords, price, created_at
+                            FROM UserServices 
+                            WHERE business_id = ? 
+                            ORDER BY created_at DESC
+                        """, (business_id,))
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -3012,12 +3025,25 @@ def get_services():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика для обратной совместимости
-            cursor.execute("""
-                SELECT id, category, name, description, keywords, price, created_at
-                FROM UserServices 
-                WHERE user_id = ? 
-                ORDER BY created_at DESC
-            """, (user_id,))
+            # Проверяем, есть ли поле optimized_description
+            cursor.execute("PRAGMA table_info(UserServices)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_optimized = 'optimized_description' in columns
+            
+            if has_optimized:
+                cursor.execute("""
+                    SELECT id, category, name, description, optimized_description, keywords, price, created_at
+                    FROM UserServices 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                """, (user_id,))
+            else:
+                cursor.execute("""
+                    SELECT id, category, name, description, keywords, price, created_at
+                    FROM UserServices 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                """, (user_id,))
         
         services = cursor.fetchall()
         db.close()
@@ -3034,7 +3060,7 @@ def get_services():
                         parsed_kw = []
                 except Exception:
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
-            result.append({
+            service_dict = {
                 "id": service['id'],
                 "category": service['category'],
                 "name": service['name'],
@@ -3042,7 +3068,11 @@ def get_services():
                 "keywords": parsed_kw,
                 "price": service['price'],
                 "created_at": service['created_at']
-            })
+            }
+            # Добавляем optimized_description, если оно есть
+            if 'optimized_description' in service:
+                service_dict['optimized_description'] = service['optimized_description']
+            result.append(service_dict)
 
         return jsonify({"success": True, "services": result})
 
