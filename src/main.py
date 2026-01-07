@@ -2274,27 +2274,52 @@ Write all generated text in {language_name}.
         
         # Убеждаемся, что prompt_template - это строка
         if not isinstance(prompt_template, str):
-            print(f"⚠️ prompt_template не строка, используем default_prompt. Type: {type(prompt_template)}", flush=True)
+            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
+            prompt_template = default_prompt
+        else:
+            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
+            try:
+                prompt_template = str(prompt_template)
+            except Exception as conv_err:
+                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
+                prompt_template = default_prompt
+        
+        # Финальная проверка
+        if not isinstance(prompt_template, str):
+            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt
+        
+        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
+        try:
+            if isinstance(prompt_template, bytes):
+                prompt_template = prompt_template.decode('utf-8')
+            else:
+                prompt_template = str(prompt_template)
+        except Exception as conv_err:
+            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
             prompt_template = default_prompt
         
         # Форматируем промпт с обработкой ошибок
         try:
+            # Преобразуем все аргументы в строки для безопасности
             prompt = prompt_template.format(
-                language_name=language_name,
-                service_context=service_context,
-                transaction_context=transaction_context,
-                raw_info=raw_info[:800],
-                news_examples=news_examples
+                language_name=str(language_name),
+                service_context=str(service_context),
+                transaction_context=str(transaction_context),
+                raw_info=str(raw_info[:800]),
+                news_examples=str(news_examples)
             )
-        except (KeyError, AttributeError, ValueError) as e:
+        except (KeyError, AttributeError, ValueError, TypeError) as e:
             print(f"⚠️ Ошибка форматирования промпта: {e}. Используем default_prompt", flush=True)
+            import traceback
+            traceback.print_exc()
             # Используем default_prompt как fallback
             prompt = default_prompt.format(
-                language_name=language_name,
-                service_context=service_context,
-                transaction_context=transaction_context,
-                raw_info=raw_info[:800],
-                news_examples=news_examples
+                language_name=str(language_name),
+                service_context=str(service_context),
+                transaction_context=str(transaction_context),
+                raw_info=str(raw_info[:800]),
+                news_examples=str(news_examples)
             )
 
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
