@@ -2641,6 +2641,11 @@ def reviews_reply():
         user_data = verify_session(token)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Проверяем, что user_data - это словарь
+        if not isinstance(user_data, dict):
+            print(f"⚠️ user_data не словарь: {type(user_data)} = {user_data}", flush=True)
+            return jsonify({"error": "Ошибка авторизации: неверный формат данных пользователя"}), 401
 
         data = request.get_json() or {}
         review_text = (data.get('review') or '').strip()
