@@ -187,7 +187,7 @@ ls -lh dist/assets/index-*.js
 # Должен быть свежий файл с текущей датой
 ```
 
-**5. Перезапустить Flask API (main.py):**
+**5. Перезапустить Flask API (main.py) с проверкой порта 8000:**
 ```bash
 # ⚠️ КРИТИЧЕСКИ ВАЖНО: seo-worker запускает worker.py, а не main.py!
 # Flask API (main.py) запускается через seo-api.service или напрямую
@@ -199,9 +199,16 @@ ls -lh dist/assets/index-*.js
 pkill -9 -f "python.*main.py" || true
 sleep 2
 
-# Проверить, что порт свободен
-lsof -iTCP:8000 -sTCP:LISTEN
-# Не должно быть вывода
+# Дополнительная проверка: если кто-то всё ещё слушает 8000 — добиваем по PID
+PID=$(lsof -tiTCP:8000 -sTCP:LISTEN || true)
+if [ ! -z "$PID" ]; then
+    echo "⚠️ Порт 8000 всё ещё занят, убиваю PID $PID"
+    kill -9 "$PID"
+    sleep 2
+fi
+
+# Убедиться, что порт свободен
+lsof -iTCP:8000 -sTCP:LISTEN || echo "✅ Порт 8000 свободен"
 
 # Перезапустить через systemd (если настроен seo-api) или напрямую
 if systemctl is-enabled seo-api >/dev/null 2>&1; then
