@@ -7150,7 +7150,21 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
         db.close()
         
         if row:
-            return row[0]
+            # Правильно извлекаем строку из row (может быть tuple или dict)
+            if isinstance(row, dict):
+                prompt_text = row.get('prompt_text', '')
+            elif isinstance(row, (tuple, list)) and len(row) > 0:
+                prompt_text = row[0]
+            else:
+                prompt_text = str(row) if row else ''
+            
+            # Убеждаемся, что это строка
+            if isinstance(prompt_text, str) and prompt_text.strip():
+                return prompt_text
+            elif fallback:
+                return fallback
+            else:
+                return ""
         elif fallback:
             return fallback
         else:
