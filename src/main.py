@@ -3140,6 +3140,8 @@ def update_service(service_id):
         
         print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
         print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
+        print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
+        print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
         
         try:
             if has_optimized_description and has_optimized_name:
@@ -3149,6 +3151,15 @@ def update_service(service_id):
                     category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND user_id = ?
                 """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
+                print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
+                
+                # Проверяем, что данные сохранились
+                cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
+                check_row = cursor.fetchone()
+                if check_row:
+                    print(f"✅ DEBUG update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
+                else:
+                    print(f"❌ DEBUG update_service: Услуга не найдена после UPDATE!", flush=True)
             elif has_optimized_description:
                 print(f"🔍 DEBUG update_service: Обновление с optimized_description", flush=True)
                 cursor.execute("""

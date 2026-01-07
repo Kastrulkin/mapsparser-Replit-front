@@ -95,6 +95,27 @@ export const CardOverviewPage = () => {
         // Находим обновленную услугу по ID для отладки
         const updatedService = data.services?.find((s: any) => s.id === '3772931e-9796-475b-b439-ee1cc07b1dc9');
         
+        // Детальный лог для отладки
+        if (updatedService) {
+          console.log('🔍 DEBUG loadUserServices: ДЕТАЛЬНЫЙ ЛОГ updatedService', {
+            id: updatedService.id,
+            name: updatedService.name,
+            optimized_name: updatedService.optimized_name,
+            optimized_name_type: typeof updatedService.optimized_name,
+            optimized_name_length: updatedService.optimized_name?.length,
+            has_optimized_name: !!updatedService.optimized_name,
+            description: updatedService.description,
+            optimized_description: updatedService.optimized_description,
+            optimized_description_type: typeof updatedService.optimized_description,
+            optimized_description_length: updatedService.optimized_description?.length,
+            has_optimized_description: !!updatedService.optimized_description,
+            allKeys: Object.keys(updatedService),
+            fullService: updatedService // Полный объект для проверки
+          });
+        } else {
+          console.log('❌ DEBUG loadUserServices: Услуга 3772931e-9796-475b-b439-ee1cc07b1dc9 не найдена в списке');
+        }
+        
         console.log('✅ DEBUG loadUserServices: Услуги загружены', {
           count: data.services?.length,
           firstService: data.services?.[0],
