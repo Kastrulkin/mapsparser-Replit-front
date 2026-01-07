@@ -3011,12 +3011,12 @@ def get_services():
                     if has_optimized_name:
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
-                    cursor.execute(f"""
-                        SELECT {', '.join(select_fields)}
-                        FROM UserServices 
-                        WHERE business_id = ? 
-                        ORDER BY created_at DESC
-                    """, (business_id,))
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
+                    print(f"🔍 DEBUG get_services: SQL запрос = {select_sql}", flush=True)
+                    print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
+                    print(f"🔍 DEBUG get_services: has_optimized_name = {has_optimized_name}, has_optimized_desc = {has_optimized_desc}", flush=True)
+                    
+                    cursor.execute(select_sql, (business_id,))
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -3038,12 +3038,11 @@ def get_services():
             if has_optimized_name:
                 select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
             
-            cursor.execute(f"""
-                SELECT {', '.join(select_fields)}
-                FROM UserServices 
-                WHERE user_id = ? 
-                ORDER BY created_at DESC
-            """, (user_id,))
+            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            print(f"🔍 DEBUG get_services: SQL запрос (старая логика) = {select_sql}", flush=True)
+            print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
+            
+            cursor.execute(select_sql, (user_id,))
         
         services = cursor.fetchall()
         db.close()
