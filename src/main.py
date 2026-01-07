@@ -2705,15 +2705,17 @@ def reviews_reply():
                 examples_text = ""
 
         # Получаем промпт из БД или используем дефолтный
-        default_prompt = f"""Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+        # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
+        default_prompt_template = """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):
+{examples_text}
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
-Отзыв клиента: {review_text[:1000]}"""
+Отзыв клиента: {review_text}"""
         
-        prompt_template = get_prompt_from_db('review_reply', default_prompt)
+        prompt_template = get_prompt_from_db('review_reply', default_prompt_template)
         
         # Логируем тип и значение prompt_template
         print(f"🔍 DEBUG reviews_reply: prompt_template type = {type(prompt_template)}", flush=True)
@@ -2734,7 +2736,22 @@ Write the reply in {language_name}.
         # Финальная проверка
         if not isinstance(prompt_template, str):
             print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
-            prompt_template = default_prompt
+            prompt_template = default_prompt_template
+        
+        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
+        try:
+            if isinstance(prompt_template, bytes):
+                prompt_template = prompt_template.decode('utf-8')
+            else:
+                prompt_template = str(prompt_template)
+        except Exception as conv_err:
+            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
+            prompt_template = default_prompt_template
+        
+        # Убеждаемся, что это действительно строка
+        if not isinstance(prompt_template, str):
+            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: prompt_template не строка: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt_template
         
         try:
             prompt = prompt_template.format(
@@ -2743,10 +2760,12 @@ Write the reply in {language_name}.
                 examples_text=examples_text,
                 review_text=review_text[:1000]
             )
-        except (KeyError, ValueError) as format_err:
-            print(f"⚠️ Ошибка форматирования промпта: {format_err}")
-            # Используем default_prompt как fallback
-            prompt = default_prompt.format(
+        except (KeyError, ValueError, TypeError) as format_err:
+            print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
+            import traceback
+            traceback.print_exc()
+            # Используем default_prompt_template как fallback
+            prompt = default_prompt_template.format(
                 tone=tone,
                 language_name=language_name,
                 examples_text=examples_text,
