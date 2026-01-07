@@ -281,10 +281,11 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
-        // Обновляем услугу
+        // Обновляем услугу - сохраняем оптимизированное описание отдельно
         await updateService(serviceId, {
           name: optimized.optimized_name || service.name,
-          description: optimized.seo_description || service.description,
+          description: service.description, // Оригинальное описание не меняем
+          optimized_description: optimized.seo_description || '', // SEO описание сохраняем отдельно
           keywords: optimized.keywords || service.keywords
         });
         setSuccess('Услуга оптимизирована');
@@ -545,7 +546,25 @@ export const CardOverviewPage = () => {
                   <tr key={service.id || index}>
                     <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{service.name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{service.description}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      <div className="space-y-2">
+                        {service.description && (
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Оригинальное описание:</div>
+                            <div>{service.description}</div>
+                          </div>
+                        )}
+                        {service.optimized_description && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="text-xs text-green-600 font-medium mb-1">SEO описание:</div>
+                            <div className="text-green-700">{service.optimized_description}</div>
+                          </div>
+                        )}
+                        {!service.description && !service.optimized_description && (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2">

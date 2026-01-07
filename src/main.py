@@ -3072,20 +3072,43 @@ def update_service(service_id):
         category = data.get('category', '')
         name = data.get('name', '')
         description = data.get('description', '')
+        optimized_description = data.get('optimized_description', '')  # Новое поле для SEO описания
         keywords = data.get('keywords', [])
         price = data.get('price', '')
         user_id = user_data['user_id']
+        
+        # Преобразуем keywords в строку JSON, если это массив
+        if isinstance(keywords, list):
+            keywords_str = json.dumps(keywords, ensure_ascii=False)
+        elif isinstance(keywords, str):
+            keywords_str = keywords
+        else:
+            keywords_str = json.dumps([])
 
         if not name:
             return jsonify({"error": "Название услуги обязательно"}), 400
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("""
-            UPDATE UserServices SET
-            category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
-        """, (category, name, description, json.dumps(keywords), price, service_id, user_id))
+        
+        # Проверяем, есть ли поле optimized_description в таблице
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_optimized_description = 'optimized_description' in columns
+        
+        if has_optimized_description:
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
+        else:
+            # Если поля нет - обновляем без него (для обратной совместимости)
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, description, keywords_str, price, service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -3096,7 +3119,9 @@ def update_service(service_id):
         return jsonify({"success": True, "message": "Услуга обновлена"})
 
     except Exception as e:
-        print(f"❌ Ошибка обновления услуги: {e}")
+        print(f"❌ Ошибка обновления услуги: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/services/delete/<string:service_id>', methods=['DELETE', 'OPTIONS'])
