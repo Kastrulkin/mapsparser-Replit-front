@@ -561,7 +561,49 @@ export const CardOverviewPage = () => {
                         {service.optimized_description && (
                           <div className="mt-2 pt-2 border-t border-gray-200">
                             <div className="text-xs text-green-600 font-medium mb-1">SEO описание:</div>
-                            <div className="text-green-700">{service.optimized_description}</div>
+                            <div className="text-green-700 mb-2">{service.optimized_description}</div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  // Принять: заменяем оригинальное описание на оптимизированное
+                                  await updateService(service.id, {
+                                    category: service.category,
+                                    name: service.name,
+                                    description: service.optimized_description, // Заменяем оригинальное
+                                    optimized_description: '', // Удаляем оптимизированное
+                                    keywords: service.keywords,
+                                    price: service.price
+                                  });
+                                  setSuccess('Оптимизированное описание принято');
+                                  await loadUserServices();
+                                }}
+                                className="text-xs h-7"
+                              >
+                                ✓ Принять
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  // Отклонить: удаляем оптимизированное описание
+                                  await updateService(service.id, {
+                                    category: service.category,
+                                    name: service.name,
+                                    description: service.description,
+                                    optimized_description: '', // Удаляем
+                                    keywords: service.keywords,
+                                    price: service.price
+                                  });
+                                  setSuccess('Оптимизированное описание отклонено');
+                                  await loadUserServices();
+                                }}
+                                className="text-xs h-7 text-red-600 hover:text-red-700"
+                              >
+                                ✕ Отклонить
+                              </Button>
+                            </div>
                           </div>
                         )}
                         {!service.description && !service.optimized_description && (
