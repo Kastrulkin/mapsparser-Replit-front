@@ -82,6 +82,7 @@ export const CardOverviewPage = () => {
       return;
     }
     
+    console.log('🔍 DEBUG loadUserServices: Загружаем услуги для business_id:', currentBusinessId);
     setLoadingServices(true);
     try {
       const token = localStorage.getItem('auth_token');
@@ -91,10 +92,23 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
+        console.log('✅ DEBUG loadUserServices: Услуги загружены', {
+          count: data.services?.length,
+          services: data.services,
+          firstService: data.services?.[0],
+          firstServiceOptimized: data.services?.[0] ? {
+            name: data.services[0].name,
+            optimized_name: data.services[0].optimized_name,
+            description: data.services[0].description,
+            optimized_description: data.services[0].optimized_description
+          } : null
+        });
         setUserServices(data.services || []);
+      } else {
+        console.error('❌ DEBUG loadUserServices: Ошибка загрузки услуг', data.error);
       }
     } catch (e) {
-      console.error('Ошибка загрузки услуг:', e);
+      console.error('❌ Ошибка загрузки услуг:', e);
     } finally {
       setLoadingServices(false);
     }
