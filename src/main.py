@@ -7234,13 +7234,15 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
             
             # Убеждаемся, что это строка
             if prompt_text is not None:
+                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type before conversion = {type(prompt_text)}", flush=True)
                 prompt_text = str(prompt_text) if not isinstance(prompt_text, str) else prompt_text
+                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type after conversion = {type(prompt_text)}", flush=True)
                 if prompt_text.strip():
                     return prompt_text
             
             # Если не удалось извлечь - используем fallback
             if fallback:
-                print(f"⚠️ Не удалось извлечь промпт из row, используем fallback. Row type: {type(row)}")
+                print(f"⚠️ Не удалось извлечь промпт из row, используем fallback. Row type: {type(row)}, Row value: {row}", flush=True)
                 return fallback
             else:
                 return ""
