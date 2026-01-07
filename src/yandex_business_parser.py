@@ -413,6 +413,18 @@ class YandexBusinessParser:
         # Парсим отзывы
         for idx, review_data in enumerate(reviews_list):
             review_id = review_data.get("id") or f"{business_id}_review_{idx}"
+            
+            # Логируем raw данные для первых 2 отзывов (для отладки)
+            if idx < 2:
+                print(f"🔍 RAW данные отзыва #{idx + 1}:", flush=True)
+                print(f"   Ключи: {list(review_data.keys())}", flush=True)
+                # Показываем все поля, связанные с датой
+                date_fields = {k: v for k, v in review_data.items() if 'date' in k.lower() or 'time' in k.lower() or 'created' in k.lower() or 'published' in k.lower()}
+                if date_fields:
+                    print(f"   Поля с датой: {date_fields}", flush=True)
+                else:
+                    print(f"   ⚠️ Поля с датой не найдены!", flush=True)
+            
             try:
                 # Пробуем разные варианты полей с датой
                 published_at_str = (

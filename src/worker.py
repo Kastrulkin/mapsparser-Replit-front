@@ -554,26 +554,37 @@ def process_queue():
 
 def _process_sync_yandex_business_task(queue_dict):
     """Обработка синхронизации Яндекс.Бизнес через кабинет"""
-    business_id = queue_dict.get("business_id")
-    account_id = queue_dict.get("account_id")
+    import signal
     
-    if not business_id or not account_id:
-        print(f"❌ Отсутствует business_id или account_id для задачи {queue_dict.get('id')}")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE ParseQueue 
-            SET status = 'error', 
-                error_message = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, ("Отсутствует business_id или account_id", queue_dict["id"]))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return
+    # Устанавливаем таймаут 10 минут для задачи
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Задача синхронизации превысила таймаут 10 минут")
     
-    print(f"🔄 Синхронизация Яндекс.Бизнес для бизнеса {business_id}", flush=True)
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(600)  # 10 минут
+    
+    try:
+        business_id = queue_dict.get("business_id")
+        account_id = queue_dict.get("account_id")
+        
+        if not business_id or not account_id:
+            print(f"❌ Отсутствует business_id или account_id для задачи {queue_dict.get('id')}", flush=True)
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE ParseQueue 
+                SET status = 'error', 
+                    error_message = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, ("Отсутствует business_id или account_id", queue_dict["id"]))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            signal.alarm(0)  # Отменяем таймаут
+            return
+        
+        print(f"🔄 Синхронизация Яндекс.Бизнес для бизнеса {business_id}", flush=True)
     
     try:
         from yandex_business_parser import YandexBusinessParser
@@ -704,12 +715,31 @@ def _process_sync_yandex_business_task(queue_dict):
             conn.close()
             
             print(f"✅ Синхронизация завершена для бизнеса {business_id}", flush=True)
+            signal.alarm(0)  # Отменяем таймаут при успехе
+            
+        except TimeoutError as e:
+            print(f"⏱️ Таймаут синхронизации: {e}", flush=True)
+            signal.alarm(0)
+            # Обновляем статус ошибки
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE ParseQueue 
+                SET status = 'error', 
+                    error_message = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (str(e), queue_dict["id"]))
+            conn.commit()
+            cursor.close()
+            conn.close()
             
         except Exception as e:
             print(f"❌ Ошибка синхронизации: {e}", flush=True)
             import traceback
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
+            signal.alarm(0)  # Отменяем таймаут при ошибке
             db.close()
             
             # Обновляем статус ошибки
