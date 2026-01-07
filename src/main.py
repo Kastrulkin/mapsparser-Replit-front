@@ -2718,6 +2718,8 @@ Write the reply in {language_name}.
             )
         # Логируем промпт для отладки
         print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
+        print(f"🔍 DEBUG reviews_reply: review_text = {review_text[:200] if review_text else 'ПУСТО'}")
+        print(f"🔍 DEBUG reviews_reply: examples_text (первые 200 символов) = {examples_text[:200] if examples_text else 'ПУСТО'}")
         
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
