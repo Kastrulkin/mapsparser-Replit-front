@@ -993,6 +993,102 @@ export const CardOverviewPage = () => {
           </div>
         </div>
       )}
+
+      {/* Модальное окно редактирования услуги */}
+      <Dialog open={!!editingService} onOpenChange={(open) => !open && setEditingService(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Редактирование услуги</DialogTitle>
+            <DialogDescription>
+              Измените данные услуги. Нажмите "Сохранить" для применения изменений.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-category">Категория</Label>
+              <Input
+                id="edit-category"
+                value={editingForm.category}
+                onChange={(e) => setEditingForm({ ...editingForm, category: e.target.value })}
+                placeholder="Например: hair, nails, spa"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-name">Название *</Label>
+              <Input
+                id="edit-name"
+                value={editingForm.name}
+                onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })}
+                placeholder="Название услуги"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-description">Описание</Label>
+              <Textarea
+                id="edit-description"
+                value={editingForm.description}
+                onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })}
+                placeholder="Описание услуги"
+                rows={4}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-keywords">Ключевые слова (через запятую)</Label>
+              <Input
+                id="edit-keywords"
+                value={editingForm.keywords}
+                onChange={(e) => setEditingForm({ ...editingForm, keywords: e.target.value })}
+                placeholder="Например: окрашивание, стрижка, укладка"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-price">Цена</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                value={editingForm.price}
+                onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })}
+                placeholder="Цена в рублях"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingService(null)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!editingForm.name.trim()) {
+                  setError('Название услуги обязательно');
+                  return;
+                }
+                try {
+                  const service = userServices.find(s => s.id === editingService);
+                  if (!service) {
+                    setError('Услуга не найдена');
+                    return;
+                  }
+                  await updateService(editingService!, {
+                    category: editingForm.category,
+                    name: editingForm.name,
+                    description: editingForm.description,
+                    keywords: editingForm.keywords.split(',').map(k => k.trim()).filter(k => k),
+                    price: editingForm.price,
+                    optimized_name: service.optimized_name || '',
+                    optimized_description: service.optimized_description || ''
+                  });
+                  setEditingService(null);
+                } catch (e: any) {
+                  setError('Ошибка обновления услуги: ' + e.message);
+                }
+              }}
+            >
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -47,6 +47,79 @@
 
 ## История упрощений
 
+### 2025-01-03 - Упрощение исправлений API get_services и UI редактирования
+
+**Источник:** Исправления API get_services() и добавление модального окна редактирования
+
+#### Файлы, которые упрощались
+- `src/main.py` - упрощена логика извлечения данных из sqlite3.Row, убрана избыточная проверка optimized полей
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - упрощен useEffect для заполнения формы редактирования (guard clauses)
+
+#### Что было упрощено
+
+1. **Упрощение fallback для tuple/list** (main.py, строки 3084-3088):
+   - Было: цикл с вложенным if
+   ```python
+   service_dict = {}
+   for idx, field_name in enumerate(select_fields):
+       if idx < len(service):
+           service_dict[field_name] = service[idx]
+   ```
+   - Стало: dict comprehension
+   ```python
+   service_dict = {field_name: service[idx] for idx, field_name in enumerate(select_fields) if idx < len(service)}
+   ```
+
+2. **Удаление избыточной проверки optimized полей** (main.py, строки 3102-3121):
+   - Было: сложная проверка с try-except для получения optimized_name и optimized_description
+   ```python
+   if has_optimized_name and 'optimized_name' not in service_dict:
+       try:
+           if hasattr(service, 'get'):
+               service_dict['optimized_name'] = service.get('optimized_name', None)
+           elif hasattr(service, '__getitem__'):
+               service_dict['optimized_name'] = service['optimized_name']
+       except:
+           pass
+   ```
+   - Стало: убрана проверка, т.к. `dict(service)` уже извлекает все поля из Row
+   ```python
+   # optimized_name и optimized_description уже будут в service_dict после dict(service)
+   # Дополнительная проверка не нужна, т.к. dict(service) извлекает все поля из Row
+   ```
+
+3. **Упрощение useEffect для формы редактирования** (CardOverviewPage.tsx, строки 45-58):
+   - Было: вложенные if
+   ```typescript
+   useEffect(() => {
+     if (editingService) {
+       const service = userServices.find(s => s.id === editingService);
+       if (service) {
+         setEditingForm({...});
+       }
+     }
+   }, [editingService, userServices]);
+   ```
+   - Стало: guard clauses для раннего выхода
+   ```typescript
+   useEffect(() => {
+     if (!editingService) return;
+     
+     const service = userServices.find(s => s.id === editingService);
+     if (!service) return;
+     
+     setEditingForm({...});
+   }, [editingService, userServices]);
+   ```
+
+#### Результаты
+- Упрощена логика fallback (dict comprehension вместо цикла)
+- Удалено ~20 строк избыточного кода (проверка optimized полей)
+- Улучшена читаемость useEffect (guard clauses вместо вложенных if)
+- Сохранена функциональность (dict(service) уже извлекает все поля)
+
+---
+
 ### 2025-01-06 - Исправление ошибок после упрощения кода
 
 **Проблемы после упрощения:**

@@ -2335,12 +2335,9 @@ Write all generated text in {language_name}.
 
         return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
     except Exception as e:
-        print(f"❌ Ошибка генерации новости: {e}")
+        print(f"❌ Ошибка генерации новости: {e}", flush=True)
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-    except Exception as e:
-        print(f"❌ Ошибка генерации новости: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/news/approve', methods=['POST', 'OPTIONS'])
@@ -3076,8 +3073,16 @@ def get_services():
                 select_fields = []
         
         for service in services:
-            # keywords в старых данных могли храниться как строка "a, b" — сделаем устойчивый парсинг
-            raw_kw = service['keywords']
+            # ПРОСТОЕ РЕШЕНИЕ: Преобразуем Row в словарь через dict()
+            # Это гарантирует правильное извлечение всех полей, включая optimized_name и optimized_description
+            if hasattr(service, 'keys'):
+                service_dict = dict(service)  # Преобразуем Row в dict
+            else:
+                # Fallback для tuple/list - создаем словарь по порядку полей
+                service_dict = {field_name: service[idx] for idx, field_name in enumerate(select_fields) if idx < len(service)}
+            
+            # Парсим keywords
+            raw_kw = service_dict.get('keywords')
             parsed_kw = []
             if raw_kw:
                 try:
@@ -3086,87 +3091,18 @@ def get_services():
                         parsed_kw = []
                 except Exception:
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
+            service_dict['keywords'] = parsed_kw
             
-            # Получаем все ключи из Row объекта
-            service_keys = list(service.keys()) if hasattr(service, 'keys') else []
-            
-            # Преобразуем Row в словарь для удобства - ПРОСТОЕ РЕШЕНИЕ
-            service_dict = {
-                "id": service['id'],
-                "category": service['category'],
-                "name": service['name'],
-                "description": service['description'],
-                "keywords": parsed_kw,
-                "price": service['price'],
-                "created_at": service['created_at']
-            }
-            
-            # Добавляем optimized_description и optimized_name напрямую из Row
-            # Если поля есть в SELECT, они будут в Row
-            if has_optimized_name:
-                try:
-                    val = service['optimized_name']
-                    if val:  # Только если не None и не пустая строка
-                        service_dict['optimized_name'] = val
-                except (KeyError, IndexError):
-                    pass
-            
-            if has_optimized_desc:
-                try:
-                    val = service['optimized_description']
-                    if val:  # Только если не None и не пустая строка
-                        service_dict['optimized_description'] = val
-                except (KeyError, IndexError):
-                    pass
-            
-            # Логируем для отладки (только для услуги с ID 3772931e-9796-475b-b439-ee1cc07b1dc9)
-            if service_dict['id'] == '3772931e-9796-475b-b439-ee1cc07b1dc9':
-                print(f"🔍 DEBUG get_services: Услуга {service_dict['id']} - has_optimized_name={has_optimized_name}, has_optimized_desc={has_optimized_desc}", flush=True)
-                if has_optimized_name:
-                    try:
-                        print(f"🔍 DEBUG get_services: service['optimized_name'] = '{service['optimized_name']}'", flush=True)
-                        print(f"🔍 DEBUG get_services: service_dict['optimized_name'] = '{service_dict.get('optimized_name')}'", flush=True)
-                    except:
-                        print(f"❌ DEBUG get_services: Не удалось получить optimized_name", flush=True)
-                if has_optimized_desc:
-                    try:
-                        print(f"🔍 DEBUG get_services: service['optimized_description'] = '{service['optimized_description'][:50] if service['optimized_description'] else None}...'", flush=True)
-                        print(f"🔍 DEBUG get_services: service_dict['optimized_description'] = '{service_dict.get('optimized_description')[:50] if service_dict.get('optimized_description') else None}...'", flush=True)
-                    except:
-                        print(f"❌ DEBUG get_services: Не удалось получить optimized_description", flush=True)
-            
-            # Альтернативный способ - обращение по индексу, если знаем порядок полей
-            if has_optimized_name and 'optimized_name' not in service_dict:
-                try:
-                    # Поля идут в порядке: id, category, name, optimized_name, description, optimized_description, keywords, price, created_at
-                    name_idx = select_fields.index('name')
-                    if 'optimized_name' in select_fields:
-                        optimized_name_idx = select_fields.index('optimized_name')
-                        service_dict['optimized_name'] = service[optimized_name_idx] if isinstance(service, (tuple, list)) else service['optimized_name']
-                except (IndexError, KeyError, ValueError):
-                    pass
-            
-            if has_optimized_desc and 'optimized_description' not in service_dict:
-                try:
-                    if 'optimized_description' in select_fields:
-                        optimized_desc_idx = select_fields.index('optimized_description')
-                        service_dict['optimized_description'] = service[optimized_desc_idx] if isinstance(service, (tuple, list)) else service['optimized_description']
-                except (IndexError, KeyError, ValueError):
-                    pass
+            # optimized_name и optimized_description уже будут в service_dict после dict(service)
+            # Дополнительная проверка не нужна, т.к. dict(service) извлекает все поля из Row
             
             # Логируем для отладки (только для первой услуги и для услуги с ID 3772931e-9796-475b-b439-ee1cc07b1dc9)
-            service_id = service['id']
+            service_id = service_dict.get('id')
             if len(result) == 0 or service_id == '3772931e-9796-475b-b439-ee1cc07b1dc9':
-                print(f"🔍 DEBUG get_services: Услуга {service_id} - keys: {service_keys}, has optimized_name: {'optimized_name' in service_keys}, has optimized_description: {'optimized_description' in service_keys}", flush=True)
-                if 'optimized_name' in service_keys:
-                    print(f"🔍 DEBUG get_services: optimized_name value = '{service['optimized_name']}'", flush=True)
-                else:
-                    print(f"❌ DEBUG get_services: optimized_name НЕТ в keys!", flush=True)
-                if 'optimized_description' in service_keys:
-                    print(f"🔍 DEBUG get_services: optimized_description value = '{service['optimized_description'][:50] if service['optimized_description'] else ''}...'", flush=True)
-                else:
-                    print(f"❌ DEBUG get_services: optimized_description НЕТ в keys!", flush=True)
-                print(f"🔍 DEBUG get_services: service_dict после обработки: optimized_name = {service_dict.get('optimized_name')}, optimized_description = {service_dict.get('optimized_description')[:50] if service_dict.get('optimized_description') else None}...", flush=True)
+                print(f"🔍 DEBUG get_services: Услуга {service_id}", flush=True)
+                print(f"🔍 DEBUG get_services: service_dict keys = {list(service_dict.keys())}", flush=True)
+                print(f"🔍 DEBUG get_services: optimized_name = {service_dict.get('optimized_name')}", flush=True)
+                print(f"🔍 DEBUG get_services: optimized_description = {service_dict.get('optimized_description')[:50] if service_dict.get('optimized_description') else None}...", flush=True)
             
             result.append(service_dict)
 
