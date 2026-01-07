@@ -2755,6 +2755,8 @@ Write the reply in {language_name}.
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
         print(f"❌ Ошибка генерации ответа на отзыв: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/review-replies/update', methods=['POST', 'OPTIONS'])
