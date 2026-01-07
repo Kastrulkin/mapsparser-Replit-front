@@ -508,19 +508,6 @@ class YandexBusinessParser:
                             except:
                                 pass
                 
-                # Логируем структуру только для первых нескольких отзывов (для отладки)
-                if idx < 3:
-                    print(f"🔍 Отзыв #{idx + 1} (ID: {review_id}):", flush=True)
-                    print(f"   Автор: {author_name}", flush=True)
-                    print(f"   Рейтинг: {rating}", flush=True)
-                    print(f"   Дата публикации: {published_at}", flush=True)
-                    if has_response:
-                        print(f"   ✅ Найден ответ: {response_text[:100]}...", flush=True)
-                        if response_at:
-                            print(f"   Дата ответа: {response_at}", flush=True)
-                    else:
-                        print(f"   ❌ Ответа нет", flush=True)
-                
                 # Парсим рейтинг (может быть в разных форматах)
                 rating = review_data.get("rating") or review_data.get("score") or review_data.get("stars")
                 if rating:
@@ -529,7 +516,7 @@ class YandexBusinessParser:
                     except:
                         rating = None
                 
-                # Парсим автора
+                # Парсим автора (ВАЖНО: до логирования!)
                 author_name = None
                 author_data = review_data.get("author") or review_data.get("user") or review_data.get("reviewer")
                 if isinstance(author_data, dict):
@@ -542,6 +529,19 @@ class YandexBusinessParser:
                         author_name = author_name.get("name") or author_name.get("display_name") or author_name.get("username")
                 elif isinstance(author_data, str):
                     author_name = author_data
+                
+                # Логируем структуру только для первых нескольких отзывов (для отладки)
+                if idx < 3:
+                    print(f"🔍 Отзыв #{idx + 1} (ID: {review_id}):", flush=True)
+                    print(f"   Автор: {author_name}", flush=True)
+                    print(f"   Рейтинг: {rating}", flush=True)
+                    print(f"   Дата публикации: {published_at}", flush=True)
+                    if has_response:
+                        print(f"   ✅ Найден ответ: {response_text[:100]}...", flush=True)
+                        if response_at:
+                            print(f"   Дата ответа: {response_at}", flush=True)
+                    else:
+                        print(f"   ❌ Ответа нет", flush=True)
                 
                 # Парсим текст отзыва
                 # В API Яндекс.Бизнес текст отзыва может быть в разных полях:

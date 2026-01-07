@@ -659,43 +659,76 @@ def _process_sync_yandex_business_task(queue_dict):
                 print(f"💾 Сохранено публикаций: {len(posts)}")
             
             # Получаем существующие данные из MapParseResults (если есть)
-            cursor.execute("""
-                SELECT rating, reviews_count, unanswered_reviews_count, news_count, photos_count
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-            """, (business_id,))
+            # Проверяем наличие колонки unanswered_reviews_count
+            cursor.execute("PRAGMA table_info(MapParseResults)")
+            columns = [row[1] for row in cursor.fetchall()]
+            has_unanswered = 'unanswered_reviews_count' in columns
+            
+            if has_unanswered:
+                cursor.execute("""
+                    SELECT rating, reviews_count, unanswered_reviews_count, news_count, photos_count
+                    FROM MapParseResults
+                    WHERE business_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (business_id,))
+            else:
+                cursor.execute("""
+                    SELECT rating, reviews_count, news_count, photos_count
+                    FROM MapParseResults
+                    WHERE business_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (business_id,))
             existing_data = cursor.fetchone()
             
             # Используем данные из кабинета (приоритет кабинету)
             rating = org_info.get('rating') if org_info and org_info.get('rating') else (existing_data[0] if existing_data and existing_data[0] else None)
             reviews_count = len(reviews) if reviews else (existing_data[1] if existing_data and existing_data[1] else 0)
-            reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else (existing_data[2] if existing_data and existing_data[2] else 0)
-            news_count = len(posts) if posts else (existing_data[3] if existing_data and existing_data[3] else 0)
-            photos_count = org_info.get('photos_count', 0) if org_info else (existing_data[4] if existing_data and existing_data[4] else 0)
+            reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else (existing_data[2] if existing_data and has_unanswered and existing_data[2] else 0)
+            news_count = len(posts) if posts else (existing_data[2] if existing_data and not has_unanswered else (existing_data[3] if existing_data and has_unanswered and existing_data[3] else 0))
+            photos_count = org_info.get('photos_count', 0) if org_info else (existing_data[3] if existing_data and not has_unanswered else (existing_data[4] if existing_data and has_unanswered and existing_data[4] else 0))
             
             # Сохраняем в MapParseResults
             parse_id = str(uuid.uuid4())
             url = f"https://yandex.ru/sprav/{external_id or 'unknown'}"
-            cursor.execute("""
-                INSERT INTO MapParseResults (
-                    id, business_id, url, map_type, rating, reviews_count, 
-                    unanswered_reviews_count, news_count, photos_count, 
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                parse_id,
-                business_id,
-                url,
-                'yandex',
-                rating,
-                reviews_count,
-                reviews_without_response,
-                news_count,
-                photos_count,
-            ))
+            
+            if has_unanswered:
+                cursor.execute("""
+                    INSERT INTO MapParseResults (
+                        id, business_id, url, map_type, rating, reviews_count, 
+                        unanswered_reviews_count, news_count, photos_count, 
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    parse_id,
+                    business_id,
+                    url,
+                    'yandex',
+                    rating,
+                    reviews_count,
+                    reviews_without_response,
+                    news_count,
+                    photos_count,
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO MapParseResults (
+                        id, business_id, url, map_type, rating, reviews_count, 
+                        news_count, photos_count, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    parse_id,
+                    business_id,
+                    url,
+                    'yandex',
+                    rating,
+                    reviews_count,
+                    news_count,
+                    photos_count,
+                ))
             
             db.conn.commit()
             db.close()
