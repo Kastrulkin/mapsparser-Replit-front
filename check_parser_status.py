@@ -40,23 +40,42 @@ else:
 
 # 2. Проверить последние результаты парсинга
 print("\n2. Последние результаты парсинга (MapParseResults):")
-cursor.execute("""
-    SELECT id, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, created_at
-    FROM MapParseResults
-    WHERE business_id = ?
-    ORDER BY created_at DESC
-    LIMIT 3
-""", (business_id,))
+# Проверяем наличие колонки unanswered_reviews_count
+cursor.execute("PRAGMA table_info(MapParseResults)")
+columns = [row[1] for row in cursor.fetchall()]
+has_unanswered = 'unanswered_reviews_count' in columns
+
+if has_unanswered:
+    cursor.execute("""
+        SELECT id, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, created_at
+        FROM MapParseResults
+        WHERE business_id = ?
+        ORDER BY created_at DESC
+        LIMIT 3
+    """, (business_id,))
+else:
+    cursor.execute("""
+        SELECT id, rating, reviews_count, news_count, photos_count, created_at
+        FROM MapParseResults
+        WHERE business_id = ?
+        ORDER BY created_at DESC
+        LIMIT 3
+    """, (business_id,))
 rows = cursor.fetchall()
 if rows:
     for row in rows:
         print(f"   ID: {row[0]}")
         print(f"   Рейтинг: {row[1]}")
         print(f"   Отзывов: {row[2]}")
-        print(f"   Без ответов: {row[3]}")
-        print(f"   Новостей: {row[4]}")
-        print(f"   Фото: {row[5]}")
-        print(f"   Дата: {row[6]}")
+        if has_unanswered:
+            print(f"   Без ответов: {row[3]}")
+            print(f"   Новостей: {row[4]}")
+            print(f"   Фото: {row[5]}")
+            print(f"   Дата: {row[6]}")
+        else:
+            print(f"   Новостей: {row[3]}")
+            print(f"   Фото: {row[4]}")
+            print(f"   Дата: {row[5]}")
         print()
 else:
     print("   Нет результатов парсинга")
