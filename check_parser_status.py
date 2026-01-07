@@ -41,7 +41,7 @@ else:
 # 2. Проверить последние результаты парсинга
 print("\n2. Последние результаты парсинга (MapParseResults):")
 cursor.execute("""
-    SELECT id, status, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, created_at
+    SELECT id, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, created_at
     FROM MapParseResults
     WHERE business_id = ?
     ORDER BY created_at DESC
@@ -51,13 +51,12 @@ rows = cursor.fetchall()
 if rows:
     for row in rows:
         print(f"   ID: {row[0]}")
-        print(f"   Статус: {row[1]}")
-        print(f"   Рейтинг: {row[2]}")
-        print(f"   Отзывов: {row[3]}")
-        print(f"   Без ответов: {row[4]}")
-        print(f"   Новостей: {row[5]}")
-        print(f"   Фото: {row[6]}")
-        print(f"   Дата: {row[7]}")
+        print(f"   Рейтинг: {row[1]}")
+        print(f"   Отзывов: {row[2]}")
+        print(f"   Без ответов: {row[3]}")
+        print(f"   Новостей: {row[4]}")
+        print(f"   Фото: {row[5]}")
+        print(f"   Дата: {row[6]}")
         print()
 else:
     print("   Нет результатов парсинга")
