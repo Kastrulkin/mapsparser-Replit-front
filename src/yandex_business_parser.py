@@ -414,10 +414,30 @@ class YandexBusinessParser:
         for idx, review_data in enumerate(reviews_list):
             review_id = review_data.get("id") or f"{business_id}_review_{idx}"
             try:
-                published_at_str = review_data.get("published_at")
+                # Пробуем разные варианты полей с датой
+                published_at_str = (
+                    review_data.get("published_at") or
+                    review_data.get("publishedAt") or
+                    review_data.get("date") or
+                    review_data.get("created_at") or
+                    review_data.get("createdAt") or
+                    review_data.get("time_created") or
+                    review_data.get("timestamp")
+                )
                 published_at = None
                 if published_at_str:
-                    published_at = datetime.fromisoformat(published_at_str.replace("Z", "+00:00"))
+                    try:
+                        # Если это timestamp в миллисекундах
+                        if isinstance(published_at_str, (int, float)) or (isinstance(published_at_str, str) and published_at_str.isdigit()):
+                            timestamp_ms = int(published_at_str)
+                            published_at = datetime.fromtimestamp(timestamp_ms / 1000.0)
+                        else:
+                            # ISO формат
+                            published_at = datetime.fromisoformat(str(published_at_str).replace("Z", "+00:00"))
+                    except Exception as date_err:
+                        # Логируем только для первых отзывов
+                        if idx < 3:
+                            print(f"⚠️ Не удалось распарсить дату '{published_at_str}': {date_err}", flush=True)
                 
                 # Парсим ответ организации (если есть)
                 response_at = None
