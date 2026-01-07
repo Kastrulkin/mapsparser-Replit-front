@@ -2628,8 +2628,10 @@ def news_examples_delete(example_id: str):
 @app.route('/api/reviews/reply', methods=['POST', 'OPTIONS'])
 def reviews_reply():
     """Сгенерировать короткий вежливый ответ на отзыв в заданном тоне."""
+    import sys
+    print(f"🔍 Начало обработки запроса /api/reviews/reply", file=sys.stderr, flush=True)
+    print(f"🔍 Начало обработки запроса /api/reviews/reply", flush=True)
     try:
-        print(f"🔍 Начало обработки запроса /api/reviews/reply")
         if request.method == 'OPTIONS':
             return ('', 204)
         auth_header = request.headers.get('Authorization')
