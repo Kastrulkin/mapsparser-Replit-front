@@ -3060,6 +3060,10 @@ def get_services():
                         parsed_kw = []
                 except Exception:
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
+            
+            # Получаем все ключи из Row объекта
+            service_keys = service.keys() if hasattr(service, 'keys') else []
+            
             service_dict = {
                 "id": service['id'],
                 "category": service['category'],
@@ -3069,10 +3073,10 @@ def get_services():
                 "price": service['price'],
                 "created_at": service['created_at']
             }
-            # Добавляем optimized_description и optimized_name, если они есть
-            if 'optimized_description' in service:
+            # Добавляем optimized_description и optimized_name, если они есть в результате запроса
+            if 'optimized_description' in service_keys:
                 service_dict['optimized_description'] = service['optimized_description']
-            if 'optimized_name' in service:
+            if 'optimized_name' in service_keys:
                 service_dict['optimized_name'] = service['optimized_name']
             result.append(service_dict)
 
