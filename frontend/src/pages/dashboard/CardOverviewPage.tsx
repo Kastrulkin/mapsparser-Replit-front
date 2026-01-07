@@ -281,14 +281,18 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
-        // Обновляем услугу - сохраняем оптимизированное описание отдельно
+        // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
         await updateService(serviceId, {
-          name: optimized.optimized_name || service.name,
-          description: service.description, // Оригинальное описание не меняем
+          category: service.category, // Сохраняем все оригинальные поля
+          name: service.name, // Оригинальное название не меняем
+          description: service.description, // Оригинальное описание НЕ меняем
           optimized_description: optimized.seo_description || '', // SEO описание сохраняем отдельно
-          keywords: optimized.keywords || service.keywords
+          keywords: service.keywords, // Оригинальные ключевые слова не меняем
+          price: service.price // Оригинальная цена не меняется
         });
-        setSuccess('Услуга оптимизирована');
+        setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
+        // Перезагружаем услуги, чтобы показать обновленные данные
+        await loadUserServices();
       } else {
         setError(data.error || 'Ошибка оптимизации');
       }
