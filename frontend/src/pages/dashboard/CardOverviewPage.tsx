@@ -442,20 +442,6 @@ export const CardOverviewPage = () => {
               Текущий вид формулировок услуг на картах. Если есть подключение к парсеру, данные добавляются автоматически.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
-            {userServices.length > 0 && (
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  // Оптимизировать все услуги
-                  userServices.forEach(s => optimizeService(s.id));
-                }}
-              >
-                Оптимизировать все
-              </Button>
-            )}
-          </div>
         </div>
 
         {/* Форма добавления услуги */}
@@ -521,16 +507,31 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
-        {/* Функционал оптимизатора услуг (из ServiceOptimizer) */}
+        {/* Функционал оптимизатора услуг (только загрузка файла) */}
         <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <ServiceOptimizer 
-            businessName={currentBusiness?.name} 
-            businessId={currentBusinessId}
-            tone={wizardTone}
-            region={wizardRegion}
-            descriptionLength={wizardLength}
-            instructions={wizardInstructions}
-          />
+          <div className="flex gap-2 items-center mb-4">
+            <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+            <ServiceOptimizer 
+              businessName={currentBusiness?.name} 
+              businessId={currentBusinessId}
+              tone={wizardTone}
+              region={wizardRegion}
+              descriptionLength={wizardLength}
+              instructions={wizardInstructions}
+              hideTextInput={true}
+            />
+            {userServices.length > 0 && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  // Оптимизировать все услуги
+                  userServices.forEach(s => optimizeService(s.id));
+                }}
+              >
+                Оптимизировать все
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Список услуг */}

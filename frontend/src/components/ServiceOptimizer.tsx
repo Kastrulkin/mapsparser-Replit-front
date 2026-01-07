@@ -29,7 +29,8 @@ export default function ServiceOptimizer({
   tone: externalTone,
   region: externalRegion,
   descriptionLength: externalLength,
-  instructions: externalInstructions
+  instructions: externalInstructions,
+  hideTextInput = false
 }: { 
   businessName?: string; 
   businessId?: string;
@@ -37,8 +38,9 @@ export default function ServiceOptimizer({
   region?: string;
   descriptionLength?: number;
   instructions?: string;
+  hideTextInput?: boolean;
 }) {
-  const [mode, setMode] = useState<'text' | 'file'>('text');
+  const [mode, setMode] = useState<'text' | 'file'>(hideTextInput ? 'file' : 'text');
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [tone, setTone] = useState<Tone>(externalTone || 'professional');
@@ -260,32 +262,38 @@ export default function ServiceOptimizer({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для карточки компании на картах</h2>
-        <p className="text-sm text-gray-600">🔎 Карты и локальное SEO — это один из самых эффективных каналов продаж.</p>
-        <p className="text-sm text-gray-600 mt-2">Правильные названия и описания услуг повышают видимость в поиске, клики на карточку и позиции в выдаче.</p>
-        <p className="text-sm text-gray-600 mt-2">Введите услуги текстом или загрузите прайс‑лист — ИИ вернёт краткие SEO‑формулировки в строгом формате с учётом частотности запросов, ваших формулировок и вашего местоположения.</p>
-        <p className="text-sm text-gray-600 mt-2">Скопируйте текст и добавьте его в карточку вашей организации на картах.</p>
-      </div>
+      {!hideTextInput && (
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для карточки компании на картах</h2>
+          <p className="text-sm text-gray-600">🔎 Карты и локальное SEO — это один из самых эффективных каналов продаж.</p>
+          <p className="text-sm text-gray-600 mt-2">Правильные названия и описания услуг повышают видимость в поиске, клики на карточку и позиции в выдаче.</p>
+          <p className="text-sm text-gray-600 mt-2">Введите услуги текстом или загрузите прайс‑лист — ИИ вернёт краткие SEO‑формулировки в строгом формате с учётом частотности запросов, ваших формулировок и вашего местоположения.</p>
+          <p className="text-sm text-gray-600 mt-2">Скопируйте текст и добавьте его в карточку вашей организации на картах.</p>
+        </div>
+      )}
 
-      <div className="flex gap-2">
-        <Button variant={mode==='text' ? undefined : 'outline'} onClick={() => setMode('text')}>Ввод текстом</Button>
-        <Button variant={mode==='file' ? undefined : 'outline'} onClick={() => setMode('file')}>Загрузка файла</Button>
-      </div>
+      {!hideTextInput && (
+        <div className="flex gap-2">
+          <Button variant={mode==='text' ? undefined : 'outline'} onClick={() => setMode('text')}>Ввод текстом</Button>
+          <Button variant={mode==='file' ? undefined : 'outline'} onClick={() => setMode('file')}>Загрузка файла</Button>
+        </div>
+      )}
 
-      {mode === 'text' ? (
+      {!hideTextInput && mode === 'text' && (
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={8}
           placeholder={"Например: Стрижка волос, укладка, окрашивание...\n\nСовет: Укажите желаемый тон и нюансы (материалы, УТП, район/метро)."}
         />
-      ) : (
+      )}
+      
+      {(!hideTextInput && mode === 'file') || hideTextInput ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <input
               type="file"
-              id="file-upload"
+              id={hideTextInput ? "file-upload-compact" : "file-upload"}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="hidden"
@@ -293,30 +301,34 @@ export default function ServiceOptimizer({
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => document.getElementById('file-upload')?.click()}
+              onClick={() => document.getElementById(hideTextInput ? "file-upload-compact" : "file-upload")?.click()}
             >
-              Выберите файл
+              {hideTextInput ? 'Загрузка файла' : 'Выберите файл'}
             </Button>
             {file && <p className="text-sm text-gray-700">Файл: {file.name}</p>}
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-            <p className="text-xs text-amber-800">
-              <strong>⚠️ Важно:</strong> Для оптимального распознавания рекомендуется загружать файлы с <strong>до 10 услугами</strong> на фото. 
-              Файлы с 14-15 услугами могут не распознаться полностью. Большее количество услуг, сомнительно, что подойдут для обработки.
-            </p>
-          </div>
+          {!hideTextInput && (
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+              <p className="text-xs text-amber-800">
+                <strong>⚠️ Важно:</strong> Для оптимального распознавания рекомендуется загружать файлы с <strong>до 10 услугами</strong> на фото. 
+                Файлы с 14-15 услугами могут не распознаться полностью. Большее количество услуг, сомнительно, что подойдут для обработки.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
 
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}
 
-      <div className="flex gap-2">
-        <Button onClick={callOptimize} disabled={loading || (mode==='text' ? text.trim().length===0 : !file)}>
-          {loading ? 'Обрабатываем…' : 'Оптимизировать'}
-        </Button>
-        {result && <Button variant="outline" onClick={exportCSV}>Экспорт CSV</Button>}
-      </div>
+      {!hideTextInput && (
+        <div className="flex gap-2">
+          <Button onClick={callOptimize} disabled={loading || (mode==='text' ? text.trim().length===0 : !file)}>
+            {loading ? 'Обрабатываем…' : 'Оптимизировать'}
+          </Button>
+          {result && <Button variant="outline" onClick={exportCSV}>Экспорт CSV</Button>}
+        </div>
+      )}
 
       {result && (
         <div className="mt-4 space-y-3">
