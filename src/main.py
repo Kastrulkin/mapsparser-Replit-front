@@ -3041,6 +3041,10 @@ def get_services():
             select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
             print(f"🔍 DEBUG get_services: SQL запрос (старая логика) = {select_sql}", flush=True)
             print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
+            # Сохраняем select_fields для использования в цикле
+            _select_fields = select_fields
+            _has_optimized_desc = has_optimized_desc
+            _has_optimized_name = has_optimized_name
             
             cursor.execute(select_sql, (user_id,))
         
@@ -3048,6 +3052,29 @@ def get_services():
         db.close()
 
         result = []
+        # Используем глобальные переменные, если они установлены
+        try:
+            has_optimized_desc = _has_optimized_desc
+            has_optimized_name = _has_optimized_name
+            select_fields = _select_fields
+        except NameError:
+            # Если не установлены (старая логика), проверяем заново
+            cursor_temp = db.conn.cursor() if 'db' in locals() else None
+            if cursor_temp:
+                cursor_temp.execute("PRAGMA table_info(UserServices)")
+                columns = [col[1] for col in cursor_temp.fetchall()]
+                has_optimized_desc = 'optimized_description' in columns
+                has_optimized_name = 'optimized_name' in columns
+                select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+                if has_optimized_desc:
+                    select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
+                if has_optimized_name:
+                    select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
+            else:
+                has_optimized_desc = False
+                has_optimized_name = False
+                select_fields = []
+        
         for service in services:
             # keywords в старых данных могли храниться как строка "a, b" — сделаем устойчивый парсинг
             raw_kw = service['keywords']
@@ -3074,18 +3101,38 @@ def get_services():
             }
             
             # Добавляем optimized_description и optimized_name, если они есть в результате запроса
-            # Используем try-except для безопасного доступа
+            # ПРОБЛЕМА: service_keys может быть пустым списком, нужно проверять по-другому
+            # Просто пытаемся получить значения напрямую - если их нет, будет KeyError
             try:
-                if 'optimized_description' in service_keys:
-                    service_dict['optimized_description'] = service['optimized_description']
-            except (KeyError, IndexError) as e:
-                print(f"⚠️ DEBUG get_services: Ошибка получения optimized_description: {e}", flush=True)
+                if has_optimized_desc:
+                    service_dict['optimized_description'] = service.get('optimized_description') or service['optimized_description'] if 'optimized_description' in service_keys else None
+            except (KeyError, IndexError, TypeError):
+                pass
             
             try:
-                if 'optimized_name' in service_keys:
-                    service_dict['optimized_name'] = service['optimized_name']
-            except (KeyError, IndexError) as e:
-                print(f"⚠️ DEBUG get_services: Ошибка получения optimized_name: {e}", flush=True)
+                if has_optimized_name:
+                    service_dict['optimized_name'] = service.get('optimized_name') or service['optimized_name'] if 'optimized_name' in service_keys else None
+            except (KeyError, IndexError, TypeError):
+                pass
+            
+            # Альтернативный способ - обращение по индексу, если знаем порядок полей
+            if has_optimized_name and 'optimized_name' not in service_dict:
+                try:
+                    # Поля идут в порядке: id, category, name, optimized_name, description, optimized_description, keywords, price, created_at
+                    name_idx = select_fields.index('name')
+                    if 'optimized_name' in select_fields:
+                        optimized_name_idx = select_fields.index('optimized_name')
+                        service_dict['optimized_name'] = service[optimized_name_idx] if isinstance(service, (tuple, list)) else service['optimized_name']
+                except (IndexError, KeyError, ValueError):
+                    pass
+            
+            if has_optimized_desc and 'optimized_description' not in service_dict:
+                try:
+                    if 'optimized_description' in select_fields:
+                        optimized_desc_idx = select_fields.index('optimized_description')
+                        service_dict['optimized_description'] = service[optimized_desc_idx] if isinstance(service, (tuple, list)) else service['optimized_description']
+                except (IndexError, KeyError, ValueError):
+                    pass
             
             # Логируем для отладки (только для первой услуги и для услуги с ID 3772931e-9796-475b-b439-ee1cc07b1dc9)
             service_id = service['id']
