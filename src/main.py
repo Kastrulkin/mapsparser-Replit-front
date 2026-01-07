@@ -2680,7 +2680,20 @@ def reviews_reply():
                 ensure_user_examples_table(cur)
                 cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                 rows = cur.fetchall(); db.close()
-                examples = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
+                examples = []
+                for row in rows:
+                    if isinstance(row, tuple) and len(row) > 0:
+                        examples.append(row[0])
+                    elif isinstance(row, dict):
+                        examples.append(row.get('example_text', ''))
+                    elif hasattr(row, '__getitem__'):
+                        try:
+                            examples.append(row[0] if len(row) > 0 else '')
+                        except (TypeError, KeyError):
+                            try:
+                                examples.append(row['example_text'])
+                            except (TypeError, KeyError):
+                                pass
                 if examples:
                     examples_text = "\n".join(examples)
             except Exception:
