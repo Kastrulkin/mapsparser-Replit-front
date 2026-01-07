@@ -573,7 +573,7 @@ def _process_sync_yandex_business_task(queue_dict):
         conn.close()
         return
     
-    print(f"🔄 Синхронизация Яндекс.Бизнес для бизнеса {business_id}")
+    print(f"🔄 Синхронизация Яндекс.Бизнес для бизнеса {business_id}", flush=True)
     
     try:
         from yandex_business_parser import YandexBusinessParser
@@ -703,12 +703,13 @@ def _process_sync_yandex_business_task(queue_dict):
             cursor.close()
             conn.close()
             
-            print(f"✅ Синхронизация завершена для бизнеса {business_id}")
+            print(f"✅ Синхронизация завершена для бизнеса {business_id}", flush=True)
             
         except Exception as e:
-            print(f"❌ Ошибка синхронизации: {e}")
+            print(f"❌ Ошибка синхронизации: {e}", flush=True)
             import traceback
-            traceback.print_exc()
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
             db.close()
             
             # Обновляем статус ошибки
