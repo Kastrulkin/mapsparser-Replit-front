@@ -2126,6 +2126,7 @@ def delete_user_service_example(example_id: str):
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 def news_generate():
     try:
+        print(f"🔍 Начало обработки запроса /api/news/generate")
         if request.method == 'OPTIONS':
             return ('', 204)
         auth_header = request.headers.get('Authorization')
@@ -2628,6 +2629,7 @@ def news_examples_delete(example_id: str):
 def reviews_reply():
     """Сгенерировать короткий вежливый ответ на отзыв в заданном тоне."""
     try:
+        print(f"🔍 Начало обработки запроса /api/reviews/reply")
         if request.method == 'OPTIONS':
             return ('', 204)
         auth_header = request.headers.get('Authorization')
