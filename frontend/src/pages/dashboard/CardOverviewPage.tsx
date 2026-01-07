@@ -300,10 +300,16 @@ export const CardOverviewPage = () => {
         });
         
         // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
-        await updateService(serviceId, updateData);
-        setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
-        // Перезагружаем услуги, чтобы показать обновленные данные
-        await loadUserServices();
+        try {
+          await updateService(serviceId, updateData);
+          setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
+          // Перезагружаем услуги, чтобы показать обновленные данные
+          await loadUserServices();
+        } catch (updateError: any) {
+          console.error('❌ Ошибка обновления услуги:', updateError);
+          setError('Ошибка сохранения оптимизированного описания: ' + (updateError.message || 'Неизвестная ошибка'));
+          throw updateError; // Пробрасываем дальше, чтобы finally сработал
+        }
       } else {
         setError(data.error || 'Ошибка оптимизации');
       }
