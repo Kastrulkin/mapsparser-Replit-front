@@ -322,27 +322,28 @@ export const CardOverviewPage = () => {
 
   // Обновление услуги
   const updateService = async (serviceId: string, updatedData: any) => {
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatedData)
-      });
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedData)
+    });
 
-      const data = await response.json();
-      if (data.success) {
-        setEditingService(null);
-        await loadUserServices();
-        setSuccess('Услуга обновлена');
-      } else {
-        setError(data.error || 'Ошибка обновления услуги');
-      }
-    } catch (e: any) {
-      setError('Ошибка обновления услуги: ' + e.message);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (data.success) {
+      setEditingService(null);
+      await loadUserServices();
+      setSuccess('Услуга обновлена');
+    } else {
+      throw new Error(data.error || 'Ошибка обновления услуги');
     }
   };
 
