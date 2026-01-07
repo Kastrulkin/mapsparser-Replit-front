@@ -7171,18 +7171,36 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
         db.close()
         
         if row:
-            # Правильно извлекаем строку из row (может быть tuple или dict)
-            if isinstance(row, dict):
+            # Правильно извлекаем строку из row (может быть tuple, dict, или sqlite3.Row)
+            prompt_text = None
+            
+            # Если это sqlite3.Row (имеет атрибут keys)
+            if hasattr(row, 'keys'):
+                try:
+                    prompt_text = row['prompt_text']
+                except (KeyError, IndexError):
+                    try:
+                        prompt_text = row[0]
+                    except (KeyError, IndexError):
+                        prompt_text = None
+            # Если это dict
+            elif isinstance(row, dict):
                 prompt_text = row.get('prompt_text', '')
+            # Если это tuple или list
             elif isinstance(row, (tuple, list)) and len(row) > 0:
                 prompt_text = row[0]
             else:
-                prompt_text = str(row) if row else ''
+                prompt_text = None
             
             # Убеждаемся, что это строка
-            if isinstance(prompt_text, str) and prompt_text.strip():
-                return prompt_text
-            elif fallback:
+            if prompt_text is not None:
+                prompt_text = str(prompt_text) if not isinstance(prompt_text, str) else prompt_text
+                if prompt_text.strip():
+                    return prompt_text
+            
+            # Если не удалось извлечь - используем fallback
+            if fallback:
+                print(f"⚠️ Не удалось извлечь промпт из row, используем fallback. Row type: {type(row)}")
                 return fallback
             else:
                 return ""
@@ -7192,6 +7210,8 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
             return ""
     except Exception as e:
         print(f"⚠️ Ошибка получения промпта из БД: {e}")
+        import traceback
+        traceback.print_exc()
         return fallback or ""
 
 # ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
