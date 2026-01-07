@@ -3090,42 +3090,50 @@ def get_services():
             # Получаем все ключи из Row объекта
             service_keys = list(service.keys()) if hasattr(service, 'keys') else []
             
-            # Преобразуем Row в словарь для удобства
-            if hasattr(service, 'keys'):
-                service_row = {key: service[key] for key in service.keys()}
-            else:
-                service_row = dict(service) if isinstance(service, dict) else {}
-            
+            # Преобразуем Row в словарь для удобства - ПРОСТОЕ РЕШЕНИЕ
             service_dict = {
-                "id": service_row.get('id') or service['id'],
-                "category": service_row.get('category') or service['category'],
-                "name": service_row.get('name') or service['name'],
-                "description": service_row.get('description') or service['description'],
+                "id": service['id'],
+                "category": service['category'],
+                "name": service['name'],
+                "description": service['description'],
                 "keywords": parsed_kw,
-                "price": service_row.get('price') or service['price'],
-                "created_at": service_row.get('created_at') or service['created_at']
+                "price": service['price'],
+                "created_at": service['created_at']
             }
             
-            # Добавляем optimized_description и optimized_name, если они есть в таблице
+            # Добавляем optimized_description и optimized_name напрямую из Row
+            # Если поля есть в SELECT, они будут в Row
             if has_optimized_name:
-                optimized_name_val = service_row.get('optimized_name') if service_row else None
-                if optimized_name_val is None and hasattr(service, 'keys') and 'optimized_name' in service.keys():
-                    try:
-                        optimized_name_val = service['optimized_name']
-                    except (KeyError, IndexError):
-                        pass
-                if optimized_name_val:
-                    service_dict['optimized_name'] = optimized_name_val
+                try:
+                    val = service['optimized_name']
+                    if val:  # Только если не None и не пустая строка
+                        service_dict['optimized_name'] = val
+                except (KeyError, IndexError):
+                    pass
             
             if has_optimized_desc:
-                optimized_desc_val = service_row.get('optimized_description') if service_row else None
-                if optimized_desc_val is None and hasattr(service, 'keys') and 'optimized_description' in service.keys():
+                try:
+                    val = service['optimized_description']
+                    if val:  # Только если не None и не пустая строка
+                        service_dict['optimized_description'] = val
+                except (KeyError, IndexError):
+                    pass
+            
+            # Логируем для отладки (только для услуги с ID 3772931e-9796-475b-b439-ee1cc07b1dc9)
+            if service_dict['id'] == '3772931e-9796-475b-b439-ee1cc07b1dc9':
+                print(f"🔍 DEBUG get_services: Услуга {service_dict['id']} - has_optimized_name={has_optimized_name}, has_optimized_desc={has_optimized_desc}", flush=True)
+                if has_optimized_name:
                     try:
-                        optimized_desc_val = service['optimized_description']
-                    except (KeyError, IndexError):
-                        pass
-                if optimized_desc_val:
-                    service_dict['optimized_description'] = optimized_desc_val
+                        print(f"🔍 DEBUG get_services: service['optimized_name'] = '{service['optimized_name']}'", flush=True)
+                        print(f"🔍 DEBUG get_services: service_dict['optimized_name'] = '{service_dict.get('optimized_name')}'", flush=True)
+                    except:
+                        print(f"❌ DEBUG get_services: Не удалось получить optimized_name", flush=True)
+                if has_optimized_desc:
+                    try:
+                        print(f"🔍 DEBUG get_services: service['optimized_description'] = '{service['optimized_description'][:50] if service['optimized_description'] else None}...'", flush=True)
+                        print(f"🔍 DEBUG get_services: service_dict['optimized_description'] = '{service_dict.get('optimized_description')[:50] if service_dict.get('optimized_description') else None}...'", flush=True)
+                    except:
+                        print(f"❌ DEBUG get_services: Не удалось получить optimized_description", flush=True)
             
             # Альтернативный способ - обращение по индексу, если знаем порядок полей
             if has_optimized_name and 'optimized_name' not in service_dict:
