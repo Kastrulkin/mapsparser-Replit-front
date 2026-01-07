@@ -555,6 +555,7 @@ def process_queue():
 def _process_sync_yandex_business_task(queue_dict):
     """Обработка синхронизации Яндекс.Бизнес через кабинет"""
     import signal
+    import sys
     
     # Устанавливаем таймаут 10 минут для задачи
     def timeout_handler(signum, frame):
