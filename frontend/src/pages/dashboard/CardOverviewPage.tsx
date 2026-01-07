@@ -281,15 +281,26 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
-        // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
-        await updateService(serviceId, {
-          category: service.category, // Сохраняем все оригинальные поля
-          name: service.name, // Оригинальное название не меняем
-          description: service.description, // Оригинальное описание НЕ меняем
+        
+        // ВАЖНО: Сохраняем оригинальное описание, оптимизированное - отдельно
+        const updateData = {
+          category: service.category || '', // Сохраняем все оригинальные поля
+          name: service.name || '', // Оригинальное название не меняем
+          description: service.description || '', // Оригинальное описание НЕ меняем - это ключевой момент!
           optimized_description: optimized.seo_description || '', // SEO описание сохраняем отдельно
-          keywords: service.keywords, // Оригинальные ключевые слова не меняем
-          price: service.price // Оригинальная цена не меняется
+          keywords: Array.isArray(service.keywords) ? service.keywords : (service.keywords ? [service.keywords] : []), // Оригинальные ключевые слова
+          price: service.price || '' // Оригинальная цена
+        };
+        
+        console.log('🔍 DEBUG optimizeService: Обновляем услугу', {
+          serviceId,
+          originalDescription: service.description,
+          optimizedDescription: optimized.seo_description,
+          updateData
         });
+        
+        // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
+        await updateService(serviceId, updateData);
         setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
         // Перезагружаем услуги, чтобы показать обновленные данные
         await loadUserServices();
