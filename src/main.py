@@ -2715,9 +2715,25 @@ Write the reply in {language_name}.
         
         prompt_template = get_prompt_from_db('review_reply', default_prompt)
         
+        # Логируем тип и значение prompt_template
+        print(f"🔍 DEBUG reviews_reply: prompt_template type = {type(prompt_template)}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
+        
         # Убеждаемся, что prompt_template - это строка
         if not isinstance(prompt_template, str):
-            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}")
+            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
+            prompt_template = default_prompt
+        else:
+            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
+            try:
+                prompt_template = str(prompt_template)
+            except Exception as conv_err:
+                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
+                prompt_template = default_prompt
+        
+        # Финальная проверка
+        if not isinstance(prompt_template, str):
+            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
             prompt_template = default_prompt
         
         try:
