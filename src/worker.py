@@ -585,8 +585,7 @@ def _process_sync_yandex_business_task(queue_dict):
             return
         
         print(f"🔄 Синхронизация Яндекс.Бизнес для бизнеса {business_id}", flush=True)
-    
-    try:
+        
         from yandex_business_parser import YandexBusinessParser
         from yandex_business_sync_worker import YandexBusinessSyncWorker
         from auth_encryption import decrypt_auth_data
