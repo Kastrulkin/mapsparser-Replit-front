@@ -2694,12 +2694,28 @@ Write the reply in {language_name}.
 Отзыв клиента: {review_text[:1000]}"""
         
         prompt_template = get_prompt_from_db('review_reply', default_prompt)
-        prompt = prompt_template.format(
-            tone=tone,
-            language_name=language_name,
-            examples_text=examples_text,
-            review_text=review_text[:1000]
-        )
+        
+        # Убеждаемся, что prompt_template - это строка
+        if not isinstance(prompt_template, str):
+            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}")
+            prompt_template = default_prompt
+        
+        try:
+            prompt = prompt_template.format(
+                tone=tone,
+                language_name=language_name,
+                examples_text=examples_text,
+                review_text=review_text[:1000]
+            )
+        except (KeyError, ValueError) as format_err:
+            print(f"⚠️ Ошибка форматирования промпта: {format_err}")
+            # Используем default_prompt как fallback
+            prompt = default_prompt.format(
+                tone=tone,
+                language_name=language_name,
+                examples_text=examples_text,
+                review_text=review_text[:1000]
+            )
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
             prompt, 
