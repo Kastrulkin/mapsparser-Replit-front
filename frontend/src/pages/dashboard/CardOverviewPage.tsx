@@ -3,6 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
 import NewsGenerator from '@/components/NewsGenerator';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
@@ -23,6 +25,13 @@ export const CardOverviewPage = () => {
   const servicesItemsPerPage = 10;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
+  const [editingForm, setEditingForm] = useState({
+    category: '',
+    name: '',
+    description: '',
+    keywords: '',
+    price: ''
+  });
   const [newService, setNewService] = useState({
     category: '',
     name: '',
@@ -31,6 +40,22 @@ export const CardOverviewPage = () => {
     price: ''
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
+  
+  // Обновить форму при выборе услуги для редактирования
+  useEffect(() => {
+    if (!editingService) return;
+    
+    const service = userServices.find(s => s.id === editingService);
+    if (!service) return;
+    
+    setEditingForm({
+      category: service.category || '',
+      name: service.name || '',
+      description: service.description || '',
+      keywords: Array.isArray(service.keywords) ? service.keywords.join(', ') : (service.keywords || ''),
+      price: service.price || ''
+    });
+  }, [editingService, userServices]);
   
   // Состояния для отзывов
   const [externalReviews, setExternalReviews] = useState<any[]>([]);
@@ -661,27 +686,23 @@ export const CardOverviewPage = () => {
                   <tr key={service.id || index}>
                     <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {service.name && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">Оригинальное название:</div>
-                            <div>{service.name}</div>
-                          </div>
+                          <div className="text-gray-900">{service.name}</div>
                         )}
                         {service.optimized_name && (
-                          <div className="mt-2 pt-2 border-t border-gray-200">
-                            <div className="text-xs text-green-600 font-medium mb-1">SEO название:</div>
-                            <div className="text-green-700 mb-2">{service.optimized_name}</div>
-                            <div className="flex gap-2">
+                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                            <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
+                            <div className="flex gap-2 pt-1">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={async () => {
-                                  // Принять: заменяем оригинальное название на оптимизированное
                                   await updateService(service.id, {
                                     category: service.category,
-                                    name: service.optimized_name, // Заменяем оригинальное
-                                    optimized_name: '', // Удаляем оптимизированное
+                                    name: service.optimized_name,
+                                    optimized_name: '',
                                     description: service.description,
                                     optimized_description: service.optimized_description,
                                     keywords: service.keywords,
@@ -690,19 +711,18 @@ export const CardOverviewPage = () => {
                                   setSuccess('Оптимизированное название принято');
                                   await loadUserServices();
                                 }}
-                                className="text-xs h-7"
+                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
                               >
-                                ✓ Принять
+                                Принять
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={async () => {
-                                  // Отклонить: удаляем оптимизированное название
                                   await updateService(service.id, {
                                     category: service.category,
                                     name: service.name,
-                                    optimized_name: '', // Удаляем
+                                    optimized_name: '',
                                     description: service.description,
                                     optimized_description: service.optimized_description,
                                     keywords: service.keywords,
@@ -711,9 +731,9 @@ export const CardOverviewPage = () => {
                                   setSuccess('Оптимизированное название отклонено');
                                   await loadUserServices();
                                 }}
-                                className="text-xs h-7 text-red-600 hover:text-red-700"
+                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
                               >
-                                ✕ Отклонить
+                                Отклонить
                               </Button>
                             </div>
                           </div>
@@ -724,57 +744,52 @@ export const CardOverviewPage = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {service.description && (
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">Оригинальное описание:</div>
-                            <div>{service.description}</div>
-                          </div>
+                          <div className="text-gray-700 leading-relaxed">{service.description}</div>
                         )}
                         {service.optimized_description && (
-                          <div className="mt-2 pt-2 border-t border-gray-200">
-                            <div className="text-xs text-green-600 font-medium mb-1">SEO описание:</div>
-                            <div className="text-green-700 mb-2">{service.optimized_description}</div>
-                            <div className="flex gap-2">
+                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
+                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                            <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
+                            <div className="flex gap-2 pt-1">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={async () => {
-                                  // Принять: заменяем оригинальное описание на оптимизированное
                                   await updateService(service.id, {
                                     category: service.category,
                                     name: service.name,
-                                    description: service.optimized_description, // Заменяем оригинальное
-                                    optimized_description: '', // Удаляем оптимизированное
+                                    description: service.optimized_description,
+                                    optimized_description: '',
                                     keywords: service.keywords,
                                     price: service.price
                                   });
                                   setSuccess('Оптимизированное описание принято');
                                   await loadUserServices();
                                 }}
-                                className="text-xs h-7"
+                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
                               >
-                                ✓ Принять
+                                Принять
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={async () => {
-                                  // Отклонить: удаляем оптимизированное описание
                                   await updateService(service.id, {
                                     category: service.category,
                                     name: service.name,
                                     description: service.description,
-                                    optimized_description: '', // Удаляем
+                                    optimized_description: '',
                                     keywords: service.keywords,
                                     price: service.price
                                   });
                                   setSuccess('Оптимизированное описание отклонено');
                                   await loadUserServices();
                                 }}
-                                className="text-xs h-7 text-red-600 hover:text-red-700"
+                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
                               >
-                                ✕ Отклонить
+                                Отклонить
                               </Button>
                             </div>
                           </div>
