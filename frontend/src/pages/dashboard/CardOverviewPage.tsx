@@ -279,8 +279,16 @@ export const CardOverviewPage = () => {
       });
       
       const data = await response.json();
+      console.log('🔍 DEBUG optimizeService: Ответ от API', {
+        success: data.success,
+        result: data.result,
+        services: data.result?.services,
+        firstService: data.result?.services?.[0]
+      });
+      
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
+        console.log('🔍 DEBUG optimizeService: Оптимизированная услуга', optimized);
         
         // ВАЖНО: Сохраняем оригинальное описание и название, оптимизированные - отдельно
         // Исправляем keywords - убираем вложенные массивы и строки
@@ -309,17 +317,20 @@ export const CardOverviewPage = () => {
         const updateData = {
           category: service.category || '', // Сохраняем все оригинальные поля
           name: service.name || '', // Оригинальное название не меняем
-          optimized_name: optimized.optimized_name || '', // SEO название сохраняем отдельно
+          optimized_name: optimized.optimized_name || optimized.optimizedName || '', // SEO название сохраняем отдельно
           description: service.description || '', // Оригинальное описание НЕ меняем - это ключевой момент!
-          optimized_description: optimized.seo_description || '', // SEO описание сохраняем отдельно
+          optimized_description: optimized.seo_description || optimized.seoDescription || '', // SEO описание сохраняем отдельно
           keywords: fixedKeywords, // Исправленные ключевые слова
           price: service.price || '' // Оригинальная цена
         };
         
         console.log('🔍 DEBUG optimizeService: Обновляем услугу', {
           serviceId,
+          originalName: service.name,
+          optimizedName: optimized.optimized_name || optimized.optimizedName,
           originalDescription: service.description,
-          optimizedDescription: optimized.seo_description,
+          optimizedDescription: optimized.seo_description || optimized.seoDescription,
+          optimizedObject: optimized, // Полный объект для отладки
           updateData
         });
         
