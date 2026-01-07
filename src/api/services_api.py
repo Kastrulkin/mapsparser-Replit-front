@@ -202,8 +202,13 @@ def update_service(service_id):
         optimized_description = data.get('optimized_description', '')
         optimized_name = data.get('optimized_name', '')
         
+        print(f"🔍 DEBUG services_api.update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
+        print(f"🔍 DEBUG services_api.update_service: optimized_name = '{optimized_name}' (length: {len(optimized_name) if optimized_name else 0})", flush=True)
+        print(f"🔍 DEBUG services_api.update_service: optimized_description = '{optimized_description[:50] if optimized_description else ''}...' (length: {len(optimized_description) if optimized_description else 0})", flush=True)
+        
         # Обновляем услугу с учетом наличия полей
         if has_optimized_description and has_optimized_name:
+            print(f"🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE UserServices 
                 SET category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
@@ -218,6 +223,15 @@ def update_service(service_id):
                 data.get('price', 0),
                 service_id
             ))
+            print(f"✅ DEBUG services_api.update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
+            
+            # Проверяем, что данные сохранились
+            cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
+            check_row = cursor.fetchone()
+            if check_row:
+                print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
+            else:
+                print(f"❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
         elif has_optimized_description:
             cursor.execute("""
                 UPDATE UserServices 
