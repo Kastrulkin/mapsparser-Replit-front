@@ -3062,7 +3062,7 @@ def get_services():
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
             
             # Получаем все ключи из Row объекта
-            service_keys = service.keys() if hasattr(service, 'keys') else []
+            service_keys = list(service.keys()) if hasattr(service, 'keys') else []
             
             service_dict = {
                 "id": service['id'],
@@ -3073,11 +3073,29 @@ def get_services():
                 "price": service['price'],
                 "created_at": service['created_at']
             }
+            
             # Добавляем optimized_description и optimized_name, если они есть в результате запроса
-            if 'optimized_description' in service_keys:
-                service_dict['optimized_description'] = service['optimized_description']
-            if 'optimized_name' in service_keys:
-                service_dict['optimized_name'] = service['optimized_name']
+            # Используем try-except для безопасного доступа
+            try:
+                if 'optimized_description' in service_keys:
+                    service_dict['optimized_description'] = service['optimized_description']
+            except (KeyError, IndexError):
+                pass
+            
+            try:
+                if 'optimized_name' in service_keys:
+                    service_dict['optimized_name'] = service['optimized_name']
+            except (KeyError, IndexError):
+                pass
+            
+            # Логируем для отладки (только для первой услуги)
+            if len(result) == 0:
+                print(f"🔍 DEBUG get_services: Первая услуга - keys: {service_keys}, has optimized_name: {'optimized_name' in service_keys}, has optimized_description: {'optimized_description' in service_keys}", flush=True)
+                if 'optimized_name' in service_keys:
+                    print(f"🔍 DEBUG get_services: optimized_name value = '{service['optimized_name']}'", flush=True)
+                if 'optimized_description' in service_keys:
+                    print(f"🔍 DEBUG get_services: optimized_description value = '{service['optimized_description'][:50] if service['optimized_description'] else ''}...'", flush=True)
+            
             result.append(service_dict)
 
         return jsonify({"success": True, "services": result})
