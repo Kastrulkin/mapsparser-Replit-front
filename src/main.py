@@ -3130,25 +3130,42 @@ def update_service(service_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем, есть ли поле optimized_description в таблице
+        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
         cursor.execute("PRAGMA table_info(UserServices)")
         columns = [col[1] for col in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
+        has_optimized_name = 'optimized_name' in columns
         
-        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}", flush=True)
+        optimized_name = data.get('optimized_name', '')
+        
+        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
         print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
         
         try:
-            if has_optimized_description:
+            if has_optimized_description and has_optimized_name:
+                print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
+                cursor.execute("""
+                    UPDATE UserServices SET
+                    category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
+            elif has_optimized_description:
                 print(f"🔍 DEBUG update_service: Обновление с optimized_description", flush=True)
                 cursor.execute("""
                     UPDATE UserServices SET
                     category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND user_id = ?
                 """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
+            elif has_optimized_name:
+                print(f"🔍 DEBUG update_service: Обновление с optimized_name", flush=True)
+                cursor.execute("""
+                    UPDATE UserServices SET
+                    category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                """, (category, name, optimized_name, description, keywords_str, price, service_id, user_id))
             else:
-                print(f"🔍 DEBUG update_service: Обновление без optimized_description (обратная совместимость)", flush=True)
-                # Если поля нет - обновляем без него (для обратной совместимости)
+                print(f"🔍 DEBUG update_service: Обновление без optimized полей (обратная совместимость)", flush=True)
+                # Если полей нет - обновляем без них (для обратной совместимости)
                 cursor.execute("""
                     UPDATE UserServices SET
                     category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
