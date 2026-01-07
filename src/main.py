@@ -3084,6 +3084,7 @@ def get_services():
 def update_service(service_id):
     """Обновление существующей услуги пользователя."""
     try:
+        print(f"🔍 Начало обновления услуги: {service_id}", flush=True)
         if request.method == 'OPTIONS':
             return ('', 204)
 
@@ -3099,6 +3100,8 @@ def update_service(service_id):
         if not data:
             return jsonify({"error": "Данные не предоставлены"}), 400
 
+        print(f"🔍 DEBUG update_service: data keys = {list(data.keys())}", flush=True)
+        
         category = data.get('category', '')
         name = data.get('name', '')
         description = data.get('description', '')
@@ -3107,6 +3110,8 @@ def update_service(service_id):
         price = data.get('price', '')
         user_id = user_data['user_id']
         
+        print(f"🔍 DEBUG update_service: keywords type = {type(keywords)}, value = {keywords}", flush=True)
+        
         # Преобразуем keywords в строку JSON, если это массив
         if isinstance(keywords, list):
             keywords_str = json.dumps(keywords, ensure_ascii=False)
@@ -3114,6 +3119,8 @@ def update_service(service_id):
             keywords_str = keywords
         else:
             keywords_str = json.dumps([])
+        
+        print(f"🔍 DEBUG update_service: keywords_str = {keywords_str[:100]}", flush=True)
 
         if not name:
             return jsonify({"error": "Название услуги обязательно"}), 400
@@ -3126,19 +3133,31 @@ def update_service(service_id):
         columns = [col[1] for col in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         
-        if has_optimized_description:
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
-            """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
-        else:
-            # Если поля нет - обновляем без него (для обратной совместимости)
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
-            """, (category, name, description, keywords_str, price, service_id, user_id))
+        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}", flush=True)
+        print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
+        
+        try:
+            if has_optimized_description:
+                print(f"🔍 DEBUG update_service: Обновление с optimized_description", flush=True)
+                cursor.execute("""
+                    UPDATE UserServices SET
+                    category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
+            else:
+                print(f"🔍 DEBUG update_service: Обновление без optimized_description (обратная совместимость)", flush=True)
+                # Если поля нет - обновляем без него (для обратной совместимости)
+                cursor.execute("""
+                    UPDATE UserServices SET
+                    category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                """, (category, name, description, keywords_str, price, service_id, user_id))
+        except Exception as sql_err:
+            print(f"❌ Ошибка SQL запроса: {sql_err}", flush=True)
+            import traceback
+            traceback.print_exc()
+            db.close()
+            raise
 
         if cursor.rowcount == 0:
             db.close()
