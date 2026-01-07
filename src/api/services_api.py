@@ -183,19 +183,51 @@ def update_service(service_id):
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
+        # Преобразуем keywords в строку JSON, если это массив
+        import json
+        keywords = data.get('keywords', [])
+        if isinstance(keywords, list):
+            keywords_str = json.dumps(keywords, ensure_ascii=False)
+        elif isinstance(keywords, str):
+            keywords_str = keywords
+        else:
+            keywords_str = json.dumps([])
+        
+        # Проверяем, есть ли поле optimized_description в таблице
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_optimized_description = 'optimized_description' in columns
+        
+        optimized_description = data.get('optimized_description', '')
+        
         # Обновляем услугу
-        cursor.execute("""
-            UPDATE UserServices 
-            SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-            WHERE id = ?
-        """, (
-            data.get('category', ''),
-            data.get('name', ''),
-            data.get('description', ''),
-            data.get('keywords', ''),
-            data.get('price', 0),
-            service_id
-        ))
+        if has_optimized_description:
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                data.get('description', ''),
+                optimized_description,
+                keywords_str,
+                data.get('price', 0),
+                service_id
+            ))
+        else:
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                data.get('description', ''),
+                keywords_str,
+                data.get('price', 0),
+                service_id
+            ))
         
         db.conn.commit()
         db.close()
