@@ -97,18 +97,27 @@ def get_services():
         # Получаем business_id из query параметров
         business_id = request.args.get('business_id')
         
+        # Проверяем, есть ли поля optimized_description и optimized_name
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_optimized_desc = 'optimized_description' in columns
+        has_optimized_name = 'optimized_name' in columns
+        
+        # Формируем SELECT с учетом наличия полей
+        select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+        if has_optimized_desc:
+            select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
+        if has_optimized_name:
+            select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
+        
         # Если передан business_id - фильтруем по нему, иначе по user_id
         if business_id:
             # Проверяем доступ к бизнесу
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    cursor.execute("""
-                        SELECT id, category, name, description, keywords, price, created_at
-                        FROM UserServices 
-                        WHERE business_id = ? 
-                        ORDER BY created_at DESC
-                    """, (business_id,))
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
+                    cursor.execute(select_sql, (business_id,))
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -117,27 +126,37 @@ def get_services():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика: получаем все услуги пользователя
-            cursor.execute("""
-                SELECT id, category, name, description, keywords, price, created_at
-                FROM UserServices 
-                WHERE user_id = ? 
-                ORDER BY created_at DESC
-            """, (user_id,))
+            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            cursor.execute(select_sql, (user_id,))
         
-        rows = cursor.fetchall()
-        services = []
-        for row in rows:
-            services.append({
-                'id': row[0],
-                'category': row[1],
-                'name': row[2],
-                'description': row[3],
-                'keywords': row[4],
-                'price': row[5],
-                'created_at': row[6]
-            })
-        
+        services_rows = cursor.fetchall()
         db.close()
+        
+        # Преобразуем Row в словари
+        services = []
+        for service in services_rows:
+            # Преобразуем Row в словарь через dict() - это гарантирует правильное извлечение всех полей
+            if hasattr(service, 'keys'):
+                service_dict = dict(service)  # Преобразуем Row в dict
+            else:
+                # Fallback для tuple/list - создаем словарь по порядку полей
+                service_dict = {field_name: service[idx] for idx, field_name in enumerate(select_fields) if idx < len(service)}
+            
+            # Парсим keywords
+            raw_kw = service_dict.get('keywords')
+            parsed_kw = []
+            if raw_kw:
+                try:
+                    import json
+                    parsed_kw = json.loads(raw_kw)
+                    if not isinstance(parsed_kw, list):
+                        parsed_kw = []
+                except Exception:
+                    parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
+            service_dict['keywords'] = parsed_kw
+            
+            services.append(service_dict)
+        
         return jsonify({"success": True, "services": services})
     
     except Exception as e:
