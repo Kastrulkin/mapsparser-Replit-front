@@ -92,16 +92,31 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
+        // Находим обновленную услугу по ID для отладки
+        const updatedService = data.services?.find((s: any) => s.id === '3772931e-9796-475b-b439-ee1cc07b1dc9');
+        
         console.log('✅ DEBUG loadUserServices: Услуги загружены', {
           count: data.services?.length,
-          services: data.services,
           firstService: data.services?.[0],
           firstServiceOptimized: data.services?.[0] ? {
+            id: data.services[0].id,
             name: data.services[0].name,
             optimized_name: data.services[0].optimized_name,
+            has_optimized_name: !!data.services[0].optimized_name,
             description: data.services[0].description,
-            optimized_description: data.services[0].optimized_description
-          } : null
+            optimized_description: data.services[0].optimized_description,
+            has_optimized_description: !!data.services[0].optimized_description
+          } : null,
+          updatedService: updatedService ? {
+            id: updatedService.id,
+            name: updatedService.name,
+            optimized_name: updatedService.optimized_name,
+            has_optimized_name: !!updatedService.optimized_name,
+            description: updatedService.description,
+            optimized_description: updatedService.optimized_description,
+            has_optimized_description: !!updatedService.optimized_description,
+            allKeys: Object.keys(updatedService)
+          } : 'Услуга не найдена'
         });
         setUserServices(data.services || []);
       } else {
