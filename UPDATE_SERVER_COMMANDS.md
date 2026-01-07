@@ -6,60 +6,104 @@
 # 1. Перейти в директорию проекта
 cd /root/mapsparser-Replit-front
 
-# 2. Остановить старый процесс Flask
+# 2. Остановить старый процесс Flask (несколько попыток)
+echo "⏹️  Останавливаю Flask..."
 pkill -9 -f "python.*main.py"
 sleep 2
 
-# 3. Проверить, что порт 8000 свободен
-lsof -iTCP:8000 -sTCP:LISTEN
-# Если есть процесс - убить его:
-# kill -9 <PID>
+# 3. Проверить и убить процесс на порту 8000 явно
+if lsof -iTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
+    echo "⚠️  Порт 8000 занят, убиваю процесс..."
+    PID=$(lsof -tiTCP:8000 -sTCP:LISTEN)
+    kill -9 $PID 2>/dev/null
+    sleep 2
+    # Проверяем еще раз
+    if lsof -iTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
+        echo "❌ Не удалось освободить порт 8000!"
+        lsof -iTCP:8000 -sTCP:LISTEN
+        exit 1
+    fi
+fi
 
-# 4. Обновить код из GitHub
+# 4. Удалить dist перед git pull (чтобы избежать конфликтов)
+rm -rf frontend/dist
+
+# 5. Обновить код из GitHub
 git pull origin main
 
-# 5. Активировать виртуальное окружение
+# 6. Активировать виртуальное окружение
 source venv/bin/activate
 
-# 6. Пересобрать frontend
+# 7. Пересобрать frontend
 cd frontend
 rm -rf dist
 npm install
 npm run build
 cd ..
 
-# 7. Скопировать собранный frontend в Nginx директорию
+# 8. Скопировать собранный frontend в Nginx директорию
 sudo cp -r frontend/dist/* /var/www/html/
 
-# 8. Запустить Flask API
+# 9. Запустить Flask API
+echo "🚀 Запускаю Flask API..."
 python src/main.py > /tmp/seo_main.out 2>&1 &
 sleep 3
 
-# 9. Проверить, что Flask запустился
-lsof -iTCP:8000 -sTCP:LISTEN
+# 10. Проверить, что Flask запустился
+if lsof -iTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
+    echo "✅ Flask запущен на порту 8000"
+    lsof -iTCP:8000 -sTCP:LISTEN
+else
+    echo "❌ Flask не запустился! Проверьте логи:"
+    tail -30 /tmp/seo_main.out
+    exit 1
+fi
 
-# 10. Проверить логи Flask
+# 11. Проверить логи Flask
+echo "📋 Последние логи Flask:"
 tail -20 /tmp/seo_main.out
 
-# 11. Перезагрузить Nginx (если нужно)
+# 12. Перезагрузить Nginx (если нужно)
 sudo systemctl reload nginx
 
-# 12. Проверить статус Nginx
+# 13. Проверить статус Nginx
 sudo systemctl status nginx --no-pager
+
+echo "✅ Обновление завершено!"
 ```
 
 ## Быстрое обновление (только Backend)
 
 ```bash
 cd /root/mapsparser-Replit-front
+
+# Остановить Flask
 pkill -9 -f "python.*main.py"
 sleep 2
+
+# Убедиться, что порт свободен
+if lsof -iTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
+    PID=$(lsof -tiTCP:8000 -sTCP:LISTEN)
+    kill -9 $PID 2>/dev/null
+    sleep 2
+fi
+
+# Обновить код
 git pull origin main
 source venv/bin/activate
+
+# Запустить Flask
 python src/main.py > /tmp/seo_main.out 2>&1 &
 sleep 3
-lsof -iTCP:8000 -sTCP:LISTEN
-tail -20 /tmp/seo_main.out
+
+# Проверить
+if lsof -iTCP:8000 -sTCP:LISTEN > /dev/null 2>&1; then
+    echo "✅ Flask запущен"
+    lsof -iTCP:8000 -sTCP:LISTEN
+else
+    echo "❌ Flask не запустился!"
+    tail -30 /tmp/seo_main.out
+fi
 ```
 
 ## Быстрое обновление (только Frontend)

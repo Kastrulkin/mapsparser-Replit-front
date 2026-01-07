@@ -343,3 +343,68 @@
 - [ ] Требуется тестирование
 
 ---
+
+### 2025-01-06 - Интеграция Google Business Profile API
+
+**План из TASK_GOOGLE_BUSINESS_API.md:**
+- Создать OAuth 2.0 аутентификацию для Google Business Profile API
+- Создать клиент для работы с Google Business Profile API
+- Обновить GoogleBusinessSyncWorker (заменить заглушки на реальные вызовы)
+- Создать API эндпоинты для OAuth и публикации данных
+
+**Реализовано:**
+
+**OAuth 2.0 аутентификация:**
+- Создан `src/google_business_auth.py`:
+  - Класс `GoogleBusinessAuth` для управления OAuth flow
+  - Методы `get_authorization_url()`, `get_credentials_from_code()`, `refresh_credentials()`
+  - Методы для преобразования credentials в словарь и обратно
+
+**Google Business API клиент:**
+- Создан `src/google_business_api.py`:
+  - Класс `GoogleBusinessAPI` для работы с Google Business Profile API
+  - Методы для получения данных: `list_accounts()`, `list_locations()`, `get_location()`, `list_reviews()`, `list_local_posts()`, `get_insights()`
+  - Методы для публикации данных: `update_review_reply()`, `create_local_post()`
+
+**Обновление GoogleBusinessSyncWorker:**
+- Обновлен `src/google_business_sync_worker.py`:
+  - Заменены заглушки `_fake_fetch_reviews()` и `_fake_fetch_stats()` на реальные методы `_fetch_reviews()` и `_fetch_stats()`
+  - Добавлен метод `_get_api_client()` для получения API клиента с автоматическим обновлением токенов
+  - Добавлен метод `_save_credentials()` для сохранения обновленных credentials
+  - Добавлены методы `_publish_review_reply()` и `_publish_post()` для публикации данных
+
+**API эндпоинты:**
+- Создан `src/api/google_business_api.py` (Blueprint):
+  - `GET /api/google/oauth/authorize` - начало OAuth авторизации
+  - `GET /api/google/oauth/callback` - обработка OAuth callback
+  - `POST /api/business/<business_id>/google/publish-review-reply` - публикация ответа на отзыв
+  - `POST /api/business/<business_id>/google/publish-post` - публикация поста/новости
+- Зарегистрирован Blueprint в `src/main.py`
+
+**Зависимости:**
+- Добавлены в `requirements.txt`:
+  - `google-api-python-client>=2.100.0`
+  - `google-auth-httplib2>=0.1.1`
+  - `google-auth-oauthlib>=1.1.0`
+
+**Файлы изменены:**
+- `src/google_business_auth.py` - создан (OAuth аутентификация)
+- `src/google_business_api.py` - создан (API клиент)
+- `src/google_business_sync_worker.py` - обновлен (реальные вызовы API)
+- `src/api/google_business_api.py` - создан (API эндпоинты)
+- `src/main.py` - добавлен импорт и регистрация Blueprint
+- `requirements.txt` - добавлены зависимости Google API
+
+**Ожидаемый эффект:**
+- OAuth авторизация Google Business Profile работает
+- Получение отзывов, статистики, постов через API
+- Публикация ответов на отзывы и постов через API
+- Автоматическое обновление токенов при истечении
+
+**Статус:**
+- [x] Backend завершено
+- [ ] Требуется настройка Google Cloud Console (OAuth credentials)
+- [ ] Требуется фронтенд интеграция (виджет авторизации)
+- [ ] Требуется тестирование
+
+---

@@ -39,6 +39,11 @@ from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 from api.services_api import services_bp
+try:
+    from api.google_business_api import google_business_bp
+except ImportError as e:
+    print(f"⚠️ Предупреждение: не удалось импортировать google_business_bp: {e}")
+    google_business_bp = None
 
 # Импорт YandexSyncService с обработкой ошибок
 try:
@@ -105,6 +110,8 @@ app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
 app.register_blueprint(services_bp)
+if google_business_bp:
+    app.register_blueprint(google_business_bp)
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))

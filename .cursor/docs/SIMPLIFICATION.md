@@ -47,6 +47,112 @@
 
 ## История упрощений
 
+### 2025-01-06 - Упрощение интеграции Google Business Profile API
+
+**Источник:** `.cursor/docs/IMPLEMENTATION.md` - "Интеграция Google Business Profile API"
+
+#### Файлы, которые упрощались
+- `src/google_business_auth.py` - вынесена общая логика создания Flow в helper метод
+- `src/google_business_api.py` - вынесена обработка ошибок в helper метод, упрощен список метрик через list comprehension
+- `src/api/google_business_api.py` - вынесена проверка авторизации и доступа в helper функцию, вынесено получение аккаунта в helper функцию
+- `src/google_business_sync_worker.py` - упрощен парсинг ответа организации и статистики (guard clauses, упрощены вложенные get())
+
+#### Что было упрощено
+
+1. **Упрощение создания Flow в google_business_auth.py**:
+   - Было: дублирование создания Flow в `get_authorization_url()` и `get_credentials_from_code()` (по ~20 строк)
+   - Стало: вынесен helper метод `_create_flow()` (1 метод, используется в 2 местах)
+
+2. **Упрощение обработки ошибок в google_business_api.py**:
+   - Было: дублирование `print(f"❌ Ошибка {operation}: {e}")` в каждом методе
+   - Стало: вынесен helper метод `_handle_api_error()` (1 метод, используется в 7 местах)
+
+3. **Упрощение списка метрик в get_insights()** (google_business_api.py):
+   - Было: 11 повторяющихся словарей с метриками (по 3 строки каждый = 33 строки)
+   ```python
+   'metricRequests': [
+       {'metric': 'QUERIES_DIRECT', 'options': ['AGGREGATED_DAILY']},
+       {'metric': 'QUERIES_INDIRECT', 'options': ['AGGREGATED_DAILY']},
+       ...
+   ]
+   ```
+   - Стало: список метрик + list comprehension (2 строки)
+   ```python
+   METRICS = ['QUERIES_DIRECT', 'QUERIES_INDIRECT', ...]
+   'metricRequests': [
+       {'metric': metric, 'options': ['AGGREGATED_DAILY']}
+       for metric in METRICS
+   ]
+   ```
+
+4. **Упрощение проверки авторизации и доступа** (api/google_business_api.py):
+   - Было: дублирование проверки в 3 эндпоинтах (по ~15 строк каждый = 45 строк)
+   ```python
+   auth_header = request.headers.get('Authorization')
+   if not auth_header or not auth_header.startswith('Bearer '):
+       return jsonify({"error": "Требуется авторизация"}), 401
+   token = auth_header.split(' ')[1]
+   user_data = verify_session(token)
+   if not user_data:
+       return jsonify({"error": "Недействительный токен"}), 401
+   db = DatabaseManager()
+   cursor = db.conn.cursor()
+   cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+   row = cursor.fetchone()
+   if not row:
+       db.close()
+       return jsonify({"error": "Бизнес не найден"}), 404
+   owner_id = row[0]
+   if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+       db.close()
+       return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+   ```
+   - Стало: helper функция `_verify_auth_and_access()` (1 функция, используется в 2 местах)
+   ```python
+   user_data, db = _verify_auth_and_access(business_id)
+   if not user_data:
+       return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+   ```
+
+5. **Упрощение получения Google аккаунта** (api/google_business_api.py):
+   - Было: дублирование логики получения аккаунта в 2 эндпоинтах (по ~15 строк каждый = 30 строк)
+   - Стало: helper функция `_get_google_account()` (1 функция, используется в 2 местах)
+
+6. **Упрощение парсинга ответа организации** (google_business_sync_worker.py):
+   - Было: проверка `if 'reply' in review:` с последующим обращением к `review['reply']`
+   - Стало: использование `review.get('reply')` с guard clause
+   ```python
+   reply = review.get('reply')
+   if reply:
+       response_text = reply.get('comment', '')
+   ```
+
+7. **Упрощение парсинга статистики** (google_business_sync_worker.py):
+   - Было: длинная цепочка вложенных `get()` вызовов
+   ```python
+   date_str = value.get('timeValue', {}).get('timeRange', {}).get('startTime', {}).get('date', {})
+   ```
+   - Стало: разбито на отдельные переменные для читаемости
+   ```python
+   time_value = value.get('timeValue', {})
+   time_range = time_value.get('timeRange', {})
+   start_time = time_range.get('startTime', {})
+   date_str = start_time.get('date', {})
+   ```
+
+8. **Использование helper функции get_business_owner_id()** (api/google_business_api.py):
+   - Было: прямое выполнение SQL запроса `cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))`
+   - Стало: использование `get_business_owner_id(cursor, business_id)` из `core/helpers.py`
+
+#### Результаты
+- Удалено ~100+ строк дублирующегося кода
+- Создано 4 переиспользуемых helper функции/метода
+- Упрощена читаемость кода (guard clauses, разбиение длинных цепочек get())
+- Улучшена поддерживаемость (изменения в одном месте вместо нескольких)
+- Использованы существующие helper функции из `core/helpers.py`
+
+---
+
 ### 2025-01-03 - Упрощение исправлений API get_services и UI редактирования
 
 **Источник:** Исправления API get_services() и добавление модального окна редактирования

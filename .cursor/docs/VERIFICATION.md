@@ -1915,3 +1915,128 @@ npm run build
 
 **Примечание:** Правила верификации и примеры находятся в `.cursor/rules/verification_workflow.mdc`
 
+---
+
+## 2025-01-07 - Проверка интеграции Google Business Profile API и упрощения кода
+
+**Источник:** `.cursor/docs/SIMPLIFICATION.md` - "Упрощение интеграции Google Business Profile API"
+
+### Проверенные файлы
+- `src/google_business_auth.py` - ✅ Синтаксис OK, импорты корректны
+- `src/google_business_api.py` - ✅ Синтаксис OK, импорты корректны
+- `src/api/google_business_api.py` - ✅ Синтаксис OK, Blueprint зарегистрирован в main.py
+- `src/google_business_sync_worker.py` - ✅ Синтаксис OK, импорты корректны
+- `requirements.txt` - ✅ Добавлены зависимости Google API
+- `src/main.py` - ✅ Blueprint `google_business_bp` зарегистрирован
+
+### Результаты проверок
+
+#### Синтаксис Python
+```bash
+python3 -m py_compile src/google_business_auth.py src/google_business_api.py src/api/google_business_api.py src/google_business_sync_worker.py
+```
+- ✅ Все файлы компилируются без ошибок
+
+#### Линтер
+- ✅ Ошибок линтера не найдено
+
+#### Frontend Build
+```bash
+cd frontend && npm run build
+```
+- ✅ Сборка успешна (3.20s)
+- ⚠️ Предупреждение: chunk size > 500 KB (не критично, можно оптимизировать позже)
+- ✅ Все модули трансформированы (2608 modules)
+
+#### Регистрация Blueprint
+- ✅ `google_business_bp` импортирован в `src/main.py` (строка 43)
+- ✅ Blueprint зарегистрирован в приложении (строка 114)
+- ✅ Обработка ошибок импорта присутствует (try-except)
+
+#### Зависимости
+- ✅ `google-api-python-client>=2.100.0` добавлен в requirements.txt
+- ✅ `google-auth-httplib2>=0.1.1` добавлен в requirements.txt
+- ✅ `google-auth-oauthlib>=1.1.0` добавлен в requirements.txt
+
+#### Упрощения кода (из SIMPLIFICATION.md)
+- ✅ `_create_flow()` helper метод в `google_business_auth.py`
+- ✅ `_handle_api_error()` helper метод в `google_business_api.py`
+- ✅ Упрощен список метрик через list comprehension
+- ✅ `_verify_auth_and_access()` helper функция в `api/google_business_api.py`
+- ✅ `_get_google_account()` helper функция в `api/google_business_api.py`
+- ✅ Использована существующая `get_business_owner_id()` из `core/helpers.py`
+- ✅ Упрощен парсинг ответа организации и статистики в `google_business_sync_worker.py`
+
+### Структура интеграции
+
+#### Созданные файлы
+1. **`src/google_business_auth.py`** - OAuth 2.0 аутентификация
+   - Класс `GoogleBusinessAuth`
+   - Методы: `get_authorization_url()`, `get_credentials_from_code()`, `refresh_credentials()`
+   - Helper метод: `_create_flow()`
+
+2. **`src/google_business_api.py`** - Клиент для работы с API
+   - Класс `GoogleBusinessAPI`
+   - Методы: `get_reviews()`, `get_insights()`, `get_posts()`, `publish_review_reply()`, `publish_post()`
+   - Helper метод: `_handle_api_error()`
+
+3. **`src/api/google_business_api.py`** - Flask Blueprint с API эндпоинтами
+   - `/api/google/oauth/authorize` - OAuth авторизация
+   - `/api/google/oauth/callback` - OAuth callback
+   - `/api/business/<id>/google/publish-review-reply` - Публикация ответа на отзыв
+   - `/api/business/<id>/google/publish-post` - Публикация поста
+   - Helper функции: `_verify_auth_and_access()`, `_get_google_account()`
+
+4. **`src/google_business_sync_worker.py`** - Worker для синхронизации
+   - Класс `GoogleBusinessSyncWorker`
+   - Методы для получения и публикации данных
+   - Автоматическое обновление токенов
+
+### Следующие шаги (для фронтенда)
+
+1. **Настройка Google Cloud Console:**
+   - Создать проект
+   - Включить Google Business Profile API
+   - Создать OAuth 2.0 Client ID
+   - Добавить переменные окружения: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+
+2. **Фронтенд интеграция:**
+   - Виджет авторизации Google OAuth
+   - Кнопки "Опубликовать в Google" для ответов на отзывы и новостей
+
+3. **Тестирование:**
+   - OAuth авторизация
+   - Получение данных
+   - Публикация данных
+
+### Git коммит (после успешных тестов)
+- [ ] Закоммичены изменения на GitHub
+- [ ] Коммит хеш: `[ожидается]`
+- [ ] Сообщение коммита: "Интеграция Google Business Profile API + упрощение кода"
+- [ ] Отправлено на GitHub: `main -> main`
+
+### Пересборка и обновление
+- [x] Локально: Frontend собран успешно
+- [ ] На сервере: требуется после коммита
+
+### Команды для обновления на сервере
+```bash
+cd /root/mapsparser-Replit-front
+git pull origin main
+source venv/bin/activate
+pip install -r requirements.txt
+cd frontend && npm install && npm run build
+systemctl restart seo-api
+```
+
+### Статус
+- [x] Синтаксис Python: OK
+- [x] Build Frontend: OK
+- [x] Линтер: OK
+- [x] Blueprint зарегистрирован: OK
+- [x] Зависимости добавлены: OK
+- [x] Упрощения применены: OK
+- [ ] Тестирование OAuth: требуется
+- [ ] Тестирование API: требуется
+- [ ] Настройка Google Cloud Console: требуется
+
