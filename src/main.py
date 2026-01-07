@@ -2777,8 +2777,12 @@ Write the reply in {language_name}.
         
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
-        print(f"❌ Ошибка генерации ответа на отзыв: {e}")
+        import sys
         import traceback
+        error_msg = f"❌ Ошибка генерации ответа на отзыв: {e}"
+        print(error_msg, file=sys.stderr, flush=True)
+        print(error_msg, flush=True)
+        traceback.print_exc(file=sys.stderr)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
