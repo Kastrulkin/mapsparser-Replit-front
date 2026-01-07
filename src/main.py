@@ -3079,22 +3079,28 @@ def get_services():
             try:
                 if 'optimized_description' in service_keys:
                     service_dict['optimized_description'] = service['optimized_description']
-            except (KeyError, IndexError):
-                pass
+            except (KeyError, IndexError) as e:
+                print(f"⚠️ DEBUG get_services: Ошибка получения optimized_description: {e}", flush=True)
             
             try:
                 if 'optimized_name' in service_keys:
                     service_dict['optimized_name'] = service['optimized_name']
-            except (KeyError, IndexError):
-                pass
+            except (KeyError, IndexError) as e:
+                print(f"⚠️ DEBUG get_services: Ошибка получения optimized_name: {e}", flush=True)
             
-            # Логируем для отладки (только для первой услуги)
-            if len(result) == 0:
-                print(f"🔍 DEBUG get_services: Первая услуга - keys: {service_keys}, has optimized_name: {'optimized_name' in service_keys}, has optimized_description: {'optimized_description' in service_keys}", flush=True)
+            # Логируем для отладки (только для первой услуги и для услуги с ID 3772931e-9796-475b-b439-ee1cc07b1dc9)
+            service_id = service['id']
+            if len(result) == 0 or service_id == '3772931e-9796-475b-b439-ee1cc07b1dc9':
+                print(f"🔍 DEBUG get_services: Услуга {service_id} - keys: {service_keys}, has optimized_name: {'optimized_name' in service_keys}, has optimized_description: {'optimized_description' in service_keys}", flush=True)
                 if 'optimized_name' in service_keys:
                     print(f"🔍 DEBUG get_services: optimized_name value = '{service['optimized_name']}'", flush=True)
+                else:
+                    print(f"❌ DEBUG get_services: optimized_name НЕТ в keys!", flush=True)
                 if 'optimized_description' in service_keys:
                     print(f"🔍 DEBUG get_services: optimized_description value = '{service['optimized_description'][:50] if service['optimized_description'] else ''}...'", flush=True)
+                else:
+                    print(f"❌ DEBUG get_services: optimized_description НЕТ в keys!", flush=True)
+                print(f"🔍 DEBUG get_services: service_dict после обработки: optimized_name = {service_dict.get('optimized_name')}, optimized_description = {service_dict.get('optimized_description')[:50] if service_dict.get('optimized_description') else None}...", flush=True)
             
             result.append(service_dict)
 
