@@ -746,7 +746,11 @@ def switch_task_to_sync(task_id):
                 "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
             }), 400
         
-        account_id = account_row[0] if isinstance(account_row, tuple) else account_row.get('id')
+        if isinstance(account_row, dict):
+            account_id = account_row.get('id')
+        else:
+            # tuple or sqlite3.Row (supports index access)
+            account_id = account_row[0]
         
         # Обновляем задачу на синхронизацию
         cursor.execute("""
