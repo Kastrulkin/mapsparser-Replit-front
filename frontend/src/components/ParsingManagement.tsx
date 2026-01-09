@@ -172,6 +172,39 @@ export const ParsingManagement: React.FC = () => {
     }
   };
 
+  const handleSwitchToSync = async (taskId: string, businessId?: string) => {
+    if (!confirm('Переключить эту задачу на синхронизацию с Яндекс.Бизнес?\n\nЭто изменит тип задачи с парсинга на синхронизацию через API.')) return;
+    
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      
+      const res = await fetch(`/api/admin/parsing/tasks/${taskId}/switch-to-sync`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Ошибка переключения задачи');
+      }
+      
+      toast({
+        title: 'Успешно',
+        description: 'Задача переключена на синхронизацию с Яндекс.Бизнес',
+      });
+      
+      await loadTasks();
+      await loadStats();
+    } catch (e: any) {
+      toast({
+        title: 'Ошибка',
+        description: e.message || 'Ошибка переключения задачи',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       'pending': { label: 'Ожидает', className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
