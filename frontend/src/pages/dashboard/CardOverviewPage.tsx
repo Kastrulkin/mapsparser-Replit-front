@@ -432,27 +432,27 @@ export const CardOverviewPage = () => {
 
   // Обновление услуги
   const updateService = async (serviceId: string, updatedData: any) => {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(updatedData)
-    });
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedData)
+      });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    if (data.success) {
-      setEditingService(null);
-      await loadUserServices();
-      setSuccess('Услуга обновлена');
-    } else {
+      const data = await response.json();
+      if (data.success) {
+        setEditingService(null);
+        await loadUserServices();
+        setSuccess('Услуга обновлена');
+      } else {
       throw new Error(data.error || 'Ошибка обновления услуги');
     }
   };
@@ -635,15 +635,15 @@ export const CardOverviewPage = () => {
           </div>
           <div className="flex gap-2 items-center">
             <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
-            <ServiceOptimizer 
-              businessName={currentBusiness?.name} 
-              businessId={currentBusinessId}
-              tone={wizardTone}
-              region={wizardRegion}
-              descriptionLength={wizardLength}
-              instructions={wizardInstructions}
+          <ServiceOptimizer 
+            businessName={currentBusiness?.name} 
+            businessId={currentBusinessId}
+            tone={wizardTone}
+            region={wizardRegion}
+            descriptionLength={wizardLength}
+            instructions={wizardInstructions}
               hideTextInput={true}
-            />
+          />
             {userServices.length > 0 && (
               <Button 
                 variant="outline" 

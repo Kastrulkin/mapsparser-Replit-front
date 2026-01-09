@@ -6299,10 +6299,17 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         db.close()
         
         # Расшифровываем auth_data
+        print(f"🔐 Расшифровка auth_data для аккаунта {account_id}...")
+        print(f"   Длина зашифрованных данных: {len(auth_data_encrypted) if auth_data_encrypted else 0} символов")
         auth_data_plain = decrypt_auth_data(auth_data_encrypted)
         if not auth_data_plain:
             print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
+            print(f"   Проверьте:")
+            print(f"   1. Установлен ли EXTERNAL_AUTH_SECRET_KEY в .env (должен совпадать с ключом при шифровании)")
+            print(f"   2. Установлена ли библиотека cryptography: pip install cryptography")
+            print(f"   3. Правильный ли формат данных в БД")
             return False
+        print(f"✅ auth_data успешно расшифрован (длина: {len(auth_data_plain)} символов)")
         
         # Парсим JSON auth_data
         import json
