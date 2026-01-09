@@ -19,7 +19,8 @@ from flask_cors import CORS
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
-    RATE_LIMITER_AVAILABLE = True
+    # Временно отключаем rate limiting для решения пробемы с 429
+    RATE_LIMITER_AVAILABLE = False
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
     print('⚠️ flask-limiter не установлен. Rate limiting отключен. Установите: pip install flask-limiter')
@@ -88,9 +89,10 @@ if RATE_LIMITER_AVAILABLE:
         default_limits=["10000 per day", "1000 per hour"],
         storage_uri="memory://"  # Для продакшена лучше использовать Redis
     )
-    print("✅ Rate limiting включен")
+    print("✅ Rate limiting включен (с расширенными лимитами)")
 else:
     limiter = None
+    print("⚠️ Rate limiting ОТКЛЮЧЕН (для отладки доступа)")
 
 # Декоратор для применения rate limiting (если доступен)
 def rate_limit_if_available(limit_str):
