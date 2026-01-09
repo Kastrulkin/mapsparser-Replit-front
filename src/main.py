@@ -5588,12 +5588,11 @@ def get_transactions():
         cursor = db.conn.cursor()
         
         # Строим запрос с явными полями (без SELECT *)
-        # Используем COALESCE(transaction_date, date) для совместимости со старой схемой
         query = """
             SELECT 
                 id,
                 business_id,
-                COALESCE(transaction_date, date) AS tx_date,
+                transaction_date,
                 amount,
                 client_type,
                 services,
@@ -5611,14 +5610,14 @@ def get_transactions():
             params.append(current_business_id)
         
         if start_date:
-            query += " AND COALESCE(transaction_date, date) >= ?"
+            query += " AND transaction_date >= ?"
             params.append(start_date)
         
         if end_date:
-            query += " AND COALESCE(transaction_date, date) <= ?"
+            query += " AND transaction_date <= ?"
             params.append(end_date)
         
-        query += " ORDER BY tx_date DESC, created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -5745,8 +5744,11 @@ def get_financial_metrics():
         metrics = cursor.fetchone()
         
         # Вычисляем retention rate
-        total_clients = metrics[3] + metrics[4]  # new + returning
-        retention_rate = (metrics[4] / total_clients * 100) if total_clients > 0 else 0
+        # Вычисляем retention rate
+        new_clients = metrics[3] or 0
+        returning_clients = metrics[4] or 0
+        total_clients = new_clients + returning_clients
+        retention_rate = (returning_clients / total_clients * 100) if total_clients > 0 else 0
         
         # Получаем данные за предыдущий период для сравнения
         from datetime import datetime, timedelta
@@ -8080,6 +8082,124 @@ def update_or_delete_business_type(type_id):
         print(f"❌ Ошибка обновления/удаления типа бизнеса: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/progress', methods=['GET'])
+def get_business_progress():
+    """Получить прогресс развития бизнеса"""
+    try:
+        # Проверка авторизации
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+            
+        business_id = request.args.get('business_id')
+        if not business_id:
+             return jsonify({"error": "Не указан business_id"}), 400
+             
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверка доступа
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+            
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+            
+        # 1. Определяем тип бизнеса
+        cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        business_type_key = row[0] if row else 'other'
+        
+        # Находим ID типа бизнеса
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        bt_row = cursor.fetchone()
+        
+        if not bt_row:
+             # Fallback
+             cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
+             bt_row = cursor.fetchone()
+             
+        business_type_id = bt_row[0] if bt_row else None
+        
+        if not business_type_id:
+            # Если даже 'other' нет
+            db.close()
+            return jsonify({"stages": [], "current_step": 1})
+            
+        # 2. Получаем текущий прогресс (шаг визарда)
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        wiz_row = cursor.fetchone()
+        current_step = wiz_row[0] if wiz_row else 1
+        
+        # 3. Получаем этапы
+        cursor.execute("""
+            SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
+            FROM GrowthStages
+            WHERE business_type_id = ?
+            ORDER BY stage_number
+        """, (business_type_id,))
+        stages_rows = cursor.fetchall()
+        
+        stages = []
+        for stage_row in stages_rows:
+            stage_id = stage_row[0]
+            stage_number = stage_row[1]
+            
+            # Получаем задачи
+            cursor.execute("""
+                SELECT id, task_number, task_text
+                FROM GrowthTasks
+                WHERE stage_id = ?
+                ORDER BY task_number
+            """, (stage_id,))
+            tasks_rows = cursor.fetchall()
+            
+            # Определяем статус этапа
+            is_completed = stage_number < current_step
+            is_current = stage_number == current_step
+            
+            tasks = []
+            for t in tasks_rows:
+                tasks.append({
+                    'id': t[0], 
+                    'number': t[1], 
+                    'text': t[2],
+                    'is_completed': is_completed # Пока считаем все задачи выполненными если этап пройден
+                })
+            
+            stages.append({
+                'id': stage_id,
+                'stage_number': stage_number,
+                'title': stage_row[2],
+                'description': stage_row[3],
+                'goal': stage_row[4],
+                'expected_result': stage_row[5],
+                'duration': stage_row[6],
+                'is_permanent': bool(stage_row[7]),
+                'status': 'completed' if is_completed else ('current' if is_current else 'locked'),
+                'tasks': tasks
+            })
+            
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "current_step": current_step,
+            "stages": stages
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка api/progress: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/growth-stages/<business_type_id>', methods=['GET', 'OPTIONS'])
