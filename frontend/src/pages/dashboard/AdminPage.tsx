@@ -13,6 +13,7 @@ import { GrowthPlan } from '../../components/GrowthPlan';
 import { GrowthPlanEditor } from '../../components/GrowthPlanEditor';
 import { PromptsManagement } from '../../components/PromptsManagement';
 import { ProxyManagement } from '../../components/ProxyManagement';
+import { ParsingManagement } from '../../components/ParsingManagement';
 
 interface Business {
   id: string;
@@ -99,7 +100,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -482,6 +483,7 @@ export const AdminPage: React.FC = () => {
     { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
     { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
     { id: 'proxies' as const, label: 'Прокси', icon: Network },
+    { id: 'parsing' as const, label: 'Парсинг', icon: MapPin },
   ];
 
   return (
@@ -535,6 +537,8 @@ export const AdminPage: React.FC = () => {
         <PromptsManagement />
       ) : activeTab === 'proxies' ? (
         <ProxyManagement />
+      ) : activeTab === 'parsing' ? (
+        <ParsingManagement />
       ) : (
         <>
           {/* Action Bar */}

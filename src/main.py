@@ -470,6 +470,320 @@ def get_token_usage_stats():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# ===== АДМИНСКИЕ ЭНДПОИНТЫ ДЛЯ ПАРСИНГА =====
+
+@app.route('/api/admin/parsing/tasks', methods=['GET'])
+def get_parsing_tasks():
+    """Получить список задач парсинга для администратора"""
+    try:
+        # Проверка авторизации и прав суперадмина
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+        
+        # Получаем параметры фильтрации
+        status_filter = request.args.get('status')
+        task_type_filter = request.args.get('task_type')
+        source_filter = request.args.get('source')
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Формируем WHERE условия
+        where_conditions = []
+        params = []
+        
+        if status_filter:
+            where_conditions.append("status = ?")
+            params.append(status_filter)
+        
+        if task_type_filter:
+            where_conditions.append("task_type = ?")
+            params.append(task_type_filter)
+        
+        if source_filter:
+            where_conditions.append("source = ?")
+            params.append(source_filter)
+        
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+        
+        # Получаем задачи
+        cursor.execute(f"""
+            SELECT 
+                id, url, user_id, business_id, task_type, account_id, source,
+                status, retry_after, error_message, created_at, updated_at
+            FROM ParseQueue
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """, params + [limit, offset])
+        
+        rows = cursor.fetchall()
+        
+        # Получаем общее количество
+        cursor.execute(f"""
+            SELECT COUNT(*) FROM ParseQueue WHERE {where_clause}
+        """, params)
+        total = cursor.fetchone()[0]
+        
+        # Получаем статистику по статусам
+        cursor.execute("""
+            SELECT 
+                status,
+                COUNT(*) as count
+            FROM ParseQueue
+            GROUP BY status
+        """)
+        status_stats = {}
+        for row in cursor.fetchall():
+            status_stats[row[0]] = row[1]
+        
+        # Получаем информацию о бизнесах для отображения
+        tasks = []
+        for row in rows:
+            task_dict = dict(row) if hasattr(row, 'keys') else {
+                'id': row[0],
+                'url': row[1],
+                'user_id': row[2],
+                'business_id': row[3],
+                'task_type': row[4] or 'parse_card',
+                'account_id': row[5],
+                'source': row[6],
+                'status': row[7],
+                'retry_after': row[8],
+                'error_message': row[9],
+                'created_at': row[10],
+                'updated_at': row[11] if len(row) > 11 else None
+            }
+            
+            # Получаем название бизнеса
+            if task_dict.get('business_id'):
+                cursor.execute("SELECT name FROM Businesses WHERE id = ?", (task_dict['business_id'],))
+                business_row = cursor.fetchone()
+                task_dict['business_name'] = business_row[0] if business_row else None
+            else:
+                task_dict['business_name'] = None
+            
+            tasks.append(task_dict)
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "tasks": tasks,
+            "total": total,
+            "stats": status_stats
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения задач парсинга: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/parsing/tasks/<task_id>/restart', methods=['POST'])
+def restart_parsing_task(task_id):
+    """Перезапустить задачу парсинга (сбросить статус на pending)"""
+    try:
+        # Проверка авторизации и прав суперадмина
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверяем, существует ли задача
+        cursor.execute("SELECT id, status FROM ParseQueue WHERE id = ?", (task_id,))
+        task = cursor.fetchone()
+        
+        if not task:
+            db.close()
+            return jsonify({"error": "Задача не найдена"}), 404
+        
+        current_status = task[1] if isinstance(task, tuple) else task.get('status')
+        
+        # Перезапускаем задачу (сбрасываем статус на pending)
+        cursor.execute("""
+            UPDATE ParseQueue
+            SET status = 'pending',
+                error_message = NULL,
+                retry_after = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (task_id,))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Задача перезапущена (был статус: {current_status})"
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка перезапуска задачи: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/parsing/tasks/<task_id>', methods=['DELETE'])
+def delete_parsing_task(task_id):
+    """Удалить задачу из очереди"""
+    try:
+        # Проверка авторизации и прав суперадмина
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (task_id,))
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({"success": True, "message": "Задача удалена"})
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления задачи: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/parsing/stats', methods=['GET'])
+def get_parsing_stats():
+    """Получить общую статистику парсинга"""
+    try:
+        # Проверка авторизации и прав суперадмина
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Общая статистика
+        cursor.execute("SELECT COUNT(*) FROM ParseQueue")
+        total_tasks = cursor.fetchone()[0]
+        
+        # По статусам
+        cursor.execute("""
+            SELECT status, COUNT(*) as count
+            FROM ParseQueue
+            GROUP BY status
+        """)
+        by_status = {}
+        for row in cursor.fetchall():
+            by_status[row[0]] = row[1]
+        
+        # По типам задач
+        cursor.execute("""
+            SELECT task_type, COUNT(*) as count
+            FROM ParseQueue
+            GROUP BY task_type
+        """)
+        by_task_type = {}
+        for row in cursor.fetchall():
+            task_type = row[0] or 'parse_card'
+            by_task_type[task_type] = row[1]
+        
+        # По источникам
+        cursor.execute("""
+            SELECT source, COUNT(*) as count
+            FROM ParseQueue
+            WHERE source IS NOT NULL
+            GROUP BY source
+        """)
+        by_source = {}
+        for row in cursor.fetchall():
+            by_source[row[0]] = row[1]
+        
+        # Зависшие задачи (processing более 30 минут)
+        # Проверяем наличие колонки updated_at
+        cursor.execute("PRAGMA table_info(ParseQueue)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_updated_at = 'updated_at' in columns
+        
+        if has_updated_at:
+            cursor.execute("""
+                SELECT id, business_id, task_type, created_at, updated_at
+                FROM ParseQueue
+                WHERE status = 'processing'
+                  AND updated_at < datetime('now', '-30 minutes')
+            """)
+        else:
+            cursor.execute("""
+                SELECT id, business_id, task_type, created_at, created_at as updated_at
+                FROM ParseQueue
+                WHERE status = 'processing'
+                  AND created_at < datetime('now', '-30 minutes')
+            """)
+        
+        stuck_tasks = []
+        for row in cursor.fetchall():
+            stuck_tasks.append({
+                'id': row[0],
+                'business_id': row[1],
+                'task_type': row[2] or 'parse_card',
+                'created_at': row[3],
+                'updated_at': row[4] if len(row) > 4 else row[3]
+            })
+        
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "total_tasks": total_tasks,
+                "by_status": by_status,
+                "by_task_type": by_task_type,
+                "by_source": by_source,
+                "stuck_tasks_count": len(stuck_tasks),
+                "stuck_tasks": stuck_tasks
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения статистики парсинга: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(FRONTEND_DIST_DIR, 'favicon.ico')
