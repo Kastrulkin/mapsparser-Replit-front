@@ -18,10 +18,7 @@ def migrate_add_workflow():
         """)
         print("✅ Колонка workflow добавлена")
     
-    safe_migrate(
-        migration_func=migration_func,
-        description="Add workflow column to AIAgents"
-    )
+    safe_migrate(migration_func, "Add workflow column to AIAgents")
 
 if __name__ == "__main__":
     migrate_add_workflow()
