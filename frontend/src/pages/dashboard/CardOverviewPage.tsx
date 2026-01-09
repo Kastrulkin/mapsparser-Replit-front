@@ -12,12 +12,12 @@ import ServiceOptimizer from '@/components/ServiceOptimizer';
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
   const { user, currentBusinessId, currentBusiness } = context || {};
-  
+
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  
+
   // Состояния для услуг
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
@@ -40,14 +40,14 @@ export const CardOverviewPage = () => {
     price: ''
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
-  
+
   // Обновить форму при выборе услуги для редактирования
   useEffect(() => {
     if (!editingService) return;
-    
+
     const service = userServices.find(s => s.id === editingService);
     if (!service) return;
-    
+
     setEditingForm({
       category: service.category || '',
       name: service.name || '',
@@ -56,18 +56,18 @@ export const CardOverviewPage = () => {
       price: service.price || ''
     });
   }, [editingService, userServices]);
-  
+
   // Состояния для отзывов
   const [externalReviews, setExternalReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
-  
+
   // Состояния для новостей
   const [externalPosts, setExternalPosts] = useState<any[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
-  
+
   // Состояния для парсера
   const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued'>('idle');
-  
+
   // Общие состояния
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export const CardOverviewPage = () => {
       setUserServices([]);
       return;
     }
-    
+
     console.log('🔍 DEBUG loadUserServices: Загружаем услуги для business_id:', currentBusinessId);
     setLoadingServices(true);
     try {
@@ -119,7 +119,7 @@ export const CardOverviewPage = () => {
       if (data.success) {
         // Находим обновленную услугу по ID для отладки
         const updatedService = data.services?.find((s: any) => s.id === '3772931e-9796-475b-b439-ee1cc07b1dc9');
-        
+
         // Детальный лог для отладки
         if (updatedService) {
           console.log('🔍 DEBUG loadUserServices: ДЕТАЛЬНЫЙ ЛОГ updatedService', {
@@ -140,7 +140,7 @@ export const CardOverviewPage = () => {
         } else {
           console.log('❌ DEBUG loadUserServices: Услуга 3772931e-9796-475b-b439-ee1cc07b1dc9 не найдена в списке');
         }
-        
+
         console.log('✅ DEBUG loadUserServices: Услуги загружены', {
           count: data.services?.length,
           firstService: data.services?.[0],
@@ -223,7 +223,7 @@ export const CardOverviewPage = () => {
       loadExternalPosts();
     }
   }, [currentBusinessId, context]);
-  
+
   // Если контекст не загружен, показываем загрузку
   if (!context) {
     return (
@@ -242,7 +242,7 @@ export const CardOverviewPage = () => {
       setError('Сначала выберите бизнес');
       return;
     }
-    
+
     setParseStatus('processing');
     setError(null);
     setSuccess(null);
@@ -251,14 +251,14 @@ export const CardOverviewPage = () => {
       console.log('🚀 Запуск парсера для бизнеса:', currentBusinessId);
       const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${currentBusinessId}`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       console.log('📡 Ответ сервера:', response.status, response.statusText);
-      
+
       let data;
       try {
         data = await response.json();
@@ -270,7 +270,7 @@ export const CardOverviewPage = () => {
         setError(`Ошибка сервера (${response.status}): ${text.substring(0, 200)}`);
         return;
       }
-      
+
       if (response.ok && data.success) {
         setParseStatus('done');
         setSuccess(data.message || 'Парсер запущен успешно');
@@ -336,7 +336,7 @@ export const CardOverviewPage = () => {
   const optimizeService = async (serviceId: string) => {
     const service = userServices.find(s => s.id === serviceId);
     if (!service) return;
-    
+
     setOptimizingServiceId(serviceId);
     setError(null);
     try {
@@ -352,7 +352,7 @@ export const CardOverviewPage = () => {
           business_id: currentBusinessId
         })
       });
-      
+
       const data = await response.json();
       console.log('🔍 DEBUG optimizeService: Ответ от API', {
         success: data.success,
@@ -360,11 +360,11 @@ export const CardOverviewPage = () => {
         services: data.result?.services,
         firstService: data.result?.services?.[0]
       });
-      
+
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
         console.log('🔍 DEBUG optimizeService: Оптимизированная услуга', optimized);
-        
+
         // ВАЖНО: Сохраняем оригинальное описание и название, оптимизированные - отдельно
         // Исправляем keywords - убираем вложенные массивы и строки
         let fixedKeywords = [];
@@ -388,7 +388,7 @@ export const CardOverviewPage = () => {
             fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
           }
         }
-        
+
         const updateData = {
           category: service.category || '', // Сохраняем все оригинальные поля
           name: service.name || '', // Оригинальное название не меняем
@@ -398,7 +398,7 @@ export const CardOverviewPage = () => {
           keywords: fixedKeywords, // Исправленные ключевые слова
           price: service.price || '' // Оригинальная цена
         };
-        
+
         console.log('🔍 DEBUG optimizeService: Обновляем услугу', {
           serviceId,
           originalName: service.name,
@@ -408,7 +408,7 @@ export const CardOverviewPage = () => {
           optimizedObject: optimized, // Полный объект для отладки
           updateData
         });
-        
+
         // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
         try {
           await updateService(serviceId, updateData);
@@ -432,27 +432,27 @@ export const CardOverviewPage = () => {
 
   // Обновление услуги
   const updateService = async (serviceId: string, updatedData: any) => {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatedData)
-      });
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedData)
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-      const data = await response.json();
-      if (data.success) {
-        setEditingService(null);
-        await loadUserServices();
-        setSuccess('Услуга обновлена');
-      } else {
+    const data = await response.json();
+    if (data.success) {
+      setEditingService(null);
+      await loadUserServices();
+      setSuccess('Услуга обновлена');
+    } else {
       throw new Error(data.error || 'Ошибка обновления услуги');
     }
   };
@@ -521,19 +521,18 @@ export const CardOverviewPage = () => {
             <>
               <div className="flex items-center gap-2">
                 <span className="text-3xl font-bold text-gray-900">
-                  {rating !== null ? rating.toFixed(1) : '—'}
+                  {rating != null ? Number(rating).toFixed(1) : '—'}
                 </span>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <span
                       key={star}
-                      className={`text-2xl ${
-                        rating !== null && star <= Math.floor(rating)
+                      className={`text-2xl ${rating !== null && star <= Math.floor(rating)
                           ? 'text-yellow-400'
                           : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                          ? 'text-yellow-400'
-                          : 'text-gray-300'
-                      }`}
+                            ? 'text-yellow-400'
+                            : 'text-gray-300'
+                        }`}
                     >
                       ★
                     </span>
@@ -568,29 +567,29 @@ export const CardOverviewPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newService.category}
-                  onChange={(e) => setNewService({...newService, category: e.target.value})}
+                  onChange={(e) => setNewService({ ...newService, category: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="Например: Стрижки"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newService.name}
-                  onChange={(e) => setNewService({...newService, name: e.target.value})}
+                  onChange={(e) => setNewService({ ...newService, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="Например: Женская стрижка"
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
-                <textarea 
+                <textarea
                   value={newService.description}
-                  onChange={(e) => setNewService({...newService, description: e.target.value})}
+                  onChange={(e) => setNewService({ ...newService, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   rows={3}
                   placeholder="Краткое описание услуги"
@@ -601,7 +600,7 @@ export const CardOverviewPage = () => {
                 <input
                   type="text"
                   value={newService.keywords}
-                  onChange={(e) => setNewService({...newService, keywords: e.target.value})}
+                  onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="стрижка, укладка, окрашивание"
                 />
@@ -611,7 +610,7 @@ export const CardOverviewPage = () => {
                 <input
                   type="text"
                   value={newService.price}
-                  onChange={(e) => setNewService({...newService, price: e.target.value})}
+                  onChange={(e) => setNewService({ ...newService, price: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="Например: 2000 руб"
                 />
@@ -635,18 +634,18 @@ export const CardOverviewPage = () => {
           </div>
           <div className="flex gap-2 items-center">
             <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
-          <ServiceOptimizer 
-            businessName={currentBusiness?.name} 
-            businessId={currentBusinessId}
-            tone={wizardTone}
-            region={wizardRegion}
-            descriptionLength={wizardLength}
-            instructions={wizardInstructions}
+            <ServiceOptimizer
+              businessName={currentBusiness?.name}
+              businessId={currentBusinessId}
+              tone={wizardTone}
+              region={wizardRegion}
+              descriptionLength={wizardLength}
+              instructions={wizardInstructions}
               hideTextInput={true}
-          />
+            />
             {userServices.length > 0 && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   // Оптимизировать все услуги
                   userServices.forEach(s => optimizeService(s.id));
@@ -683,156 +682,156 @@ export const CardOverviewPage = () => {
                 userServices
                   .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
                   .map((service, index) => (
-                  <tr key={service.id || index}>
-                    <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      <div className="space-y-3">
-                        {service.name && (
-                          <div className="text-gray-900">{service.name}</div>
-                        )}
-                        {service.optimized_name && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
-                            <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
-                            <div className="flex gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.optimized_name,
-                                    optimized_name: '',
-                                    description: service.description,
-                                    optimized_description: service.optimized_description,
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное название принято');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                              >
-                                Принять
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    optimized_name: '',
-                                    description: service.description,
-                                    optimized_description: service.optimized_description,
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное название отклонено');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                              >
-                                Отклонить
-                              </Button>
+                    <tr key={service.id || index}>
+                      <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        <div className="space-y-3">
+                          {service.name && (
+                            <div className="text-gray-900">{service.name}</div>
+                          )}
+                          {service.optimized_name && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                              <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
+                              <div className="flex gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    await updateService(service.id, {
+                                      category: service.category,
+                                      name: service.optimized_name,
+                                      optimized_name: '',
+                                      description: service.description,
+                                      optimized_description: service.optimized_description,
+                                      keywords: service.keywords,
+                                      price: service.price
+                                    });
+                                    setSuccess('Оптимизированное название принято');
+                                    await loadUserServices();
+                                  }}
+                                  className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                >
+                                  Принять
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    await updateService(service.id, {
+                                      category: service.category,
+                                      name: service.name,
+                                      optimized_name: '',
+                                      description: service.description,
+                                      optimized_description: service.optimized_description,
+                                      keywords: service.keywords,
+                                      price: service.price
+                                    });
+                                    setSuccess('Оптимизированное название отклонено');
+                                    await loadUserServices();
+                                  }}
+                                  className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                >
+                                  Отклонить
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {!service.name && !service.optimized_name && (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      <div className="space-y-3">
-                        {service.description && (
-                          <div className="text-gray-700 leading-relaxed">{service.description}</div>
-                        )}
-                        {service.optimized_description && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
-                            <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
-                            <div className="flex gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    description: service.optimized_description,
-                                    optimized_description: '',
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное описание принято');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                              >
-                                Принять
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    description: service.description,
-                                    optimized_description: '',
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное описание отклонено');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                              >
-                                Отклонить
-                              </Button>
+                          )}
+                          {!service.name && !service.optimized_name && (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        <div className="space-y-3">
+                          {service.description && (
+                            <div className="text-gray-700 leading-relaxed">{service.description}</div>
+                          )}
+                          {service.optimized_description && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                              <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
+                              <div className="flex gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    await updateService(service.id, {
+                                      category: service.category,
+                                      name: service.name,
+                                      description: service.optimized_description,
+                                      optimized_description: '',
+                                      keywords: service.keywords,
+                                      price: service.price
+                                    });
+                                    setSuccess('Оптимизированное описание принято');
+                                    await loadUserServices();
+                                  }}
+                                  className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                >
+                                  Принять
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    await updateService(service.id, {
+                                      category: service.category,
+                                      name: service.name,
+                                      description: service.description,
+                                      optimized_description: '',
+                                      keywords: service.keywords,
+                                      price: service.price
+                                    });
+                                    setSuccess('Оптимизированное описание отклонено');
+                                    await loadUserServices();
+                                  }}
+                                  className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                >
+                                  Отклонить
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {!service.description && !service.optimized_description && (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => optimizeService(service.id)}
-                          disabled={optimizingServiceId === service.id}
-                        >
-                          {optimizingServiceId === service.id ? 'Оптимизация...' : 'Оптимизировать'}
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => setEditingService(service.id)}
-                        >
-                          Редактировать
-                        </Button>
-                        <Button 
-                          size="sm"
-                          variant="outline" 
-                          onClick={() => deleteService(service.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Удалить
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          )}
+                          {!service.description && !service.optimized_description && (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => optimizeService(service.id)}
+                            disabled={optimizingServiceId === service.id}
+                          >
+                            {optimizingServiceId === service.id ? 'Оптимизация...' : 'Оптимизировать'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingService(service.id)}
+                          >
+                            Редактировать
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteService(service.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Удалить
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
               )}
             </tbody>
           </table>
-          
+
           {/* Пагинация для услуг */}
           {userServices.length > servicesItemsPerPage && (
             <div className="flex items-center justify-between mt-4 px-4">
@@ -881,8 +880,8 @@ export const CardOverviewPage = () => {
       }}>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Новости</h2>
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <NewsGenerator 
-            services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} 
+          <NewsGenerator
+            services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
             businessId={currentBusinessId}
             externalPosts={externalPosts}
           />
@@ -904,7 +903,7 @@ export const CardOverviewPage = () => {
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <p className="text-gray-600 mb-4">Опишите, как вы хотите звучать и чего избегать. Это задаст тон для всех текстов.</p>
-                  
+
                   {/* Тон */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Тон</label>
@@ -916,15 +915,14 @@ export const CardOverviewPage = () => {
                         { key: 'youth', label: 'Молодёжный' },
                         { key: 'business', label: 'Деловой' }
                       ].map(tone => (
-                        <button 
-                          key={tone.key} 
+                        <button
+                          key={tone.key}
                           type="button"
                           onClick={() => setWizardTone(tone.key as any)}
-                          className={`text-xs px-3 py-1 rounded-full border ${
-                            wizardTone === tone.key 
-                              ? 'bg-blue-600 text-white border-blue-600' 
+                          className={`text-xs px-3 py-1 rounded-full border ${wizardTone === tone.key
+                              ? 'bg-blue-600 text-white border-blue-600'
                               : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
+                            }`}
                         >
                           {tone.label}
                         </button>
@@ -937,7 +935,7 @@ export const CardOverviewPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Регион (для локального SEO)</label>
-                      <input 
+                      <input
                         type="text"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         placeholder="Санкт‑Петербург, м. Чернышевская"
@@ -947,7 +945,7 @@ export const CardOverviewPage = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Длина описания (символов)</label>
-                      <input 
+                      <input
                         type="number"
                         min={80}
                         max={200}
@@ -961,7 +959,7 @@ export const CardOverviewPage = () => {
                   {/* Дополнительные инструкции */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Дополнительные инструкции (необязательно)</label>
-                    <textarea 
+                    <textarea
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       rows={3}
                       placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи."
@@ -974,11 +972,11 @@ export const CardOverviewPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки ответов на отзывы (до 5)</label>
                     <div className="space-y-2">
-                      {[1,2,3,4,5].map(i => (
-                        <input 
-                          key={i} 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md" 
-                          placeholder="Например: Спасибо за отзыв! Нам важно ваше мнение" 
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <input
+                          key={i}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="Например: Спасибо за отзыв! Нам важно ваше мнение"
                         />
                       ))}
                     </div>
