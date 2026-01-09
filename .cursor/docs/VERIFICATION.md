@@ -12,6 +12,10 @@
 
 Перед проверкой кода **ОБЯЗАТЕЛЬНО** выполни следующие шаги:
 
+- [x] Database restored from `reports_20251218_144916.db.backup` (8 businesses).
+- [x] Growth Stages migration re-applied successfully.
+- [x] Confirmed White Screen fixes pushed to main.
+
 1. **Открой**: `.cursor/docs/SIMPLIFICATION.md`
 2. **Вытяни**: какие файлы финальные после упрощения
 3. **Проверь ВСЁ** эти файлы
