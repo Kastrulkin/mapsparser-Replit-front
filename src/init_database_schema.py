@@ -624,6 +624,26 @@ Write all generated text in {language_name}.
         """)
         print("✅ Таблица AIAgents создана/проверена")
 
+        # Инициализация дефолтных агентов
+        default_agents = [
+            {
+                'id': 'booking_agent_default',
+                'name': 'Booking Agent',
+                'type': 'booking',
+                'description': 'Агент для записи клиентов',
+                'personality': 'Вежливый, пунктуальный администратор. Твоя задача - записать клиента на услугу.',
+                'is_active': 1
+            }
+        ]
+        
+        for agent in default_agents:
+            cursor.execute("""
+                INSERT OR IGNORE INTO AIAgents (id, name, type, description, personality, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (agent['id'], agent['name'], agent['type'], agent['description'], agent['personality'], agent['is_active']))
+            
+        print("✅ Дефолтные AI агенты инициализированы")
+
         # BusinessTypes - типы бизнеса (редактируемые)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessTypes (
