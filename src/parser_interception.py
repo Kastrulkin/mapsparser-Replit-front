@@ -470,7 +470,12 @@ class YandexMapsInterceptionParser:
             text = item.get('text') or item.get('comment') or item.get('message') or item.get('content', '')
             
             # Извлекаем дату (может быть в разных форматах)
-            date_raw = item.get('date') or item.get('publishedAt') or item.get('published_at') or item.get('createdAt') or item.get('created_at', '')
+            date_fields = [
+                'date', 'publishedAt', 'published_at', 'createdAt', 'created_at',
+                'time', 'timestamp', 'created', 'published',
+                'dateCreated', 'datePublished', 'reviewDate', 'review_date'
+            ]
+            date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
             date = ''
             if date_raw:
                 # Если это timestamp (число)
@@ -482,13 +487,29 @@ class YandexMapsInterceptionParser:
                             date = datetime.fromtimestamp(date_raw / 1000.0).isoformat()
                         else:  # Секунды
                             date = datetime.fromtimestamp(date_raw).isoformat()
-                    except:
+                    except Exception as e:
+                        print(f"⚠️ Ошибка парсинга timestamp {date_raw}: {e}")
                         date = str(date_raw)
                 # Если это строка ISO формата
                 elif isinstance(date_raw, str):
-                    date = date_raw
+                    # Пробуем распарсить как ISO
+                    try:
+                        from datetime import datetime
+                        # Убираем Z и заменяем на +00:00
+                        date_clean = date_raw.replace('Z', '+00:00')
+                        datetime.fromisoformat(date_clean)  # Проверяем валидность
+                        date = date_clean
+                    except:
+                        # Если не ISO, оставляем как есть (будет парситься в worker.py)
+                        date = date_raw
                 else:
                     date = str(date_raw)
+            
+            # Логируем дату отзыва (только для первых 5 отзывов)
+            if date and len(reviews) < 5:
+                print(f"📅 Дата отзыва извлечена: {date}")
+            elif not date and len(reviews) < 5:
+                print(f"⚠️ Дата отзыва не найдена. Доступные поля: {list(item.keys())}")
             
             # Извлекаем ответ организации (проверяем все возможные варианты)
             response_text = None

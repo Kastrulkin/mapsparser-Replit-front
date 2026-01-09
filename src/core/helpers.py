@@ -103,4 +103,3 @@ def find_business_id_for_user(cursor, user_id: str) -> str:
     if business_row:
         return business_row[0]
     return user_id
-

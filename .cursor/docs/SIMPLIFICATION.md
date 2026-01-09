@@ -682,6 +682,99 @@ lsof -iTCP:8000 -sTCP:LISTEN
 
 ---
 
+### 2025-01-06 - Упрощение кода после исправления сортировки отзывов и парсинга дат
+
+**Источник:** `.cursor/docs/IMPLEMENTATION.md` - "Исправление сортировки отзывов и парсинга дат"
+
+#### Файлы, которые упрощались
+- `src/parser_interception.py` - упрощено извлечение даты из полей
+- `src/parser.py` - упрощены проверки атрибутов через guard clauses
+- `src/worker.py` - вынесена дублирующаяся логика парсинга дат в helper функции
+
+#### Что было упрощено
+
+1. **Извлечение даты из полей в `parser_interception.py`**:
+   - Было: длинная цепочка `or` (14 строк)
+   ```python
+   date_raw = (
+       item.get('date') or 
+       item.get('publishedAt') or 
+       item.get('published_at') or 
+       # ... еще 10 полей
+   )
+   ```
+   - Стало: использование `next()` с генератором (6 строк)
+   ```python
+   date_fields = [
+       'date', 'publishedAt', 'published_at', 'createdAt', 'created_at',
+       'time', 'timestamp', 'created', 'published',
+       'dateCreated', 'datePublished', 'reviewDate', 'review_date'
+   ]
+   date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
+   ```
+
+2. **Проверки атрибутов в `parser.py`**:
+   - Было: вложенные `if` внутри цикла
+   ```python
+   for selector in date_selectors:
+       date_el = block.query_selector(selector)
+       if date_el:
+           date_attr = date_el.get_attribute('datetime')
+           if date_attr:
+               date = date_attr.strip()
+               break
+   ```
+   - Стало: guard clause для раннего выхода
+   ```python
+   for selector in date_selectors:
+       date_el = block.query_selector(selector)
+       if not date_el:
+           continue
+       date_attr = date_el.get_attribute('datetime')
+       if date_attr:
+           date = date_attr.strip()
+           break
+   ```
+
+3. **Парсинг дат в `worker.py`**:
+   - Было: ~75 строк дублирующейся логики парсинга дат (timestamp, относительные даты, ISO формат)
+   - Стало: вынесено в 4 helper функции (~85 строк, но переиспользуемые)
+   ```python
+   def _extract_date_from_review(review: dict) -> str | int | float | None
+   def _parse_timestamp_to_datetime(timestamp: int | float) -> datetime | None
+   def _parse_relative_date(date_str: str) -> datetime | None
+   def _parse_date_string(date_str: str) -> datetime | None
+   ```
+   - Использование: ~10 строк вместо ~75
+   ```python
+   date_value = _extract_date_from_review(review)
+   if date_value:
+       if isinstance(date_value, (int, float)):
+           published_at = _parse_timestamp_to_datetime(date_value)
+       elif isinstance(date_value, str):
+           published_at = _parse_date_string(date_value)
+   ```
+
+4. **Упрощение проверки года в `parser.py`**:
+   - Было: множественные проверки `or`
+   ```python
+   if title_attr and ('202' in title_attr or '2023' in title_attr or '2024' in title_attr or '2025' in title_attr):
+   ```
+   - Стало: использование `any()` с генератором
+   ```python
+   if title_attr and any(year in title_attr for year in ['202', '2023', '2024', '2025']):
+   ```
+
+#### Результаты
+- Удалено ~75 строк дублирующегося кода парсинга дат
+- Упрощено извлечение даты из полей (14 строк → 6 строк)
+- Создано 4 переиспользуемые функции для парсинга дат
+- Убрана вложенность в циклах парсинга атрибутов (guard clauses)
+- Улучшена читаемость: логика парсинга дат вынесена в отдельные функции
+- Сохранена функциональность: все форматы дат обрабатываются корректно
+
+---
+
 ### Чеклист перед завершением
 
 - [ ] Прочитан `IMPLEMENTATION.md`

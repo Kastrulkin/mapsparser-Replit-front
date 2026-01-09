@@ -3,12 +3,105 @@ import sqlite3
 import os
 import uuid
 import json
+import re
 from datetime import datetime, timedelta
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
     from safe_db_utils import get_db_connection as _get_db_connection
     return _get_db_connection()
+
+def _extract_date_from_review(review: dict) -> str | int | float | None:
+    """Извлечь дату из отзыва, проверяя различные поля"""
+    date_fields = ['date', 'published_at', 'publishedAt', 'created_at', 'createdAt', 'time', 'timestamp']
+    date_value = review.get('date')
+    
+    if date_value:
+        if isinstance(date_value, str):
+            return date_value.strip()
+        return date_value
+    
+    # Пробуем другие поля
+    for field in date_fields[1:]:
+        date_value = review.get(field)
+        if date_value:
+            if isinstance(date_value, str):
+                return date_value.strip()
+            return date_value
+    
+    return None
+
+def _parse_timestamp_to_datetime(timestamp: int | float) -> datetime | None:
+    """Парсить timestamp в datetime (миллисекунды или секунды)"""
+    try:
+        if timestamp > 1e10:  # Миллисекунды
+            return datetime.fromtimestamp(timestamp / 1000.0)
+        return datetime.fromtimestamp(timestamp)  # Секунды
+    except Exception:
+        return None
+
+def _parse_relative_date(date_str: str) -> datetime | None:
+    """Парсить относительные даты: 'сегодня', 'вчера', '2 дня назад' и т.д."""
+    date_lower = date_str.lower()
+    
+    if 'сегодня' in date_lower or 'today' in date_lower:
+        return datetime.now()
+    if 'вчера' in date_lower or 'yesterday' in date_lower:
+        return datetime.now() - timedelta(days=1)
+    
+    # Дни назад
+    if any(word in date_str for word in ['дня', 'день', 'дней']):
+        days_match = re.search(r'(\d+)', date_str)
+        if days_match:
+            return datetime.now() - timedelta(days=int(days_match.group(1)))
+    
+    # Недели назад
+    if any(word in date_str for word in ['неделю', 'недели', 'недель']):
+        weeks_match = re.search(r'(\d+)', date_str)
+        weeks_ago = int(weeks_match.group(1)) if weeks_match else 1
+        return datetime.now() - timedelta(weeks=weeks_ago)
+    
+    # Месяцы назад
+    if any(word in date_str for word in ['месяц', 'месяца', 'месяцев']):
+        months_match = re.search(r'(\d+)', date_str)
+        months_ago = int(months_match.group(1)) if months_match else 1
+        return datetime.now() - timedelta(days=months_ago * 30)
+    
+    # Годы назад
+    if any(word in date_str for word in ['год', 'года', 'лет']):
+        years_match = re.search(r'(\d+)', date_str)
+        years_ago = int(years_match.group(1)) if years_match else 1
+        return datetime.now() - timedelta(days=years_ago * 365)
+    
+    return None
+
+def _parse_date_string(date_str: str) -> datetime | None:
+    """Парсить строку даты в datetime"""
+    if not date_str or not isinstance(date_str, str):
+        return None
+    
+    date_str = date_str.strip()
+    if not date_str:
+        return None
+    
+    # Пробуем относительные даты
+    relative = _parse_relative_date(date_str)
+    if relative:
+        return relative
+    
+    # Пробуем ISO формат
+    try:
+        if 'T' in date_str or 'Z' in date_str or date_str.count('-') >= 2:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except Exception:
+        pass
+    
+    # Пробуем dateutil для других форматов
+    try:
+        from dateutil import parser as date_parser
+        return date_parser.parse(date_str, fuzzy=True)
+    except Exception:
+        return None
 
 def _is_parsing_successful(card_data: dict, business_id: str = None) -> tuple:
     """
@@ -324,43 +417,16 @@ def process_queue():
                                 
                                 # Парсим дату
                                 published_at = None
-                                date_str = review.get('date', '').strip()
-                                if date_str:
-                                    try:
-                                        # Пробуем разные форматы дат
-                                        # "2 дня назад", "неделю назад", "15 января 2024", "2024-01-15"
-                                        if 'дня' in date_str or 'день' in date_str or 'дней' in date_str:
-                                            # Относительная дата
-                                            days_match = re.search(r'(\d+)', date_str)
-                                            if days_match:
-                                                days_ago = int(days_match.group(1))
-                                                published_at = datetime.now() - timedelta(days=days_ago)
-                                        elif 'неделю' in date_str or 'недели' in date_str or 'недель' in date_str:
-                                            weeks_match = re.search(r'(\d+)', date_str)
-                                            if weeks_match:
-                                                weeks_ago = int(weeks_match.group(1))
-                                                published_at = datetime.now() - timedelta(weeks=weeks_ago)
-                                            else:
-                                                published_at = datetime.now() - timedelta(weeks=1)
-                                        elif 'месяц' in date_str or 'месяца' in date_str or 'месяцев' in date_str:
-                                            months_match = re.search(r'(\d+)', date_str)
-                                            if months_match:
-                                                months_ago = int(months_match.group(1))
-                                                published_at = datetime.now() - timedelta(days=months_ago * 30)
-                                            else:
-                                                published_at = datetime.now() - timedelta(days=30)
-                                        elif 'год' in date_str or 'года' in date_str or 'лет' in date_str:
-                                            years_match = re.search(r'(\d+)', date_str)
-                                            if years_match:
-                                                years_ago = int(years_match.group(1))
-                                                published_at = datetime.now() - timedelta(days=years_ago * 365)
-                                            else:
-                                                published_at = datetime.now() - timedelta(days=365)
-                                        else:
-                                            # Пробуем распарсить как обычную дату
-                                            published_at = date_parser.parse(date_str, fuzzy=True)
-                                    except Exception as date_err:
-                                        print(f"⚠️ Не удалось распарсить дату '{date_str}': {date_err}")
+                                date_value = _extract_date_from_review(review)
+                                
+                                if date_value:
+                                    # Если это timestamp (число)
+                                    if isinstance(date_value, (int, float)):
+                                        published_at = _parse_timestamp_to_datetime(date_value)
+                                    elif isinstance(date_value, str):
+                                        published_at = _parse_date_string(date_value)
+                                        if not published_at:
+                                            print(f"⚠️ Не удалось распарсить дату '{date_value}'")
                                 
                                 # Извлекаем ответ организации
                                 response_text = review.get('org_reply') or review.get('response_text') or ''
@@ -370,10 +436,7 @@ def process_queue():
                                 # Парсим дату ответа (если есть)
                                 response_date_str = review.get('response_date')
                                 if response_date_str:
-                                    try:
-                                        response_at = date_parser.parse(response_date_str, fuzzy=True)
-                                    except:
-                                        pass
+                                    response_at = _parse_date_string(str(response_date_str))
                                 
                                 # Конвертируем рейтинг
                                 rating = review.get('score') or review.get('rating')

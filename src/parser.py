@@ -828,6 +828,8 @@ def parse_reviews(page):
                     # Дата - расширенный парсинг
                     date = ""
                     date_selectors = [
+                        "div.Review-RatingDate",  # Селектор из кабинета Яндекс.Бизнес
+                        "div.Review-InfoWrapper > div > div.Review-RatingDate",  # Полный путь
                         "div.business-review-view__date",
                         "span.business-review-view__date",
                         "span[class*='date']",
@@ -839,17 +841,32 @@ def parse_reviews(page):
                     ]
                     for selector in date_selectors:
                         date_el = block.query_selector(selector)
-                        if date_el:
-                            # Пробуем атрибут datetime (если есть)
-                            date_attr = date_el.get_attribute('datetime')
-                            if date_attr:
-                                date = date_attr.strip()
-                                break
-                            # Иначе берем текст
-                            date_text = date_el.inner_text().strip()
-                            if date_text:
-                                date = date_text
-                                break
+                        if not date_el:
+                            continue
+                        
+                        # Пробуем атрибут datetime (если есть)
+                        date_attr = date_el.get_attribute('datetime')
+                        if date_attr:
+                            date = date_attr.strip()
+                            break
+                        
+                        # Пробуем атрибут data-date
+                        data_date_attr = date_el.get_attribute('data-date')
+                        if data_date_attr:
+                            date = data_date_attr.strip()
+                            break
+                        
+                        # Пробуем атрибут title (может содержать дату)
+                        title_attr = date_el.get_attribute('title')
+                        if title_attr and any(year in title_attr for year in ['202', '2023', '2024', '2025']):
+                            date = title_attr.strip()
+                            break
+                        
+                        # Иначе берем текст
+                        date_text = date_el.inner_text().strip()
+                        if date_text:
+                            date = date_text
+                            break
                     
                     # Если не нашли, логируем
                     if not date:

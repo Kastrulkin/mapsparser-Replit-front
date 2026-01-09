@@ -17,23 +17,55 @@ cursor = conn.cursor()
 
 # 1. Проверить задачи в очереди
 print("\n1. Задачи в очереди ParseQueue:")
-cursor.execute("""
-    SELECT id, status, task_type, url, created_at, updated_at, retry_after
-    FROM ParseQueue
-    WHERE business_id = ?
-    ORDER BY created_at DESC
-    LIMIT 5
-""", (business_id,))
+# Проверяем наличие колонок в ParseQueue
+cursor.execute("PRAGMA table_info(ParseQueue)")
+parsequeue_columns = [row[1] for row in cursor.fetchall()]
+has_updated_at = 'updated_at' in parsequeue_columns
+has_task_type = 'task_type' in parsequeue_columns
+
+if has_updated_at and has_task_type:
+    cursor.execute("""
+        SELECT id, status, task_type, url, created_at, updated_at, retry_after
+        FROM ParseQueue
+        WHERE business_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, (business_id,))
+elif has_task_type:
+    cursor.execute("""
+        SELECT id, status, task_type, url, created_at, retry_after
+        FROM ParseQueue
+        WHERE business_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, (business_id,))
+else:
+    cursor.execute("""
+        SELECT id, status, url, created_at, retry_after
+        FROM ParseQueue
+        WHERE business_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    """, (business_id,))
+
 rows = cursor.fetchall()
 if rows:
     for row in rows:
         print(f"   ID: {row[0]}")
         print(f"   Статус: {row[1]}")
-        print(f"   Тип: {row[2]}")
-        print(f"   URL: {row[3]}")
-        print(f"   Создано: {row[4]}")
-        print(f"   Обновлено: {row[5]}")
-        print(f"   Retry after: {row[6]}")
+        idx = 2
+        if has_task_type:
+            print(f"   Тип: {row[idx]}")
+            idx += 1
+        print(f"   URL: {row[idx] if has_task_type else row[2]}")
+        idx = idx + 1 if has_task_type else 3
+        print(f"   Создано: {row[idx]}")
+        if has_updated_at:
+            idx += 1
+            print(f"   Обновлено: {row[idx]}")
+        idx += 1
+        if idx < len(row):
+            print(f"   Retry after: {row[idx]}")
         print()
 else:
     print("   Нет задач в очереди")
