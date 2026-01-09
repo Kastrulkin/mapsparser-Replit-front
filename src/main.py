@@ -619,7 +619,11 @@ def restart_parsing_task(task_id):
             db.close()
             return jsonify({"error": "Задача не найдена"}), 404
         
-        current_status = task[1] if isinstance(task, tuple) else task.get('status')
+        if isinstance(task, dict):
+            current_status = task.get('status')
+        else:
+             # tuple or sqlite3.Row
+            current_status = task[1]
         
         # Перезапускаем задачу (сбрасываем статус на pending)
         cursor.execute("""
