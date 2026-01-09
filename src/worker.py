@@ -5,11 +5,34 @@ import uuid
 import json
 import re
 from datetime import datetime, timedelta
+import sys
+
+# New imports
+from yandex_business_sync_worker import YandexBusinessSyncWorker
+# from google_business_sync_worker import GoogleBusinessSyncWorker  # Uncomment when ready
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
     from safe_db_utils import get_db_connection as _get_db_connection
     return _get_db_connection()
+
+def _handle_worker_error(queue_id: str, error_msg: str):
+    """Обновить статус задачи на error с сообщением"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE ParseQueue 
+            SET status = 'error', 
+                error_message = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (error_msg, queue_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as ex:
+        print(f"❌ Не удалось обновить статус ошибки для {queue_id}: {ex}")
 
 def _extract_date_from_review(review: dict) -> str | int | float | None:
     """Извлечь дату из отзыва, проверяя различные поля"""
@@ -875,516 +898,46 @@ def _process_cabinet_fallback_task(queue_dict):
     """Обработка fallback парсинга через кабинет"""
     business_id = queue_dict.get("business_id")
     account_id = queue_dict.get("account_id")
-    url = queue_dict.get("url")
     
     if not business_id or not account_id:
-        print(f"❌ Отсутствует business_id или account_id для задачи {queue_dict.get('id')}")
+        print(f"❌ Отсутствует business_id или account_id для задачи {queue_dict.get('id')}", flush=True)
+        _handle_worker_error(queue_dict["id"], "Отсутствует business_id или account_id")
+        return
+    
+    print(f"🔄 Fallback парсинг через кабинет для бизнеса {business_id}", flush=True)
+    
+    try:
+        from yandex_business_sync_worker import YandexBusinessSyncWorker
+        
+        # Используем sync_account для получения данных из кабинета
+        worker = YandexBusinessSyncWorker()
+        worker.sync_account(account_id)
+        
+        # Обновляем статус задачи в ParseQueue
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE ParseQueue 
-            SET status = 'error', 
-                error_message = ?,
+            SET status = 'completed', 
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, ("Отсутствует business_id или account_id", queue_dict["id"]))
+        """, (queue_dict["id"],))
         conn.commit()
         cursor.close()
         conn.close()
-        return
-    
-    print(f"🔄 Fallback парсинг через кабинет для бизнеса {business_id}")
-    
-    try:
-        from yandex_business_parser import YandexBusinessParser
-        from yandex_business_sync_worker import YandexBusinessSyncWorker
-        from auth_encryption import decrypt_auth_data
-        from database_manager import DatabaseManager
-        import json
-        import traceback
         
-        # Получаем auth_data
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        print(f"✅ Fallback парсинг завершен для бизнеса {business_id}", flush=True)
         
-        try:
-            cursor.execute("""
-                SELECT auth_data_encrypted, external_id 
-                FROM ExternalBusinessAccounts 
-                WHERE id = ? AND business_id = ?
-            """, (account_id, business_id))
-            account_row = cursor.fetchone()
-            
-            if not account_row:
-                raise Exception("Аккаунт не найден")
-            
-            auth_data_encrypted, external_id = account_row
-            auth_data_plain = decrypt_auth_data(auth_data_encrypted)
-            
-            if not auth_data_plain:
-                raise Exception("Не удалось расшифровать auth_data")
-            
-            # Парсим auth_data
-            try:
-                auth_data_dict = json.loads(auth_data_plain)
-            except json.JSONDecodeError:
-                auth_data_dict = {"cookies": auth_data_plain}
-            
-            # Создаем парсер
-            parser = YandexBusinessParser(auth_data_dict)
-            account_data = {
-                "id": account_id,
-                "business_id": business_id,
-                "external_id": external_id
-            }
-            
-            # Получаем данные из кабинета
-            print(f"📥 Получение отзывов из кабинета...")
-            reviews = parser.fetch_reviews(account_data)
-            print(f"✅ Получено отзывов: {len(reviews)}")
-            
-            print(f"📥 Получение статистики из кабинета...")
-            stats = parser.fetch_stats(account_data)
-            print(f"✅ Получено точек статистики: {len(stats)}")
-            
-            print(f"📥 Получение публикаций из кабинета...")
-            posts = parser.fetch_posts(account_data)
-            print(f"✅ Получено публикаций: {len(posts)}")
-            
-            print(f"📥 Получение информации об организации из кабинета...")
-            org_info = parser.fetch_organization_info(account_data)
-            
-            # Сохраняем отзывы и статистику
-            worker = YandexBusinessSyncWorker()
-            if reviews:
-                worker._upsert_reviews(db, reviews)
-                print(f"💾 Сохранено отзывов: {len(reviews)}")
-            
-            if stats:
-                worker._upsert_stats(db, stats)
-                print(f"💾 Сохранено точек статистики: {len(stats)}")
-            
-            if posts:
-                worker._upsert_posts(db, posts)
-                print(f"💾 Сохранено публикаций: {len(posts)}")
-            
-            # Получаем существующие данные из MapParseResults (если есть)
-            cursor.execute("""
-                SELECT rating, reviews_count, unanswered_reviews_count, news_count, photos_count
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-            """, (business_id,))
-            existing_data = cursor.fetchone()
-            
-            # Используем данные из кабинета (приоритет кабинету)
-            # Если данных нет в кабинете, используем существующие (если есть)
-            rating = org_info.get('rating') if org_info and org_info.get('rating') else (existing_data[0] if existing_data and existing_data[0] else None)
-            reviews_count = len(reviews) if reviews else (existing_data[1] if existing_data and existing_data[1] else 0)
-            reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else (existing_data[2] if existing_data and existing_data[2] else 0)
-            news_count = len(posts) if posts else (existing_data[3] if existing_data and existing_data[3] else 0)
-            photos_count = org_info.get('photos_count', 0) if org_info else (existing_data[4] if existing_data and existing_data[4] else 0)
-            
-            # Сохраняем в MapParseResults
-            parse_id = str(uuid.uuid4())
-            cursor.execute("""
-                INSERT INTO MapParseResults (
-                    id, business_id, url, map_type, rating, reviews_count, 
-                    unanswered_reviews_count, news_count, photos_count, 
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                parse_id,
-                business_id,
-                url or f"https://yandex.ru/sprav/{external_id or 'unknown'}",
-                'yandex',
-                rating,
-                reviews_count,
-                reviews_without_response,
-                news_count,
-                photos_count,
-            ))
-            
-            db.conn.commit()
-            db.close()
-            
-            # Обновляем статус задачи
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE ParseQueue 
-                SET status = 'completed', updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (queue_dict["id"],))
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
-            print(f"✅ Fallback парсинг завершен для бизнеса {business_id}")
-            
-        except Exception as e:
-            error_details = traceback.format_exc()
-            print(f"❌ Ошибка fallback парсинга: {e}")
-            print(f"❌ Детали ошибки:\n{error_details}")
-            db.close()
-            
-            # Обновляем статус на error
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE ParseQueue 
-                SET status = 'error', 
-                    error_message = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (str(e), queue_dict["id"]))
-            conn.commit()
-            cursor.close()
-            conn.close()
     except Exception as e:
-        print(f"❌ Критическая ошибка при обработке fallback парсинга {queue_dict.get('id', 'unknown')}: {e}")
+        print(f"❌ Ошибка fallback парсинга: {e}", flush=True)
         import traceback
-        traceback.print_exc()
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("""
-                UPDATE ParseQueue 
-                SET status = 'error', 
-                    error_message = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (str(e), queue_dict["id"]))
-            conn.commit()
-        except Exception as update_error:
-            print(f"❌ Не удалось обновить статус fallback парсинга: {update_error}")
-        finally:
-            cursor.close()
-            conn.close()
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+        _handle_worker_error(queue_dict["id"], str(e))
 
-def process_sync_queue():
-    """Обрабатывает очередь синхронизации внешних источников"""
-    sync_dict = None
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='SyncQueue'")
-        if not cursor.fetchone():
-            conn.close()
-            return
-        
-        cursor.execute("""
-            SELECT * FROM SyncQueue 
-            WHERE status = 'pending'
-            ORDER BY created_at ASC 
-            LIMIT 1
-        """)
-        sync_item = cursor.fetchone()
-        
-        if not sync_item:
-            return
-        
-        sync_dict = dict(sync_item)
-        
-        cursor.execute("UPDATE SyncQueue SET status = ? WHERE id = ?", ("processing", sync_dict["id"]))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-    
-    if not sync_dict:
-        return
-    
-    print(f"🔄 Обрабатываю синхронизацию: {sync_dict['id']} для бизнеса {sync_dict['business_id']}")
-    
-    try:
-        if sync_dict['source'] == 'yandex_business':
-            from yandex_business_sync_worker import YandexBusinessSyncWorker
-            from yandex_business_parser import YandexBusinessParser
-            from auth_encryption import decrypt_auth_data
-            import json
-            import uuid
-            import traceback
-            
-            db = DatabaseManager()
-            cursor = db.conn.cursor()
-            
-            try:
-                cursor.execute("""
-                    SELECT auth_data_encrypted, external_id 
-                    FROM ExternalBusinessAccounts 
-                    WHERE id = ?
-                """, (sync_dict['account_id'],))
-                account_row = cursor.fetchone()
-                
-                if not account_row:
-                    print(f"❌ Аккаунт {sync_dict['account_id']} не найден")
-                    cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                                 ("Аккаунт не найден", sync_dict['id']))
-                    db.conn.commit()
-                    db.close()
-                    return
-                
-                auth_data_encrypted = account_row[0]
-                external_id = account_row[1] if len(account_row) > 1 else None
-                
-                cursor.execute("SELECT name FROM Businesses WHERE id = ?", (sync_dict['business_id'],))
-                business_row = cursor.fetchone()
-                business_name = business_row[0] if business_row else 'Unknown'
-                
-                db.close()
-                
-                auth_data_plain = decrypt_auth_data(auth_data_encrypted)
-                if not auth_data_plain:
-                    print(f"❌ Не удалось расшифровать auth_data для аккаунта {sync_dict['account_id']}")
-                    db = DatabaseManager()
-                    cursor = db.conn.cursor()
-                    cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                                 ("Не удалось расшифровать данные авторизации", sync_dict['id']))
-                    db.conn.commit()
-                    db.close()
-                    return
-                
-                try:
-                    auth_data_dict = json.loads(auth_data_plain)
-                except json.JSONDecodeError:
-                    auth_data_dict = {"cookies": auth_data_plain}
-                
-                parser = YandexBusinessParser(auth_data_dict)
-                account_data = {
-                    "id": sync_dict['account_id'],
-                    "business_id": sync_dict['business_id'],
-                    "external_id": external_id
-                }
-                
-                print(f"📥 Получение отзывов...")
-                reviews = parser.fetch_reviews(account_data)
-                print(f"✅ Получено отзывов: {len(reviews)}")
-                
-                print(f"📥 Получение статистики...")
-                stats = parser.fetch_stats(account_data)
-                print(f"✅ Получено точек статистики: {len(stats)}")
-                
-                print(f"📥 Получение публикаций...")
-                posts = parser.fetch_posts(account_data)
-                print(f"✅ Получено публикаций: {len(posts)}")
-                
-                print(f"📥 Получение услуг/прайс-листа...")
-                services = parser.fetch_services(account_data)
-                print(f"✅ Получено услуг: {len(services)}")
-                
-                print(f"📥 Получение информации об организации...")
-                org_info = parser.fetch_organization_info(account_data)
-                
-                db = DatabaseManager()
-                worker = YandexBusinessSyncWorker()
-                
-                if reviews:
-                    worker._upsert_reviews(db, reviews)
-                    print(f"💾 Сохранено отзывов: {len(reviews)}")
-                
-                if not stats and org_info:
-                    from external_sources import ExternalStatsPoint, make_stats_id
-                    from datetime import date
-                    today_str = date.today().isoformat()
-                    stat_id = make_stats_id(sync_dict['business_id'], "yandex_business", today_str)
-                    stat = ExternalStatsPoint(
-                        id=stat_id,
-                        business_id=sync_dict['business_id'],
-                        source="yandex_business",
-                        date=today_str,
-                        views_total=0,
-                        clicks_total=0,
-                        actions_total=0,
-                        rating=org_info.get('rating'),
-                        reviews_total=org_info.get('reviews_count') or len(reviews),
-                        raw_payload=org_info,
-                    )
-                    stats = [stat]
-                
-                if stats:
-                    if org_info and stats:
-                        last_stat = stats[-1]
-                        if last_stat.raw_payload:
-                            last_stat.raw_payload.update(org_info)
-                        else:
-                            last_stat.raw_payload = org_info
-                        if org_info.get('rating'):
-                            last_stat.rating = org_info.get('rating')
-                        if org_info.get('reviews_count'):
-                            last_stat.reviews_total = org_info.get('reviews_count')
-                    
-                    worker._upsert_stats(db, stats)
-                    print(f"💾 Сохранено точек статистики: {len(stats)}")
-                
-                if posts:
-                    worker._upsert_posts(db, posts)
-                    print(f"💾 Сохранено публикаций: {len(posts)}")
-                
-                if services:
-                    try:
-                        cursor = db.conn.cursor()
-                        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (sync_dict['business_id'],))
-                        owner_row = cursor.fetchone()
-                        user_id = owner_row[0] if owner_row else None
-                        
-                        if user_id:
-                            saved_count = 0
-                            updated_count = 0
-                            for service in services:
-                                try:
-                                    if not isinstance(service, dict) or "name" not in service or not service["name"]:
-                                        continue
-                                    
-                                    cursor.execute("""
-                                        SELECT id FROM UserServices 
-                                        WHERE business_id = ? AND name = ? 
-                                        LIMIT 1
-                                    """, (sync_dict['business_id'], service["name"]))
-                                    existing = cursor.fetchone()
-                                    
-                                    description = service.get("description", "")
-                                    if isinstance(description, dict):
-                                        description = description.get("text") or description.get("value") or description.get("content") or str(description)
-                                    elif not isinstance(description, str):
-                                        description = str(description) if description else ""
-                                    
-                                    category = service.get("category", "Общие услуги")
-                                    if isinstance(category, dict):
-                                        category = category.get("name") or category.get("title") or str(category)
-                                    elif not isinstance(category, str):
-                                        category = str(category) if category else "Общие услуги"
-                                    
-                                    if not existing:
-                                        service_id = str(uuid.uuid4())
-                                        cursor.execute("""
-                                            INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                        """, (
-                                            service_id,
-                                            user_id,
-                                            sync_dict['business_id'],
-                                            category,
-                                            service["name"],
-                                            description,
-                                            json.dumps(service.get("keywords", [])),
-                                            service.get("price", "")
-                                        ))
-                                        saved_count += 1
-                                    else:
-                                        cursor.execute("""
-                                            UPDATE UserServices 
-                                            SET category = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                                            WHERE business_id = ? AND name = ?
-                                        """, (
-                                            category,
-                                            description,
-                                            json.dumps(service.get("keywords", [])),
-                                            service.get("price", ""),
-                                            sync_dict['business_id'],
-                                            service["name"]
-                                        ))
-                                        updated_count += 1
-                                except Exception as e:
-                                    print(f"⚠️ Ошибка сохранения услуги '{service.get('name', 'unknown')}': {e}")
-                                    continue
-                            
-                            db.conn.commit()
-                            print(f"💾 Сохранено услуг: {saved_count} новых, {updated_count} обновлено")
-                    except Exception as e:
-                        print(f"❌ Критическая ошибка при сохранении услуг: {e}")
-                
-                cursor = db.conn.cursor()
-                cursor.execute("""
-                    UPDATE ExternalBusinessAccounts 
-                    SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
-                    WHERE id = ?
-                """, (sync_dict['account_id'],))
-                
-                try:
-                    cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (sync_dict['business_id'],))
-                    yandex_url_row = cursor.fetchone()
-                    yandex_url = yandex_url_row[0] if yandex_url_row else None
-                    
-                    if not yandex_url and external_id:
-                        yandex_url = f"https://yandex.ru/sprav/{external_id}"
-                    
-                    parse_id = str(uuid.uuid4())
-                    reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else 0
-                    
-                    cursor.execute("""
-                        INSERT INTO MapParseResults (
-                            id, business_id, url, map_type, rating, reviews_count, 
-                            unanswered_reviews_count, news_count, photos_count, 
-                            created_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    """, (
-                        parse_id,
-                        sync_dict['business_id'],
-                        yandex_url or f"https://yandex.ru/sprav/{external_id or 'unknown'}",
-                        'yandex',
-                        org_info.get('rating') if org_info else None,
-                        len(reviews) if reviews else 0,
-                        reviews_without_response,
-                        len(posts) if posts else 0,
-                        org_info.get('photos_count', 0) if org_info else 0,
-                    ))
-                    db.conn.commit()
-                    print(f"💾 Сохранена история парсинга: {parse_id}")
-                except Exception as e:
-                    print(f"⚠️ Ошибка сохранения истории парсинга: {e}")
-                
-                cursor.execute("UPDATE SyncQueue SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (sync_dict['id'],))
-                db.conn.commit()
-                db.close()
-                
-                print(f"✅ Синхронизация {sync_dict['id']} завершена успешно для бизнеса {business_name}")
-            except Exception as e:
-                error_details = traceback.format_exc()
-                print(f"❌ Ошибка при синхронизации: {e}")
-                print(f"❌ Детали ошибки:\n{error_details}")
-                
-                db = DatabaseManager()
-                cursor = db.conn.cursor()
-                cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                             (str(e), sync_dict['id']))
-                cursor.execute("UPDATE ExternalBusinessAccounts SET last_error = ? WHERE id = ?", (str(e), sync_dict['account_id']))
-                db.conn.commit()
-                db.close()
-        else:
-            print(f"⚠️ Неизвестный source: {sync_dict['source']}")
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                         (f"Неизвестный source: {sync_dict['source']}", sync_dict['id']))
-            conn.commit()
-            cursor.close()
-            conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка при обработке синхронизации {sync_dict.get('id', 'unknown')}: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                         (str(e), sync_dict['id']))
-            conn.commit()
-        except Exception as update_error:
-            print(f"❌ Не удалось обновить статус синхронизации: {update_error}")
-        finally:
-            cursor.close()
-            conn.close()
 
 if __name__ == "__main__":
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
-        process_queue()  # Теперь обрабатывает и parse_card, и sync задачи
+        process_queue()
         time.sleep(300)  # 5 минут = 300 секунд

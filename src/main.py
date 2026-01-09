@@ -23,7 +23,7 @@ try:
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
     print('⚠️ flask-limiter не установлен. Rate limiting отключен. Установите: pip install flask-limiter')
-from parser import parse_yandex_card
+from yandex_maps_scraper import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat

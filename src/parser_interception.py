@@ -701,7 +701,7 @@ class YandexMapsInterceptionParser:
         
         # Импортируем функции из оригинального парсера
         try:
-            from parser import parse_overview_data, parse_reviews, parse_news, parse_photos, get_photos_count, parse_features, parse_competitors
+            from yandex_maps_scraper import parse_overview_data, parse_reviews, parse_news, parse_photos, get_photos_count, parse_features, parse_competitors
             
             data = parse_overview_data(page)
             data['url'] = url

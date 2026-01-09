@@ -1415,3 +1415,46 @@ def row_to_dict(row, columns=None):
 - [ ] Completed
 
 **Подробная задача:** см. `TASK_FIX_REVIEWS_SORTING_AND_DATES.md`
+
+---
+
+### 2026-01-09 - Архитектурный рефакторинг парсеров и воркеров
+
+#### Current Task
+Устранение дублирования кода (80% между Yandex/Google воркерами), декомпозиция "God Object" `worker.py` и централизация работы с БД.
+
+#### Architecture Decision
+
+1. **Базовый класс `BaseSyncWorker`**:
+   - Создать абстрактный класс для синхронизации.
+   - Вынести общую логику: загрузка аккаунтов, обработка ошибок, логирование.
+   - Наследовать `GoogleBusinessSyncWorker` и `YandexBusinessSyncWorker` от него.
+
+2. **Централизация доступа к данным (`ExternalDataRepository`)**:
+   - Убрать прямой SQL из воркеров.
+   - Создать репозиторий (или расширить `DatabaseManager`) для методов `upsert_reviews`, `upsert_stats`, `upsert_posts`.
+
+3. **Декомпозиция `worker.py`**:
+   - `worker.py` должен только *диспетчеризировать* задачи.
+   - Логику парсинга (Playwright) вынести в `yandex_maps_scraper.py` (бывший `parser.py`).
+   - Логику синхронизации вызывать через соответствующие воркеры.
+
+4. **Нейминг**:
+   - Переименовать `src/parser.py` -> `src/yandex_maps_scraper.py` (чтобы отличать от `yandex_business_parser.py`).
+
+#### Files to Modify
+- `src/base_sync_worker.py` (NEW)
+- `src/repositories/external_data_repository.py` (NEW)
+- `src/google_business_sync_worker.py` (REFACTOR)
+- `src/yandex_business_sync_worker.py` (REFACTOR)
+- `src/worker.py` (REFACTOR)
+- `src/parser.py` -> `src/yandex_maps_scraper.py` (RENAME)
+
+#### Trade-offs & Decisions
+- **Complexity vs Maintainability**: Добавление слоев (репозиторий, наследование) увеличивает количество файлов, но радикально упрощает поддержку и снижает дублирование.
+- **Backward Compatibility**: Переименование `parser.py` потребует обновления импортов.
+
+#### Status
+- [x] Approved for Implementation
+- [ ] In Progress
+
