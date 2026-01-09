@@ -280,18 +280,18 @@ def update_service(service_id):
                 service_id
             ))
         else:
-        cursor.execute("""
-            UPDATE UserServices 
-            SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-            WHERE id = ?
-        """, (
-            data.get('category', ''),
-            data.get('name', ''),
-            data.get('description', ''),
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                data.get('description', ''),
                 keywords_str,
-            data.get('price', 0),
-            service_id
-        ))
+                data.get('price', 0),
+                service_id
+            ))
         
         db.conn.commit()
         db.close()
