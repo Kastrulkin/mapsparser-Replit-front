@@ -6312,41 +6312,58 @@ def admin_sync_business_yandex(business_id):
         """, (business_id,))
         account_row = cursor.fetchone()
         
-        print(f"🔍 Результат поиска аккаунта: {account_row}")
-        
-        db.close()
+        account_id = None
+        if account_row:
+             account_id = account_row[0]
+             print(f"✅ Найден аккаунт: {account_id}")
+        else:
+             print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
 
-        if not account_row:
-            print(f"❌ Не найден активный аккаунт Яндекс.Бизнес для бизнеса {business_id}")
+        # Ищем ссылку на карты (NEW)
+        print(f"🔍 Поиск ссылки на карты для бизнеса {business_id}...")
+        cursor.execute("SELECT url FROM BusinessMapLinks WHERE business_id = ? AND map_type = 'yandex' LIMIT 1", (business_id,))
+        map_link_row = cursor.fetchone()
+        map_url = map_link_row[0] if map_link_row else None
+        
+        if not account_id and not map_url:
+            print(f"❌ Не найден ни аккаунт Яндекс.Бизнес, ни ссылка на карты для бизнеса {business_id}")
+            db.close()
             return jsonify({
                 "success": False,
-                "error": "Не найден активный аккаунт Яндекс.Бизнес",
-                "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
+                "error": "Не найден источник данных",
+                "message": "Для запуска парсинга добавьте ссылку на Яндекс.Карты или подключите аккаунт Яндекс.Бизнес"
             }), 400
+            
+        # Определяем тип задачи
+        task_id = str(uuid.uuid4())
+        user_id = user_data["user_id"]
+        
+        if map_url:
+            task_type = 'parse_card'
+            source = 'yandex_maps'  # Worker ожидает это для parse_card? В worker.py source используется для fallback.
+            target_url = map_url
+            print(f"✅ Найдена ссылка на карты: {map_url}. Запуск парсинга (с фоллбеком на синхронизацию).")
+            message = "Запущен парсинг карт"
+        else:
+            task_type = 'sync_yandex_business'
+            source = 'yandex_business'
+            target_url = ''
+            print(f"⚠️ Ссылка на карты не найдена, но есть аккаунт. Запуск прямой синхронизации.")
+            message = "Запущена синхронизация (без парсинга)"
 
-        account_id, auth_data_encrypted, external_id = account_row
-        print(f"✅ Найден аккаунт: {account_id}, external_id: {external_id}")
-        
-        print(f"🔄 Добавление задачи синхронизации в очередь для бизнеса {business_id}, аккаунт {account_id}")
-        
-        sync_id = str(uuid.uuid4())
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        print(f"🔄 Добавление задачи {task_type} в очередь для бизнеса {business_id}")
         
         try:
-            # Получаем user_id из авторизованного пользователя
-            user_id = user_data["user_id"]
-            
             cursor.execute("""
                 INSERT INTO ParseQueue (
                     id, business_id, account_id, task_type, source, 
                     status, user_id, url, created_at, updated_at
                 )
-                VALUES (?, ?, ?, 'sync_yandex_business', 'yandex_business', 
-                        'pending', ?, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            """, (sync_id, business_id, account_id, user_id))
+                VALUES (?, ?, ?, ?, ?, 
+                        'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
             db.conn.commit()
-            print(f"✅ Задача синхронизации добавлена в очередь: {sync_id}")
+            print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
         except Exception as e:
             db.close()
             print(f"❌ Ошибка при добавлении задачи в очередь: {e}")
@@ -6359,8 +6376,9 @@ def admin_sync_business_yandex(business_id):
         
         return jsonify({
             "success": True,
-            "message": "Синхронизация запущена, обработка в фоне",
-            "sync_id": sync_id
+            "message": message,
+            "sync_id": task_id,
+            "task_type": task_type
         })
     
     except Exception as e:
