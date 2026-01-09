@@ -677,6 +677,104 @@ def delete_parsing_task(task_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/admin/parsing/tasks/<task_id>/switch-to-sync', methods=['POST'])
+def switch_task_to_sync(task_id):
+    """Переключить задачу парсинга на синхронизацию с Яндекс.Бизнес"""
+    try:
+        # Проверка авторизации и прав суперадмина
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+        
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Получаем задачу
+        cursor.execute("""
+            SELECT id, business_id, task_type, status 
+            FROM ParseQueue 
+            WHERE id = ?
+        """, (task_id,))
+        task = cursor.fetchone()
+        
+        if not task:
+            db.close()
+            return jsonify({"error": "Задача не найдена"}), 404
+        
+        task_dict = dict(task) if hasattr(task, 'keys') else {
+            'id': task[0],
+            'business_id': task[1],
+            'task_type': task[2],
+            'status': task[3]
+        }
+        
+        business_id = task_dict.get('business_id')
+        if not business_id:
+            db.close()
+            return jsonify({"error": "У задачи нет business_id"}), 400
+        
+        # Проверяем, что задача еще не синхронизация
+        if task_dict.get('task_type') == 'sync_yandex_business':
+            db.close()
+            return jsonify({"error": "Задача уже является синхронизацией"}), 400
+        
+        # Ищем аккаунт Яндекс.Бизнес для этого бизнеса
+        cursor.execute("""
+            SELECT id 
+            FROM ExternalBusinessAccounts 
+            WHERE business_id = ? 
+              AND source = 'yandex_business' 
+              AND is_active = 1
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (business_id,))
+        account_row = cursor.fetchone()
+        
+        if not account_row:
+            db.close()
+            return jsonify({
+                "success": False,
+                "error": "Не найден активный аккаунт Яндекс.Бизнес",
+                "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
+            }), 400
+        
+        account_id = account_row[0] if isinstance(account_row, tuple) else account_row.get('id')
+        
+        # Обновляем задачу на синхронизацию
+        cursor.execute("""
+            UPDATE ParseQueue
+            SET task_type = 'sync_yandex_business',
+                account_id = ?,
+                source = 'yandex_business',
+                status = 'pending',
+                error_message = NULL,
+                retry_after = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (account_id, task_id))
+        
+        db.conn.commit()
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Задача переключена на синхронизацию с Яндекс.Бизнес"
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка переключения задачи на синхронизацию: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/admin/parsing/stats', methods=['GET'])
 def get_parsing_stats():
     """Получить общую статистику парсинга"""

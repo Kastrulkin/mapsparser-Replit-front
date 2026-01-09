@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { RefreshCw, Play, Trash2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Play, Trash2, AlertTriangle, Sync } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 
@@ -400,6 +400,17 @@ export const ParsingManagement: React.FC = () => {
                               title="Перезапустить задачу"
                             >
                               <Play className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {task.task_type !== 'sync_yandex_business' && task.business_id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSwitchToSync(task.id, task.business_id)}
+                              className="text-blue-600 hover:text-blue-700"
+                              title="Переключить на синхронизацию с Яндекс.Бизнес"
+                            >
+                              <Sync className="w-4 h-4" />
                             </Button>
                           )}
                           <Button
