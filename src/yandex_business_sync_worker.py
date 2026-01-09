@@ -38,6 +38,11 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def _upsert_reviews(self, db: DatabaseManager, reviews: List[ExternalReview]) -> None:
+        """Вставка/обновление отзывов (для совместимости с worker.py)"""
+        repository = ExternalDataRepository(db)
+        repository.upsert_reviews(reviews)
+
     def _update_map_parse_results(self, db: DatabaseManager, account: dict, 
                                   org_info: dict, reviews_count: int, news_count: int, photos_count: int) -> None:
         """Обновление таблицы MapParseResults для отображения статуса в дашборде"""
