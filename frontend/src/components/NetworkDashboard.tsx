@@ -158,7 +158,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -187,7 +187,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -236,7 +236,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
                   <span className="text-sm font-medium">{item.name}</span>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-600">
-                      {item.rating != null ? item.rating.toFixed(1) : '—'}
+                      {item.rating != null ? Number(item.rating).toFixed(1) : '—'}
                     </span>
                     <span className="text-xs text-gray-400">
                       ({item.reviews_total ?? 0} отзывов, за 30 дн: {item.reviews_30d ?? 0})

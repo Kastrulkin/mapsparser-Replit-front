@@ -52,7 +52,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
 
@@ -60,7 +60,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
       const token = localStorage.getItem('auth_token');
       const baseUrl = window.location.origin;
       const businessParam = currentBusinessId ? `&business_id=${currentBusinessId}` : '';
-      
+
       // Загружаем метрики
       const metricsResponse = await fetch(`${baseUrl}/api/finance/metrics?period=${selectedPeriod}${businessParam}`, {
         headers: {
@@ -113,11 +113,13 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
     }).format(amount);
   };
 
-  const formatPercentage = (value: number) => {
+  const formatPercentage = (value: number | null | undefined) => {
+    if (value == null) return '0%';
     return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
   };
 
-  const getGrowthColor = (value: number) => {
+  const getGrowthColor = (value: number | null | undefined) => {
+    if (value == null) return 'text-gray-600';
     if (value > 0) return 'text-green-600';
     if (value < 0) return 'text-red-600';
     return 'text-gray-600';
@@ -264,7 +266,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
             <div>
               <p className="text-sm text-pink-600 font-medium">Удержание клиентов</p>
               <p className="text-xl font-bold text-pink-900">
-                {metrics.metrics.retention_rate.toFixed(1)}%
+                {formatPercentage(metrics.metrics.retention_rate)}
               </p>
             </div>
             <div className="text-2xl">❤️</div>
@@ -287,7 +289,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -320,7 +322,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
