@@ -258,7 +258,13 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       {/* Agent Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {AGENT_TYPES.map(({ key, label, icon: Icon, description, gradient, bgGradient }) => {
-          const config = agentsConfig[key] || {};
+          const config: AgentConfig = agentsConfig[key] || {
+            enabled: false,
+            agent_id: null,
+            tone: 'professional',
+            language: interfaceLanguage,
+            variables: {},
+          };
           const isExpanded = expandedAgents.has(key);
           const agentTypeKey = key.replace('_agent', '');
 
@@ -266,8 +272,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
             <div
               key={key}
               className={`group relative overflow-hidden rounded-2xl border-2 transition-all duration-500 ${config.enabled
-                  ? 'border-transparent shadow-xl scale-[1.02]'
-                  : 'border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg'
+                ? 'border-transparent shadow-xl scale-[1.02]'
+                : 'border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg'
                 }`}
             >
               {/* Gradient Background (visible when enabled) */}
@@ -385,7 +391,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                                 <div key={varKey} className="flex items-center gap-2">
                                   <Label className="text-xs text-amber-800 flex-1">{varKey}:</Label>
                                   <Input
-                                    value={varValue}
+                                    value={String(varValue || '')}
                                     onChange={(e) =>
                                       updateAgentConfig(key, {
                                         variables: { ...config.variables, [varKey]: e.target.value },
