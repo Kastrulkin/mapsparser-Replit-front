@@ -19,9 +19,8 @@ def migrate_add_workflow():
         print("✅ Колонка workflow добавлена")
     
     safe_migrate(
-        db_path="src/reports.db",
-        migration_name="Add workflow column to AIAgents",
-        migration_func=migration_func
+        migration_func=migration_func,
+        description="Add workflow column to AIAgents"
     )
 
 if __name__ == "__main__":
