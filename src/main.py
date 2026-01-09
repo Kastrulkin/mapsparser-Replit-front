@@ -39,6 +39,7 @@ from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 from api.services_api import services_bp
+from api.growth_api import growth_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -110,6 +111,7 @@ app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
 app.register_blueprint(services_bp)
+app.register_blueprint(growth_bp)
 if google_business_bp:
     app.register_blueprint(google_business_bp)
 

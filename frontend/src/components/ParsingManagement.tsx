@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { RefreshCw, Play, Trash2, AlertTriangle, Sync } from 'lucide-react';
+import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 
@@ -52,29 +52,29 @@ export const ParsingManagement: React.FC = () => {
   const loadTasks = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const token = await newAuth.getToken();
       if (!token) {
         setError('Требуется авторизация');
         return;
       }
-      
+
       const params = new URLSearchParams();
       if (filters.status) params.append('status', filters.status);
       if (filters.task_type) params.append('task_type', filters.task_type);
       if (filters.source) params.append('source', filters.source);
       params.append('limit', '50');
-      
+
       const res = await fetch(`/api/admin/parsing/tasks?${params.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Ошибка загрузки задач');
       }
-      
+
       setTasks(data.tasks || []);
     } catch (e: any) {
       setError(e.message || 'Ошибка загрузки задач');
@@ -87,11 +87,11 @@ export const ParsingManagement: React.FC = () => {
     try {
       const token = await newAuth.getToken();
       if (!token) return;
-      
+
       const res = await fetch('/api/admin/parsing/stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
       if (data.success) {
         setStats(data.stats);
@@ -108,26 +108,26 @@ export const ParsingManagement: React.FC = () => {
 
   const handleRestart = async (taskId: string) => {
     if (!confirm('Перезапустить эту задачу?')) return;
-    
+
     try {
       const token = await newAuth.getToken();
       if (!token) return;
-      
+
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}/restart`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Ошибка перезапуска задачи');
       }
-      
+
       toast({
         title: 'Успешно',
         description: 'Задача перезапущена',
       });
-      
+
       await loadTasks();
       await loadStats();
     } catch (e: any) {
@@ -141,26 +141,26 @@ export const ParsingManagement: React.FC = () => {
 
   const handleDelete = async (taskId: string) => {
     if (!confirm('Удалить эту задачу из очереди?')) return;
-    
+
     try {
       const token = await newAuth.getToken();
       if (!token) return;
-      
+
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Ошибка удаления задачи');
       }
-      
+
       toast({
         title: 'Успешно',
         description: 'Задача удалена',
       });
-      
+
       await loadTasks();
       await loadStats();
     } catch (e: any) {
@@ -174,26 +174,26 @@ export const ParsingManagement: React.FC = () => {
 
   const handleSwitchToSync = async (taskId: string, businessId?: string) => {
     if (!confirm('Переключить эту задачу на синхронизацию с Яндекс.Бизнес?\n\nЭто изменит тип задачи с парсинга на синхронизацию через API.')) return;
-    
+
     try {
       const token = await newAuth.getToken();
       if (!token) return;
-      
+
       const res = await fetch(`/api/admin/parsing/tasks/${taskId}/switch-to-sync`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || data.message || 'Ошибка переключения задачи');
       }
-      
+
       toast({
         title: 'Успешно',
         description: 'Задача переключена на синхронизацию с Яндекс.Бизнес',
       });
-      
+
       await loadTasks();
       await loadStats();
     } catch (e: any) {
@@ -213,9 +213,9 @@ export const ParsingManagement: React.FC = () => {
       'error': { label: 'Ошибка', className: 'bg-red-50 text-red-800 border-red-200' },
       'captcha': { label: 'Капча', className: 'bg-orange-50 text-orange-800 border-orange-200' }
     };
-    
+
     const config = statusConfig[status] || { label: status, className: 'bg-gray-50 text-gray-800 border-gray-200' };
-    
+
     return (
       <Badge variant="outline" className={config.className}>
         {config.label}
@@ -263,7 +263,7 @@ export const ParsingManagement: React.FC = () => {
               <div className="text-2xl font-bold">{stats.total_tasks}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Ожидают</CardTitle>
@@ -272,7 +272,7 @@ export const ParsingManagement: React.FC = () => {
               <div className="text-2xl font-bold text-yellow-600">{stats.by_status?.pending || 0}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Обрабатываются</CardTitle>
@@ -281,7 +281,7 @@ export const ParsingManagement: React.FC = () => {
               <div className="text-2xl font-bold text-blue-600">{stats.by_status?.processing || 0}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Зависшие</CardTitle>
@@ -332,7 +332,7 @@ export const ParsingManagement: React.FC = () => {
                 <option value="captcha">Капча</option>
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Тип задачи</label>
               <select
@@ -346,7 +346,7 @@ export const ParsingManagement: React.FC = () => {
                 <option value="parse_cabinet_fallback">Парсинг из кабинета</option>
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Источник</label>
               <select
@@ -424,17 +424,17 @@ export const ParsingManagement: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          {(task.status === 'error' || task.status === 'captcha' || 
+                          {(task.status === 'error' || task.status === 'captcha' ||
                             (task.status === 'processing' && stats?.stuck_tasks.some(st => st.id === task.id))) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRestart(task.id)}
-                              title="Перезапустить задачу"
-                            >
-                              <Play className="w-4 h-4" />
-                            </Button>
-                          )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRestart(task.id)}
+                                title="Перезапустить задачу"
+                              >
+                                <Play className="w-4 h-4" />
+                              </Button>
+                            )}
                           {task.task_type !== 'sync_yandex_business' && task.business_id && (
                             <Button
                               size="sm"
@@ -443,7 +443,7 @@ export const ParsingManagement: React.FC = () => {
                               className="text-blue-600 hover:text-blue-700"
                               title="Переключить на синхронизацию с Яндекс.Бизнес"
                             >
-                              <Sync className="w-4 h-4" />
+                              <ArrowLeftRight className="w-4 h-4" />
                             </Button>
                           )}
                           <Button

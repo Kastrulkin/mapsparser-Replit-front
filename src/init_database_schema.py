@@ -601,6 +601,29 @@ Write all generated text in {language_name}.
         
         print("✅ Дефолтные промпты инициализированы")
         
+        # AIAgents - ИИ агенты
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AIAgents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                description TEXT,
+                personality TEXT,
+                states_json TEXT,
+                workflow TEXT,
+                task TEXT,
+                identity TEXT,
+                speech_style TEXT,
+                restrictions_json TEXT,
+                variables_json TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Таблица AIAgents создана/проверена")
+
         # BusinessTypes - типы бизнеса (редактируемые)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessTypes (

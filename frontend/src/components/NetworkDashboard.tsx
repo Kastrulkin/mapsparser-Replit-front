@@ -44,7 +44,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/networks/${networkId}/stats?period=${period}`, {
+      const response = await fetch(getApiEndpoint(`/api/networks/${networkId}/stats?period=${period}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }

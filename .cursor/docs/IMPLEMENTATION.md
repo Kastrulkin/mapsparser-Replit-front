@@ -464,3 +464,33 @@
 - [ ] Требуется проверка сортировки на фронтенде
 
 ---
+---
+
+### 2026-01-09 - Реализация виджета авторизации Google (Frontend)
+
+**План из FRONTEND_GOOGLE_OAUTH_WIDGET.md:**
+- Добавить функцию `handleGoogleAuth` в `ExternalIntegrations.tsx`
+- Заменить ручной ввод токена на кнопку "Подключить Google" с иконкой
+- Реализовать логику открытия popup для OAuth и поллинг статуса
+- Реализовать обработку callback через URL параметры и postMessage
+- Отображать статус подключенного аккаунта и индикаторы синхронизации
+
+**Реализовано:**
+- Обновлен `ExternalIntegrations.tsx`:
+  - Полностью переписан UI: вместо формы ввода токена теперь секция с кнопкой "Подключить Google"
+  - Реализована функция `handleGoogleAuth`, которая получает URL авторизации от бэкенда и открывает popup
+  - Добавлен механизм polling для проверки закрытия окна и завершения авторизации
+  - Добавлен `useEffect` для обработки редиректов с параметрами `google_auth=success/error`
+  - Улучшен список подключенных аккаунтов: добавлены иконки сервисов и индикаторы статуса (зеленый/красный)
+  - Добавлены Toast уведомления для обратной связи
+
+**Файлы изменены:**
+- `frontend/src/components/ExternalIntegrations.tsx` - полный рефакторинг компонента для поддержки Google OAuth
+
+**Статус:**
+### 2026-01-09 - Implementing Growth Stages Feature
+- [x] Create `src/api/growth_api.py` with `/api/business/<id>/stages`.
+- [x] Register `growth_bp` in `src/main.py`.
+- [x] Run `init_database_schema.py` to ensure `GrowthStages` table exists.
+- [x] Update `frontend/src/components/ProgressTracker.tsx` with new UI and API integration.
+

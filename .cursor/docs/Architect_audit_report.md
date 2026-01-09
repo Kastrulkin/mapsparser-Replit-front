@@ -1458,3 +1458,68 @@ def row_to_dict(row, columns=None):
 - [x] Approved for Implementation
 - [ ] In Progress
 
+
+## 2026-01-09 - Исправление ошибок Frontend и миграции Backend
+
+### Current Task
+Исправление ошибок, о которых сообщил пользователь:
+1. Ошибка 500 на `/api/business/{id}/stages` (отсутствуют таблицы этапов роста)
+2. Ошибка "Connection Refused" на вкладке Финансы (hardcoded localhost)
+3. Ошибка 500 на создание AI агента (схема БД рассинхронизирована с кодом)
+
+### Architecture Decision
+1. **Frontend**: Исправлены хардкорные URL `localhost:8000` на использование `getApiEndpoint()` helper'а.
+2. **Backend**:
+   - Создана миграция `migrate_growth_stages.py` для создания таблиц `BusinessTypes`, `GrowthStages`, `GrowthTasks`.
+   - Обновлен `init_database_schema.py` для включения таблицы `AIAgents` со всеми полями для новых инсталляций.
+
+### Files to Modify
+- `frontend/src/components/NetworkSwitcher.tsx` - fix localhost
+- `frontend/src/components/NetworkDashboard.tsx` - fix localhost
+- `migrations/migrate_growth_stages.py` - [NEW] создание таблиц этапов
+- `src/init_database_schema.py` - добавлена таблица `AIAgents`
+
+### Trade-offs & Decisions
+- **Consistency**: Обновление `init_database_schema.py` гарантирует, что новые развертывания будут иметь правильную схему сразу, без необходимости накатывать кучу миграций.
+- **Safety**: Миграция `migrate_growth_stages.py` использует `IF NOT EXISTS` и безопасные методы.
+
+### Dependencies
+- Требуется запустить миграции:
+  1. `python migrations/migrate_ai_agents_table.py`
+  2. `python migrations/migrate_workflow_agents.py`
+  3. `python migrations/migrate_growth_stages.py`
+- Пересборка Frontend обязательна (`npm run build`).
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-09 - Implementing Growth Stages Feature
+
+### Current Task
+Implement the "Growth Stages" feature (BizDev roadmap) for businesses.
+This includes:
+- Backend API to fetch stages.
+- Frontend UI to display the roadmap.
+
+### Architecture Decision
+- **Backend**: Create a new Blueprint `src/api/growth_api.py`.
+- **Database**: Tables already exist (migration script ready).
+- **Frontend**: Create `GrowthStages.tsx` using shadcn/ui.
+
+### Files to Modify
+- `src/api/growth_api.py` - [NEW] Blueprint with `/api/business/<id>/stages` endpoint.
+- `src/main.py` - Register `growth_bp`.
+- `frontend/src/components/GrowthStages.tsx` - [NEW] UI Component.
+
+### Trade-offs & Decisions
+- **New Blueprint**: Better modularity.
+- **Raw SQL**: Consistent with project pattern.
+
+### Dependencies
+- No new dependencies.
+
+### Status
+- [ ] Approved for Implementation
+
