@@ -41,6 +41,7 @@ from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 from api.services_api import services_bp
 from api.growth_api import growth_bp
+from api.admin_growth_api import admin_growth_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
