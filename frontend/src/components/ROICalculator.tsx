@@ -233,7 +233,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
             <>
               <div className="text-center">
                 <div className={`text-4xl font-bold ${getROIColor(roiData.roi_percentage)}`}>
-                  {roiData.roi_percentage.toFixed(1)}%
+                  {(roiData.roi_percentage || 0).toFixed(1)}%
                 </div>
                 <div className="text-lg text-gray-600 mt-2">
                   {getROIStatus(roiData.roi_percentage).emoji} {getROIStatus(roiData.roi_percentage).text}
