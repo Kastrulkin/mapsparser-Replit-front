@@ -5,6 +5,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Upload, FileText, Image as ImageIcon, X } from 'lucide-react';
+import { getApiEndpoint } from '../config/api';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -39,7 +40,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
     try {
       const token = localStorage.getItem('auth_token');
       const formDataToSend = new FormData();
-      
+
       if (file) {
         formDataToSend.append('file', file);
       }
@@ -47,7 +48,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
         formDataToSend.append('photo', photo);
       }
 
-      const response = await fetch('http://localhost:8000/api/finance/transaction/upload', {
+      const response = await fetch(getApiEndpoint('/api/finance/transaction/upload'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -68,7 +69,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
           master_id: firstTransaction.master_id || '',
           notes: firstTransaction.notes || ''
         });
-        
+
         // Если транзакций несколько, можно показать уведомление
         if (data.transactions.length > 1) {
           setError(`Загружено ${data.transactions.length} транзакций. Заполнена первая.`);
@@ -90,7 +91,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/finance/transaction', {
+      const response = await fetch(getApiEndpoint('/api/finance/transaction'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +132,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">💰 Добавить транзакцию</h3>
-      
+
       {/* Переключатель режима */}
       <div className="mb-4 flex gap-2">
         <Button
@@ -169,8 +170,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
             <div className="flex flex-col items-center justify-center space-y-2">
               <Upload className="w-8 h-8 text-gray-400" />
               <span className="text-sm text-gray-600">
-                {uploadMode === 'file' 
-                  ? 'Выберите файл (PDF, DOC, XLS, TXT, CSV)' 
+                {uploadMode === 'file'
+                  ? 'Выберите файл (PDF, DOC, XLS, TXT, CSV)'
                   : 'Выберите фото (PNG, JPG, JPEG)'}
               </span>
             </div>
@@ -219,7 +220,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
           </Button>
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -232,7 +233,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSuccess, onCancel }
               required
             />
           </div>
-          
+
           <div>
             <Label htmlFor="amount">Сумма (₽)</Label>
             <Input

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiEndpoint } from '../config/api';
 import { ChevronDown, Building2, Network } from 'lucide-react';
 
 interface NetworkLocation {

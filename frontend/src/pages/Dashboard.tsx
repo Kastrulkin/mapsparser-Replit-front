@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getApiEndpoint } from '../config/api';
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { newAuth } from "@/lib/auth_new";
@@ -554,7 +555,7 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/analyze-card-auto', {
+      const response = await fetch(getApiEndpoint('/api/analyze-card-auto', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

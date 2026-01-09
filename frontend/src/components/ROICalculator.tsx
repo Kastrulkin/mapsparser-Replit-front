@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { getApiEndpoint } from '../config/api';
 
 interface ROIData {
   investment_amount: number;
@@ -34,7 +35,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/finance/roi', {
+      const response = await fetch(getApiEndpoint('/api/finance/roi'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -70,7 +71,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://localhost:8000/api/finance/roi', {
+      const response = await fetch(getApiEndpoint('/api/finance/roi'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,7 +175,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
                 placeholder="0.00"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="returns_amount">Получено (₽)</Label>
               <Input
@@ -199,7 +200,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
                 onChange={(e) => setFormData({ ...formData, period_start: e.target.value })}
               />
             </div>
-            
+
             <div>
               <Label htmlFor="period_end">Конец периода</Label>
               <Input
