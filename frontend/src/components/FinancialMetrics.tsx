@@ -113,9 +113,11 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
     }).format(amount);
   };
 
-  const formatPercentage = (value: number | null | undefined) => {
+  const formatPercentage = (value: number | string | null | undefined) => {
     if (value == null) return '0%';
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+    const num = Number(value);
+    if (isNaN(num)) return '0%';
+    return `${num >= 0 ? '+' : ''}${num.toFixed(1)}%`;
   };
 
   const getGrowthColor = (value: number | null | undefined) => {

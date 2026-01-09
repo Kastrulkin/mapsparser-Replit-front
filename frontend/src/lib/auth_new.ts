@@ -37,7 +37,7 @@ export class NewAuth {
     }
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+  public async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.apiBaseUrl}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',
@@ -59,7 +59,7 @@ export class NewAuth {
       const isJson = contentType && contentType.includes('application/json');
 
       let data: any = {};
-      
+
       if (isJson) {
         const text = await response.text();
         if (text.trim()) {
@@ -124,9 +124,9 @@ export class NewAuth {
   }
 
   async signUpWithBusiness(
-    email: string, 
-    password: string, 
-    name?: string, 
+    email: string,
+    password: string,
+    name?: string,
     phone?: string,
     business_name?: string,
     business_address?: string,
@@ -136,10 +136,10 @@ export class NewAuth {
     try {
       const response = await this.makeRequest('/auth/register-with-business', {
         method: 'POST',
-        body: JSON.stringify({ 
-          email, 
-          password, 
-          name, 
+        body: JSON.stringify({
+          email,
+          password,
+          name,
           phone,
           business_name,
           business_address,
@@ -165,10 +165,10 @@ export class NewAuth {
         localStorage.setItem('auth_token', this.token);
       }
 
-      return { 
-        user: this.currentUser, 
-        business: response.business || null, 
-        error: null 
+      return {
+        user: this.currentUser,
+        business: response.business || null,
+        error: null
       };
     } catch (error) {
       return { user: null, business: null, error: error.message };

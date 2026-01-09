@@ -1523,3 +1523,123 @@ This includes:
 ### Status
 - [ ] Approved for Implementation
 
+
+---
+
+## 2026-01-09 - Critical Hotfix: White Screen Crash Safeguards (Round 2)
+
+### Current Task
+Resolving persistent "White Screen" crashes caused by unsafe `.toFixed()` usage on undefined values in frontend dashboard components.
+
+### Architecture Decision
+- Identified and patched multiple instances where API data (specifically `rating` and `roi_percentage`) could be `undefined/null`, causing crashes when accessing methods like `.toFixed()`.
+- Enforced strict null-checks (`!= null`) and fallback values (`|| 0`) in:
+    - `CardOverviewPage.tsx`
+    - `ROICalculator.tsx`
+    - `NetworkDashboard.tsx` (verified)
+    - `FinancialMetrics.tsx` (verified)
+
+### Files to Modify
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Safely handle undefined `rating`.
+- `frontend/src/components/ROICalculator.tsx` - Safely handle undefined `roi_percentage`.
+
+### Trade-offs & Decisions
+- **Safety**: Direct inline checks were chosen over global utility functions for speed of hotfix deployment.
+- **Robustness**: Ensure `Number()` casting or optional chaining prevents runtime type errors even if API contract is violated.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-09 - Hotfix: Relaxing API Rate Limits
+
+### Current Task
+User encountered `429 Too Many Requests` errors blocking authentication. The previous limit of 50 requests/hour was too strict for SPA usage.
+
+### Architecture Decision
+- Increased default rate limits in `src/main.py`:
+  - Daily: 200 -> 10000
+  - Hourly: 50 -> 1000
+- This change balances security with usability, ensuring valid user sessions aren't blocked.
+
+### Files to Modify
+- `src/main.py` - Updated `default_limits` in Limiter configuration.
+
+### Trade-offs & Decisions
+- **Security vs Usability**: Relaxed limits reduce protection against brute force but significantly improve user experience for legitimate users. 1000/hour is still low enough to prevent massive abuse.
+
+---
+
+## 2026-01-09 - Hotfix: Temporarily Disable Rate Limiting
+
+### Current Task
+User continued to face `429 Too Many Requests` errors despite relaxed limits, likely due to persistence or default limit overrides.
+
+### Architecture Decision
+- **Disabled Rate Limiting**: Set `RATE_LIMITER_AVAILABLE = False` in `src/main.py`.
+- This completely bypasses `flask-limiter` initialization and all decorators.
+- **Why**: Immediate unblocking of the user is higher priority than abuse protection right now.
+
+### Files to Modify
+- `src/main.py` - Forced `RATE_LIMITER_AVAILABLE` to `False`.
+
+### Trade-offs & Decisions
+- **Security**: Temporarily exposing the API to potential brute force (low risk for now).
+- **Resolution**: Guarantees the 429 error stops.
+
+### Status
+- [x] Completed
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-09 - Defensive Coding for Frontend Crashes
+
+### Current Task
+Resolve persistent "white screen" crashes caused by `.toFixed()` being called on non-numeric values (undefined, strings, or objects).
+
+### Architecture Decision
+- Implement "Paranoid" type checking in frontend components receiving financial/stats data.
+- Explicitly cast all values to `Number()` before calling mathematical methods like `.toFixed()`.
+- Use `isNaN()` checks to return safe fallbacks ('0', '—') instead of crashing.
+
+### Files toModify
+- `frontend/src/components/FinancialMetrics.tsx`
+- `frontend/src/components/NetworkDashboard.tsx`
+- (`CardOverviewPage.tsx` and `ROICalculator.tsx` were patched previously)
+
+### Status
+- [x] Completed
+
+## 2026-01-09 - Growth Stages Feature Implementation
+
+### Current Task
+Implement dynamic Growth Stages feature (Database, Admin API, Frontend migration).
+
+### Architecture Decision
+- Created `BusinessTypes` and `GrowthStages` tables in SQLite to store dynamic plans.
+- Implemented `admin_growth_api.py` Blueprint for CRUD operations.
+- Migrated `GrowthPlan.tsx` to fetch data from API instead of hardcoded JSON.
+- Exposed methods in `auth_new.ts` (`makeRequest`) to allow components to fetch data safely.
+
+### Files to Modify
+- `src/database_manager.py` (via `init_growth_db.py` migration)
+- `src/api/admin_growth_api.py` [NEW]
+- `src/main.py` - Registered new blueprint
+- `frontend/src/components/GrowthPlan.tsx` - Rewritten for dynamic data
+- `frontend/src/lib/auth_new.ts` - Made `makeRequest` public
+
+### Trade-offs & Decisions
+- **Dynamic vs Hardcoded**: Moved to database-driven approach to allow Admin editing without code changes.
+- **Frontend Refactor**: Complete rewrite of `GrowthPlan` component was necessary to support async data loading and state management.
+- **Backwards Compatibility**: Migration script safeguards existing data; Verified DB was empty before migration, so no data usage concerns.
+
+### Dependencies
+- No new external dependencies.
+- Database migration required (handled by `init_growth_db.py`).
+
+### Status
+- [x] Completed

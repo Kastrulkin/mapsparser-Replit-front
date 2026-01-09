@@ -114,6 +114,7 @@ app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
 app.register_blueprint(services_bp)
 app.register_blueprint(growth_bp)
+app.register_blueprint(admin_growth_bp)
 if google_business_bp:
     app.register_blueprint(google_business_bp)
 
