@@ -80,8 +80,81 @@ def init_database_schema():
             if 'subscription_status' not in columns:
                 cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_status TEXT DEFAULT 'active'")
                 print("✅ Добавлена колонка subscription_status")
+            
+            # Добавляем колонки для ChatGPT API и AI агентов
+            if 'city' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN city TEXT")
+                print("✅ Добавлена колонка city")
+            
+            if 'country' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN country TEXT")
+                print("✅ Добавлена колонка country")
+            
+            if 'timezone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN timezone TEXT DEFAULT 'UTC'")
+                print("✅ Добавлена колонка timezone")
+            
+            if 'latitude' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN latitude REAL")
+                print("✅ Добавлена колонка latitude")
+            
+            if 'longitude' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN longitude REAL")
+                print("✅ Добавлена колонка longitude")
+            
+            if 'working_hours_json' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN working_hours_json TEXT")
+                print("✅ Добавлена колонка working_hours_json")
+            
+            # WhatsApp Business API
+            if 'waba_phone_id' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN waba_phone_id TEXT")
+                print("✅ Добавлена колонка waba_phone_id")
+            
+            if 'waba_access_token' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN waba_access_token TEXT")
+                print("✅ Добавлена колонка waba_access_token")
+            
+            if 'whatsapp_phone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN whatsapp_phone TEXT")
+                print("✅ Добавлена колонка whatsapp_phone")
+            
+            if 'whatsapp_verified' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN whatsapp_verified INTEGER DEFAULT 0")
+                print("✅ Добавлена колонка whatsapp_verified")
+            
+            # Telegram
+            if 'telegram_bot_token' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN telegram_bot_token TEXT")
+                print("✅ Добавлена колонка telegram_bot_token")
+            
+            # AI Agent settings
+            if 'ai_agent_enabled' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_enabled INTEGER DEFAULT 0")
+                print("✅ Добавлена колонка ai_agent_enabled")
+            
+            if 'ai_agent_type' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_type TEXT")
+                print("✅ Добавлена колонка ai_agent_type")
+            
+            if 'ai_agent_id' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_id TEXT")
+                print("✅ Добавлена колонка ai_agent_id")
+            
+            if 'ai_agent_tone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_tone TEXT")
+                print("✅ Добавлена колонка ai_agent_tone")
+            
+            if 'ai_agent_restrictions' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_restrictions TEXT")
+                print("✅ Добавлена колонка ai_agent_restrictions")
+            
+            if 'ai_agent_language' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_language TEXT DEFAULT 'en'")
+                print("✅ Добавлена колонка ai_agent_language")
+                
         except Exception as e:
-            print(f"⚠️ Ошибка при добавлении колонок subscription: {e}")
+            print(f"⚠️ Ошибка при добавлении колонок: {e}")
         
         # UserSessions - сессии пользователей
         cursor.execute("""
