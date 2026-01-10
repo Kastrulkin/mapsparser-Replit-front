@@ -123,6 +123,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
 
     def sync_account(self, account_id: str) -> None:
         """Синхронизировать один аккаунт по ID"""
+        db = None
         db = DatabaseManager()
         try:
             repository = ExternalDataRepository(db)
@@ -185,9 +186,11 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         except Exception as e:
             print(f"❌ Ошибка синхронизации аккаунта {account_id}: {e}")
             traceback.print_exc()
-            self._update_account_sync_status(db, account_id, error=str(e))
+            if db:
+                self._update_account_sync_status(db, account_id, error=str(e))
         finally:
-            db.close()
+            if db:
+                db.close()
 
     def run_once(self) -> None:
         """Один проход синхронизации по всем активным аккаунтам"""
