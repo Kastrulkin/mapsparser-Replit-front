@@ -65,7 +65,7 @@ class ProgressCalculator:
         
         # 1. Проверка Яндекс.Карты
         self.cursor.execute("""
-            SELECT COUNT(*) FROM MapLinks 
+            SELECT COUNT(*) FROM BusinessMapLinks 
             WHERE business_id = ? AND map_type = 'yandex'
         """, (business_id,))
         yandex_count = self.cursor.fetchone()[0]
@@ -73,7 +73,7 @@ class ProgressCalculator:
         
         # 2. Проверка Google Maps
         self.cursor.execute("""
-            SELECT COUNT(*) FROM MapLinks 
+            SELECT COUNT(*) FROM BusinessMapLinks 
             WHERE business_id = ? AND map_type = 'google'
         """, (business_id,))
         google_count = self.cursor.fetchone()[0]
