@@ -1,42 +1,28 @@
 from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
-from auth_system import verify_session
+from core.auth_helpers import require_auth_from_request, verify_business_access
 import uuid
+import json
 from datetime import datetime
 
 metrics_history_bp = Blueprint('metrics_history_api', __name__)
 
-def require_auth():
-    """Проверка авторизации"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return None
-    
-    token = auth_header.split(' ')[1]
-    return verify_session(token)
-
 @metrics_history_bp.route('/api/business/<business_id>/metrics-history', methods=['GET'])
 def get_metrics_history(business_id):
-    """Получить историю метрик для графиков"""
+    """Получить историю метрик бизнеса"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        business = cursor.fetchone()
-        
-        if not business:
+        # Проверяем доступ к бизнесу
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
-            db.close()
-            return jsonify({"error": "Нет доступа"}), 403
+            return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
         # Загружаем историю метрик
         cursor.execute("""

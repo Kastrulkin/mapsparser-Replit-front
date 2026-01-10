@@ -1,26 +1,18 @@
 from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
-from auth_system import verify_session
+from core.auth_helpers import require_auth_from_request, verify_business_access
 import uuid
 import json
 from datetime import datetime
 
 stage_progress_bp = Blueprint('stage_progress_api', __name__)
 
-def require_auth():
-    """Проверка авторизации"""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return None
-    
-    token = auth_header.split(' ')[1]
-    return verify_session(token)
 
 @stage_progress_bp.route('/api/business/<business_id>/stage-progress', methods=['GET'])
 def get_stage_progress(business_id):
     """Получить прогресс пользователя по всем этапам"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         
@@ -28,18 +20,15 @@ def get_stage_progress(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
-        business = cursor.fetchone()
-        
-        if not business:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
-            db.close()
-            return jsonify({"error": "Нет доступа"}), 403
+            return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
         # Получаем тип бизнеса для загрузки этапов
+        cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+
         cursor.execute("""
             SELECT id FROM BusinessTypes WHERE type_key = ?
         """, (business[1],))
@@ -122,7 +111,7 @@ def get_stage_progress(business_id):
 def unlock_stage(business_id, stage_id):
     """Разблокировать этап досрочно"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         
@@ -130,12 +119,10 @@ def unlock_stage(business_id, stage_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        business = cursor.fetchone()
-        
-        if not business or (business[0] != user_data['user_id'] and not user_data.get('is_superadmin')):
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Нет доступа"}), 403
+            return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
         # Проверяем, есть ли уже запись прогресса
         cursor.execute("""
@@ -183,7 +170,7 @@ def unlock_stage(business_id, stage_id):
 def complete_task(business_id, stage_id):
     """Отметить задачу как выполненную"""
     try:
-        user_data = require_auth()
+        user_data = require_auth_from_request()
         if not user_data:
             return jsonify({"error": "Требуется авторизация"}), 401
         
@@ -197,12 +184,10 @@ def complete_task(business_id, stage_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        business = cursor.fetchone()
-        
-        if not business or (business[0] != user_data['user_id'] and not user_data.get('is_superadmin')):
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
             db.close()
-            return jsonify({"error": "Нет доступа"}), 403
+            return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
         # Получаем текущий прогресс
         cursor.execute("""
