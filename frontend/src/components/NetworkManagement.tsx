@@ -35,6 +35,14 @@ export const NetworkManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [creatingNetwork, setCreatingNetwork] = useState(false);
 
+  // Определяем, является ли текущий бизнес частью сети
+  useEffect(() => {
+    if (currentBusiness && currentBusiness.network_id) {
+      setIsNetwork(true);
+      setSelectedNetworkId(currentBusiness.network_id);
+    }
+  }, [currentBusiness]);
+
   useEffect(() => {
     loadNetworks();
   }, []);
