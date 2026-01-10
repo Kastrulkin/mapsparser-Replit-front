@@ -61,8 +61,8 @@ def migrate_add_business_metrics_history():
         print(f"✅ Migrated {migrated_count} records from MapParseResults")
 
     safe_migrate(
-        migration_func=migration_func,
-        description="Add BusinessMetricsHistory table and migrate existing data"
+        migration_func,
+        "Add BusinessMetricsHistory table and migrate existing data"
     )
 
 if __name__ == "__main__":

@@ -40,8 +40,8 @@ def migrate_add_user_stage_progress():
         print("✅ Indexes created")
 
     safe_migrate(
-        migration_func=migration_func,
-        description="Add UserStageProgress table for tracking user progress"
+        migration_func,
+        "Add UserStageProgress table for tracking user progress"
     )
 
 if __name__ == "__main__":
