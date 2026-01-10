@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import ProgressTracker from '@/components/ProgressTracker';
 import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
-import { GrowthPlan } from '@/components/GrowthPlan';
+import { BusinessGrowthPlan } from '@/components/BusinessGrowthPlan';
 
 export const ProgressPage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
@@ -65,8 +65,8 @@ export const ProgressPage = () => {
         </div>
       </div>
 
-      {/* Growth Plan - План роста бизнеса */}
-      <GrowthPlan businessId={currentBusinessId} />
+      {/* Gamified Business Growth Plan */}
+      <BusinessGrowthPlan businessId={currentBusinessId} />
 
       <ProgressTracker businessId={currentBusinessId} />
       <MapRecommendations businessId={currentBusinessId} />
@@ -91,8 +91,8 @@ export const ProgressPage = () => {
                           key={x}
                           onClick={() => setWizardExperience(x === wizardExperience ? '' : x)}
                           className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${wizardExperience === x
-                              ? 'bg-primary text-white hover:bg-primary/90'
-                              : 'bg-gray-100 hover:bg-gray-200'
+                            ? 'bg-primary text-white hover:bg-primary/90'
+                            : 'bg-gray-100 hover:bg-gray-200'
                             }`}
                         >
                           {x}
@@ -126,8 +126,8 @@ export const ProgressPage = () => {
                           key={x}
                           onClick={() => setWizardLocation(x === wizardLocation ? '' : x)}
                           className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${wizardLocation === x
-                              ? 'bg-primary text-white hover:bg-primary/90'
-                              : 'bg-gray-100 hover:bg-gray-200'
+                            ? 'bg-primary text-white hover:bg-primary/90'
+                            : 'bg-gray-100 hover:bg-gray-200'
                             }`}
                         >
                           {x}
