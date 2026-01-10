@@ -22,13 +22,18 @@ interface BusinessType {
   label: string;
 }
 
-export const GrowthPlan: React.FC = () => {
+interface GrowthPlanProps {
+  businessId?: string;
+}
+
+export const GrowthPlan: React.FC<GrowthPlanProps> = ({ businessId }) => {
   const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [stages, setStages] = useState<GrowthStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(['1']));
+  const [progressData, setProgressData] = useState<Record<string, any>>({});
 
   useEffect(() => {
     loadBusinessTypes();
@@ -39,6 +44,39 @@ export const GrowthPlan: React.FC = () => {
       loadStages(selectedTypeId);
     }
   }, [selectedTypeId]);
+
+  useEffect(() => {
+    if (businessId) {
+      loadProgressData();
+    }
+  }, [businessId]);
+
+  const loadProgressData = async () => {
+    if (!businessId) return;
+    try {
+      const data = await newAuth.makeRequest(`/business/${businessId}/progress`, { method: 'GET' });
+      setProgressData(data.progress || {});
+    } catch (error: any) {
+      console.error('Error loading progress data:', error);
+    }
+  };
+
+  const getStageProgress = (stageNumber: number): number => {
+    const key = `stage_${stageNumber}`;
+    return progressData[key]?.percentage || 0;
+  };
+
+  const getProgressColor = (percentage: number): string => {
+    if (percentage >= 71) return 'bg-green-500';
+    if (percentage >= 31) return 'bg-yellow-500';
+    return 'bg-orange-500';
+  };
+
+  const getProgressTextColor = (percentage: number): string => {
+    if (percentage >= 71) return 'text-green-600';
+    if (percentage >= 31) return 'text-yellow-600';
+    return 'text-orange-600';
+  };
 
   const loadBusinessTypes = async () => {
     try {
@@ -142,9 +180,8 @@ export const GrowthPlan: React.FC = () => {
           <div className="space-y-4">
             {stages.map((stage, index) => {
               const isExpanded = expandedStages.has(stage.id);
-              // Simple logic for completion: all previous stages are completed
-              // Only for visualization purposes now
-              const isCompleted = false;
+              const progressPercentage = getStageProgress(stage.stage_number);
+              const isCompleted = progressPercentage >= 100;
 
               return (
                 <Card key={stage.id} className="border-2 border-primary shadow-lg">
@@ -159,8 +196,25 @@ export const GrowthPlan: React.FC = () => {
                           )}
                         </div>
                         <div className="flex-1">
-                          <CardTitle className="text-lg">{stage.title}</CardTitle>
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg">{stage.title}</CardTitle>
+                            {businessId && (
+                              <span className={`text-xs font-semibold px-2 py-1 rounded ${getProgressTextColor(progressPercentage)} bg-opacity-10 ${getProgressColor(progressPercentage).replace('bg-', 'bg-opacity-10 bg-')}`}>
+                                {progressPercentage}%
+                              </span>
+                            )}
+                          </div>
                           <CardDescription className="mt-1">{stage.description}</CardDescription>
+                          {businessId && progressPercentage > 0 && (
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
+                                <div
+                                  className={`h-2 rounded transition-all duration-300 ${getProgressColor(progressPercentage)}`}
+                                  style={{ width: `${progressPercentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Button

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import ProgressTracker from '@/components/ProgressTracker';
 import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
+import { GrowthPlan } from '@/components/GrowthPlan';
 
 export const ProgressPage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
@@ -21,7 +22,7 @@ export const ProgressPage = () => {
   useEffect(() => {
     const loadWizardData = async () => {
       if (!showWizard || !currentBusinessId) return;
-      
+
       setLoadingWizard(true);
       try {
         const token = localStorage.getItem('auth_token');
@@ -64,6 +65,9 @@ export const ProgressPage = () => {
         </div>
       </div>
 
+      {/* Growth Plan - План роста бизнеса */}
+      <GrowthPlan businessId={currentBusinessId} />
+
       <ProgressTracker businessId={currentBusinessId} />
       <MapRecommendations businessId={currentBusinessId} />
       <MapParseTable businessId={currentBusinessId} />
@@ -82,15 +86,14 @@ export const ProgressPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Как давно работаете</label>
                     <div className="flex flex-wrap gap-2">
-                      {['0–6 мес','6–12 мес','1–3 года','3+ лет'].map(x => (
-                        <span 
-                          key={x} 
+                      {['0–6 мес', '6–12 мес', '1–3 года', '3+ лет'].map(x => (
+                        <span
+                          key={x}
                           onClick={() => setWizardExperience(x === wizardExperience ? '' : x)}
-                          className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${
-                            wizardExperience === x 
-                              ? 'bg-primary text-white hover:bg-primary/90' 
+                          className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${wizardExperience === x
+                              ? 'bg-primary text-white hover:bg-primary/90'
                               : 'bg-gray-100 hover:bg-gray-200'
-                          }`}
+                            }`}
                         >
                           {x}
                         </span>
@@ -99,8 +102,8 @@ export const ProgressPage = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Постоянные клиенты</label>
-                    <input 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                    <input
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="например, 150"
                       value={wizardClients}
                       onChange={(e) => setWizardClients(e.target.value)}
@@ -108,8 +111,8 @@ export const ProgressPage = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">CRM</label>
-                    <input 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                    <input
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="Например: Yclients"
                       value={wizardCRM}
                       onChange={(e) => setWizardCRM(e.target.value)}
@@ -118,15 +121,14 @@ export const ProgressPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Расположение</label>
                     <div className="flex flex-wrap gap-2">
-                      {['Дом','ТЦ','Двор','Магистраль','Центр','Спальник','Около метро'].map(x => (
-                        <span 
-                          key={x} 
+                      {['Дом', 'ТЦ', 'Двор', 'Магистраль', 'Центр', 'Спальник', 'Около метро'].map(x => (
+                        <span
+                          key={x}
                           onClick={() => setWizardLocation(x === wizardLocation ? '' : x)}
-                          className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${
-                            wizardLocation === x 
-                              ? 'bg-primary text-white hover:bg-primary/90' 
+                          className={`px-3 py-1 rounded-md text-gray-700 text-sm cursor-pointer transition-colors ${wizardLocation === x
+                              ? 'bg-primary text-white hover:bg-primary/90'
                               : 'bg-gray-100 hover:bg-gray-200'
-                          }`}
+                            }`}
                         >
                           {x}
                         </span>
@@ -135,8 +137,8 @@ export const ProgressPage = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Средний чек (₽)</label>
-                    <input 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                    <input
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="2200"
                       value={wizardAverageCheck}
                       onChange={(e) => setWizardAverageCheck(e.target.value)}
@@ -144,8 +146,8 @@ export const ProgressPage = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Выручка в месяц (₽)</label>
-                    <input 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                    <input
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="350000"
                       value={wizardRevenue}
                       onChange={(e) => setWizardRevenue(e.target.value)}
@@ -154,7 +156,7 @@ export const ProgressPage = () => {
                 </div>
               </div>
               <div className="mt-6 flex justify-end pt-4 border-t border-gray-200">
-                <Button 
+                <Button
                   onClick={async () => {
                     if (!currentBusinessId) {
                       alert('Бизнес не выбран');
