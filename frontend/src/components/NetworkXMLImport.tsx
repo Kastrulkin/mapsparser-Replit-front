@@ -3,7 +3,7 @@ import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import newAuth from '@/lib/auth_new';
+import { newAuth } from '@/lib/auth_new';
 
 interface NetworkXMLImportProps {
     networkId: string;
@@ -77,21 +77,25 @@ export function NetworkXMLImport({ networkId, onImportComplete }: NetworkXMLImpo
         formData.append('file', file);
 
         try {
-            const response = await newAuth.makeRequest(
-                `/networks/${networkId}/import-xml`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/networks/${networkId}/import-xml`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    // НЕ устанавливаем Content-Type - браузер сам установит для FormData
+                },
+                body: formData,
+            });
 
-            if (response.success) {
-                setResult(response as ImportResult);
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setResult(data as ImportResult);
                 setTimeout(() => {
                     onImportComplete();
                 }, 2000);
             } else {
-                setResult({ success: false, error: response.error || 'Неизвестная ошибка' });
+                setResult({ success: false, error: data.error || 'Неизвестная ошибка' });
             }
         } catch (error: any) {
             console.error('Import error:', error);
