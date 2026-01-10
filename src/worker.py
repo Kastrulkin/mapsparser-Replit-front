@@ -486,10 +486,15 @@ def process_queue():
                             
                             # Сохраняем в БД
                             if external_reviews:
-                                db = DatabaseManager()
-                                worker = YandexBusinessSyncWorker()
-                                worker._upsert_reviews(db, external_reviews)
-                                print(f"💾 Сохранено {len(external_reviews)} отзывов в ExternalBusinessReviews с датами и ответами")
+                                db = None
+                                try:
+                                    db = DatabaseManager()
+                                    worker = YandexBusinessSyncWorker()
+                                    worker._upsert_reviews(db, external_reviews)
+                                    print(f"💾 Сохранено {len(external_reviews)} отзывов в ExternalBusinessReviews с датами и ответами")
+                                finally:
+                                    if db:
+                                        db.close()
                         except Exception as review_err:
                             print(f"⚠️ Ошибка сохранения отзывов в ExternalBusinessReviews: {review_err}")
                             import traceback
