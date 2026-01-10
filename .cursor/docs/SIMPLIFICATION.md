@@ -47,6 +47,79 @@
 
 ## История упрощений
 
+### 2026-01-10 - Упрощение кода после реализации Progress Page UX Redesign
+
+**Источник:** Реализация gamified Business Growth Plan и Metrics History Charts
+
+#### Файлы, которые упрощались
+- **`src/core/auth_helpers.py`** - создан новый файл с переиспользуемыми функциями авторизации и проверки доступа
+- **`src/api/stage_progress_api.py`** - убрана дублирующаяся функция `require_auth()`, заменены 2 ручных SQL проверки доступа на helper
+- **`src/api/metrics_history_api.py`** - убран весь дублирующийся код авторизации, заменены 3 ручных SQL проверки доступа на helper
+
+#### Что было упрощено
+
+1. **Дублирование функции авторизации** (stage_progress_api.py, metrics_history_api.py):
+   - Было: функция `require_auth()` дублировалась в каждом API файле (по 8 строк)
+   - Было: в metrics_history_api.py код авторизации повторялся напрямую в каждом endpoint (по 7-8 строк × 3 endpoint'а)
+   - Стало: единая функция `require_auth_from_request()` в `core/auth_helpers.py` (1 строка вызова)
+   ```python
+   # Было (дублирование):
+   auth_header = request.headers.get('Authorization')
+   if not auth_header or not auth_header.startswith('Bearer '):
+       return jsonify({"error": "Требуется авторизация"}), 401
+   token = auth_header.split(' ')[1]
+   user_data = verify_session(token)
+   
+   # Стало (переиспользование):
+   user_data = require_auth_from_request()
+   if not user_data:
+       return jsonify({"error": "Требуется авторизация"}), 401
+   ```
+
+2. **НЕиспользовалась существующая helper функция** (5 мест):
+   - Было: SQL запрос `SELECT owner_id FROM Businesses WHERE id = ?` повторялся 5 раз
+   - УЖЕ СУЩЕСТВОВАЛА: функция `get_business_owner_id()` в `src/core/helpers.py`
+   - Стало: создана обёртка `verify_business_access()` которая использует `get_business_owner_id()`
+   ```python
+   # Было (5× дублирование):
+   cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+   business = cursor.fetchone()
+   if not business:
+       db.close()
+       return jsonify({"error": "Бизнес не найден"}), 404
+   if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+       db.close()
+       return jsonify({"error": "Нет доступа"}), 403
+   
+   # Стало (1 строка):
+   has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+   if not has_access:
+       db.close()
+       return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+   ```
+
+3. **Упрощение логики проверки доступа**:
+   - Было: сложная проверка `business[0] != user_data['user_id'] and not user_data.get('is_superadmin')` в каждом endpoint
+   - Стало: функция `verify_business_access()` инкапсулирует всю логику + использует существующий `get_business_owner_id()`
+   ```python
+   def verify_business_access(cursor, business_id: str, user_data: dict) -> tuple[bool, str | None]:
+       owner_id = get_business_owner_id(cursor, business_id)  # Используем существующий helper!
+       if not owner_id:
+           return False, None
+       user_id = user_data.get('user_id') or user_data.get('id')
+       has_access = owner_id == user_id or user_data.get('is_superadmin', False)
+       return has_access, owner_id
+   ```
+
+#### Результаты
+- **Удалено:** ~70 строк дублирующегося кода
+- **Создано:** 2 переиспользуемые helper функции (`require_auth_from_request`, `verify_business_access`)
+- **Упрощено:** 6 endpoint'ов (3 в stage_progress_api + 3 в metrics_history_api)
+- **Использован:** существующий helper `get_business_owner_id()` из `core/helpers.py`
+- **Улучшено:** читаемость (меньше вложенности), поддерживаемость (изменения в одном месте), DRY (Don't Repeat Yourself)
+
+---
+
 ### 2025-01-06 - Упрощение интеграции Google Business Profile API
 
 **Источник:** `.cursor/docs/IMPLEMENTATION.md` - "Интеграция Google Business Profile API"
