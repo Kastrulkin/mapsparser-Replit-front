@@ -31,7 +31,7 @@ def get_stage_progress(business_id):
 
         cursor.execute("""
             SELECT id FROM BusinessTypes WHERE type_key = ?
-        """, (business[1],))
+        """, (business[0],))  # FIX: business[0] вместо business[1]
         business_type_row = cursor.fetchone()
         
         if not business_type_row:

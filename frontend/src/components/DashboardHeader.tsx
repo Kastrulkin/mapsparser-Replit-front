@@ -6,6 +6,7 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { BusinessSwitcher } from './BusinessSwitcher';
+import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
 import { LogOut, LogIn, Settings } from 'lucide-react';
 import {
   AlertDialog,
@@ -24,6 +25,7 @@ interface DashboardHeaderProps {
   onBusinessChange?: (businessId: string) => void;
   isSuperadmin?: boolean;
   user?: any;
+  currentBusiness?: any;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -32,6 +34,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onBusinessChange,
   isSuperadmin = false,
   user: userProp,
+  currentBusiness,
 }) => {
   const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
@@ -74,30 +77,44 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-      <div className="flex items-center justify-end px-4 py-3">
-              <div className="flex items-center gap-3">
-                 {/* Показываем переключатель бизнесов для суперадмина всегда (даже если бизнесов нет), для остальных - если больше 1 */}
-                 {(isSuperadmin || businesses.length > 1) && (
-                   <BusinessSwitcher
-                     businesses={businesses}
-                     currentBusinessId={currentBusinessId || undefined}
-                     onBusinessChange={onBusinessChange || (() => {})}
-                     isSuperadmin={isSuperadmin || false}
-                   />
-                 )}
+      <div className="flex items-center justify-between px-4 py-3">
+        {/* Левая сторона: Суперадмин dropdown */}
+        <div className="flex items-center gap-2">
+          {isSuperadmin && (
+            <>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Суперадмин</span>
+              <BusinessSwitcher
+                businesses={businesses}
+                currentBusinessId={currentBusinessId || undefined}
+                onBusinessChange={onBusinessChange || (() => { })}
+                isSuperadmin={isSuperadmin}
+              />
+            </>
+          )}
+        </div>
 
-                 {/* Пункт меню "Базич" для суперадмина demyanovap@yandex.ru */}
-                 {currentUser?.email === 'demyanovap@yandex.ru' && (
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={() => navigate('/dashboard/bazich')}
-                     className="flex items-center gap-2"
-                   >
-                     <Settings className="w-4 h-4" />
-                     <span className="hidden sm:inline">Базич</span>
-                   </Button>
-                 )}
+        {/* Правая сторона: Network Locations + остальное */}
+        <div className="flex items-center gap-3">
+          {/* Network Locations Switcher для владельцев сетей */}
+          {currentBusiness?.network_id && onBusinessChange && (
+            <NetworkLocationsSwitcher
+              currentBusinessId={currentBusinessId || undefined}
+              onLocationChange={onBusinessChange}
+            />
+          )}
+
+          {/* Пункт меню "Базич" для суперадмина demyanovap@yandex.ru */}
+          {currentUser?.email === 'demyanovap@yandex.ru' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/dashboard/bazich')}
+              className="flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Базич</span>
+            </Button>
+          )}
 
           <LanguageSwitcher />
 
@@ -145,8 +162,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <AlertDialogDescription>
               Для получения доступа к системе обратитесь к нам по электронной почте:
               <br />
-              <a 
-                href="mailto:info@beautybot.pro" 
+              <a
+                href="mailto:info@beautybot.pro"
                 className="text-blue-600 hover:text-blue-800 underline font-medium"
               >
                 info@beautybot.pro

@@ -40,9 +40,9 @@ export const DashboardLayout = () => {
           });
           if (response.ok) {
             const data = await response.json();
-            console.log('📊 Загружены данные пользователя:', { 
-              is_superadmin: data.user?.is_superadmin, 
-              businesses_count: data.businesses?.length || 0 
+            console.log('📊 Загружены данные пользователя:', {
+              is_superadmin: data.user?.is_superadmin,
+              businesses_count: data.businesses?.length || 0
             });
             // API возвращает businesses для всех типов пользователей:
             // - суперадмин: все бизнесы
@@ -51,7 +51,7 @@ export const DashboardLayout = () => {
             if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
               console.log('✅ Бизнесы загружены:', data.businesses.length);
               setBusinesses(data.businesses);
-              
+
               // Приоритет: бизнес из админской страницы > сохраненный > первый
               let businessToSelect;
               if (adminSelectedBusinessId) {
@@ -60,7 +60,7 @@ export const DashboardLayout = () => {
                   console.log('✅ Выбран бизнес из админской страницы:', businessToSelect.id, businessToSelect.name);
                 }
               }
-              
+
               if (!businessToSelect) {
                 const savedBusinessId = localStorage.getItem('selectedBusinessId');
                 businessToSelect = savedBusinessId
@@ -104,11 +104,11 @@ export const DashboardLayout = () => {
   };
 
   const updateBusiness = (businessId: string, updates: Partial<any>) => {
-    const updatedBusinesses = businesses.map(b => 
+    const updatedBusinesses = businesses.map(b =>
       b.id === businessId ? { ...b, ...updates } : b
     );
     setBusinesses(updatedBusinesses);
-    
+
     // Обновляем текущий бизнес, если он был изменен
     if (currentBusinessId === businessId) {
       const updatedBusiness = updatedBusinesses.find(b => b.id === businessId);
@@ -165,6 +165,7 @@ export const DashboardLayout = () => {
         <DashboardHeader
           businesses={businesses}
           currentBusinessId={currentBusinessId}
+          currentBusiness={currentBusiness}
           onBusinessChange={handleBusinessChange}
           isSuperadmin={user.is_superadmin}
           user={user}

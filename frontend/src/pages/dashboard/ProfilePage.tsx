@@ -143,8 +143,8 @@ export const ProfilePage = () => {
             });
           }
 
-          // Загружаем точки сети, если бизнес является сетью
-          if (currentBusinessId) {
+          // Загружаем точки сети ТОЛЬКО если текущий бизнес является частью сети
+          if (currentBusiness?.network_id) {
             loadNetworkLocations();
           }
 
@@ -563,8 +563,8 @@ export const ProfilePage = () => {
         <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
           <div
             className={`h-3 rounded ${profileCompletion >= 80 ? 'bg-green-500' :
-                profileCompletion >= 50 ? 'bg-yellow-500' :
-                  'bg-orange-500'
+              profileCompletion >= 50 ? 'bg-yellow-500' :
+                'bg-orange-500'
               }`}
             style={{ width: `${profileCompletion}%` }}
           />
