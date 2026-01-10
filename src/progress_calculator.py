@@ -29,26 +29,22 @@ class ProgressCalculator:
         
         # 0. Проверка заполненности профиля (как в ProfilePage)
         self.cursor.execute("""
-            SELECT contact_email, contact_phone, contact_name, 
-                   name, business_type, address, working_hours, owner_id
+            SELECT email, phone, name, 
+                   name AS business_name, business_type, address, working_hours, owner_id
             FROM Businesses WHERE id = ?
         """, (business_id,))
         business_row = self.cursor.fetchone()
         
         profile_fields_filled = 0
         if business_row:
-            # Проверяем владельца (owner_id -> Users table)
-            owner_id = business_row[7]
-            if owner_id:
-                self.cursor.execute("SELECT email FROM Users WHERE id = ?", (owner_id,))
-                owner = self.cursor.fetchone()
-                if owner and owner[0] and owner[0].strip():
-                    profile_fields_filled += 1  # email
+            # email (от владельца через JOIN или напрямую из Businesses)
+            if business_row[0] and str(business_row[0]).strip():
+                profile_fields_filled += 1
             
-            # contact_phone
+            # phone
             if business_row[1] and str(business_row[1]).strip():
                 profile_fields_filled += 1
-            # contact_name
+            # name (contact_name - используем owner через Users или name)
             if business_row[2] and str(business_row[2]).strip():
                 profile_fields_filled += 1
             # businessName
