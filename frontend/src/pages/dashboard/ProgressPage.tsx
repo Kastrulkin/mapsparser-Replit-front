@@ -5,6 +5,7 @@ import ProgressTracker from '@/components/ProgressTracker';
 import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
 import { BusinessGrowthPlan } from '@/components/BusinessGrowthPlan';
+import { MetricsHistoryCharts } from '@/components/MetricsHistoryCharts';
 
 export const ProgressPage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
@@ -67,6 +68,9 @@ export const ProgressPage = () => {
 
       {/* Gamified Business Growth Plan */}
       <BusinessGrowthPlan businessId={currentBusinessId} />
+
+      {/* Metrics History Graphs */}
+      <MetricsHistoryCharts businessId={currentBusinessId} />
 
       <ProgressTracker businessId={currentBusinessId} />
       <MapRecommendations businessId={currentBusinessId} />
