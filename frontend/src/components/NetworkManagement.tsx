@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Plus, Trash2, Building2, MapPin, Link as LinkIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { NetworkXMLImport } from './NetworkXMLImport';
 
 interface Network {
   id: string;
@@ -113,7 +114,7 @@ export const NetworkManagement: React.FC = () => {
         setNetworkDescription('');
         await loadNetworks();
         setSelectedNetworkId(newNetworkId);
-        
+
         // Автоматически добавляем текущий бизнес в сеть, если он есть
         if (currentBusinessId && currentBusiness) {
           try {
@@ -127,7 +128,7 @@ export const NetworkManagement: React.FC = () => {
                 business_id: currentBusinessId
               })
             });
-            
+
             if (addResponse.ok) {
               toast({
                 title: 'Успешно',
@@ -194,7 +195,7 @@ export const NetworkManagement: React.FC = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      
+
       for (const location of validLocations) {
         const response = await fetch(`/api/networks/${selectedNetworkId}/businesses`, {
           method: 'POST',
@@ -219,10 +220,10 @@ export const NetworkManagement: React.FC = () => {
         title: 'Успешно',
         description: `Добавлено точек: ${validLocations.length}`
       });
-      
+
       // Очищаем форму
       setLocations([{ name: '', address: '', yandex_url: '' }]);
-      
+
       // Перезагружаем страницу для обновления списка бизнесов
       window.location.reload();
     } catch (error: any) {
@@ -273,7 +274,7 @@ export const NetworkManagement: React.FC = () => {
                         business_id: currentBusinessId
                       })
                     });
-                    
+
                     if (response.ok) {
                       toast({
                         title: 'Успешно',
@@ -340,6 +341,22 @@ export const NetworkManagement: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {/* XML Import для сети */}
+            {selectedNetworkId && (
+              <div className="border-t pt-4">
+                <NetworkXMLImport
+                  networkId={selectedNetworkId}
+                  onImportComplete={() => {
+                    toast({
+                      title: 'Обновление',
+                      description: 'Список точек обновлен'
+                    });
+                    setTimeout(() => window.location.reload(), 1000);
+                  }}
+                />
               </div>
             )}
 
