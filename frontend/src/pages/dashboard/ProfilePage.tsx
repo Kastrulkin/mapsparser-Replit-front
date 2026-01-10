@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
 import { Network, MapPin } from 'lucide-react';
 
 export const ProfilePage = () => {
+  const navigate = useNavigate();
   const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
@@ -45,7 +46,7 @@ export const ProfilePage = () => {
   const [networkLocations, setNetworkLocations] = useState<any[]>([]);
   const [isNetwork, setIsNetwork] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
-  const [businessTypes, setBusinessTypes] = useState<Array<{type_key: string; label: string}>>([]);
+  const [businessTypes, setBusinessTypes] = useState<Array<{ type_key: string; label: string }>>([]);
 
   useEffect(() => {
     // Если есть currentBusiness и это не наш бизнес, загружаем данные владельца
@@ -73,7 +74,7 @@ export const ProfilePage = () => {
 
   const loadOwnerData = async () => {
     if (!currentBusinessId) return;
-    
+
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`/api/client-info?business_id=${currentBusinessId}`, {
@@ -81,7 +82,7 @@ export const ProfilePage = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.owner) {
@@ -132,7 +133,7 @@ export const ProfilePage = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('📥 Получены данные с сервера:', data);
-          
+
           // Если есть данные владельца бизнеса и это не наш бизнес, обновляем форму
           if (data.owner && currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
             setForm({
@@ -141,19 +142,19 @@ export const ProfilePage = () => {
               name: data.owner.name || ""
             });
           }
-          
+
           // Загружаем точки сети, если бизнес является сетью
           if (currentBusinessId) {
             loadNetworkLocations();
           }
-          
+
           // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
-          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
+          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
             ? data.mapLinks.map((link: any) => ({
-                id: link.id,
-                url: link.url || '',
-                mapType: link.mapType || link.map_type
-              }))
+              id: link.id,
+              url: link.url || '',
+              mapType: link.mapType || link.map_type
+            }))
             : []);
           console.log('📋 Нормализованные mapLinks:', normalizedMapLinks);
           console.log('📋 businessType из API:', data.businessType);
@@ -180,7 +181,7 @@ export const ProfilePage = () => {
 
   const loadNetworkLocations = async () => {
     if (!currentBusinessId) return;
-    
+
     try {
       setLoadingLocations(true);
       const token = localStorage.getItem('auth_token');
@@ -190,7 +191,7 @@ export const ProfilePage = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setIsNetwork(data.is_network || false);
@@ -248,10 +249,10 @@ export const ProfilePage = () => {
 
   const handleSaveClientInfo = async () => {
     console.log('🔵 handleSaveClientInfo вызван, currentBusinessId:', currentBusinessId);
-    
+
     // Определяем бизнес: если не выбран, пытаемся найти автоматически
     let effectiveBusinessId = currentBusinessId;
-    
+
     if (!effectiveBusinessId) {
       // Если бизнес не выбран, пытаемся найти автоматически
       if (businesses && businesses.length > 0) {
@@ -259,10 +260,10 @@ export const ProfilePage = () => {
         if (businesses.length === 1) {
           effectiveBusinessId = businesses[0].id;
           console.log('✅ Автоматически выбран единственный бизнес:', effectiveBusinessId);
-        } 
+        }
         // Если есть название бизнеса в clientInfo - ищем по имени
         else if (clientInfo.businessName) {
-          const foundBusiness = businesses.find(b => 
+          const foundBusiness = businesses.find(b =>
             b.name && b.name.toLowerCase().trim() === clientInfo.businessName.toLowerCase().trim()
           );
           if (foundBusiness) {
@@ -272,7 +273,7 @@ export const ProfilePage = () => {
         }
       }
     }
-    
+
     // Если бизнес не определён - проверяем, можно ли сохранить без него
     if (!effectiveBusinessId) {
       // Если бизнесов много - просим выбрать
@@ -282,7 +283,7 @@ export const ProfilePage = () => {
         setSavingClientInfo(false);
         return;
       }
-      
+
       // Если бизнесов нет, но есть название - разрешаем сохранение (сохранится в ClientInfo)
       if ((!businesses || businesses.length === 0) && clientInfo.businessName && clientInfo.businessName.trim()) {
         console.log('⚠️ Бизнесов нет, но есть название - сохраняю в ClientInfo');
@@ -307,18 +308,18 @@ export const ProfilePage = () => {
       const validMapLinks = (clientInfo.mapLinks || [])
         .map(link => typeof link === 'string' ? link : link.url)
         .filter(url => url && url.trim());
-      
+
       const payload: any = {
         ...clientInfo,
         workingHours: clientInfo.workingHours || 'ежедневно 9:00-21:00',
         mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
       };
-      
+
       // Добавляем businessId только если он определён
       if (effectiveBusinessId) {
         payload.businessId = effectiveBusinessId;
       }
-      
+
       console.log('📤 Отправляю данные:', payload);
       console.log('📤 businessType в payload:', payload.businessType);
       console.log('📤 clientInfo.businessType:', clientInfo.businessType);
@@ -335,7 +336,7 @@ export const ProfilePage = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('Ответ сервера:', data);
-        
+
         // Всегда перезагружаем данные после сохранения для синхронизации
         // Если businessId был определён - используем его, иначе загружаем без параметра
         const qs = effectiveBusinessId ? `?business_id=${effectiveBusinessId}` : '';
@@ -349,12 +350,12 @@ export const ProfilePage = () => {
           console.log('🔄 Перезагруженные данные:', reloadData);
           console.log('🔄 businessType из перезагруженных данных:', reloadData.businessType);
           // Нормализуем mapLinks
-          const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks) 
+          const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks)
             ? reloadData.mapLinks.map((link: any) => ({
-                id: link.id,
-                url: link.url || '',
-                mapType: link.mapType || link.map_type
-              }))
+              id: link.id,
+              url: link.url || '',
+              mapType: link.mapType || link.map_type
+            }))
             : []);
           // Используем businessType из перезагруженных данных или из currentBusiness
           const businessType = reloadData.businessType || currentBusiness?.business_type || '';
@@ -369,23 +370,23 @@ export const ProfilePage = () => {
         } else {
           // Если перезагрузка не удалась, используем данные из ответа
           console.log('⚠️ Перезагрузка не удалась, использую данные из ответа');
-          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks) 
+          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
             ? data.mapLinks.map((link: any) => ({
-                id: link.id,
-                url: link.url || '',
-                mapType: link.mapType || link.map_type
-              }))
+              id: link.id,
+              url: link.url || '',
+              mapType: link.mapType || link.map_type
+            }))
             : []);
-          setClientInfo({ 
-            ...clientInfo, 
+          setClientInfo({
+            ...clientInfo,
             businessType: data.businessType || clientInfo.businessType,
-            mapLinks: normalizedMapLinks 
+            mapLinks: normalizedMapLinks
           });
         }
-        
+
         setEditClientInfo(false);
         setSuccess('Информация о бизнесе сохранена');
-        
+
         // Обновляем название бизнеса в списке businesses локально
         if (effectiveBusinessId && updateBusiness) {
           updateBusiness(effectiveBusinessId, {
@@ -395,7 +396,7 @@ export const ProfilePage = () => {
             working_hours: clientInfo.workingHours
           });
         }
-        
+
         // Перезагружаем список бизнесов из API для синхронизации (особенно важно для суперадмина)
         if (reloadBusinesses) {
           await reloadBusinesses();
@@ -426,18 +427,18 @@ export const ProfilePage = () => {
   const startCountdown = (initialHours: number, initialMinutes: number) => {
     // Устанавливаем начальное значение
     setRetryCountdown({ hours: initialHours, minutes: initialMinutes });
-    
+
     let currentHours = initialHours;
     let currentMinutes = initialMinutes;
     let timeoutId: NodeJS.Timeout | null = null;
-    
+
     const updateCountdown = () => {
       // Проверяем, не закончилось ли время
       if (currentHours === 0 && currentMinutes === 0) {
         setRetryCountdown(null);
         return;
       }
-      
+
       // Уменьшаем время
       if (currentMinutes > 0) {
         currentMinutes--;
@@ -445,17 +446,17 @@ export const ProfilePage = () => {
         currentHours--;
         currentMinutes = 59;
       }
-      
+
       // Обновляем состояние
       setRetryCountdown({ hours: currentHours, minutes: currentMinutes });
-      
+
       // Планируем следующее обновление через минуту
       timeoutId = setTimeout(updateCountdown, 60000);
     };
-    
+
     // Первое обновление через минуту (чтобы сразу показать начальное время)
     timeoutId = setTimeout(updateCountdown, 60000);
-    
+
     // Возвращаем функцию очистки для возможности отмены
     return () => {
       if (timeoutId) {
@@ -466,18 +467,18 @@ export const ProfilePage = () => {
 
   const checkParseStatus = async () => {
     if (!currentBusinessId) return;
-    
+
     try {
       const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/parse-status`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const status = data.status;
-        
+
         // Сохраняем информацию о времени повтора для captcha
         if (data.retry_info) {
           const retryInfoData = {
@@ -493,7 +494,7 @@ export const ProfilePage = () => {
           setRetryInfo(null);
           setRetryCountdown(null);
         }
-        
+
         if (status === 'done' || status === 'error' || status === 'captcha') {
           setParseStatus(status);
           // Для captcha запускаем обратный отсчёт
@@ -560,13 +561,12 @@ export const ProfilePage = () => {
           <span className="text-sm font-medium text-orange-600">{profileCompletion}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
-          <div 
-            className={`h-3 rounded ${
-              profileCompletion >= 80 ? 'bg-green-500' : 
-              profileCompletion >= 50 ? 'bg-yellow-500' : 
-              'bg-orange-500'
-            }`} 
-            style={{ width: `${profileCompletion}%` }} 
+          <div
+            className={`h-3 rounded ${profileCompletion >= 80 ? 'bg-green-500' :
+                profileCompletion >= 50 ? 'bg-yellow-500' :
+                  'bg-orange-500'
+              }`}
+            style={{ width: `${profileCompletion}%` }}
           />
         </div>
       </div>
@@ -592,29 +592,29 @@ export const ProfilePage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input 
-              type="email" 
-              value={form.email} 
+            <input
+              type="email"
+              value={form.email}
               disabled
               className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Имя</label>
-            <input 
-              type="text" 
-              value={form.name} 
-              onChange={(e) => setForm({...form, name: e.target.value})}
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
               disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Телефон</label>
-            <input 
+            <input
               type="tel"
               value={form.phone}
-              onChange={(e) => setForm({...form, phone: e.target.value})}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
               disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
@@ -681,7 +681,7 @@ export const ProfilePage = () => {
                         'Content-Type': 'application/json'
                       }
                     });
-                    
+
                     if (response.ok) {
                       const data = await response.json();
                       setSuccess(data.message || 'Данные для входа отправлены владельцу бизнеса');
@@ -708,10 +708,10 @@ export const ProfilePage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Название бизнеса</label>
-            <input 
-              type="text" 
-              value={clientInfo.businessName} 
-              onChange={(e) => setClientInfo({...clientInfo, businessName: e.target.value})}
+            <input
+              type="text"
+              value={clientInfo.businessName}
+              onChange={(e) => setClientInfo({ ...clientInfo, businessName: e.target.value })}
               disabled={!editClientInfo}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
@@ -761,10 +761,10 @@ export const ProfilePage = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Адрес</label>
-            <input 
-              type="text" 
-              value={clientInfo.address} 
-              onChange={(e) => setClientInfo({...clientInfo, address: e.target.value})}
+            <input
+              type="text"
+              value={clientInfo.address}
+              onChange={(e) => setClientInfo({ ...clientInfo, address: e.target.value })}
               disabled={!editClientInfo}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
@@ -773,10 +773,10 @@ export const ProfilePage = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Режим работы</label>
             <div className="bg-white rounded-lg border border-gray-200 p-3 mb-2">
               <div className="text-xs text-gray-500 mb-1">Время работы</div>
-              <input 
-                type="text" 
-                value={clientInfo.workingHours} 
-                onChange={(e) => setClientInfo({...clientInfo, workingHours: e.target.value})}
+              <input
+                type="text"
+                value={clientInfo.workingHours}
+                onChange={(e) => setClientInfo({ ...clientInfo, workingHours: e.target.value })}
                 disabled={!editClientInfo}
                 className="w-full text-base font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none"
                 placeholder="ежедневно 9:00-21:00"
@@ -790,7 +790,7 @@ export const ProfilePage = () => {
                     type="button"
                     onClick={() => {
                       let newValue = clientInfo.workingHours || '';
-                      
+
                       if (option === 'Ежедневно') {
                         newValue = 'ежедневно 9:00-21:00';
                       } else if (option === 'Будни') {
@@ -818,8 +818,8 @@ export const ProfilePage = () => {
                           newValue = newValue.replace(/перерыв\s+\d{1,2}:\d{2}-\d{1,2}:\d{2}/g, 'перерыв 12:00-13:00');
                         }
                       }
-                      
-                      setClientInfo({...clientInfo, workingHours: newValue});
+
+                      setClientInfo({ ...clientInfo, workingHours: newValue });
                     }}
                     className="px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
                   >
@@ -888,11 +888,11 @@ export const ProfilePage = () => {
         {editClientInfo && (
           <div className="mt-4 flex justify-end">
             <div className="flex gap-2">
-              <Button 
+              <Button
                 onClick={() => {
                   console.log('🟢 Кнопка "Сохранить" нажата, savingClientInfo:', savingClientInfo, 'editClientInfo:', editClientInfo);
                   handleSaveClientInfo();
-                }} 
+                }}
                 disabled={savingClientInfo}
               >
                 {savingClientInfo ? 'Сохранение...' : 'Сохранить'}
@@ -927,9 +927,9 @@ export const ProfilePage = () => {
                   key={location.id}
                   className="p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors"
                   onClick={() => {
-                    if (onBusinessChange) {
-                      onBusinessChange(location.id);
-                    }
+                    // Переключаемся на выбранную точку сети
+                    navigate(`/dashboard?business=${location.id}`);
+                    window.location.reload(); // Перезагрузка для обновления контекста
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -950,9 +950,9 @@ export const ProfilePage = () => {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onBusinessChange) {
-                          onBusinessChange(location.id);
-                        }
+                        // Переключаемся на выбранную точку сети
+                        navigate(`/dashboard?business=${location.id}`);
+                        window.location.reload(); // Перезагрузка для обновления контекста
                       }}
                     >
                       Открыть

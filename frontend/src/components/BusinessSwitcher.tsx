@@ -26,12 +26,15 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
+  // Фильтруем точки сети - показываем только основные аккаунты
+  const mainBusinesses = businesses.filter((b: any) => !b.network_id);
+
   useEffect(() => {
-    if (businesses.length > 0) {
-      const current = businesses.find(b => b.id === currentBusinessId) || businesses[0];
+    if (mainBusinesses.length > 0) {
+      const current = mainBusinesses.find(b => b.id === currentBusinessId) || mainBusinesses[0];
       setSelectedBusiness(current);
     }
-  }, [businesses, currentBusinessId]);
+  }, [mainBusinesses, currentBusinessId]);
 
   const handleBusinessSelect = (business: Business) => {
     setSelectedBusiness(business);
@@ -39,7 +42,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     setIsOpen(false);
   };
 
-  const hasBusinesses = businesses.length > 0;
+  const hasBusinesses = mainBusinesses.length > 0;
 
   return (
     <div className="relative">
@@ -63,13 +66,12 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {hasBusinesses && businesses.map((business) => (
+          {hasBusinesses && mainBusinesses.map((business) => (
             <button
               key={business.id}
               onClick={() => handleBusinessSelect(business)}
-              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                selectedBusiness?.id === business.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${selectedBusiness?.id === business.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                }`}
             >
               <div className="flex items-start space-x-3">
                 <Building2 className="w-4 h-4 text-gray-600 mt-0.5" />
