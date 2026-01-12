@@ -5,6 +5,7 @@ import uuid
 import json
 import re
 from datetime import datetime, timedelta
+import signal
 import sys
 
 # New imports
@@ -298,6 +299,13 @@ def process_queue():
     
     # Обычный парсинг карт (task_type = 'parse_card' или NULL)
     # ШАГ 2: Парсим данные (БЕЗ открытого соединения с БД)
+    # Устанавливаем таймаут 10 минут
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Parsing task timed out after 10 minutes")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(600)
+    
     try:
         if not queue_dict.get("url"):
             raise ValueError("URL не указан для задачи парсинга")
@@ -607,12 +615,14 @@ def process_queue():
             conn.commit()
             
             print(f"✅ Заявка {queue_dict['id']} обработана и удалена из очереди.")
+            signal.alarm(0)  # Отключаем таймаут при успехе
             
         finally:
             cursor.close()
             conn.close()
             
     except Exception as e:
+        signal.alarm(0)  # Отключаем таймаут при ошибке
         queue_id = queue_dict.get('id', 'unknown') if queue_dict else 'unknown'
         print(f"❌ Ошибка при обработке заявки {queue_id}: {e}")
         import traceback
@@ -950,4 +960,4 @@ if __name__ == "__main__":
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:
         process_queue()
-        time.sleep(300)  # 5 минут = 300 секунд
+        time.sleep(10)  # 10 секунд
