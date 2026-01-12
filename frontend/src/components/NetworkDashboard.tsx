@@ -3,6 +3,7 @@ import { getApiEndpoint } from '../config/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface NetworkDashboardProps {
   networkId: string;
@@ -33,6 +34,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('month');
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     loadNetworkStats();
@@ -55,19 +57,19 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
       if (data.success) {
         setStats(data.stats);
       } else {
-        setError(data.error || 'Ошибка загрузки статистики');
+        setError(data.error || t.dashboard.network.errorLoading);
       }
     } catch (error) {
-      setError('Ошибка соединения с сервером');
+      setError(t.error);
     } finally {
       setLoading(false);
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ru-RU', {
+    return new Intl.NumberFormat(language === 'ru' ? 'ru-RU' : 'en-US', {
       style: 'currency',
-      currency: 'RUB',
+      currency: language === 'ru' ? 'RUB' : 'USD', // Assuming simple switch, though API usually sends raw numbers
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);
@@ -94,7 +96,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
         <div className="text-center">
           <div className="text-red-600 mb-4">❌ {error}</div>
           <Button onClick={() => loadNetworkStats()} variant="outline">
-            Попробовать снова
+            {t.dashboard.network.tryAgain}
           </Button>
         </div>
       </div>
@@ -105,7 +107,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="text-center text-gray-500">
-          <p>Нет данных для отображения</p>
+          <p>{t.dashboard.network.noData}</p>
         </div>
       </div>
     );
@@ -115,16 +117,16 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
     <div className="space-y-6">
       {/* Заголовок и период */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">📊 Дашборд сети</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t.dashboard.network.title}</h2>
         <Select value={period} onValueChange={(value) => { setPeriod(value); }}>
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="week">Неделя</SelectItem>
-            <SelectItem value="month">Месяц</SelectItem>
-            <SelectItem value="quarter">Квартал</SelectItem>
-            <SelectItem value="year">Год</SelectItem>
+            <SelectItem value="week">{t.dashboard.network.period.week}</SelectItem>
+            <SelectItem value="month">{t.dashboard.network.period.month}</SelectItem>
+            <SelectItem value="quarter">{t.dashboard.network.period.quarter}</SelectItem>
+            <SelectItem value="year">{t.dashboard.network.period.year}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -132,15 +134,15 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
       {/* Общая статистика */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-blue-50 rounded-lg p-4">
-          <div className="text-sm text-blue-600 font-medium">Общая выручка</div>
+          <div className="text-sm text-blue-600 font-medium">{t.dashboard.network.totalRevenue}</div>
           <div className="text-2xl font-bold text-blue-900">{formatCurrency(stats.total_revenue)}</div>
         </div>
         <div className="bg-green-50 rounded-lg p-4">
-          <div className="text-sm text-green-600 font-medium">Всего заказов</div>
+          <div className="text-sm text-green-600 font-medium">{t.dashboard.network.totalOrders}</div>
           <div className="text-2xl font-bold text-green-900">{stats.total_orders}</div>
         </div>
         <div className="bg-purple-50 rounded-lg p-4">
-          <div className="text-sm text-purple-600 font-medium">Точек сети</div>
+          <div className="text-sm text-purple-600 font-medium">{t.dashboard.network.locationsCount}</div>
           <div className="text-2xl font-bold text-purple-900">{stats.locations_count}</div>
         </div>
       </div>
@@ -149,7 +151,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Доход по услугам */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">💼 Доход по услугам</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.network.revenueByService}</h3>
           {stats.by_services.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -172,13 +174,13 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-gray-500 py-8">Нет данных</div>
+            <div className="text-center text-gray-500 py-8">{t.dashboard.network.noData}</div>
           )}
         </div>
 
         {/* Доход по мастерам */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">👤 Доход по мастерам</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.network.revenueByMaster}</h3>
           {stats.by_masters.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -201,14 +203,14 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-gray-500 py-8">Нет данных</div>
+            <div className="text-center text-gray-500 py-8">{t.dashboard.network.noData}</div>
           )}
         </div>
       </div>
 
       {/* Доход по точкам */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">🏢 Доход по точкам сети</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.network.revenueByLocation}</h3>
         {stats.by_locations.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={stats.by_locations}>
@@ -220,7 +222,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="text-center text-gray-500 py-8">Нет данных</div>
+          <div className="text-center text-gray-500 py-8">{t.dashboard.network.noData}</div>
         )}
       </div>
 
@@ -228,7 +230,7 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Рейтинги */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">⭐ Рейтинги точек</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.network.ratings}</h3>
           {stats.ratings.length > 0 ? (
             <div className="space-y-2">
               {stats.ratings.map((item, index) => (
@@ -239,20 +241,20 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
                       {item.rating != null ? Number(item.rating).toFixed(1) : '—'}
                     </span>
                     <span className="text-xs text-gray-400">
-                      ({item.reviews_total ?? 0} отзывов, за 30 дн: {item.reviews_30d ?? 0})
+                      ({item.reviews_total ?? 0} {t.dashboard.network.reviews}, {t.dashboard.network.last30Days}: {item.reviews_30d ?? 0})
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center text-gray-500 py-8">Нет данных</div>
+            <div className="text-center text-gray-500 py-8">{t.dashboard.network.noData}</div>
           )}
         </div>
 
         {/* Плохие отзывы */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">⚠️ Плохие отзывы</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.network.badReviews}</h3>
           {stats.bad_reviews.length > 0 ? (
             <div className="space-y-2">
               {stats.bad_reviews.map((item, index) => (
@@ -263,11 +265,10 @@ export const NetworkDashboard: React.FC<NetworkDashboardProps> = ({ networkId })
               ))}
             </div>
           ) : (
-            <div className="text-center text-gray-500 py-8">Нет плохих отзывов</div>
+            <div className="text-center text-gray-500 py-8">{t.dashboard.network.noBadReviews}</div>
           )}
         </div>
       </div>
     </div>
   );
 };
-

@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
-import NewsGenerator from '@/components/NewsGenerator';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
   const { user, currentBusinessId, currentBusiness } = context || {};
+  const { t, language } = useLanguage();
 
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
@@ -25,13 +22,6 @@ export const CardOverviewPage = () => {
   const servicesItemsPerPage = 10;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
-  const [editingForm, setEditingForm] = useState({
-    category: '',
-    name: '',
-    description: '',
-    keywords: '',
-    price: ''
-  });
   const [newService, setNewService] = useState({
     category: '',
     name: '',
@@ -41,30 +31,6 @@ export const CardOverviewPage = () => {
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
 
-  // Обновить форму при выборе услуги для редактирования
-  useEffect(() => {
-    if (!editingService) return;
-
-    const service = userServices.find(s => s.id === editingService);
-    if (!service) return;
-
-    setEditingForm({
-      category: service.category || '',
-      name: service.name || '',
-      description: service.description || '',
-      keywords: Array.isArray(service.keywords) ? service.keywords.join(', ') : (service.keywords || ''),
-      price: service.price || ''
-    });
-  }, [editingService, userServices]);
-
-  // Состояния для отзывов
-  const [externalReviews, setExternalReviews] = useState<any[]>([]);
-  const [loadingReviews, setLoadingReviews] = useState(false);
-
-  // Состояния для новостей
-  const [externalPosts, setExternalPosts] = useState<any[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(false);
-
   // Состояния для парсера
   const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued'>('idle');
 
@@ -72,8 +38,8 @@ export const CardOverviewPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardStep, setWizardStep] = useState<2>(2);
-  // Настройки для мастера оптимизации
+
+  // Wizard settings
   const [wizardTone, setWizardTone] = useState<'friendly' | 'professional' | 'premium' | 'youth' | 'business'>('professional');
   const [wizardRegion, setWizardRegion] = useState('');
   const [wizardLength, setWizardLength] = useState(150);
@@ -107,7 +73,6 @@ export const CardOverviewPage = () => {
       return;
     }
 
-    console.log('🔍 DEBUG loadUserServices: Загружаем услуги для business_id:', currentBusinessId);
     setLoadingServices(true);
     try {
       const token = localStorage.getItem('auth_token');
@@ -117,101 +82,12 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
-        // Находим обновленную услугу по ID для отладки
-        const updatedService = data.services?.find((s: any) => s.id === '3772931e-9796-475b-b439-ee1cc07b1dc9');
-
-        // Детальный лог для отладки
-        if (updatedService) {
-          console.log('🔍 DEBUG loadUserServices: ДЕТАЛЬНЫЙ ЛОГ updatedService', {
-            id: updatedService.id,
-            name: updatedService.name,
-            optimized_name: updatedService.optimized_name,
-            optimized_name_type: typeof updatedService.optimized_name,
-            optimized_name_length: updatedService.optimized_name?.length,
-            has_optimized_name: !!updatedService.optimized_name,
-            description: updatedService.description,
-            optimized_description: updatedService.optimized_description,
-            optimized_description_type: typeof updatedService.optimized_description,
-            optimized_description_length: updatedService.optimized_description?.length,
-            has_optimized_description: !!updatedService.optimized_description,
-            allKeys: Object.keys(updatedService),
-            fullService: updatedService // Полный объект для проверки
-          });
-        } else {
-          console.log('❌ DEBUG loadUserServices: Услуга 3772931e-9796-475b-b439-ee1cc07b1dc9 не найдена в списке');
-        }
-
-        console.log('✅ DEBUG loadUserServices: Услуги загружены', {
-          count: data.services?.length,
-          firstService: data.services?.[0],
-          firstServiceOptimized: data.services?.[0] ? {
-            id: data.services[0].id,
-            name: data.services[0].name,
-            optimized_name: data.services[0].optimized_name,
-            has_optimized_name: !!data.services[0].optimized_name,
-            description: data.services[0].description,
-            optimized_description: data.services[0].optimized_description,
-            has_optimized_description: !!data.services[0].optimized_description
-          } : null,
-          updatedService: updatedService ? {
-            id: updatedService.id,
-            name: updatedService.name,
-            optimized_name: updatedService.optimized_name,
-            has_optimized_name: !!updatedService.optimized_name,
-            description: updatedService.description,
-            optimized_description: updatedService.optimized_description,
-            has_optimized_description: !!updatedService.optimized_description,
-            allKeys: Object.keys(updatedService)
-          } : 'Услуга не найдена'
-        });
         setUserServices(data.services || []);
-      } else {
-        console.error('❌ DEBUG loadUserServices: Ошибка загрузки услуг', data.error);
       }
     } catch (e) {
-      console.error('❌ Ошибка загрузки услуг:', e);
+      console.error('Ошибка загрузки услуг:', e);
     } finally {
       setLoadingServices(false);
-    }
-  };
-
-  // Загрузка отзывов из парсера
-  const loadExternalReviews = async () => {
-    if (!currentBusinessId) return;
-    setLoadingReviews(true);
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/reviews`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setExternalReviews(data.reviews || []);
-      }
-    } catch (e) {
-      console.error('Ошибка загрузки отзывов:', e);
-    } finally {
-      setLoadingReviews(false);
-    }
-  };
-
-  // Загрузка новостей из парсера
-  const loadExternalPosts = async () => {
-    if (!currentBusinessId) return;
-    setLoadingPosts(true);
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/posts`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setExternalPosts(data.posts || []);
-      }
-    } catch (e) {
-      console.error('Ошибка загрузки новостей:', e);
-    } finally {
-      setLoadingPosts(false);
     }
   };
 
@@ -219,8 +95,6 @@ export const CardOverviewPage = () => {
     if (currentBusinessId && context) {
       loadSummary();
       loadUserServices();
-      loadExternalReviews();
-      loadExternalPosts();
     }
   }, [currentBusinessId, context]);
 
@@ -230,73 +104,16 @@ export const CardOverviewPage = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка...</p>
+          <p className="mt-4 text-gray-600">{t.dashboard.subscription.processing}</p>
         </div>
       </div>
     );
   }
 
-  // Запуск парсера
-  const handleRunParser = async () => {
-    if (!currentBusinessId) {
-      setError('Сначала выберите бизнес');
-      return;
-    }
-
-    setParseStatus('processing');
-    setError(null);
-    setSuccess(null);
-    try {
-      const token = localStorage.getItem('auth_token');
-      console.log('🚀 Запуск парсера для бизнеса:', currentBusinessId);
-      const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${currentBusinessId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('📡 Ответ сервера:', response.status, response.statusText);
-
-      let data;
-      try {
-        data = await response.json();
-        console.log('📦 Данные ответа:', data);
-      } catch (jsonError) {
-        const text = await response.text();
-        console.error('❌ Ошибка парсинга JSON:', text);
-        setParseStatus('error');
-        setError(`Ошибка сервера (${response.status}): ${text.substring(0, 200)}`);
-        return;
-      }
-
-      if (response.ok && data.success) {
-        setParseStatus('done');
-        setSuccess(data.message || 'Парсер запущен успешно');
-        // Перезагружаем данные
-        setTimeout(() => {
-          loadSummary();
-          loadExternalReviews();
-          loadExternalPosts();
-        }, 2000);
-      } else {
-        setParseStatus('error');
-        const errorMsg = data.error || data.message || 'Ошибка запуска парсера';
-        console.error('❌ Ошибка парсера:', errorMsg);
-        setError(errorMsg);
-      }
-    } catch (e: any) {
-      console.error('❌ Исключение при запуске парсера:', e);
-      setParseStatus('error');
-      setError('Ошибка запуска парсера: ' + (e.message || String(e)));
-    }
-  };
-
   // Добавление услуги
   const addService = async () => {
     if (!newService.name.trim()) {
-      setError('Название услуги обязательно');
+      setError(t.dashboard.card.serviceName + ' required');
       return;
     }
 
@@ -323,12 +140,12 @@ export const CardOverviewPage = () => {
         setNewService({ category: '', name: '', description: '', keywords: '', price: '' });
         setShowAddService(false);
         await loadUserServices();
-        setSuccess('Услуга добавлена');
+        setSuccess(t.success);
       } else {
-        setError(data.error || 'Ошибка добавления услуги');
+        setError(data.error || t.error);
       }
     } catch (e: any) {
-      setError('Ошибка добавления услуги: ' + e.message);
+      setError(t.error + ': ' + e.message);
     }
   };
 
@@ -354,19 +171,11 @@ export const CardOverviewPage = () => {
       });
 
       const data = await response.json();
-      console.log('🔍 DEBUG optimizeService: Ответ от API', {
-        success: data.success,
-        result: data.result,
-        services: data.result?.services,
-        firstService: data.result?.services?.[0]
-      });
 
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
-        console.log('🔍 DEBUG optimizeService: Оптимизированная услуга', optimized);
 
-        // ВАЖНО: Сохраняем оригинальное описание и название, оптимизированные - отдельно
-        // Исправляем keywords - убираем вложенные массивы и строки
+        // Исправляем keywords
         let fixedKeywords = [];
         if (Array.isArray(service.keywords)) {
           fixedKeywords = service.keywords.map(k => {
@@ -381,50 +190,31 @@ export const CardOverviewPage = () => {
             return Array.isArray(k) ? k : [k];
           }).flat();
         } else if (service.keywords) {
-          try {
-            const parsed = JSON.parse(service.keywords);
-            fixedKeywords = Array.isArray(parsed) ? parsed : [service.keywords];
-          } catch {
-            fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
-          }
+          fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
         }
 
         const updateData = {
-          category: service.category || '', // Сохраняем все оригинальные поля
-          name: service.name || '', // Оригинальное название не меняем
-          optimized_name: optimized.optimized_name || optimized.optimizedName || '', // SEO название сохраняем отдельно
-          description: service.description || '', // Оригинальное описание НЕ меняем - это ключевой момент!
-          optimized_description: optimized.seo_description || optimized.seoDescription || '', // SEO описание сохраняем отдельно
-          keywords: fixedKeywords, // Исправленные ключевые слова
-          price: service.price || '' // Оригинальная цена
+          category: service.category || '',
+          name: service.name || '',
+          optimized_name: optimized.optimized_name || optimized.optimizedName || '',
+          description: service.description || '',
+          optimized_description: optimized.seo_description || optimized.seoDescription || '',
+          keywords: fixedKeywords,
+          price: service.price || ''
         };
 
-        console.log('🔍 DEBUG optimizeService: Обновляем услугу', {
-          serviceId,
-          originalName: service.name,
-          optimizedName: optimized.optimized_name || optimized.optimizedName,
-          originalDescription: service.description,
-          optimizedDescription: optimized.seo_description || optimized.seoDescription,
-          optimizedObject: optimized, // Полный объект для отладки
-          updateData
-        });
-
-        // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
         try {
           await updateService(serviceId, updateData);
-          setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
-          // Перезагружаем услуги, чтобы показать обновленные данные
+          setSuccess(t.success);
           await loadUserServices();
         } catch (updateError: any) {
-          console.error('❌ Ошибка обновления услуги:', updateError);
-          setError('Ошибка сохранения оптимизированного описания: ' + (updateError.message || 'Неизвестная ошибка'));
-          throw updateError; // Пробрасываем дальше, чтобы finally сработал
+          setError(t.error);
         }
       } else {
-        setError(data.error || 'Ошибка оптимизации');
+        setError(data.error || t.error);
       }
     } catch (e: any) {
-      setError('Ошибка оптимизации: ' + e.message);
+      setError(t.error + ': ' + e.message);
     } finally {
       setOptimizingServiceId(null);
     }
@@ -451,15 +241,15 @@ export const CardOverviewPage = () => {
     if (data.success) {
       setEditingService(null);
       await loadUserServices();
-      setSuccess('Услуга обновлена');
+      setSuccess(t.success);
     } else {
-      throw new Error(data.error || 'Ошибка обновления услуги');
+      throw new Error(data.error || t.error);
     }
   };
 
   // Удаление услуги
   const deleteService = async (serviceId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить эту услугу?')) return;
+    if (!confirm(t.dashboard.card.deleteConfirm)) return;
 
     try {
       const token = localStorage.getItem('auth_token');
@@ -471,12 +261,12 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success) {
         await loadUserServices();
-        setSuccess('Услуга удалена');
+        setSuccess(t.success);
       } else {
-        setError(data.error || 'Ошибка удаления услуги');
+        setError(data.error || t.error);
       }
     } catch (e: any) {
-      setError('Ошибка удаления услуги: ' + e.message);
+      setError(t.error + ': ' + e.message);
     }
   };
 
@@ -484,19 +274,19 @@ export const CardOverviewPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Работа с картами</h1>
-          <p className="text-gray-600 mt-1">Управляйте услугами и оптимизируйте карточку организации</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.card.title}</h1>
+          <p className="text-gray-600 mt-1">{t.dashboard.card.subtitle}</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setShowWizard(true)}>Мастер оптимизации карт</Button>
+          <Button onClick={() => setShowWizard(true)}>{t.dashboard.card.optimizationWizard}</Button>
         </div>
       </div>
 
       {/* Пояснение о парсинге */}
       <p className="text-xs text-gray-500 text-right">
-        Раз в неделю мы будем получать данные, чтобы отслеживать прогресс и давать советы по оптимизации. Данные с карт будут сохраняться тут, а статистика на{' '}
+        {t.dashboard.card.parsingNote}
         <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
-          вкладке Прогресс
+          {t.dashboard.card.progressTab}
         </a>.
       </p>
 
@@ -516,7 +306,7 @@ export const CardOverviewPage = () => {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center gap-4">
           {loadingSummary ? (
-            <div className="text-gray-500">Загрузка...</div>
+            <div className="text-gray-500">{t.dashboard.subscription.processing}</div>
           ) : (
             <>
               <div className="flex items-center gap-2">
@@ -528,10 +318,10 @@ export const CardOverviewPage = () => {
                     <span
                       key={star}
                       className={`text-2xl ${rating !== null && star <= Math.floor(rating)
+                        ? 'text-yellow-400'
+                        : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
                           ? 'text-yellow-400'
-                          : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                            ? 'text-yellow-400'
-                            : 'text-gray-300'
+                          : 'text-gray-300'
                         }`}
                     >
                       ★
@@ -540,7 +330,7 @@ export const CardOverviewPage = () => {
                 </div>
               </div>
               <div className="text-gray-600">
-                <span className="font-medium">{reviewsTotal}</span> отзывов
+                <span className="font-medium">{reviewsTotal}</span> {t.dashboard.card.reviews}
               </div>
             </>
           )}
@@ -553,9 +343,9 @@ export const CardOverviewPage = () => {
       }}>
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t.dashboard.card.services}</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Текущий вид формулировок услуг на картах. Если есть подключение к парсеру, данные добавляются автоматически.
+              {t.dashboard.card.servicesSubtitle}
             </p>
           </div>
         </div>
@@ -563,62 +353,62 @@ export const CardOverviewPage = () => {
         {/* Форма добавления услуги */}
         {showAddService && (
           <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Добавить новую услугу</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">{t.dashboard.card.addService}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.category}</label>
                 <input
                   type="text"
                   value={newService.category}
                   onChange={(e) => setNewService({ ...newService, category: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: Стрижки"
+                  placeholder={t.dashboard.card.placeholders.category}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.serviceName}</label>
                 <input
                   type="text"
                   value={newService.name}
                   onChange={(e) => setNewService({ ...newService, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: Женская стрижка"
+                  placeholder={t.dashboard.card.placeholders.name}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.description}</label>
                 <textarea
                   value={newService.description}
                   onChange={(e) => setNewService({ ...newService, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   rows={3}
-                  placeholder="Краткое описание услуги"
+                  placeholder={t.dashboard.card.placeholders.desc}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ключевые слова</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.keywords}</label>
                 <input
                   type="text"
                   value={newService.keywords}
                   onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="стрижка, укладка, окрашивание"
+                  placeholder={t.dashboard.card.placeholders.keywords}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.price}</label>
                 <input
                   type="text"
                   value={newService.price}
                   onChange={(e) => setNewService({ ...newService, price: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: 2000 руб"
+                  placeholder={t.dashboard.card.placeholders.price}
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <Button onClick={addService}>Добавить</Button>
-              <Button onClick={() => setShowAddService(false)} variant="outline">Отмена</Button>
+              <Button onClick={addService}>{t.dashboard.card.add}</Button>
+              <Button onClick={() => setShowAddService(false)} variant="outline">{t.dashboard.card.cancel}</Button>
             </div>
           </div>
         )}
@@ -626,14 +416,14 @@ export const CardOverviewPage = () => {
         {/* Функционал оптимизатора услуг (только загрузка файла) */}
         <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для карточки компании на картах</h2>
-            <p className="text-sm text-gray-600">🔎 Карты и локальное SEO — это один из самых эффективных каналов продаж.</p>
-            <p className="text-sm text-gray-600 mt-2">Правильные названия и описания услуг повышают видимость в поиске, клики на карточку и позиции в выдаче.</p>
-            <p className="text-sm text-gray-600 mt-2">Загрузите прайс‑лист — ИИ вернёт краткие SEO‑формулировки в строгом формате с учётом частотности запросов, ваших формулировок и вашего местоположения.</p>
-            <p className="text-sm text-gray-600 mt-2">Скопируйте текст и добавьте его в карточку вашей организации на картах.</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-1">{t.dashboard.card.seo.title}</h2>
+            <p className="text-sm text-gray-600">{t.dashboard.card.seo.desc1}</p>
+            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc2}</p>
+            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc3}</p>
+            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc4}</p>
           </div>
           <div className="flex gap-2 items-center">
-            <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
+            <Button onClick={() => setShowAddService(true)}>+ {t.dashboard.card.addService}</Button>
             <ServiceOptimizer
               businessName={currentBusiness?.name}
               businessId={currentBusinessId}
@@ -647,11 +437,10 @@ export const CardOverviewPage = () => {
               <Button
                 variant="outline"
                 onClick={() => {
-                  // Оптимизировать все услуги
                   userServices.forEach(s => optimizeService(s.id));
                 }}
               >
-                Оптимизировать все
+                {t.dashboard.card.optimizeAll}
               </Button>
             )}
           </div>
@@ -662,21 +451,21 @@ export const CardOverviewPage = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Описание</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loadingServices ? (
                 <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>Загрузка услуг...</td>
+                  <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.subscription.processing}</td>
                 </tr>
               ) : userServices.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
+                  <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.network.noData}</td>
                 </tr>
               ) : (
                 userServices
@@ -691,7 +480,7 @@ export const CardOverviewPage = () => {
                           )}
                           {service.optimized_name && (
                             <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">{t.dashboard.card.seo.proposal}</div>
                               <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
                               <div className="flex gap-2 pt-1">
                                 <Button
@@ -707,12 +496,12 @@ export const CardOverviewPage = () => {
                                       keywords: service.keywords,
                                       price: service.price
                                     });
-                                    setSuccess('Оптимизированное название принято');
+                                    setSuccess(t.success);
                                     await loadUserServices();
                                   }}
                                   className="text-xs h-7 border-gray-300 hover:bg-gray-100"
                                 >
-                                  Принять
+                                  {t.dashboard.card.seo.accept}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -727,12 +516,12 @@ export const CardOverviewPage = () => {
                                       keywords: service.keywords,
                                       price: service.price
                                     });
-                                    setSuccess('Оптимизированное название отклонено');
+                                    setSuccess(t.success);
                                     await loadUserServices();
                                   }}
                                   className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
                                 >
-                                  Отклонить
+                                  {t.dashboard.card.seo.reject}
                                 </Button>
                               </div>
                             </div>
@@ -749,7 +538,7 @@ export const CardOverviewPage = () => {
                           )}
                           {service.optimized_description && (
                             <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">{t.dashboard.card.seo.proposal}</div>
                               <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
                               <div className="flex gap-2 pt-1">
                                 <Button
@@ -764,12 +553,12 @@ export const CardOverviewPage = () => {
                                       keywords: service.keywords,
                                       price: service.price
                                     });
-                                    setSuccess('Оптимизированное описание принято');
+                                    setSuccess(t.success);
                                     await loadUserServices();
                                   }}
                                   className="text-xs h-7 border-gray-300 hover:bg-gray-100"
                                 >
-                                  Принять
+                                  {t.dashboard.card.seo.accept}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -783,12 +572,12 @@ export const CardOverviewPage = () => {
                                       keywords: service.keywords,
                                       price: service.price
                                     });
-                                    setSuccess('Оптимизированное описание отклонено');
+                                    setSuccess(t.success);
                                     await loadUserServices();
                                   }}
                                   className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
                                 >
-                                  Отклонить
+                                  {t.dashboard.card.seo.reject}
                                 </Button>
                               </div>
                             </div>
@@ -798,31 +587,11 @@ export const CardOverviewPage = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm text-gray-900">{service.price}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => optimizeService(service.id)}
-                            disabled={optimizingServiceId === service.id}
-                          >
-                            {optimizingServiceId === service.id ? 'Оптимизация...' : 'Оптимизировать'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingService(service.id)}
-                          >
-                            Редактировать
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => deleteService(service.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            Удалить
+                          <Button variant="ghost" size="sm" onClick={() => deleteService(service.id)}>
+                            🗑️
                           </Button>
                         </div>
                       </td>
@@ -831,262 +600,8 @@ export const CardOverviewPage = () => {
               )}
             </tbody>
           </table>
-
-          {/* Пагинация для услуг */}
-          {userServices.length > servicesItemsPerPage && (
-            <div className="flex items-center justify-between mt-4 px-4">
-              <div className="text-sm text-gray-600">
-                Показано {((servicesCurrentPage - 1) * servicesItemsPerPage) + 1}-{Math.min(servicesCurrentPage * servicesItemsPerPage, userServices.length)} из {userServices.length}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setServicesCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={servicesCurrentPage === 1}
-                >
-                  Назад
-                </Button>
-                <span className="px-3 py-1 text-sm text-gray-700">
-                  Страница {servicesCurrentPage} из {Math.ceil(userServices.length / servicesItemsPerPage)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setServicesCurrentPage(prev => Math.min(Math.ceil(userServices.length / servicesItemsPerPage), prev + 1))}
-                  disabled={servicesCurrentPage >= Math.ceil(userServices.length / servicesItemsPerPage)}
-                >
-                  Вперед
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Отзывы */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Отзывы</h2>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <ReviewReplyAssistant businessName={currentBusiness?.name} />
-        </div>
-      </div>
-
-      {/* Новости */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Новости</h2>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <NewsGenerator
-            services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
-            businessId={currentBusinessId}
-            externalPosts={externalPosts}
-          />
-        </div>
-      </div>
-
-      {/* Модальное окно мастера оптимизации */}
-      {showWizard && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={() => setShowWizard(false)}>
-          <div className="bg-white/95 backdrop-blur-md rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden shadow-2xl border-2 border-gray-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации карт</h2>
-              </div>
-              <Button onClick={() => setShowWizard(false)} variant="outline" size="sm">✕</Button>
-            </div>
-            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)] bg-gradient-to-br from-white to-gray-50/50">
-              {/* Шаг 2 */}
-              {wizardStep === 2 && (
-                <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Опишите, как вы хотите звучать и чего избегать. Это задаст тон для всех текстов.</p>
-
-                  {/* Тон */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Тон</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { key: 'friendly', label: 'Дружелюбный' },
-                        { key: 'professional', label: 'Профессиональный' },
-                        { key: 'premium', label: 'Премиум' },
-                        { key: 'youth', label: 'Молодёжный' },
-                        { key: 'business', label: 'Деловой' }
-                      ].map(tone => (
-                        <button
-                          key={tone.key}
-                          type="button"
-                          onClick={() => setWizardTone(tone.key as any)}
-                          className={`text-xs px-3 py-1 rounded-full border ${wizardTone === tone.key
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
-                        >
-                          {tone.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Примеры формулировок для выбранного тона появятся автоматически в подсказках.</p>
-                  </div>
-
-                  {/* Регион и длина описания */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Регион (для локального SEO)</label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder="Санкт‑Петербург, м. Чернышевская"
-                        value={wizardRegion}
-                        onChange={(e) => setWizardRegion(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Длина описания (символов)</label>
-                      <input
-                        type="number"
-                        min={80}
-                        max={200}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        value={wizardLength}
-                        onChange={(e) => setWizardLength(Number(e.target.value) || 150)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Дополнительные инструкции */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Дополнительные инструкции (необязательно)</label>
-                    <textarea
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      rows={3}
-                      placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи."
-                      value={wizardInstructions}
-                      onChange={(e) => setWizardInstructions(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Формулировки ответов на отзывы */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки ответов на отзывы (до 5)</label>
-                    <div className="space-y-2">
-                      {[1, 2, 3, 4, 5].map(i => (
-                        <input
-                          key={i}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="Например: Спасибо за отзыв! Нам важно ваше мнение"
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Эти формулировки будут использоваться при генерации ответов на отзывы.</p>
-                  </div>
-                </div>
-              )}
-              <div className="mt-6 flex justify-end pt-4 border-t border-gray-200">
-                <Button onClick={() => setShowWizard(false)}>Готово</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно редактирования услуги */}
-      <Dialog open={!!editingService} onOpenChange={(open) => !open && setEditingService(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Редактирование услуги</DialogTitle>
-            <DialogDescription>
-              Измените данные услуги. Нажмите "Сохранить" для применения изменений.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="edit-category">Категория</Label>
-              <Input
-                id="edit-category"
-                value={editingForm.category}
-                onChange={(e) => setEditingForm({ ...editingForm, category: e.target.value })}
-                placeholder="Например: hair, nails, spa"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-name">Название *</Label>
-              <Input
-                id="edit-name"
-                value={editingForm.name}
-                onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })}
-                placeholder="Название услуги"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-description">Описание</Label>
-              <Textarea
-                id="edit-description"
-                value={editingForm.description}
-                onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })}
-                placeholder="Описание услуги"
-                rows={4}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-keywords">Ключевые слова (через запятую)</Label>
-              <Input
-                id="edit-keywords"
-                value={editingForm.keywords}
-                onChange={(e) => setEditingForm({ ...editingForm, keywords: e.target.value })}
-                placeholder="Например: окрашивание, стрижка, укладка"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-price">Цена</Label>
-              <Input
-                id="edit-price"
-                type="number"
-                value={editingForm.price}
-                onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })}
-                placeholder="Цена в рублях"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingService(null)}>
-              Отмена
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!editingForm.name.trim()) {
-                  setError('Название услуги обязательно');
-                  return;
-                }
-                try {
-                  const service = userServices.find(s => s.id === editingService);
-                  if (!service) {
-                    setError('Услуга не найдена');
-                    return;
-                  }
-                  await updateService(editingService!, {
-                    category: editingForm.category,
-                    name: editingForm.name,
-                    description: editingForm.description,
-                    keywords: editingForm.keywords.split(',').map(k => k.trim()).filter(k => k),
-                    price: editingForm.price,
-                    optimized_name: service.optimized_name || '',
-                    optimized_description: service.optimized_description || ''
-                  });
-                  setEditingService(null);
-                } catch (e: any) {
-                  setError('Ошибка обновления услуги: ' + e.message);
-                }
-              }}
-            >
-              Сохранить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

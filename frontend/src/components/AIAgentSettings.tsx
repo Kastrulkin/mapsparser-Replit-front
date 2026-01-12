@@ -21,49 +21,49 @@ interface AgentConfig {
   variables: Record<string, string>;
 }
 
-const TONE_OPTIONS = [
-  { value: 'professional', label: 'Профессиональный' },
-  { value: 'friendly', label: 'Дружелюбный' },
-  { value: 'casual', label: 'Неформальный' },
-  { value: 'formal', label: 'Официальный' },
-];
-
-const LANGUAGE_OPTIONS = [
-  { value: 'ru', label: 'Русский' },
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Español' },
-  { value: 'de', label: 'Deutsch' },
-  { value: 'fr', label: 'Français' },
-];
-
-const AGENT_TYPES = [
-  {
-    key: 'booking_agent',
-    label: 'Агент для записи',
-    icon: Bot,
-    description: 'Автоматическая запись клиентов на услуги',
-    gradient: 'from-blue-500 to-indigo-600',
-    bgGradient: 'from-blue-50 to-indigo-50',
-  },
-  {
-    key: 'marketing_agent',
-    label: 'Маркетинговый агент',
-    icon: Zap,
-    description: 'Отправка акций и специальных предложений',
-    gradient: 'from-orange-500 to-pink-600',
-    bgGradient: 'from-orange-50 to-pink-50',
-  },
-];
-
 const DEFAULT_AGENT_VALUE = '__default__';
 
 export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) => {
-  const { language: interfaceLanguage } = useLanguage();
+  const { language: interfaceLanguage, t } = useLanguage();
   const [agentsConfig, setAgentsConfig] = useState<Record<string, AgentConfig>>({});
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+
+  const TONE_OPTIONS = [
+    { value: 'professional', label: t.dashboard.settings.ai.tones.professional },
+    { value: 'friendly', label: t.dashboard.settings.ai.tones.friendly },
+    { value: 'casual', label: t.dashboard.settings.ai.tones.casual },
+    { value: 'formal', label: t.dashboard.settings.ai.tones.formal },
+  ];
+
+  const AGENT_TYPES = [
+    {
+      key: 'booking_agent',
+      label: t.dashboard.settings.ai.types.booking,
+      icon: Bot,
+      description: t.dashboard.settings.ai.types.bookingDesc,
+      gradient: 'from-blue-500 to-indigo-600',
+      bgGradient: 'from-blue-50 to-indigo-50',
+    },
+    {
+      key: 'marketing_agent',
+      label: t.dashboard.settings.ai.types.marketing,
+      icon: Zap,
+      description: t.dashboard.settings.ai.types.marketingDesc,
+      gradient: 'from-orange-500 to-pink-600',
+      bgGradient: 'from-orange-50 to-pink-50',
+    },
+  ];
+
+  const LANGUAGE_OPTIONS = [
+    { value: 'ru', label: 'Русский' },
+    { value: 'en', label: 'English' },
+    { value: 'es', label: 'Español' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'fr', label: 'Français' },
+  ];
 
   useEffect(() => {
     loadAvailableAgents();
@@ -188,8 +188,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const handleSave = async () => {
     if (!businessId) {
       toast({
-        title: 'Ошибка',
-        description: 'Бизнес не выбран',
+        title: t.error,
+        description: t.dashboard.settings.telegram.selectBusiness,
         variant: 'destructive',
       });
       return;
@@ -200,7 +200,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       const { newAuth } = await import('@/lib/auth_new');
       const token = await newAuth.getToken();
       if (!token) {
-        toast({ title: 'Ошибка', description: 'Требуется авторизация', variant: 'destructive' });
+        toast({ title: t.error, description: t.error, variant: 'destructive' });
         return;
       }
 
@@ -219,12 +219,12 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       const data = await response.json();
 
       if (response.ok) {
-        toast({ title: 'Успешно', description: 'Настройки ИИ агентов сохранены' });
+        toast({ title: t.success, description: t.dashboard.settings.ai.saved });
       } else {
-        toast({ title: 'Ошибка', description: data.error || 'Не удалось сохранить', variant: 'destructive' });
+        toast({ title: t.error, description: data.error || t.error, variant: 'destructive' });
       }
     } catch (error) {
-      toast({ title: 'Ошибка', description: 'Ошибка при сохранении', variant: 'destructive' });
+      toast({ title: t.error, description: t.error, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -241,15 +241,15 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">
-                Управление ИИ Агентами
+                {t.dashboard.settings.ai.title}
               </h2>
               <p className="text-purple-200 text-lg">
-                Настройте автоматизированных помощников для вашего бизнеса
+                {t.dashboard.settings.ai.subtitle}
               </p>
             </div>
             <div className="text-right">
               <div className="text-5xl font-black text-white mb-1">{activeCount}/{AGENT_TYPES.length}</div>
-              <div className="text-purple-300 text-sm uppercase tracking-wider font-semibold">Активно</div>
+              <div className="text-purple-300 text-sm uppercase tracking-wider font-semibold">{t.dashboard.settings.ai.active}</div>
             </div>
           </div>
         </div>
@@ -302,7 +302,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                     <div className="flex items-center gap-2">
                       <Circle className={`w-2 h-2 ${config.enabled ? 'fill-green-500 text-green-500' : 'fill-gray-300 text-gray-300'}`} />
                       <span className={`text-xs font-semibold uppercase tracking-wide ${config.enabled ? 'text-green-700' : 'text-gray-500'}`}>
-                        {config.enabled ? 'Активен' : 'Выключен'}
+                        {config.enabled ? t.dashboard.settings.ai.status.active : t.dashboard.settings.ai.status.disabled}
                       </span>
                     </div>
                   </div>
@@ -315,7 +315,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                       onClick={() => toggleExpand(key)}
                       className="w-full flex items-center justify-between py-3 px-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors mb-4"
                     >
-                      <span className="font-semibold text-gray-700">Настройки агента</span>
+                      <span className="font-semibold text-gray-700">{t.dashboard.settings.ai.agentSettings}</span>
                       {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </button>
 
@@ -323,7 +323,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                       <div className="space-y-4 animate-in slide-in-from-top duration-300">
                         {/* Tone Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">Тон общения</Label>
+                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.tone}</Label>
                           <Select
                             value={config.tone}
                             onValueChange={(value) => updateAgentConfig(key, { tone: value })}
@@ -341,7 +341,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
                         {/* Language Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">Язык агента</Label>
+                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.language}</Label>
                           <Select
                             value={config.language}
                             onValueChange={(value) => updateAgentConfig(key, { language: value })}
@@ -359,7 +359,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
                         {/* Agent Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">Выберите агента</Label>
+                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.selectAgent}</Label>
                           <Select
                             value={config.agent_id || DEFAULT_AGENT_VALUE}
                             onValueChange={(value) =>
@@ -367,10 +367,10 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                             }
                           >
                             <SelectTrigger className="bg-white border-gray-300">
-                              <SelectValue placeholder="Дефолтный агент" />
+                              <SelectValue placeholder={t.dashboard.settings.ai.defaultAgent} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={DEFAULT_AGENT_VALUE}>Использовать дефолтного</SelectItem>
+                              <SelectItem value={DEFAULT_AGENT_VALUE}>{t.dashboard.settings.ai.defaultAgent}</SelectItem>
                               {availableAgents
                                 .filter(a => a && a.type === agentTypeKey && a.is_active)
                                 .map(agent => (
@@ -385,7 +385,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                         {/* Variables (Future Enhancement) */}
                         {Object.keys(config.variables || {}).length > 0 && (
                           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                            <Label className="text-sm font-semibold text-amber-900 mb-2 block">Переменные агента</Label>
+                            <Label className="text-sm font-semibold text-amber-900 mb-2 block">{t.dashboard.settings.ai.variables}</Label>
                             <div className="space-y-2">
                               {Object.entries(config.variables).map(([varKey, varValue]) => (
                                 <div key={varKey} className="flex items-center gap-2">
@@ -425,10 +425,10 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           {saving ? (
             <>
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Сохранение...
+              {t.dashboard.settings.ai.saving}
             </>
           ) : (
-            'Сохранить настройки'
+            t.dashboard.settings.ai.save
           )}
         </Button>
       </div>

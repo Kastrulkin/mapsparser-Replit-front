@@ -1,4 +1,5 @@
 import { useOutletContext } from 'react-router-dom';
+import { useLanguage } from '@/i18n/LanguageContext';
 import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
@@ -11,11 +12,13 @@ import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 export const SettingsPage = () => {
   const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
 
+  const { t } = useLanguage();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Настройки</h1>
-        <p className="text-gray-600 mt-1">Управляйте настройками аккаунта и интеграциями</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.settings.title}</h1>
+        <p className="text-gray-600 mt-1">{t.dashboard.settings.subtitle}</p>
       </div>
 
       {/* Блок 1: Текущая подписка и доступные тарифы */}
@@ -29,7 +32,7 @@ export const SettingsPage = () => {
       <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
         boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
       }}>
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Подключения к мессенджерам</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">{t.dashboard.settings.messengers}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <TelegramConnection currentBusinessId={currentBusinessId} />
           <WhatsAppConnection currentBusinessId={currentBusinessId} business={currentBusiness} />

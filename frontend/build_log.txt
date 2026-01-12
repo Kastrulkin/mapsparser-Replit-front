@@ -1,0 +1,21 @@
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 2270 modules transformed.
+x Build failed in 2.04s
+error during build:
+[vite]: Rollup failed to resolve import "framer-motion" from "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/mapsparser-Replit-front/frontend/src/components/BusinessGrowthPlan.tsx".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+    at viteWarn (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65855:17)
+    at onwarn (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/@vitejs/plugin-react-swc/index.js:90:7)
+    at onRollupWarning (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65885:5)
+    at onwarn (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65550:7)
+    at file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/rollup/dist/es/shared/node-entry.js:20880:13
+    at Object.logger [as onLog] (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/rollup/dist/es/shared/node-entry.js:22748:9)
+    at ModuleLoader.handleInvalidResolvedId (file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/rollup/dist/es/shared/node-entry.js:21492:26)
+    at file:///Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI%20bots/mapsparser-Replit-front/frontend/node_modules/rollup/dist/es/shared/node-entry.js:21450:26

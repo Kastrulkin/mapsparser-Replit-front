@@ -1643,3 +1643,34 @@ Implement dynamic Growth Stages feature (Database, Admin API, Frontend migration
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-09 - Dashboard Localization Refinement
+
+### Current Task
+Localize critical dashboard pages (`Bookings`, `Chats`, `Finance`, `AIChatPromotion`, `Progress`) and fix hardcoded strings using dynamic keys.
+
+### Architecture Decision
+- Refactor `AIChatPromotionPage` to use array-based configuration in `locales` to remove hardcoded steps and allow easier adding/removing of steps via config.
+- Refactor `ProgressPage` wizard to use localization keys for all options and labels.
+- Use `useLanguage` hook across all refactored components for consistent locale access.
+- Propagate new keys to `ru.ts` and `en.ts` fully.
+- Use English values as fallback for `es.ts` and other locales to ensure runtime stability.
+
+### Files to Modify
+- `frontend/src/i18n/locales/ru.ts` - added keys for `contacts`, `finance`, `progress`, `chats`, `aiChatPromotion`.
+- `frontend/src/i18n/locales/en.ts` - added corresponding keys.
+- `frontend/src/i18n/locales/es.ts` (and others) - partially updated with English fallback.
+- `frontend/src/pages/dashboard/AIChatPromotionPage.tsx` - rewritten.
+- `frontend/src/pages/dashboard/ProgressPage.tsx` - rewritten.
+- `frontend/src/pages/dashboard/FinancePage.tsx` - refactored.
+- `frontend/src/pages/dashboard/ChatsPage.tsx` - refactored.
+- `frontend/src/pages/dashboard/BookingsPage.tsx` - refactored.
+
+### Trade-offs & Decisions
+- **Complexity vs Maintainability**: Moving `AIChatPromotion` data to locales increases locale file size but makes the component cleaner and purely presentational.
+- **Fallback Strategy**: Using English for secondary locales (`es`, `de`, etc.) prevents runtime errors immediately without blocking the release on professional translation.
+
+### Status
+- [x] Completed

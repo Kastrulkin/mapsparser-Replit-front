@@ -4,6 +4,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Copy, Check, Loader2, Bot } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface TelegramConnectionProps {
   currentBusinessId?: string | null;
@@ -17,11 +18,12 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     // Сбрасываем статус при смене бизнеса
     setIsLinked(false);
-    
+
     if (currentBusinessId) {
       checkStatus();
     }
@@ -32,14 +34,14 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
       setIsLinked(false);
       return;
     }
-    
+
     try {
       const token = localStorage.getItem('auth_token');
       const url = new URL(`${window.location.origin}/api/telegram/bind/status`);
       url.searchParams.append('business_id', currentBusinessId);
-      
-      console.log('Проверка статуса Telegram для бизнеса:', currentBusinessId);
-      
+
+      console.log('Checking Telegram status for business:', currentBusinessId);
+
       const response = await fetch(url.toString(), {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -48,26 +50,26 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Статус Telegram для бизнеса', currentBusinessId, ':', data);
+        console.log('✅ Telegram status for business', currentBusinessId, ':', data);
         // Явно проверяем, что is_linked === true (не просто truthy значение)
         setIsLinked(data.is_linked === true);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Ошибка проверки статуса:', response.status, errorData);
+        console.error('Status check error:', response.status, errorData);
         setIsLinked(false);
       }
     } catch (e) {
-      console.error('Ошибка проверки статуса:', e);
+      console.error('Status check error:', e);
       setIsLinked(false);
     }
   };
 
   const generateToken = async () => {
     if (!currentBusinessId) {
-      setError('Сначала выберите бизнес');
+      setError(t.dashboard.settings.telegram.selectBusiness);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -87,13 +89,13 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         const data = await response.json();
         setBindToken(data.token);
         setTokenExpiresAt(data.expires_at);
-        setSuccess('Токен создан! Используйте его для привязки бота.');
+        setSuccess(t.dashboard.settings.telegram.successToken);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Ошибка создания токена');
+        setError(errorData.error || t.dashboard.settings.telegram.errorToken);
       }
     } catch (e: any) {
-      setError('Ошибка подключения к серверу: ' + e.message);
+      setError(t.error + ': ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -105,7 +107,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      setError('Не удалось скопировать в буфер обмена');
+      setError('Failed to copy to clipboard');
     }
   };
 
@@ -120,17 +122,17 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bot className="w-5 h-5" />
-          Подключение Telegram-бота
+          {t.dashboard.settings.telegram.title}
         </CardTitle>
         <CardDescription>
-          Подключите Telegram-бота для управления аккаунтом прямо из мессенджера
+          {t.dashboard.settings.telegram.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLinked && currentBusinessId ? (
           <Alert>
             <AlertDescription>
-              ✅ Telegram-бот успешно подключен! Вы можете использовать все функции бота.
+              {t.dashboard.settings.telegram.connected}
             </AlertDescription>
           </Alert>
         ) : (
@@ -150,22 +152,22 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
             {!bindToken ? (
               <div className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Для подключения Telegram-бота:
+                  {t.dashboard.settings.telegram.instruction}
                 </p>
                 <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
-                  <li>Нажмите кнопку ниже для генерации кода привязки</li>
-                  <li>Откройте Telegram и найдите нашего бота</li>
-                  <li>Отправьте боту команду: <code className="bg-gray-100 px-1 rounded">/start &lt;код&gt;</code></li>
-                  <li>Готово! Бот будет подключен к вашему аккаунту</li>
+                  <li>{t.dashboard.settings.telegram.step1}</li>
+                  <li>{t.dashboard.settings.telegram.step2}</li>
+                  <li>{t.dashboard.settings.telegram.step3} <code className="bg-gray-100 px-1 rounded">/start &lt;code&gt;</code></li>
+                  <li>{t.dashboard.settings.telegram.step4}</li>
                 </ol>
                 <Button onClick={generateToken} disabled={loading}>
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Генерирую токен...
+                      {t.dashboard.settings.telegram.generating}
                     </>
                   ) : (
-                    'Сгенерировать код привязки'
+                    t.dashboard.settings.telegram.generateToken
                   )}
                 </Button>
               </div>
@@ -173,12 +175,12 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
               <div className="space-y-4">
                 <Alert>
                   <AlertDescription>
-                    ⏰ Токен действителен до: {new Date(tokenExpiresAt || '').toLocaleString('ru-RU')}
+                    {t.dashboard.settings.telegram.tokenExpires} {new Date(tokenExpiresAt || '').toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}
                   </AlertDescription>
                 </Alert>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Код привязки:</label>
+                  <label className="text-sm font-medium">{t.dashboard.settings.telegram.bindCode}</label>
                   <div className="flex gap-2">
                     <Input
                       value={bindToken}
@@ -200,7 +202,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Или используйте прямую ссылку:</label>
+                  <label className="text-sm font-medium">{t.dashboard.settings.telegram.directLink}</label>
                   <div className="flex gap-2">
                     <Input
                       value={getBotLink()}
@@ -222,12 +224,12 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                 </div>
 
                 <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm font-medium mb-2">📱 Инструкция:</p>
+                  <p className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.instructionTitle}</p>
                   <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
-                    <li>Откройте Telegram</li>
-                    <li>Найдите бота (имя бота будет указано после создания)</li>
-                    <li>Отправьте команду: <code className="bg-white px-1 rounded">/start {bindToken}</code></li>
-                    <li>Или просто перейдите по ссылке выше</li>
+                    <li>{t.dashboard.settings.telegram.manualStep1}</li>
+                    <li>{t.dashboard.settings.telegram.manualStep2}</li>
+                    <li>{t.dashboard.settings.telegram.manualStep3} <code className="bg-white px-1 rounded">/start {bindToken}</code></li>
+                    <li>{t.dashboard.settings.telegram.manualStep4}</li>
                   </ol>
                 </div>
 
@@ -237,7 +239,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   setSuccess(null);
                   setError(null);
                 }}>
-                  Сгенерировать новый код
+                  {t.dashboard.settings.telegram.generateNew}
                 </Button>
               </div>
             )}
@@ -245,12 +247,12 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         )}
 
         <div className="pt-4 border-t">
-          <h4 className="text-sm font-medium mb-2">Возможности бота:</h4>
+          <h4 className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.featuresTitle}</h4>
           <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-            <li>💰 Добавление транзакций (фото чека или текстом)</li>
-            <li>📊 Оптимизация услуг для SEO</li>
-            <li>⚙️ Изменение данных компании (название, адрес, карты)</li>
-            <li>📈 Просмотр статистики (в разработке)</li>
+            <li>{t.dashboard.settings.telegram.feature1}</li>
+            <li>{t.dashboard.settings.telegram.feature2}</li>
+            <li>{t.dashboard.settings.telegram.feature3}</li>
+            <li>{t.dashboard.settings.telegram.feature4}</li>
           </ul>
         </div>
       </CardContent>
@@ -259,4 +261,3 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
 };
 
 export default TelegramConnection;
-

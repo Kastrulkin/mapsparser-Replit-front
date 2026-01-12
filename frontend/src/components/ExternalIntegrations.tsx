@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { newAuth } from "@/lib/auth_new";
 import { useToast } from "@/components/ui/use-toast";
+import { useLanguage } from "@/i18n/LanguageContext";
 
 interface ExternalAccount {
   id: string;
@@ -26,6 +27,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const { t, language } = useLanguage();
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -47,13 +49,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Не удалось загрузить интеграции");
+        throw new Error(data.error || t.dashboard.settings.external.error);
       }
       setAccounts(data.accounts || []);
     } catch (e: any) {
       toast({
-        title: "Ошибка",
-        description: e.message || "Ошибка загрузки интеграций",
+        title: t.error,
+        description: e.message || t.dashboard.settings.external.error,
         variant: "destructive",
       });
     } finally {
@@ -73,16 +75,16 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
     if (authStatus === 'success') {
       toast({
-        title: "Успешно",
-        description: "Google Business Profile успешно подключен",
+        title: t.success,
+        description: t.dashboard.settings.external.successAuth,
       });
       loadAccounts();
       // Убираем параметр из URL
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (authStatus === 'error') {
       toast({
-        title: "Ошибка",
-        description: "Ошибка подключения Google Business Profile",
+        title: t.error,
+        description: t.dashboard.settings.external.errorAuth,
         variant: "destructive",
       });
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -93,8 +95,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const handleGoogleAuth = async () => {
     if (!currentBusinessId) {
       toast({
-        title: "Ошибка",
-        description: "Сначала выберите бизнес",
+        title: t.error,
+        description: t.dashboard.settings.external.selectBusiness,
         variant: "destructive",
       });
       return;
@@ -104,8 +106,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       const token = newAuth.getToken();
       if (!token) {
         toast({
-          title: "Ошибка",
-          description: "Требуется авторизация",
+          title: t.error,
+          description: t.error,
           variant: "destructive"
         });
         return;
@@ -124,7 +126,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Ошибка получения URL авторизации');
+        throw new Error(data.error || t.error);
       }
 
       // Открываем popup для авторизации
@@ -141,17 +143,12 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
       if (!popup) {
         toast({
-          title: "Внимание",
-          description: "Не удалось открыть окно авторизации. Разрешите всплывающие окна.",
+          title: t.error,
+          description: "Pop-up blocked. Please allow pop-ups.",
           variant: "destructive",
         });
         return;
       }
-
-      // Проверяем статус через polling (так как popup на другом домене может быть недоступен для postMessage напрямую без настройки CORS/Headers на стороне Google)
-      // В данном случае мы полагаемся на то, что backend перенаправит на нашу страницу с параметром,
-      // но если редирект происходит внутри popup, нам нужно междоменное общение или просто ждать закрытия.
-      // Реализация с проверкой закрытия и обновлением списка:
 
       const checkPopup = setInterval(() => {
         try {
@@ -165,7 +162,6 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         }
       }, 1000);
 
-      // Также слушаем postMessage если мы настроим редирект на специальную страницу-закрывашку
       const messageHandler = (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
 
@@ -175,8 +171,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
           popup.close();
 
           toast({
-            title: "Успешно",
-            description: "Google Business Profile успешно подключен",
+            title: t.success,
+            description: t.dashboard.settings.external.successAuth,
           });
           loadAccounts();
         } else if (event.data.type === 'GOOGLE_AUTH_ERROR') {
@@ -185,8 +181,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
           popup.close();
 
           toast({
-            title: "Ошибка",
-            description: event.data.error || 'Ошибка подключения Google Business Profile',
+            title: t.error,
+            description: event.data.error || t.dashboard.settings.external.errorAuth,
             variant: "destructive"
           });
         }
@@ -202,8 +198,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
     } catch (e: any) {
       toast({
-        title: "Ошибка",
-        description: e.message || 'Ошибка подключения Google',
+        title: t.error,
+        description: e.message || t.dashboard.settings.external.errorAuth,
         variant: "destructive",
       });
     }
@@ -224,17 +220,17 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Не удалось отключить интеграцию");
+        throw new Error(data.error || t.error);
       }
       toast({
-        title: "Успешно",
-        description: "Интеграция отключена",
+        title: t.success,
+        description: t.dashboard.settings.external.successDisconnect,
       });
       await loadAccounts();
     } catch (e: any) {
       toast({
-        title: "Ошибка",
-        description: e.message || "Ошибка отключения интеграции",
+        title: t.error,
+        description: e.message || t.error,
         variant: "destructive",
       });
     } finally {
@@ -245,8 +241,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Интеграции с внешними источниками</CardTitle>
-        <CardDescription>Подключите Google Business Profile для автоматической синхронизации отзывов и статистики.</CardDescription>
+        <CardTitle>{t.dashboard.settings.external.title}</CardTitle>
+        <CardDescription>{t.dashboard.settings.external.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
 
@@ -261,9 +257,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             </svg>
           </div>
           <div>
-            <h3 className="font-medium text-lg">Google Business Profile</h3>
+            <h3 className="font-medium text-lg">{t.dashboard.settings.external.googleTitle}</h3>
             <p className="text-sm text-gray-500 max-w-md mx-auto mt-1">
-              Подключите аккаунт Google, чтобы управлять отзывами, публиковать новости и получать расширенную статистику прямо из панели управления.
+              {t.dashboard.settings.external.googleDesc}
             </p>
           </div>
           <Button
@@ -271,20 +267,20 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             className="w-full sm:w-auto min-w-[200px]"
             disabled={!currentBusinessId}
           >
-            Подключить Google
+            {t.dashboard.settings.external.connectGoogle}
           </Button>
           {!currentBusinessId && (
-            <p className="text-xs text-red-500">Выберите бизнес для подключения</p>
+            <p className="text-xs text-red-500">{t.dashboard.settings.external.selectBusiness}</p>
           )}
         </div>
 
         {/* Список подключённых аккаунтов */}
         <div className="space-y-3 pt-4 border-t">
-          <h3 className="text-sm font-semibold text-gray-800">Подключённые аккаунты</h3>
+          <h3 className="text-sm font-semibold text-gray-800">{t.dashboard.settings.external.connectedAccounts}</h3>
           {loading ? (
-            <p className="text-sm text-gray-500">Загрузка...</p>
+            <p className="text-sm text-gray-500">{t.dashboard.subscription.processing}</p>
           ) : accounts.length === 0 ? (
-            <p className="text-sm text-gray-500">Интеграции ещё не настроены.</p>
+            <p className="text-sm text-gray-500">{t.dashboard.settings.external.noIntegrations}</p>
           ) : (
             <div className="space-y-2">
               {accounts.map((acc) => (
@@ -326,13 +322,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                         {acc.last_sync_at && (
                           <div className="text-xs text-gray-500 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                            Синхронизация: {new Date(acc.last_sync_at).toLocaleString("ru-RU")}
+                            {t.dashboard.settings.external.sync} {new Date(acc.last_sync_at).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}
                           </div>
                         )}
                         {acc.last_error && (
                           <div className="text-xs text-red-600 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Ошибка: {acc.last_error}
+                            {t.dashboard.settings.external.error} {acc.last_error}
                           </div>
                         )}
                       </div>
@@ -341,7 +337,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
 
                   <div className="mt-3 md:mt-0 flex gap-2 justify-end items-center">
                     <div className={`px-2 py-1 rounded text-xs font-medium ${acc.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {acc.is_active ? 'Активен' : 'Отключен'}
+                      {acc.is_active ? t.dashboard.settings.external.active : t.dashboard.settings.external.disabled}
                     </div>
                     <Button
                       variant="outline"
@@ -350,7 +346,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                       onClick={() => handleDisconnect(acc.id)}
                       className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-100 h-8"
                     >
-                      Отключить
+                      {t.dashboard.settings.external.disconnect}
                     </Button>
                   </div>
                 </div>

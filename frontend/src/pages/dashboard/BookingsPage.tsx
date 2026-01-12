@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Calendar, Phone, Mail, User } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Booking {
   id: string;
@@ -22,20 +23,21 @@ interface Booking {
   created_at: string;
 }
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'Все' },
-  { value: 'pending', label: 'Ожидает подтверждения' },
-  { value: 'confirmed', label: 'Подтверждено' },
-  { value: 'cancelled', label: 'Отменено' },
-  { value: 'completed', label: 'Завершено' },
-];
-
 export const BookingsPage = () => {
   const { currentBusinessId } = useOutletContext<any>();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const { toast } = useToast();
+  const { t, language } = useLanguage();
+
+  const STATUS_OPTIONS = [
+    { value: 'all', label: t.dashboard.bookings.status.all },
+    { value: 'pending', label: t.dashboard.bookings.status.pendingFilter },
+    { value: 'confirmed', label: t.dashboard.bookings.status.confirmed },
+    { value: 'cancelled', label: t.dashboard.bookings.status.cancelled },
+    { value: 'completed', label: t.dashboard.bookings.status.completed },
+  ];
 
   useEffect(() => {
     if (currentBusinessId) {
@@ -66,15 +68,15 @@ export const BookingsPage = () => {
         setBookings(data.bookings || []);
       } else {
         toast({
-          title: 'Ошибка',
-          description: 'Не удалось загрузить бронирования',
+          title: t.error,
+          description: t.dashboard.bookings.messages.loadError,
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при загрузке бронирований',
+        title: t.error,
+        description: t.dashboard.bookings.messages.loadError,
         variant: 'destructive',
       });
     } finally {
@@ -96,46 +98,49 @@ export const BookingsPage = () => {
 
       if (response.ok) {
         toast({
-          title: 'Успешно',
-          description: 'Статус бронирования обновлён',
+          title: t.success,
+          description: t.dashboard.bookings.messages.updateSuccess,
         });
         fetchBookings();
       } else {
         const data = await response.json();
         toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось обновить статус',
+          title: t.error,
+          description: data.error || t.dashboard.bookings.messages.updateError,
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при обновлении статуса',
+        title: t.error,
+        description: t.dashboard.bookings.messages.updateError,
         variant: 'destructive',
       });
     }
   };
 
   const getStatusBadge = (status: string) => {
+    const statusKey = status as keyof typeof t.dashboard.bookings.status;
+    const label = t.dashboard.bookings.status[statusKey] || status;
+
     switch (status) {
       case 'pending':
-        return <Badge className="bg-yellow-500">Ожидает</Badge>;
+        return <Badge className="bg-yellow-500">{t.dashboard.bookings.status.pending}</Badge>;
       case 'confirmed':
-        return <Badge className="bg-green-500">Подтверждено</Badge>;
+        return <Badge className="bg-green-500">{t.dashboard.bookings.status.confirmed}</Badge>;
       case 'cancelled':
-        return <Badge className="bg-red-500">Отменено</Badge>;
+        return <Badge className="bg-red-500">{t.dashboard.bookings.status.cancelled}</Badge>;
       case 'completed':
-        return <Badge className="bg-blue-500">Завершено</Badge>;
+        return <Badge className="bg-blue-500">{t.dashboard.bookings.status.completed}</Badge>;
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge>{label}</Badge>;
     }
   };
 
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleString('ru-RU', {
+      return date.toLocaleString(language === 'en' ? 'en-US' : 'ru-RU', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -151,8 +156,8 @@ export const BookingsPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Бронирования</h1>
-          <p className="text-gray-600 mt-1">Управляйте заявками от клиентов</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.bookings.title}</h1>
+          <p className="text-gray-600 mt-1">{t.dashboard.bookings.subtitle}</p>
         </div>
         <div className="flex items-center gap-4">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -168,16 +173,16 @@ export const BookingsPage = () => {
             </SelectContent>
           </Select>
           <Button onClick={fetchBookings} variant="outline" size="sm">
-            Обновить
+            {t.dashboard.bookings.refresh}
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Список бронирований</CardTitle>
+          <CardTitle>{t.dashboard.bookings.list}</CardTitle>
           <CardDescription>
-            Всего: {bookings.length} {bookings.length === 1 ? 'бронирование' : 'бронирований'}
+            {t.dashboard.bookings.total} {bookings.length}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -188,19 +193,19 @@ export const BookingsPage = () => {
           ) : bookings.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>Нет бронирований</p>
+              <p>{t.dashboard.bookings.empty}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Клиент</TableHead>
-                    <TableHead>Услуга</TableHead>
-                    <TableHead>Дата и время</TableHead>
-                    <TableHead>Источник</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead>Действия</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.client}</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.service}</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.dateTime}</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.source}</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.status}</TableHead>
+                    <TableHead>{t.dashboard.bookings.table.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -252,14 +257,14 @@ export const BookingsPage = () => {
                                 variant="outline"
                                 onClick={() => updateBookingStatus(booking.id, 'confirmed')}
                               >
-                                Подтвердить
+                                {t.dashboard.bookings.actions.confirm}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => updateBookingStatus(booking.id, 'cancelled')}
                               >
-                                Отменить
+                                {t.dashboard.bookings.actions.cancel}
                               </Button>
                             </>
                           )}
@@ -269,7 +274,7 @@ export const BookingsPage = () => {
                               variant="outline"
                               onClick={() => updateBookingStatus(booking.id, 'completed')}
                             >
-                              Завершить
+                              {t.dashboard.bookings.actions.complete}
                             </Button>
                           )}
                         </div>

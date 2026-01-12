@@ -27,7 +27,8 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   // Фильтруем точки сети - показываем только основные аккаунты
-  const mainBusinesses = businesses.filter((b: any) => !b.network_id);
+  // ДЛЯ СУПЕРАДМИНА показываем ВСЁ (включая точки сетей для переключения)
+  const mainBusinesses = isSuperadmin ? businesses : businesses.filter((b: any) => !b.network_id);
 
   useEffect(() => {
     if (mainBusinesses.length > 0) {

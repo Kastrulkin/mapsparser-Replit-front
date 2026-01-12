@@ -267,6 +267,322 @@ export const ha = {
       eliteFeature3: "Samun abokan ciniki ba tare da layi ba",
       eliteFeature4: "Inganta tsarin kasuwanci",
       eliteFeature5: "Manaja na musamman"
+    },
+    settings: {
+      title: "Settings",
+      subtitle: "Manage account settings and integrations",
+      messengers: "Messenger Connections",
+      integrations: "External Integrations",
+      aiAgents: "AI Agent Settings",
+      network: "Network Management",
+      telegram: {
+        title: "Telegram Bot Connection",
+        description: "Connect Telegram bot to manage your account directly from the messenger",
+        connected: "✅ Telegram bot connected successfully! You can use all bot features.",
+        instruction: "To connect Telegram bot:",
+        step1: "Click the button below to generate a binding code",
+        step2: "Open Telegram and find our bot",
+        step3: "Send the command to the bot:",
+        step4: "Done! The bot will be connected to your account",
+        generateToken: "Generate binding code",
+        generating: "Generating token...",
+        tokenExpires: "⏰ Token expires at:",
+        bindCode: "Binding code:",
+        directLink: "Or use direct link:",
+        instructionTitle: "📱 Instruction:",
+        manualStep1: "Open Telegram",
+        manualStep2: "Find the bot (name will be shown after generation)",
+        manualStep3: "Send command:",
+        manualStep4: "Or just follow the link above",
+        generateNew: "Generate new code",
+        featuresTitle: "Bot features:",
+        feature1: "💰 Add transactions (receipt photo or text)",
+        feature2: "📊 Service optimization for SEO",
+        feature3: "⚙️ Edit company data (name, address, maps)",
+        feature4: "📈 View statistics (in development)",
+        successToken: "Token created! Use it to bind the bot.",
+        errorToken: "Error creating token",
+        selectBusiness: "Select a business first"
+      },
+      external: {
+        title: "External Integrations",
+        description: "Connect Google Business Profile for automatic reviews and stats synchronization.",
+        googleTitle: "Google Business Profile",
+        googleDesc: "Connect Google account to manage reviews, post news, and get advanced stats directly from the dashboard.",
+        connectGoogle: "Connect Google",
+        selectBusiness: "Select business to connect",
+        connectedAccounts: "Connected Accounts",
+        noIntegrations: "No integrations configured yet.",
+        sync: "Sync:",
+        error: "Error:",
+        active: "Active",
+        disabled: "Disabled",
+        disconnect: "Disconnect",
+        successAuth: "Google Business Profile successfully connected",
+        errorAuth: "Error connecting Google Business Profile",
+        successDisconnect: "Integration disconnected"
+      },
+      ai: {
+        title: "AI Agent Management",
+        subtitle: "Configure automated assistants for your business",
+        active: "Active",
+        agentSettings: "Agent Settings",
+        tone: "Tone of Voice",
+        language: "Agent Language",
+        selectAgent: "Select Agent",
+        defaultAgent: "Use Default",
+        variables: "Agent Variables",
+        save: "Save Settings",
+        saving: "Saving...",
+        saved: "AI Agent settings saved",
+        tones: {
+          professional: "Professional",
+          friendly: "Friendly",
+          casual: "Casual",
+          formal: "Formal"
+        },
+        types: {
+          booking: "Booking Agent",
+          bookingDesc: "Automatic client booking for services",
+          marketing: "Marketing Agent",
+          marketingDesc: "Sending promotions and special offers"
+        },
+        status: {
+          active: "Active",
+          disabled: "Disabled"
+        }
+      }
+    },
+    network: {
+      title: "📊 Network Dashboard",
+      period: {
+        week: "Week",
+        month: "Month",
+        quarter: "Quarter",
+        year: "Year"
+      },
+      totalRevenue: "Total Revenue",
+      totalOrders: "Total Orders",
+      locationsCount: "Network Locations",
+      revenueByService: "💼 Revenue by Services",
+      revenueByMaster: "👤 Revenue by Masters",
+      revenueByLocation: "🏢 Revenue by Locations",
+      ratings: "⭐ Location Ratings",
+      badReviews: "⚠️ Bad Reviews",
+      noBadReviews: "No bad reviews",
+      noData: "No data",
+      reviews: "reviews",
+      last30Days: "30d",
+      errorLoading: "Error loading stats",
+      tryAgain: "Try again"
+    },
+    profile: {
+      title: "Profile & Business",
+      subtitle: "Manage personal data and business information",
+      completion: "Profile Completion",
+      userProfile: "Profile",
+      owner: "(business owner)",
+      edit: "Edit",
+      notEditable: "Editing not available (not your business)",
+      email: "Email",
+      name: "Name",
+      phone: "Phone",
+      save: "Save",
+      cancel: "Cancel",
+      noBusinessSelected: "No business selected",
+      selectBusinessToSave: "To save map links, you must select a business from the dropdown in the top right corner.",
+      availableBusinesses: "Available businesses: ",
+      chooseOne: "Choose one to continue.",
+      businessInfo: "Business Information",
+      sendCredentials: "Send credentials",
+      sending: "Sending...",
+      businessName: "Business Name",
+      businessType: "Business Type",
+      selectType: "Select type",
+      address: "Address",
+      workingHours: "Working Hours",
+      workingHoursPlaceholder: "daily 9:00-21:00",
+      mapLinks: "Map Links",
+      addLink: "Add Link",
+      pasteLink: "Paste map link",
+      saveSuccess: "Business info saved",
+      profileUpdated: "Profile updated",
+      errorSave: "Error saving information",
+      businessTypes: {
+        beauty_salon: "Beauty Salon",
+        barbershop: "Barbershop",
+        spa: "SPA/Wellness",
+        nail_studio: "Nail Studio",
+        cosmetology: "Cosmetology",
+        massage: "Massage",
+        brows_lashes: "Brows & Lashes",
+        makeup: "Makeup",
+        tanning: "Tanning",
+        other: "Other"
+      },
+      workSchedule: {
+        weekdays: "Weekdays",
+        daily: "Daily",
+        roundClock: "24/7",
+        weekends: "Weekends",
+        break: "Break"
+      }
+    },
+    card: {
+      title: "Maps Management",
+      subtitle: "Manage services and optimize business card",
+      optimizationWizard: "Map Optimization Wizard",
+      parsingNote: "We receive data weekly to track progress and provide optimization tips. Map data will be saved here, and statistics on ",
+      progressTab: "Progress tab",
+      rating: "Rating",
+      reviews: "reviews",
+      services: "Services",
+      servicesSubtitle: "Current service breakdown on maps. Data is added automatically if parser is connected.",
+      addService: "Add New Service",
+      category: "Category",
+      serviceName: "Name *",
+      description: "Description",
+      keywords: "Keywords",
+      price: "Price",
+      add: "Add",
+      cancel: "Cancel",
+      deleteConfirm: "Are you sure you want to delete this service?",
+      optimizeAll: "Optimize All",
+      table: {
+        category: "Category",
+        name: "Name",
+        description: "Description",
+        price: "Price",
+        actions: "Actions"
+      },
+      seo: {
+        proposal: "SEO Proposal",
+        accept: "Accept",
+        reject: "Reject",
+        title: "Setup service descriptions for maps business card",
+        desc1: "🔎 Maps and local SEO are one of the most effective sales channels.",
+        desc2: "Correct service names and descriptions improve search visibility, card clicks, and ranking.",
+        desc3: "Upload a price list — AI will return concise SEO formulations in strict format considering query frequency, your wording, and location.",
+        desc4: "Copy the text and add it to your organization card on maps."
+      },
+      placeholders: {
+        category: "Example: Haircuts",
+        name: "Example: Womens Haircut",
+        desc: "Short service description",
+        keywords: "haircut, styling, coloring",
+        price: "Example: $30"
+      }
+    },
+    bookings: {
+      title: "Bookings",
+      subtitle: "Manage client bookings",
+      refresh: "Refresh",
+      list: "Booking List",
+      total: "Total:",
+      empty: "No bookings",
+      table: {
+        client: "Client",
+        service: "Service",
+        dateTime: "Date & Time",
+        source: "Source",
+        status: "Status",
+        actions: "Actions"
+      },
+      status: {
+        all: "All",
+        pending: "Pending",
+        confirmed: "Confirmed",
+        cancelled: "Cancelled",
+        completed: "Completed",
+        pendingFilter: "Pending Confirmation"
+      },
+      actions: {
+        confirm: "Confirm",
+        cancel: "Cancel",
+        complete: "Complete"
+      },
+      messages: {
+        error: "Error",
+        loadError: "Failed to load bookings",
+        updateSuccess: "Booking status updated",
+        updateError: "Failed to update status"
+      }
+    },
+    chats: {
+      title: "All Chats",
+      sandbox: "Sandbox",
+      search: "Search...",
+      roles: {
+        agent: "Agent",
+        client: "Client",
+        operator: "Operator"
+      },
+      input: {
+        placeholder: "Type a message...",
+        send: "Send"
+      },
+      controls: {
+        pause: "Pause",
+        resume: "Resume"
+      }
+    },
+    aiChatPromotion: {
+      title: "AI Chat Promotion",
+      subtitle: "Step-by-step guide to get your business into ChatGPT and other AI assistants",
+      whyImportant: {
+        title: "Why is this important?",
+        description: "ChatGPT and other AI assistants are becoming the primary way to find information. To get your business in ChatGPT answers, you need to optimize your site correctly. Four key steps will help your business be found through AI chats."
+      },
+      steps: {
+        step1: {
+          title: "Add site to Bing Webmaster",
+          description: "Bing Webmaster helps ChatGPT find your site on the internet"
+        },
+        step2: {
+          title: "Implement Schema.org markup",
+          description: "Structured data helps ChatGPT better understand your content"
+        },
+        step3: {
+          title: "Add FAQ section",
+          description: "ChatGPT loves sites with answers to frequently asked questions"
+        },
+        step4: {
+          title: "Cite studies",
+          description: "ChatGPT prefers sites that look like encyclopedias with sources"
+        }
+      },
+      actions: {
+        copy: "Copy",
+        copied: "Copied",
+        todo: "What to do:",
+        links: "Useful links:",
+        code: "Code example:"
+      },
+      progress: {
+        title: "Progress",
+        completed: "Steps completed:",
+        from: "of",
+        success: "Great! You have completed all steps. Now your site is optimized for AI chat search."
+      }
+    },
+    finance: {
+      title: "Finance",
+      subtitle: "Manage financial metrics and transactions",
+      addTransaction: "Add Transaction",
+      hideForm: "Hide Form",
+      successAdded: "Transaction added successfully!"
+    },
+    progress: {
+      title: "Progress",
+      subtitle: "Track your progress and achievements",
+      wizard: {
+        button: "Business Optimization Wizard",
+        title: "Business Optimization Wizard",
+        intro: "Some numbers to make the plan realistic. Can be filled later.",
+        experience: "Years in business",
+        save: "Save",
+        saving: "Saving..."
+      }
     }
   }
 };
