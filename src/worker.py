@@ -701,7 +701,7 @@ def _process_sync_yandex_business_task(queue_dict):
             db = DatabaseManager()
             cursor = db.conn.cursor()
         
-        try:
+
             cursor.execute("""
                 SELECT auth_data_encrypted, external_id 
                 FROM ExternalBusinessAccounts 
