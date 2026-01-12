@@ -1729,3 +1729,19 @@ Resolve `SyntaxError` (unexpected EOF while parsing) in `worker.py` which caused
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Parser Interception Cleanup Safety
+
+### Current Task
+Resolve `AttributeError: 'NoneType' object has no attribute 'close'` in `process_worker` logs. This was traced to `parser_interception.py` where a failed Playwright launch leaves the `browser` variable as `None`, causing subsequent `.close()` calls in `finally/except` blocks to crash the worker.
+
+### Architecture Decision
+- **Defensive Browser Cleanup**: Wrapped `browser.close()` calls in `src/parser_interception.py` with `if browser:` checks to handle initialization failures gracefully.
+
+### Files to Modify
+- `src/parser_interception.py` - Updated cleanup logic in success path, TimeoutError handler, and generic Exception handler.
+
+### Status
+- [x] Completed

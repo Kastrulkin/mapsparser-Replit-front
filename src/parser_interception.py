@@ -174,16 +174,19 @@ class YandexMapsInterceptionParser:
                     print("⚠️ Не удалось извлечь данные через API, используем HTML парсинг как fallback")
                     data = self._fallback_html_parsing(page, url)
                 
-                browser.close()
+                if browser:
+                    browser.close()
                 
                 print(f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'")
                 return data
                 
             except PlaywrightTimeoutError as e:
-                browser.close()
+                if browser:
+                    browser.close()
                 raise Exception(f"Тайм-аут при загрузке страницы: {e}")
             except Exception as e:
-                browser.close()
+                if browser:
+                    browser.close()
                 raise Exception(f"Ошибка при парсинге: {e}")
     
     def _extract_data_from_responses(self) -> Dict[str, Any]:
