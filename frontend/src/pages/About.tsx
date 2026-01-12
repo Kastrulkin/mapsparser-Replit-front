@@ -25,7 +25,7 @@ const About = () => {
     // Если уже авторизован — ведём в личный кабинет на страницу подписки
     navigate(`/dashboard/settings?payment=required&tier=${tierId}&source=pricing`);
   };
-  
+
   useEffect(() => {
     const scrollToPricing = () => {
       if (window.location.hash === "#pricing") {
@@ -37,25 +37,25 @@ const About = () => {
         }
       }
     };
-    
+
     // Прокручиваем при монтировании
     scrollToPricing();
-    
+
     // Прокручиваем при изменении хеша
     const handleHashChange = () => {
       scrollToPricing();
     };
-    
+
     window.addEventListener('hashchange', handleHashChange);
-    
+
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
   }, [location.hash]);
-  
+
   return (
     <div className="min-h-screen bg-background">
-      
+
       {/* Hero Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
@@ -101,7 +101,7 @@ const About = () => {
           <p className="text-xl text-muted-foreground mb-8">
             {t.about.targetText}
           </p>
-          
+
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             <div className="text-center">
               <div className="text-3xl mb-2">💇‍♀️</div>
@@ -140,7 +140,7 @@ const About = () => {
       <section className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-3xl font-bold text-foreground mb-12 text-center">{t.about.howTitle}</h2>
-          
+
           <div className="mb-12">
             <h3 className="text-2xl font-semibold text-foreground mb-6 text-center">
               {t.about.howSubtitle}
@@ -243,7 +243,7 @@ const About = () => {
                   {isRu ? "Начальный" : "Starter"}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "400 рублей в месяц" : "$5 / month"}
+                  {isRu ? "1200 рублей в месяц" : "$15 / month"}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingStarterPoint1}</div>
@@ -264,7 +264,7 @@ const About = () => {
 
             {/* Option 0 - 5000 рублей в месяц */}
             <Card className="p-8 flex flex-col h-full">
-            <CardContent className="p-0 flex flex-col flex-1">
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Профессиональный" : "Professional"}
                 </div>
@@ -290,7 +290,7 @@ const About = () => {
 
             {/* Option 1 */}
             <Card className="p-8 flex flex-col h-full">
-            <CardContent className="p-0 flex flex-col flex-1">
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Консьерж" : "Concierge"}
                 </div>
@@ -317,7 +317,7 @@ const About = () => {
 
             {/* Option 2 */}
             <Card className="p-8 flex flex-col h-full border-primary">
-            <CardContent className="p-0 flex flex-col flex-1">
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Особый" : "Elite"}
                 </div>

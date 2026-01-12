@@ -1,7 +1,7 @@
 export const ru = {
   // Page title
   pageTitle: "BeautyBot.pro - Локальное продвижение локального бизнеса",
-  
+
   // Header
   header: {
     whatWeDo: "Что мы делаем?",
@@ -9,7 +9,7 @@ export const ru = {
     prices: "Цены",
     tryFree: "Попробовать бесплатно"
   },
-  
+
   // Footer
   footer: {
     title: "BeautyBot",
@@ -20,7 +20,7 @@ export const ru = {
     contacts: "Контакты",
     copyright: "© 2025 BeautyBot. Все права защищены."
   },
-  
+
   // Stats
   stats: {
     title: "Мы не просто предоставляем инструменты —",
@@ -30,7 +30,7 @@ export const ru = {
     stat2: "Новые клиенты за 2-4 недели",
     stat3: "1700% рост лидов в массаж-студии"
   },
-  
+
   // Hero
   hero: {
     newClients: "Новые клиенты без труда",
@@ -44,7 +44,7 @@ export const ru = {
     successMessage: "Спасибо! Мы приняли вашу заявку и скоро с вами свяжемся.",
     errorMessage: "Произошла ошибка. Попробуйте ещё раз."
   },
-  
+
   // Features
   features: {
     title: "Без магии - просто делаем свою работу, чтобы вы росли",
@@ -62,7 +62,7 @@ export const ru = {
     upToDate: "Ваши клиенты всегда получают актуальную информацию",
     upToDateDesc: "Автоматическое обновление расписания, цен, акций на всех площадках."
   },
-  
+
   // Testimonials
   testimonials: {
     title: "Работаем на результат вашего бизнеса - занимайтесь любимым делом, а не рутиной",
@@ -122,7 +122,7 @@ export const ru = {
       result: "+25–40% записей, +67% постоянных клиентов, 3–4x рекомендации. Администраторам нужно в 2–3 раза меньше времени на рутину."
     }
   },
-  
+
   // CTA
   cta: {
     title: "Готовы к росту?",
@@ -151,7 +151,7 @@ export const ru = {
     finalText: "Полноценное развитие салона — плата только из новых доходов!",
     contactExpert: "Связаться с экспертом"
   },
-  
+
   // About
   about: {
     heroTitle: "Кто мы?",
@@ -187,11 +187,11 @@ export const ru = {
     pricingOption0Title: "Доступ к инструментам 5000 рублей в месяц",
     pricingOption0Point1: "Работайте над карточкой, подскажем каждый шаг",
     pricingOption0Point2: "Оптимизируйте процесс на основе лучших практик",
-    pricingStarterTitle: "Starter — 400 рублей в месяц",
-    pricingStarterPoint1: "Подключитесь к экосистеме BeautyBot",
-    pricingStarterPoint2: "Начните использовать ChatGPT для лидогенерации",
-    pricingStarterPoint3: "Тестовый доступ к основным инструментам",
-    pricingStarterPoint4: "Подходит для салонов, которые только знакомятся с сервисом",
+    pricingStarterTitle: "Starter — 1200 рублей в месяц",
+    pricingStarterPoint1: "Клиенты без рекламы с карт и ChatGPT",
+    pricingStarterPoint2: "Посты для соцсетей",
+    pricingStarterPoint3: "Идеально для тех, кто ищет новые каналы привлечения клиентов",
+    pricingStarterPoint4: "",
     pricingStarterButton: "Начать",
     pricingOption0Point3: "Генерация новостей",
     pricingOption0Point4: "Генерация ответов на отзывы",
