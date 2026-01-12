@@ -26,10 +26,10 @@ const TIERS: SubscriptionTier[] = [
   {
     id: 'starter',
     name: 'Starter (Начальный)',
-    price: 5,
+    price: 15,
     features: [
-      'Подключитесь к профессиональной сети Beautybot',
-      'Начните использовать ChatGPT для лидогенерации',
+      'Клиенты без рекламы с карт и ChatGPT',
+      'Посты для соцсетей',
       'Идеально для тех, кто ищет новые каналы привлечения клиентов'
     ]
   },
@@ -359,12 +359,12 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                         {tier.id === 'elite'
                           ? 'Связаться с нами'
                           : isActive
-                          ? 'Текущий тариф'
-                          : isCurrentTier
-                          ? 'Обновить'
-                          : processing
-                          ? 'Обработка...'
-                          : 'Выбрать'}
+                            ? 'Текущий тариф'
+                            : isCurrentTier
+                              ? 'Обновить'
+                              : processing
+                                ? 'Обработка...'
+                                : 'Выбрать'}
                       </Button>
                     </CardFooter>
                   </div>
