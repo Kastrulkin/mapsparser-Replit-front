@@ -1,7 +1,7 @@
 export const en = {
   // Page title
   pageTitle: "BeautyBot.pro - Local promotion for local business",
-  
+
   // Header
   header: {
     whatWeDo: "What We Do?",
@@ -9,7 +9,7 @@ export const en = {
     prices: "Prices",
     tryFree: "Try Free"
   },
-  
+
   // Footer
   footer: {
     title: "BeautyBot",
@@ -20,7 +20,7 @@ export const en = {
     contacts: "Contacts",
     copyright: "© 2025 BeautyBot. All rights reserved."
   },
-  
+
   // Stats
   stats: {
     title: "We don't just provide tools —",
@@ -30,7 +30,7 @@ export const en = {
     stat2: "New clients in 2-4 weeks",
     stat3: "1700% lead growth in massage studio"
   },
-  
+
   // Hero
   hero: {
     newClients: "New clients effortlessly",
@@ -44,7 +44,7 @@ export const en = {
     successMessage: "Thank you! We have received your request and will contact you soon.",
     errorMessage: "An error occurred. Please try again."
   },
-  
+
   // Features
   features: {
     title: "No magic - just doing our job so you grow",
@@ -62,7 +62,7 @@ export const en = {
     upToDate: "Your clients always get up-to-date information",
     upToDateDesc: "Automatic updates of schedules, prices, promotions across all platforms."
   },
-  
+
   // Testimonials
   testimonials: {
     title: "We work for your business results - do what you love, not routine",
@@ -122,7 +122,7 @@ export const en = {
       result: "+25–40% appointments, +67% regular clients, 3–4x recommendations. Administrators need 2–3 times less time on routine."
     }
   },
-  
+
   // CTA
   cta: {
     title: "Ready to grow?",
@@ -151,7 +151,7 @@ export const en = {
     finalText: "Full salon development — payment only from new revenue!",
     contactExpert: "Contact an expert"
   },
-  
+
   // About
   about: {
     heroTitle: "Who We Are?",
@@ -184,10 +184,11 @@ export const en = {
     option2Point4: "You see results from the first month — new clients, average check growth, repeat visits",
     option2Button: "Contact an expert",
     pricingTitle: "Terms",
-    pricingStarterPoint1: "Connect to the professional Beautybot network",
-    pricingStarterPoint2: "Start using ChatGPT for lead generation",
+    pricingStarterTitle: "Starter — $15 per month",
+    pricingStarterPoint1: "Clients without ads from maps and ChatGPT",
+    pricingStarterPoint2: "Social media posts",
     pricingStarterPoint3: "Perfect for those looking for new customer acquisition channels",
-    pricingStarterPoint4: "$5 per month",
+    pricingStarterPoint4: "",
     pricingStarterButton: "Get access",
     pricingOption0Title: "Access to tools $65 per month",
     pricingOption0Point1: "Work on the card, we'll guide you every step",
