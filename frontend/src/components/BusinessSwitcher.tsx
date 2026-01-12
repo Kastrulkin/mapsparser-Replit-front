@@ -8,6 +8,8 @@ interface Business {
   industry?: string;
   owner_email?: string;
   owner_name?: string;
+  network_id?: string;
+  created_at?: string;
 }
 
 interface BusinessSwitcherProps {
@@ -27,8 +29,37 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   // Фильтруем точки сети - показываем только основные аккаунты
-  // Фильтруем точки сети - показываем только основные аккаунты (у которых нет network_id)
-  const mainBusinesses = businesses.filter((b: any) => !b.network_id);
+  // Фильтруем точки сети - показываем независимые точки ИЛИ "главную" точку сети (самую старую)
+  const mainBusinesses = React.useMemo(() => {
+    const independent = [];
+    const networks: { [key: string]: Business[] } = {};
+
+    // Группируем
+    for (const b of businesses) {
+      if (!b.network_id) {
+        independent.push(b);
+      } else {
+        if (!networks[b.network_id]) {
+          networks[b.network_id] = [];
+        }
+        networks[b.network_id].push(b);
+      }
+    }
+
+    // Выбираем "главные" точки из сетей (сортировка по дате создания, если есть, или просто первый)
+    const networkHeads = Object.values(networks).map((group: any[]) => {
+      // Сортируем по created_at (по возрастанию - старые первые), если поля нет, оставляем как есть
+      // Предполагаем, что created_at приходит строкой ISO
+      return group.sort((a, b) => {
+        if (a.created_at && b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return 0;
+      })[0];
+    });
+
+    return [...independent, ...networkHeads];
+  }, [businesses]);
 
   useEffect(() => {
     if (mainBusinesses.length > 0) {
