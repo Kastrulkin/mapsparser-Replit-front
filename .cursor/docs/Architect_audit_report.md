@@ -1763,3 +1763,20 @@ Resolve issue where parser detected captcha but returned empty data, which worke
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Visibility of Orphan Networks in Superadmin
+
+### Current Task
+Resolve issue where Networks (and consequently their businesses) were disappearing from the Superadmin "Businesses" list if the Network Owner was deleted or did not exist in the `Users` table. The API `/api/admin/users-with-businesses` iterates over `Users`, thus skipping orphan networks.
+
+### Architecture Decision
+- **Unified Orphan Handling**: Updated `get_all_users_with_businesses` in `DatabaseManager` to explicitly fetch orphan networks (`WHERE u.id IS NULL`).
+- **Data Grouping**: Orphan networks are now grouped under a synthetic `[Без владельца]` user entry in the API response, ensuring they are visible in the frontend without requiring UI changes.
+
+### Files to Modify
+- `src/database_manager.py` - Added SQL query for orphan networks and logic to merge them into the result set.
+
+### Status
+- [x] Completed

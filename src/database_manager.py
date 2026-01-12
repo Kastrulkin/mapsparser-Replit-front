@@ -724,6 +724,52 @@ class DatabaseManager:
                 'direct_businesses': orphan_businesses,
                 'networks': []
             })
+            
+        # Находим сети без владельцев (orphan networks)
+        cursor.execute("""
+            SELECT n.*
+            FROM Networks n
+            LEFT JOIN Users u ON n.owner_id = u.id
+            WHERE u.id IS NULL
+            ORDER BY n.created_at DESC
+        """)
+        orphan_networks = [dict(row) for row in cursor.fetchall()]
+        
+        if orphan_networks:
+            # Для каждой сиротливой сети собираем её бизнесы
+            networks_with_businesses = []
+            for network in orphan_networks:
+                network_id = network['id']
+                # Ищем бизнесы этой сети (используем уже полученные all_network_businesses)
+                # Это эффективнее чем делать новый запрос
+                network_businesses = businesses_by_network.get(network_id, [])
+                networks_with_businesses.append({
+                    **network,
+                    'businesses': network_businesses
+                })
+            
+            # Если уже есть группа "Без владельца", добавляем туда
+            found_orphan_group = False
+            for user_group in result:
+                if user_group['id'] is None and user_group['email'] == '[Без владельца]':
+                    user_group['networks'].extend(networks_with_businesses)
+                    found_orphan_group = True
+                    break
+            
+            # Если группы нет, создаем её
+            if not found_orphan_group:
+                result.append({
+                    'id': None,
+                    'email': '[Без владельца]',
+                    'name': '[Сети без владельца]',
+                    'phone': None,
+                    'created_at': None,
+                    'is_active': None,
+                    'is_verified': None,
+                    'is_superadmin': False,
+                    'direct_businesses': [],
+                    'networks': networks_with_businesses
+                })
         
         return result
     
