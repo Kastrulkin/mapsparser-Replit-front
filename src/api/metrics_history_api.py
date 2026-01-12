@@ -27,7 +27,7 @@ def get_metrics_history(business_id):
         # --- SYNC LEGACY PARSES START ---
         # Проверяем старые парсинги и добавляем их в историю, если их нет
         try:
-        try:
+
             # Используем MAX(), чтобы выбрать непустые значения, если в один день было несколько парсингов (один успешный, другой нет)
             cursor.execute("""
                 SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
