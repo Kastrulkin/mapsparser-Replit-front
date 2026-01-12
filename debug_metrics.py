@@ -3,15 +3,21 @@ import os
 import sys
 from datetime import datetime
 
-# Adjust path to find modules if needed
-sys.path.append(os.getcwd())
+# Add 'src' to python path so we can import modules
+current_dir = os.getcwd()
+src_dir = os.path.join(current_dir, 'src')
+sys.path.append(src_dir)
 
 try:
     from safe_db_utils import get_db_connection
-except ImportError:
-    # Fallback if safe_db_utils is not found in path
+    print("Successfully imported safe_db_utils")
+except ImportError as e:
+    print(f"Could not import safe_db_utils: {e}")
+    # Fallback to the known path in src
     def get_db_connection():
-        return sqlite3.connect('reports.db')
+        db_path = os.path.join(src_dir, 'reports.db')
+        print(f"Connecting to fallback DB path: {db_path}")
+        return sqlite3.connect(db_path)
 
 def debug_metrics():
     print("=== DEBUGGING METRICS ===")
@@ -22,16 +28,19 @@ def debug_metrics():
     try:
         # 1. Check if MapParseResults exists and has data
         print("\n[1] Checking MapParseResults table...")
-        cursor.execute("SELECT COUNT(*) FROM MapParseResults")
-        count = cursor.fetchone()[0]
-        print(f"Total rows in MapParseResults: {count}")
-        
-        if count > 0:
-            cursor.execute("SELECT id, business_id, created_at, rating FROM MapParseResults ORDER BY created_at DESC LIMIT 5")
-            print("Latest 5 Parse Results:")
-            for row in cursor.fetchall():
-                print(f" - ID: {row[0]}, BID: {row[1]}, Date: {row[2]}, Rating: {row[3]}")
-                
+        try:
+            cursor.execute("SELECT COUNT(*) FROM MapParseResults")
+            count = cursor.fetchone()[0]
+            print(f"Total rows in MapParseResults: {count}")
+            
+            if count > 0:
+                cursor.execute("SELECT id, business_id, created_at, rating FROM MapParseResults ORDER BY created_at DESC LIMIT 5")
+                print("Latest 5 Parse Results:")
+                for row in cursor.fetchall():
+                    print(f" - ID: {row[0]}, BID: {row[1]}, Date: {row[2]}, Rating: {row[3]}")
+        except Exception as e:
+            print(f"Error reading MapParseResults: {e}")
+
         # 2. Check if BusinessMetricsHistory exists and has data
         print("\n[2] Checking BusinessMetricsHistory table...")
         try:
