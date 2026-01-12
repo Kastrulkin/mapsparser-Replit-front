@@ -366,6 +366,24 @@ def process_queue():
             return
         
         # ШАГ 3: Сохраняем результаты (открываем новое соединение)
+        if not is_successful and card_data.get("error") != "captcha_detected":
+            print(f"❌ Парсинг неуспешен: {reason}. Сохранение отменено.")
+            
+            # Обновляем статус задачи на error
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE ParseQueue 
+                SET status = 'error', 
+                    error_message = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (f"Parsing failed: {reason}", queue_dict["id"]))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return
+
         business_id = queue_dict.get("business_id")
         conn = get_db_connection()
         cursor = conn.cursor()

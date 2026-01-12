@@ -145,8 +145,10 @@ class YandexMapsInterceptionParser:
                     page.wait_for_timeout(2000)
                     page_content = page.content()
                     if "captcha" in page_content.lower() or "робот" in page_content.lower() or "Подтвердите" in page_content:
-                        print("⚠️ Обнаружена капча! Fallback на HTML парсинг может не сработать.")
-                        # Продолжаем, но данные могут быть неполными
+                        print("⚠️ Обнаружена капча! Возвращаем ошибку для повторной попытки.")
+                        if browser:
+                            browser.close()
+                        return {'error': 'captcha_detected', 'url': url}
                 except:
                     # Если не удалось загрузить, продолжаем с тем что есть
                     print("⚠️ Страница не загрузилась полностью, но продолжаем...")

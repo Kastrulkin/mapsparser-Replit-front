@@ -1745,3 +1745,21 @@ Resolve `AttributeError: 'NoneType' object has no attribute 'close'` in `process
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Captcha Detection & Empty Result Prevention
+
+### Current Task
+Resolve issue where parser detected captcha but returned empty data, which worker then saved as "successful" completion, leading to empty reports and tasks disappearing from queue.
+
+### Architecture Decision
+1. **Explicit Captcha Return**: `parser_interception.py` now returns `{'error': 'captcha_detected'}` immediately upon detecting captcha, triggering the worker's rescheduling logic.
+2. **Strict Success Validation**: `worker.py` now checks `_is_parsing_successful()`. If validation fails (and it's not a handled captcha), the task is marked as `error` with a descriptive message instead of `done`. This prevents empty/broken data from being silently accepted.
+
+### Files to Modify
+- `src/parser_interception.py` - Added early return on captcha detection.
+- `src/worker.py` - Added check for `is_successful` before saving results to `MapParseResults`.
+
+### Status
+- [x] Completed
