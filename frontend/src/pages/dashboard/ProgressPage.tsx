@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import ProgressTracker from '@/components/ProgressTracker';
+
 import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
 import { BusinessGrowthPlan } from '@/components/BusinessGrowthPlan';
@@ -91,7 +91,7 @@ export const ProgressPage = () => {
       {/* Metrics History Graphs */}
       <MetricsHistoryCharts businessId={currentBusinessId} />
 
-      <ProgressTracker businessId={currentBusinessId} />
+
       <MapRecommendations businessId={currentBusinessId} />
       <MapParseTable businessId={currentBusinessId} />
 

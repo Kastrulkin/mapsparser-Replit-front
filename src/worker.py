@@ -860,6 +860,44 @@ def _process_sync_yandex_business_task(queue_dict):
                     photos_count,
                 ))
             
+            # Также сохраняем в историю метрик для графиков
+            try:
+                metric_history_id = str(uuid.uuid4())
+                current_date = datetime.now().strftime('%Y-%m-%d')
+                
+                # Проверяем, есть ли уже запись за сегодня от парсинга
+                cursor.execute("""
+                    SELECT id FROM BusinessMetricsHistory 
+                    WHERE business_id = ? AND metric_date = ? AND source = 'parsing'
+                """, (business_id, current_date))
+                
+                existing_metric = cursor.fetchone()
+                
+                if existing_metric:
+                    cursor.execute("""
+                        UPDATE BusinessMetricsHistory 
+                        SET rating = ?, reviews_count = ?, photos_count = ?, news_count = ?
+                        WHERE id = ?
+                    """, (rating, reviews_count, photos_count, news_count, existing_metric[0]))
+                else:
+                    cursor.execute("""
+                        INSERT INTO BusinessMetricsHistory (
+                            id, business_id, metric_date, rating, reviews_count, 
+                            photos_count, news_count, source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'parsing')
+                    """, (
+                        metric_history_id, 
+                        business_id, 
+                        current_date, 
+                        rating, 
+                        reviews_count, 
+                        photos_count, 
+                        news_count
+                    ))
+            except Exception as e:
+                print(f"Error saving metrics history: {e}")
+            
             db.conn.commit()
             # Safely close db and connections
             try:

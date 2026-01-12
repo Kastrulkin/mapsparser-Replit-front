@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from core.auth_helpers import require_auth_from_request, verify_business_access
+from progress_calculator import calculate_business_progress
 import uuid
 import json
 from datetime import datetime
@@ -24,7 +25,138 @@ def get_stage_progress(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
-        
+            
+        # --- AUTO-CALCULATION START ---
+        # Рассчитываем прогресс на основе реальных данных
+        try:
+            calc_results = calculate_business_progress(business_id)
+            
+            # Маппинг технических проверок на номера задач (1-based)
+            # Stage ID -> { Task Number -> [Check Keys] }
+            mapping = {
+                1: { # Фундамент
+                    1: ['profile_completed', 'yandex_maps_profile'], # Заполнить профиль
+                    2: ['google_maps_profile'],                    # Создать карточки Google
+                    3: ['photos_uploaded'],                        # Загрузить фото
+                    4: ['reviews_collected'],                      # Собрать отзывы
+                    5: ['social_links']                            # Соцсети
+                },
+                2: { # Оптимизация
+                    1: ['pricelist_added'],                        # Прайс-лист
+                    2: ['booking_widget'],                         # Виджет
+                    3: ['auto_reviews']                            # Автосбор отзывов
+                },
+                3: { # Автоматизация
+                    1: ['crm_implemented'],                        # CRM
+                    2: ['database_filled']                         # База
+                },
+                4: { # Боты
+                    1: ['bots_connected'],                         # Боты
+                    3: ['crm_integration']                         # Интеграция
+                }
+            }
+            
+            now = datetime.now().isoformat()
+            
+            # Получаем ID этапов для этого типа бизнеса
+            cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
+            b_type_key = cursor.fetchone()[0]
+            cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ?", (b_type_key,))
+            b_type_id_row = cursor.fetchone()
+            
+            if b_type_id_row:
+                b_type_id = b_type_id_row[0]
+                # Получаем stages: id, stage_number, tasks_count
+                cursor.execute("SELECT id, stage_number, tasks FROM GrowthStages WHERE business_type_id = ?", (b_type_id,))
+                db_stages = cursor.fetchall()
+                
+                for stage_row in db_stages:
+                    stage_id = stage_row[0]
+                    stage_num = stage_row[1]
+                    tasks_json = stage_row[2]
+                    total_tasks_count = 0
+                    if tasks_json:
+                        try:
+                            total_tasks_count = len(json.loads(tasks_json))
+                        except:
+                            pass
+                    
+                    # Проверяем, есть ли расчеты для этого этапа
+                    calc_stage = calc_results.get(f'stage_{stage_num}')
+                    if calc_stage and stage_num in mapping:
+                        # Получаем текущий прогресс из БД
+                        cursor.execute("""
+                            SELECT id, completed_tasks, is_unlocked FROM UserStageProgress 
+                            WHERE business_id = ? AND user_id = ? AND stage_id = ?
+                        """, (business_id, user_data['user_id'], stage_id))
+                        prog_row = cursor.fetchone()
+                        
+                        existing_tasks = []
+                        is_unlocked = False
+                        if prog_row:
+                            if prog_row[1]:
+                                try:
+                                    existing_tasks = json.loads(prog_row[1])
+                                except:
+                                    pass
+                            is_unlocked = bool(prog_row[2])
+                        
+                        # Вычисляем новые выполненные задачи
+                        new_tasks = set(existing_tasks)
+                        details = calc_stage['details']
+                        
+                        task_map = mapping[stage_num]
+                        for task_num, check_keys in task_map.items():
+                            # Если любой из ключей проверки True -> задача выполнена?
+                            # Или ВСЕ? Обычно "или" для профиля, "и" для сложносоставных.
+                            # Здесь считаем: если ключ completed=True, то OK.
+                            # Если task 1 зависит от profile OR yandex -> any()
+                            # Но логика Task 1: "Заполнить на Яндекс..." -> yandex check.
+                            # Давайте используем ANY для Task 1, и конкретные для остальных.
+                            is_done = False
+                            for key in check_keys:
+                                if details.get(key, {}).get('completed'):
+                                    is_done = True
+                                    break
+                            
+                            if is_done:
+                                new_tasks.add(task_num)
+                        
+                        # Если изменилось - обновляем
+                        if len(new_tasks) != len(existing_tasks):
+                            final_tasks_list = list(new_tasks)
+                            final_percentage = round((len(final_tasks_list) / total_tasks_count) * 100) if total_tasks_count > 0 else 0
+                            completed_at = now if final_percentage >= 100 else None
+                            
+                            # Если прогресс > 0, разблокируем этап автоматически
+                            should_unlock = is_unlocked or (final_percentage > 0)
+                            # Также можно разблокировать следующий этап, если этот 100%
+                            
+                            if prog_row:
+                                cursor.execute("""
+                                    UPDATE UserStageProgress
+                                    SET completed_tasks = ?, progress_percentage = ?, completed_at = ?, is_unlocked = ?
+                                    WHERE id = ?
+                                """, (json.dumps(final_tasks_list), final_percentage, completed_at, 1 if should_unlock else 0, prog_row[0]))
+                            else:
+                                prog_id = str(uuid.uuid4())
+                                cursor.execute("""
+                                    INSERT INTO UserStageProgress (
+                                        id, user_id, business_id, stage_id, is_unlocked, 
+                                        completed_tasks, progress_percentage, unlocked_at, completed_at
+                                    )
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (prog_id, user_data['user_id'], business_id, stage_id, 
+                                      1 if should_unlock else 0, json.dumps(final_tasks_list), 
+                                      final_percentage, now if should_unlock else None, completed_at))
+            
+            db.conn.commit()
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка авто-расчета прогресса: {e}")
+            # Не падаем, отдаем старые данные
+        # --- AUTO-CALCULATION END ---
+
         # Получаем тип бизнеса для загрузки этапов
         cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
         business = cursor.fetchone()

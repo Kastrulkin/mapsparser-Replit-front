@@ -1884,3 +1884,23 @@ User reported that generated news sometimes contains raw JSON (e.g., `{"news": "
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - UI Fix: Progress Page Duplication & Metrics History
+
+### Current Task
+User reported duplicate headers on the "Progress" page (Legacy "Business Growth Plan" + new banner). Also reported that parsed metrics were not appearing in the "Business Metrics" history chart.
+
+### Architecture Decision
+- **UI Cleanup**: Removed the legacy `ProgressTracker` component from `ProgressPage.tsx`, keeping only the new gamified `BusinessGrowthPlan`.
+- **Metrics Sync**: Updated `src/worker.py` to automatically save parsed data (rating, reviews, photos, news) into the `BusinessMetricsHistory` table. Previously, this data sat only in `MapParseResults`, so the history charts (which query `BusinessMetricsHistory`) came up empty.
+- **Auto-Progress**: (Previously implemented) Integrated `ProgressCalculator` into `stage_progress_api.py` to auto-complete growth tasks.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/ProgressPage.tsx` - Removed `ProgressTracker`.
+- `src/worker.py` - Added SQL INSERT/UPDATE to `BusinessMetricsHistory` after successful parsing.
+- `src/api/stage_progress_api.py` - Integrated auto-calculation.
+
+### Status
+- [x] Completed
