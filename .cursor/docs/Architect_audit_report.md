@@ -1901,7 +1901,7 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 - `frontend/src/pages/dashboard/ProgressPage.tsx` - Removed `ProgressTracker`.
 - `src/worker.py` - Added SQL INSERT/UPDATE to `BusinessMetricsHistory` after successful parsing.
 - `src/api/stage_progress_api.py` - Integrated auto-calculation.
-- `src/api/metrics_history_api.py` - Added smart legacy sync logic. Now uses `MAX(rating)` to select the best successful parse for the day and updates existing history entries if they contain empty data.
+- `src/api/metrics_history_api.py` - Added smart legacy sync logic. Now handles empty strings (`''`) correctly by filtering them out in source and allowing overwrite of valid data over empty/null data in history.
 
 ### Status
 - [x] Completed

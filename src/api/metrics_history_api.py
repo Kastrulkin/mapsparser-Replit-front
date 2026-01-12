@@ -25,14 +25,15 @@ def get_metrics_history(business_id):
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
         # --- SYNC LEGACY PARSES START ---
-        # Проверяем старые парсинги и добавляем их в историю, если их нет
+                # Проверяем старые парсинги и добавляем их в историю, если их нет
         try:
-
-            # Используем MAX(), чтобы выбрать непустые значения, если в один день было несколько парсингов (один успешный, другой нет)
+            # Используем MAX(), чтобы выбрать непустые значения. 
+            # SQLite MAX игнорирует NULL, но может выбрать пустую строку, если она считается "больше" NULL.
+            # Поэтому явно фильтруем пустые строки
             cursor.execute("""
                 SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
                 FROM MapParseResults 
-                WHERE business_id = ?
+                WHERE business_id = ? AND rating != '' AND rating IS NOT NULL
                 GROUP BY parse_date 
             """, (business_id,))
             
@@ -62,8 +63,8 @@ def get_metrics_history(business_id):
                         metric_id, business_id, parse_date,
                         parse[0], parse[1], parse[2], parse[3]
                     ))
-                elif existing[1] is None and parse[0] is not None:
-                    # Если существующая запись имеет пустое значение, а мы нашли лучшее - обновляем
+                # Обновляем, если в базе пусто (None или ''), а у нас есть данные
+                elif (existing[1] is None or existing[1] == '') and parse[0]:
                      cursor.execute("""
                         UPDATE BusinessMetricsHistory
                         SET rating = ?, reviews_count = ?, photos_count = ?, news_count = ?
