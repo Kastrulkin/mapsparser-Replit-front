@@ -1903,6 +1903,8 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 - `src/api/stage_progress_api.py` - Integrated auto-calculation.
 - `src/api/metrics_history_api.py` - Added smart legacy sync logic. Now handles empty strings (`''`) correctly by filtering them out in source and allowing overwrite of valid data over empty/null data in history.
 - `src/yandex_maps_scraper.py` - Improved `get_photos_count` robustness by adding multiple selectors for the "Photos" tab, aligning it with `parse_photos` logic.
+- `frontend/src/components/BusinessSwitcher.tsx` - Hidden network sub-locations from Superadmin dropdown (now consistent for all users).
+- `src/add_beauty_salon_strategy.py` - Updated growth plan texts to be geo-neutral (removed specific mentions of Yandex/Google/2GIS).
 
 ### Status
 - [x] Completed
