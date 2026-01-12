@@ -660,6 +660,10 @@ export const ru = {
           ]
         }
       ],
+      card: {
+        step: "Шаг",
+        completed: "Выполнено"
+      },
       actions: {
         copy: "Копировать",
         copied: "Скопировано",
@@ -727,4 +731,3 @@ export const ru = {
     }
   }
 };
-
