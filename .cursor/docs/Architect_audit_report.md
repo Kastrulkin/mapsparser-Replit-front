@@ -1816,3 +1816,20 @@ User reported missing "Optimize" button in Service List actions. Also replaced e
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - UI Adjustment: Revert Icon Style
+
+### Current Task
+User requested to revert the "Delete" icon back to the previous style (emoji) while keeping the new "Optimize" button.
+
+### Architecture Decision
+- **Visual Preference**: Reverted `Trash2` icon to `🗑️` emoji based on user feedback.
+- **Functionality Preservation**: "Optimize" button remains as `Wand2` icon.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Replaced `Trash2` with emoji, removed unused import.
+
+### Status
+- [x] Completed

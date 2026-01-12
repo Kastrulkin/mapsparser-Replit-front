@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Wand2, Trash2 } from 'lucide-react';
+import { Wand2 } from 'lucide-react';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
@@ -621,9 +621,9 @@ export const CardOverviewPage = () => {
                             variant="ghost"
                             size="icon"
                             onClick={() => deleteService(service.id)}
-                            className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                            className="h-8 w-8 hover:bg-red-50"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <span className="text-lg">🗑️</span>
                           </Button>
                         </div>
                       </td>
