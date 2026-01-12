@@ -1,7 +1,7 @@
 export const el = {
   // Page title
   pageTitle: "BeautyBot.pro - Τοπική προώθηση για τοπική επιχείρηση",
-  
+
   // Header
   header: {
     whatWeDo: "Τι Κάνουμε?",
@@ -9,7 +9,7 @@ export const el = {
     prices: "Τιμές",
     tryFree: "Δοκιμή Δωρεάν"
   },
-  
+
   // Footer
   footer: {
     title: "BeautyBot",
@@ -20,7 +20,7 @@ export const el = {
     contacts: "Επαφές",
     copyright: "© 2025 BeautyBot. Όλα τα δικαιώματα διατηρούνται."
   },
-  
+
   // Stats
   stats: {
     title: "Δεν παρέχουμε απλώς εργαλεία —",
@@ -30,7 +30,7 @@ export const el = {
     stat2: "Νέοι πελάτες σε 2-4 εβδομάδες",
     stat3: "1700% αύξηση prospects σε στούντιο μασάζ"
   },
-  
+
   // Hero
   hero: {
     newClients: "Νέοι πελάτες χωρίς κόπο",
@@ -44,7 +44,7 @@ export const el = {
     successMessage: "Ευχαριστούμε! Λάβαμε το αίτημά σας και θα επικοινωνήσουμε σύντομα.",
     errorMessage: "Παρουσιάστηκε σφάλμα. Παρακαλώ δοκιμάστε ξανά."
   },
-  
+
   // Features
   features: {
     title: "Χωρίς μαγεία - απλά κάνουμε τη δουλειά μας για να μεγαλώσεις",
@@ -62,7 +62,7 @@ export const el = {
     upToDate: "Οι πελάτες σου λαμβάνουν πάντα ενημερωμένες πληροφορίες",
     upToDateDesc: "Αυτόματες ενημερώσεις προγραμμάτων, τιμών, προσφορών σε όλες τις πλατφόρμες."
   },
-  
+
   // Testimonials
   testimonials: {
     title: "Δουλεύουμε για τα αποτελέσματα της επιχείρησής σου - κάνε αυτό που αγαπάς, όχι ρουτίνα",
@@ -122,7 +122,7 @@ export const el = {
       result: "+25–40% ραντεβού, +67% τακτικοί πελάτες, 3–4x συστάσεις. Οι διαχειριστές χρειάζονται 2–3 φορές λιγότερο χρόνο στη ρουτίνα."
     }
   },
-  
+
   // CTA
   cta: {
     title: "Έτοιμος να μεγαλώσεις?",
@@ -151,7 +151,7 @@ export const el = {
     finalText: "Πλήρης ανάπτυξη σαλονιού — πληρωμή μόνο από νέα έσοδα!",
     contactExpert: "Επικοινώνησε με ειδικό"
   },
-  
+
   // About
   about: {
     heroTitle: "Ποιοί Είμαστε?",
@@ -232,6 +232,57 @@ export const el = {
     send: "Αποστολή μηνύματος",
     success: "Ευχαριστούμε! Το μήνυμά σας στάλθηκε. Θα επικοινωνήσουμε σύντομα.",
     error: "Αποτυχία αποστολής μηνύματος"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Προφίλ & Επιχείρηση",
+      card: "Διαχείριση Χαρτών",
+      progress: "Πρόοδος",
+      bookings: "Κρατήσεις",
+      chats: "Συνομιλίες",
+      finance: "Οικονομικά",
+      aiChatPromotion: "Προώθηση AI Chat",
+      settings: "Ρυθμίσεις",
+      network: "Διαχείριση Δικτύου"
+    },
+    subscription: {
+      currentSubscription: "Τρέχουσα Συνδρομή",
+      manage: "Διαχειριστείτε τη συνδρομή και το πρόγραμμά σας",
+      plan: "Πρόγραμμα",
+      status: "Κατάσταση",
+      trialUntil: "Δοκιμή μέχρι",
+      subscriptionUntil: "Συνδρομή μέχρι",
+      noSubscription: "Δεν έχετε ενεργή συνδρομή. Επιλέξτε πρόγραμμα παρακάτω.",
+      availablePlans: "Διαθέσιμα Προγράμματα",
+      choosePlan: "Επιλέξτε ένα κατάλληλο πρόγραμμα για την επιχείρησή σας",
+      perMonth: "/μήνα",
+      fromReferrals: " των πληρωμών από προσελκυόμενους πελάτες",
+      after3Months: "Διαθέσιμο μετά από 3 μήνες συνδρομής ή με σύσταση",
+      contactUs: "Επικοινωνήστε μαζί μας",
+      currentPlan: "Τρέχον Πρόγραμμα",
+      update: "Ενημέρωση",
+      processing: "Επεξεργασία...",
+      select: "Επιλογή",
+      starterFeature1: "Πελάτες χωρίς διαφημίσεις από χάρτες και ChatGPT",
+      starterFeature2: "Αναρτήσεις στα social media",
+      starterFeature3: "Ιδανικό για όσους ψάχνουν νέα κανάλια απόκτησης πελατών",
+      profFeature1: "Εργασία στην κάρτα, καθοδήγηση σε κάθε βήμα",
+      profFeature2: "Βελτιστοποίηση διαδικασίας βάσει βέλτιστων πρακτικών",
+      profFeature3: "Δημιουργία ειδήσεων",
+      profFeature4: "Δημιουργία απαντήσεων σε κριτικές",
+      conciergeFeature1: "Κάρτα εταιρείας στο Google ή τοπικούς χάρτες",
+      conciergeFeature2: "Επικοινωνία με πελάτες",
+      conciergeFeature3: "Upselling και Cross-selling",
+      conciergeFeature4: "Βελτιστοποίηση επιχειρηματικών διαδικασιών",
+      conciergeFeature5: "Αφιερωμένος διαχειριστής",
+      eliteFeature1: "Απόκτηση πελατών online",
+      eliteFeature2: "Επικοινωνία με πελάτες",
+      eliteFeature3: "Απόκτηση πελατών offline",
+      eliteFeature4: "Βελτιστοποίηση επιχειρηματικών διαδικασιών",
+      eliteFeature5: "Αφιερωμένος διαχειριστής"
+    }
   }
 };
 

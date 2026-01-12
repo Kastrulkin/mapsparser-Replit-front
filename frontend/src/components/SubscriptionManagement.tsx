@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,8 @@ interface SubscriptionTier {
   id: string;
   name: string;
   price: number;
+  currency: string;
+  period: string;
   features: string[];
   stripe_price_id?: string;
 }
@@ -22,54 +24,6 @@ interface BusinessSubscription {
   moderation_status?: string;
 }
 
-const TIERS: SubscriptionTier[] = [
-  {
-    id: 'starter',
-    name: 'Starter (Начальный)',
-    price: 15,
-    features: [
-      'Клиенты без рекламы с карт и ChatGPT',
-      'Посты для соцсетей',
-      'Идеально для тех, кто ищет новые каналы привлечения клиентов'
-    ]
-  },
-  {
-    id: 'professional',
-    name: 'Профессиональный',
-    price: 55,
-    features: [
-      'Работайте над карточкой, подскажем каждый шаг',
-      'Оптимизируйте процесс на основе лучших практик',
-      'Генерация новостей',
-      'Генерация ответов на отзывы'
-    ]
-  },
-  {
-    id: 'concierge',
-    name: 'Консьерж',
-    price: 310,
-    features: [
-      'Карточка компании на картах',
-      'Коммуникация с клиентами',
-      'Допродажи и кросс-продажи',
-      'Оптимизация бизнес-процессов',
-      'Выделенный менеджер'
-    ]
-  },
-  {
-    id: 'elite',
-    name: 'Особый (Elite)',
-    price: 0,
-    features: [
-      'Привлечение клиентов онлайн',
-      'Коммуникация с клиентами',
-      'Привлечение клиентов оффлайн',
-      'Оптимизация бизнес-процессов',
-      'Выделенный менеджер'
-    ]
-  }
-];
-
 export const SubscriptionManagement = ({ businessId, business }: { businessId: string | null; business: any }) => {
   const [subscription, setSubscription] = useState<BusinessSubscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,25 +33,84 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const paymentStatus = searchParams.get('payment');
   const selectedTierFromUrl = searchParams.get('tier');
   const autoCheckoutStartedRef = useRef(false);
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+
+  const tiers: SubscriptionTier[] = useMemo(() => {
+    const isRu = language === 'ru';
+    return [
+      {
+        id: 'starter',
+        name: isRu ? 'Начальный' : 'Starter',
+        price: isRu ? 1200 : 15,
+        currency: isRu ? '₽' : '$',
+        period: t.dashboard.subscription.perMonth,
+        features: [
+          t.dashboard.subscription.starterFeature1,
+          t.dashboard.subscription.starterFeature2,
+          t.dashboard.subscription.starterFeature3
+        ]
+      },
+      {
+        id: 'professional',
+        name: isRu ? 'Профессиональный' : 'Professional',
+        price: isRu ? 5000 : 55,
+        currency: isRu ? '₽' : '$',
+        period: t.dashboard.subscription.perMonth,
+        features: [
+          t.dashboard.subscription.profFeature1,
+          t.dashboard.subscription.profFeature2,
+          t.dashboard.subscription.profFeature3,
+          t.dashboard.subscription.profFeature4
+        ]
+      },
+      {
+        id: 'concierge',
+        name: isRu ? 'Консьерж' : 'Concierge',
+        price: isRu ? 25000 : 310,
+        currency: isRu ? '₽' : '$',
+        period: t.dashboard.subscription.perMonth,
+        features: [
+          t.dashboard.subscription.conciergeFeature1,
+          t.dashboard.subscription.conciergeFeature2,
+          t.dashboard.subscription.conciergeFeature3,
+          t.dashboard.subscription.conciergeFeature4,
+          t.dashboard.subscription.conciergeFeature5
+        ]
+      },
+      {
+        id: 'elite',
+        name: isRu ? 'Особый (Elite)' : 'Elite',
+        price: 0,
+        currency: '',
+        period: '',
+        features: [
+          t.dashboard.subscription.eliteFeature1,
+          t.dashboard.subscription.eliteFeature2,
+          t.dashboard.subscription.eliteFeature3,
+          t.dashboard.subscription.eliteFeature4,
+          t.dashboard.subscription.eliteFeature5
+        ]
+      }
+    ];
+  }, [language, t]);
 
   useEffect(() => {
     if (paymentStatus === 'success') {
       toast({
-        title: 'Оплата успешна!',
-        description: 'Ваша подписка активирована.',
+        title: language === 'ru' ? 'Оплата успешна!' : 'Payment successful!',
+        description: language === 'ru' ? 'Ваша подписка активирована.' : 'Your subscription is activated.',
       });
       // Очищаем параметр из URL
       window.history.replaceState({}, '', window.location.pathname);
     } else if (paymentStatus === 'cancelled') {
       toast({
-        title: 'Оплата отменена',
-        description: 'Вы можете выбрать тариф позже.',
+        title: language === 'ru' ? 'Оплата отменена' : 'Payment cancelled',
+        description: language === 'ru' ? 'Вы можете выбрать тариф позже.' : 'You can choose a plan later.',
         variant: 'destructive',
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [paymentStatus, toast]);
+  }, [paymentStatus, toast, language]);
 
   useEffect(() => {
     if (business) {
@@ -134,8 +147,8 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   const handleSubscribe = async (tierId: string) => {
     if (!businessId) {
       toast({
-        title: 'Ошибка',
-        description: 'Бизнес не выбран',
+        title: t.error,
+        description: language === 'ru' ? 'Бизнес не выбран' : 'Business not selected',
         variant: 'destructive',
       });
       return;
@@ -163,15 +176,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         window.location.href = data.url;
       } else {
         toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось создать сессию оплаты',
+          title: t.error,
+          description: data.error || (language === 'ru' ? 'Не удалось создать сессию оплаты' : 'Failed to create payment session'),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при создании сессии оплаты',
+        title: t.error,
+        description: language === 'ru' ? 'Ошибка при создании сессии оплаты' : 'Error creating payment session',
         variant: 'destructive',
       });
     } finally {
@@ -180,45 +193,20 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   };
 
   const getTierName = (tierId: string) => {
-    if (language === 'ru') {
-      switch (tierId) {
-        case 'starter':
-          return 'Начальный';
-        case 'professional':
-          return 'Профессиональный';
-        case 'concierge':
-          return 'Консьерж';
-        case 'elite':
-          return 'Особый';
-        default:
-          return tierId;
-      }
-    }
-    // Для всех не-русских языков используем английские названия
-    switch (tierId) {
-      case 'starter':
-        return 'Starter';
-      case 'professional':
-        return 'Professional';
-      case 'concierge':
-        return 'Concierge';
-      case 'elite':
-        return 'Elite';
-      default:
-        return tierId;
-    }
+    const tier = tiers.find(t => t.id === tierId);
+    return tier ? tier.name : tierId;
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-500">Активна</Badge>;
+        return <Badge className="bg-green-500">{language === 'ru' ? 'Активна' : 'Active'}</Badge>;
       case 'pending':
-        return <Badge className="bg-yellow-500">Ожидает оплаты</Badge>;
+        return <Badge className="bg-yellow-500">{language === 'ru' ? 'Ожидает оплаты' : 'Pending Payment'}</Badge>;
       case 'cancelled':
-        return <Badge className="bg-red-500">Отменена</Badge>;
+        return <Badge className="bg-red-500">{language === 'ru' ? 'Отменена' : 'Cancelled'}</Badge>;
       default:
-        return <Badge className="bg-gray-500">Неактивна</Badge>;
+        return <Badge className="bg-gray-500">{language === 'ru' ? 'Неактивна' : 'Inactive'}</Badge>;
     }
   };
 
@@ -226,48 +214,47 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     return (
       <Card>
         <CardContent className="pt-6">
-          <div className="text-center">Загрузка...</div>
+          <div className="text-center">{language === 'ru' ? 'Загрузка...' : 'Loading...'}</div>
         </CardContent>
       </Card>
     );
   }
 
-  const currentTier = TIERS.find(t => t.id === subscription?.tier);
   const isModerationPending = subscription?.moderation_status === 'pending';
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Текущая подписка</CardTitle>
+          <CardTitle>{t.dashboard.subscription.currentSubscription}</CardTitle>
           <CardDescription>
-            Управляйте своей подпиской и тарифом
+            {t.dashboard.subscription.manage}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {subscription && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Тариф:</span>
+                <span className="text-sm font-medium">{t.dashboard.subscription.plan}:</span>
                 <span className="text-sm">{getTierName(subscription.tier)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Статус:</span>
+                <span className="text-sm font-medium">{t.dashboard.subscription.status}:</span>
                 {getStatusBadge(subscription.status)}
               </div>
               {subscription.trial_ends_at && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Триал до:</span>
+                  <span className="text-sm font-medium">{t.dashboard.subscription.trialUntil}:</span>
                   <span className="text-sm">
-                    {new Date(subscription.trial_ends_at).toLocaleDateString('ru-RU')}
+                    {new Date(subscription.trial_ends_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')}
                   </span>
                 </div>
               )}
               {subscription.subscription_ends_at && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Подписка до:</span>
+                  <span className="text-sm font-medium">{t.dashboard.subscription.subscriptionUntil}:</span>
                   <span className="text-sm">
-                    {new Date(subscription.subscription_ends_at).toLocaleDateString('ru-RU')}
+                    {new Date(subscription.subscription_ends_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')}
                   </span>
                 </div>
               )}
@@ -277,7 +264,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
           {!subscription && (
             <div className="text-center py-4">
               <p className="text-sm text-gray-600 mb-4">
-                У вас нет активной подписки. Выберите тариф ниже.
+                {t.dashboard.subscription.noSubscription}
               </p>
             </div>
           )}
@@ -286,14 +273,14 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
       <Card>
         <CardHeader>
-          <CardTitle>Доступные тарифы</CardTitle>
+          <CardTitle>{t.dashboard.subscription.availablePlans}</CardTitle>
           <CardDescription>
-            Выберите подходящий тариф для вашего бизнеса
+            {t.dashboard.subscription.choosePlan}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
-            {TIERS.map((tier) => {
+            {tiers.map((tier) => {
               const isCurrentTier = subscription?.tier === tier.id;
               const isActive = subscription?.status === 'active' && isCurrentTier;
 
@@ -306,23 +293,23 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                     {/* Верхний невидимый блок: заголовок + особенности */}
                     <div className="flex-1 flex flex-col">
                       <CardHeader>
-                        <CardTitle className="text-xl">{getTierName(tier.id)}</CardTitle>
+                        <CardTitle className="text-xl">{tier.name}</CardTitle>
                         <div className="mt-2">
                           {tier.id === 'elite' ? (
                             <>
                               <span className="text-3xl font-bold">7%</span>
-                              <span className="text-gray-500"> от оплат привлечённых клиентов</span>
+                              <span className="text-gray-500">{t.dashboard.subscription.fromReferrals}</span>
                             </>
                           ) : (
                             <>
-                              <span className="text-3xl font-bold">${tier.price}</span>
-                              <span className="text-gray-500">/месяц</span>
+                              <span className="text-3xl font-bold">{tier.currency}{tier.price}</span>
+                              <span className="text-gray-500">{tier.period}</span>
                             </>
                           )}
                         </div>
                         {tier.id === 'elite' && (
                           <p className="text-xs text-gray-500 mt-2">
-                            Доступно после 3 месяцев подписки или по рекомендации
+                            {t.dashboard.subscription.after3Months}
                           </p>
                         )}
                       </CardHeader>
@@ -347,9 +334,8 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                         onClick={() => {
                           if (tier.id === 'elite') {
                             toast({
-                              title: 'Особый тариф',
-                              description:
-                                'Для подключения тарифа Elite свяжитесь с нами. Доступно после 3 месяцев подписки или по рекомендации.',
+                              title: t.dashboard.subscription.eliteFeature5, // Use manager title or similar
+                              description: t.dashboard.subscription.after3Months,
                             });
                           } else {
                             handleSubscribe(tier.id);
@@ -357,14 +343,14 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                         }}
                       >
                         {tier.id === 'elite'
-                          ? 'Связаться с нами'
+                          ? t.dashboard.subscription.contactUs
                           : isActive
-                            ? 'Текущий тариф'
+                            ? t.dashboard.subscription.currentPlan
                             : isCurrentTier
-                              ? 'Обновить'
+                              ? t.dashboard.subscription.update
                               : processing
-                                ? 'Обработка...'
-                                : 'Выбрать'}
+                                ? t.dashboard.subscription.processing
+                                : t.dashboard.subscription.select}
                       </Button>
                     </CardFooter>
                   </div>
@@ -377,4 +363,3 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     </div>
   );
 };
-

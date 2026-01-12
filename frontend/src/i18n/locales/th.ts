@@ -1,7 +1,7 @@
 export const th = {
   // Page title
   pageTitle: "BeautyBot.pro - การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
-  
+
   header: {
     whatWeDo: "เราทำอะไร?",
     whoWeAre: "เราเป็นใคร?",
@@ -217,5 +217,56 @@ export const th = {
     send: "ส่งข้อความ",
     success: "ขอบคุณ! ส่งข้อความเรียบร้อย เราจะติดต่อกลับโดยเร็ว",
     error: "ส่งข้อความไม่สำเร็จ"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "โปรไฟล์และธุรกิจ",
+      card: "การจัดการแผนที่",
+      progress: "ความคืบหน้า",
+      bookings: "การจอง",
+      chats: "แชท",
+      finance: "การเงิน",
+      aiChatPromotion: "โปรโมชั่น AI Chat",
+      settings: "ตั้งค่า",
+      network: "การจัดการเครือข่าย"
+    },
+    subscription: {
+      currentSubscription: "การสมัครสมาชิกปัจจุบัน",
+      manage: "จัดการการสมัครสมาชิกและแพ็กเกจของคุณ",
+      plan: "แพ็กเกจ",
+      status: "สถานะ",
+      trialUntil: "ทดลองใช้ถึง",
+      subscriptionUntil: "สมาชิกถึง",
+      noSubscription: "คุณไม่มีการสมัครสมาชิกที่ใช้งานอยู่ เลือกแพ็กเกจด้านล่าง",
+      availablePlans: "แพ็กเกจที่มีอยู่",
+      choosePlan: "เลือกแพ็กเกจที่เหมาะสมสำหรับธุรกิจของคุณ",
+      perMonth: "/เดือน",
+      fromReferrals: " ของการชำระเงินจากลูกค้าที่แนะนำ",
+      after3Months: "ใช้ได้หลังจากสมัครสมาชิก 3 เดือนหรือตามคำแนะนำ",
+      contactUs: "ติดต่อเรา",
+      currentPlan: "แพ็กเกจปัจจุบัน",
+      update: "อัปเดต",
+      processing: "กำลังดำเนินการ...",
+      select: "เลือก",
+      starterFeature1: "ลูกค้าโดยไม่มีโฆษณาจากแผนที่และ ChatGPT",
+      starterFeature2: "โพสต์โซเชียลมีเดีย",
+      starterFeature3: "เหมาะสำหรับผู้ที่มองหาช่องหาลูกค้าใหม่",
+      profFeature1: "ทำงานบนการ์ด เราจะแนะนำคุณทุกขั้นตอน",
+      profFeature2: "ปรับปรุงกระบวนการตามแนวทางปฏิบัติที่ดีที่สุด",
+      profFeature3: "การสร้างข่าว",
+      profFeature4: "การสร้างคำตอบรีวิว",
+      conciergeFeature1: "การ์ดบริษัทบน Google หรือแผนที่ท้องถิ่น",
+      conciergeFeature2: "การสื่อสารกับลูกค้า",
+      conciergeFeature3: "Upselling และ Cross-selling",
+      conciergeFeature4: "การปรับปรุงกระบวนการทางธุรกิจ",
+      conciergeFeature5: "ผู้จัดการส่วนตัว",
+      eliteFeature1: "การหาลูกค้าออนไลน์",
+      eliteFeature2: "การสื่อสารกับลูกค้า",
+      eliteFeature3: "การหาลูกค้าออฟไลน์",
+      eliteFeature4: "การปรับปรุงกระบวนการทางธุรกิจ",
+      eliteFeature5: "ผู้จัดการส่วนตัว"
+    }
   }
 };

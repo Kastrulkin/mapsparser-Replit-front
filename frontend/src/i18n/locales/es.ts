@@ -1,7 +1,7 @@
 export const es = {
   // Page title
   pageTitle: "BeautyBot.pro - Promoción local para negocios locales",
-  
+
   // Header
   header: {
     whatWeDo: "¿Qué Hacemos?",
@@ -9,7 +9,7 @@ export const es = {
     prices: "Precios",
     tryFree: "Probar Gratis"
   },
-  
+
   // Footer
   footer: {
     title: "BeautyBot",
@@ -20,7 +20,7 @@ export const es = {
     contacts: "Contactos",
     copyright: "© 2025 BeautyBot. Todos los derechos reservados."
   },
-  
+
   // Stats
   stats: {
     title: "No solo proporcionamos herramientas —",
@@ -30,7 +30,7 @@ export const es = {
     stat2: "Nuevos clientes en 2-4 semanas",
     stat3: "1700% de crecimiento de leads en estudio de masajes"
   },
-  
+
   // Hero
   hero: {
     newClients: "Nuevos clientes sin esfuerzo",
@@ -44,7 +44,7 @@ export const es = {
     successMessage: "¡Gracias! Hemos recibido tu solicitud y te contactaremos pronto.",
     errorMessage: "Ocurrió un error. Por favor, inténtalo de nuevo."
   },
-  
+
   // Features
   features: {
     title: "Sin magia - solo haciendo nuestro trabajo para que crezcas",
@@ -62,7 +62,7 @@ export const es = {
     upToDate: "Tus clientes siempre reciben información actualizada",
     upToDateDesc: "Actualizaciones automáticas de horarios, precios, promociones en todas las plataformas."
   },
-  
+
   // Testimonials
   testimonials: {
     title: "Trabajamos para los resultados de tu negocio - haz lo que amas, no la rutina",
@@ -122,7 +122,7 @@ export const es = {
       result: "+25–40% citas, +67% clientes regulares, 3–4x recomendaciones. Los administradores necesitan 2–3 veces menos tiempo en rutina."
     }
   },
-  
+
   // CTA
   cta: {
     title: "¿Listo para crecer?",
@@ -151,7 +151,7 @@ export const es = {
     finalText: "¡Desarrollo completo del salón — pago solo de nuevos ingresos!",
     contactExpert: "Contactar un experto"
   },
-  
+
   // About
   about: {
     heroTitle: "¿Quiénes Somos?",
@@ -232,6 +232,57 @@ export const es = {
     send: "Enviar mensaje",
     success: "¡Gracias! Tu mensaje ha sido enviado. Te contactaremos pronto.",
     error: "Error al enviar el mensaje"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Perfil y Negocio",
+      card: "Gestión de Mapas",
+      progress: "Progreso",
+      bookings: "Reservas",
+      chats: "Chats",
+      finance: "Finanzas",
+      aiChatPromotion: "Promoción Chat IA",
+      settings: "Ajustes",
+      network: "Gestión de Red"
+    },
+    subscription: {
+      currentSubscription: "Suscripción Actual",
+      manage: "Administra tu suscripción y plan",
+      plan: "Plan",
+      status: "Estado",
+      trialUntil: "Prueba hasta",
+      subscriptionUntil: "Suscripción hasta",
+      noSubscription: "No tienes una suscripción activa. Elige un plan abajo.",
+      availablePlans: "Planes Disponibles",
+      choosePlan: "Elige un plan adecuado para tu negocio",
+      perMonth: "/mes",
+      fromReferrals: " de pagos de clientes referidos",
+      after3Months: "Disponible después de 3 meses de suscripción o por recomendación",
+      contactUs: "Contáctanos",
+      currentPlan: "Plan Actual",
+      update: "Actualizar",
+      processing: "Procesando...",
+      select: "Seleccionar",
+      starterFeature1: "Clientes sin publicidad de mapas y ChatGPT",
+      starterFeature2: "Publicaciones para redes sociales",
+      starterFeature3: "Perfecto para quienes buscan nuevos canales de adquisición",
+      profFeature1: "Trabajo en la tarjeta, guiaremos cada paso",
+      profFeature2: "Optimización de procesos basada en mejores prácticas",
+      profFeature3: "Generación de noticias",
+      profFeature4: "Generación de respuestas a reseñas",
+      conciergeFeature1: "Tarjeta de empresa en Google o mapas locales",
+      conciergeFeature2: "Comunicación con clientes",
+      conciergeFeature3: "Ventas cruzadas y adicionales",
+      conciergeFeature4: "Optimización de procesos comerciales",
+      conciergeFeature5: "Gerente dedicado",
+      eliteFeature1: "Adquisición de clientes online",
+      eliteFeature2: "Comunicación con clientes",
+      eliteFeature3: "Adquisición de clientes offline",
+      eliteFeature4: "Optimización de procesos comerciales",
+      eliteFeature5: "Gerente dedicado"
+    }
   }
 };
 

@@ -233,6 +233,61 @@ export const en = {
     send: "Send message",
     success: "Thank you! Your message has been sent. We'll get back to you soon.",
     error: "Failed to send message"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Profile & Business",
+      card: "Maps Management",
+      progress: "Progress",
+      bookings: "Bookings",
+      chats: "Chats",
+      finance: "Finance",
+      aiChatPromotion: "AI Chat Promotion",
+      settings: "Settings",
+      network: "Network Management"
+    },
+    subscription: {
+      currentSubscription: "Current Subscription",
+      manage: "Manage your subscription and plan",
+      plan: "Plan",
+      status: "Status",
+      trialUntil: "Trial until",
+      subscriptionUntil: "Subscription until",
+      noSubscription: "You have no active subscription. Choose a plan below.",
+      availablePlans: "Available Plans",
+      choosePlan: "Choose a suitable plan for your business",
+      perMonth: "/month",
+      fromReferrals: " of referred clients",
+      after3Months: "Available after 3 months of subscription or by recommendation",
+      contactUs: "Contact Us",
+      currentPlan: "Current Plan",
+      update: "Update",
+      processing: "Processing...",
+      select: "Select",
+      // Features - Starter
+      starterFeature1: "Clients without ads from maps and ChatGPT",
+      starterFeature2: "Social media posts",
+      starterFeature3: "Perfect for those looking for new customer acquisition channels",
+      // Features - Professional
+      profFeature1: "Work on the card, we'll guide you every step",
+      profFeature2: "Optimize the process based on best practices",
+      profFeature3: "News generation",
+      profFeature4: "Generating responses to reviews",
+      // Features - Concierge
+      conciergeFeature1: "Company card on Google or local maps",
+      conciergeFeature2: "Customer communication",
+      conciergeFeature3: "Upselling and cross-selling",
+      conciergeFeature4: "Business process optimization",
+      conciergeFeature5: "Dedicated manager",
+      // Features - Elite
+      eliteFeature1: "Online client acquisition",
+      eliteFeature2: "Customer communication",
+      eliteFeature3: "Offline client acquisition",
+      eliteFeature4: "Business process optimization",
+      eliteFeature5: "Dedicated manager"
+    }
   }
 };
 

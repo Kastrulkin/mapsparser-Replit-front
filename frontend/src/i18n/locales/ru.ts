@@ -233,6 +233,61 @@ export const ru = {
     send: "Отправить сообщение",
     success: "Спасибо! Ваше сообщение отправлено. Мы свяжемся с вами в ближайшее время.",
     error: "Ошибка отправки сообщения"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Профиль и бизнес",
+      card: "Работа с картами",
+      progress: "Прогресс",
+      bookings: "Бронирования",
+      chats: "Чаты",
+      finance: "Финансы",
+      aiChatPromotion: "Продвижение через ИИ чаты",
+      settings: "Настройки",
+      network: "Управление сетью"
+    },
+    subscription: {
+      currentSubscription: "Текущая подписка",
+      manage: "Управляйте своей подпиской и тарифом",
+      plan: "Тариф",
+      status: "Статус",
+      trialUntil: "Триал до",
+      subscriptionUntil: "Подписка до",
+      noSubscription: "У вас нет активной подписки. Выберите тариф ниже.",
+      availablePlans: "Доступные тарифы",
+      choosePlan: "Выберите подходящий тариф для вашего бизнеса",
+      perMonth: "/месяц",
+      fromReferrals: " от оплат привлечённых клиентов",
+      after3Months: "Доступно после 3 месяцев подписки или по рекомендации",
+      contactUs: "Связаться с нами",
+      currentPlan: "Текущий тариф",
+      update: "Обновить",
+      processing: "Обработка...",
+      select: "Выбрать",
+      // Features - Starter
+      starterFeature1: "Клиенты без рекламы с карт и ChatGPT",
+      starterFeature2: "Посты для соцсетей",
+      starterFeature3: "Идеально для тех, кто ищет новые каналы привлечения клиентов",
+      // Features - Professional
+      profFeature1: "Работайте над карточкой, подскажем каждый шаг",
+      profFeature2: "Оптимизируйте процесс на основе лучших практик",
+      profFeature3: "Генерация новостей",
+      profFeature4: "Генерация ответов на отзывы",
+      // Features - Concierge
+      conciergeFeature1: "Карточка компании на картах",
+      conciergeFeature2: "Коммуникация с клиентами",
+      conciergeFeature3: "Допродажи и кросс-продажи",
+      conciergeFeature4: "Оптимизация бизнес-процессов",
+      conciergeFeature5: "Выделенный менеджер",
+      // Features - Elite
+      eliteFeature1: "Привлечение клиентов онлайн",
+      eliteFeature2: "Коммуникация с клиентами",
+      eliteFeature3: "Привлечение клиентов оффлайн",
+      eliteFeature4: "Оптимизация бизнес-процессов",
+      eliteFeature5: "Выделенный менеджер"
+    }
   }
 };
 

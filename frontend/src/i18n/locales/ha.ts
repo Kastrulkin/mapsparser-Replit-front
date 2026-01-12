@@ -1,7 +1,7 @@
 export const ha = {
   // Page title
   pageTitle: "BeautyBot.pro - Tallata gida ga kasuwanci na gida",
-  
+
   header: {
     whatWeDo: "Me muke yi?",
     whoWeAre: "Su waye mu?",
@@ -217,5 +217,56 @@ export const ha = {
     send: "Aika saƙo",
     success: "Na gode! An aika saƙonku. Za mu tuntuɓe ku nan ba da jimawa ba.",
     error: "An kasa aikawa da saƙo"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Bayanan martaba & Kasuwanci",
+      card: "Gudanar da Taswira",
+      progress: "Ci gaba",
+      bookings: "Yi rajista",
+      chats: "Tattaunawa",
+      finance: "Kudi",
+      aiChatPromotion: "Tallan Hirar AI",
+      settings: "Saituna",
+      network: "Gudanar da hanyar sadarwa"
+    },
+    subscription: {
+      currentSubscription: "Biyan Kuɗi na Yanzu",
+      manage: "Sarrafa biyan kuɗin ku da tsari",
+      plan: "Tsari",
+      status: "Matsayi",
+      trialUntil: "Gwaji har sai",
+      subscriptionUntil: "Biyan kuɗi har sai",
+      noSubscription: "Ba ku da biyan kuɗi mai aiki. Zaɓi tsari a ƙasa.",
+      availablePlans: "Shirye-shiryen da ke Akwai",
+      choosePlan: "Zaɓi tsarin da ya dace don kasuwancin ku",
+      perMonth: "/wata",
+      fromReferrals: " na biyan kuɗi daga abokan ciniki da aka tura",
+      after3Months: "Akwai bayan watanni 3 na biyan kuɗi ko ta shawarwari",
+      contactUs: "Tuntuɓe mu",
+      currentPlan: "Tsari na Yanzu",
+      update: "Sabuntawa",
+      processing: "Ana sarrafawa...",
+      select: "Zaɓi",
+      starterFeature1: "Abokan ciniki ba tare da tallace-tallace daga taswira da ChatGPT ba",
+      starterFeature2: "Rubutun kafofin watsa labarun",
+      starterFeature3: "Cikakke ga waɗanda ke neman sabbin tashoshi don samun abokan ciniki",
+      profFeature1: "Yi aiki akan katin, za mu jagorance ku kowane mataki",
+      profFeature2: "Inganta tsarin bisa mafi kyawun ayyuka",
+      profFeature3: "Ƙirƙirar labarai",
+      profFeature4: "Ƙirƙirar amsoshi ga bita",
+      conciergeFeature1: "Katin kamfani akan Google ko taswirorin gida",
+      conciergeFeature2: "Sadarwar abokin ciniki",
+      conciergeFeature3: "Upselling da Cross-selling",
+      conciergeFeature4: "Inganta tsarin kasuwanci",
+      conciergeFeature5: "Manaja na musamman",
+      eliteFeature1: "Samun abokan ciniki akan layi",
+      eliteFeature2: "Sadarwar abokin ciniki",
+      eliteFeature3: "Samun abokan ciniki ba tare da layi ba",
+      eliteFeature4: "Inganta tsarin kasuwanci",
+      eliteFeature5: "Manaja na musamman"
+    }
   }
 };

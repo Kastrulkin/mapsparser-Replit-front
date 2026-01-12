@@ -1,9 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  User, 
-  FileText, 
-  TrendingUp, 
-  DollarSign, 
+import {
+  User,
+  FileText,
+  TrendingUp,
+  DollarSign,
   Settings,
   Calendar,
   MessageSquare,
@@ -21,9 +21,9 @@ interface DashboardSidebarProps {
   onClose?: () => void;
 }
 
-export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ 
+export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   isMobile = false,
-  onClose 
+  onClose
 }) => {
   const location = useLocation();
   const { t } = useLanguage();
@@ -32,49 +32,49 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const menuItems = [
     {
       id: 'profile',
-      label: 'Профиль и бизнес',
+      label: t.dashboard.sidebar.profile,
       icon: User,
       path: '/dashboard/profile',
     },
     {
       id: 'card',
-      label: 'Работа с картами',
+      label: t.dashboard.sidebar.card,
       icon: FileText,
       path: '/dashboard/card',
     },
     {
       id: 'progress',
-      label: 'Прогресс',
+      label: t.dashboard.sidebar.progress,
       icon: TrendingUp,
       path: '/dashboard/progress',
     },
     {
       id: 'bookings',
-      label: 'Бронирования',
+      label: t.dashboard.sidebar.bookings,
       icon: Calendar,
       path: '/dashboard/bookings',
     },
     {
       id: 'chats',
-      label: 'Чаты',
+      label: t.dashboard.sidebar.chats,
       icon: MessageSquare,
       path: '/dashboard/chats',
     },
     {
       id: 'finance',
-      label: 'Финансы',
+      label: t.dashboard.sidebar.finance,
       icon: DollarSign,
       path: '/dashboard/finance',
     },
     {
       id: 'ai-chat-promotion',
-      label: 'Продвижение через ИИ чаты',
+      label: t.dashboard.sidebar.aiChatPromotion,
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
     },
     {
       id: 'settings',
-      label: 'Настройки',
+      label: t.dashboard.sidebar.settings,
       icon: Settings,
       path: '/dashboard/settings',
     },

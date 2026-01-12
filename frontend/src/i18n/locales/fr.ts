@@ -1,7 +1,7 @@
 export const fr = {
   // Page title
   pageTitle: "BeautyBot.pro - Promotion locale pour les entreprises locales",
-  
+
   // Header
   header: {
     whatWeDo: "Ce Que Nous Faisons?",
@@ -9,7 +9,7 @@ export const fr = {
     prices: "Prix",
     tryFree: "Essayer Gratuitement"
   },
-  
+
   // Footer
   footer: {
     title: "BeautyBot",
@@ -20,7 +20,7 @@ export const fr = {
     contacts: "Contacts",
     copyright: "© 2025 BeautyBot. Tous droits réservés."
   },
-  
+
   // Stats
   stats: {
     title: "Nous ne fournissons pas seulement des outils —",
@@ -30,7 +30,7 @@ export const fr = {
     stat2: "Nouveaux clients en 2-4 semaines",
     stat3: "1700% de croissance des prospects dans un studio de massage"
   },
-  
+
   // Hero
   hero: {
     newClients: "Nouveaux clients sans effort",
@@ -44,7 +44,7 @@ export const fr = {
     successMessage: "Merci! Nous avons reçu votre demande et vous contacterons bientôt.",
     errorMessage: "Une erreur s'est produite. Veuillez réessayer."
   },
-  
+
   // Features
   features: {
     title: "Pas de magie - juste faire notre travail pour que vous grandissiez",
@@ -62,7 +62,7 @@ export const fr = {
     upToDate: "Vos clients reçoivent toujours des informations à jour",
     upToDateDesc: "Mises à jour automatiques des horaires, prix, promotions sur toutes les plateformes."
   },
-  
+
   // Testimonials
   testimonials: {
     title: "Nous travaillons pour les résultats de votre entreprise - faites ce que vous aimez, pas la routine",
@@ -122,7 +122,7 @@ export const fr = {
       result: "+25–40% rendez-vous, +67% clients réguliers, 3–4x recommandations. Les administrateurs ont besoin de 2–3 fois moins de temps pour la routine."
     }
   },
-  
+
   // CTA
   cta: {
     title: "Prêt à grandir?",
@@ -151,7 +151,7 @@ export const fr = {
     finalText: "Développement complet du salon — paiement uniquement sur les nouveaux revenus !",
     contactExpert: "Contacter un expert"
   },
-  
+
   // About
   about: {
     heroTitle: "Qui Sommes-Nous?",
@@ -232,6 +232,57 @@ export const fr = {
     send: "Envoyer le message",
     success: "Merci ! Votre message a été envoyé. Nous vous répondrons rapidement.",
     error: "Échec de l'envoi du message"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Profil & Entreprise",
+      card: "Gestion des Cartes",
+      progress: "Progrès",
+      bookings: "Réservations",
+      chats: "Chats",
+      finance: "Finances",
+      aiChatPromotion: "Promotion Chat IA",
+      settings: "Paramètres",
+      network: "Gestion de Réseau"
+    },
+    subscription: {
+      currentSubscription: "Abonnement Actuel",
+      manage: "Gérez votre abonnement et votre plan",
+      plan: "Plan",
+      status: "Statut",
+      trialUntil: "Essai jusqu'au",
+      subscriptionUntil: "Abonnement jusqu'au",
+      noSubscription: "Vous n'avez aucun abonnement actif. Choisissez un plan ci-dessous.",
+      availablePlans: "Plans Disponibles",
+      choosePlan: "Choisissez un plan adapté à votre entreprise",
+      perMonth: "/mois",
+      fromReferrals: " des paiements des clients référés",
+      after3Months: "Disponible après 3 mois d'abonnement ou sur recommandation",
+      contactUs: "Nous Contacter",
+      currentPlan: "Plan Actuel",
+      update: "Mettre à jour",
+      processing: "Traitement...",
+      select: "Sélectionner",
+      starterFeature1: "Clients sans publicité des cartes et ChatGPT",
+      starterFeature2: "Publications réseaux sociaux",
+      starterFeature3: "Parfait pour la recherche de nouveaux canaux d'acquisition",
+      profFeature1: "Travail sur la carte, guidage étape par étape",
+      profFeature2: "Optimisation des processus basée sur les meilleures pratiques",
+      profFeature3: "Génération de nouvelles",
+      profFeature4: "Génération de réponses aux avis",
+      conciergeFeature1: "Carte d'entreprise sur Google ou cartes locales",
+      conciergeFeature2: "Communication client",
+      conciergeFeature3: "Ventes incitatives et croisées",
+      conciergeFeature4: "Optimisation des processus métier",
+      conciergeFeature5: "Gestionnaire dédié",
+      eliteFeature1: "Acquisition de clients en ligne",
+      eliteFeature2: "Communication client",
+      eliteFeature3: "Acquisition de clients hors ligne",
+      eliteFeature4: "Optimisation des processus métier",
+      eliteFeature5: "Gestionnaire dédié"
+    }
   }
 };
 

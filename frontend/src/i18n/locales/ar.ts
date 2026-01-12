@@ -1,7 +1,7 @@
 export const ar = {
   // Page title
   pageTitle: "BeautyBot.pro - ترويج محلي للأعمال المحلية",
-  
+
   header: {
     whatWeDo: "ماذا نفعل؟",
     whoWeAre: "من نحن؟",
@@ -217,5 +217,56 @@ export const ar = {
     send: "إرسال الرسالة",
     success: "شكرًا! تم إرسال رسالتك. سنتواصل معك قريبًا.",
     error: "فشل إرسال الرسالة"
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "الملف الشخصي والعمل",
+      card: "إدارة الخرائط",
+      progress: "التقدم",
+      bookings: "الحجوزات",
+      chats: "الدردشات",
+      finance: "المشروعات المالية",
+      aiChatPromotion: "ترويج دردشة الذكاء الاصطناعي",
+      settings: "الإعدادات",
+      network: "إدارة الشبكة"
+    },
+    subscription: {
+      currentSubscription: "الاشتراك الحالي",
+      manage: "إدارة اشتراكك وخطتك",
+      plan: "الخطة",
+      status: "الحالة",
+      trialUntil: "تجربة حتى",
+      subscriptionUntil: "الاشتراك حتى",
+      noSubscription: "ليس لديك اشتراك نشط. اختر خطة أدناه.",
+      availablePlans: "الخطط المتاحة",
+      choosePlan: "اختر خطة مناسبة لعملك",
+      perMonth: "/شهر",
+      fromReferrals: " من مدفوعات العملاء المحالين",
+      after3Months: "متاح بعد 3 أشهر من الاشتراك أو بالتوصية",
+      contactUs: "اتصل بنا",
+      currentPlan: "الخطة الحالية",
+      update: "تحديث",
+      processing: "معالجة...",
+      select: "تحديد",
+      starterFeature1: "عملاء بدون إعلانات من الخرائط و ChatGPT",
+      starterFeature2: "منشورات وسائل التواصل الاجتماعي",
+      starterFeature3: "مثالي للباحثين عن قنوات اكتساب عملاء جديدة",
+      profFeature1: "العمل على البطاقة، سنرشدك في كل خطوة",
+      profFeature2: "تحسين العملية بناءً على أفضل الممارسات",
+      profFeature3: "توليد الأخبار",
+      profFeature4: "توليد الردود على المراجعات",
+      conciergeFeature1: "بطاقة الشركة على Google أو الخرائط المحلية",
+      conciergeFeature2: "التواصل مع العملاء",
+      conciergeFeature3: "البيع الإضافي والمتبادل",
+      conciergeFeature4: "تحسين العمليات التجارية",
+      conciergeFeature5: "مدير مخصص",
+      eliteFeature1: "اكتساب العملاء عبر الإنترنت",
+      eliteFeature2: "التواصل مع العملاء",
+      eliteFeature3: "اكتساب العملاء دون الاتصال بالإنترنت",
+      eliteFeature4: "تحسين العمليات التجارية",
+      eliteFeature5: "مدير مخصص"
+    }
   }
 };
