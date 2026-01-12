@@ -1798,3 +1798,21 @@ Visual separation of SEO optimization suggestions from original service text in 
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - UI Fix: Restore Optimize Button & Icon Update
+
+### Current Task
+User reported missing "Optimize" button in Service List actions. Also replaced emoji icons with Lucide icons for consistency.
+
+### Architecture Decision
+- **Interactive Elements**: Restored "Optimize" button using `Wand2` icon (Magic Wand) to signify AI action.
+- **Consistency**: Replaced `🗑️` emoji with `Trash2` icon.
+- **Feedback**: Added loading spinner state to the Optimize button during processing.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Updated `actions` column in service table, added imports.
+
+### Status
+- [x] Completed

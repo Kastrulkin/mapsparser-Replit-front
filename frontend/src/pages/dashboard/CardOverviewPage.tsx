@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Wand2, Trash2 } from 'lucide-react';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
@@ -601,9 +602,28 @@ export const CardOverviewPage = () => {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{service.price}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => deleteService(service.id)}>
-                            🗑️
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => optimizeService(service.id)}
+                            disabled={optimizingServiceId === service.id}
+                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                            title={t.dashboard.card.seo.proposal || "Оптимизировать"}
+                          >
+                            {optimizingServiceId === service.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteService(service.id)}
+                            className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
