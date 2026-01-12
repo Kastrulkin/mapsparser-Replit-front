@@ -1901,6 +1901,7 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 - `frontend/src/pages/dashboard/ProgressPage.tsx` - Removed `ProgressTracker`.
 - `src/worker.py` - Added SQL INSERT/UPDATE to `BusinessMetricsHistory` after successful parsing.
 - `src/api/stage_progress_api.py` - Integrated auto-calculation.
+- `src/api/metrics_history_api.py` - Added legacy sync logic (backfill from `MapParseResults`).
 
 ### Status
 - [x] Completed

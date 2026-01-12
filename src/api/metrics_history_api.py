@@ -24,6 +24,45 @@ def get_metrics_history(business_id):
             db.close()
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
         
+        # --- SYNC LEGACY PARSES START ---
+        # Проверяем старые парсинги и добавляем их в историю, если их нет
+        try:
+            cursor.execute("""
+                SELECT rating, reviews_count, photos_count, news_count, DATE(created_at) as parse_date
+                FROM MapParseResults 
+                WHERE business_id = ?
+                GROUP BY parse_date 
+            """, (business_id,))
+            
+            parses = cursor.fetchall()
+            for parse in parses:
+                parse_date = parse[4]
+                if not parse_date: continue
+                
+                # Проверяем, есть ли запись в истории за эту дату
+                cursor.execute("""
+                    SELECT id FROM BusinessMetricsHistory 
+                    WHERE business_id = ? AND metric_date = ?
+                """, (business_id, parse_date))
+                
+                if not cursor.fetchone():
+                    # Создаем запись
+                    metric_id = str(uuid.uuid4())
+                    cursor.execute("""
+                        INSERT INTO BusinessMetricsHistory (
+                            id, business_id, metric_date, rating, reviews_count, 
+                            photos_count, news_count, source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'parsing')
+                    """, (
+                        metric_id, business_id, parse_date,
+                        parse[0], parse[1], parse[2], parse[3]
+                    ))
+            db.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка синхронизации истории метрик: {e}")
+        # --- SYNC LEGACY PARSES END ---
+
         # Загружаем историю метрик
         cursor.execute("""
             SELECT id, metric_date, rating, reviews_count, 
