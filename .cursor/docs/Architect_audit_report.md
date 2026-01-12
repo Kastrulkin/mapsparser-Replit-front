@@ -1713,3 +1713,19 @@ Resolve `AttributeError: 'NoneType' object has no attribute 'close'` causing wor
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Worker Syntax Error Restore
+
+### Current Task
+Resolve `SyntaxError` (unexpected EOF while parsing) in `worker.py` which caused the service to exit immediately.
+
+### Architecture Decision
+- **Restoration**: Restored missing arguments (`news_count`, `photos_count`) and closing parenthesis `))` to the `cursor.execute` call for the `else` branch in `_process_sync_yandex_business_task`. These were accidentally removed during the previous hotfix.
+
+### Files to Modify
+- `src/worker.py` - Restored lines 841-844.
+
+### Status
+- [x] Completed

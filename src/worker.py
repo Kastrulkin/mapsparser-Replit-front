@@ -838,6 +838,10 @@ def _process_sync_yandex_business_task(queue_dict):
                     'yandex',
                     rating,
                     reviews_count,
+                    news_count,
+                    photos_count,
+                ))
+            
             db.conn.commit()
             # Safely close db and connections
             try:
