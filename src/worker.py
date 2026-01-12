@@ -618,8 +618,16 @@ def process_queue():
             signal.alarm(0)  # Отключаем таймаут при успехе
             
         finally:
-            cursor.close()
-            conn.close()
+            try:
+                if 'cursor' in locals() and cursor:
+                    cursor.close()
+            except:
+                pass
+            try:
+                if 'conn' in locals() and conn:
+                    conn.close()
+            except:
+                pass
             
     except Exception as e:
         signal.alarm(0)  # Отключаем таймаут при ошибке
@@ -830,12 +838,28 @@ def _process_sync_yandex_business_task(queue_dict):
                     'yandex',
                     rating,
                     reviews_count,
-                    news_count,
-                    photos_count,
-                ))
-            
             db.conn.commit()
-            db.close()
+            # Safely close db and connections
+            try:
+                if 'db' in locals() and db:
+                    db.close()
+            except Exception:
+                pass
+            
+            # The cursor and conn here refer to the ones created within the try block
+            # associated with the DatabaseManager instance.
+            # The subsequent conn/cursor are for the ParseQueue update.
+            try:
+                if 'cursor' in locals() and cursor and not cursor.closed: # Check if cursor is not already closed by db.close()
+                    cursor.close()
+            except Exception:
+                pass
+                
+            try:
+                if 'conn' in locals() and conn and not conn.closed: # Check if conn is not already closed by db.close()
+                    conn.close()
+            except Exception:
+                pass
             
             # Обновляем статус задачи
             conn = get_db_connection()
@@ -847,8 +871,16 @@ def _process_sync_yandex_business_task(queue_dict):
                 WHERE id = ?
             """, (queue_dict["id"],))
             conn.commit()
-            cursor.close()
-            conn.close()
+            try:
+                if cursor:
+                    cursor.close()
+            except Exception:
+                pass
+            try:
+                if conn:
+                    conn.close()
+            except Exception:
+                pass
             
             print(f"✅ Синхронизация завершена для бизнеса {business_id}", flush=True)
             signal.alarm(0)  # Отменяем таймаут при успехе
@@ -867,8 +899,16 @@ def _process_sync_yandex_business_task(queue_dict):
                 WHERE id = ?
             """, (str(e), queue_dict["id"]))
             conn.commit()
-            cursor.close()
-            conn.close()
+            try:
+                if cursor:
+                    cursor.close()
+            except:
+                pass
+            try:
+                if conn:
+                    conn.close()
+            except:
+                pass
             
         except Exception as e:
             print(f"❌ Ошибка синхронизации: {e}", flush=True)
@@ -878,8 +918,11 @@ def _process_sync_yandex_business_task(queue_dict):
             signal.alarm(0)  # Отменяем таймаут при ошибке
             
             # Safely close db if it was created
-            if db:
-                db.close()
+            try:
+                if 'db' in locals() and db:
+                    db.close()
+            except:
+                pass
             
             # Обновляем статус ошибки
             conn = get_db_connection()
@@ -892,8 +935,16 @@ def _process_sync_yandex_business_task(queue_dict):
                 WHERE id = ?
             """, (str(e), queue_dict["id"]))
             conn.commit()
-            cursor.close()
-            conn.close()
+            try:
+                if cursor:
+                    cursor.close()
+            except:
+                pass
+            try:
+                if conn:
+                    conn.close()
+            except:
+                pass
             
     except Exception as e:
         print(f"❌ Критическая ошибка синхронизации: {e}")
@@ -911,8 +962,16 @@ def _process_sync_yandex_business_task(queue_dict):
             WHERE id = ?
         """, (str(e), queue_dict["id"]))
         conn.commit()
-        cursor.close()
-        conn.close()
+        try:
+            if cursor:
+                cursor.close()
+        except:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except:
+            pass
 
 def _process_cabinet_fallback_task(queue_dict):
     """Обработка fallback парсинга через кабинет"""

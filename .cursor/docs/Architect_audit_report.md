@@ -1674,3 +1674,42 @@ Localize critical dashboard pages (`Bookings`, `Chats`, `Finance`, `AIChatPromot
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Worker Timeout & Syntax Error
+
+### Current Task
+Fix "stuck" parser tasks causing the worker to hang indefinitely, and resolve a subsequent syntax error introduced during the fix.
+
+### Architecture Decision
+- **Timeout Logic**: Added `signal.alarm(600)` (10 minutes) to the `parse_card` task in `worker.py`. If Selenium/GeckoDriver hangs, the signal handler raises `TimeoutError` and the worker moves to the next task.
+- **Polling Interval**: Reduced `time.sleep` from 300s (5m) to 10s to make the worker more responsive.
+- **Syntax Fix**: Removed a redundant nested `try:` block that caused a `SyntaxError` in `worker.py`.
+
+### Files to Modify
+- `src/worker.py` - Added `signal` import, timeout handler, reduced sleep time, fixed try/except block.
+
+### Trade-offs & Decisions
+- **Signal vs Threading**: Used `signal.alarm` for simplicity as it works well on Linux/Mac for main thread timeouts.
+- **Responsiveness**: 10s interval increases DB load slightly but failing to pick up tasks for 5m is user-hostile.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-12 - Critical Hotfix: Worker Database Cleanup Safety
+
+### Current Task
+Resolve `AttributeError: 'NoneType' object has no attribute 'close'` causing worker crashes. This occurs when database connection/cursor variables fail to initialize (e.g. due to earlier errors) but cleanup code unconditionally tries to `.close()` them.
+
+### Architecture Decision
+- **Defensive Cleanup**: Wrapped all `.close()` calls for `db`, `conn`, and `cursor` objects in `try...except` blocks with checks for existence (`if var:`).
+- **Scope Safety**: Used `if 'var' in locals()` checks where appropriate to handle `UnboundLocalError` cases safely (though Python's scoping usually handles this, explicit checks prevent edge cases in nested blocks).
+
+### Files to Modify
+- `src/worker.py` - Patched `process_queue` finally block, `_process_sync_yandex_business_task` error handlers, and success paths.
+
+### Status
+- [x] Completed
