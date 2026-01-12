@@ -1902,6 +1902,7 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 - `src/worker.py` - Added SQL INSERT/UPDATE to `BusinessMetricsHistory` after successful parsing.
 - `src/api/stage_progress_api.py` - Integrated auto-calculation.
 - `src/api/metrics_history_api.py` - Added smart legacy sync logic. Now handles empty strings (`''`) correctly by filtering them out in source and allowing overwrite of valid data over empty/null data in history.
+- `src/yandex_maps_scraper.py` - Improved `get_photos_count` robustness by adding multiple selectors for the "Photos" tab, aligning it with `parse_photos` logic.
 
 ### Status
 - [x] Completed

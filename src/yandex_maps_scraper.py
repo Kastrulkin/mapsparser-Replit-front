@@ -1053,7 +1053,23 @@ def parse_news(page):
 def get_photos_count(page):
     """Получает количество фотографий"""
     try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
+        # Пробуем разные селекторы для вкладки "Фото"
+        photo_tab_selectors = [
+            "div.tabs-select-view__title._name_gallery",
+            "div[role='tab']:has-text('Фото')",
+            "button:has-text('Фото')",
+            "div.tabs-select-view__title:has-text('Фото')"
+        ]
+        
+        photos_tab = None
+        for selector in photo_tab_selectors:
+            try:
+                photos_tab = page.query_selector(selector)
+                if photos_tab:
+                    break
+            except:
+                continue
+                
         if photos_tab:
             try:
                 counter = photos_tab.query_selector("div.tabs-select-view__counter")
