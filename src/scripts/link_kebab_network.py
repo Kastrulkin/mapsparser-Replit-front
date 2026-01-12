@@ -32,19 +32,26 @@ def link_kebab_network():
 
         # 2. Находим бизнесы для привязки
         # Ищем всё, что похоже на Кебаб, но НЕ является самой сетью (материнским аккаунтом)
-        print("\n🔍 Поиск точек для привязки...")
+        print("\n🔍 Поиск точек для привязки (бизнесов с именем 'Кебаб' или 'Kebab')...")
         
-        cursor.execute("""
-            SELECT id, name, network_id 
-            FROM Businesses 
-            WHERE (name LIKE '%Кебаб%' OR name LIKE '%Kebab%') 
-            AND name != ?
-        """, (network_name,))
+        # Используем LOWER для регистронезависимого сравнения
+        cursor.execute("SELECT id, name, network_id FROM Businesses")
+        all_businesses = cursor.fetchall()
         
-        businesses = cursor.fetchall()
+        businesses = []
+        network_name_lower = network_name.lower().strip()
+        
+        for b_id, b_name, b_net_id in all_businesses:
+            name_lower = b_name.lower()
+            if ('кебаб' in name_lower or 'kebab' in name_lower):
+                # Пропускаем, если это сама сеть (точное совпадение имени)
+                if name_lower.strip() == network_name_lower:
+                    print(f"  ℹ️ Пропускаем материнский аккаунт: {b_name}")
+                    continue
+                businesses.append((b_id, b_name, b_net_id))
         
         if not businesses:
-            print("⚠️ Не найдено точек с названием 'Кебаб' (кроме самой сети).")
+            print("⚠️ Не найдено подходящих точек с названием 'Кебаб'.")
             return
 
         to_update = []

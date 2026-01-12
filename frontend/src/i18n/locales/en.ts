@@ -660,6 +660,10 @@ export const en = {
           ]
         }
       ],
+      card: {
+        step: "Step",
+        completed: "Completed"
+      },
       actions: {
         copy: "Copy",
         copied: "Copied",
