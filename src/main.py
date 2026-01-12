@@ -2790,6 +2790,7 @@ Write all generated text in {language_name}.
         else:
             # Если строка, пробуем распарсить как JSON
             generated_text = result
+            parsed_result = None
             try:
                 # Ищем JSON объект в строке
                 start_idx = result.find('{')
@@ -2797,15 +2798,37 @@ Write all generated text in {language_name}.
                 if start_idx != -1 and end_idx != 0:
                     json_str = result[start_idx:end_idx]
                     parsed_result = json.loads(json_str)
-                if isinstance(parsed_result, dict):
-                        # Проверяем наличие ошибки
-                    if 'error' in parsed_result:
-                        db.close()
-                        return jsonify({"error": parsed_result['error']}), 500
-                    generated_text = parsed_result.get('news') or parsed_result.get('text') or result
             except json.JSONDecodeError:
-                # Если не JSON, используем строку как есть
-                pass
+                # Если не JSON (например, кавычки внутри), пробуем регулярку/ручной парсинг
+                try:
+                    import re
+                    # Ищем pattern: "news": "..."
+                    # Используем non-greedy match для содержимого, но так как внутри могут быть кавычки,
+                    # это сложно. Попробуем взять все между первыми и последними кавычками значения.
+                    match = re.search(r'"news"\s*:\s*"(.*)"\s*\}', result, re.DOTALL)
+                    if match:
+                        generated_text = match.group(1)
+                        # Экранированные кавычки возвращаем обратно, если они были правильно экранированы
+                        # Но скорее всего проблема в неэкранированных.
+                        # В простом случае просто вернем то что нашли.
+                        parsed_result = {"news": generated_text}
+                except Exception:
+                    pass
+
+            if isinstance(parsed_result, dict):
+                # Проверяем наличие ошибки
+                if 'error' in parsed_result:
+                    db.close()
+                    return jsonify({"error": parsed_result['error']}), 500
+                
+                # Используем явную проверку ключей, чтобы пустая строка не вызывала фолбэк
+                if 'news' in parsed_result:
+                    generated_text = parsed_result['news']
+                elif 'text' in parsed_result:
+                    generated_text = parsed_result['text']
+                else:
+                    # Если ключей нет, но это словарь - странно, но оставим result или json dump
+                    pass
         
         # Проверяем, что generated_text не пустой
         if not generated_text or not generated_text.strip():

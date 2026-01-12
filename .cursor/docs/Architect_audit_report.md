@@ -1856,7 +1856,31 @@ User requested to revert the "Delete" icon back to the previous style (emoji) wh
 - **Functionality Preservation**: "Optimize" button remains as `Wand2` icon.
 
 ### Files to Modify
+### Files to Modify
 - `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Replaced `Trash2` with emoji, removed unused import.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-12 - Fix: JSON Artifacts in Generated News
+
+### Current Task
+User reported that generated news sometimes contains raw JSON (e.g., `{"news": "..."}`) or technical artifacts, especially when the content has unescaped quotes or is empty.
+
+### Architecture Decision
+- **Robust JSON Parsing**: Updated `news_generate` in `src/main.py` to:
+    - Initialize `parsed_result` explicitly to avoid scope errors.
+    - Use specific key checks (`if 'news' in parsed_result`) instead of falsy checks (`get('news') or ...`) to correctly handle empty strings.
+    - **Regex Fallback**: Added a regex extraction step (`r'"news"\s*:\s*"(.*)"\s*\}`) to handle `JSONDecodeError` caused by unescaped quotes in the LLM response.
+
+### Files to Modify
+- `src/main.py` - Updated `news_generate` function logic.
+
+### Trade-offs & Decisions
+- **Regex vs library**: Used standard `re` module for fallback instead of installing a "dirty json" library to keep dependencies minimal and deployment simple.
+- **Empty string handling**: Explicitly treating empty string as a valid result allows the UI to show "no content" cleanly rather than dumping the raw JSON error.
 
 ### Status
 - [x] Completed
