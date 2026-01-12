@@ -479,8 +479,14 @@ export const CardOverviewPage = () => {
                             <div className="text-gray-900">{service.name}</div>
                           )}
                           {service.optimized_name && (
-                            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">{t.dashboard.card.seo.proposal}</div>
+                            <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
+                              <div className="absolute top-0 right-0 p-2 opacity-10">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                              </div>
+                              <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                {t.dashboard.card.seo.proposal}
+                              </div>
                               <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
                               <div className="flex gap-2 pt-1">
                                 <Button
@@ -537,8 +543,14 @@ export const CardOverviewPage = () => {
                             <div className="text-gray-700 leading-relaxed">{service.description}</div>
                           )}
                           {service.optimized_description && (
-                            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">{t.dashboard.card.seo.proposal}</div>
+                            <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
+                              <div className="absolute top-0 right-0 p-2 opacity-10">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                              </div>
+                              <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                {t.dashboard.card.seo.proposal}
+                              </div>
                               <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
                               <div className="flex gap-2 pt-1">
                                 <Button

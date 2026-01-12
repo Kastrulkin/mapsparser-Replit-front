@@ -1780,3 +1780,21 @@ Resolve issue where Networks (and consequently their businesses) were disappeari
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-12 - UI Improvement: SEO Suggestion Visual Separation
+
+### Current Task
+Visual separation of SEO optimization suggestions from original service text in the Service List table (`CardOverviewPage`). The previous layout caused text to blend together.
+
+### Architecture Decision
+- **Visual Distinction**: Applied `bg-primary/5` and `border-primary/20` to suggestion blocks to leverage the project's primary color (orange) without being overwhelming.
+- **Spacing**: Added `mt-2` to strictly separate the suggestion from the original text.
+- **Iconography**: Added subtle sparkle icons to reinforce the "AI Suggestion" context.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Updated `optimized_name` and `optimized_description` rendering blocks.
+
+### Status
+- [x] Completed
