@@ -63,10 +63,26 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 
   useEffect(() => {
     if (mainBusinesses.length > 0) {
-      const current = mainBusinesses.find(b => b.id === currentBusinessId) || mainBusinesses[0];
-      setSelectedBusiness(current);
+      // 1. Пытаемся найти бизнес в списке отображаемых (для независимых или главных точек)
+      let current = mainBusinesses.find(b => b.id === currentBusinessId);
+
+      // 2. Если не нашли (значит это дочерняя точка), ищем её родителя/главную точку
+      if (!current && currentBusinessId) {
+        const childBusiness = businesses.find(b => b.id === currentBusinessId);
+        if (childBusiness?.network_id) {
+          current = mainBusinesses.find(b => b.network_id === childBusiness.network_id);
+        }
+      }
+
+      // 3. Если всё равно не нашли, не меняем (или ставим первый, но лучше оставить как есть во избежание скачков)
+      // Но если selectedBusiness еще нет, ставим первый
+      if (current) {
+        setSelectedBusiness(current);
+      } else if (!selectedBusiness) {
+        setSelectedBusiness(mainBusinesses[0]);
+      }
     }
-  }, [mainBusinesses, currentBusinessId]);
+  }, [mainBusinesses, currentBusinessId, businesses]);
 
   const handleBusinessSelect = (business: Business) => {
     setSelectedBusiness(business);
