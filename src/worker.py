@@ -686,8 +686,10 @@ def _process_sync_yandex_business_task(queue_dict):
         import traceback
         
         # Получаем auth_data
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        db = None  # Initialize to None for safe cleanup
+        try:
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
         
         try:
             cursor.execute("""
@@ -864,7 +866,10 @@ def _process_sync_yandex_business_task(queue_dict):
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
             signal.alarm(0)  # Отменяем таймаут при ошибке
-            db.close()
+            
+            # Safely close db if it was created
+            if db:
+                db.close()
             
             # Обновляем статус ошибки
             conn = get_db_connection()
