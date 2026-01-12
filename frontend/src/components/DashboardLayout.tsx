@@ -171,7 +171,7 @@ export const DashboardLayout = () => {
           user={user}
         />
         <main className="flex-1 p-6">
-          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses }} />
+          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
         </main>
       </div>
       {/* Mobile sidebar overlay */}

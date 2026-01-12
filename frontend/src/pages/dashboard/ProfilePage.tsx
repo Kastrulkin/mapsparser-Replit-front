@@ -8,7 +8,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness, updateBusiness, businesses, setBusinesses, reloadBusinesses, onBusinessChange } = useOutletContext<any>();
   const [editMode, setEditMode] = useState(false);
   const [editClientInfo, setEditClientInfo] = useState(false);
   const { t } = useLanguage();
@@ -749,6 +749,41 @@ export const ProfilePage = () => {
           </div>
         )}
       </div>
+
+      {/* Точки сети */}
+      {networkLocations.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t.dashboard.profile.networkLocations}</h2>
+          <div className="grid grid-cols-1 gap-4">
+            {networkLocations.map((loc) => (
+              <div key={loc.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-white p-2 rounded-full border border-gray-200">
+                    <MapPin className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">{loc.name}</div>
+                    {loc.address && <div className="text-sm text-gray-500 mt-0.5">{loc.address}</div>}
+                    {loc.id === currentBusinessId && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-2">
+                        Текущий
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {loc.id !== currentBusinessId && onBusinessChange && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onBusinessChange(loc.id)}
+                  >
+                    {t.dashboard.profile.goToLocation}
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

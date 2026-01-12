@@ -428,6 +428,8 @@ export const ru = {
       workingHoursPlaceholder: "ежедневно 9:00-21:00",
       mapLinks: "Ссылки на карты",
       addLink: "Добавить ссылку",
+      networkLocations: "Точки сети",
+      goToLocation: "Перейти",
       pasteLink: "Вставьте ссылку на карты",
       saveSuccess: "Информация о бизнесе сохранена",
       profileUpdated: "Профиль обновлен",
