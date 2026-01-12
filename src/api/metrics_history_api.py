@@ -27,8 +27,10 @@ def get_metrics_history(business_id):
         # --- SYNC LEGACY PARSES START ---
         # Проверяем старые парсинги и добавляем их в историю, если их нет
         try:
+        try:
+            # Используем MAX(), чтобы выбрать непустые значения, если в один день было несколько парсингов (один успешный, другой нет)
             cursor.execute("""
-                SELECT rating, reviews_count, photos_count, news_count, DATE(created_at) as parse_date
+                SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
                 FROM MapParseResults 
                 WHERE business_id = ?
                 GROUP BY parse_date 
@@ -41,11 +43,13 @@ def get_metrics_history(business_id):
                 
                 # Проверяем, есть ли запись в истории за эту дату
                 cursor.execute("""
-                    SELECT id FROM BusinessMetricsHistory 
-                    WHERE business_id = ? AND metric_date = ?
+                    SELECT id, rating FROM BusinessMetricsHistory 
+                    WHERE business_id = ? AND metric_date = ? AND source = 'parsing'
                 """, (business_id, parse_date))
                 
-                if not cursor.fetchone():
+                existing = cursor.fetchone()
+                
+                if not existing:
                     # Создаем запись
                     metric_id = str(uuid.uuid4())
                     cursor.execute("""
@@ -58,6 +62,14 @@ def get_metrics_history(business_id):
                         metric_id, business_id, parse_date,
                         parse[0], parse[1], parse[2], parse[3]
                     ))
+                elif existing[1] is None and parse[0] is not None:
+                    # Если существующая запись имеет пустое значение, а мы нашли лучшее - обновляем
+                     cursor.execute("""
+                        UPDATE BusinessMetricsHistory
+                        SET rating = ?, reviews_count = ?, photos_count = ?, news_count = ?
+                        WHERE id = ?
+                    """, (parse[0], parse[1], parse[2], parse[3], existing[0]))
+                    
             db.conn.commit()
         except Exception as e:
             print(f"⚠️ Ошибка синхронизации истории метрик: {e}")
