@@ -460,6 +460,9 @@ export const ru = {
       progressTab: "вкладке Прогресс",
       rating: "Рейтинг",
       reviews: "отзывов",
+      tabServices: "Услуги",
+      tabReviews: "Отзывы",
+      tabNews: "Новости",
       services: "Услуги",
       servicesSubtitle: "Текущий вид формулировок услуг на картах. Если есть подключение к парсеру, данные добавляются автоматически.",
       addService: "Добавить новую услугу",
@@ -472,6 +475,7 @@ export const ru = {
       cancel: "Отмена",
       deleteConfirm: "Вы уверены, что хотите удалить эту услугу?",
       optimizeAll: "Оптимизировать все",
+      optimize: "Оптимизировать",
       table: {
         category: "Категория",
         name: "Название",

@@ -1540,12 +1540,39 @@ Resolving persistent "White Screen" crashes caused by unsafe `.toFixed()` usage 
     - `FinancialMetrics.tsx` (verified)
 
 ### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Safely handle undefined `rating`.
-- `frontend/src/components/ROICalculator.tsx` - Safely handle undefined `roi_percentage`.
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Replaced `Trash2` icon with `🗑️` emoji
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Removed unused `Trash2` import
 
 ### Trade-offs & Decisions
-- **Safety**: Direct inline checks were chosen over global utility functions for speed of hotfix deployment.
-- **Robustness**: Ensure `Number()` casting or optional chaining prevents runtime type errors even if API contract is violated.
+- **Consistency**: Using emojis for actions aligns effectively with the current design language without adding extra icon dependencies for simple actions.
+
+### Status
+- [x] Completed
+
+## 2026-01-12 - Restoration of "Reviews" and "News" Tabs in Maps Management
+
+### Current Task
+Restore the missing "Reviews", "News", and "etc." sections in the "Maps Management" tab (`CardOverviewPage`), which were reportedly lost. Also fix the tooltip for the optimization icon.
+
+### Architecture Decision
+- Implement a **Tabbed Interface** using `shadcn/ui` `Tabs` within `CardOverviewPage`.
+- Structure:
+    - **Services Tab**: Contains the existing service management and optimization UI.
+    - **Reviews Tab**: Integrates `ReviewReplyAssistant`.
+    - **News Tab**: Integrates `NewsGenerator`.
+- Localization: Added specific keys (`tabServices`, `tabReviews`, `tabNews`) to `ru.ts` and `en.ts` to ensure correct localized headers.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Wrapped content in `Tabs`, added `TabsContent` for Reviews and News.
+- `frontend/src/i18n/locales/ru.ts` - Added tab keys and `optimize` key.
+- `frontend/src/i18n/locales/en.ts` - Added tab keys and `optimize` key.
+
+### Trade-offs & Decisions
+- **Reuse vs New**: Reused existing `ReviewReplyAssistant` and `NewsGenerator` components instead of rebuilding them, ensuring consistency with the dashboard logic.
+- **Data Passing**: Passed `currentBusinessId` to `NewsGenerator` to enable transaction-based news generation logic if supported.
+
+### Dependencies
+- `shadcn/ui` Tabs component (already present in project).
 
 ### Status
 - [x] Completed

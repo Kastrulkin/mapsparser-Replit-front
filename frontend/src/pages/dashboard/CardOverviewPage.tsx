@@ -5,6 +5,9 @@ import ServiceOptimizer from '@/components/ServiceOptimizer';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Wand2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
+import NewsGenerator from "@/components/NewsGenerator";
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
@@ -303,337 +306,363 @@ export const CardOverviewPage = () => {
         </div>
       )}
 
-      {/* Блок с рейтингом и количеством отзывов */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center gap-4">
-          {loadingSummary ? (
-            <div className="text-gray-500">{t.dashboard.subscription.processing}</div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold text-gray-900">
-                  {rating != null ? Number(rating).toFixed(1) : '—'}
-                </span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <span
-                      key={star}
-                      className={`text-2xl ${rating !== null && star <= Math.floor(rating)
-                        ? 'text-yellow-400'
-                        : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                          ? 'text-yellow-400'
-                          : 'text-gray-300'
-                        }`}
-                    >
-                      ★
+      <Tabs defaultValue="services" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="services">{t.dashboard.card.tabServices || "Services"}</TabsTrigger>
+          <TabsTrigger value="reviews">{t.dashboard.card.tabReviews || "Reviews"}</TabsTrigger>
+          <TabsTrigger value="news">{t.dashboard.card.tabNews || "News"}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="services" className="space-y-6">
+          {/* Блок с рейтингом и количеством отзывов */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center gap-4">
+              {loadingSummary ? (
+                <div className="text-gray-500">{t.dashboard.subscription.processing}</div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-3xl font-bold text-gray-900">
+                      {rating != null ? Number(rating).toFixed(1) : '—'}
                     </span>
-                  ))}
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span
+                          key={star}
+                          className={`text-2xl ${rating !== null && star <= Math.floor(rating)
+                            ? 'text-yellow-400'
+                            : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
+                              ? 'text-yellow-400'
+                              : 'text-gray-300'
+                            }`}
+                        >
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-gray-600">
+                    <span className="font-medium">{reviewsTotal}</span> {t.dashboard.card.reviews}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+
+          {/* Услуги */}
+          <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
+            boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
+          }}>
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">{t.dashboard.card.services}</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {t.dashboard.card.servicesSubtitle}
+                </p>
+              </div>
+            </div>
+
+            {/* Форма добавления услуги */}
+            {showAddService && (
+              <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">{t.dashboard.card.addService}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.category}</label>
+                    <input
+                      type="text"
+                      value={newService.category}
+                      onChange={(e) => setNewService({ ...newService, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder={t.dashboard.card.placeholders.category}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.serviceName}</label>
+                    <input
+                      type="text"
+                      value={newService.name}
+                      onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder={t.dashboard.card.placeholders.name}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.description}</label>
+                    <textarea
+                      value={newService.description}
+                      onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      rows={3}
+                      placeholder={t.dashboard.card.placeholders.desc}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.keywords}</label>
+                    <input
+                      type="text"
+                      value={newService.keywords}
+                      onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder={t.dashboard.card.placeholders.keywords}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.price}</label>
+                    <input
+                      type="text"
+                      value={newService.price}
+                      onChange={(e) => setNewService({ ...newService, price: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder={t.dashboard.card.placeholders.price}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={addService}>{t.dashboard.card.add}</Button>
+                  <Button onClick={() => setShowAddService(false)} variant="outline">{t.dashboard.card.cancel}</Button>
                 </div>
               </div>
-              <div className="text-gray-600">
-                <span className="font-medium">{reviewsTotal}</span> {t.dashboard.card.reviews}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Услуги */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">{t.dashboard.card.services}</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {t.dashboard.card.servicesSubtitle}
-            </p>
-          </div>
-        </div>
-
-        {/* Форма добавления услуги */}
-        {showAddService && (
-          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">{t.dashboard.card.addService}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.category}</label>
-                <input
-                  type="text"
-                  value={newService.category}
-                  onChange={(e) => setNewService({ ...newService, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder={t.dashboard.card.placeholders.category}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.serviceName}</label>
-                <input
-                  type="text"
-                  value={newService.name}
-                  onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder={t.dashboard.card.placeholders.name}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.description}</label>
-                <textarea
-                  value={newService.description}
-                  onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={3}
-                  placeholder={t.dashboard.card.placeholders.desc}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.keywords}</label>
-                <input
-                  type="text"
-                  value={newService.keywords}
-                  onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder={t.dashboard.card.placeholders.keywords}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.price}</label>
-                <input
-                  type="text"
-                  value={newService.price}
-                  onChange={(e) => setNewService({ ...newService, price: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder={t.dashboard.card.placeholders.price}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={addService}>{t.dashboard.card.add}</Button>
-              <Button onClick={() => setShowAddService(false)} variant="outline">{t.dashboard.card.cancel}</Button>
-            </div>
-          </div>
-        )}
-
-        {/* Функционал оптимизатора услуг (только загрузка файла) */}
-        <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">{t.dashboard.card.seo.title}</h2>
-            <p className="text-sm text-gray-600">{t.dashboard.card.seo.desc1}</p>
-            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc2}</p>
-            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc3}</p>
-            <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc4}</p>
-          </div>
-          <div className="flex gap-2 items-center">
-            <Button onClick={() => setShowAddService(true)}>+ {t.dashboard.card.addService}</Button>
-            <ServiceOptimizer
-              businessName={currentBusiness?.name}
-              businessId={currentBusinessId}
-              tone={wizardTone}
-              region={wizardRegion}
-              descriptionLength={wizardLength}
-              instructions={wizardInstructions}
-              hideTextInput={true}
-            />
-            {userServices.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  userServices.forEach(s => optimizeService(s.id));
-                }}
-              >
-                {t.dashboard.card.optimizeAll}
-              </Button>
             )}
-          </div>
-        </div>
 
-        {/* Список услуг */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loadingServices ? (
-                <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.subscription.processing}</td>
-                </tr>
-              ) : userServices.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.network.noData}</td>
-                </tr>
-              ) : (
-                userServices
-                  .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
-                  .map((service, index) => (
-                    <tr key={service.id || index}>
-                      <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        <div className="space-y-3">
-                          {service.name && (
-                            <div className="text-gray-900">{service.name}</div>
-                          )}
-                          {service.optimized_name && (
-                            <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
-                              <div className="absolute top-0 right-0 p-2 opacity-10">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
-                              </div>
-                              <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
-                                {t.dashboard.card.seo.proposal}
-                              </div>
-                              <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
-                              <div className="flex gap-2 pt-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    await updateService(service.id, {
-                                      category: service.category,
-                                      name: service.optimized_name,
-                                      optimized_name: '',
-                                      description: service.description,
-                                      optimized_description: service.optimized_description,
-                                      keywords: service.keywords,
-                                      price: service.price
-                                    });
-                                    setSuccess(t.success);
-                                    await loadUserServices();
-                                  }}
-                                  className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                                >
-                                  {t.dashboard.card.seo.accept}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    await updateService(service.id, {
-                                      category: service.category,
-                                      name: service.name,
-                                      optimized_name: '',
-                                      description: service.description,
-                                      optimized_description: service.optimized_description,
-                                      keywords: service.keywords,
-                                      price: service.price
-                                    });
-                                    setSuccess(t.success);
-                                    await loadUserServices();
-                                  }}
-                                  className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                                >
-                                  {t.dashboard.card.seo.reject}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          {!service.name && !service.optimized_name && (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        <div className="space-y-3">
-                          {service.description && (
-                            <div className="text-gray-700 leading-relaxed">{service.description}</div>
-                          )}
-                          {service.optimized_description && (
-                            <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
-                              <div className="absolute top-0 right-0 p-2 opacity-10">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
-                              </div>
-                              <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
-                                {t.dashboard.card.seo.proposal}
-                              </div>
-                              <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
-                              <div className="flex gap-2 pt-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    await updateService(service.id, {
-                                      category: service.category,
-                                      name: service.name,
-                                      description: service.optimized_description,
-                                      optimized_description: '',
-                                      keywords: service.keywords,
-                                      price: service.price
-                                    });
-                                    setSuccess(t.success);
-                                    await loadUserServices();
-                                  }}
-                                  className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                                >
-                                  {t.dashboard.card.seo.accept}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    await updateService(service.id, {
-                                      category: service.category,
-                                      name: service.name,
-                                      description: service.description,
-                                      optimized_description: '',
-                                      keywords: service.keywords,
-                                      price: service.price
-                                    });
-                                    setSuccess(t.success);
-                                    await loadUserServices();
-                                  }}
-                                  className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                                >
-                                  {t.dashboard.card.seo.reject}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          {!service.description && !service.optimized_description && (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{service.price}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => optimizeService(service.id)}
-                            disabled={optimizingServiceId === service.id}
-                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                            title={t.dashboard.card.seo.proposal || "Оптимизировать"}
-                          >
-                            {optimizingServiceId === service.id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
-                            ) : (
-                              <Wand2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteService(service.id)}
-                            className="h-8 w-8 hover:bg-red-50"
-                          >
-                            <span className="text-lg">🗑️</span>
-                          </Button>
-                        </div>
-                      </td>
+            {/* Функционал оптимизатора услуг (только загрузка файла) */}
+            <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 mb-1">{t.dashboard.card.seo.title}</h2>
+                <p className="text-sm text-gray-600">{t.dashboard.card.seo.desc1}</p>
+                <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc2}</p>
+                <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc3}</p>
+                <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc4}</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button onClick={() => setShowAddService(true)}>+ {t.dashboard.card.addService}</Button>
+                <ServiceOptimizer
+                  businessName={currentBusiness?.name}
+                  businessId={currentBusinessId}
+                  tone={wizardTone}
+                  region={wizardRegion}
+                  descriptionLength={wizardLength}
+                  instructions={wizardInstructions}
+                  hideTextInput={true}
+                />
+                {userServices.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      userServices.forEach(s => optimizeService(s.id));
+                    }}
+                  >
+                    {t.dashboard.card.optimizeAll}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Список услуг */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {loadingServices ? (
+                    <tr>
+                      <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.subscription.processing}</td>
                     </tr>
-                  ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  ) : userServices.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.network.noData}</td>
+                    </tr>
+                  ) : (
+                    userServices
+                      .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
+                      .map((service, index) => (
+                        <tr key={service.id || index}>
+                          <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            <div className="space-y-3">
+                              {service.name && (
+                                <div className="text-gray-900">{service.name}</div>
+                              )}
+                              {service.optimized_name && (
+                                <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
+                                  <div className="absolute top-0 right-0 p-2 opacity-10">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                                  </div>
+                                  <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                    {t.dashboard.card.seo.proposal}
+                                  </div>
+                                  <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
+                                  <div className="flex gap-2 pt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        await updateService(service.id, {
+                                          category: service.category,
+                                          name: service.optimized_name,
+                                          optimized_name: '',
+                                          description: service.description,
+                                          optimized_description: service.optimized_description,
+                                          keywords: service.keywords,
+                                          price: service.price
+                                        });
+                                        setSuccess(t.success);
+                                        await loadUserServices();
+                                      }}
+                                      className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                    >
+                                      {t.dashboard.card.seo.accept}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        await updateService(service.id, {
+                                          category: service.category,
+                                          name: service.name,
+                                          optimized_name: '',
+                                          description: service.description,
+                                          optimized_description: service.optimized_description,
+                                          keywords: service.keywords,
+                                          price: service.price
+                                        });
+                                        setSuccess(t.success);
+                                        await loadUserServices();
+                                      }}
+                                      className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                    >
+                                      {t.dashboard.card.seo.reject}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              {!service.name && !service.optimized_name && (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            <div className="space-y-3">
+                              {service.description && (
+                                <div className="text-gray-700 leading-relaxed">{service.description}</div>
+                              )}
+                              {service.optimized_description && (
+                                <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
+                                  <div className="absolute top-0 right-0 p-2 opacity-10">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                                  </div>
+                                  <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                    {t.dashboard.card.seo.proposal}
+                                  </div>
+                                  <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
+                                  <div className="flex gap-2 pt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        await updateService(service.id, {
+                                          category: service.category,
+                                          name: service.name,
+                                          description: service.optimized_description,
+                                          optimized_description: '',
+                                          keywords: service.keywords,
+                                          price: service.price
+                                        });
+                                        setSuccess(t.success);
+                                        await loadUserServices();
+                                      }}
+                                      className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                    >
+                                      {t.dashboard.card.seo.accept}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        await updateService(service.id, {
+                                          category: service.category,
+                                          name: service.name,
+                                          description: service.description,
+                                          optimized_description: '',
+                                          keywords: service.keywords,
+                                          price: service.price
+                                        });
+                                        setSuccess(t.success);
+                                        await loadUserServices();
+                                      }}
+                                      className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                    >
+                                      {t.dashboard.card.seo.reject}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              {!service.description && !service.optimized_description && (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{service.price}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => optimizeService(service.id)}
+                                disabled={optimizingServiceId === service.id}
+                                className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                title={t.dashboard.card.optimize}
+                              >
+                                {optimizingServiceId === service.id ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                                ) : (
+                                  <Wand2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteService(service.id)}
+                                className="h-8 w-8 hover:bg-red-50"
+                              >
+                                <span className="text-lg">🗑️</span>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="reviews">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <ReviewReplyAssistant businessName={currentBusiness?.name} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="news">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <NewsGenerator
+              services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
+              businessId={currentBusinessId}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

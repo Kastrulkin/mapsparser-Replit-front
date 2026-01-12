@@ -460,6 +460,9 @@ export const en = {
       progressTab: "Progress tab",
       rating: "Rating",
       reviews: "reviews",
+      tabServices: "Services",
+      tabReviews: "Reviews",
+      tabNews: "News",
       services: "Services",
       servicesSubtitle: "Current service breakdown on maps. Data is added automatically if parser is connected.",
       addService: "Add New Service",
@@ -472,6 +475,7 @@ export const en = {
       cancel: "Cancel",
       deleteConfirm: "Are you sure you want to delete this service?",
       optimizeAll: "Optimize All",
+      optimize: "Optimize",
       table: {
         category: "Category",
         name: "Name",
