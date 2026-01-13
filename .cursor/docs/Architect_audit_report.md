@@ -1909,3 +1909,26 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-13 - Исправление зацикливания парсинга и багов
+
+### Current Task
+Исправление проблемы, когда парсер "Оливер" зацикливался каждые 2-3 часа (Captcha -> Fallback -> Captcha Retry). Также обновление селекторов для отзывов и добавление утилиты для обновления email владельца.
+
+### Architecture Decision
+- **Fix Parsing Loop**: Изменен `worker.py`. Теперь, если обнаружена Капча, но успешно выполнен Fallback (через API кабинета), основная задача помечается как `done`, а не `captcha`. Это разрывает цикл повторений.
+- **Harden Selectors**: Обновлены селекторы в `yandex_maps_scraper.py` (review parsing) — добавлены wildcard селекторы `div[class*='business-review-view']` для повышения устойчивости к изменениям классов Яндекса.
+- **Scripted Updates**: Создан скрипт `src/scripts/update_oliver_email.py` для безопасного обновления email и установки пароля (с правильным хешированием через `auth_system.py`) на сервере.
+
+### Files to Modify
+- `src/worker.py` - Добавлена проверка `fallback_created` перед rescheduling on captcha.
+- `src/yandex_maps_scraper.py` - Улучшены селекторы парсинга отзывов.
+- `src/scripts/update_oliver_email.py` - Создан новый скрипт для обновления кредов.
+
+### Trade-offs & Decisions
+- **Fallback Marking**: Решение помечать задачу как `done` при успешном фоллбэке принято для остановки спама. Формально задача парсинга (Playwright) не выполнена, но бизнес-цель ("получить данные") достигнута через API.
+
+### Status
+- [x] Completed
