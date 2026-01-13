@@ -316,6 +316,7 @@ def process_queue():
         business_id = queue_dict.get("business_id")
         is_successful, reason = _is_parsing_successful(card_data, business_id)
         
+        fallback_created = False
         if not is_successful and business_id:
             # Проверяем, есть ли кабинет для fallback
             has_account, account_id = _has_cabinet_account(business_id)
@@ -339,11 +340,26 @@ def process_queue():
                     """, (fallback_task_id, business_id, account_id, queue_dict["user_id"], queue_dict["url"]))
                     conn.commit()
                     print(f"✅ Создана задача fallback: {fallback_task_id}")
+                    fallback_created = True
                 finally:
                     cursor.close()
                     conn.close()
         
         if card_data.get("error") == "captcha_detected":
+            # Если был создан фоллбэк, то считаем задачу выполненной, не уходим в цикл
+            if fallback_created:
+                print(f"✅ Капча обнаружена, но создан фоллбэк. Помечаю задачу как выполненную, чтобы не зацикливать.")
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("done", queue_dict["id"]))
+                    cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_dict["id"],))
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                return
+
             # Открываем новое соединение только для обновления статуса капчи
             conn = get_db_connection()
             cursor = conn.cursor()

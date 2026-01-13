@@ -788,7 +788,7 @@ def parse_reviews(page):
 
         # Парсим отзывы с ИМЕНАМИ авторов - ОБРАБАТЫВАЕМ ВСЕ
         try:
-            review_blocks = page.query_selector_all("div.business-review-view")
+            review_blocks = page.query_selector_all("div.business-review-view, div[class*='business-review-view']")
             print(f"Найдено блоков отзывов: {len(review_blocks)}")
 
             for i, block in enumerate(review_blocks):
