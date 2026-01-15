@@ -1932,3 +1932,58 @@ User reported duplicate headers on the "Progress" page (Legacy "Business Growth 
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-15 - Интеграция 2ГИС (Implementation)
+
+### Current Task
+Реализация боевого парсинга данных из личного кабинета 2ГИС.
+
+### Architecture Decision
+- Изменен подход с Direct API на **Browser Automation (Playwright)**. Причина: отсутствие документации по внутреннему API и сложность реверс-инжиниринга аутентификации.
+- `TwoGisBusinessParser` использует `playwright.sync_api` для запуска браузера, установки cookies из `auth_data` и перехвата сетевых ответов (`page.on("response", ...)`).
+- Интерфейс `TwoGisBusinessSyncWorker` остался прежним, но теперь он расшифровывает cookies и передает их в парсер.
+
+### Files to Modify
+- `src/two_gis_business_parser.py` - Переписан на Playwright. Реализован перехват сетевых запросов для получения отзывов.
+- `src/two_gis_business_sync_worker.py` - Обновлен для работы с реальным парсером.
+
+### Trade-offs & Decisions
+- **Browser Automation (Playwright)**:
+    - *Плюсы*: Надежность (эмуляция реального пользователя), не нужно ломать голову над подписью запросов.
+    - *Минусы*: Тяжелее и медленнее, чем requests. Требует установки браузеров.
+    - *Решение*: Выбрана надежность, так как 2ГИС часто меняет API и имеет сложную защиту.
+- **Network Interception**: Вместо парсинга HTML (DOM) используется перехват JSON ответов от внутреннего API, так как это более стабильно (структура JSON меняется реже, чем верстка).
+
+### Dependencies
+- Требуется `playwright` (уже есть в зависимостях) и установленные браузеры (`playwright install`).
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-15 - Fixing Profile Update and User Data Corruption
+
+### Current Task
+Debug and fix issue where updating the "Oliver" account profile name fails (reverts to "Alexander" or previous value).
+
+### Architecture Decision
+- Modify `/api/client-info` endpoint to prioritize reading contact info (name, phone, email) from the `BusinessProfiles` table.
+- This connects the write path (which uses `/api/business/<id>/profile` -> `BusinessProfiles`) with the read path (which previously ignored it).
+- Repair corrupted user record for `tislitskaya@yandex.ru` in `Users` table (shifted columns).
+
+### Files to Modify
+- `src/main.py` - Updated `client_info` function to query `BusinessProfiles` and override owner data if found.
+
+### Trade-offs & Decisions
+- **Consistency**: Ensures that profile updates made in the "Business Profile" section are actually displayed to the user.
+- **Data Integrity**: Repaired a specific user record that had data shifted across columns (phone in name column, etc.), restoring proper labeling.
+- **Backwards Compatibility**: The change in `client_info` falls back to `Users` table if no profile exists, preserving existing behavior for users who haven't updated their profile yet.
+
+### Dependencies
+- None. `BusinessProfiles` table schema was already defined in the codebase.
+
+### Status
+- [x] Completed

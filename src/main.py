@@ -4050,7 +4050,38 @@ def client_info():
                         
                         # Получаем данные владельца бизнеса для отображения
                         owner_data = None
-                        if owner_id:
+                        
+                        # Сначала проверяем BusinessProfiles (где сохраняются обновления)
+                        cursor.execute("""
+                            CREATE TABLE IF NOT EXISTS BusinessProfiles (
+                                id TEXT PRIMARY KEY,
+                                business_id TEXT NOT NULL,
+                                contact_name TEXT,
+                                contact_phone TEXT,
+                                contact_email TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+                            )
+                        """)
+                        
+                        cursor.execute("""
+                            SELECT contact_name, contact_phone, contact_email
+                            FROM BusinessProfiles
+                            WHERE business_id = ?
+                        """, (current_business_id,))
+                        profile_row = cursor.fetchone()
+                        
+                        if profile_row and (profile_row[0] or profile_row[1] or profile_row[2]):
+                             owner_data = {
+                                'id': owner_id, # Оставляем ID реального владельца
+                                'name': profile_row[0] or "",
+                                'phone': profile_row[1] or "",
+                                'email': profile_row[2] or ""
+                            }
+                        
+                        # Если в профиле нет данных, берем из таблицы Users
+                        if not owner_data and owner_id:
                             cursor.execute("""
                                 SELECT id, email, name, phone
                                 FROM Users

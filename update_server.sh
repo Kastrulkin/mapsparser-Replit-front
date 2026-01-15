@@ -80,6 +80,12 @@ else
     echo -e "${YELLOW}⚠️  Миграция migrate_clientinfo_add_business_id.py не найдена${NC}"
 fi
 
+# 3.1. Исправление профиля tislitskaya
+if [ -f "src/scripts/fix_tislitskaya_profile.py" ]; then
+    echo -e "${YELLOW}🔧 Запускаю исправление профиля tislitskaya...${NC}"
+    $PYTHON_BIN src/scripts/fix_tislitskaya_profile.py
+fi
+
 # 4. Пересобрать фронтенд
 echo -e "${YELLOW}🏗️  Пересобираю фронтенд...${NC}"
 cd frontend
