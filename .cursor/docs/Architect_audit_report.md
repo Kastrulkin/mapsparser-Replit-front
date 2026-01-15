@@ -1987,3 +1987,23 @@ Debug and fix issue where updating the "Oliver" account profile name fails (reve
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-15 - User Profile Link in Header
+
+### Current Task
+Add a link with the authenticated user's email in the dashboard header, pointing to the profile page.
+
+### Architecture Decision
+- Modified `DashboardHeader.tsx` (the logged-in header) to display `currentUser.email` as a link to `/dashboard/profile`.
+- Placed next to the `LanguageSwitcher` for visibility.
+
+### Files to Modify
+- `frontend/src/components/DashboardHeader.tsx` - Added `Link` import and rendering logic.
+
+### Trade-offs & Decisions
+- **UX**: Provides quick access to profile settings and clear indication of which account is logged in.
+
+### Status
+- [x] Completed
