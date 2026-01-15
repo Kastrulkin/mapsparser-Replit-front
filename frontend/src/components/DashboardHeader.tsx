@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { newAuth } from '../lib/auth_new';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -114,6 +114,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Базич</span>
             </Button>
+          )}
+
+          {isAuthenticated && currentUser && (
+            <Link
+              to="/dashboard/profile"
+              className="text-sm font-medium text-gray-700 hover:text-blue-600 mr-2 transition-colors border-b border-transparent hover:border-blue-600"
+            >
+              {currentUser.email}
+            </Link>
           )}
 
           <LanguageSwitcher />
