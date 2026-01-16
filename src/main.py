@@ -8959,30 +8959,21 @@ def get_network_locations(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        user_id = user_data['user_id']
+        # ! FIX: Получаем только точки ТОЙ ЖЕ сети, к которой принадлежит бизнес
+        network_id = business.get('network_id')
         
-        # Проверяем, является ли пользователь владельцем сети
-        # Получаем все сети пользователя
-        user_networks = db.get_user_networks(user_id)
-        
-        if not user_networks or len(user_networks) == 0:
+        if not network_id:
             db.close()
-            # Если у пользователя нет сетей, возвращаем пустой список
             return jsonify({"success": True, "is_network": False, "locations": []})
-        
-        # Получаем все точки всех сетей пользователя
-        all_locations = []
-        for network in user_networks:
-            network_id = network['id']
-            locations = db.get_businesses_by_network(network_id)
-            all_locations.extend(locations)
+            
+        locations = db.get_businesses_by_network(network_id)
         
         db.close()
         
         return jsonify({
             "success": True,
-            "is_network": len(user_networks) > 0,
-            "locations": all_locations
+            "is_network": True,
+            "locations": locations
         })
         
     except Exception as e:
