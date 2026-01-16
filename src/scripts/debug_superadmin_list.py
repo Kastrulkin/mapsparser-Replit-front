@@ -36,13 +36,14 @@ def debug_superadmin_visibility():
     try:
         all_businesses = db.get_all_businesses()
         print(f"📦 Total businesses found: {len(all_businesses)}")
-        kebab_count = 0
-        for b in all_businesses:
-            if 'kebab' in b['name'].lower() or 'кебаб' in b['name'].lower():
-                kebab_count += 1
-                if kebab_count <= 5:
-                    print(f"   - Found Kebab: {b['name']} (Owner: {b['owner_name']}, Network: {b.get('network_id')})")
-        print(f"   Total Kebab businesses in list: {kebab_count}")
+        
+        # Find demyanovap businesses
+        demyanovap_businesses = [b for b in all_businesses if b.get('owner_email') == 'demyanovap@yandex.ru']
+        print(f"📦 Demyanovap businesses: {len(demyanovap_businesses)}")
+        
+        for b in demyanovap_businesses:
+            print(f"   - {b['name']} (ID: {b['id']}, Active: {b.get('is_active')}, Network: {b.get('network_id')})")
+            
     except Exception as e:
         print(f"❌ Error in get_all_businesses: {e}")
 
