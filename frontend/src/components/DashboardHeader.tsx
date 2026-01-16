@@ -83,6 +83,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           {isSuperadmin && (
             <>
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Суперадмин</span>
+              {/* DEBUG: Показывать network_id прямо в интерфейсе */}
+              <span className="text-[10px] text-red-500 font-mono border border-red-200 px-1 rounded bg-red-50">
+                NetID: {currentBusiness?.network_id ? currentBusiness.network_id.substring(0, 8) + '...' : 'NULL'}
+              </span>
               <BusinessSwitcher
                 businesses={businesses}
                 currentBusinessId={currentBusinessId || undefined}
@@ -96,6 +100,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* Правая сторона: Network Locations + остальное */}
         <div className="flex items-center gap-3">
           {/* Network Locations Switcher для владельцев сетей */}
+          {(() => {
+            console.log('🏗️ DashboardHeader render:', {
+              hasCurrentBusiness: !!currentBusiness,
+              networkId: currentBusiness?.network_id,
+              name: currentBusiness?.name
+            });
+            return null;
+          })()}
           {currentBusiness?.network_id && onBusinessChange && (
             <NetworkLocationsSwitcher
               currentBusinessId={currentBusinessId || undefined}
