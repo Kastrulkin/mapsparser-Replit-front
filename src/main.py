@@ -1948,7 +1948,13 @@ def spa_fallback(path):
         return send_from_directory(FRONTEND_DIST_DIR, path)
 
     # Иначе — SPA индекс
-    return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+    response = send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+    # Для index.html отключаем кэширование, чтобы всегда получать свежую версию приложения
+    if response:
+         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+         response.headers["Pragma"] = "no-cache"
+         response.headers["Expires"] = "0"
+    return response
 
 # Временные заглушки для тихой работы фронтенда
 @app.route('/api/users/reports', methods=['GET'])
