@@ -312,6 +312,11 @@ def serve_assets(filename):
     """Раздача ассетов Vite/SPA"""
     return send_from_directory(os.path.join(FRONTEND_DIST_DIR, 'assets'), filename)
 
+@app.route('/yandex_f5eb229fc5e67c03.html')
+def serve_yandex_verification():
+    """Yandex Webmaster verification"""
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), '../yandex_f5eb229fc5e67c03.html')
+
 @app.route('/api/geo/payment-provider', methods=['GET'])
 def get_payment_provider():
     """
