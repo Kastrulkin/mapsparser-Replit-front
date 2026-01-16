@@ -315,7 +315,9 @@ def serve_assets(filename):
 @app.route('/yandex_f5eb229fc5e67c03.html')
 def serve_yandex_verification():
     """Yandex Webmaster verification"""
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), '../yandex_f5eb229fc5e67c03.html')
+    # Explicitly define root directory to avoid traversal issues
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    return send_from_directory(root_dir, 'yandex_f5eb229fc5e67c03.html')
 
 @app.route('/api/geo/payment-provider', methods=['GET'])
 def get_payment_provider():
