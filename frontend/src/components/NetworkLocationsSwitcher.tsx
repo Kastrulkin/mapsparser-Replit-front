@@ -73,9 +73,9 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
         );
     }
 
-    if (locations.length === 0) {
-        return null; // Не показываем dropdown если нет точек сети
-    }
+    // if (locations.length === 0) {
+    //     return null; // Не показываем dropdown если нет точек сети
+    // }
 
     return (
         <div className="relative">
@@ -98,31 +98,38 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
             </button>
 
             {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto min-w-[300px]">
+                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                     {locations.map((location) => (
                         <button
                             key={location.id}
                             onClick={() => handleLocationSelect(location)}
-                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${selectedLocation?.id === location.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start space-x-3 transition-colors ${selectedLocation?.id === location.id ? 'bg-blue-50' : ''
                                 }`}
                         >
-                            <div className="flex items-start space-x-3">
-                                <MapPin className="w-4 h-4 text-blue-600 mt-0.5" />
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-gray-900 truncate">
-                                        {location.name}
-                                    </div>
-                                    {location.address && (
-                                        <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                            {location.address}
-                                        </div>
-                                    )}
+                            <Building2 className={`w-5 h-5 mt-0.5 flex-shrink-0 ${selectedLocation?.id === location.id ? 'text-blue-600' : 'text-gray-400'
+                                }`} />
+                            <div>
+                                <div className={`text-sm font-medium ${selectedLocation?.id === location.id ? 'text-blue-900' : 'text-gray-900'
+                                    }`}>
+                                    {location.name}
                                 </div>
+                                {location.address && (
+                                    <div className="text-xs text-gray-500 mt-0.5">
+                                        {location.address}
+                                    </div>
+                                )}
                             </div>
                         </button>
                     ))}
                 </div>
             )}
+
+            {/* DEBUG OVERLAY */}
+            <div style={{ position: 'fixed', bottom: 10, right: 10, background: 'rgba(255,0,0,0.8)', color: 'white', padding: 5, zIndex: 9999, fontSize: 12 }}>
+                NetworkSwitcher Debug:<br />
+                Loading: {loading ? 'YES' : 'NO'}<br />
+                Locs: {locations.length}
+            </div>
         </div>
     );
 };
