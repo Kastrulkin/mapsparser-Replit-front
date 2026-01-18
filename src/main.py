@@ -8967,12 +8967,15 @@ def get_network_locations(business_id):
         
         # ! FIX: Получаем только точки ТОЙ ЖЕ сети, к которой принадлежит бизнес
         network_id = business.get('network_id')
+        print(f"🔍 API DEBUG: Business {business_id} ({business.get('name')}) -> Network {network_id}")
         
         if not network_id:
+            print("🔍 API DEBUG: No network_id, returning []")
             db.close()
             return jsonify({"success": True, "is_network": False, "locations": []})
             
         locations = db.get_businesses_by_network(network_id)
+        print(f"🔍 API DEBUG: Found {len(locations)} locations for network {network_id}")
         
         db.close()
         
