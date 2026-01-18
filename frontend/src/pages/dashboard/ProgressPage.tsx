@@ -6,10 +6,11 @@ import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
 import { BusinessGrowthPlan } from '@/components/BusinessGrowthPlan';
 import { MetricsHistoryCharts } from '@/components/MetricsHistoryCharts';
+import { NetworkDashboard } from '@/components/NetworkDashboard';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 export const ProgressPage = () => {
-  const { user, currentBusinessId } = useOutletContext<any>();
+  const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardLocation, setWizardLocation] = useState<string>('');
   const [wizardExperience, setWizardExperience] = useState<string>('');
@@ -19,7 +20,38 @@ export const ProgressPage = () => {
   const [wizardRevenue, setWizardRevenue] = useState<string>('');
   const [savingWizard, setSavingWizard] = useState(false);
   const [loadingWizard, setLoadingWizard] = useState(false);
+  const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const { t } = useLanguage();
+
+  // Check if current business is network master
+  useEffect(() => {
+    const checkNetwork = async () => {
+      if (!currentBusinessId) {
+        setIsNetworkMaster(false);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsNetworkMaster(data.is_network || false);
+        }
+      } catch (error) {
+        console.error('Error checking network status:', error);
+        setIsNetworkMaster(false);
+      }
+    };
+
+    checkNetwork();
+  }, [currentBusinessId]);
 
   const experienceKeys = [
     'zeroToSix',
@@ -72,6 +104,15 @@ export const ProgressPage = () => {
 
     loadWizardData();
   }, [showWizard, currentBusinessId]);
+
+  // If network master, show Network Dashboard instead
+  if (isNetworkMaster) {
+    return (
+      <NetworkDashboard
+        networkId={currentBusinessId || ''}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
