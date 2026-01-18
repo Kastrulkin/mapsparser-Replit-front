@@ -8981,7 +8981,7 @@ def get_network_locations(business_id):
         
         return jsonify({
             "success": True,
-            "is_network": True,
+            "is_network": (business_id == network_id),
             "locations": locations
         })
         
