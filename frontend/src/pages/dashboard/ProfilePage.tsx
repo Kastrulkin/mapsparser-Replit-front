@@ -558,7 +558,14 @@ export const ProfilePage = () => {
       {/* Информация о бизнесе */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">{t.dashboard.profile.businessInfo}</h2>
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            {t.dashboard.profile.businessInfo}
+            {isNetwork && (
+              <span className="text-sm font-normal text-gray-500 bg-orange-50 px-2 py-1 rounded-md border border-orange-200">
+                (сеть)
+              </span>
+            )}
+          </h2>
           <div className="flex gap-2">
             {user?.is_superadmin && currentBusinessId && !editClientInfo && (
               <Button
