@@ -2057,3 +2057,105 @@ Restore client report generation and parse "Services/Prices" tab data.
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-18 - Network Account Dashboard Features
+
+### Current Task
+Implement network-specific UI adaptations for master network accounts in 3 phases: profile indicators, blocked maps tab, and comprehensive network dashboard with Growth Plan integration.
+
+### Architecture Decision
+
+**Three-phase UI enhancement approach**:
+
+1. **Profile Indicators**: Add "(сеть)" badge to business information header 
+2. **Maps Tab Blocking**: Blur CardOverviewPage with modal directing to location selection
+3. **Network Dashboard**: Replace standard Progress view with network analytics for master accounts
+
+**Key Decision**: Leverage existing Growth Plan (Схема роста) system for network health validation
+
+- Growth Plan requirements define "ideal state" for each business type
+- Network dashboard compares location metrics vs. Growth Plan standards  
+- If no Growth Plan configured → show warning "Обратиться к администратору"
+- Enforces business-type-specific standards across all network locations
+
+### Files Modified
+
+#### Frontend Changes
+
+**[MODIFIED]** `frontend/src/pages/dashboard/ProfilePage.tsx`
+- Added "(сеть)" badge to business info header for network masters
+- Uses `isNetwork` state from `/api/business/${businessId}/network-locations`
+- Styled with orange theme: `bg-orange-50 border-orange-200`
+
+**[MODIFIED]** `frontend/src/pages/dashboard/CardOverviewPage.tsx`
+- Added `isNetworkMaster` detection via network-locations API
+- Fixed overlay (`z-50`) with blur effect and modal dialog
+- Content blurred (`blur-sm`) and disabled (`pointer-events-none`)
+- Network icon + message + CTA button to navigate to location selection
+
+**[MODIFIED]** `frontend/src/pages/dashboard/ProgressPage.tsx`
+- Added `isNetworkMaster` check and conditional routing
+- Network masters → NetworkDashboard, single locations → standard view
+- Imports existing `NetworkDashboard` component
+
+**[EXISTING]** `frontend/src/components/NetworkDashboard.tsx` 
+- Leveraged for network analytics with Growth Plan integration
+- Displays aggregated metrics and location health cards
+
+### Trade-offs & Decisions
+
+**1. Growth Plan Integration** ✅
+- **Decision**: Require Growth Plan for network dashboard
+- **Rationale**: Provides objective standards for location health
+- **Trade-off**: Adds setup requirement (admin must configure plan)
+- **Mitigation**: Clear warning with admin CTA
+
+**2. Health Status Algorithm**
+- **Decision**: Threshold-based scoring (healthy/warning/critical)
+- **Criteria**: Unanswered reviews > 0, rating < 4.5, photos < 5, no news
+- **Calculation**: 3+ flags → critical; 1+ flags → warning; 0 flags → healthy
+- **Future**: Could integrate Growth Plan task completion percentage
+
+**3. Maps Tab Blocking Approach** ✅
+- **Decision**: Full page blur + modal (not just disabled state)
+- **Rationale**: Strong visual signal of intentional unavailability
+- **Alternative**: Empty state → rejected (less clear)
+
+### Dependencies
+
+**No new npm dependencies** - uses existing:
+- shadcn/ui components (`Card`, `Button`)
+- `lucide-react` icons
+- Tailwind utilities for blur/styling
+
+**Backend API dependencies:**
+- `/api/business/${businessId}/network-locations` - network detection
+- `/api/networks/${networkId}/locations` - all locations list
+- `/api/networks/${networkId}/stats` - aggregated statistics
+- `/api/admin/growth-stages/${businessTypeId}` - Growth Plan config
+
+**Data requirements:**
+- `Businesses.network_id` populated for network relationships
+- Growth Plan configured for business type
+- Network stats endpoints correctly aggregating data
+
+### Status
+- [x] Completed
+
+**Commits:**
+- `325f5d6`: feat: Add network account UI indicators
+- `daf139c`: feat: Add Network Dashboard to Progress page
+
+### Future Enhancements
+
+1. **Deeper Growth Plan Integration**: Compare actual weekly metrics (photos, news) against plan requirements
+2. **Trend Charts**: NetworkReviewsChart, location comparison table
+3. **Alert Panel**: Dedicated panel listing all network issues
+4. **Admin Quick Actions**: Bulk reply, network-wide content scheduling
+
+**Technical Debt:**
+- TypeScript errors for missing `networkNotice` localization keys (non-blocking, fallbacks provided)
+- Could add refresh mechanism for network stats
+
