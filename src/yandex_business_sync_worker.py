@@ -42,6 +42,16 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         """Вставка/обновление отзывов (для совместимости с worker.py)"""
         repository = ExternalDataRepository(db)
         repository.upsert_reviews(reviews)
+    
+    def _upsert_stats(self, db: DatabaseManager, stats: List[ExternalStatsPoint]) -> None:
+        """Вставка/обновление статистики (для совместимости с main.py)"""
+        repository = ExternalDataRepository(db)
+        repository.upsert_stats(stats)
+    
+    def _upsert_posts(self, db: DatabaseManager, posts: list) -> None:
+        """Вставка/обновление постов (для совместимости с main.py)"""
+        repository = ExternalDataRepository(db)
+        repository.upsert_posts(posts)
 
     def _update_map_parse_results(self, db: DatabaseManager, account: dict, 
                                   org_info: dict, reviews_count: int, news_count: int, photos_count: int) -> None:
