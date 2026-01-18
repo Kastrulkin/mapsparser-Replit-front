@@ -778,7 +778,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT id, name, description, industry, business_type, address, working_hours, 
-                   phone, email, website, owner_id, is_active, 
+                   phone, email, website, owner_id, network_id, is_active, 
                    created_at, updated_at
             FROM Businesses WHERE id = ?
         """, (business_id,))
