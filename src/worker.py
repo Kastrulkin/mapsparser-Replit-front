@@ -410,14 +410,26 @@ def process_queue():
                 print(f"📊 Сохраняю результаты в MapParseResults для business_id={business_id}")
                 
                 try:
-                    from analyzer import analyze_card
+                    # Используем GigaChat для анализа, как и в старой логике
+                    from gigachat_analyzer import analyze_business_data
                     from report import generate_html_report
                     
-                    analysis = analyze_card(card_data)
-                    report_path = generate_html_report(card_data, analysis, {})
+                    print(f"🤖 Запускаем GigaChat анализ для {business_id}...")
+                    analysis_result = analyze_business_data(card_data)
                     
-                    # Сохраняем анализ для использования в рекомендациях
-                    analysis_json = json.dumps(analysis, ensure_ascii=False)
+                    # Формируем данные для отчета
+                    analysis_data = {
+                        'score': analysis_result.get('score', 50),
+                        'recommendations': analysis_result.get('recommendations', []),
+                        'ai_analysis': analysis_result.get('analysis', {})
+                    }
+                    
+                    # Генерируем отчет
+                    report_path = generate_html_report(card_data, analysis_data, {})
+                    print(f"📄 Отчет сгенерирован: {report_path}")
+                    
+                    # Сохраняем анализ для использования в рекомендациях (JSON)
+                    analysis_json = json.dumps(analysis_data['ai_analysis'], ensure_ascii=False)
                     
                     rating = card_data.get('overview', {}).get('rating', '') or ''
                     reviews_count = card_data.get('reviews_count') or card_data.get('overview', {}).get('reviews_count') or 0

@@ -58,35 +58,31 @@ class YandexMapsInterceptionParser:
         
         print(f"📋 Извлечен org_id: {self.org_id}")
         
-        # Cookies для имитации браузера (те же что в оригинальном parser.py)
-        cookies = [
-            {"name": "_yasc", "value": "+nRgeAgdQvcUzBXmoMj8pj3o4NAMqN+CCHHN8J9/1lgNfV+4kHD1Sh3zeyrGAQw5", "domain": ".yandex.net", "path": "/"},
-            {"name": "_yasc", "value": "biwmzqpVhmFOmsUovC7mHXedgeCta8YxIE4/1irJQVFGT+VWqh2xJNmwwC1OtCIXlpDhth57aht1oLEYU3XZbIItFHp3McubCw==", "domain": ".yandex.ru", "path": "/"},
-            {"name": "_ym_d", "value": "1752161744", "domain": ".yandex.ru", "path": "/"},
-            {"name": "_ym_d", "value": "1742889194", "domain": ".yandex.net", "path": "/"},
-            {"name": "_ym_isad", "value": "2", "domain": ".yandex.ru", "path": "/"},
-            {"name": "_ym_uid", "value": "1742128615416397392", "domain": ".yandex.ru", "path": "/"},
-            {"name": "_ym_uid", "value": "1742889187528829383", "domain": ".yandex.net", "path": "/"},
-            {"name": "amcuid", "value": "1494970031742211656", "domain": ".yandex.ru", "path": "/"},
-        ]
+        # Cookies для имитации браузера
+        from parser_config_cookies import get_yandex_cookies
+        cookies = get_yandex_cookies()
+        
+        print(f"🍪 Используем {len(cookies)} cookies")
         
         browser = None
         with sync_playwright() as p:
             try:
                 browser = p.chromium.launch(
-                    headless=True,
+                    headless=False,  # Headless=False для отладки и обхода капчи
                     args=[
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
                         '--disable-images',  # Не загружаем картинки для скорости
+                        '--disable-blink-features=AutomationControlled'
                     ]
                 )
                 
                 context = browser.new_context(
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     viewport={'width': 1920, 'height': 1080},
+                    device_scale_factor=1,
                 )
                 
                 context.add_cookies(cookies)
@@ -127,12 +123,13 @@ class YandexMapsInterceptionParser:
                                         }
                                         # Показываем только важные запросы
                                         if any(keyword in url for keyword in ['org', 'organization', 'business', 'company', 'reviews', 'feedback', 'location-info']):
-                                            print(f"✅ Перехвачен важный API запрос: {url[:120]}...")
+                                            print(f"✅ Перехвачен важный API запрос: {url[:100]}...")
                                 except:
                                     # Не JSON, пропускаем
                                     pass
                     except Exception as e:
-                        print(f"⚠️ Ошибка при перехвате ответа: {e}")
+                        # print(f"⚠️ Ошибка при перехвате ответа: {e}")
+                        pass
                 
                 page.on("response", handle_response)
                 
@@ -141,35 +138,127 @@ class YandexMapsInterceptionParser:
                 try:
                     page.goto(url, wait_until='domcontentloaded', timeout=30000)
                     
-                    # Проверяем на капчу
-                    page.wait_for_timeout(2000)
-                    page_content = page.content()
-                    if "captcha" in page_content.lower() or "робот" in page_content.lower() or "Подтвердите" in page_content:
-                        print("⚠️ Обнаружена капча! Возвращаем ошибку для повторной попытки.")
-                        if browser:
-                            browser.close()
-                        return {'error': 'captcha_detected', 'url': url}
+                    # Проверяем на капчу с ожиданием решения
+                    for _ in range(12):  # Ждем до 60 секунд
+                        try:
+                            page_content = page.content()
+                            if "captcha" in page_content.lower() or "робот" in page_content.lower() or "Подтвердите" in page_content:
+                                print("⚠️ Обнаружена капча! Ждем 5 секунд для ручного решения...")
+                                page.wait_for_timeout(5000)
+                            else:
+                                break
+                        except:
+                            break
                 except:
-                    # Если не удалось загрузить, продолжаем с тем что есть
                     print("⚠️ Страница не загрузилась полностью, но продолжаем...")
                 
-                # Ждем, чтобы все запросы успели выполниться
-                print("⏳ Ожидаем выполнения API запросов...")
-                time.sleep(5)
+                # Вспомогательная функция для прокрутки
+                def scroll_page(times=5):
+                    for _ in range(times):
+                        page.mouse.wheel(0, 1000)
+                        time.sleep(random.uniform(0.5, 1.0))
                 
-                # Скроллим для подгрузки дополнительного контента (отзывы, фото)
+                extra_photos_count = 0
+
+                # 1. Скроллим основную страницу
+                print("📜 Скроллим основную страницу...")
+                scroll_page(3)
+                
+                # 2. Кликаем и скроллим Отзывы (Reviews)
                 try:
-                    page.mouse.wheel(0, 1000)
-                    time.sleep(2)
-                    page.mouse.wheel(0, 1000)
-                    time.sleep(2)
-                except:
-                    pass
-                
+                    reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews")
+                    if reviews_tab:
+                        print("💬 Переходим во вкладку Отзывы...")
+                        reviews_tab.click(force=True)
+                        time.sleep(2)
+                        
+                        # Скроллим отзывы (очень агрессивно)
+                        print("📜 Скроллим отзывы (глубокий скролл - 30 раз)...")
+                        for i in range(30):
+                            page.mouse.wheel(0, 2000)
+                            time.sleep(random.uniform(0.5, 1.2))
+                            if i % 5 == 0:
+                                page.mouse.move(random.randint(100, 800), random.randint(100, 800))
+                    else:
+                        print("ℹ️ Вкладка Отзывы не найдена (селектор)")
+                except Exception as e:
+                    print(f"⚠️ Ошибка при обработке отзывов: {e}")
+
+                # 3. Кликаем и скроллим Фото (Photos)
+                try:
+                    photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
+                    if photos_tab:
+                        print("📷 Переходим во вкладку Фото...")
+                        
+                        # Пытаемся получить количество фото
+                        try:
+                            photos_text = photos_tab.inner_text()
+                            print(f"ℹ️ Текст вкладки фото: {photos_text}")
+                            match = re.search(r'(\d+)', photos_text)
+                            if match:
+                                extra_photos_count = int(match.group(1))
+                        except:
+                            pass
+
+                        photos_tab.click(force=True)
+                        time.sleep(2)
+                        print("📜 Скроллим фото...")
+                        scroll_page(10)
+                    else:
+                        print("ℹ️ Вкладка Фото не найдена")
+                except Exception as e:
+                    print(f"⚠️ Ошибка при обработке фото: {e}")
+
+                # 4. Кликаем и скроллим Новости (News/Posts)
+                try:
+                    news_tab = page.query_selector("div.tabs-select-view__title._name_posts")
+                    if news_tab:
+                        print("📰 Переходим во вкладку Новости...")
+                        news_tab.click(force=True)
+                        time.sleep(2)
+                        print("📜 Скроллим новости...")
+                        scroll_page(10)
+                    else:
+                        print("ℹ️ Вкладка Новости не найдена")
+                except Exception as e:
+                    print(f"⚠️ Ошибка при обработке новостей: {e}")
+
+                # 5. Кликаем и скроллим Товары/Услуги (Prices/Goods)
+                try:
+                    # Пробуем разные селекторы для таба товаров
+                    services_tab = page.query_selector("div.tabs-select-view__title._name_price")
+                    if not services_tab:
+                        services_tab = page.query_selector("div.tabs-select-view__title._name_goods")
+                    
+                    # Fallback на поиск по тексту
+                    if not services_tab:
+                        for text in ["Цены", "Товары и услуги", "Услуги", "Товары"]:
+                            try:
+                                found = page.get_by_text(text, exact=True)
+                                if found.count() > 0:
+                                    services_tab = found.first
+                                    print(f"✅ Нашли таб услуг по тексту: {text}")
+                                    break
+                            except:
+                                pass
+
+                    if services_tab:
+                        print("💰 Переходим во вкладку Цены/Услуги...")
+                        services_tab.click(force=True)
+                        time.sleep(3) # Чуть больше времени на загрузку
+                        print("📜 Скроллим услуги...")
+                        scroll_page(20) # Больше скролла
+                    else:
+                        print("ℹ️ Вкладка Цены/Услуги не найдена")
+                except Exception as e:
+                    print(f"⚠️ Ошибка при обработке услуг: {e}")
+
                 print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
                 
                 # Извлекаем данные из перехваченных ответов
                 data = self._extract_data_from_responses()
+                if extra_photos_count > 0:
+                    data['photos_count'] = extra_photos_count
                 
                 # Если не удалось извлечь данные через API, fallback на HTML парсинг
                 if not data.get('title') and not data.get('overview', {}).get('title'):
@@ -214,6 +303,7 @@ class YandexMapsInterceptionParser:
             'social_links': [],
             'features_full': {},
             'competitors': [],
+            'products': [],
             'overview': {}
         }
         
@@ -234,7 +324,18 @@ class YandexMapsInterceptionParser:
                 org_data = self._extract_location_info(json_data)
                 if org_data:
                     print(f"✅ Извлечены данные организации из location-info API")
+                if org_data:
+                    print(f"✅ Извлечены данные организации из location-info API")
                     data.update(org_data)
+            
+            # Специальная обработка для fetchGoods/Prices API
+            elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower():
+                products = self._extract_products_from_api(json_data)
+                if products:
+                    print(f"✅ Извлечено {len(products)} услуг/товаров из API запроса")
+                    current_products = data.get('products', [])
+                    current_products.extend(products)
+                    data['products'] = current_products
             
             # Пытаемся найти данные организации
             elif self._is_organization_data(json_data):
@@ -254,6 +355,26 @@ class YandexMapsInterceptionParser:
                 posts = self._extract_posts(json_data)
                 if posts:
                     data['news'] = posts
+        
+        # Группируем товары по категориям (для совместимости с отчетом)
+        if data.get('products'):
+            raw_products = data['products']
+            grouped_products = {}
+            for prod in raw_products:
+                cat = prod.get('category', 'Другое')
+                if not cat:
+                    cat = 'Другое'
+                if cat not in grouped_products:
+                    grouped_products[cat] = []
+                grouped_products[cat].append(prod)
+            
+            final_products = []
+            for cat, items in grouped_products.items():
+                final_products.append({
+                    'category': cat,
+                    'items': items
+                })
+            data['products'] = final_products
         
         # Создаем overview
         overview_keys = [
@@ -699,6 +820,50 @@ class YandexMapsInterceptionParser:
         
         find_posts(json_data)
         return posts
+    
+    def _extract_products_from_api(self, json_data: Any) -> List[Dict[str, Any]]:
+        """Извлекает товары/услуги из API"""
+        products = []
+        
+        def find_products(data):
+            if isinstance(data, dict):
+                # Ищем список товаров
+                for key in ['goods', 'items', 'products', 'prices']:
+                    if key in data and isinstance(data[key], list):
+                        for item in data[key]:
+                            if isinstance(item, dict) and ('price' in item or 'name' in item):
+                                # Проверяем, что это похоже на товар/услугу
+                                name = item.get('name', item.get('title', ''))
+                                if not name:
+                                    continue
+                                    
+                                price = item.get('price', {})
+                                price_val = ''
+                                if isinstance(price, dict):
+                                    price_val = price.get('text', '') or str(price.get('value', ''))
+                                else:
+                                    price_val = str(price)
+                                
+                                category = item.get('category', {}).get('name', '') if isinstance(item.get('category'), dict) else str(item.get('category', ''))
+                                
+                                products.append({
+                                    'name': name,
+                                    'price': price_val,
+                                    'description': item.get('description', ''),
+                                    'category': category,
+                                    'photo': item.get('image', {}).get('url', '') if isinstance(item.get('image'), dict) else ''
+                                })
+                
+                # Рекурсивный поиск
+                for value in data.values():
+                    find_products(value)
+            
+            elif isinstance(data, list):
+                for item in data:
+                    find_products(item)
+                    
+        find_products(json_data)
+        return products
     
     def _fallback_html_parsing(self, page, url: str) -> Dict[str, Any]:
         """Fallback на HTML парсинг, если API не сработал"""

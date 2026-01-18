@@ -1,194 +1,115 @@
 #!/usr/bin/env python3
 """
-Каркас воркера для синхронизации данных из личного кабинета 2ГИС.
-
-Как и для Яндекс.Бизнес:
-- используем ExternalBusinessAccounts с source='2gis'
-- реальный доступ к ЛК (cookie/токены) будет реализован позже
-- текущая версия пишет демо-данные в ExternalBusinessReviews/Stats,
-  чтобы проверить схему и UI.
+Воркер для синхронизации данных из личного кабинета 2ГИС.
+Использует внутреннее API 2ГИС через cookies пользователя.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, date
-from typing import List
+import traceback
+from typing import List, Optional
+from datetime import datetime
 
 from database_manager import DatabaseManager
-from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint, make_stats_id
+from external_sources import ExternalSource, ExternalReview
+from auth_encryption import decrypt_auth_data
+from two_gis_business_parser import TwoGisBusinessParser
+from base_sync_worker import BaseSyncWorker
+from repositories.external_data_repository import ExternalDataRepository
 
 
-class TwoGisBusinessSyncWorker:
-  def __init__(self) -> None:
-      self.source = ExternalSource.TWO_GIS
+class TwoGisBusinessSyncWorker(BaseSyncWorker):
+    """Воркер синхронизации 2ГИС аккаунтов."""
 
-  def _load_active_accounts(self, db: DatabaseManager) -> List[dict]:
-      cursor = db.conn.cursor()
-      cursor.execute(
-          """
-          SELECT *
-          FROM ExternalBusinessAccounts
-          WHERE source = ? AND is_active = 1
-          """,
-          (self.source,),
-      )
-      rows = cursor.fetchall()
-      return [dict(row) for row in rows]
+    def __init__(self) -> None:
+        super().__init__(ExternalSource.TWO_GIS)
 
-  def _fake_fetch_reviews(self, account: dict) -> List[ExternalReview]:
-      """Заглушка вместо реального парсинга ЛК 2ГИС."""
-      now = datetime.utcnow()
-      rid = f"{account['id']}_2gis_demo_review"
-      return [
-          ExternalReview(
-              id=rid,
-              business_id=account["business_id"],
-              source=self.source,
-              external_review_id=rid,
-              rating=5,
-              author_name="2ГИС Demo Author",
-              text="Демо-отзыв из 2ГИС (личный кабинет, заглушка).",
-              published_at=now,
-              raw_payload={"demo": True},
-          )
-      ]
+    def _get_account_by_id(self, db: DatabaseManager, account_id: str) -> Optional[dict]:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            \"\"\"
+            SELECT *
+            FROM ExternalBusinessAccounts
+            WHERE id = ? AND source = ?
+            \"\"\",
+            (account_id, self.source),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
-  def _fake_fetch_stats(self, account: dict) -> List[ExternalStatsPoint]:
-      today_str = date.today().isoformat()
-      sid = make_stats_id(account["business_id"], self.source, today_str)
-      return [
-          ExternalStatsPoint(
-              id=sid,
-              business_id=account["business_id"],
-              source=self.source,
-              date=today_str,
-              views_total=150,
-              clicks_total=15,
-              actions_total=6,
-              rating=4.6,
-              reviews_total=78,
-              raw_payload={"demo": True},
-          )
-      ]
+    def sync_account(self, account_id: str) -> None:
+        """Синхронизировать один аккаунт по ID"""
+        db = None
+        db = DatabaseManager()
+        try:
+            repository = ExternalDataRepository(db)
+            account = self._get_account_by_id(db, account_id)
+            if not account:
+                print(f"❌ Аккаунт {account_id} не найден")
+                return
 
-  def _upsert_reviews(self, db: DatabaseManager, reviews: List[ExternalReview]) -> None:
-      cursor = db.conn.cursor()
-      for r in reviews:
-          cursor.execute(
-              """
-              INSERT INTO ExternalBusinessReviews (
-                  id, business_id, account_id, source, external_review_id,
-                  rating, author_name, text, response_text, response_at,
-                  published_at, raw_payload, created_at, updated_at
-              )
-              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT(id) DO UPDATE SET
-                  rating=excluded.rating,
-                  author_name=excluded.author_name,
-                  text=excluded.text,
-                  response_text=excluded.response_text,
-                  response_at=excluded.response_at,
-                  published_at=excluded.published_at,
-                  raw_payload=excluded.raw_payload,
-                  updated_at=CURRENT_TIMESTAMP
-              """,
-              (
-                  r.id,
-                  r.business_id,
-                  r.source,
-                  r.external_review_id,
-                  r.rating,
-                  r.author_name,
-                  r.text,
-                  r.response_text,
-                  r.response_at,
-                  r.published_at,
-                  json.dumps(r.raw_payload or {}),
-              ),
-          )
+            print(f"🔄 Синхронизация аккаунта {account_id} ({account.get('business_id')}) [2GIS]")
+            
+            # Расшифровываем auth_data
+            auth_data_encrypted = account.get("auth_data_encrypted")
+            if not auth_data_encrypted:
+                raise ValueError("Нет auth_data")
+            
+            auth_data_plain = decrypt_auth_data(auth_data_encrypted)
+            if not auth_data_plain:
+                raise ValueError("Не удалось расшифровать auth_data")
+            
+            try:
+                auth_data_dict = json.loads(auth_data_plain)
+            except json.JSONDecodeError:
+                auth_data_dict = {"cookies": auth_data_plain}
+            
+            parser = TwoGisBusinessParser(auth_data_dict)
+            
+            # Fetch & Upsert
+            reviews = parser.fetch_reviews(account)
+            repository.upsert_reviews(reviews)
+            
+            stats = parser.fetch_stats(account)
+            if stats:
+                repository.upsert_stats(stats)
+            
+            posts = parser.fetch_posts(account)
+            repository.upsert_posts(posts)
+            
+            self._update_account_sync_status(db, account['id'])
+            print(f"✅ Синхронизация аккаунта {account_id} завершена [2GIS]")
 
-  def _upsert_stats(self, db: DatabaseManager, stats: List[ExternalStatsPoint]) -> None:
-      cursor = db.conn.cursor()
-      for s in stats:
-          cursor.execute(
-              """
-              INSERT INTO ExternalBusinessStats (
-                  id, business_id, account_id, source, date,
-                  views_total, clicks_total, actions_total,
-                  rating, reviews_total, raw_payload,
-                  created_at, updated_at
-              )
-              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT(id) DO UPDATE SET
-                  views_total=excluded.views_total,
-                  clicks_total=excluded.clicks_total,
-                  actions_total=excluded.actions_total,
-                  rating=excluded.rating,
-                  reviews_total=excluded.reviews_total,
-                  raw_payload=excluded.raw_payload,
-                  updated_at=CURRENT_TIMESTAMP
-              """,
-              (
-                  s.id,
-                  s.business_id,
-                  s.source,
-                  s.date,
-                  s.views_total,
-                  s.clicks_total,
-                  s.actions_total,
-                  s.rating,
-                  s.reviews_total,
-                  json.dumps(s.raw_payload or {}),
-              ),
-          )
+        except Exception as e:
+            print(f"❌ Ошибка синхронизации аккаунта {account_id}: {e}")
+            traceback.print_exc()
+            if db:
+                self._update_account_sync_status(db, account_id, error=str(e))
+        finally:
+            if db:
+                db.close()
 
-  def run_once(self) -> None:
-      db = DatabaseManager()
-      try:
-          accounts = self._load_active_accounts(db)
-          print(f"[TwoGisBusinessSyncWorker] Активных аккаунтов: {len(accounts)}")
-          for acc in accounts:
-              try:
-                  reviews = self._fake_fetch_reviews(acc)
-                  stats = self._fake_fetch_stats(acc)
-                  self._upsert_reviews(db, reviews)
-                  self._upsert_stats(db, stats)
-
-                  cursor = db.conn.cursor()
-                  cursor.execute(
-                      """
-                      UPDATE ExternalBusinessAccounts
-                      SET last_sync_at = ?, last_error = NULL
-                      WHERE id = ?
-                      """,
-                      (datetime.utcnow(), acc["id"]),
-                  )
-                  db.conn.commit()
-                  print(f"[TwoGisBusinessSyncWorker] Синк демо-данных для аккаунта {acc['id']} завершён")
-              except Exception as e:  # noqa: BLE001
-                  db.conn.rollback()
-                  cursor = db.conn.cursor()
-                  cursor.execute(
-                      """
-                      UPDATE ExternalBusinessAccounts
-                      SET last_error = ?
-                      WHERE id = ?
-                      """,
-                      (str(e), acc["id"]),
-                  )
-                  db.conn.commit()
-                  print(f"[TwoGisBusinessSyncWorker] Ошибка синхронизации аккаунта {acc['id']}: {e}")
-      finally:
-          db.close()
+    def run_once(self) -> None:
+        """Один проход синхронизации по всем активным аккаунтам"""
+        db = DatabaseManager()
+        try:
+            accounts = self._load_active_accounts(db)
+            print(f"[TwoGisBusinessSyncWorker] Активных аккаунтов: {len(accounts)}")
+            account_ids = [acc['id'] for acc in accounts]
+        finally:
+            db.close()
+            
+        for acc_id in account_ids:
+            self.sync_account(acc_id)
 
 
 def main() -> None:
-  worker = TwoGisBusinessSyncWorker()
-  worker.run_once()
+    worker = TwoGisBusinessSyncWorker()
+    worker.run_once()
 
 
 if __name__ == "__main__":
-  main()
+    main()
 
 

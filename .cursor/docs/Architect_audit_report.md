@@ -2007,3 +2007,53 @@ Add a link with the authenticated user's email in the dashboard header, pointing
 
 ### Status
 - [x] Completed
+
+## 2024-01-18 - Debugging and Fixing Yandex Maps Parser
+
+### Current Task
+Debug and fix the Yandex Maps parser to accurately scrape reviews, news, and photos count.
+
+### Architecture Decision
+- Enhance `parser_interception.py` to explicitly interact with UI tabs (Reviews, Photos, News) to trigger XHR requests.
+- Implement aggressive scrolling logic (30 scrolls) to ensure deep pagination.
+- Add specific CSS selectors for tabs to avoid text-based ambiguity.
+- Implement explicit extraction of `photos_count` from the tab text.
+
+### Files to Modify
+- `src/parser_interception.py` - Added tab interaction logic, deep scrolling, and photo count extraction.
+- `src/yandex_maps_scraper.py` - Updated review text selector (legacy parser).
+- `src/parser_config_cookies.py` - Updated with fresh session cookies.
+
+### Trade-offs & Decisions
+- **Interactive Parsing vs Passive**: Decided to make the interception parser "interactive" (clicking tabs) because Yandex now lazy-loads data only on tab activation.
+- **Performance**: Deep scrolling adds time (approx 30-40s) but is necessary for complete data.
+
+### Dependencies
+- Valid cookies in `src/parser_config_cookies.py` are critical.
+
+### Status
+- [x] Completed
+
+## 2024-01-18 - Restore Report Generation and Services Parsing
+
+### Current Task
+Restore client report generation and parse "Services/Prices" tab data.
+
+### Architecture Decision
+- **Services Parsing**: Added interaction with "Prices" tab (supports text fallbacks "Товары и услуги", "Цены"). Intercept `fetchGoods`, `prices`, and `search` API endpoints to extract products.
+- **Data Grouping**: Implemented grouping of flat product list into categories within `parser_interception.py` to match `report.py` expectations.
+- **Report Generation**: Updated `worker.py` to use `gigachat_analyzer` (Expert SEO Analysis) instead of simple rule-based analyzer for the new parsing flow.
+
+### Files to Modify
+- `src/parser_interception.py` - Added Services tab interaction, API extraction, and product grouping.
+- `src/worker.py` - Switched to `gigachat_analyzer` for legacy-compatible report generation.
+
+### Trade-offs & Decisions
+- **Services Extraction**: Yandex API structure varies. We intercept multiple endpoints (`search`, `fetchGoods`) and use a loose extraction heuristic to catch most cases.
+- **Report Quality**: Reverted to using GigaChat for analysis to ensure high-quality "Expert" reports as requested.
+
+### Dependencies
+- None.
+
+### Status
+- [x] Completed

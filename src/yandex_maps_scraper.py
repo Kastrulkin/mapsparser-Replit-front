@@ -925,7 +925,7 @@ def parse_reviews(page):
                                         continue
 
                     # Текст отзыва
-                    text_el = block.query_selector("div.business-review-view__body, div[class*='review-text']")
+                    text_el = block.query_selector("span.business-review-view__body-text, div.business-review-view__body, div[class*='review-text']")
                     text = text_el.inner_text().strip() if text_el else ""
 
                     # Ответ организации - улучшенный парсинг
