@@ -2218,3 +2218,27 @@ Diagnose and fix the "White Screen" issue occurring after deployment. The app lo
 ### Status
 - [ ] In Progress (Waiting for user verification)
 
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-19 - Progress Tab Translation
+
+### Current Task
+Translate "Progress" tab components (`MetricsHistoryCharts.tsx` and `BusinessGrowthPlan.tsx`) to eliminate hardcoded Russian strings and use the `t()` function.
+
+### Architecture Decision
+- **Unified Translation Structure**: Adopted a nested structure in `en.ts` and `ru.ts` under `dashboard.progress` (e.g., `dashboard.progress.charts`, `dashboard.progress.growthPlan`) for better organization.
+- **Component Refactoring**:
+    - `MetricsHistoryCharts.tsx`: Added `useLanguage` hook, destructured `t`, and replaced strings.
+    - `BusinessGrowthPlan.tsx`: Added `useLanguage` hook, destructured `t`, and replaced strings.
+
+### Files to Modify
+- `frontend/src/i18n/locales/ru.ts` - Added keys for charts and growth plan.
+- `frontend/src/i18n/locales/en.ts` - Added corresponding English keys.
+- `frontend/src/components/MetricsHistoryCharts.tsx` - Replaced strings with `t()` calls.
+- `frontend/src/components/BusinessGrowthPlan.tsx` - Replaced strings with `t()` calls.
+
+### Status
+- [x] Completed

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { useApiData } from '../hooks/useApiData';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface MapParseItem {
   id: string;
@@ -20,6 +21,7 @@ interface MapParseTableProps {
 }
 
 const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
+  const { t } = useLanguage();
   const [viewHtml, setViewHtml] = useState<string | null>(null);
 
   const { data, loading, error } = useApiData<MapParseItem[]>(
@@ -37,28 +39,31 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
         headers: { Authorization: `Bearer ${token || ''}` }
       });
       if (!res.ok) {
-        setError('Отчет недоступен');
+        // Since useApiData handles the error state, we can't easily update 'error' here unless we manage it locally
+        // But for simplicity/correctness, we'll log it or use toast if available.
+        // For now adhering to existing pattern, but maybe setting specific view error would be better.
+        console.error(t.dashboard.parsing.history.noReport);
         return;
       }
       const html = await res.text();
       setViewHtml(html);
     } catch (e) {
-      setError('Ошибка при загрузке отчета');
+      console.error(t.dashboard.parsing.history.noReport);
     }
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900">Парсинг карт</h3>
-        <div className="text-sm text-gray-500">История парсинга</div>
+        <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.parsing.history.title}</h3>
+        <div className="text-sm text-gray-500">{t.dashboard.parsing.history.subtitle}</div>
       </div>
 
-      {loading && <div className="text-gray-500 text-sm">Загружаем...</div>}
+      {loading && <div className="text-gray-500 text-sm">{t.common.loading}</div>}
       {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
 
       {!loading && !error && items.length === 0 && (
-        <div className="text-sm text-gray-500">Нет данных парсинга для этого бизнеса</div>
+        <div className="text-sm text-gray-500">{t.dashboard.parsing.history.noData}</div>
       )}
 
       {!loading && !error && items.length > 0 && (
@@ -67,15 +72,15 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
             <thead className="bg-gray-50 text-gray-700">
               <tr>
                 <th className="px-3 py-2 border-b text-left">№</th>
-                <th className="px-3 py-2 border-b text-left">Дата</th>
-                <th className="px-3 py-2 border-b text-left">URL</th>
-                <th className="px-3 py-2 border-b text-left">Тип</th>
-                <th className="px-3 py-2 border-b text-right">Рейтинг</th>
-                <th className="px-3 py-2 border-b text-right">Отзывы</th>
-                <th className="px-3 py-2 border-b text-right">Без ответа</th>
-                <th className="px-3 py-2 border-b text-right">Новости</th>
-                <th className="px-3 py-2 border-b text-right">Фото</th>
-                <th className="px-3 py-2 border-b text-right">Отчет</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.date}</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.url}</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.type}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.rating}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.reviews}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.unanswered}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.news}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.photos}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.report}</th>
               </tr>
             </thead>
             <tbody>
@@ -105,10 +110,10 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                   <td className="px-3 py-2 border-b text-right">
                     {item.reportPath ? (
                       <Button size="sm" variant="outline" onClick={() => viewReport(item.id)}>
-                        Посмотреть
+                        {t.dashboard.parsing.history.viewReport}
                       </Button>
                     ) : (
-                      <span className="text-gray-400">нет отчета</span>
+                      <span className="text-gray-400">{t.dashboard.parsing.history.noReport}</span>
                     )}
                   </td>
                 </tr>
@@ -122,9 +127,9 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto relative">
             <div className="flex justify-between items-center border-b px-4 py-2">
-              <h4 className="font-semibold text-gray-900">Отчет</h4>
+              <h4 className="font-semibold text-gray-900">{t.dashboard.parsing.history.columns.report}</h4>
               <Button size="sm" variant="outline" onClick={() => setViewHtml(null)}>
-                Закрыть
+                {t.dashboard.parsing.history.close}
               </Button>
             </div>
             <div className="p-4">
