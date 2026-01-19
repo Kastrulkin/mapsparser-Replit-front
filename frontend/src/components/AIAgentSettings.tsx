@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ChevronDown, ChevronUp, Bot, Zap, Circle } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { newAuth } from '@/lib/auth_new';
 
 interface AIAgentSettingsProps {
   businessId: string | null;
@@ -31,6 +32,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  // ... (rest of constants)
   const TONE_OPTIONS = [
     { value: 'professional', label: t.dashboard.settings.ai.tones.professional },
     { value: 'friendly', label: t.dashboard.settings.ai.tones.friendly },
@@ -131,7 +133,6 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const loadAvailableAgents = async () => {
     try {
-      const { newAuth } = await import('@/lib/auth_new');
       const token = await newAuth.getToken();
       if (!token) return;
 
@@ -197,7 +198,6 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
     setSaving(true);
     try {
-      const { newAuth } = await import('@/lib/auth_new');
       const token = await newAuth.getToken();
       if (!token) {
         toast({ title: t.error, description: t.error, variant: 'destructive' });
