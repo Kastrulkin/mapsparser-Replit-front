@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface FinancialMetricsProps {
   onRefresh?: () => void;
@@ -41,6 +42,7 @@ interface BreakdownData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
 
 const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentBusinessId }) => {
+  const { t } = useLanguage();
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -171,7 +173,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">📊 Финансовые метрики</h3>
+        <h3 className="text-lg font-semibold text-gray-900">📊 {t.dashboard.finance.metrics.title}</h3>
         <div className="flex gap-2">
           <Select value={period} onValueChange={handlePeriodChange}>
             <SelectTrigger className="w-32">
@@ -179,9 +181,9 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="week">Неделя</SelectItem>
-              <SelectItem value="month">Месяц</SelectItem>
-              <SelectItem value="quarter">Квартал</SelectItem>
-              <SelectItem value="year">Год</SelectItem>
+              <SelectItem value="month">{ t.dashboard.finance.metrics.month}</SelectItem>
+              <SelectItem value="quarter">{ t.dashboard.network.period.quarter}</SelectItem>
+              <SelectItem value="year">{ t.dashboard.network.period.year}</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={() => loadMetrics()} variant="outline" size="sm">
@@ -194,12 +196,12 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-600 font-medium">Общая выручка</p>
+              <p className="text-sm text-blue-600 font-medium">{ t.dashboard.finance.metrics.totalRevenue}</p>
               <p className="text-2xl font-bold text-blue-900">
                 {formatCurrency(metrics.metrics.total_revenue)}
               </p>
               <p className={`text-sm ${getGrowthColor(metrics.growth.revenue_growth)}`}>
-                {formatPercentage(metrics.growth.revenue_growth)} к прошлому периоду
+                {formatPercentage(metrics.growth.revenue_growth)} {t.dashboard.finance.metrics.compareToPrevious}
               </p>
             </div>
             <div className="text-3xl">💰</div>
@@ -209,12 +211,12 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-green-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-green-600 font-medium">Заказов</p>
+              <p className="text-sm text-green-600 font-medium">{ t.dashboard.finance.metrics.totalOrders}</p>
               <p className="text-2xl font-bold text-green-900">
                 {metrics.metrics.total_orders}
               </p>
               <p className={`text-sm ${getGrowthColor(metrics.growth.orders_growth)}`}>
-                {formatPercentage(metrics.growth.orders_growth)} к прошлому периоду
+                {formatPercentage(metrics.growth.orders_growth)} {t.dashboard.finance.metrics.compareToPrevious}
               </p>
             </div>
             <div className="text-3xl">📦</div>
@@ -224,7 +226,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-purple-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-purple-600 font-medium">Средний чек</p>
+              <p className="text-sm text-purple-600 font-medium">{ t.dashboard.finance.metrics.avgCheck}</p>
               <p className="text-2xl font-bold text-purple-900">
                 {formatCurrency(metrics.metrics.average_check)}
               </p>
@@ -235,14 +237,14 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
       </div>
 
       <div className="text-xs text-gray-500 mb-2">
-        Эти показатели будут отображаться корректно при подключении к CRM.
+        {t.dashboard.finance.metrics.crmNote}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-60 pointer-events-none">
         <div className="bg-orange-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-orange-600 font-medium">Новых клиентов</p>
+              <p className="text-sm text-orange-600 font-medium">{ t.dashboard.finance.metrics.newClients}</p>
               <p className="text-xl font-bold text-orange-900">
                 {metrics.metrics.new_clients}
               </p>
@@ -254,7 +256,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-indigo-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-indigo-600 font-medium">Повторных клиентов</p>
+              <p className="text-sm text-indigo-600 font-medium">{ t.dashboard.finance.metrics.returningClients}</p>
               <p className="text-xl font-bold text-indigo-900">
                 {metrics.metrics.returning_clients}
               </p>
@@ -266,7 +268,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-pink-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-pink-600 font-medium">Удержание клиентов</p>
+              <p className="text-sm text-pink-600 font-medium">{ t.dashboard.finance.metrics.clientRetention}</p>
               <p className="text-xl font-bold text-pink-900">
                 {formatPercentage(metrics.metrics.retention_rate)}
               </p>
@@ -306,7 +308,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
             </ResponsiveContainer>
           ) : (
             <div className="text-center text-gray-500 py-8">
-              Нет данных по услугам
+              {t.dashboard.finance.metrics.noServiceData}
             </div>
           )}
         </div>
@@ -339,14 +341,14 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
             </ResponsiveContainer>
           ) : (
             <div className="text-center text-gray-500 py-8">
-              Нет данных по мастерам
+              {t.dashboard.finance.metrics.noMasterData}
             </div>
           )}
         </div>
       </div>
 
       <div className="mt-4 text-sm text-gray-500 text-center">
-        Период: {metrics.period.start_date} — {metrics.period.end_date}
+        {t.dashboard.finance.metrics.period} {metrics.period.start_date} — {metrics.period.end_date}
       </div>
     </div>
   );
