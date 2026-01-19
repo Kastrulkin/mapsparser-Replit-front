@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 

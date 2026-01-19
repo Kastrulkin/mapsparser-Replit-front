@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,7 +104,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="telegram-bot-token">Токен бота</Label>
+          <Label htmlFor="telegram-bot-token">{ t.dashboard.settings.telegram2.tokenLabel}</Label>
           <div className="relative">
             <Input
               id="telegram-bot-token"

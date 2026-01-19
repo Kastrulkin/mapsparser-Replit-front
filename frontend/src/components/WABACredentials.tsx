@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,10 @@ interface WABACredentialsProps {
   business: any;
 }
 
-export const WABACredentials = ({ businessId, business }: WABACredentialsProps) => {
+export const WABACredentials = () => {
+  const { t } = useLanguage();
+  return (
+ = ({ businessId, business }: WABACredentialsProps) => {
   const [phoneId, setPhoneId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [showToken, setShowToken] = useState(false);
@@ -106,7 +110,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="waba-phone-id">Phone ID</Label>
+          <Label htmlFor="waba-phone-id">{ t.dashboard.settings.whatsapp.phoneIdLabel}</Label>
           <Input
             id="waba-phone-id"
             type="text"
@@ -121,7 +125,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="waba-access-token">Access Token</Label>
+          <Label htmlFor="waba-access-token">{ t.dashboard.settings.whatsapp.accessTokenLabel}</Label>
           <div className="relative">
             <Input
               id="waba-access-token"
