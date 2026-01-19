@@ -60,11 +60,35 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
         }
     };
 
+    const translateStage = (stage: GrowthStage): GrowthStage => {
+        const stageTranslations = (t as any).growthStages?.[stage.stage_number];
+
+        if (!stageTranslations) {
+            // Fallback to database values if translation doesn't exist
+            return stage;
+        }
+
+        // Map translated tasks to the original task structure
+        const translatedTasks = stageTranslations.tasks?.map((text: string, idx: number) => ({
+            number: idx + 1,
+            text
+        })) || stage.tasks;
+
+        return {
+            ...stage,
+            title: stageTranslations.title || stage.title,
+            description: stageTranslations.description || stage.description,
+            goal: stageTranslations.goal || stage.goal,
+            expected_result: stageTranslations.expectedResult || stage.expected_result,
+            duration: stageTranslations.duration || stage.duration,
+            tasks: translatedTasks
+        };
+    };
+
     const toggleStageExpand = (stageId: string) => {
         const newExpanded = new Set(expandedStages);
         if (newExpanded.has(stageId)) {
             newExpanded.delete(stageId);
-        } else {
             newExpanded.add(stageId);
         }
         setExpandedStages(newExpanded);
@@ -152,7 +176,8 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
 
             {/* Stages */}
             <div className="space-y-4">
-                {stages.map((stage, index) => {
+                {stages.map((dbStage, index) => {
+                    const stage = translateStage(dbStage);
                     const status = getStageStatus(stage, index);
                     const isExpanded = expandedStages.has(stage.id);
                     const isCompleted = status === 'completed';
