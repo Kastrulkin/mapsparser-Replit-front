@@ -1551,5 +1551,25 @@ export const ru = {
         "ИНВЕСТИРОВАТЬ в развитие: минимум 10% от дополнительного дохода идет на маркетинг, обучение, расширение",
       ]
     },
+  },
+  networkHealth: {
+    title: "Состояние сети",
+    description: "Мониторинг здоровья всех точек сети на картах",
+    avgRating: "Средний рейтинг",
+    totalReviews: "Всего отзывов",
+    locationsCount: "Точек сети",
+    unansweredReviews: "Неотвеченных отзывов",
+    needsAttention: "Требуют внимания",
+    locationsRequiringAction: "{{count}} точек требуют вашего внимания",
+    allGood: "Всё отлично!",
+    noAlertsMessage: "Все точки сети в хорошем состоянии",
+    alerts: {
+      count: "алерта",
+      daysInfo: "{{days}} дней (порог: {{threshold}})",
+      staleNews: "Устаревшие новости",
+      stalePhotos: "Устаревшие фото",
+      unansweredReviews: "Неотвеченные отзывы",
+      lowRating: "Низкий рейтинг"
+    }
   }
 };

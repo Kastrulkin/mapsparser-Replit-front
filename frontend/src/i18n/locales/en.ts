@@ -1525,5 +1525,25 @@ export const en = {
         "INVEST in development: minimum 10% of additional income goes to marketing, training, expansion",
       ]
     },
+  },
+  networkHealth: {
+    title: "Network Health",
+    description: "Monitor the health of all network locations on maps",
+    avgRating: "Average Rating",
+    totalReviews: "Total Reviews",
+    locationsCount: "Network Locations",
+    unansweredReviews: "Unanswered Reviews",
+    needsAttention: "Needs Attention",
+    locationsRequiringAction: "{{count}} locations require your attention",
+    allGood: "All Good!",
+    noAlertsMessage: "All network locations are in good condition",
+    alerts: {
+      count: "alert",
+      daysInfo: "{{days}} days (threshold: {{threshold}})",
+      staleNews: "Stale news",
+      stalePhotos: "Stale photos",
+      unansweredReviews: "Unanswered reviews",
+      lowRating: "Low rating"
+    }
   }
 };

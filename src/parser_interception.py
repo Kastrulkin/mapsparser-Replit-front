@@ -68,7 +68,7 @@ class YandexMapsInterceptionParser:
         with sync_playwright() as p:
             try:
                 browser = p.chromium.launch(
-                    headless=False,  # Headless=False для отладки и обхода капчи
+                    headless=True,  # ВАЖНО: headless=True для Linux сервера без X Server
                     args=[
                         '--no-sandbox',
                         '--disable-setuid-sandbox',

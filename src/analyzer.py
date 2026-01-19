@@ -399,7 +399,7 @@ def parse_features(page):
 
 def parse_yandex_card(url: str) -> dict:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)  # headless=True для Linux сервера
         page = browser.new_page()
         page.goto(url, timeout=60000)
         page.wait_for_timeout(4000)

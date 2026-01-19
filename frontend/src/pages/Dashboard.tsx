@@ -9,6 +9,7 @@ import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
 import FinancialMetrics from "@/components/FinancialMetrics";
 import ProgressTracker from "@/components/ProgressTracker";
+import NetworkHealthDashboard from "@/components/NetworkHealthDashboard";
 import ROICalculator from "@/components/ROICalculator";
 import TransactionForm from "@/components/TransactionForm";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
@@ -1142,8 +1143,8 @@ const Dashboard = () => {
             <button
               onClick={() => setActiveTab('overview')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'overview'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
               📊 Обзор
@@ -1151,8 +1152,8 @@ const Dashboard = () => {
             <button
               onClick={() => setActiveTab('finance')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'finance'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
               💰 Финансы
@@ -1160,8 +1161,8 @@ const Dashboard = () => {
             <button
               onClick={() => setActiveTab('progress')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'progress'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
               🎯 Прогресс
@@ -1169,8 +1170,8 @@ const Dashboard = () => {
             <button
               onClick={() => setActiveTab('settings')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'settings'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
                 }`}
             >
               ⚙️ Настройки
@@ -1207,11 +1208,17 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Прогресс-трекер */}
+            {/* Network Health Dashboard + Financial Metrics */}
             {activeTab === 'progress' && (
               <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900">🎯 Ваш прогресс</h2>
-                <ProgressTracker />
+                <h2 className="text-xl font-semibold text-gray-900">📊 Состояние сети</h2>
+                <NetworkHealthDashboard
+                  networkId={currentNetworkId}
+                  businessId={currentBusinessId}
+                />
+                <FinancialMetrics
+                  businessId={currentBusinessId}
+                />
               </div>
             )}
 

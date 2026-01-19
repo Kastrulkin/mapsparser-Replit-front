@@ -2380,3 +2380,41 @@ Eliminate remaining hardcoded strings in `FinancialMetrics.tsx` and translate En
 
 ### Status
 - [x] Completed
+
+## 2026-01-19 - Growth Plan Stages Localization
+
+### Current Task  
+Translate dynamic Growth Plan stages (titles, descriptions, goals, tasks) from Russian database values to support all 9 languages.
+
+### Architecture Decision
+- **Frontend Translation Layer**: Instead of modifying the database, created a translation mapping in locale files that maps `stage_number` → localized content
+- **Component Modification**: Modified `BusinessGrowthPlan.tsx` to use `translateStage()` helper function that applies translations before rendering
+- **Fallback Strategy**: If translation doesn't exist for a stage, component falls back to database value (Russian)
+
+### Files Modified
+- `frontend/src/components/BusinessGrowthPlan.tsx` - Added `translateStage()` helper, applies translations in render loop
+- `frontend/src/i18n/locales/ru.ts` - Added `growthStages` object with Russian translations (from DB)
+- `frontend/src/i18n/locales/en.ts` - Added `growthStages` object with English translations
+- `frontend/src/i18n/locales/*.ts` (fr, es, de, el, th, ar, ha) - Added `growthStages` with English as temporary base
+
+### Trade-offs & Decisions
+- **Database vs Frontend**: Chose frontend translation over adding language columns to database
+  - **Pro**: Simpler implementation, no database migration needed, easier for translators to update
+  - **Con**: Large locale file size (+200 lines per language), but acceptable for 16 stages
+- **English as Temporary Base**: Non-English/Russian languages use English translations temporarily
+  - Can be replaced with native translations later without code changes
+  - Ensures UI displays properly in all languages immediately
+
+### Data Structure
+Each stage contains:
+- `title`, `description`, `goal`, `expectedResult`, `duration`: String fields
+- `tasks`: Array of task strings (5-10 tasks per stage)
+- Total: 16 stages for "beauty_salon" business type
+
+### Verification
+- ✅ Build passed (`npm run build` successful)
+- ✅ All 9 locale files updated with proper TypeScript syntax
+- ✅ Changes committed and pushed to `main` (commit `57371e5`)
+
+### Status
+- [x] Completed

@@ -46,6 +46,7 @@ from api.progress_api import progress_bp
 from api.stage_progress_api import stage_progress_bp
 from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
+from api.network_health_api import network_health_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -124,6 +125,7 @@ app.register_blueprint(progress_bp)
 app.register_blueprint(stage_progress_bp)
 app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
+app.register_blueprint(network_health_bp)
 if google_business_bp:
     app.register_blueprint(google_business_bp)
 
