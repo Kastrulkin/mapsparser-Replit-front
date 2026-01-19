@@ -19,7 +19,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [generated, setGenerated] = useState<string>('');
   const [news, setNews] = useState<any[]>([]);
   const [exampleInput, setExampleInput] = useState('');
-  const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
+  const [examples, setExamples] = useState<{ id: string, text: string }[]>([]);
   const { language: interfaceLanguage, t } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,19 +46,21 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       });
       const data = await res.json();
       if (data.success) setNews(data.news || []);
-    } catch {}
+    } catch { }
   };
 
-  useEffect(()=>{ loadNews(); }, []);
-  useEffect(()=>{ (async()=>{
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-      if (data.success) setExamples((data.examples||[]).map((e:any)=>({ id: e.id, text: e.text })));
-    } catch {}
-  })(); }, []);
-  
+  useEffect(() => { loadNews(); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const res = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
+      } catch { }
+    })();
+  }, []);
+
   // Загрузка транзакций
   const loadTransactions = async () => {
     if (!businessId) return;
@@ -78,7 +80,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       setLoadingTransactions(false);
     }
   };
-  
+
   useEffect(() => {
     if (useTransaction && businessId) {
       loadTransactions();
@@ -92,13 +94,13 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       const res = await fetch(`${window.location.origin}/api/news/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ 
-          use_service: useService, 
+        body: JSON.stringify({
+          use_service: useService,
           use_transaction: useTransaction,
-          service_id: serviceId || undefined, 
+          service_id: serviceId || undefined,
           transaction_id: transactionId || undefined,
-          raw_info: rawInfo, 
-          language 
+          raw_info: rawInfo,
+          language
         })
       });
       const data = await res.json();
@@ -134,7 +136,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   };
 
   const deleteNews = async (id: string) => {
-    if (!confirm('Вы уверены, что хотите удалить эту новость?')) return;
+    if (!confirm(t.dashboard.card.newsGenerator.deleteConfirm)) return;
     const token = localStorage.getItem('auth_token');
     const res = await fetch(`${window.location.origin}/api/news/delete`, {
       method: 'POST',
@@ -157,7 +159,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       setExampleInput('');
       const list = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
       const json = await list.json();
-      if (json.success) setExamples((json.examples||[]).map((e:any)=>({ id: e.id, text: e.text })));
+      if (json.success) setExamples((json.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
     }
   };
 
@@ -168,25 +170,25 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     if (data.success) {
       const list = await fetch(`${window.location.origin}/api/news-examples`, { headers: { 'Authorization': `Bearer ${token}` } });
       const json = await list.json();
-      if (json.success) setExamples((json.examples||[]).map((e:any)=>({ id: e.id, text: e.text })));
+      if (json.success) setExamples((json.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
     }
   };
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">{ t.dashboard.card.newsGenerator.title}</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">{t.dashboard.card.newsGenerator.title}</h2>
       <div className="mb-3">
         <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.examplesLabel}</label>
         <div className="flex gap-2">
-          <Input value={exampleInput} onChange={(e)=> setExampleInput(e.target.value)} placeholder={t.dashboard.card.newsGenerator.examplesPlaceholder} />
+          <Input value={exampleInput} onChange={(e) => setExampleInput(e.target.value)} placeholder={t.dashboard.card.newsGenerator.examplesPlaceholder} />
           <Button variant="outline" onClick={addExample}>{t.dashboard.card.newsGenerator.addExample}</Button>
         </div>
-        {examples.length>0 && (
+        {examples.length > 0 && (
           <ul className="mt-2 space-y-1">
             {examples.map(e => (
               <li key={e.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">
                 <span className="mr-2 truncate">{e.text}</span>
-                <button className="text-xs text-red-600" onClick={()=> deleteExample(e.id)}>{t.dashboard.card.newsGenerator.deleteExample}</button>
+                <button className="text-xs text-red-600" onClick={() => deleteExample(e.id)}>{t.dashboard.card.newsGenerator.deleteExample}</button>
               </li>
             ))}
           </ul>
@@ -194,36 +196,36 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       </div>
       <div className="space-y-3 mb-3">
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={useService} onChange={(e)=> { setUseService(e.target.checked); if (e.target.checked) setUseTransaction(false); }} />
+          <input type="checkbox" checked={useService} onChange={(e) => { setUseService(e.target.checked); if (e.target.checked) setUseTransaction(false); }} />
           {t.dashboard.card.newsGenerator.generateFromService}
         </label>
         {useService && (
           <div className="ml-6">
             <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.selectService}</label>
-            <select className="border rounded px-2 py-2 w-full" value={serviceId} onChange={(e)=> setServiceId(e.target.value)}>
-              <option value="">— выбрать —</option>
+            <select className="border rounded px-2 py-2 w-full" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+              <option value="">— {t.common.select} —</option>
               {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
         )}
-        
+
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={useTransaction} onChange={(e)=> { setUseTransaction(e.target.checked); if (e.target.checked) setUseService(false); }} />
+          <input type="checkbox" checked={useTransaction} onChange={(e) => { setUseTransaction(e.target.checked); if (e.target.checked) setUseService(false); }} />
           {t.dashboard.card.newsGenerator.generateFromTransaction}
         </label>
         {useTransaction && (
           <div className="ml-6">
-            <label className="block text-sm text-gray-600 mb-1">Выберите транзакцию</label>
+            <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.selectTransaction}</label>
             {loadingTransactions ? (
-              <div className="text-sm text-gray-500">Загрузка транзакций...</div>
+              <div className="text-sm text-gray-500">{t.dashboard.card.newsGenerator.loadingTransactions}</div>
             ) : transactions.length === 0 ? (
-              <div className="text-sm text-gray-500">Нет транзакций. Добавьте транзакции во вкладке Финансы.</div>
+              <div className="text-sm text-gray-500">{t.dashboard.card.newsGenerator.noTransactions}</div>
             ) : (
-              <select className="border rounded px-2 py-2 w-full" value={transactionId} onChange={(e)=> setTransactionId(e.target.value)}>
-                <option value="">— выбрать —</option>
+              <select className="border rounded px-2 py-2 w-full" value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
+                <option value="">— {t.common.select} —</option>
                 {transactions.map(t => (
                   <option key={t.id} value={t.id}>
-                    {t.transaction_date} - {t.services?.join(', ') || 'Услуги'} - {t.amount}₽ {t.notes ? `(${t.notes})` : ''}
+                    {t.transaction_date} - {t.services?.join(', ') || t.dashboard.card.services} - {t.amount}₽ {t.notes ? `(${t.notes})` : ''}
                   </option>
                 ))}
               </select>
@@ -232,12 +234,12 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         )}
       </div>
       <div className="mb-3">
-        <label className="block text-sm text-gray-600 mb-1">Неотформатированная информация (необязательно)</label>
-        <Textarea rows={3} value={rawInfo} onChange={(e)=> setRawInfo(e.target.value)} placeholder={t.dashboard.card.newsGenerator.transactionPlaceholder} />
+        <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.rawInfoLabel}</label>
+        <Textarea rows={3} value={rawInfo} onChange={(e) => setRawInfo(e.target.value)} placeholder={t.dashboard.card.newsGenerator.transactionPlaceholder} />
       </div>
 
       <div className="mb-3">
-        <label className="block text-sm text-gray-600 mb-1">Язык новости</label>
+        <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.newsLanguage}</label>
         <Select value={language} onValueChange={setLanguage}>
           <SelectTrigger>
             <SelectValue />
@@ -251,7 +253,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500 mt-1">
-          Язык, на котором будет сгенерирована новость. По умолчанию — язык интерфейса (
+          {t.dashboard.card.newsGenerator.newsLanguageHelp} (
           {LANGUAGE_OPTIONS.find((l) => l.value === interfaceLanguage)?.label || interfaceLanguage}).
         </p>
       </div>
@@ -261,11 +263,11 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
           <div className="flex items-center justify-between mb-2">
             <div className="font-medium">{t.dashboard.card.newsGenerator.result}</div>
-            <button 
+            <button
               onClick={() => setGenerated('')}
               className="text-xs text-red-600 hover:text-red-800 underline"
             >
-              Удалить
+              {t.dashboard.card.newsGenerator.delete}
             </button>
           </div>
           <div className="mb-2">{generated}</div>
@@ -273,9 +275,9 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       )}
 
       <div className="mt-4">
-        <div className="text-sm font-medium text-gray-900 mb-2">Ваши новости</div>
+        <div className="text-sm font-medium text-gray-900 mb-2">{t.dashboard.card.newsGenerator.yourNews}</div>
         {(news.length === 0 && (!externalPosts || externalPosts.length === 0)) ? (
-          <div className="text-sm text-gray-500">Пока нет новостей</div>
+          <div className="text-sm text-gray-500">{t.dashboard.card.newsGenerator.noNews}</div>
         ) : (() => {
           // Объединяем все новости в один список для пагинации
           const allNews: any[] = [];
@@ -289,7 +291,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           });
           const totalItems = allNews.length;
           const paginatedNews = allNews.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-          
+
           return (
             <>
               {/* Пагинация сверху */}
@@ -305,10 +307,10 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
                     >
-                      Назад
+                      {t.common.back}
                     </Button>
                     <span className="px-3 py-1 text-sm text-gray-700">
-                      {t.dashboard.card.reviewReply.page} {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                      {t.dashboard.card.reviewReply.page} {currentPage} {t.dashboard.card.reviewReply.of} {Math.ceil(totalItems / itemsPerPage)}
                     </span>
                     <Button
                       size="sm"
@@ -316,12 +318,12 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
                       disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
                     >
-                      Вперед
+                      {t.common.next}
                     </Button>
                   </div>
                 </div>
               )}
-              
+
               <ul className="space-y-2">
                 {paginatedNews.map((item: any) => {
                   if (item.isExternal) {
@@ -333,15 +335,15 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                             {item.title && (
                               <div className="font-semibold text-gray-900 mb-1">{item.title}</div>
                             )}
-                            <div className="text-gray-700 whitespace-pre-wrap">{item.text || 'Без текста'}</div>
+                            <div className="text-gray-700 whitespace-pre-wrap">{item.text || t.dashboard.card.reviewReply.noReviewText}</div>
                             {item.published_at && (
                               <div className="text-xs text-gray-500 mt-2">
-                                Опубликовано: {new Date(item.published_at).toLocaleDateString('ru-RU')}
+                                {t.dashboard.card.newsGenerator.published} {new Date(item.published_at).toLocaleDateString(interfaceLanguage === 'ru' ? 'ru-RU' : 'en-US')}
                               </div>
                             )}
                             {item.source && (
                               <div className="text-xs text-gray-500">
-                                Источник: {item.source === 'yandex_business' ? 'Яндекс.Бизнес' : item.source}
+                                {t.dashboard.card.newsGenerator.source} {item.source === 'yandex_business' ? t.dashboard.card.newsGenerator.yandexBusiness : item.source}
                               </div>
                             )}
                           </div>
@@ -352,33 +354,33 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                     // Сгенерированные новости
                     return (
                       <li key={item.id} className="border border-gray-200 rounded p-2 text-sm">
-                        <Textarea 
+                        <Textarea
                           id={`news-textarea-${item.id}`}
-                          rows={3} 
-                          defaultValue={item.generated_text} 
-                          onBlur={(e)=> saveEdited(item.id, e.target.value)} 
+                          rows={3}
+                          defaultValue={item.generated_text}
+                          onBlur={(e) => saveEdited(item.id, e.target.value)}
                         />
                         <div className="mt-2 flex gap-2">
                           {!item.approved && (
-                            <Button size="sm" variant="outline" onClick={()=> approve(item.id)}>{t.dashboard.card.newsGenerator.copy}</Button>
+                            <Button size="sm" variant="outline" onClick={() => approve(item.id)}>{t.dashboard.card.newsGenerator.copy}</Button>
                           )}
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => {
                               const textarea = document.getElementById(`news-textarea-${item.id}`) as HTMLTextAreaElement;
                               textarea?.focus();
                             }}
                           >
-                            Редактировать
+                            {t.dashboard.card.newsGenerator.edit}
                           </Button>
-                          <Button 
+                          <Button
                             size="sm"
-                            variant="outline" 
+                            variant="outline"
                             onClick={() => deleteNews(item.id)}
                             className="text-red-600 hover:text-red-700"
                           >
-                            Удалить
+                            {t.dashboard.card.newsGenerator.delete}
                           </Button>
                         </div>
                       </li>
@@ -386,7 +388,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                   }
                 })}
               </ul>
-              
+
               {/* Пагинация внизу */}
               {totalItems > itemsPerPage && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
@@ -400,10 +402,10 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
                     >
-                      Назад
+                      {t.common.back}
                     </Button>
                     <span className="px-3 py-1 text-sm text-gray-700">
-                      {t.dashboard.card.reviewReply.page} {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                      {t.dashboard.card.reviewReply.page} {currentPage} {t.dashboard.card.reviewReply.of} {Math.ceil(totalItems / itemsPerPage)}
                     </span>
                     <Button
                       size="sm"
@@ -411,7 +413,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalItems / itemsPerPage), prev + 1))}
                       disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
                     >
-                      Вперед
+                      {t.common.next}
                     </Button>
                   </div>
                 </div>

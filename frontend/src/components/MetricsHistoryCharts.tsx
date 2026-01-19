@@ -30,7 +30,7 @@ interface MetricsHistoryChartsProps {
 type MetricType = 'rating' | 'reviews' | 'photos' | 'news';
 
 export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ businessId }) => {
-    const { t } = useLanguage();
+    const { language, t } = useLanguage();
     const [history, setHistory] = useState<MetricEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMetric, setSelectedMetric] = useState<MetricType>('rating');
@@ -91,7 +91,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
 
     const deleteEntry = async (entryId: string) => {
         if (!businessId) return;
-        if (!confirm('Удалить эту запись?')) return;
+        if (!confirm(t.dashboard.progress.charts.deleteConfirm)) return;
         try {
             await newAuth.makeRequest(`/business/${businessId}/metrics-history/${entryId}`, {
                 method: 'DELETE'
@@ -105,28 +105,28 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
     const getMetricConfig = (type: MetricType) => {
         const configs = {
             rating: {
-                label: 'Рейтинг',
+                label: t.dashboard.progress.charts.metrics.rating,
                 icon: '⭐',
                 color: '#f59e0b',
                 unit: '',
                 format: (value: number) => value.toFixed(1)
             },
             reviews: {
-                label: 'Отзывы',
+                label: t.dashboard.progress.charts.metrics.reviews,
                 icon: '💬',
                 color: '#3b82f6',
                 unit: '',
                 format: (value: number) => value.toString()
             },
             photos: {
-                label: 'Фото',
+                label: t.dashboard.progress.charts.metrics.photos,
                 icon: '📸',
                 color: '#8b5cf6',
                 unit: '',
                 format: (value: number) => value.toString()
             },
             news: {
-                label: 'Новости',
+                label: t.dashboard.progress.charts.metrics.news,
                 icon: '📰',
                 color: '#10b981',
                 unit: '',
@@ -141,7 +141,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
         return history
             .filter(entry => entry[key] !== null)
             .map(entry => ({
-                date: new Date(entry.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+                date: new Date(entry.date).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short' }),
                 value: entry[key],
                 fullDate: entry.date
             }))
@@ -315,7 +315,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                         {history.slice(0, 10).map(entry => (
                                             <tr key={entry.id} className="hover:bg-gray-50">
                                                 <td className="px-4 py-3 text-sm text-gray-900">
-                                                    {new Date(entry.date).toLocaleDateString(useLanguage().language === 'ru' ? 'ru-RU' : 'en-US')}
+                                                    {new Date(entry.date).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-gray-900">
                                                     {entry.rating !== null ? entry.rating.toFixed(1) : '—'}

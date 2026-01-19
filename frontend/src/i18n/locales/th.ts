@@ -2,6 +2,17 @@ export const th = {
   // Page title
   pageTitle: "BeautyBot.pro - การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
 
+  common: {
+    success: "สำเร็จ",
+    error: "ข้อผิดพลาด",
+    save: "บันทึก",
+    cancel: "ยกเลิก",
+    loading: "กำลังโหลด...",
+    back: "Back",
+    next: "Next",
+    select: "Select"
+  },
+
   header: {
     whatWeDo: "เราทำอะไร?",
     whoWeAre: "เราเป็นใคร?",
@@ -351,10 +362,85 @@ export const th = {
           active: "Active",
           disabled: "Disabled"
         }
+      },
+      whatsapp: {
+        title: "WhatsApp Business API Credentials",
+        description: "Enter your WABA credentials to send messages to clients from your number",
+        subtitle: "If you have your own WhatsApp Business API account, specify your credentials here. This will allow you to send messages to clients via AI agent from your bot.",
+        phoneIdLabel: "Phone ID",
+        phoneIdHelp: "Phone ID of your WhatsApp Business account",
+        accessTokenLabel: "Access Token",
+        accessTokenPlaceholder: "Enter Access Token",
+        accessTokenHelp: "Access Token for WhatsApp Business API access",
+        showToken: "Show token",
+        hideToken: "Hide token",
+        saveCredentials: "Save credentials",
+        saving: "Saving...",
+        successSave: "WhatsApp credentials saved",
+        errorSave: "Error saving credentials",
+        selectBusiness: "Select a business first",
+        alert: "This allows you to send messages to clients from your number via AI agent.",
+        phoneIdPlaceholder: "Enter Phone ID",
+        saveButton: "Save credentials"
+      },
+      telegram2: {
+        title: "Telegram Bot Token",
+        description: "Enter your Telegram bot token to send messages to clients",
+        subtitle: "If you have your own Telegram bot, specify its token here. This will allow you to send messages to clients via AI agent from your bot.",
+        tokenLabel: "Bot Token",
+        tokenPlaceholder: "Enter bot token",
+        tokenHelp: "Token can be obtained from @BotFather in Telegram",
+        saveToken: "Save token",
+        saving: "Saving...",
+        successSave: "Telegram bot token saved",
+        errorSave: "Error saving token",
+        selectBusiness: "Select a business first",
+        alert: "This allows you to send messages to clients via AI agent from your bot.",
+        errorEmpty: "Enter bot token",
+        saveButton: "Save token"
       }
     },
     network: {
-      title: "📊 Network Dashboard",
+      title: "การจัดการเครือข่าย",
+      subtitle: "Manage your network of businesses",
+      type: "Network Type",
+      singlePoint: "Single Point",
+      network: "Network",
+      businessAdded: "Business added to network",
+      singlePointMessage: "This business is a single point",
+      select: {
+        label: "Select network"
+      },
+      create: {
+        title: "Create Network",
+        name: "Network Name",
+        namePlaceholder: "Enter network name",
+        description: "Description",
+        descriptionPlaceholder: "Enter network description",
+        creating: "Creating...",
+        submit: "Create Network",
+        emptyName: "Network name is required",
+        success: "Network created successfully",
+        error: "Error creating network"
+      },
+      points: {
+        title: "Network Points",
+        add: "Add Point",
+        point: "Point",
+        name: "Name",
+        namePlaceholder: "Point name",
+        address: "Address",
+        addressPlaceholder: "Point address",
+        mapLink: "Map Link",
+        mapLinkPlaceholder: "Link to maps",
+        saving: "Saving...",
+        save: "Save Point",
+        selectNetwork: "Select Network",
+        empty: "No points",
+        success: "Point saved",
+        error: "Error saving point"
+      },
+      // Analytics
       period: {
         week: "Week",
         month: "Month",
@@ -375,6 +461,88 @@ export const th = {
       last30Days: "30d",
       errorLoading: "Error loading stats",
       tryAgain: "Try again"
+    },
+    parsing: {
+      refresh: "Refresh Data",
+      stats: {
+        total: "Total Tasks",
+        pending: "Pending",
+        processing: "Processing",
+        stuck: "Stuck",
+        stuckWarning: "tasks serve longer than 1 hour",
+        stuckDesc: "Tasks stuck in processing status for too long"
+      },
+      table: {
+        title: "Parsing Tasks",
+        loading: "Loading tasks...",
+        noTasks: "No parsing tasks found",
+        id: "ID",
+        business: "Business",
+        type: "Type",
+        source: "Source",
+        status: "Status",
+        url: "URL",
+        created: "Created",
+        error: "Error",
+        actions: "Actions"
+      },
+      filters: {
+        title: "Filters",
+        status: "Status",
+        statusAll: "All Statuses",
+        type: "Type",
+        typeAll: "All Types",
+        source: "Source",
+        sourceAll: "All Sources"
+      },
+      actions: {
+        restartConfirm: "Restart this task?",
+        successRestart: "Task restarted",
+        deleteConfirm: "Delete this task?",
+        successDelete: "Task deleted",
+        switchToSyncConfirm: "Switch to Sync mode?",
+        successSwitch: "Switched to Sync mode",
+        restart: "Restart",
+        switchToSync: "Switch to Sync",
+        delete: "Delete"
+      },
+      status: {
+        pending: "Pending",
+        processing: "Processing",
+        done: "Done",
+        error: "Error",
+        captcha: "Captcha"
+      },
+      type: {
+        parse_card: "Card Parse",
+        sync_yandex_business: "Yandex Sync",
+        parse_cabinet_fallback: "Cabinet Fallback"
+      },
+      source: {
+        yandex_maps: "Yandex Maps",
+        yandex_business: "Yandex Business",
+        google_business: "Google Business",
+        "2gis": "2GIS"
+      },
+      history: {
+        title: "Parsing History",
+        subtitle: "History of parsing tasks for this business",
+        noData: "No history found",
+        viewReport: "View Report",
+        noReport: "No Report",
+        close: "Close",
+        columns: {
+          date: "Date",
+          url: "URL",
+          type: "Type",
+          rating: "Rating",
+          reviews: "Reviews",
+          unanswered: "Unanswered",
+          news: "News",
+          photos: "Photos",
+          report: "Report"
+        }
+      }
     },
     profile: {
       title: "Profile & Business",
@@ -471,6 +639,40 @@ export const th = {
         desc: "Short service description",
         keywords: "haircut, styling, coloring",
         price: "Example: $30"
+      },
+      newsGenerator: {
+        title: "News Generator",
+        subtitle: "Create news for your business card based on your services or transactions",
+        examplesLabel: "News examples (up to 5)",
+        examplesPlaceholder: "Example: New service — massage for expectant mothers",
+        addExample: "Add",
+        deleteExample: "Delete",
+        generateFromService: "Generate based on service",
+        selectService: "Select service",
+        generateFromTransaction: "Generate based on completed work",
+        transactionPlaceholder: "Describe the transaction",
+        generate: "Generate news",
+        generating: "Generating…",
+        result: "Result:",
+        copy: "Copy",
+        copied: "Copied",
+        errorAddExample: "Error adding example",
+        errorDeleteExample: "Error deleting example",
+        errorGenerate: "Generation error",
+        selectTransaction: "Select transaction",
+        loadingTransactions: "Loading transactions...",
+        noTransactions: "No transactions. Add transactions in Finance tab.",
+        rawInfoLabel: "Unformatted information (optional)",
+        newsLanguage: "News language",
+        newsLanguageHelp: "Language in which the news will be generated. Default — interface language",
+        yourNews: "Your news",
+        noNews: "No news yet",
+        deleteConfirm: "Are you sure you want to delete this news?",
+        edit: "Edit",
+        delete: "Delete",
+        published: "Published:",
+        source: "Source:",
+        yandexBusiness: "Yandex.Business"
       }
     },
     bookings: {
@@ -570,18 +772,159 @@ export const th = {
       subtitle: "Manage financial metrics and transactions",
       addTransaction: "Add Transaction",
       hideForm: "Hide Form",
-      successAdded: "Transaction added successfully!"
+      successAdded: "Transaction added successfully!",
+      metrics: {
+        title: "Financial Metrics",
+        month: "Month",
+        totalRevenue: "Total Revenue",
+        totalOrders: "Orders",
+        avgCheck: "Average Check",
+        compareToPrevious: "compared to previous period",
+        newClients: "New Clients",
+        returningClients: "Returning Clients",
+        clientRetention: "Client Retention",
+        crmNote: "These metrics will display correctly when connected to CRM.",
+        revenueByService: "💼 Revenue by Services",
+        revenueByMaster: "👤 Revenue by Masters",
+        noServiceData: "No service data",
+        noMasterData: "No master data",
+        period: "Period:"
+      },
+      roi: {
+        title: "ROI Calculator",
+        edit: "Edit",
+        investment: "Investment ($)",
+        returns: "Returns ($)",
+        periodStart: "Period start",
+        periodEnd: "Period end",
+        saving: "Saving...",
+        save: "Save",
+        cancel: "Cancel",
+        invested: "Invested",
+        received: "Received",
+        period: "Period",
+        profit: "Profit:",
+        notCalculated: "ROI not calculated",
+        addData: "Add investment and return data",
+        calculate: "Calculate ROI",
+        loadError: "Error loading ROI",
+        saveError: "Error saving ROI",
+        status: {
+          excellent: "Excellent ROI!",
+          good: "Good ROI",
+          notBad: "Not bad ROI",
+          positive: "Positive ROI",
+          negative: "Negative ROI"
+        }
+      },
+      transactions: {
+        title: "Transactions List",
+        shownLimit: "Showing up to 100 recent",
+        loading: "Loading...",
+        empty: "No transactions yet",
+        loadError: "Failed to load transactions",
+        date: "Date",
+        name: "Name",
+        price: "Price",
+        qty: "Qty",
+        cost: "Cost",
+        actions: "Actions",
+        servicesPlaceholder: "Services comma separated",
+        edit: "Edit",
+        delete: "Delete",
+        deleteConfirm: "Delete this transaction?"
+      }
     },
     progress: {
       title: "Progress",
       subtitle: "Track your progress and achievements",
+      businessMetrics: "Business Metrics",
+      charts: {
+        title: "Business Metrics",
+        subtitle: "History of metric changes",
+        addManual: "Add Manually",
+        addFirst: "Add First Entry",
+        noData: "No data to display",
+        currentValue: "Current Value",
+        deleteConfirm: "Delete this entry?",
+        date: "Date",
+        source: "Source",
+        parsing: "Parsing",
+        manual: "Manual",
+        metrics: {
+          rating: "Rating",
+          reviews: "Reviews",
+          photos: "Photos",
+          news: "News"
+        },
+        addModal: {
+          title: "Add metrics manually",
+          date: "Date",
+          rating: "Rating (1-5)",
+          reviews: "Number of reviews",
+          photos: "Number of photos",
+          news: "Number of news",
+          cancel: "Cancel",
+          save: "Save"
+        }
+      },
+      growthPlan: {
+        title: "Your Path to Success",
+        subtitle: "Complete all growth stages and reach the top!",
+        stage: "Stage",
+        active: "Active",
+        unlock: "Unlock",
+        unlocking: "Unlocking...",
+        target: "Stage Goal:",
+        tasks: "Tasks",
+        progress: "Stage Progress",
+        almostDone: "🔥 Almost there! You are {percent}% of the way to completing the stage!",
+        goodJob: "💪 Great job! Keep it up!",
+        goodStart: "🚀 Good start! Every task brings you closer to the goal!",
+        completed: "✅ Stage completed! Congratulations on the achievement!",
+        noStages: "No growth stages available for this business type",
+        contactAdmin: "Contact administrator to configure growth plan"
+      },
+      recommendations: "Recommendations",
       wizard: {
         button: "Business Optimization Wizard",
         title: "Business Optimization Wizard",
         intro: "Some numbers to make the plan realistic. Can be filled later.",
         experience: "Years in business",
+        clients: "Regular clients",
+        clientsPlaceholder: "e.g., 150",
+        crm: "CRM",
+        crmPlaceholder: "e.g., Salesforce",
+        location: "Location",
+        avgCheck: "Average check ($)",
+        avgCheckPlaceholder: "50",
+        revenue: "Monthly revenue ($)",
+        revenuePlaceholder: "5000",
         save: "Save",
-        saving: "Saving..."
+        saving: "Saving...",
+        submit: "Generate Plan",
+        errors: {
+          noBusiness: "Business not selected",
+          save: "Save error: ",
+          unknown: "Unknown error"
+        },
+        options: {
+          experience: {
+            zeroToSix: "0-6 months",
+            sixToTwelve: "6-12 months",
+            oneToThree: "1-3 years",
+            threePlus: "3+ years"
+          },
+          location: {
+            home: "Home",
+            mall: "Mall",
+            yard: "Yard",
+            highway: "Highway",
+            center: "City Center",
+            suburbs: "Suburbs",
+            metro: "Near Metro"
+          }
+        }
       }
     }
   }

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { getApiEndpoint } from '../config/api';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface ROIData {
   investment_amount: number;
@@ -17,6 +18,7 @@ interface ROICalculatorProps {
 }
 
 const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
+  const { t } = useLanguage();
   const [roiData, setRoiData] = useState<ROIData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,10 +54,10 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
           period_end: data.roi.period_end || new Date().toISOString().split('T')[0]
         });
       } else {
-        setError(data.error || 'Ошибка загрузки ROI');
+        setError(data.error || t.dashboard.finance.roi.loadError);
       }
     } catch (error) {
-      setError('Ошибка соединения с сервером');
+      setError(t.common.error);
     } finally {
       setLoading(false);
     }
@@ -92,10 +94,10 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
         setEditMode(false);
         onUpdate?.();
       } else {
-        setError(data.error || 'Ошибка сохранения ROI');
+        setError(data.error || t.dashboard.finance.roi.saveError);
       }
     } catch (error) {
-      setError('Ошибка соединения с сервером');
+      setError(t.common.error);
     } finally {
       setSaving(false);
     }
@@ -118,11 +120,11 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
   };
 
   const getROIStatus = (roi: number) => {
-    if (roi > 200) return { text: 'Отличный ROI!', emoji: '🚀' };
-    if (roi > 100) return { text: 'Хороший ROI', emoji: '💪' };
-    if (roi > 50) return { text: 'Неплохой ROI', emoji: '👍' };
-    if (roi > 0) return { text: 'Положительный ROI', emoji: '✅' };
-    return { text: 'Отрицательный ROI', emoji: '⚠️' };
+    if (roi > 200) return { text: t.dashboard.finance.roi.status.excellent, emoji: '🚀' };
+    if (roi > 100) return { text: t.dashboard.finance.roi.status.good, emoji: '💪' };
+    if (roi > 50) return { text: t.dashboard.finance.roi.status.notBad, emoji: '👍' };
+    if (roi > 0) return { text: t.dashboard.finance.roi.status.positive, emoji: '✅' };
+    return { text: t.dashboard.finance.roi.status.negative, emoji: '⚠️' };
   };
 
   if (loading) {
@@ -142,7 +144,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
         <div className="text-center">
           <div className="text-red-600 mb-4">❌ {error}</div>
           <Button onClick={loadROIData} variant="outline">
-            Попробовать снова
+            {t.dashboard.network.tryAgain}
           </Button>
         </div>
       </div>
@@ -152,10 +154,10 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">💰 ROI Калькулятор</h3>
+        <h3 className="text-lg font-semibold text-gray-900">💰 {t.dashboard.finance.roi.title}</h3>
         {!editMode && (
           <Button onClick={() => setEditMode(true)} variant="outline" size="sm">
-            ✏️ Редактировать
+            ✏️ {t.dashboard.finance.roi.edit}
           </Button>
         )}
       </div>
@@ -164,7 +166,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="investment_amount">Инвестиции (₽)</Label>
+              <Label htmlFor="investment_amount">{t.dashboard.finance.roi.investment}</Label>
               <Input
                 id="investment_amount"
                 type="number"
@@ -177,7 +179,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
             </div>
 
             <div>
-              <Label htmlFor="returns_amount">Получено (₽)</Label>
+              <Label htmlFor="returns_amount">{t.dashboard.finance.roi.returns}</Label>
               <Input
                 id="returns_amount"
                 type="number"
@@ -192,7 +194,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="period_start">Начало периода</Label>
+              <Label htmlFor="period_start">{t.dashboard.finance.roi.periodStart}</Label>
               <Input
                 id="period_start"
                 type="date"
@@ -202,7 +204,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
             </div>
 
             <div>
-              <Label htmlFor="period_end">Конец периода</Label>
+              <Label htmlFor="period_end">{t.dashboard.finance.roi.periodEnd}</Label>
               <Input
                 id="period_end"
                 type="date"
@@ -220,10 +222,10 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
           <div className="flex gap-3">
             <Button onClick={handleSave} disabled={saving} className="flex-1">
-              {saving ? 'Сохраняем...' : '💾 Сохранить'}
+              {saving ? t.dashboard.finance.roi.saving : (<span>💾 {t.dashboard.finance.roi.save}</span>)}
             </Button>
             <Button onClick={() => setEditMode(false)} variant="outline">
-              Отмена
+              {t.dashboard.finance.roi.cancel}
             </Button>
           </div>
         </div>
@@ -242,14 +244,14 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="text-sm text-blue-600 font-medium mb-1">Инвестировано</div>
+                  <div className="text-sm text-blue-600 font-medium mb-1">{t.dashboard.finance.roi.invested}</div>
                   <div className="text-xl font-bold text-blue-900">
                     {formatCurrency(roiData.investment_amount)}
                   </div>
                 </div>
 
                 <div className="bg-green-50 rounded-lg p-4">
-                  <div className="text-sm text-green-600 font-medium mb-1">Получено</div>
+                  <div className="text-sm text-green-600 font-medium mb-1">{t.dashboard.finance.roi.received}</div>
                   <div className="text-xl font-bold text-green-900">
                     {formatCurrency(roiData.returns_amount)}
                   </div>
@@ -257,7 +259,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600 font-medium mb-1">Период</div>
+                <div className="text-sm text-gray-600 font-medium mb-1">{t.dashboard.finance.roi.period}</div>
                 <div className="text-lg text-gray-900">
                   {roiData.period_start} — {roiData.period_end}
                 </div>
@@ -265,17 +267,17 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
 
               <div className="text-center">
                 <div className="text-sm text-gray-500">
-                  Прибыль: {formatCurrency(roiData.returns_amount - roiData.investment_amount)}
+                  {t.dashboard.finance.roi.profit} {formatCurrency(roiData.returns_amount - roiData.investment_amount)}
                 </div>
               </div>
             </>
           ) : (
             <div className="text-center text-gray-500">
               <div className="text-4xl mb-4">📊</div>
-              <p className="text-lg mb-2">ROI не рассчитан</p>
-              <p className="text-sm mb-4">Добавьте данные об инвестициях и доходах</p>
+              <p className="text-lg mb-2">{t.dashboard.finance.roi.notCalculated}</p>
+              <p className="text-sm mb-4">{t.dashboard.finance.roi.addData}</p>
               <Button onClick={() => setEditMode(true)}>
-                Рассчитать ROI
+                {t.dashboard.finance.roi.calculate}
               </Button>
             </div>
           )}

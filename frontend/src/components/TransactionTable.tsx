@@ -19,6 +19,7 @@ interface TransactionTableProps {
 }
 
 const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, refreshKey = 0 }) => {
+  const { language, t } = useLanguage();
   const [rows, setRows] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +52,10 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
       if (res.ok && data.success) {
         setRows(data.transactions || []);
       } else {
-        setError(data.error || 'Не удалось загрузить транзакции');
+        setError(data.error || t.dashboard.finance.transactions.loadError);
       }
     } catch (e) {
-      setError('Ошибка соединения с сервером');
+      setError(t.common.error);
     } finally {
       setLoading(false);
     }
@@ -84,9 +85,9 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
         amount: parseFloat(form.amount || '0') || 0,
         services: form.services
           ? form.services
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
           : [],
         notes: form.notes || '',
       };
@@ -100,20 +101,20 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'Ошибка сохранения');
+        setError(data.error || t.common.error);
       } else {
         setEditingId(null);
         await loadTransactions();
       }
     } catch (e) {
-      setError('Ошибка соединения с сервером');
+      setError(t.common.error);
     } finally {
       setLoading(false);
     }
   };
 
   const deleteRow = async (id: string) => {
-    if (!window.confirm('Удалить транзакцию?')) return;
+    if (!window.confirm(t.dashboard.finance.transactions.deleteConfirm)) return;
     try {
       setLoading(true);
       const token = localStorage.getItem('auth_token');
@@ -125,12 +126,12 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'Ошибка удаления');
+        setError(data.error || t.common.error);
       } else {
         await loadTransactions();
       }
     } catch (e) {
-      setError('Ошибка соединения с сервером');
+      setError(t.common.error);
     } finally {
       setLoading(false);
     }
@@ -145,26 +146,26 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
     if (!value) return '—';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleDateString('ru-RU');
+    return d.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US');
   };
 
   const formatMoney = (value: number) =>
-    new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(
+    new Intl.NumberFormat(language === 'ru' ? 'ru-RU' : 'en-US', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(
       value || 0,
     );
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900">Список транзакций</h3>
-        <div className="text-sm text-gray-500">Показано до 100 последних</div>
+        <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.finance.transactions.title}</h3>
+        <div className="text-sm text-gray-500">{t.dashboard.finance.transactions.shownLimit}</div>
       </div>
 
-      {loading && <div className="text-gray-500">Загружаем...</div>}
+      {loading && <div className="text-gray-500">{t.dashboard.finance.transactions.loading}</div>}
       {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
 
       {!loading && !error && rows.length === 0 && (
-        <div className="text-gray-500 text-sm">Транзакций пока нет</div>
+        <div className="text-gray-500 text-sm">{t.dashboard.finance.transactions.empty}</div>
       )}
 
       {!loading && !error && rows.length > 0 && (
@@ -172,12 +173,12 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
           <table className="min-w-full border border-gray-200 text-sm">
             <thead className="bg-gray-50 text-gray-700">
               <tr>
-                <th className="px-3 py-2 border-b text-left">Дата</th>
-                <th className="px-3 py-2 border-b text-left">Наименование</th>
-                <th className="px-3 py-2 border-b text-right">Цена</th>
-                <th className="px-3 py-2 border-b text-right">Кол-во</th>
-                <th className="px-3 py-2 border-b text-right">Стоимость</th>
-                <th className="px-3 py-2 border-b text-right">Действия</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.finance.transactions.date}</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.finance.transactions.name}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.finance.transactions.price}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.finance.transactions.qty}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.finance.transactions.cost}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.finance.transactions.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +209,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
                         <Input
                           value={form.services}
                           onChange={(e) => setForm({ ...form, services: e.target.value })}
-                          placeholder="Услуги через запятую"
+                          placeholder={t.dashboard.finance.transactions.servicesPlaceholder}
                         />
                       ) : (
                         name
@@ -231,19 +232,19 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ currentBusinessId, 
                       {isEditing ? (
                         <>
                           <Button size="sm" onClick={saveEdit}>
-                            Сохранить
+                            {t.common.save}
                           </Button>
                           <Button size="sm" variant="outline" onClick={cancelEdit}>
-                            Отмена
+                            {t.common.cancel}
                           </Button>
                         </>
                       ) : (
                         <>
                           <Button size="sm" variant="outline" onClick={() => startEdit(row)}>
-                            Редактировать
+                            {t.dashboard.finance.transactions.edit}
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => deleteRow(row.id)}>
-                            Удалить
+                            {t.dashboard.finance.transactions.delete}
                           </Button>
                         </>
                       )}

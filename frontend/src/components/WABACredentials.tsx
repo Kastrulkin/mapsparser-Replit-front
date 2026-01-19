@@ -31,8 +31,8 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
   const handleSave = async () => {
     if (!businessId) {
       toast({
-        title: 'Ошибка',
-        description: 'Бизнес не выбран',
+        title: t.common.error,
+        description: t.dashboard.settings.whatsapp.selectBusiness,
         variant: 'destructive',
       });
       return;
@@ -40,8 +40,8 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
 
     if (!phoneId || !accessToken) {
       toast({
-        title: 'Ошибка',
-        description: 'Заполните все поля',
+        title: t.common.error,
+        description: t.common.fillAllFields,
         variant: 'destructive',
       });
       return;
@@ -67,20 +67,20 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
 
       if (response.ok) {
         toast({
-          title: 'Успешно',
-          description: 'Учётные данные WABA сохранены',
+          title: t.common.success,
+          description: t.dashboard.settings.whatsapp.successSave,
         });
       } else {
         toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось сохранить данные',
+          title: t.common.error,
+          description: data.error || t.dashboard.settings.whatsapp.errorSave,
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при сохранении данных',
+        title: t.common.error,
+        description: t.dashboard.settings.whatsapp.errorSave,
         variant: 'destructive',
       });
     } finally {
@@ -93,17 +93,17 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
-          Учётные данные WhatsApp Business API
+          {t.dashboard.settings.whatsapp.title}
         </CardTitle>
         <CardDescription>
-          Укажите ваши учётные данные WABA для отправки сообщений со своего номера
+          {t.dashboard.settings.whatsapp.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <AlertDescription>
             {t.dashboard.settings.whatsapp.subtitle}
-            Это позволит отправлять сообщения клиентам со своего номера через ИИ агента.
+            {t.dashboard.settings.whatsapp.alert}
           </AlertDescription>
         </Alert>
 
@@ -112,7 +112,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
           <Input
             id="waba-phone-id"
             type="text"
-            placeholder="Введите Phone ID"
+            placeholder={t.dashboard.settings.whatsapp.phoneIdPlaceholder}
             value={phoneId}
             onChange={(e) => setPhoneId(e.target.value)}
             disabled={saving}
@@ -128,7 +128,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
             <Input
               id="waba-access-token"
               type={showToken ? 'text' : 'password'}
-              placeholder="Введите Access Token"
+              placeholder={t.dashboard.settings.whatsapp.accessTokenPlaceholder}
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
               disabled={saving}
@@ -156,10 +156,10 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Сохранение...
+              {t.dashboard.settings.whatsapp.saving}
             </>
           ) : (
-            'Сохранить учётные данные'
+            t.dashboard.settings.whatsapp.saveButton
           )}
         </Button>
       </CardContent>

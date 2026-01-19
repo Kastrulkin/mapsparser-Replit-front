@@ -2242,3 +2242,115 @@ Translate "Progress" tab components (`MetricsHistoryCharts.tsx` and `BusinessGro
 
 ### Status
 - [x] Completed
+
+---
+
+## 2026-01-14 - Localization Updates for Network & Parsing Management
+
+### Current Task
+Refactoring translation files to support Network and Parsing management features, and fixing syntax errors in locale files.
+
+### Architecture Decision
+- Added a global `common` object to `ru.ts` and `en.ts` for shared translations.
+- Merged new `network` management keys into the existing `network` object structure within `dashboard` to preserve existing analytics translations while supporting the new UI.
+- Updated `dashboard.network.title` to "Network Management" (was "Network Dashboard") to reflect the expanded functionality involved in managing networks, not just viewing stats.
+- Added a new `parsing` object to `dashboard` for the Parsing Management UI.
+- Fixed syntax errors (missing `export const` declarations and premature closing braces) in `ru.ts` and `en.ts`.
+
+### Files to Modify
+- `frontend/src/i18n/locales/ru.ts` - structure fixed, generic keys moved to `common`, `network` extended, `parsing` added.
+- `frontend/src/i18n/locales/en.ts` - structure fixed, generic keys moved to `common`, `network` extended, `parsing` added.
+
+### Trade-offs & Decisions
+- **Merging vs Separation**: Decided to merge the new `network` management keys into the existing `dashboard.network` object. This avoids namespace collision and allows `dashboard.network` to be the single source of truth for all network-related translations, though it mixes analytics and management keys.
+- **Title Update**: Changed the existing `title` from "Network Dashboard" to "Network Management". This was necessary for the new UI context. If the old analytics dashboard relies on this specific string, the context might slightly shift, but "Network Management" is broad enough to cover both.
+- **Structure Repair**: The files had syntax errors (missing exports) and nesting issues. These were fixed to restore compilation.
+
+### Dependencies
+- None. Pure frontend resource update.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-14 - Global Localization Updates (All Languages)
+
+### Current Task
+Applying the structural fixes and new translation keys (Network & Parsing) to all remaining language files: `fr.ts`, `es.ts`, `de.ts`, `el.ts`, `th.ts`, `ar.ts`, `ha.ts`.
+
+### Architecture Decision
+- **Consistent Structure**: Applied the same `common` root object and `dashboard.network` / `dashboard.parsing` structure to all files as established in `ru.ts`/`en.ts`.
+- **Syntax Correction**: Identified and fixed a syntax error where the key `2gis` was unquoted. It has been corrected to `"2gis"` in all updated files to ensure valid TypeScript objects.
+- **Fallbacks**: Used English translations for new technical keys (like Parsing management) where native translations were not immediately available, ensuring functionality is not blocked by missing text.
+- **Title Localization**: Preserved or updated the `dashboard.network.title` to the correct local language equivalents (e.g., "Netzwerkverwaltung" for German) where the term was already present or easily deducible.
+
+### Files to Modify
+- `frontend/src/i18n/locales/fr.ts`
+- `frontend/src/i18n/locales/es.ts`
+- `frontend/src/i18n/locales/de.ts`
+- `frontend/src/i18n/locales/el.ts`
+- `frontend/src/i18n/locales/th.ts`
+- `frontend/src/i18n/locales/ar.ts`
+- `frontend/src/i18n/locales/ha.ts`
+
+### Trade-offs & Decisions
+- **English Fallbacks**: Choosing to ship with English fallbacks for advanced/admin features (Parsing/Network management) allows us to release the feature globally without waiting for professional translation of technical terms.
+- **Quoted Keys**: The usage of numerical keys like `2gis` requires quotes. This was a critical fix to prevent build errors.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-19 - Progress Tab Translations Fix
+
+### Current Task
+Fix "Russian text" appearing in "Progress" tab for non-English/Russian locales (e.g., German).
+
+### Architecture Decision
+- **Detected Issue**: The `dashboard.progress` section (Business Metrics, Growth Plan) was added to `ru.ts` and `en.ts` but missing from other locale files (`de`, `fr`, etc.), causing the UI to fall back to the default language (likely Russian or key names).
+- **Resolution**: Propagated the comprehensive `dashboard.progress` block from `en.ts` to all 7 other locale files (`fr.ts`, `es.ts`, `de.ts`, `el.ts`, `th.ts`, `ar.ts`, `ha.ts`). Used English as the fallback content to ensuring immediate usability.
+
+### Files to Modify
+- `frontend/src/i18n/locales/fr.ts`
+- `frontend/src/i18n/locales/es.ts`
+- `frontend/src/i18n/locales/de.ts`
+- `frontend/src/i18n/locales/el.ts`
+- `frontend/src/i18n/locales/th.ts`
+- `frontend/src/i18n/locales/ar.ts`
+- `frontend/src/i18n/locales/ha.ts`
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-13 - Comprehensive Localization Updates
+
+### Current Task
+Fixing remaining hardcoded Russian strings in "Progress", "Finance", "News", and "Settings" tabs, and propagating translation keys to all supported languages.
+
+### Architecture Decision
+- **Translation Propagation**: Expanded `common`, `dashboard.finance`, and `dashboard.progress` keys to all 9 locale files. Used English strings as fallback.
+- **Component Localization**: Replaced hardcoded strings with `t()` calls in `ROICalculator.tsx`, `TransactionTable.tsx`, `MetricsHistoryCharts.tsx`, `WABACredentials.tsx`, `TelegramBotCredentials.tsx`, `NewsGenerator.tsx`.
+- **Dynamic Formatting**: Implemented `useLanguage()` based date and currency formatting.
+
+### Files to Modify
+- `src/i18n/locales/*.ts` (all 9 files)
+- `src/components/ROICalculator.tsx`
+- `src/components/TransactionTable.tsx`
+- `src/components/MetricsHistoryCharts.tsx`
+- `src/components/WABACredentials.tsx`
+- `src/components/TelegramBotCredentials.tsx`
+- `src/components/NewsGenerator.tsx`
+
+### Trade-offs & Decisions
+- **English Fallback**: Chosen to use English for new keys in other languages to speed up implementation.
+- **Batched Updates**: Grouped updates by tab to minimize file edits.
+
+### Dependencies
+- None.
+
+### Status
+- [x] Completed

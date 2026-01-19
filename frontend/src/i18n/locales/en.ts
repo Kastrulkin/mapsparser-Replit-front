@@ -1,8 +1,16 @@
 export const en = {
-  success: "Success",
-  error: "Error",
-  save: "Save",
-  cancel: "Cancel",
+  common: {
+    success: "Success",
+    error: "Error",
+    save: "Save",
+    cancel: "Cancel",
+    loading: "Loading...",
+    back: "Back",
+    next: "Next",
+    select: "Select",
+    fillAllFields: "Please fill all fields"
+  },
+
   // Page title
   pageTitle: "BeautyBot.pro - Local promotion for local business",
 
@@ -381,10 +389,9 @@ export const en = {
         description: "Enter your WABA credentials to send messages to clients from your number",
         subtitle: "If you have your own WhatsApp Business API account, specify your credentials here. This will allow you to send messages to clients via AI agent from your bot.",
         phoneIdLabel: "Phone ID",
-        phoneIdPlaceholder: "your.email@example.com",
         phoneIdHelp: "Phone ID of your WhatsApp Business account",
         accessTokenLabel: "Access Token",
-        accessTokenPlaceholder: "Enter token",
+        accessTokenPlaceholder: "Enter Access Token",
         accessTokenHelp: "Access Token for WhatsApp Business API access",
         showToken: "Show token",
         hideToken: "Hide token",
@@ -392,7 +399,10 @@ export const en = {
         saving: "Saving...",
         successSave: "WhatsApp credentials saved",
         errorSave: "Error saving credentials",
-        selectBusiness: "Select a business first"
+        selectBusiness: "Select a business first",
+        alert: "This allows you to send messages to clients from your number via AI agent.",
+        phoneIdPlaceholder: "Enter Phone ID",
+        saveButton: "Save credentials"
       },
       telegram2: {
         title: "Telegram Bot Token",
@@ -405,11 +415,14 @@ export const en = {
         saving: "Saving...",
         successSave: "Telegram bot token saved",
         errorSave: "Error saving token",
-        selectBusiness: "Select a business first"
+        selectBusiness: "Select a business first",
+        alert: "This allows you to send messages to clients via AI agent from your bot.",
+        errorEmpty: "Enter bot token",
+        saveButton: "Save token"
       }
     },
     network: {
-      title: "📊 Network Dashboard",
+      title: "Network Management",
       period: {
         week: "Week",
         month: "Month",
@@ -429,7 +442,45 @@ export const en = {
       reviews: "reviews",
       last30Days: "30d",
       errorLoading: "Error loading stats",
-      tryAgain: "Try again"
+      tryAgain: "Try again",
+      subtitle: "Manage branches and network settings",
+      type: "Business Type",
+      singlePoint: "Single Point",
+      network: "Branch Network",
+      businessAdded: "Business added to network",
+      singlePointMessage: "This business operates as a single point. To combine multiple points into a network, select 'Branch Network'.",
+      select: {
+        label: "Select Network"
+      },
+      create: {
+        title: "Create Network",
+        name: "Network Name",
+        namePlaceholder: "Example: Coffee Shop Network 'Arabica'",
+        description: "Description",
+        descriptionPlaceholder: "Short description of the network",
+        creating: "Creating...",
+        submit: "Create Network",
+        emptyName: "Enter network name",
+        success: "Network created successfully",
+        error: "Error creating network"
+      },
+      points: {
+        title: "Network Points",
+        add: "Add Point",
+        point: "Point",
+        name: "Name",
+        namePlaceholder: "Example: Branch on Lenin St",
+        address: "Address",
+        addressPlaceholder: "10 Lenin St",
+        mapLink: "Map Link",
+        mapLinkPlaceholder: "https://yandex.ru/maps/...",
+        saving: "Saving...",
+        save: "Save Points",
+        selectNetwork: "Select network to add points",
+        empty: "Add at least one point with a name",
+        success: "Points saved successfully",
+        error: "Error saving points"
+      }
     },
     profile: {
       title: "Profile & Business",
@@ -595,8 +646,22 @@ export const en = {
         copied: "Copied",
         errorAddExample: "Error adding example",
         errorDeleteExample: "Error deleting example",
-        errorGenerate: "Generation error"
-      }
+        errorGenerate: "Generation error",
+        selectTransaction: "Select transaction",
+        loadingTransactions: "Loading transactions...",
+        noTransactions: "No transactions. Add transactions in Finance tab.",
+        rawInfoLabel: "Unformatted information (optional)",
+        newsLanguage: "News language",
+        newsLanguageHelp: "Language in which the news will be generated. Default — interface language",
+        yourNews: "Your news",
+        noNews: "No news yet",
+        deleteConfirm: "Are you sure you want to delete this news?",
+        edit: "Edit",
+        delete: "Delete",
+        published: "Published:",
+        source: "Source:",
+        yandexBusiness: "Yandex.Business"
+      },
     },
     bookings: {
       title: "Bookings",
@@ -798,6 +863,50 @@ export const en = {
         noMasterData: "No master data",
         period: "Period:"
       },
+      roi: {
+        title: "ROI Calculator",
+        edit: "Edit",
+        investment: "Investment ($)",
+        returns: "Returns ($)",
+        periodStart: "Period start",
+        periodEnd: "Period end",
+        saving: "Saving...",
+        save: "Save",
+        cancel: "Cancel",
+        invested: "Invested",
+        received: "Received",
+        period: "Period",
+        profit: "Profit:",
+        notCalculated: "ROI not calculated",
+        addData: "Add investment and return data",
+        calculate: "Calculate ROI",
+        loadError: "Error loading ROI",
+        saveError: "Error saving ROI",
+        status: {
+          excellent: "Excellent ROI!",
+          good: "Good ROI",
+          notBad: "Not bad ROI",
+          positive: "Positive ROI",
+          negative: "Negative ROI"
+        }
+      },
+      transactions: {
+        title: "Transactions List",
+        shownLimit: "Showing up to 100 recent",
+        loading: "Loading...",
+        empty: "No transactions yet",
+        loadError: "Failed to load transactions",
+        date: "Date",
+        name: "Name",
+        price: "Price",
+        qty: "Qty",
+        cost: "Cost",
+        actions: "Actions",
+        servicesPlaceholder: "Services comma separated",
+        edit: "Edit",
+        delete: "Delete",
+        deleteConfirm: "Delete this transaction?"
+      },
     },
     progress: {
       title: "Progress",
@@ -890,7 +999,93 @@ export const en = {
           }
         }
       }
+    },
+
+    parsing: {
+      title: "Parsing Management",
+      subtitle: "Monitor and manage data parsing tasks",
+      refresh: "Refresh",
+      stats: {
+        total: "Total Tasks",
+        pending: "Pending",
+        processing: "Processing",
+        stuck: "Stuck",
+        stuckWarning: "Stuck tasks detected",
+        stuckDesc: "Some tasks have been in 'Processing' status for too long. Restart is recommended."
+      },
+      filters: {
+        title: "Filters",
+        status: "Status",
+        statusAll: "All Statuses",
+        type: "Task Type",
+        typeAll: "All Types",
+        source: "Source",
+        sourceAll: "All Sources"
+      },
+      status: {
+        pending: "Pending",
+        processing: "In Progress",
+        done: "Done",
+        error: "Error",
+        captcha: "Captcha"
+      },
+      type: {
+        parse_card: "Card Parsing",
+        sync_yandex_business: "Yandex Sync",
+        parse_cabinet_fallback: "Cabinet Parsing"
+      },
+      source: {
+        yandex_maps: "Yandex Maps",
+        yandex_business: "Yandex Business",
+        google_business: "Google Business",
+        '2gis': "2GIS"
+      },
+      table: {
+        title: "Task List",
+        loading: "Loading tasks...",
+        noTasks: "No tasks",
+        id: "ID",
+        business: "Business",
+        type: "Type",
+        source: "Source",
+        status: "Status",
+        url: "URL / Data",
+        created: "Created",
+        error: "Error",
+        actions: "Actions"
+      },
+      actions: {
+        restartConfirm: "Are you sure you want to restart this task?",
+        successRestart: "Task restarted",
+        deleteConfirm: "Are you sure you want to delete this task?",
+        successDelete: "Task deleted",
+        switchToSyncConfirm: "This will change the task type to official Yandex.Business synchronization. Continue?",
+        successSwitch: "Task type changed",
+        restart: "Restart",
+        switchToSync: "To Sync",
+        delete: "Delete"
+      },
+      history: {
+        title: "Parsing History",
+        subtitle: "Reports on recent parsing runs for this business",
+        noData: "Parsing history is empty",
+        viewReport: "Report",
+        noReport: "Report unavailable",
+        close: "Close",
+        columns: {
+          date: "Date",
+          url: "Link",
+          type: "Type",
+          rating: "Rating",
+          reviews: "Reviews",
+          unanswered: "No Reply",
+          news: "News",
+          photos: "Photos",
+          report: "Report"
+        }
+      }
     }
   }
 };
+
 

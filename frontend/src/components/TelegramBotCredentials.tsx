@@ -29,8 +29,8 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
   const handleSave = async () => {
     if (!businessId) {
       toast({
-        title: 'Ошибка',
-        description: 'Бизнес не выбран',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.selectBusiness,
         variant: 'destructive',
       });
       return;
@@ -38,8 +38,8 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
     if (!botToken) {
       toast({
-        title: 'Ошибка',
-        description: 'Введите токен бота',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.errorEmpty,
         variant: 'destructive',
       });
       return;
@@ -64,20 +64,20 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
       if (response.ok) {
         toast({
-          title: 'Успешно',
-          description: 'Токен Telegram бота сохранён',
+          title: t.common.success,
+          description: t.dashboard.settings.telegram2.successSave,
         });
       } else {
         toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось сохранить токен',
+          title: t.common.error,
+          description: data.error || t.dashboard.settings.telegram2.errorSave,
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при сохранении токена',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.errorSave,
         variant: 'destructive',
       });
     } finally {
@@ -90,7 +90,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bot className="h-5 w-5" />
-          Токен Telegram бота
+          {t.dashboard.settings.telegram2.title}
         </CardTitle>
         <CardDescription>
           {t.dashboard.settings.telegram2.description}
@@ -100,7 +100,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         <Alert>
           <AlertDescription>
             {t.dashboard.settings.telegram2.subtitle}
-            Это позволит отправлять сообщения клиентам через ИИ агента со своего бота.
+            {t.dashboard.settings.telegram2.alert}
           </AlertDescription>
         </Alert>
 
@@ -138,10 +138,10 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Сохранение...
+              {t.dashboard.settings.telegram2.saving}
             </>
           ) : (
-            'Сохранить токен'
+            t.dashboard.settings.telegram2.saveButton
           )}
         </Button>
       </CardContent>
