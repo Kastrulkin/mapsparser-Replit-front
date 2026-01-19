@@ -92,13 +92,13 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           Токен Telegram бота
         </CardTitle>
         <CardDescription>
-          Укажите токен вашего Telegram бота для отправки сообщений клиентам
+          {t.dashboard.settings.telegram2.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <AlertDescription>
-            Если у вас есть собственный Telegram бот, укажите здесь его токен.
+            {t.dashboard.settings.telegram2.subtitle}
             Это позволит отправлять сообщения клиентам через ИИ агента со своего бота.
           </AlertDescription>
         </Alert>
@@ -109,7 +109,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
             <Input
               id="telegram-bot-token"
               type={showToken ? 'text' : 'password'}
-              placeholder="Введите токен бота"
+              placeholder={t.dashboard.settings.telegram2.tokenPlaceholder}
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
               disabled={saving}
@@ -125,7 +125,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Токен можно получить у @BotFather в Telegram
+            {t.dashboard.settings.telegram2.tokenHelp}
           </p>
         </div>
 

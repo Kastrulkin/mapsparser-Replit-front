@@ -104,7 +104,7 @@ export const WABACredentials = () => {
       <CardContent className="space-y-4">
         <Alert>
           <AlertDescription>
-            Если у вас есть собственный аккаунт WhatsApp Business API, укажите здесь ваши учётные данные.
+            {t.dashboard.settings.whatsapp.subtitle}
             Это позволит отправлять сообщения клиентам со своего номера через ИИ агента.
           </AlertDescription>
         </Alert>
@@ -120,7 +120,7 @@ export const WABACredentials = () => {
             disabled={saving}
           />
           <p className="text-xs text-gray-500">
-            Phone ID вашего WhatsApp Business аккаунта
+            {t.dashboard.settings.whatsapp.phoneIdHelp}
           </p>
         </div>
 
@@ -146,7 +146,7 @@ export const WABACredentials = () => {
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Access Token для доступа к WhatsApp Business API
+            {t.dashboard.settings.whatsapp.accessTokenHelp}
           </p>
         </div>
 
