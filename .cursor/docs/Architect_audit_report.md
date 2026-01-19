@@ -2354,3 +2354,29 @@ Fixing remaining hardcoded Russian strings in "Progress", "Finance", "News", and
 
 ### Status
 - [x] Completed
+
+## 2026-01-19 - Final Localization Polish
+
+### Current Task
+Eliminate remaining hardcoded strings in `FinancialMetrics.tsx` and translate English fallbacks in non-core languages (fr, de, es, el, th, ar, ha).
+
+### Architecture Decision
+- **Elimination of Fallbacks**: Replaced English fallback text in `dashboard.network` and `dashboard.parsing` sections for all non-English languages with native translations (Hausa, Arabic, Thai, French, German, Spanish, Greek).
+- **Financial Metrics**: Replaced hardcoded Russian headers with `t()` calls in `FinancialMetrics.tsx`.
+
+### Files Modified
+- `frontend/src/components/FinancialMetrics.tsx` - Removed Russian strings.
+- `frontend/src/i18n/locales/ha.ts` - Translated Network & Parsing.
+- `frontend/src/i18n/locales/ar.ts` - Translated Parsing.
+- `frontend/src/i18n/locales/th.ts` - Translated Parsing.
+- `frontend/src/i18n/locales/fr.ts` - Translated Parsing.
+- `frontend/src/i18n/locales/de.ts` - Translated Parsing.
+- `frontend/src/i18n/locales/es.ts` - Translated Parsing.
+- `frontend/src/i18n/locales/el.ts` - Translated Parsing.
+
+### Trade-offs & Decisions
+- **Manual Translation**: Used AI context to generate translations for technical terms in less common languages (Hausa, Thai), assuming standard terminology.
+- **Completeness**: Prioritized having translated UI over perfect linguistic accuracy for administrative features (Parsing/Network), to meet the "no English fallbacks" requirement.
+
+### Status
+- [x] Completed
