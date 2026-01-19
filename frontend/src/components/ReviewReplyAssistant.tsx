@@ -228,7 +228,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     setIsEditing(false);
     setEditableReply(reply);
   };
-  };
+
 
   // Get tone labels from translations
   const tones: { key: Tone; label: string }[] = [
