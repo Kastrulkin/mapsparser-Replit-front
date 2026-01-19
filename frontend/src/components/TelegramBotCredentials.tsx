@@ -14,6 +14,7 @@ interface TelegramBotCredentialsProps {
 }
 
 export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCredentialsProps) => {
+  const { t } = useLanguage();
   const [botToken, setBotToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -104,7 +105,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="telegram-bot-token">{ t.dashboard.settings.telegram2.tokenLabel}</Label>
+          <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
           <div className="relative">
             <Input
               id="telegram-bot-token"

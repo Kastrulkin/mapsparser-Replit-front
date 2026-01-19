@@ -13,10 +13,8 @@ interface WABACredentialsProps {
   business: any;
 }
 
-export const WABACredentials = () => {
+export const WABACredentials = ({ businessId, business }: WABACredentialsProps) => {
   const { t } = useLanguage();
-  return (
- = ({ businessId, business }: WABACredentialsProps) => {
   const [phoneId, setPhoneId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [showToken, setShowToken] = useState(false);
@@ -110,7 +108,7 @@ export const WABACredentials = () => {
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="waba-phone-id">{ t.dashboard.settings.whatsapp.phoneIdLabel}</Label>
+          <Label htmlFor="waba-phone-id">{t.dashboard.settings.whatsapp.phoneIdLabel}</Label>
           <Input
             id="waba-phone-id"
             type="text"
@@ -125,7 +123,7 @@ export const WABACredentials = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="waba-access-token">{ t.dashboard.settings.whatsapp.accessTokenLabel}</Label>
+          <Label htmlFor="waba-access-token">{t.dashboard.settings.whatsapp.accessTokenLabel}</Label>
           <div className="relative">
             <Input
               id="waba-access-token"
