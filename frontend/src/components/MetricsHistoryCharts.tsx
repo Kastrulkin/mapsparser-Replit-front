@@ -30,6 +30,7 @@ interface MetricsHistoryChartsProps {
 type MetricType = 'rating' | 'reviews' | 'photos' | 'news';
 
 export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ businessId }) => {
+    const { t } = useLanguage();
     const [history, setHistory] = useState<MetricEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMetric, setSelectedMetric] = useState<MetricType>('rating');
@@ -168,11 +169,12 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
         return data.length > 0 ? data[data.length - 1].value : null;
     };
 
+
     if (!businessId) {
         return (
             <Card>
                 <CardContent className="p-8 text-center text-gray-500">
-                    Выберите бизнес для просмотра истории метрик
+                    {t.dashboard.profile.noBusinessSelected}
                 </CardContent>
             </Card>
         );
@@ -190,12 +192,12 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle className="text-2xl">📊 Метрики Бизнеса</CardTitle>
-                            <CardDescription>История изменений показателей</CardDescription>
+                            <CardTitle className="text-2xl">📊 {t.dashboard.progress.charts.title}</CardTitle>
+                            <CardDescription>{t.dashboard.progress.charts.subtitle}</CardDescription>
                         </div>
                         <Button onClick={() => setShowAddModal(true)} size="sm">
                             <Plus className="h-4 w-4 mr-2" />
-                            Добавить вручную
+                            {t.dashboard.progress.charts.addManual}
                         </Button>
                     </div>
 
@@ -234,7 +236,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                             <div className="mb-6 p-6 bg-gray-50 rounded-lg border border-gray-200">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm text-gray-500 mb-1">Текущее значение</p>
+                                        <p className="text-sm text-gray-500 mb-1">{t.dashboard.progress.charts.currentValue}</p>
                                         <p className="text-4xl font-bold" style={{ color: config.color }}>
                                             {latestValue !== null ? config.format(latestValue) : '—'}
                                         </p>
@@ -300,12 +302,12 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                 <table className="w-full">
                                     <thead className="bg-gray-50 border-b">
                                         <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Дата</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Рейтинг</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Отзывы</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Фото</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Новости</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Источник</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.date}</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.metrics.rating}</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.metrics.reviews}</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.metrics.photos}</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.metrics.news}</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">{t.dashboard.progress.charts.source}</th>
                                             <th className="px-4 py-3"></th>
                                         </tr>
                                     </thead>
@@ -313,7 +315,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                         {history.slice(0, 10).map(entry => (
                                             <tr key={entry.id} className="hover:bg-gray-50">
                                                 <td className="px-4 py-3 text-sm text-gray-900">
-                                                    {new Date(entry.date).toLocaleDateString('ru-RU')}
+                                                    {new Date(entry.date).toLocaleDateString(useLanguage().language === 'ru' ? 'ru-RU' : 'en-US')}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm text-gray-900">
                                                     {entry.rating !== null ? entry.rating.toFixed(1) : '—'}
@@ -329,10 +331,10 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${entry.source === 'parsing'
-                                                            ? 'bg-blue-100 text-blue-700'
-                                                            : 'bg-purple-100 text-purple-700'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-purple-100 text-purple-700'
                                                         }`}>
-                                                        {entry.source === 'parsing' ? 'Парсинг' : 'Вручную'}
+                                                        {entry.source === 'parsing' ? t.dashboard.progress.charts.parsing : t.dashboard.progress.charts.manual}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -354,10 +356,10 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                         </>
                     ) : (
                         <div className="text-center p-12 text-gray-500">
-                            <p className="mb-4">Нет данных для отображения</p>
+                            <p className="mb-4">{t.dashboard.progress.charts.noData}</p>
                             <Button onClick={() => setShowAddModal(true)} variant="outline">
                                 <Plus className="h-4 w-4 mr-2" />
-                                Добавить первую запись
+                                {t.dashboard.progress.charts.addFirst}
                             </Button>
                         </div>
                     )}
@@ -381,11 +383,11 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                             className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <h3 className="text-xl font-bold mb-4">Добавить метрики вручную</h3>
+                            <h3 className="text-xl font-bold mb-4">{t.dashboard.progress.charts.addModal.title}</h3>
 
                             <div className="space-y-4">
                                 <div>
-                                    <Label htmlFor="date">Дата</Label>
+                                    <Label htmlFor="date">{t.dashboard.progress.charts.addModal.date}</Label>
                                     <Input
                                         id="date"
                                         type="date"
@@ -395,7 +397,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="rating">Рейтинг (1-5)</Label>
+                                    <Label htmlFor="rating">{t.dashboard.progress.charts.addModal.rating}</Label>
                                     <Input
                                         id="rating"
                                         type="number"
@@ -409,7 +411,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="reviews">Количество отзывов</Label>
+                                    <Label htmlFor="reviews">{t.dashboard.progress.charts.addModal.reviews}</Label>
                                     <Input
                                         id="reviews"
                                         type="number"
@@ -421,7 +423,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="photos">Количество фото</Label>
+                                    <Label htmlFor="photos">{t.dashboard.progress.charts.addModal.photos}</Label>
                                     <Input
                                         id="photos"
                                         type="number"
@@ -433,7 +435,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="news">Количество новостей</Label>
+                                    <Label htmlFor="news">{t.dashboard.progress.charts.addModal.news}</Label>
                                     <Input
                                         id="news"
                                         type="number"
@@ -451,13 +453,13 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                                     onClick={() => setShowAddModal(false)}
                                     className="flex-1"
                                 >
-                                    Отмена
+                                    {t.dashboard.progress.charts.addModal.cancel}
                                 </Button>
                                 <Button
                                     onClick={addManualEntry}
                                     className="flex-1"
                                 >
-                                    Сохранить
+                                    {t.dashboard.progress.charts.addModal.save}
                                 </Button>
                             </div>
                         </motion.div>
@@ -467,3 +469,4 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
         </div>
     );
 };
+

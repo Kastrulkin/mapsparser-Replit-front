@@ -797,14 +797,58 @@ export const en = {
         noServiceData: "No service data",
         noMasterData: "No master data",
         period: "Period:"
-      }
+      },
     },
     progress: {
       title: "Progress",
       subtitle: "Track your progress and achievements",
       businessMetrics: "Business Metrics",
-      metricsHistory: "Metrics History",
-      growthPlan: "Growth Plan",
+      charts: {
+        title: "Business Metrics",
+        subtitle: "History of metric changes",
+        addManual: "Add Manually",
+        addFirst: "Add First Entry",
+        noData: "No data to display",
+        currentValue: "Current Value",
+        deleteConfirm: "Delete this entry?",
+        date: "Date",
+        source: "Source",
+        parsing: "Parsing",
+        manual: "Manual",
+        metrics: {
+          rating: "Rating",
+          reviews: "Reviews",
+          photos: "Photos",
+          news: "News"
+        },
+        addModal: {
+          title: "Add metrics manually",
+          date: "Date",
+          rating: "Rating (1-5)",
+          reviews: "Number of reviews",
+          photos: "Number of photos",
+          news: "Number of news",
+          cancel: "Cancel",
+          save: "Save"
+        }
+      },
+      growthPlan: {
+        title: "Your Path to Success",
+        subtitle: "Complete all growth stages and reach the top!",
+        stage: "Stage",
+        active: "Active",
+        unlock: "Unlock",
+        unlocking: "Unlocking...",
+        target: "Stage Goal:",
+        tasks: "Tasks",
+        progress: "Stage Progress",
+        almostDone: "🔥 Almost there! You are {percent}% of the way to completing the stage!",
+        goodJob: "💪 Great job! Keep it up!",
+        goodStart: "🚀 Good start! Every task brings you closer to the goal!",
+        completed: "✅ Stage completed! Congratulations on the achievement!",
+        noStages: "No growth stages available for this business type",
+        contactAdmin: "Contact administrator to configure growth plan"
+      },
       recommendations: "Recommendations",
       wizard: {
         button: "Business Optimization Wizard",

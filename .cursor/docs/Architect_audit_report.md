@@ -2159,3 +2159,62 @@ Implement network-specific UI adaptations for master network accounts in 3 phase
 - TypeScript errors for missing `networkNotice` localization keys (non-blocking, fallbacks provided)
 - Could add refresh mechanism for network stats
 
+
+### 2026-01-19 - Исправление проблем с переводом (i18n)
+
+#### Current Task
+Устранение hardcoded строк (русский текст) в компонентах интерфейса для обеспечения полноценной поддержки многоязычности (9 языков).
+
+#### Architecture Decision
+- **Принято решение:** Систематическая замена жестко закодированных строк на вызовы функции перевода `t()`.
+- **Локализация:** Добавлены полные ключи для Russian (`ru.ts`) и English (`en.ts`) как основных языков. Остальные языки будут использовать английский fallack или требуют до-перевода.
+- **Структура ключей:** Иерархическая структура `dashboard.card.*`, `dashboard.finance.*`, `dashboard.settings.*` для логической группировки.
+
+#### Files to Modify
+- `frontend/src/i18n/locales/ru.ts` - добавлено ~150 ключей
+- `frontend/src/i18n/locales/en.ts` - добавлено ~150 ключей
+- `frontend/src/components/ReviewReplyAssistant.tsx` - полный рефакторинг UI текстов
+- `frontend/src/components/NewsGenerator.tsx` - полный рефакторинг UI текстов
+- `frontend/src/components/FinancialMetrics.tsx` - полный рефакторинг UI текстов
+- `frontend/src/pages/dashboard/ProgressPage.tsx` - заголовки разделов
+- `frontend/src/components/WABACredentials.tsx` - настройки WhatsApp
+- `frontend/src/components/TelegramBotCredentials.tsx` - настройки Telegram
+- `frontend/src/components/AIAgentsManagement.tsx` - настройки агентов
+
+#### Trade-offs & Decisions
+- **Скорость vs Охват языков:** Сфокусировались на полном покрытии UI ключами в RU/EN. Остальные 7 языков требуют обновления файлов локализации (сейчас там могут быть пропуски).
+- **Generic vs Specific:** В некоторых админских компонентах (Agents) использованы существующие общие ключи, чтобы не раздувать файлы локализации ради редких текстов.
+- **Безопасность изменений:** Использована автоматизированная замена (sed) для минимизации опечаток в больших файлах.
+
+#### Dependencies
+- Нет новых npm зависимостей.
+- Требуется пересборка фронтенда (`npm run build`).
+
+#### Status
+
+---
+
+## 2026-01-19 - Debugging White Screen & Fix Import Warnings
+
+### Current Task
+Diagnose and fix the "White Screen" issue occurring after deployment. The app loads but renders a blank screen.
+
+### Architecture Decision
+- **Enhanced Diagnostics**: Deployed an upgraded `ErrorBoundary` that captures and displays runtime errors with stack traces directly in the UI (replacing the generic "blank" state).
+- **Import Fix**: Refactored `AIAgentSettings.tsx` to use **static import** of `newAuth` instead of dynamic `await import()`.
+  - **Reason**: Vite emitted warnings about `auth_new.ts` being both statically and dynamically imported. This ambiguity can cause module loading race conditions or undefined behaviors in production builds, potentially crashing the app at startup.
+
+### Files to Modify
+- `frontend/src/components/ErrorBoundary.tsx` - improved error visualization (red box with details).
+- `frontend/src/components/AIAgentSettings.tsx` - changed dynamic import to static.
+
+### Trade-offs & Decisions
+- **Static Import**: Increases initial bundle size slightly (vs dynamic), but guarantees `newAuth` is initialized consistently with `AIAgentsManagement`. Stability > micro-optimization of bundle size here.
+- **Visible Errors**: Exposing stack traces in production is generally bad practice, but necessary for this specific debugging session where SSH access logs are insufficient to see client-side failures. Will be reverted after fix.
+
+### Dependencies
+- None.
+
+### Status
+- [ ] In Progress (Waiting for user verification)
+

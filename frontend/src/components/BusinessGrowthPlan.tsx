@@ -27,6 +27,7 @@ interface BusinessGrowthPlanProps {
 }
 
 export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ businessId }) => {
+    const { t } = useLanguage();
     const [stages, setStages] = useState<GrowthStage[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
@@ -130,7 +131,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
         return (
             <Card>
                 <CardContent className="p-8 text-center text-gray-500">
-                    Выберите бизнес для просмотра плана роста
+                    {t.dashboard.progress.growthPlan.title}
                 </CardContent>
             </Card>
         );
@@ -141,9 +142,9 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             {/* Header */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 p-8 text-white">
                 <div className="relative z-10">
-                    <h2 className="text-3xl font-bold mb-2">🏆 Ваш Путь к Успеху</h2>
+                    <h2 className="text-3xl font-bold mb-2">🏆 {t.dashboard.progress.growthPlan.title}</h2>
                     <p className="text-white/90 text-lg">
-                        Пройдите все этапы роста и достигните вершины!
+                        {t.dashboard.progress.growthPlan.subtitle}
                     </p>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
@@ -230,11 +231,11 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-1">
                                                     <CardTitle className="text-xl">
-                                                        Этап {stage.stage_number}: {stage.title}
+                                                        {t.dashboard.progress.growthPlan.stage} {stage.stage_number}: {stage.title}
                                                     </CardTitle>
                                                     {isActive && (
                                                         <span className="px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-700">
-                                                            🔥 Активный
+                                                            🔥 {t.dashboard.progress.growthPlan.active}
                                                         </span>
                                                     )}
                                                 </div>
@@ -263,9 +264,9 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                     className="min-w-[120px]"
                                                 >
                                                     {unlockingStage === stage.id ? (
-                                                        <>🔓 Разблокировка...</>
+                                                        <>🔓 {t.dashboard.progress.growthPlan.unlocking}</>
                                                     ) : (
-                                                        <>🔒 Разблокировать</>
+                                                        <>🔒 {t.dashboard.progress.growthPlan.unlock}</>
                                                     )}
                                                 </Button>
                                             ) : (
@@ -298,7 +299,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                 {/* Goal */}
                                                 {stage.goal && (
                                                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                                        <h4 className="font-semibold text-blue-900 mb-2">🎯 Цель этапа:</h4>
+                                                        <h4 className="font-semibold text-blue-900 mb-2">🎯 {t.dashboard.progress.growthPlan.target}</h4>
                                                         <p className="text-blue-800">{stage.goal}</p>
                                                     </div>
                                                 )}
@@ -307,7 +308,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                 {stage.tasks && stage.tasks.length > 0 && (
                                                     <div>
                                                         <h4 className="font-semibold text-gray-900 mb-3">
-                                                            Задачи ({stage.completed_tasks?.length || 0}/{stage.tasks.length}):
+                                                            {t.dashboard.progress.growthPlan.tasks} ({stage.completed_tasks?.length || 0}/{stage.tasks.length}):
                                                         </h4>
                                                         <div className="space-y-2">
                                                             {stage.tasks.map((task) => {
@@ -347,7 +348,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                 {stage.progress_percentage > 0 && (
                                                     <div className="pt-4 border-t">
                                                         <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-sm font-medium text-gray-700">Прогресс этапа</span>
+                                                            <span className="text-sm font-medium text-gray-700">{t.dashboard.progress.growthPlan.progress}</span>
                                                             <span className={`text-sm font-bold ${getProgressColor(stage.progress_percentage)}`}>
                                                                 {stage.progress_percentage}%
                                                             </span>
@@ -368,11 +369,11 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                     <div className="p-4 bg-gradient-to-r from-orange-50 to-pink-50 rounded-lg border border-orange-200">
                                                         <p className="text-orange-800 font-medium">
                                                             {stage.progress_percentage >= 75 ? (
-                                                                <>🔥 Почти готово! Вы {stage.progress_percentage}% пути к завершению этапа!</>
+                                                                <>{t.dashboard.progress.growthPlan.almostDone.replace('{percent}', String(stage.progress_percentage))}</>
                                                             ) : stage.progress_percentage >= 50 ? (
-                                                                <>💪 Отличная работа! Продолжайте в том же духе!</>
+                                                                <>{t.dashboard.progress.growthPlan.goodJob}</>
                                                             ) : (
-                                                                <>🚀 Хорошее начало! Каждая задача приближает вас к цели!</>
+                                                                <>{t.dashboard.progress.growthPlan.goodStart}</>
                                                             )}
                                                         </p>
                                                     </div>
@@ -382,7 +383,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                 {isCompleted && (
                                                     <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                                                         <p className="text-green-800 font-medium">
-                                                            ✅ Этап завершен! Поздравляем с достижением!
+                                                            {t.dashboard.progress.growthPlan.completed}
                                                         </p>
                                                     </div>
                                                 )}
@@ -400,8 +401,8 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             {stages.length === 0 && (
                 <Card>
                     <CardContent className="p-12 text-center">
-                        <p className="text-gray-500 mb-4">Нет доступных этапов для этого типа бизнеса</p>
-                        <p className="text-sm text-gray-400">Обратитесь к администратору для настройки плана роста</p>
+                        <p className="text-gray-500 mb-4">{t.dashboard.progress.growthPlan.noStages}</p>
+                        <p className="text-sm text-gray-400">{t.dashboard.progress.growthPlan.contactAdmin}</p>
                     </CardContent>
                 </Card>
             )}
