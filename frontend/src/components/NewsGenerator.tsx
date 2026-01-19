@@ -20,7 +20,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [news, setNews] = useState<any[]>([]);
   const [exampleInput, setExampleInput] = useState('');
   const [examples, setExamples] = useState<{id:string, text:string}[]>([]);
-  const { language: interfaceLanguage } = useLanguage();
+  const { language: interfaceLanguage, t } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -174,19 +174,19 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">Новости</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">{ t.dashboard.card.newsGenerator.title}</h2>
       <div className="mb-3">
-        <label className="block text-sm text-gray-600 mb-1">Примеры новостей (до 5)</label>
+        <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.examplesLabel}</label>
         <div className="flex gap-2">
-          <Input value={exampleInput} onChange={(e)=> setExampleInput(e.target.value)} placeholder="Например: Запустили экспресс-маникюр — запись уже открыта" />
-          <Button variant="outline" onClick={addExample}>Добавить</Button>
+          <Input value={exampleInput} onChange={(e)=> setExampleInput(e.target.value)} placeholder={t.dashboard.card.newsGenerator.examplesPlaceholder} />
+          <Button variant="outline" onClick={addExample}>{t.dashboard.card.newsGenerator.addExample}</Button>
         </div>
         {examples.length>0 && (
           <ul className="mt-2 space-y-1">
             {examples.map(e => (
               <li key={e.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">
                 <span className="mr-2 truncate">{e.text}</span>
-                <button className="text-xs text-red-600" onClick={()=> deleteExample(e.id)}>Удалить</button>
+                <button className="text-xs text-red-600" onClick={()=> deleteExample(e.id)}>{t.dashboard.card.newsGenerator.deleteExample}</button>
               </li>
             ))}
           </ul>
@@ -195,11 +195,11 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       <div className="space-y-3 mb-3">
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={useService} onChange={(e)=> { setUseService(e.target.checked); if (e.target.checked) setUseTransaction(false); }} />
-          Сгенерировать новость на основе услуги
+          {t.dashboard.card.newsGenerator.generateFromService}
         </label>
         {useService && (
           <div className="ml-6">
-            <label className="block text-sm text-gray-600 mb-1">Выберите услугу</label>
+            <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.newsGenerator.selectService}</label>
             <select className="border rounded px-2 py-2 w-full" value={serviceId} onChange={(e)=> setServiceId(e.target.value)}>
               <option value="">— выбрать —</option>
               {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -209,7 +209,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={useTransaction} onChange={(e)=> { setUseTransaction(e.target.checked); if (e.target.checked) setUseService(false); }} />
-          Сгенерировать новость на основе выполненной работы (из транзакций)
+          {t.dashboard.card.newsGenerator.generateFromTransaction}
         </label>
         {useTransaction && (
           <div className="ml-6">
@@ -233,7 +233,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
       </div>
       <div className="mb-3">
         <label className="block text-sm text-gray-600 mb-1">Неотформатированная информация (необязательно)</label>
-        <Textarea rows={3} value={rawInfo} onChange={(e)=> setRawInfo(e.target.value)} placeholder="Например: Новый сотрудник, акция, праздник и т.п." />
+        <Textarea rows={3} value={rawInfo} onChange={(e)=> setRawInfo(e.target.value)} placeholder={t.dashboard.card.newsGenerator.transactionPlaceholder} />
       </div>
 
       <div className="mb-3">
@@ -255,12 +255,12 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           {LANGUAGE_OPTIONS.find((l) => l.value === interfaceLanguage)?.label || interfaceLanguage}).
         </p>
       </div>
-      <Button onClick={generate} disabled={loading}>{loading ? 'Генерация…' : 'Сгенерировать новость'}</Button>
+      <Button onClick={generate} disabled={loading}>{loading ? t.dashboard.card.newsGenerator.generating : t.dashboard.card.newsGenerator.generate}</Button>
 
       {generated && (
         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
           <div className="flex items-center justify-between mb-2">
-            <div className="font-medium">Сгенерированный вариант</div>
+            <div className="font-medium">{t.dashboard.card.newsGenerator.result}</div>
             <button 
               onClick={() => setGenerated('')}
               className="text-xs text-red-600 hover:text-red-800 underline"
@@ -296,7 +296,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               {totalItems > itemsPerPage && (
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
                   <div className="text-sm text-gray-600">
-                    Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
+                    {t.dashboard.card.reviewReply.shown} {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -308,7 +308,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       Назад
                     </Button>
                     <span className="px-3 py-1 text-sm text-gray-700">
-                      Страница {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                      {t.dashboard.card.reviewReply.page} {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
                     </span>
                     <Button
                       size="sm"
@@ -360,7 +360,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                         />
                         <div className="mt-2 flex gap-2">
                           {!item.approved && (
-                            <Button size="sm" variant="outline" onClick={()=> approve(item.id)}>Принять</Button>
+                            <Button size="sm" variant="outline" onClick={()=> approve(item.id)}>{t.dashboard.card.newsGenerator.copy}</Button>
                           )}
                           <Button 
                             size="sm" 
@@ -391,7 +391,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               {totalItems > itemsPerPage && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                   <div className="text-sm text-gray-600">
-                    Показано {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
+                    {t.dashboard.card.reviewReply.shown} {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalItems)} из {totalItems}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -403,7 +403,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                       Назад
                     </Button>
                     <span className="px-3 py-1 text-sm text-gray-700">
-                      Страница {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
+                      {t.dashboard.card.reviewReply.page} {currentPage} из {Math.ceil(totalItems / itemsPerPage)}
                     </span>
                     <Button
                       size="sm"
