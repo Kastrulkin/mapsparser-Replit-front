@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -495,7 +496,7 @@ export const AIAgentsManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Управление ИИ агентами</h2>
-          <p className="text-gray-600 mt-1">Настройка агентов для автоматического общения с клиентами</p>
+          <p className="text-gray-600 mt-1">{t.dashboard.settings.subtitle}</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -950,7 +951,7 @@ export const AIAgentsManagement = () => {
                                 ) : (
                                   <>
                                     <Bot className="w-4 h-4" />
-                                    <span className="text-xs font-medium">Агент</span>
+                                    <span className="text-xs font-medium">{t.dashboard.chat.roles.agent}</span>
                                   </>
                                 )}
                               </div>

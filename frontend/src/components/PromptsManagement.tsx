@@ -20,7 +20,7 @@ const PROMPT_TYPES = {
     description: 'Промпт для оптимизации услуг и прайс-листа'
   },
   review_reply: {
-    label: 'Ответы на отзывы',
+    label: t.dashboard.card.reviewReply.title,
     description: 'Промпт для генерации ответов на отзывы'
   },
   news_generation: {
