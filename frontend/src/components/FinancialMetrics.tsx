@@ -181,9 +181,9 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="week">Неделя</SelectItem>
-              <SelectItem value="month">{ t.dashboard.finance.metrics.month}</SelectItem>
-              <SelectItem value="quarter">{ t.dashboard.network.period.quarter}</SelectItem>
-              <SelectItem value="year">{ t.dashboard.network.period.year}</SelectItem>
+              <SelectItem value="month">{t.dashboard.finance.metrics.month}</SelectItem>
+              <SelectItem value="quarter">{t.dashboard.network.period.quarter}</SelectItem>
+              <SelectItem value="year">{t.dashboard.network.period.year}</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={() => loadMetrics()} variant="outline" size="sm">
@@ -196,7 +196,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-600 font-medium">{ t.dashboard.finance.metrics.totalRevenue}</p>
+              <p className="text-sm text-blue-600 font-medium">{t.dashboard.finance.metrics.totalRevenue}</p>
               <p className="text-2xl font-bold text-blue-900">
                 {formatCurrency(metrics.metrics.total_revenue)}
               </p>
@@ -211,7 +211,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-green-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-green-600 font-medium">{ t.dashboard.finance.metrics.totalOrders}</p>
+              <p className="text-sm text-green-600 font-medium">{t.dashboard.finance.metrics.totalOrders}</p>
               <p className="text-2xl font-bold text-green-900">
                 {metrics.metrics.total_orders}
               </p>
@@ -226,7 +226,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-purple-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-purple-600 font-medium">{ t.dashboard.finance.metrics.avgCheck}</p>
+              <p className="text-sm text-purple-600 font-medium">{t.dashboard.finance.metrics.avgCheck}</p>
               <p className="text-2xl font-bold text-purple-900">
                 {formatCurrency(metrics.metrics.average_check)}
               </p>
@@ -244,7 +244,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-orange-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-orange-600 font-medium">{ t.dashboard.finance.metrics.newClients}</p>
+              <p className="text-sm text-orange-600 font-medium">{t.dashboard.finance.metrics.newClients}</p>
               <p className="text-xl font-bold text-orange-900">
                 {metrics.metrics.new_clients}
               </p>
@@ -256,7 +256,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-indigo-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-indigo-600 font-medium">{ t.dashboard.finance.metrics.returningClients}</p>
+              <p className="text-sm text-indigo-600 font-medium">{t.dashboard.finance.metrics.returningClients}</p>
               <p className="text-xl font-bold text-indigo-900">
                 {metrics.metrics.returning_clients}
               </p>
@@ -268,7 +268,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         <div className="bg-pink-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-pink-600 font-medium">{ t.dashboard.finance.metrics.clientRetention}</p>
+              <p className="text-sm text-pink-600 font-medium">{t.dashboard.finance.metrics.clientRetention}</p>
               <p className="text-xl font-bold text-pink-900">
                 {formatPercentage(metrics.metrics.retention_rate)}
               </p>
@@ -283,7 +283,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         {/* Диаграмма по услугам */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
-            💼 Доход по услугам
+            {t.dashboard.finance.metrics.revenueByService}
           </h4>
           {breakdown && breakdown.by_services.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -316,7 +316,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
         {/* Диаграмма по мастерам */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
-            👤 Доход по мастерам
+            {t.dashboard.finance.metrics.revenueByMaster}
           </h4>
           {breakdown && breakdown.by_masters.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
