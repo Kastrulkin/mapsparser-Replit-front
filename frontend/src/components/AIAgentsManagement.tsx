@@ -45,12 +45,13 @@ interface AIAgent {
 }
 
 export const AIAgentsManagement = () => {
+  const { t } = useLanguage();
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [sandboxMessages, setSandboxMessages] = useState<Array<{sender: 'client' | 'agent', content: string}>>([]);
+  const [sandboxMessages, setSandboxMessages] = useState<Array<{ sender: 'client' | 'agent', content: string }>>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
@@ -125,11 +126,11 @@ export const AIAgentsManagement = () => {
     if (typeof workflow === 'string') {
       return workflow;
     }
-    
+
     if (!Array.isArray(workflow)) {
       return '';
     }
-    
+
     // Конвертируем массив стейтов в YAML формат
     return workflow.map((state: any) => {
       let yaml = `- name: ${state.name || ''}\n`;
@@ -137,7 +138,7 @@ export const AIAgentsManagement = () => {
       yaml += `  process_name: ${state.process_name || ''}\n`;
       yaml += `  init_state: ${state.init_state || false}\n`;
       yaml += `  description: >\n    ${(state.description || '').replace(/\n/g, '\n    ')}\n`;
-      
+
       if (state.state_scenarios && Array.isArray(state.state_scenarios) && state.state_scenarios.length > 0) {
         yaml += `  state_scenarios:\n`;
         state.state_scenarios.forEach((scenario: any) => {
@@ -146,7 +147,7 @@ export const AIAgentsManagement = () => {
           yaml += `      description: ${scenario.description || ''}\n`;
         });
       }
-      
+
       if (state.available_tools && typeof state.available_tools === 'object') {
         yaml += `  available_tools:\n`;
         Object.entries(state.available_tools).forEach(([key, tools]: [string, any]) => {
@@ -158,13 +159,13 @@ export const AIAgentsManagement = () => {
           }
         });
       }
-      
+
       return yaml;
     }).join('\n');
   };
 
   const handleEdit = (agent: AIAgent) => {
-    setEditingAgent({ 
+    setEditingAgent({
       ...agent,
       workflow: agent.workflow || [],
       task: agent.task || '',
@@ -200,10 +201,10 @@ export const AIAgentsManagement = () => {
     try {
       const token = await newAuth.getToken();
       const isNew = !editingAgent.id;
-      const url = isNew 
+      const url = isNew
         ? '/api/admin/ai-agents'
         : `/api/admin/ai-agents/${editingAgent.id}`;
-      
+
       const method = isNew ? 'POST' : 'PUT';
 
       const response = await fetch(url, {
@@ -255,18 +256,18 @@ export const AIAgentsManagement = () => {
 
   const handleSandboxSend = async () => {
     if (!editingAgent || !sandboxInput.trim() || sandboxLoading) return;
-    
+
     const clientMessage = sandboxInput.trim();
     setSandboxInput('');
     setSandboxMessages(prev => [...prev, { sender: 'client', content: clientMessage }]);
     setSandboxLoading(true);
-    
+
     try {
       const token = await newAuth.getToken();
       if (!token) {
         throw new Error('Требуется авторизация');
       }
-      
+
       const response = await fetch(`/api/admin/ai-agents/${editingAgent.id}/test`, {
         method: 'POST',
         headers: {
@@ -277,7 +278,7 @@ export const AIAgentsManagement = () => {
           message: clientMessage,
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -295,9 +296,9 @@ export const AIAgentsManagement = () => {
         description: error.message || 'Не удалось получить ответ от агента',
         variant: 'destructive',
       });
-      setSandboxMessages(prev => [...prev, { 
-        sender: 'agent', 
-        content: `Ошибка: ${error.message || 'Не удалось получить ответ'}` 
+      setSandboxMessages(prev => [...prev, {
+        sender: 'agent',
+        content: `Ошибка: ${error.message || 'Не удалось получить ответ'}`
       }]);
     } finally {
       setSandboxLoading(false);
@@ -599,95 +600,95 @@ export const AIAgentsManagement = () => {
                   </>
                 )}
               </TabsList>
-              
+
               <TabsContent value="settings" className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="agent-name">Название</Label>
+                    <Input
+                      id="agent-name"
+                      value={editingAgent.name}
+                      onChange={(e) => setEditingAgent({ ...editingAgent, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="agent-type">Тип</Label>
+                    <select
+                      id="agent-type"
+                      className="w-full px-3 py-2 border rounded-md"
+                      value={editingAgent.type}
+                      onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value })}
+                    >
+                      <option value="marketing">Маркетинговый</option>
+                      <option value="booking">Для записи</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
-                  <Label htmlFor="agent-name">Название</Label>
-                  <Input
-                    id="agent-name"
-                    value={editingAgent.name}
-                    onChange={(e) => setEditingAgent({ ...editingAgent, name: e.target.value })}
+                  <Label htmlFor="agent-description">Описание</Label>
+                  <Textarea
+                    id="agent-description"
+                    value={editingAgent.description}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, description: e.target.value })}
+                    rows={2}
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="agent-type">Тип</Label>
-                  <select
-                    id="agent-type"
-                    className="w-full px-3 py-2 border rounded-md"
-                    value={editingAgent.type}
-                    onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value })}
-                  >
-                    <option value="marketing">Маркетинговый</option>
-                    <option value="booking">Для записи</option>
-                  </select>
+                  <Label htmlFor="agent-identity">Identity (Личность агента)</Label>
+                  <Textarea
+                    id="agent-identity"
+                    value={editingAgent.identity || ''}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, identity: e.target.value })}
+                    placeholder="You are a multilingual digital airport transfer assistant, designed to communicate with passengers."
+                    rows={3}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Определяет личность и роль агента
+                  </p>
                 </div>
-              </div>
 
-              <div>
-                <Label htmlFor="agent-description">Описание</Label>
-                <Textarea
-                  id="agent-description"
-                  value={editingAgent.description}
-                  onChange={(e) => setEditingAgent({ ...editingAgent, description: e.target.value })}
-                  rows={2}
-                />
-              </div>
+                <div>
+                  <Label htmlFor="agent-task">Task (Задачи агента)</Label>
+                  <Textarea
+                    id="agent-task"
+                    value={editingAgent.task || ''}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, task: e.target.value })}
+                    placeholder="##### **Initial Engagement:**&#10;- Greet the user at the beginning&#10;&#10;##### **Answering Questions:**&#10;- You represent..."
+                    rows={8}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Задачи агента в формате Markdown. Используйте ##### для заголовков разделов.
+                  </p>
+                </div>
 
-              <div>
-                <Label htmlFor="agent-identity">Identity (Личность агента)</Label>
-                <Textarea
-                  id="agent-identity"
-                  value={editingAgent.identity || ''}
-                  onChange={(e) => setEditingAgent({ ...editingAgent, identity: e.target.value })}
-                  placeholder="You are a multilingual digital airport transfer assistant, designed to communicate with passengers."
-                  rows={3}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Определяет личность и роль агента
-                </p>
-              </div>
+                <div>
+                  <Label htmlFor="agent-speech-style">Speech Style (Стиль речи)</Label>
+                  <Textarea
+                    id="agent-speech-style"
+                    value={editingAgent.speech_style || ''}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, speech_style: e.target.value })}
+                    placeholder="You engage in conversation in a friendly and clear manner, using emojis..."
+                    rows={4}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Стиль общения агента с клиентами
+                  </p>
+                </div>
 
-              <div>
-                <Label htmlFor="agent-task">Task (Задачи агента)</Label>
-                <Textarea
-                  id="agent-task"
-                  value={editingAgent.task || ''}
-                  onChange={(e) => setEditingAgent({ ...editingAgent, task: e.target.value })}
-                  placeholder="##### **Initial Engagement:**&#10;- Greet the user at the beginning&#10;&#10;##### **Answering Questions:**&#10;- You represent..."
-                  rows={8}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Задачи агента в формате Markdown. Используйте ##### для заголовков разделов.
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="agent-speech-style">Speech Style (Стиль речи)</Label>
-                <Textarea
-                  id="agent-speech-style"
-                  value={editingAgent.speech_style || ''}
-                  onChange={(e) => setEditingAgent({ ...editingAgent, speech_style: e.target.value })}
-                  placeholder="You engage in conversation in a friendly and clear manner, using emojis..."
-                  rows={4}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Стиль общения агента с клиентами
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="agent-workflow">Workflow (Воркфлоу)</Label>
-                <Textarea
-                  id="agent-workflow"
-                  value={typeof editingAgent.workflow === 'string' 
-                    ? editingAgent.workflow 
-                    : (editingAgent.workflow 
-                      ? convertWorkflowToYAML(editingAgent.workflow) 
-                      : '')}
-                  onChange={(e) => setEditingAgent({ ...editingAgent, workflow: e.target.value })}
-                  placeholder={`- name: GreetingState
+                <div>
+                  <Label htmlFor="agent-workflow">Workflow (Воркфлоу)</Label>
+                  <Textarea
+                    id="agent-workflow"
+                    value={typeof editingAgent.workflow === 'string'
+                      ? editingAgent.workflow
+                      : (editingAgent.workflow
+                        ? convertWorkflowToYAML(editingAgent.workflow)
+                        : '')}
+                    onChange={(e) => setEditingAgent({ ...editingAgent, workflow: e.target.value })}
+                    placeholder={`- name: GreetingState
   kind: StateConfig
   process_name: MarketingEngagementProcess
   init_state: true
@@ -703,76 +704,76 @@ export const AIAgentsManagement = () => {
       - ForwardSpeech
       - notify_operator
       - create_booking`}
-                  rows={20}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Определите workflow агента в формате YAML или текста. Доступные tools: <strong>notify_operator</strong> (вызов оператора), <strong>create_booking</strong> (создание бронирования), <strong>send_message</strong> (отправка сообщения клиенту), <strong>get_client_info</strong> (получение информации о клиенте), <strong>get_services</strong> (получение списка услуг), <strong>check_availability</strong> (проверка доступного времени).
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="agent-restrictions">Ограничения</Label>
-                <Textarea
-                  id="agent-restrictions"
-                  value={editingAgent.restrictions.text || ''}
-                  onChange={(e) => setEditingAgent({
-                    ...editingAgent,
-                    restrictions: { text: e.target.value }
-                  })}
-                  placeholder="Например: Не предлагай скидки больше 50%"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Переменные (названия для пользователя)</Label>
-                  <Button variant="outline" size="sm" onClick={addVariable}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить переменную
-                  </Button>
+                    rows={20}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Определите workflow агента в формате YAML или текста. Доступные tools: <strong>notify_operator</strong> (вызов оператора), <strong>create_booking</strong> (создание бронирования), <strong>send_message</strong> (отправка сообщения клиенту), <strong>get_client_info</strong> (получение информации о клиенте), <strong>get_services</strong> (получение списка услуг), <strong>check_availability</strong> (проверка доступного времени).
+                  </p>
                 </div>
-                <div className="space-y-2 border rounded-lg p-4">
-                  {Object.entries(editingAgent.variables).map(([key, value]) => (
-                    <div key={key} className="flex gap-2">
-                      <Input
-                        placeholder="Ключ"
-                        value={key}
-                        disabled
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="Название"
-                        value={value}
-                        onChange={(e) => updateVariable(key, e.target.value)}
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateVariable(key, '')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {Object.keys(editingAgent.variables).length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-2">
-                      Нет переменных. Нажмите "Добавить переменную" для создания.
-                    </p>
-                  )}
+
+                <div>
+                  <Label htmlFor="agent-restrictions">Ограничения</Label>
+                  <Textarea
+                    id="agent-restrictions"
+                    value={editingAgent.restrictions.text || ''}
+                    onChange={(e) => setEditingAgent({
+                      ...editingAgent,
+                      restrictions: { text: e.target.value }
+                    })}
+                    placeholder="Например: Не предлагай скидки больше 50%"
+                    rows={3}
+                  />
                 </div>
-              </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Переменные (названия для пользователя)</Label>
+                    <Button variant="outline" size="sm" onClick={addVariable}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Добавить переменную
+                    </Button>
+                  </div>
+                  <div className="space-y-2 border rounded-lg p-4">
+                    {Object.entries(editingAgent.variables).map(([key, value]) => (
+                      <div key={key} className="flex gap-2">
+                        <Input
+                          placeholder="Ключ"
+                          value={key}
+                          disabled
+                          className="flex-1"
+                        />
+                        <Input
+                          placeholder="Название"
+                          value={value}
+                          onChange={(e) => updateVariable(key, e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateVariable(key, '')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {Object.keys(editingAgent.variables).length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-2">
+                        Нет переменных. Нажмите "Добавить переменную" для создания.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </TabsContent>
-              
+
               {!showCreateDialog && (
                 <TabsContent value="tools" className="py-4">
                   <div className="space-y-4">
                     <div className="text-sm text-gray-600 mb-4">
                       Доступные функции (Tools) для Function Calling в GigaChat. Эти функции автоматически доступны агенту при общении с клиентами.
                     </div>
-                    
+
                     <div className="space-y-4">
                       <Card>
                         <CardHeader>
@@ -798,7 +799,7 @@ export const AIAgentsManagement = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
+
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">create_booking</CardTitle>
@@ -820,7 +821,7 @@ export const AIAgentsManagement = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
+
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">send_message</CardTitle>
@@ -840,7 +841,7 @@ export const AIAgentsManagement = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
+
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">get_client_info</CardTitle>
@@ -863,7 +864,7 @@ export const AIAgentsManagement = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
+
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">get_services</CardTitle>
@@ -886,7 +887,7 @@ export const AIAgentsManagement = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
+
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg">check_availability</CardTitle>
@@ -916,79 +917,77 @@ export const AIAgentsManagement = () => {
                   </div>
                 </TabsContent>
               )}
-              
+
               {!showCreateDialog && (
                 <TabsContent value="sandbox" className="py-4">
-                <div className="space-y-4">
-                  <div className="text-sm text-gray-600 mb-4">
-                    Протестируйте настройки агента. Вы пишете от лица клиента, агент отвечает в соответствии с настройками.
-                  </div>
-                  
-                  <ScrollArea className="h-96 border rounded-lg p-4 mb-4">
-                    <div className="space-y-4">
-                      {sandboxMessages.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8">
-                          Начните диалог, отправив сообщение
-                        </div>
-                      ) : (
-                        sandboxMessages.map((msg, idx) => (
-                          <div
-                            key={idx}
-                            className={`flex ${
-                              msg.sender === 'client' ? 'justify-end' : 'justify-start'
-                            }`}
-                          >
-                            <div
-                              className={`max-w-[80%] rounded-lg p-3 ${
-                                msg.sender === 'client'
-                                  ? 'bg-blue-100 text-blue-900'
-                                  : 'bg-gray-100 text-gray-900'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 mb-1">
-                                {msg.sender === 'client' ? (
-                                  <span className="text-xs font-medium">Вы (клиент)</span>
-                                ) : (
-                                  <>
-                                    <Bot className="w-4 h-4" />
-                                    <span className="text-xs font-medium">{t.dashboard.chat.roles.agent}</span>
-                                  </>
-                                )}
-                              </div>
-                              <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
-                            </div>
-                          </div>
-                        ))
-                      )}
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-600 mb-4">
+                      Протестируйте настройки агента. Вы пишете от лица клиента, агент отвечает в соответствии с настройками.
                     </div>
-                  </ScrollArea>
-                  
-                  <div className="flex gap-2">
-                    <Input
-                      value={sandboxInput}
-                      onChange={(e) => setSandboxInput(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSandboxSend();
-                        }
-                      }}
-                      placeholder="Введите сообщение от лица клиента..."
-                      disabled={sandboxLoading}
-                    />
-                    <Button
-                      onClick={handleSandboxSend}
-                      disabled={sandboxLoading || !sandboxInput.trim() || !editingAgent}
-                    >
-                      {sandboxLoading ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                    </Button>
+
+                    <ScrollArea className="h-96 border rounded-lg p-4 mb-4">
+                      <div className="space-y-4">
+                        {sandboxMessages.length === 0 ? (
+                          <div className="text-center text-gray-500 py-8">
+                            Начните диалог, отправив сообщение
+                          </div>
+                        ) : (
+                          sandboxMessages.map((msg, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex ${msg.sender === 'client' ? 'justify-end' : 'justify-start'
+                                }`}
+                            >
+                              <div
+                                className={`max-w-[80%] rounded-lg p-3 ${msg.sender === 'client'
+                                    ? 'bg-blue-100 text-blue-900'
+                                    : 'bg-gray-100 text-gray-900'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  {msg.sender === 'client' ? (
+                                    <span className="text-xs font-medium">Вы (клиент)</span>
+                                  ) : (
+                                    <>
+                                      <Bot className="w-4 h-4" />
+                                      <span className="text-xs font-medium">{t.dashboard.chat.roles.agent}</span>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+
+                    <div className="flex gap-2">
+                      <Input
+                        value={sandboxInput}
+                        onChange={(e) => setSandboxInput(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSandboxSend();
+                          }
+                        }}
+                        placeholder="Введите сообщение от лица клиента..."
+                        disabled={sandboxLoading}
+                      />
+                      <Button
+                        onClick={handleSandboxSend}
+                        disabled={sandboxLoading || !sandboxInput.trim() || !editingAgent}
+                      >
+                        {sandboxLoading ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </TabsContent>
+                </TabsContent>
               )}
             </Tabs>
 
