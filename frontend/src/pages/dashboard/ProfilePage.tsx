@@ -3,8 +3,10 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
-import { Network, MapPin } from 'lucide-react';
+import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, Trophy } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { cn } from '@/lib/utils';
+import { DESIGN_TOKENS } from '@/lib/design-tokens';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
@@ -433,139 +435,202 @@ export const ProfilePage = () => {
   const businessTypeOptions = Object.keys(t.dashboard.profile.businessTypes);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.profile.title}</h1>
-        <p className="text-gray-600 mt-1">{t.dashboard.profile.subtitle}</p>
+    <div className="space-y-8 max-w-7xl mx-auto pb-10">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+          <User className="w-8 h-8 text-primary" />
+          {t.dashboard.profile.title}
+        </h1>
+        <p className="text-gray-500 text-lg ml-11">{t.dashboard.profile.subtitle}</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+        <div className="bg-emerald-50/80 backdrop-blur-sm border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
           {success}
         </div>
       )}
 
       {/* Заполненность профиля */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-sm text-gray-700">{t.dashboard.profile.completion}</span>
-          <span className="text-sm font-medium text-orange-600">{profileCompletion}%</span>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white shadow-xl">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+          <Trophy className="w-32 h-32" />
         </div>
-        <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
-          <div
-            className={`h-3 rounded ${profileCompletion >= 80 ? 'bg-green-500' :
-              profileCompletion >= 50 ? 'bg-yellow-500' :
-                'bg-orange-500'
-              }`}
-            style={{ width: `${profileCompletion}%` }}
-          />
+        <div className="relative z-10 flex items-center gap-6">
+          <div className="relative w-20 h-20 shrink-0">
+            <svg className="w-full h-full transform -rotate-90">
+              <circle
+                cx="40"
+                cy="40"
+                r="36"
+                stroke="currentColor"
+                strokeWidth="8"
+                fill="transparent"
+                className="text-blue-500/30"
+              />
+              <circle
+                cx="40"
+                cy="40"
+                r="36"
+                stroke="currentColor"
+                strokeWidth="8"
+                fill="transparent"
+                strokeDasharray={226}
+                strokeDashoffset={226 - (226 * profileCompletion) / 100}
+                className="text-white transition-all duration-1000 ease-out"
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center font-bold text-xl">
+              {profileCompletion}%
+            </span>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-xl font-bold mb-1">{t.dashboard.profile.completion}</h3>
+            <p className="text-blue-100 text-sm max-w-md">
+              {profileCompletion === 100
+                ? "Excellent! Your profile is fully optimized."
+                : "Complete your profile to unlock full potential and trust."}
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Профиль пользователя */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {t.dashboard.profile.userProfile}
-            {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
-              <span className="ml-2 text-sm font-normal text-gray-500">
-                {t.dashboard.profile.owner}
-              </span>
-            )}
-          </h2>
+      <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+              <User className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">
+                {t.dashboard.profile.userProfile}
+              </h2>
+              {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
+                <span className="text-sm font-medium text-gray-500">
+                  {t.dashboard.profile.owner}
+                </span>
+              )}
+            </div>
+          </div>
+
           {!editMode && currentBusiness && currentBusiness.owner_id === user?.id && (
-            <Button onClick={() => setEditMode(true)}>{t.dashboard.profile.edit}</Button>
+            <Button onClick={() => setEditMode(true)} variant="outline" className="gap-2">
+              <Edit2 className="w-4 h-4" />
+              {t.dashboard.profile.edit}
+            </Button>
           )}
           {currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id && (
-            <span className="text-sm text-gray-500">{t.dashboard.profile.notEditable}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
+              <ShieldCheck className="w-4 h-4" />
+              {t.dashboard.profile.notEditable}
+            </div>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.email}</label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Mail className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.email}
+            </label>
             <input
               type="email"
               value={form.email}
               disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50/50 text-gray-500 font-medium"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.name}</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <User className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.name}
+            </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className={cn(
+                "w-full px-4 py-2.5 border rounded-xl transition-all duration-200",
+                editMode ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
+              )}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.phone}</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Phone className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.phone}
+            </label>
             <input
               type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               disabled={!editMode || (currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className={cn(
+                "w-full px-4 py-2.5 border rounded-xl transition-all duration-200",
+                editMode ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
+              )}
             />
           </div>
         </div>
         {editMode && (
-          <div className="mt-4 flex justify-end">
-            <div className="flex gap-2">
-              <Button onClick={handleUpdateProfile}>{t.dashboard.profile.save}</Button>
-              <Button onClick={() => setEditMode(false)} variant="outline">{t.dashboard.profile.cancel}</Button>
-            </div>
+          <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-gray-100">
+            <Button onClick={() => setEditMode(false)} variant="ghost">{t.dashboard.profile.cancel}</Button>
+            <Button onClick={handleUpdateProfile} className="bg-blue-600 hover:bg-blue-700">{t.dashboard.profile.save}</Button>
           </div>
         )}
       </div>
 
       {/* Предупреждение, если бизнес не выбран */}
       {!currentBusinessId && businesses && businesses.length > 1 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                {t.dashboard.profile.noBusinessSelected}
-              </h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>
-                  {t.dashboard.profile.selectBusinessToSave}
-                </p>
-                {businesses && businesses.length > 0 && (
-                  <p className="mt-1">
-                    {t.dashboard.profile.availableBusinesses} {businesses.length}. {t.dashboard.profile.chooseOne}
-                  </p>
-                )}
-              </div>
-            </div>
+        <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100 flex gap-4">
+          <div className="p-3 bg-amber-100 rounded-full h-fit">
+            <AlertTriangle className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-amber-900 mb-1">
+              {t.dashboard.profile.noBusinessSelected}
+            </h3>
+            <p className="text-amber-800 mb-2">
+              {t.dashboard.profile.selectBusinessToSave}
+            </p>
+            {businesses && businesses.length > 0 && (
+              <p className="text-sm font-medium text-amber-700">
+                {t.dashboard.profile.availableBusinesses} {businesses.length}. {t.dashboard.profile.chooseOne}
+              </p>
+            )}
           </div>
         </div>
       )}
 
       {/* Информация о бизнесе */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            {t.dashboard.profile.businessInfo}
-            {isNetwork && (
-              <span className="text-sm font-normal text-gray-500 bg-orange-50 px-2 py-1 rounded-md border border-orange-200">
-                (сеть)
-              </span>
-            )}
-          </h2>
+      <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                {t.dashboard.profile.businessInfo}
+                {isNetwork && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                    <Network className="w-3 h-3" />
+                    Network
+                  </span>
+                )}
+              </h2>
+            </div>
+          </div>
+
           <div className="flex gap-2">
             {user?.is_superadmin && currentBusinessId && !editClientInfo && (
               <Button
@@ -599,34 +664,49 @@ export const ProfilePage = () => {
                   }
                 }}
                 disabled={sendingCredentials}
+                className="gap-2"
               >
+                <Mail className="w-4 h-4" />
                 {sendingCredentials ? t.dashboard.profile.sending : t.dashboard.profile.sendCredentials}
               </Button>
             )}
             {!editClientInfo && (
-              <Button onClick={() => setEditClientInfo(true)}>{t.dashboard.profile.edit}</Button>
+              <Button onClick={() => setEditClientInfo(true)} variant="outline" className="gap-2">
+                <Edit2 className="w-4 h-4" />
+                {t.dashboard.profile.edit}
+              </Button>
             )}
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.businessName}</label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.businessName}
+            </label>
             <input
               type="text"
               value={clientInfo.businessName}
               onChange={(e) => setClientInfo({ ...clientInfo, businessName: e.target.value })}
               disabled={!editClientInfo}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className={cn(
+                "w-full px-4 py-2.5 border rounded-xl transition-all duration-200",
+                editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
+              )}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.businessType}</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.businessType}
+            </label>
             {editClientInfo ? (
               <Select
                 value={clientInfo.businessType || "beauty_salon"}
                 onValueChange={(v) => setClientInfo({ ...clientInfo, businessType: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder={t.dashboard.profile.selectType} />
                 </SelectTrigger>
                 <SelectContent>
@@ -642,36 +722,48 @@ export const ProfilePage = () => {
                 type="text"
                 value={clientInfo.businessType ? getBusinessTypeLabel(clientInfo.businessType) : ''}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50/50 text-gray-500"
                 readOnly
                 placeholder="-"
               />
             )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.address}</label>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.address}
+            </label>
             <input
               type="text"
               value={clientInfo.address}
               onChange={(e) => setClientInfo({ ...clientInfo, address: e.target.value })}
               disabled={!editClientInfo}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className={cn(
+                "w-full px-4 py-2.5 border rounded-xl transition-all duration-200",
+                editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
+              )}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.profile.workingHours}</label>
-            <div className="bg-white rounded-lg border border-gray-200 p-3 mb-2">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.workingHours}
+            </label>
+            <div className={cn(
+              "border rounded-xl p-3",
+              editClientInfo ? "border-gray-300 bg-white" : "border-gray-200 bg-gray-50/50"
+            )}>
               <input
                 type="text"
                 value={clientInfo.workingHours}
                 onChange={(e) => setClientInfo({ ...clientInfo, workingHours: e.target.value })}
                 disabled={!editClientInfo}
-                className="w-full text-base font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none"
+                className="w-full text-base font-medium text-gray-900 bg-transparent border-0 p-0 focus:outline-none placeholder:text-gray-400"
                 placeholder={t.dashboard.profile.workingHoursPlaceholder}
               />
             </div>
             {editClientInfo && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {[
                   { label: t.dashboard.profile.workSchedule.weekdays, val: 'будни 9:00-21:00' },
                   { label: t.dashboard.profile.workSchedule.daily, val: 'ежедневно 9:00-21:00' },
@@ -688,7 +780,7 @@ export const ProfilePage = () => {
                       newValue += option.val;
                       setClientInfo({ ...clientInfo, workingHours: newValue });
                     }}
-                    className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
                   >
                     + {option.label}
                   </button>
@@ -699,9 +791,12 @@ export const ProfilePage = () => {
         </div>
 
         {/* Секция ссылок на карты */}
-        <div className="mt-6 border-t pt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">{t.dashboard.profile.mapLinks}</label>
-          <div className="space-y-3">
+        <div className="mt-8 pt-8 border-t border-gray-100">
+          <label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+            <MapPin className="w-4 h-4 text-gray-400" />
+            {t.dashboard.profile.mapLinks}
+          </label>
+          <div className="space-y-4">
             {clientInfo.mapLinks.map((link, index) => {
               const getMapServiceName = (url: string) => {
                 if (!url) return null;
@@ -717,7 +812,7 @@ export const ProfilePage = () => {
               const serviceName = getMapServiceName(link.url);
 
               return (
-                <div key={index} className="flex gap-2 items-center">
+                <div key={index} className="flex gap-3 items-center group">
                   <div className="relative flex-1">
                     <input
                       type="text"
@@ -728,25 +823,29 @@ export const ProfilePage = () => {
                         setClientInfo({ ...clientInfo, mapLinks: newLinks });
                       }}
                       disabled={!editClientInfo}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md pr-24" // Added padding for badge
+                      className={cn(
+                        "w-full px-4 py-2.5 border rounded-xl pr-28 transition-all",
+                        editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100" : "border-gray-200 bg-gray-50/50"
+                      )}
                       placeholder={t.dashboard.profile.pasteLink}
                     />
                     {serviceName && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200 pointer-events-none">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200 pointer-events-none shadow-sm">
                         {serviceName}
                       </span>
                     )}
                   </div>
                   {editClientInfo && (
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => {
                         const newLinks = clientInfo.mapLinks.filter((_, i) => i !== index);
                         setClientInfo({ ...clientInfo, mapLinks: newLinks });
                       }}
-                      className="text-red-500 hover:text-red-700 shrink-0"
+                      className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl"
                     >
-                      ✕
+                      <span className="text-xl">×</span>
                     </Button>
                   )}
                 </div>
@@ -759,7 +858,7 @@ export const ProfilePage = () => {
                   ...clientInfo,
                   mapLinks: [...clientInfo.mapLinks, { url: '' }]
                 })}
-                className="w-full dashed border-2"
+                className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 py-6 rounded-xl"
               >
                 + {t.dashboard.profile.addLink}
               </Button>
@@ -768,12 +867,17 @@ export const ProfilePage = () => {
         </div>
 
         {editClientInfo && (
-          <div className="mt-6 flex justify-end gap-2">
-            <Button onClick={handleSaveClientInfo} disabled={savingClientInfo}>
-              {savingClientInfo ? t.dashboard.profile.sending : t.dashboard.profile.save}
-            </Button>
-            <Button onClick={() => setEditClientInfo(false)} variant="outline">
+          <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-gray-100">
+            <Button onClick={() => setEditClientInfo(false)} variant="ghost">
               {t.dashboard.profile.cancel}
+            </Button>
+            <Button onClick={handleSaveClientInfo} disabled={savingClientInfo} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]">
+              {savingClientInfo ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                  {t.dashboard.profile.sending}...
+                </span>
+              ) : t.dashboard.profile.save}
             </Button>
           </div>
         )}
@@ -781,31 +885,41 @@ export const ProfilePage = () => {
 
       {/* Точки сети */}
       {networkLocations.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t.dashboard.profile.networkLocations}</h2>
-          <div className="grid grid-cols-1 gap-4">
+        <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">
+              <Network className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">{t.dashboard.profile.networkLocations}</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {networkLocations.map((loc) => (
-              <div key={loc.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="mt-1 bg-white p-2 rounded-full border border-gray-200">
-                    <MapPin className="w-5 h-5 text-gray-500" />
+              <div key={loc.id} className="group flex items-center justify-between p-5 bg-white/50 hover:bg-white rounded-xl border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 bg-white p-2.5 rounded-full border border-gray-100 shadow-sm text-purple-600">
+                    <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-medium text-gray-900">{loc.name}</div>
-                    {loc.address && <div className="text-sm text-gray-500 mt-0.5">{loc.address}</div>}
+                    <div className="font-bold text-gray-900 text-lg group-hover:text-purple-700 transition-colors">{loc.name}</div>
+                    {loc.address && <div className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 block" /> {loc.address}
+                    </div>}
                     {loc.id === currentBusinessId && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-2">
-                        Текущий
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mt-3">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Current
                       </span>
                     )}
                   </div>
                 </div>
                 {loc.id !== currentBusinessId && onBusinessChange && (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => onBusinessChange(loc.id)}
+                    className="text-gray-400 hover:text-purple-600 hover:bg-purple-50"
                   >
-                    {t.dashboard.profile.goToLocation}
+                    {t.dashboard.profile.goToLocation} →
                   </Button>
                 )}
               </div>

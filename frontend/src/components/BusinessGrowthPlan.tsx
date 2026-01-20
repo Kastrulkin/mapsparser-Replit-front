@@ -24,6 +24,7 @@ interface GrowthTask {
     link_url?: string;
     link_text?: string;
     is_auto_verifiable?: boolean;
+    is_completed?: boolean;
 }
 
 interface GrowthStage {
@@ -35,10 +36,8 @@ interface GrowthStage {
     expected_result: string;
     duration: string;
     tasks: GrowthTask[];
-    is_unlocked: boolean;
+    status: 'completed' | 'active' | 'unlocked' | 'locked';
     progress_percentage: number;
-    completed_tasks: number[];
-    unlocked_at: string | null;
     completed_at: string | null;
 }
 
@@ -63,12 +62,12 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
         if (!businessId) return;
         try {
             setLoading(true);
-            const data = await newAuth.makeRequest(`/business/${businessId}/stage-progress`, { method: 'GET' });
+            const data = await newAuth.makeRequest(`/business/${businessId}/stages`, { method: 'GET' });
             setStages(data.stages || []);
 
             // Авто-раскрываем текущий активный этап
             const activeStage = data.stages?.find((s: GrowthStage) =>
-                s.is_unlocked && s.progress_percentage > 0 && s.progress_percentage < 100
+                s.status === 'active'
             );
             if (activeStage) {
                 setExpandedStages(new Set([activeStage.id]));
@@ -93,7 +92,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             const translatedText = stageTranslations.tasks?.[idx];
             return {
                 ...task,
-                text: typeof translatedText === 'string' ? translatedText : task.text
+                text: typeof translatedText === 'string' ? translatedText : task.text,
             };
         });
 
@@ -114,36 +113,15 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             newExpanded.delete(stageId);
             newExpanded.add(stageId);
         }
+        else {
+            newExpanded.add(stageId);
+        }
         setExpandedStages(newExpanded);
     };
 
     const unlockStage = async (stageId: string) => {
-        if (!businessId) return;
-        try {
-            setUnlockingStage(stageId);
-            await newAuth.makeRequest(`/business/${businessId}/stage-progress/${stageId}/unlock`, {
-                method: 'POST'
-            });
-            await loadStageProgress();
-            setExpandedStages(new Set([stageId]));
-        } catch (error) {
-            console.error('Error unlocking stage:', error);
-        } finally {
-            setUnlockingStage(null);
-        }
-    };
-
-    const toggleTask = async (stageId: string, taskNumber: number) => {
-        if (!businessId) return;
-        try {
-            await newAuth.makeRequest(`/business/${businessId}/stage-progress/${stageId}/complete-task`, {
-                method: 'POST',
-                body: JSON.stringify({ task_number: taskNumber })
-            });
-            await loadStageProgress();
-        } catch (error) {
-            console.error('Error toggling task:', error);
-        }
+        // Unlock logic is now mostly backend driven or wizard driven.
+        // Keep simple toggle for local UI state if needed, but primarily reliance on backend.
     };
 
     const getProgressColor = (percentage: number): string => {
@@ -156,14 +134,6 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
         if (percentage >= 100) return 'bg-green-500';
         if (percentage >= 50) return 'bg-orange-500';
         return 'bg-gray-400';
-    };
-
-    // Определяем статус этапа: completed, active, unlocked, locked
-    const getStageStatus = (stage: GrowthStage, index: number): 'completed' | 'active' | 'unlocked' | 'locked' => {
-        if (stage.progress_percentage >= 100) return 'completed';
-        if (stage.is_unlocked && stage.progress_percentage > 0) return 'active';
-        if (stage.is_unlocked) return 'unlocked';
-        return 'locked';
     };
 
     if (loading) {
@@ -199,6 +169,15 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                     <p className="text-white/90 text-lg pl-11">
                         {t.dashboard.progress.growthPlan.subtitle}
                     </p>
+                    <Button
+                        onClick={() => loadStageProgress()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-4 ml-11 bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-md"
+                    >
+                        <Zap className="w-4 h-4 mr-2" />
+                        Обновить прогресс
+                    </Button>
                 </div>
                 {/* Decorative circles */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -209,11 +188,10 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             <div className="space-y-4">
                 {stages.map((dbStage, index) => {
                     const stage = translateStage(dbStage);
-                    const status = getStageStatus(stage, index);
                     const isExpanded = expandedStages.has(stage.id);
-                    const isCompleted = status === 'completed';
-                    const isActive = status === 'active';
-                    const isLocked = status === 'locked';
+                    const isCompleted = stage.status === 'completed';
+                    const isActive = stage.status === 'active';
+                    const isLocked = stage.status === 'locked';
 
                     return (
                         <motion.div
@@ -245,7 +223,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                             <CheckCircle2 className="h-6 w-6 text-green-600" />
                                                         </div>
                                                     </motion.div>
-                                                ) : isActive || stage.is_unlocked ? (
+                                                ) : isActive || stage.status !== 'locked' ? (
                                                     <div className="relative w-16 h-16">
                                                         {/* Progress Ring */}
                                                         <svg className="transform -rotate-90 w-16 h-16">
@@ -325,17 +303,12 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                         <div className="flex items-center gap-2 ml-4">
                                             {isLocked ? (
                                                 <Button
-                                                    onClick={() => unlockStage(stage.id)}
-                                                    disabled={unlockingStage === stage.id}
+                                                    disabled={true}
                                                     variant="outline"
                                                     size="sm"
                                                     className="min-w-[120px] bg-white/50 backdrop-blur-sm"
                                                 >
-                                                    {unlockingStage === stage.id ? (
-                                                        <><Unlock className="w-4 h-4 mr-2 animate-pulse" /> {t.dashboard.progress.growthPlan.unlocking}</>
-                                                    ) : (
-                                                        <><Lock className="w-4 h-4 mr-2" /> {t.dashboard.progress.growthPlan.unlock}</>
-                                                    )}
+                                                    <Lock className="w-4 h-4 mr-2" /> {t.dashboard.progress.growthPlan.unlock}
                                                 </Button>
                                             ) : (
                                                 <Button
@@ -377,18 +350,19 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                 {stage.tasks && stage.tasks.length > 0 && (
                                                     <div>
                                                         <h4 className="font-semibold text-gray-900 mb-3">
-                                                            {t.dashboard.progress.growthPlan.tasks} ({stage.completed_tasks?.length || 0}/{stage.tasks.length}):
+                                                            {t.dashboard.progress.growthPlan.tasks} ({stage.tasks.filter(t => t.is_completed).length}/{stage.tasks.length}):
                                                         </h4>
                                                         <div className="space-y-2">
                                                             {stage.tasks.map((task) => {
-                                                                const isTaskCompleted = stage.completed_tasks?.includes(task.number);
+                                                                const isTaskCompleted = task.is_completed;
                                                                 return (
                                                                     <motion.div
                                                                         key={task.number}
                                                                         whileHover={{ scale: 1.01, x: 4 }}
-                                                                        whileTap={{ scale: 0.99 }}
-                                                                        className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors group"
-                                                                        onClick={() => toggleTask(stage.id, task.number)}
+                                                                        className={cn(
+                                                                            "flex items-center justify-between p-3 rounded-lg transition-colors group",
+                                                                            isTaskCompleted ? "bg-green-50/50" : "hover:bg-gray-50"
+                                                                        )}
                                                                     >
                                                                         <div className="flex items-start space-x-3 flex-1">
                                                                             <div className="mt-0.5">

@@ -39,6 +39,12 @@ npm run build
 echo "📊 Checking build output..."
 ls -lh dist/assets/index-*.js | tail -1
 
+# Copy to Web Root
+echo "🚀 Publishing to Nginx..."
+rm -rf /var/www/html/*
+cp -r dist/* /var/www/html/
+
+
 # 3. Populate Content
 echo "📚 Populating Yandex Growth Content..."
 cd ..

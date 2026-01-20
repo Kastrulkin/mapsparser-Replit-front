@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, ChevronDown, ChevronUp, Bot, Zap, Circle } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
+import { cn } from '@/lib/utils';
 
 interface AIAgentSettingsProps {
   businessId: string | null;
@@ -189,7 +190,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   const handleSave = async () => {
     if (!businessId) {
       toast({
-        title: t.error,
+        title: t.common.error,
         description: t.dashboard.settings.telegram.selectBusiness,
         variant: 'destructive',
       });
@@ -200,7 +201,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     try {
       const token = await newAuth.getToken();
       if (!token) {
-        toast({ title: t.error, description: t.error, variant: 'destructive' });
+        toast({ title: t.common.error, description: t.common.error, variant: 'destructive' });
         return;
       }
 
@@ -219,12 +220,12 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       const data = await response.json();
 
       if (response.ok) {
-        toast({ title: t.success, description: t.dashboard.settings.ai.saved });
+        toast({ title: t.common.success, description: t.dashboard.settings.ai.saved });
       } else {
-        toast({ title: t.error, description: data.error || t.error, variant: 'destructive' });
+        toast({ title: t.common.error, description: data.error || t.common.error, variant: 'destructive' });
       }
     } catch (error) {
-      toast({ title: t.error, description: t.error, variant: 'destructive' });
+      toast({ title: t.common.error, description: t.common.error, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -235,7 +236,11 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   return (
     <div className="space-y-6">
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8 shadow-2xl">
+      <div className={cn(
+        "relative overflow-hidden rounded-2xl shadow-xl",
+        "bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900", // Keep the dark theme for this hero card as it looks good
+        "p-8"
+      )}>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40"></div>
         <div className="relative z-10">
           <div className="flex items-center justify-between">

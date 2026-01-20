@@ -2545,3 +2545,66 @@ Enhance the UI/UX of the "Growth Plan" using professional design standards (glas
 
 ### Status
 - [x] Completed
+
+## 2026-01-20 - Fix Deployment Script (UI Not Updating)
+
+### Current Task
+The UI was not updating on the server because the accumulated build artifacts in `frontend/dist` were not being copied to the Nginx web root `/var/www/html`.
+
+### Architecture Decision
+Updated `deploy_network_health.sh` to explicitly clean and copy the new build to the web root.
+
+### Files to Modify
+- `deploy_network_health.sh` - added `cp -r dist/* /var/www/html/`
+
+### Status
+- [x] Completed
+
+### Fix Database Population
+The `populate_yandex_growth.py` script failed because of Foreign Key constraints.
+- Updated script to delete `GrowthTasks` before deleting `GrowthStages`.
+
+### Status
+- [x] Completed
+
+## 2026-01-20 - Interactive Growth Plan
+
+### Current Task
+Make the Growth Stages interactive so checks (Rating 4.5, 15 Reviews) are verified automatically against real data.
+
+### Architecture Decision
+- **Safe Read-Only Logic**: The check logic runs on-the-fly in `get_business_stages` API.
+- **Frontend**: Updated `BusinessGrowthPlan.tsx` to show green checkmarks ✅ for completed tasks.
+
+### Files to Modify
+- `src/api/growth_api.py` - Added `check_task_status` logic.
+- `frontend/src/components/BusinessGrowthPlan.tsx` - Added visual completion states and removed manual toggle.
+
+### Status
+- [x] Completed
+
+## 2026-01-20 - Merging Growth Plans
+
+### Current Task
+User requested to combine the new Yandex "5 Stars" plan (5 stages) with the previous extensive growth plan (formerly stages 3-16), keeping the new ones as 1-5 and appending the old ones as 6-19.
+
+### Architecture Decision
+- Modified `populate_yandex_growth.py`:
+    - Kept the new interactive Yandex stages (1-5).
+    - Appended the old stages from `ru.ts` (formerly 3-16) as new stages 6-19.
+    - Converted old stages to the new `GrowthTasks` format in the Python script.
+    - Set `check_logic = 'manual_check'` for old stages (since they don't have auto-verification logic yet).
+    - Used `.get('tooltip')` to handle missing tooltips in old tasks.
+
+### Files to Modify
+- `src/scripts/populate_yandex_growth.py` - Added 14 old stages to the population list.
+
+### Trade-offs & Decisions
+- **Manual vs Auto**: Old stages are restored as "Manual Check" tasks. This preserves the content but doesn't block the user (they can manually check them off).
+- **Hardcoding vs DB**: Moving everything to DB means we have a single source of truth and removed the conflict with `ru.ts`.
+
+### Dependencies
+- None.
+
+### Status
+- [x] Completed

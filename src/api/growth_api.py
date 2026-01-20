@@ -62,6 +62,74 @@ def get_business_stages(business_id):
         wiz_row = cursor.fetchone()
         current_step = wiz_row[0] if wiz_row else 1
         
+        # --- Фетчим метрики для проверки условий ---
+        metrics = {
+            "rating": 0.0,
+            "reviews_count": 0,
+            "photos_count": 0,
+            "services_count": 0,
+            "has_phone": False,
+            "has_address": False,
+            "has_website": False,
+            "yandex_url": None
+        }
+        
+        # 1. MapParseResults (Rating, Reviews, Photos)
+        cursor.execute("""
+            SELECT rating, reviews_count, photos_count 
+            FROM MapParseResults 
+            WHERE business_id = ? 
+            ORDER BY created_at DESC LIMIT 1
+        """, (business_id,))
+        map_row = cursor.fetchone()
+        if map_row:
+            try:
+                metrics["rating"] = float(map_row[0]) if map_row[0] else 0.0
+                metrics["reviews_count"] = int(map_row[1]) if map_row[1] else 0
+                metrics["photos_count"] = int(map_row[2]) if map_row[2] else 0
+            except:
+                pass
+
+        # 2. UserServices (Services Added)
+        cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = ?", (business_id,))
+        svc_row = cursor.fetchone()
+        metrics["services_count"] = svc_row[0] if svc_row else 0
+        
+        # 3. Business Profile (Contacts)
+        cursor.execute("SELECT phone, address, website, yandex_url FROM Businesses WHERE id = ?", (business_id,))
+        biz_info = cursor.fetchone()
+        if biz_info:
+            metrics["has_phone"] = bool(biz_info[0])
+            metrics["has_address"] = bool(biz_info[1])
+            metrics["has_website"] = bool(biz_info[2])
+            metrics["yandex_url"] = biz_info[3]
+
+        def check_task_status(logic_code, metrics):
+            """Проверяет выполнение задачи на основе метрик"""
+            if not logic_code:
+                return False
+                
+            if logic_code == 'reviews_count_5':
+                return metrics["reviews_count"] >= 5
+            elif logic_code == 'reviews_count_15':
+                return metrics["reviews_count"] >= 15
+            elif logic_code == 'rating_4_5':
+                return metrics["rating"] >= 4.5
+            elif logic_code == 'photos_count_3':
+                return metrics["photos_count"] >= 3
+            elif logic_code == 'profile_contacts_full':
+                return metrics["has_phone"] and metrics["has_address"]
+            elif logic_code == 'services_added':
+                return metrics["services_count"] > 0
+            elif logic_code == 'profile_verified':
+                # Простая эвристика: если есть ссылка на профиль, считаем что базово подтвержден
+                return bool(metrics["yandex_url"])
+            elif logic_code == 'reply_rate_100':
+                 # Пока заглушка или можно проверить reviews without reply
+                return False 
+            
+            return False
+
         # Получаем этапы
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration
@@ -76,14 +144,6 @@ def get_business_stages(business_id):
             stage_id = stage_row[0]
             stage_number = stage_row[1]
             
-            # Определяем статус
-            if stage_number < current_step:
-                status = 'completed'
-            elif stage_number == current_step:
-                status = 'active'
-            else:
-                status = 'locked' 
-            
             # Получаем задачи для этапа
             cursor.execute("""
                 SELECT id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, link_url, link_text, is_auto_verifiable
@@ -94,27 +154,51 @@ def get_business_stages(business_id):
             tasks_rows = cursor.fetchall()
             
             tasks = []
+            completed_tasks_count = 0
+            
             for tr in tasks_rows:
+                check_logic = tr[3]
+                is_completed = check_task_status(check_logic, metrics)
+                
+                if is_completed:
+                    completed_tasks_count += 1
+
                 tasks.append({
                     'id': tr[0],
                     'task_number': tr[1],
                     'text': tr[2],
-                    'check_logic': tr[3],
+                    'check_logic': check_logic,
                     'reward_value': tr[4],
                     'reward_type': tr[5],
                     'tooltip': tr[6],
                     'link_url': tr[7],
                     'link_text': tr[8],
-                    'is_auto_verifiable': bool(tr[9])
+                    'is_auto_verifiable': bool(tr[9]),
+                    'is_completed': is_completed  # NEW FIELD
                 })
+
+            # Определяем статус этапа (динамически, если задачи выполнены)
+            # Или используем wizard step как hard constraint
+            if stage_number < current_step:
+                status = 'completed'
+                progress_percentage = 100
+            elif stage_number == current_step:
+                status = 'active'
+                # Считаем прогресс по задачам
+                progress_percentage = 0
+                if len(tasks) > 0:
+                    progress_percentage = int((completed_tasks_count / len(tasks)) * 100)
+            else:
+                status = 'locked' 
+                progress_percentage = 0
 
             stages.append({
                 'id': stage_row[0],
                 'stage_number': stage_number,
-                'stage_name': stage_row[2],
+                'title': stage_row[2],
                 'stage_description': stage_row[3],
                 'status': status,
-                'progress_percentage': 100 if status == 'completed' else (0 if status == 'locked' else 50),
+                'progress_percentage': progress_percentage,
                 'duration': stage_row[6],
                 'goal': stage_row[4],
                 'expected_result': stage_row[5],
