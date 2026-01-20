@@ -458,16 +458,42 @@ class YandexBusinessParser:
                 
                 # Проверяем различные варианты структуры ответа
                 # В реальном API ответ находится в поле "owner_comment"
-                response_data = (
-                    review_data.get("owner_comment") or  # Основное поле в реальном API
-                    review_data.get("response") or 
-                    review_data.get("reply") or 
-                    review_data.get("organization_response") or
-                    review_data.get("company_response") or
-                    review_data.get("owner_response") or
-                    review_data.get("answer") or
-                    review_data.get("answers")  # Может быть массив
-                )
+                response_data = review_data.get("owner_comment")
+                
+                # Логируем структуру owner_comment для отладки (первые 3 отзыва)
+                if idx < 3:
+                    print(f"   🔍 DEBUG owner_comment для отзыва #{idx + 1}:", flush=True)
+                    print(f"      Тип: {type(response_data)}", flush=True)
+                    print(f"      Значение: {str(response_data)[:200]}", flush=True)
+                
+                # ВАЖНО: проверяем, что owner_comment не null и не пустой объект
+                if response_data is None:
+                    # Нет ответа - это нормально
+                    response_data = None
+                elif isinstance(response_data, dict):
+                    # Проверяем, что это не пустой объект {}
+                    if not response_data or len(response_data) == 0:
+                        if idx < 3:
+                            print(f"      ⚠️ owner_comment - пустой объект {{}}", flush=True)
+                        response_data = None
+                elif isinstance(response_data, str):
+                    # Проверяем, что строка не пустая
+                    if not response_data.strip():
+                        if idx < 3:
+                            print(f"      ⚠️ owner_comment - пустая строка", flush=True)
+                        response_data = None
+                
+                # Если owner_comment не найден, пробуем альтернативные поля
+                if not response_data:
+                    response_data = (
+                        review_data.get("response") or 
+                        review_data.get("reply") or 
+                        review_data.get("organization_response") or
+                        review_data.get("company_response") or
+                        review_data.get("owner_response") or
+                        review_data.get("answer") or
+                        review_data.get("answers")  # Может быть массив
+                    )
                 
                 # Если answers - массив, берём первый элемент
                 if isinstance(response_data, list) and len(response_data) > 0:
@@ -495,6 +521,8 @@ class YandexBusinessParser:
                     
                     if response_text and response_text.strip():
                         has_response = True
+                        if idx < 3:
+                            print(f"      ✅ Найден ответ (длина: {len(response_text)})", flush=True)
                         if response_at_str:
                             try:
                                 # Если это timestamp в миллисекундах (как в owner_comment)
@@ -507,6 +535,9 @@ class YandexBusinessParser:
                                     response_at = datetime.fromisoformat(response_at_str.replace("Z", "+00:00"))
                             except:
                                 pass
+                    else:
+                        if idx < 3 and response_text is not None:
+                            print(f"      ⚠️ response_text пустой или только пробелы: '{response_text}'", flush=True)
                 
                 # Парсим рейтинг (может быть в разных форматах)
                 rating = review_data.get("rating") or review_data.get("score") or review_data.get("stars")
