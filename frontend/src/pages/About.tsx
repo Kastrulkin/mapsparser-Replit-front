@@ -264,7 +264,8 @@ const About = () => {
             </Card>
 
             {/* Option 0 - 5000 рублей в месяц */}
-            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
+            <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Профессиональный" : "Professional"}
@@ -317,8 +318,7 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Особый" : "Elite"}
@@ -346,14 +346,7 @@ const About = () => {
             </Card>
           </div>
 
-          {/* Специальное предложение под условиями тарифов (на всю ширину блока тарифов) */}
-          <div className="mt-6">
-            <p className="text-sm text-blue-800 bg-blue-50 rounded-lg p-4">
-              💡 <strong>Специальное предложение:</strong> Первый месяц полного доступа (как в тарифе
-              &nbsp;«Профессиональный») всего за $5! После первого месяца функции вернутся к базовому тарифу,
-              если вы не перейдёте на тариф $65.
-            </p>
-          </div>
+
         </div>
       </section>
 
