@@ -2462,3 +2462,86 @@ Implement network health dashboard for Progress tab + fix critical Playwright pa
 - Pushed to main
 - Pending server deployment
 
+
+## 2026-01-20 - Debugging Frontend Deployment & Network Health Dashboard
+
+### Current Task
+Deploying the Network Health Dashboard and resolving persistent issues where frontend updates were not reflecting in the browser.
+
+### Architecture Decision
+- **Cache Busting Strategy**: Implemented aggressive cache busting by manually versioning build artifacts (`index-TIMESTAMP.js`) and updating `index.html`. This bypasses Nginx's `immutable` cache headers which were preventing updates.
+- **Component Association**: Identified that the `/dashboard/progress` route is handled by `ProgressPage.tsx`, not `Dashboard.tsx` (legacy). Switched implementation to `ProgressPage.tsx`.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/ProgressPage.tsx` - Updated to render `NetworkHealthDashboard` and `FinancialMetrics`.
+- `frontend/src/components/NetworkHealthDashboard.tsx` - Full implementation of the network health metrics.
+- `frontend/src/i18n/locales/*.ts` - Fixed duplicate `growthStages` keys in all languages.
+
+### Trade-offs & Decisions
+- **Manual Cache Busting vs Config Change**: Chosen to force-rename files via script (`sed` in `index.html`) rather than risking Nginx config changes on a live production server without full access to reload strategies.
+- **Direct SCP vs Git Pull**: Used `scp` for rapid iteration during debugging to bypass potential git/build pipeline latency or state mismatches.
+
+### Dependencies
+- No new external dependencies.
+- valid `auth_new` library usage in `ProgressPage.tsx`.
+
+### Debugging Learnings (Root Cause Analysis)
+1.  **Nginx Caching**: The server configuration has `expires 1y; add_header Cache-Control "public, immutable";` for assets. Rebuilding Vite apps often produces the same filename (`index-HASH.js`) if code changes are minor. Nginx (and browsers) ignored the new content because the filename didn't change.
+    *   *Fix*: Appending a timestamp to the filename (`mv old.js new-123.js`) forces a fresh download.
+2.  **Routing Mismatch**: The project has legacy (`Dashboard.tsx`) and new (`dashboard/ProgressPage.tsx`) routing. We were editing the legacy file while the app was routing to the new one.
+    *   *Fix*: Identified correct component via `grep "Управление сетью"` and updated `ProgressPage.tsx`.
+
+### Status
+- [x] Completed
+
+## 2026-01-20 - Yandex Maps 5-Star Growth Strategy
+
+### Current Task
+Implement the new "5 Stars on Yandex Maps" growth strategy guide as actionable stages and tasks in the application.
+
+### Architecture Decision
+- **Schema Extension**: Extended `GrowthTasks` table with `check_logic`, `reward_value`, `reward_type`, `tooltip`, `link_url`, `link_text`, `is_auto_verifiable` to support rich task features.
+- **Content Population**: Created a dedicated script `populate_yandex_growth.py` to parse and insert the specific Yandex guide content, keeping content separation from logic.
+- **Frontend Enhancement**: Updated `BusinessGrowthPlan.tsx` to render rich task details (tooltips, time-saved rewards) and adapted the data interface.
+
+### Files to Modify
+- `src/init_database_schema.py` - Checked base schema.
+- `src/scripts/migrate_growth_tasks_schema.py` - Created migration for new columns.
+- `src/api/growth_api.py` - Updated API to expose new fields.
+- `src/scripts/populate_yandex_growth.py` - Created content population script.
+- `frontend/src/components/BusinessGrowthPlan.tsx` - Updated UI to show tooltips and rewards.
+
+### Trade-offs & Decisions
+- **Database Schema vs JSON**: Selected explicit columns/schema extension for `GrowthTasks` over a JSON blob for better queryability and data integrity.
+- **Russian-Native Content**: The provided guide is in Russian. Populated directly into DB. Frontend translation logic falls back to DB values, which is acceptable for the target audience.
+
+### Dependencies
+- No new external dependencies.
+- Requires running migration and population scripts once.
+
+### Status
+- [x] Completed
+
+## 2026-01-20 - UI/UX Pro Enhancements
+
+### Current Task
+Enhance the UI/UX of the "Growth Plan" using professional design standards (glassmorphism, advanced typography, iconic consistency).
+
+### Architecture Decision
+- **Design Tokens**: Created `frontend/src/lib/design-tokens.ts` to centralize "Pro" styles (glassmorphism, gradients, motion).
+- **Iconography**: Replaced 100% of emojis in `BusinessGrowthPlan.tsx` with `lucide-react` SVG icons for vector consistency.
+- **Glassmorphism**: Applied backdrop-blur and translucent backgrounds to cards and tooltips using the new tokens.
+
+### Files to Modify
+- `frontend/src/lib/design-tokens.ts` (NEW) - Central design system configs.
+- `frontend/src/components/BusinessGrowthPlan.tsx` - Refactored to use new tokens and icons.
+
+### Trade-offs & Decisions
+- **Standard Icons**: Chose Lucide items over custom SVGs for immediate consistency with the rest of the generic UI.
+- **Tailwind Extension**: Used `clsx` + `tailwind-merge` (standard `cn` utility) for dynamic class composition.
+
+### Dependencies
+- `lucide-react`, `clsx`, `tailwind-merge` (already present in package.json).
+
+### Status
+- [x] Completed

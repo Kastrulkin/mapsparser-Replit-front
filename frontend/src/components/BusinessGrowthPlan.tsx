@@ -2,9 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Lock, Unlock, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, Unlock, ChevronDown, ChevronRight, HelpCircle, Clock, Trophy, Zap, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { newAuth } from '@/lib/auth_new';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface GrowthTask {
+    id?: string;
+    number: number;
+    text: string;
+    tooltip?: string;
+    reward_value?: number;
+    reward_type?: string;
+    check_logic?: string;
+    link_url?: string;
+    link_text?: string;
+    is_auto_verifiable?: boolean;
+}
 
 interface GrowthStage {
     id: string;
@@ -14,7 +34,7 @@ interface GrowthStage {
     goal: string;
     expected_result: string;
     duration: string;
-    tasks: Array<{ number: number; text: string }>;
+    tasks: GrowthTask[];
     is_unlocked: boolean;
     progress_percentage: number;
     completed_tasks: number[];
@@ -68,11 +88,14 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
             return stage;
         }
 
-        // Map translated tasks to the original task structure
-        const translatedTasks = stageTranslations.tasks?.map((text: string, idx: number) => ({
-            number: idx + 1,
-            text
-        })) || stage.tasks;
+        // Map translated tasks to the original task structure, preserving metadata
+        const translatedTasks = stage.tasks.map((task, idx) => {
+            const translatedText = stageTranslations.tasks?.[idx];
+            return {
+                ...task,
+                text: typeof translatedText === 'string' ? translatedText : task.text
+            };
+        });
 
         return {
             ...stage,
@@ -153,7 +176,7 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
 
     if (!businessId) {
         return (
-            <Card>
+            <Card className="border-none shadow-sm bg-gray-50/50">
                 <CardContent className="p-8 text-center text-gray-500">
                     {t.dashboard.progress.growthPlan.title}
                 </CardContent>
@@ -164,14 +187,22 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 p-8 text-white">
+            <div className={cn(
+                "relative overflow-hidden rounded-2xl p-8 text-white shadow-lg",
+                DESIGN_TOKENS.gradients.gold
+            )}>
                 <div className="relative z-10">
-                    <h2 className="text-3xl font-bold mb-2">🏆 {t.dashboard.progress.growthPlan.title}</h2>
-                    <p className="text-white/90 text-lg">
+                    <div className="flex items-center gap-3 mb-2">
+                        <Trophy className="h-8 w-8 text-white/90" />
+                        <h2 className="text-3xl font-bold">{t.dashboard.progress.growthPlan.title}</h2>
+                    </div>
+                    <p className="text-white/90 text-lg pl-11">
                         {t.dashboard.progress.growthPlan.subtitle}
                     </p>
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                {/* Decorative circles */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-black/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4" />
             </div>
 
             {/* Stages */}
@@ -189,15 +220,15 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                             key={stage.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
+                            transition={{ delay: index * DESIGN_TOKENS.motion.fast }}
                         >
                             <Card
-                                className={`
-                  transition-all duration-300
-                  ${isActive ? 'border-orange-500 border-2 shadow-xl shadow-orange-500/20' : ''}
-                  ${isCompleted ? 'border-green-500 bg-green-50/50' : ''}
-                  ${isLocked ? 'opacity-60 blur-[1px]' : ''}
-                `}
+                                className={cn(
+                                    "transition-all duration-300 border-0",
+                                    isActive ? DESIGN_TOKENS.glass.default + " ring-1 ring-orange-500/20" : "bg-white/50 hover:bg-white/80",
+                                    isCompleted && "bg-green-50/30 border-green-200/50",
+                                    isLocked && "opacity-60 grayscale-[0.5]"
+                                )}
                             >
                                 <CardHeader className="pb-4">
                                     <div className="flex items-start justify-between">
@@ -210,7 +241,9 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                         animate={{ scale: 1 }}
                                                         transition={{ type: "spring", stiffness: 200, damping: 10 }}
                                                     >
-                                                        <CheckCircle2 className="h-8 w-8 text-green-500" />
+                                                        <div className="rounded-full bg-green-100 p-2">
+                                                            <CheckCircle2 className="h-6 w-6 text-green-600" />
+                                                        </div>
                                                     </motion.div>
                                                 ) : isActive || stage.is_unlocked ? (
                                                     <div className="relative w-16 h-16">
@@ -222,8 +255,8 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                                 r="28"
                                                                 stroke="currentColor"
                                                                 strokeWidth="4"
-                                                                fill="none"
-                                                                className="text-gray-200"
+                                                                fill="none" // Transparent center for glass effect
+                                                                className="text-gray-100"
                                                             />
                                                             <motion.circle
                                                                 cx="32"
@@ -248,31 +281,41 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <Lock className="h-8 w-8 text-gray-400" />
+                                                    <div className="rounded-full bg-gray-100 p-3">
+                                                        <Lock className="h-6 w-6 text-gray-400" />
+                                                    </div>
                                                 )}
                                             </div>
 
                                             {/* Stage Info */}
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-1">
-                                                    <CardTitle className="text-xl">
-                                                        {t.dashboard.progress.growthPlan.stage} {stage.stage_number}: {stage.title}
+                                                    <CardTitle className="text-xl font-display tracking-tight text-gray-900">
+                                                        <span className="text-gray-400 font-normal mr-2">#{stage.stage_number}</span>
+                                                        {stage.title}
                                                     </CardTitle>
                                                     {isActive && (
-                                                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-700">
-                                                            🔥 {t.dashboard.progress.growthPlan.active}
+                                                        <span className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-orange-100/80 text-orange-700 border border-orange-200/50 backdrop-blur-sm">
+                                                            <Zap className="w-3 h-3" />
+                                                            {t.dashboard.progress.growthPlan.active}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <CardDescription className="text-base">
+                                                <CardDescription className="text-base text-gray-600 leading-relaxed max-w-2xl">
                                                     {stage.description}
                                                 </CardDescription>
 
                                                 {/* Duration & Goal */}
                                                 {!isLocked && (
-                                                    <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-600">
-                                                        <div>⏱️ {stage.duration}</div>
-                                                        <div>🎯 {stage.expected_result}</div>
+                                                    <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
+                                                        <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">
+                                                            <Clock className="w-4 h-4 text-gray-400" />
+                                                            {stage.duration}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 bg-blue-50/50 px-2.5 py-1 rounded-md border border-blue-100/50 text-blue-700">
+                                                            <Target className="w-4 h-4 text-blue-500" />
+                                                            {stage.expected_result}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -286,19 +329,20 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                     disabled={unlockingStage === stage.id}
                                                     variant="outline"
                                                     size="sm"
-                                                    className="min-w-[120px]"
+                                                    className="min-w-[120px] bg-white/50 backdrop-blur-sm"
                                                 >
                                                     {unlockingStage === stage.id ? (
-                                                        <>🔓 {t.dashboard.progress.growthPlan.unlocking}</>
+                                                        <><Unlock className="w-4 h-4 mr-2 animate-pulse" /> {t.dashboard.progress.growthPlan.unlocking}</>
                                                     ) : (
-                                                        <>🔒 {t.dashboard.progress.growthPlan.unlock}</>
+                                                        <><Lock className="w-4 h-4 mr-2" /> {t.dashboard.progress.growthPlan.unlock}</>
                                                     )}
                                                 </Button>
                                             ) : (
                                                 <Button
                                                     variant="ghost"
-                                                    size="sm"
+                                                    size="icon"
                                                     onClick={() => toggleStageExpand(stage.id)}
+                                                    className="rounded-full hover:bg-black/5"
                                                 >
                                                     {isExpanded ? (
                                                         <ChevronDown className="h-5 w-5" />
@@ -343,25 +387,55 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                                         key={task.number}
                                                                         whileHover={{ scale: 1.01, x: 4 }}
                                                                         whileTap={{ scale: 0.99 }}
-                                                                        className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                                                        className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors group"
                                                                         onClick={() => toggleTask(stage.id, task.number)}
                                                                     >
-                                                                        <div className="mt-0.5">
-                                                                            {isTaskCompleted ? (
-                                                                                <motion.div
-                                                                                    initial={{ scale: 0, rotate: -90 }}
-                                                                                    animate={{ scale: 1, rotate: 0 }}
-                                                                                    transition={{ type: "spring", stiffness: 200 }}
-                                                                                >
-                                                                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                                                                </motion.div>
-                                                                            ) : (
-                                                                                <Circle className="h-5 w-5 text-gray-400" />
-                                                                            )}
+                                                                        <div className="flex items-start space-x-3 flex-1">
+                                                                            <div className="mt-0.5">
+                                                                                {isTaskCompleted ? (
+                                                                                    <motion.div
+                                                                                        initial={{ scale: 0, rotate: -90 }}
+                                                                                        animate={{ scale: 1, rotate: 0 }}
+                                                                                        transition={{ type: "spring", stiffness: 200 }}
+                                                                                    >
+                                                                                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                                                                    </motion.div>
+                                                                                ) : (
+                                                                                    <Circle className="h-5 w-5 text-gray-400" />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className={`${isTaskCompleted ? 'line-through text-gray-500' : 'text-gray-700'}`}>
+                                                                                        {task.text}
+                                                                                    </span>
+
+                                                                                    {/* Tooltip */}
+                                                                                    {task.tooltip && (
+                                                                                        <TooltipProvider>
+                                                                                            <Tooltip>
+                                                                                                <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                                                                    <HelpCircle className="h-4 w-4 text-gray-400 hover:text-orange-500 transition-colors" />
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent>
+                                                                                                    <p className="max-w-xs">{task.tooltip}</p>
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        </TooltipProvider>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {/* Reward Badge */}
+                                                                                {task.reward_value && task.reward_value > 0 && !isTaskCompleted && (
+                                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                                                            <Clock className="w-3 h-3" />
+                                                                                            +{task.reward_value} мин
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                        <span className={`flex-1 ${isTaskCompleted ? 'line-through text-gray-500' : 'text-gray-700'}`}>
-                                                                            {task.text}
-                                                                        </span>
                                                                     </motion.div>
                                                                 );
                                                             })}

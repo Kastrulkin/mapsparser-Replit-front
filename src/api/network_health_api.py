@@ -13,14 +13,30 @@ from typing import Dict, List, Any, Optional
 network_health_bp = Blueprint('network_health', __name__)
 
 
+from auth_system import verify_session
+
 def require_auth(f):
     """Decorator to require authentication for API endpoints."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        from auth import get_current_user
-        user = get_current_user()
-        if not user:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({"error": "Unauthorized"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        
+        if not user_data:
+            return jsonify({"error": "Unauthorized"}), 401
+            
+        # Compatibility adapter: existing code expects 'id', verify_session returns 'user_id'
+        user = {
+            'id': user_data['user_id'],
+            'email': user_data.get('email'),
+            'name': user_data.get('name'),
+            'is_superadmin': user_data.get('is_superadmin', False)
+        }
+            
         return f(user, *args, **kwargs)
     return decorated_function
 

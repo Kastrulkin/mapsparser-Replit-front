@@ -255,7 +255,7 @@ export const ProfilePage = () => {
         setSavingClientInfo(false);
         return;
       } else {
-        setError(t.error);
+        setError(t.common.error);
         setSavingClientInfo(false);
         return;
       }
@@ -352,7 +352,7 @@ export const ProfilePage = () => {
       } else {
         // Проверяем, не истёк ли токен
         if (response.status === 401) {
-          setError(t.error);
+          setError(t.common.error);
           localStorage.removeItem('auth_token');
           setTimeout(() => {
             window.location.href = '/login';
@@ -590,10 +590,10 @@ export const ProfilePage = () => {
                       setSuccess(data.message || 'Credentials sent');
                     } else {
                       const errorData = await response.json();
-                      setError(errorData.error || t.error);
+                      setError(errorData.error || t.common.error);
                     }
                   } catch (err: any) {
-                    setError(t.error + ': ' + err.message);
+                    setError(t.common.error + ': ' + err.message);
                   } finally {
                     setSendingCredentials(false);
                   }
@@ -702,34 +702,56 @@ export const ProfilePage = () => {
         <div className="mt-6 border-t pt-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">{t.dashboard.profile.mapLinks}</label>
           <div className="space-y-3">
-            {clientInfo.mapLinks.map((link, index) => (
-              <div key={index} className="flex gap-2">
-                <input
-                  type="text"
-                  value={link.url}
-                  onChange={(e) => {
-                    const newLinks = [...clientInfo.mapLinks];
-                    newLinks[index].url = e.target.value;
-                    setClientInfo({ ...clientInfo, mapLinks: newLinks });
-                  }}
-                  disabled={!editClientInfo}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder={t.dashboard.profile.pasteLink}
-                />
-                {editClientInfo && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const newLinks = clientInfo.mapLinks.filter((_, i) => i !== index);
-                      setClientInfo({ ...clientInfo, mapLinks: newLinks });
-                    }}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    ✕
-                  </Button>
-                )}
-              </div>
-            ))}
+            {clientInfo.mapLinks.map((link, index) => {
+              const getMapServiceName = (url: string) => {
+                if (!url) return null;
+                const lower = url.toLowerCase();
+                if (lower.includes('yandex') || lower.includes('ya.ru')) return 'Yandex';
+                if (lower.includes('2gis') || lower.includes('dgis')) return '2GIS';
+                if (lower.includes('google') && lower.includes('maps')) return 'Google Maps';
+                if (lower.includes('goo.gl')) return 'Google Maps';
+                if (lower.includes('zoon')) return 'Zoon';
+                return null;
+              };
+
+              const serviceName = getMapServiceName(link.url);
+
+              return (
+                <div key={index} className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={link.url}
+                      onChange={(e) => {
+                        const newLinks = [...clientInfo.mapLinks];
+                        newLinks[index].url = e.target.value;
+                        setClientInfo({ ...clientInfo, mapLinks: newLinks });
+                      }}
+                      disabled={!editClientInfo}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md pr-24" // Added padding for badge
+                      placeholder={t.dashboard.profile.pasteLink}
+                    />
+                    {serviceName && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200 pointer-events-none">
+                        {serviceName}
+                      </span>
+                    )}
+                  </div>
+                  {editClientInfo && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const newLinks = clientInfo.mapLinks.filter((_, i) => i !== index);
+                        setClientInfo({ ...clientInfo, mapLinks: newLinks });
+                      }}
+                      className="text-red-500 hover:text-red-700 shrink-0"
+                    >
+                      ✕
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
             {editClientInfo && (
               <Button
                 variant="outline"

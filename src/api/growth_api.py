@@ -73,12 +73,10 @@ def get_business_stages(business_id):
         
         stages = []
         for stage_row in stages_rows:
+            stage_id = stage_row[0]
             stage_number = stage_row[1]
             
             # Определяем статус
-            # Логика: если текущий шаг визарда > номера этапа, то этап пройден
-            # Если равен - активен
-            # Иначе - ожидается
             if stage_number < current_step:
                 status = 'completed'
             elif stage_number == current_step:
@@ -86,6 +84,30 @@ def get_business_stages(business_id):
             else:
                 status = 'locked' 
             
+            # Получаем задачи для этапа
+            cursor.execute("""
+                SELECT id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, link_url, link_text, is_auto_verifiable
+                FROM GrowthTasks
+                WHERE stage_id = ?
+                ORDER BY task_number
+            """, (stage_id,))
+            tasks_rows = cursor.fetchall()
+            
+            tasks = []
+            for tr in tasks_rows:
+                tasks.append({
+                    'id': tr[0],
+                    'task_number': tr[1],
+                    'text': tr[2],
+                    'check_logic': tr[3],
+                    'reward_value': tr[4],
+                    'reward_type': tr[5],
+                    'tooltip': tr[6],
+                    'link_url': tr[7],
+                    'link_text': tr[8],
+                    'is_auto_verifiable': bool(tr[9])
+                })
+
             stages.append({
                 'id': stage_row[0],
                 'stage_number': stage_number,
@@ -95,7 +117,8 @@ def get_business_stages(business_id):
                 'progress_percentage': 100 if status == 'completed' else (0 if status == 'locked' else 50),
                 'duration': stage_row[6],
                 'goal': stage_row[4],
-                'expected_result': stage_row[5]
+                'expected_result': stage_row[5],
+                'tasks': tasks
             })
             
         db.close()
