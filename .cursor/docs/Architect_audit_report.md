@@ -2418,3 +2418,47 @@ Each stage contains:
 
 ### Status
 - [x] Completed
+
+## 2026-01-19 - Network Health Dashboard + Playwright Headless Fix
+
+### Current Task
+Implement network health dashboard for Progress tab + fix critical Playwright parsing error.
+
+### Architecture Decision
+- Created `/api/network/health` and `/api/network/locations-alerts` endpoints
+- Added alert thresholds to BusinessTypes table (news/photos/reviews days)
+- Built NetworkHealthDashboard.tsx component (metric cards + location alerts)
+- Fixed Playwright parsing error: changed headless=False to headless=True (parser_interception.py, analyzer.py)
+- Integrated dashboard into Progress tab (replaced ProgressTracker)
+
+### Files Modified
+**Backend:**
+- `src/api/network_health_api.py` (NEW)
+- `src/main.py` - registered network_health_bp
+- `src/parser_interception.py` - line 71: headless=True
+- `src/analyzer.py` - line 402: headless=True
+- `src/reports.db` - added 3 columns to BusinessTypes
+
+**Frontend:**
+- `frontend/src/components/NetworkHealthDashboard.tsx` (NEW)
+- `frontend/src/pages/Dashboard.tsx` - integrated into Progress tab
+- `frontend/src/i18n/locales/ru.ts` - added networkHealth translations
+- `frontend/src/i18n/locales/en.ts` - added networkHealth translations
+- `frontend/package.json` - added react-i18next, i18next
+
+### Trade-offs
+- **Alert thresholds in BusinessTypes**: Simple but less flexible than separate table
+- **Replaced ProgressTracker**: Growth stages no longer visible (requested by user)
+- **Headless=True**: Cannot debug CAPTCHA visually on server, but required for Linux
+- **Russian-first localization**: Other languages use English fallback for now
+
+### Dependencies
+- Added: react-i18next, i18next (frontend)
+- DB migration: 3 new columns in BusinessTypes table
+
+### Status
+- [x] Completed
+- Commit: a236cdb
+- Pushed to main
+- Pending server deployment
+

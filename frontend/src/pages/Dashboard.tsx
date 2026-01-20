@@ -1216,9 +1216,7 @@ const Dashboard = () => {
                   networkId={currentNetworkId}
                   businessId={currentBusinessId}
                 />
-                <FinancialMetrics
-                  businessId={currentBusinessId}
-                />
+                <FinancialMetrics />
               </div>
             )}
 
