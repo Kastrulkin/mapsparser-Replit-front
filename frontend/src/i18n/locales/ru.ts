@@ -530,6 +530,7 @@ export const ru = {
         brows_lashes: "Брови и ресницы",
         makeup: "Макияж",
         tanning: "Солярий",
+        kebab_network: "Сеть шаверм",
         other: "Другое"
       },
       workSchedule: {
