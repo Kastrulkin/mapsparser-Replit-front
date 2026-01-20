@@ -198,7 +198,7 @@ def add_universal_stages():
             print("⚠️ BusinessTypes table doesn't exist yet. Run init_database_schema.py first.")
             return
         
-        cursor.execute("SELECT id, type_key, name_ru FROM BusinessTypes")
+        cursor.execute("SELECT id, type_key, label FROM BusinessTypes")
         business_types = cursor.fetchall()
         
         if not business_types:
