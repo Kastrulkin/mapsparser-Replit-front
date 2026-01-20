@@ -57,26 +57,26 @@ const About = () => {
     <div className="min-h-screen bg-background">
 
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-8">
             {t.about.heroTitle}
           </h1>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
+          <p className="text-2xl text-gray-600 max-w-4xl mx-auto mb-8 leading-relaxed">
             {t.about.heroSubtitle}
           </p>
         </div>
       </section>
 
       {/* Problem Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
-        <div className="max-w-4xl mx-auto">
-          <div className="space-y-6 text-lg text-muted-foreground">
-            <p>
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <div className="space-y-8 text-lg text-gray-600 leading-relaxed">
+            <p className="text-xl">
               {t.about.problemText}
             </p>
-            <div className="text-center py-6">
-              <div className="text-2xl font-bold text-primary">
+            <div className="text-center py-8">
+              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent">
                 {t.about.problemHighlight}
               </div>
             </div>
@@ -124,12 +124,12 @@ const About = () => {
       </section>
 
       {/* Results Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl p-12">
-            <h2 className="text-3xl font-bold text-foreground mb-6">{t.about.resultsTitle}</h2>
-            <div className="text-5xl font-bold text-primary mb-4">{t.about.resultsPercent}</div>
-            <p className="text-xl text-foreground">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="bg-white rounded-3xl p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
+            <h2 className="text-4xl font-bold text-gray-900 mb-8">{t.about.resultsTitle}</h2>
+            <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div>
+            <p className="text-2xl text-gray-700 leading-relaxed">
               {t.about.resultsText}
             </p>
           </div>
@@ -149,35 +149,35 @@ const About = () => {
 
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Option 1 */}
-            <Card className="p-8">
+            <Card className="group p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                    <span className="text-primary font-bold">1</span>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xl">1</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">{t.about.option1Title}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option1Title}</h3>
                 </div>
-                <div className="space-y-3 text-muted-foreground mb-6">
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point1}</span>
+                <div className="space-y-4 text-gray-600 mb-8">
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point1}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point2}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point2}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point3}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point3}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point4}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point4}</span>
                   </div>
                 </div>
                 <Button
                   size="lg"
-                  className="mt-2 text-lg px-8 py-3"
+                  className="mt-2 text-lg px-10 py-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30"
                   onClick={() => {
                     window.location.href = '/#hero-form';
                   }}
@@ -188,36 +188,36 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="p-8 border-primary">
+            <Card className="group p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                    <span className="text-primary-foreground font-bold">2</span>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xl">2</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">{t.about.option2Title}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option2Title}</h3>
                 </div>
-                <div className="space-y-3 text-muted-foreground mb-6">
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point1}</span>
+                <div className="space-y-4 text-gray-700 mb-8">
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point1}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point2}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point2}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point3}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point3}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point4}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point4}</span>
                   </div>
                 </div>
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2"
+                  className="text-lg px-10 py-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30 mt-2"
                   onClick={() => {
                     navigate('/contact');
                   }}
@@ -231,15 +231,16 @@ const About = () => {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-16 px-4 sm:px-6 lg:px-8">
+      <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.pricingTitle}</h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">Выберите тариф для вашего бизнеса</p>
 
           <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
-            <Card className="p-8 flex flex-col h-full">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-2xl font-bold text-primary mb-1">
+                <div className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
                   {isRu ? "Начальный" : "Starter"}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
@@ -254,7 +255,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30 hover:shadow-orange-600/40 transition-all duration-300 mt-auto w-full"
                   onClick={() => handleSubscribeLanding("starter")}
                 >
                   {t.about.pricingStarterButton}
@@ -263,7 +264,7 @@ const About = () => {
             </Card>
 
             {/* Option 0 - 5000 рублей в месяц */}
-            <Card className="p-8 flex flex-col h-full">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Профессиональный" : "Professional"}
@@ -289,7 +290,7 @@ const About = () => {
             </Card>
 
             {/* Option 1 */}
-            <Card className="p-8 flex flex-col h-full">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Консьерж" : "Concierge"}
@@ -316,7 +317,8 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="p-8 flex flex-col h-full border-primary">
+            <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Особый" : "Elite"}
