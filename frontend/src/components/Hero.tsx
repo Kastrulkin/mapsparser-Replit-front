@@ -1,139 +1,152 @@
 import { Button } from "@/components/ui/button";
-import { Play, Users, Calendar, TrendingUp, Heart, Loader2 } from "lucide-react";
+import { Play, Users, Calendar, TrendingUp, Heart, Loader2, CheckCircle2 } from "lucide-react";
 import heroImage from "@/assets/hero-image.jpg";
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 const Hero = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useLanguage();
-  
+
   return (
     <section className="relative overflow-hidden bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <div className="inline-flex items-center px-4 py-2 bg-accent/10 rounded-full text-sm text-accent mb-6">
-              <Heart className="w-4 h-4 mr-2" />
+      {/* Background Gradients */}
+      <div className="absolute inset-0 -z-10 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] opacity-70 mixture-blend-multiply"></div>
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-[100px] opacity-70 mixture-blend-multiply"></div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="relative z-10">
+            <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-full text-sm font-medium text-orange-700 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <Heart className="w-4 h-4 mr-2 text-orange-500 fill-orange-500" />
               {t.hero.newClients}
             </div>
-            
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
+
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-8 leading-tight tracking-tight animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-100">
               {t.hero.title}
             </h1>
-            
-            <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
+
+            <p className="text-xl text-gray-600 mb-10 leading-relaxed max-w-lg animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
               {t.hero.subtitle}
             </p>
 
-            {/* Форма для email и ссылки на карты */}
-            <form
-              id="hero-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                
-                // Защита от двойного клика
-                if (isSubmitting) {
-                  return;
-                }
-                
-                setIsSubmitting(true);
-                
-                const form = e.target as HTMLFormElement;
-                const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-                const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
-                
-                try {
-                  const resp = await fetch('/api/public/request-report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, url: yandexUrl })
-                  });
-                  const result = await resp.json().catch(() => null);
-                  if (!resp.ok) {
-                    const msg = (result && (result.error || result.message)) || t.hero.errorMessage;
-                    throw new Error(msg);
-                  }
-
-                  form.reset();
-                  alert(t.hero.successMessage);
-                  
-                } catch (error) {
-                  console.error('Общая ошибка:', error);
-                  alert(error instanceof Error ? error.message : t.hero.errorMessage);
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <input
-                  name="email"
-                  type="email"
-                  placeholder={t.hero.emailPlaceholder}
-                  required
-                  className="w-full px-6 py-4 text-lg rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
-                />
+            <div className="flex items-center gap-4 text-sm font-medium text-gray-500 animate-in fade-in slide-in-from-bottom-7 duration-1000 delay-300">
+              <div className="flex -space-x-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200" />
+                ))}
               </div>
-              
-              <div>
-                <input
-                  name="yandexUrl"
-                  type="url"
-                  placeholder={t.hero.yandexUrlPlaceholder}
-                  required
-                  className="w-full px-6 py-4 text-lg rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
-                />
-              </div>
-              
-              <Button
-                type="submit"
-                size="lg"
-                disabled={isSubmitting}
-                className="w-full bg-primary hover:bg-primary/90 text-white px-8 py-4 text-lg font-semibold rounded-xl transition-all duration-200 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    {t.hero.submitting}
-                  </>
-                ) : (
-                  <>
-                    <TrendingUp className="w-5 h-5 mr-2" />
-                    {t.hero.submitButton}
-                  </>
-                )}
-              </Button>
-            </form>
-            
-            <p className="text-sm text-muted-foreground mt-4">
-              {t.hero.privacyText}
-            </p>
-          </div>
-          
-          <div className="relative">
-            <div className="relative z-10">
-              <img
-                src={heroImage}
-                alt="SEO анализ бизнеса"
-                className="w-full h-auto rounded-2xl shadow-2xl"
-              />
+              <div>Joined by 1000+ businesses</div>
             </div>
-            
-            {/* Декоративные элементы */}
-            <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary/20 rounded-full blur-xl"></div>
-            <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-accent/20 rounded-full blur-xl"></div>
+          </div>
+
+          <div className="relative animate-in fade-in slide-in-from-right-8 duration-1000 delay-300">
+            {/* Glassmorphic Form Card */}
+            <div className={cn(
+              "relative z-20 rounded-3xl p-8 md:p-10 shadow-2xl",
+              "bg-white/70 backdrop-blur-xl border border-white/50",
+              "ring-1 ring-gray-900/5"
+            )}>
+              <div className="mb-8">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Get Your Free Report</h3>
+                <p className="text-gray-500">Enter your details to receive a comprehensive audit.</p>
+              </div>
+
+              <form
+                id="hero-form"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+
+                  if (isSubmitting) return;
+                  setIsSubmitting(true);
+
+                  const form = e.target as HTMLFormElement;
+                  const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+                  const yandexUrl = (form.elements.namedItem('yandexUrl') as HTMLInputElement).value;
+
+                  try {
+                    const resp = await fetch('/api/public/request-report', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email, url: yandexUrl })
+                    });
+                    const result = await resp.json().catch(() => null);
+                    if (!resp.ok) {
+                      const msg = (result && (result.error || result.message)) || t.hero.errorMessage;
+                      throw new Error(msg);
+                    }
+
+                    form.reset();
+                    alert(t.hero.successMessage);
+
+                  } catch (error) {
+                    console.error('Общая ошибка:', error);
+                    alert(error instanceof Error ? error.message : t.hero.errorMessage);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className="space-y-5"
+              >
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 ml-1">Email</label>
+                  <input
+                    name="email"
+                    type="email"
+                    placeholder={t.hero.emailPlaceholder}
+                    required
+                    className="w-full px-5 py-4 text-lg rounded-xl border border-gray-200 bg-white/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all duration-200 placeholder:text-gray-400"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 ml-1">Yandex Maps Link</label>
+                  <input
+                    name="yandexUrl"
+                    type="url"
+                    placeholder={t.hero.yandexUrlPlaceholder}
+                    required
+                    className="w-full px-5 py-4 text-lg rounded-xl border border-gray-200 bg-white/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all duration-200 placeholder:text-gray-400"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-8 py-6 text-lg font-bold rounded-xl shadow-xl shadow-orange-500/20 transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:transform-none"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      {t.hero.submitting}
+                    </>
+                  ) : (
+                    <>
+                      {t.hero.submitButton}
+                      <TrendingUp className="w-5 h-5 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span>Free 14-day trial</span>
+                <span className="w-1 h-1 rounded-full bg-gray-300 mx-1" />
+                <span>No credit card required</span>
+              </div>
+            </div>
+
+            {/* Decorative elements behind form */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-b from-indigo-500/5 to-purple-500/5 rounded-full blur-3xl -z-10"></div>
           </div>
         </div>
-      </div>
-      
-      {/* Фоновые элементы */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl"></div>
       </div>
     </section>
   );

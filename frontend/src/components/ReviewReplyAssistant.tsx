@@ -366,7 +366,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
         )}
 
         <div className="flex justify-end">
-          <Button onClick={() => handleGenerate()} disabled={loading || !review.trim()} className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20">
+          <Button onClick={() => handleGenerate()} disabled={loading || !review.trim()} className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg shadow-orange-500/20">
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
@@ -534,7 +534,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
                               }}
                               disabled={generatingForReviewId === reviewItem.id || !reviewItem.text}
                               size="sm"
-                              className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
+                              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg"
                             >
                               {generatingForReviewId === reviewItem.id ? (
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>

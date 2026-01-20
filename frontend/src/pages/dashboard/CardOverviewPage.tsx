@@ -366,7 +366,7 @@ export const CardOverviewPage = () => {
             </a>
             <Button
               onClick={() => setShowWizard(true)}
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg hover:shadow-xl hover:from-violet-700 hover:to-indigo-700 transition-all"
+              className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-orange-700 transition-all"
             >
               <Sparkles className="w-4 h-4 mr-2" />
               {t.dashboard.card.optimizationWizard}
@@ -389,7 +389,7 @@ export const CardOverviewPage = () => {
         )}
 
         <Tabs defaultValue="services" className="space-y-8">
-          <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start">
+          <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
               <List className="w-4 h-4" />
               {t.dashboard.card.tabServices || "Services"}

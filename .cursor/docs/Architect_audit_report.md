@@ -2655,3 +2655,34 @@ Completing the "Pro" redesign for the `/dashboard/card` page by refactoring the 
 ### Status
 - [x] Completed (Local Code)
 - [ ] Deployment (Manual Git Pull Required)
+
+
+## 2026-01-22 - UI Polish & Landing Page Redesign
+
+### Current Task
+Refine UI/UX of Profile and Card pages (Network Points visibility, scrollbars, button colors) and redesign the Landing Page (Hero section) to match "Pro" standards.
+
+### Architecture Decision
+- **Network Points Visibility**: Implemented logic in `ProfilePage.tsx` to conditionally render network points only for the parent account (`isNetworkMaster`).
+- **Button Colors**: Updated primary action buttons in `CardOverviewPage`, `ReviewReplyAssistant`, `NewsGenerator`, and `Hero` to use an orange/amber gradient (`from-amber-500 to-orange-600`) instead of blue/violet.
+- **Scrollbars**: Removed visible scrollbars from tabs in `CardOverviewPage` using `[&::-webkit-scrollbar]:hidden` utility class for cleaner UI.
+- **Landing Page (Hero)**: Refactored `Hero.tsx` to use glassmorphism for the form container and applied the new color scheme. Added `networkNotice` to translation files to support `CardOverviewPage` alerts.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/ProfilePage.tsx` - added conditional rendering for network points.
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - button colors, scrollbar removal.
+- `frontend/src/components/ReviewReplyAssistant.tsx` - button colors.
+- `frontend/src/components/NewsGenerator.tsx` - button colors.
+- `frontend/src/components/Hero.tsx` - landing page refactoring (glassmorphism, colors).
+- `frontend/src/i18n/locales/en.ts`, `ru.ts` - added `networkNotice` translation object.
+
+### Trade-offs & Decisions
+- **Modifying Translations**: Added `networkNotice` to translations to fix runtime errors and support the UI update in `CardOverviewPage`, ensuring internationalization consistency.
+- **Glassmorphism**: Applied lightweight glassmorphism using Tailwind/CSS utilities (`backdrop-blur`, `bg-white/70`) which assumes modern browser support (standard today).
+
+### Dependencies
+- No new package dependencies.
+- Relies on existing `DESIGN_TOKENS` and `cn` utility.
+
+### Status
+- [x] Completed

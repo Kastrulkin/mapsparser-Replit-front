@@ -40,6 +40,30 @@ export const ProfilePage = () => {
   const [isNetwork, setIsNetwork] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [businessTypes, setBusinessTypes] = useState<Array<{ type_key: string; label: string }>>([]);
+  const [isNetworkMaster, setIsNetworkMaster] = useState(false);
+
+  useEffect(() => {
+    const checkIfNetworkMaster = async () => {
+      if (!currentBusinessId) {
+        setIsNetworkMaster(false);
+        return;
+      }
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/network-locations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIsNetworkMaster(data.is_network || false);
+          if (data.locations) setNetworkLocations(data.locations);
+        }
+      } catch (error) {
+        console.error('Network check error:', error);
+      }
+    };
+    checkIfNetworkMaster();
+  }, [currentBusinessId]);
 
   useEffect(() => {
     // Если есть currentBusiness и это не наш бизнес, загружаем данные владельца
@@ -883,8 +907,8 @@ export const ProfilePage = () => {
         )}
       </div>
 
-      {/* Точки сети */}
-      {networkLocations.length > 0 && (
+      {/* Точки сети - показываем только для мастер-аккаунта */}
+      {isNetworkMaster && networkLocations.length > 0 && (
         <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">

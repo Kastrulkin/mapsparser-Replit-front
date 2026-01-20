@@ -537,6 +537,11 @@ export const en = {
     card: {
       title: "Maps Management",
       subtitle: "Manage services and optimize business card",
+      networkNotice: {
+        title: "Network Management",
+        message: "Manage your network settings in the Network Management tab.",
+        action: "Go to Network"
+      },
       optimizationWizard: "Map Optimization Wizard",
       parsingNote: "We receive data weekly to track progress and provide optimization tips. Map data will be saved here, and statistics on ",
       progressTab: "Progress tab",
