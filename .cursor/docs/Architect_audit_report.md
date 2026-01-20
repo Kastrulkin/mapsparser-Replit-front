@@ -2608,3 +2608,50 @@ User requested to combine the new Yandex "5 Stars" plan (5 stages) with the prev
 
 ### Status
 - [x] Completed
+
+## 2026-01-20 - UI/UX Pro Enhancements (Settings, Profile, Card)
+
+### Current Task
+Refactoring the `/dashboard/settings`, `/dashboard/profile`, and `/dashboard/card` pages to align with the new "Pro" design standard.
+
+### Architecture Decision
+- **Settings Page**: Replaced inline styles with `DESIGN_TOKENS`, added Lucide icons, glassmorphism.
+- **Profile Page**: Refactored logic-preserving `ProfilePage.tsx` with glassmorphism. **Updated gradient** to Orange/Gold (user preference).
+- **Card Page**: Complete rewrite of `CardOverviewPage.tsx` using specialized "Pro" glass components, refined typography, and Lucide icons suitable for service management.
+- **Localization**: Ensured `t.common.error` is used for consistent error messaging.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/SettingsPage.tsx`
+- `frontend/src/components/SubscriptionManagement.tsx`
+- `frontend/src/components/AIAgentSettings.tsx`
+- `frontend/src/pages/dashboard/ProfilePage.tsx`
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx`
+
+### Trade-offs & Decisions
+- **Visual Consistency**: Unified all main dashboard pages under the same design system (`design-tokens.ts`).
+- **User Preference**: Switched Profile completion banner to Orange/Gold to match "Progress" tab as requested.
+
+### Dependencies
+- `lucide-react`, `clsx`, `tailwind-merge`
+
+### Status
+- [x] Completed (Local Code)
+- [ ] Deployment (Manual Git Pull Required)
+
+## 2026-01-20 - UI/UX Pro Enhancements (Reviews & News)
+
+### Current Task
+Completing the "Pro" redesign for the `/dashboard/card` page by refactoring the Reviews and News child components.
+
+### Architecture Decision
+- **ReviewReplyAssistant**: Redesigned to use glass settings panel, quick generator, and card-based layout for reviews. Added detailed `Lucide` icons.
+- **NewsGenerator**: Redesigned utilizing a 2-column settings layout, gradient action buttons, and clean card lists for generated/external news.
+- **Consistency**: Both components now share the same visual language as `CardOverviewPage`.
+
+### Files to Modify
+- `frontend/src/components/ReviewReplyAssistant.tsx`
+- `frontend/src/components/NewsGenerator.tsx`
+
+### Status
+- [x] Completed (Local Code)
+- [ ] Deployment (Manual Git Pull Required)

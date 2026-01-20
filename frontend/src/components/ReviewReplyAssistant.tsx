@@ -5,6 +5,26 @@ import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useLanguage } from '@/i18n/LanguageContext';
+import {
+  MessageSquare,
+  Sparkles,
+  Copy,
+  Edit3,
+  Send,
+  Save,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Plus,
+  Globe,
+  Settings2,
+  Calendar,
+  User,
+  Star,
+  Quote
+} from 'lucide-react';
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 
@@ -143,7 +163,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
         })
       });
       const data = await res.json();
-      console.log('Ответ API генерации:', data); // Для отладки
+
       if (!res.ok || data.error) {
         setError(data.error || t.dashboard.card.reviewReply.errorGenerate);
       } else {
@@ -158,8 +178,6 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
         } else if (data.result && typeof data.result === 'object' && 'text' in data.result) {
           generatedReply = data.result.text;
         }
-
-        console.log('Извлечённый ответ:', generatedReply); // Для отладки
 
         if (reviewId) {
           // Сохраняем ответ для конкретного отзыва
@@ -240,230 +258,302 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
   ];
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.card.reviewReply.title}</h3>
-      <p className="text-sm text-gray-600">{t.dashboard.card.reviewReply.subtitle}</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            {tones.map(toneItem => (
-              <button key={toneItem.key} type="button" onClick={() => setTone(toneItem.key)}
-                className={`text-xs px-3 py-1 rounded-full border ${tone === toneItem.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700'}`}>
-                {toneItem.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {t.dashboard.card.reviewReply.toneLabel}
-          </p>
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm text-gray-700 mb-1">{t.dashboard.card.reviewReply.languageLabel}</label>
-          <Select value={language} onValueChange={setLanguage}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">
-            {t.dashboard.card.reviewReply.languageHint} (
-            {LANGUAGE_OPTIONS.find((l) => l.value === interfaceLanguage)?.label || interfaceLanguage}).
-          </p>
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <MessageSquare className="w-6 h-6 text-primary" />
+            {t.dashboard.card.reviewReply.title}
+          </h3>
+          <p className="text-gray-600 mt-1">{t.dashboard.card.reviewReply.subtitle}</p>
         </div>
       </div>
 
-      {/* {t.dashboard.card.reviewReply.examplesLabel} */}
-      <div>
-        <label className="block text-sm text-gray-600 mb-1">{t.dashboard.card.reviewReply.examplesLabel}</label>
-        <div className="flex gap-2">
-          <Input value={exampleInput} onChange={(e) => setExampleInput(e.target.value)} placeholder={t.dashboard.card.reviewReply.examplesPlaceholder} />
-          <Button variant="outline" onClick={addExample}>{t.dashboard.card.reviewReply.addExample}</Button>
-        </div>
-        {examples.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {examples.map(e => (
-              <li key={e.id} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">
-                <span className="mr-2 truncate">{e.text}</span>
-                <button className="text-xs text-red-600" onClick={() => deleteExample(e.id)}>{t.dashboard.card.reviewReply.deleteExample}</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <Textarea rows={5} value={review} onChange={(e) => setReview(e.target.value)} placeholder={t.dashboard.card.reviewReply.reviewPlaceholder} />
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}
-      <div className="flex gap-2">
-        <Button onClick={() => handleGenerate()} disabled={loading || !review.trim()}>{loading ? t.dashboard.card.reviewReply.generating : t.dashboard.card.reviewReply.generate}</Button>
-      </div>
-      {reply && (
-        <div className="bg-gray-50 border border-gray-200 p-3 rounded">
-          <div className="text-sm text-gray-600 mb-2">Предложение ответа:</div>
-          {isEditing ? (
-            <div className="space-y-2">
-              <Textarea
-                value={editableReply}
-                onChange={(e) => setEditableReply(e.target.value)}
-                rows={3}
-                className="w-full"
-                placeholder={t.dashboard.card.reviewReply.editPlaceholder}
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSaveReply}
-                  disabled={saving || !editableReply.trim()}
-                  size="sm"
-                >
-                  {saving ? t.dashboard.card.reviewReply.saving : t.dashboard.card.reviewReply.save}
-                </Button>
-                <Button
-                  onClick={handleCancelEdit}
-                  variant="outline"
-                  size="sm"
-                >
-                  Отмена
-                </Button>
-              </div>
+      {/* Settings Panel */}
+      <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6 bg-gradient-to-br from-white/80 to-indigo-50/30")}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Settings2 className="w-4 h-4" />
+              {t.dashboard.card.reviewReply.toneLabel}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-gray-900">{reply}</div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleEditReply}
-                  variant="outline"
-                  size="sm"
-                >
-                  Редактировать
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigator.clipboard.writeText(reply)}
-                >
-                  Копировать
-                </Button>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {tones.map(toneItem => (
+                <button key={toneItem.key} type="button" onClick={() => setTone(toneItem.key)}
+                  className={cn(
+                    "text-sm px-4 py-2 rounded-xl border transition-all duration-200",
+                    tone === toneItem.key
+                      ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-primary/50 hover:bg-primary/5'
+                  )}>
+                  {toneItem.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <Globe className="w-4 h-4" />
+              {t.dashboard.card.reviewReply.languageLabel}
+            </div>
+            <Select value={language} onValueChange={setLanguage}>
+              <SelectTrigger className="w-full h-10 rounded-xl bg-white border-gray-200 focus:ring-primary/20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <Quote className="w-4 h-4" />
+            {t.dashboard.card.reviewReply.examplesLabel}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={exampleInput}
+              onChange={(e) => setExampleInput(e.target.value)}
+              placeholder={t.dashboard.card.reviewReply.examplesPlaceholder}
+              className="rounded-xl border-gray-200 focus:ring-primary/20"
+            />
+            <Button variant="outline" onClick={addExample} className="rounded-xl border-gray-200 bg-white hover:bg-gray-50">
+              <Plus className="w-4 h-4 mr-2" />
+              {t.dashboard.card.reviewReply.addExample}
+            </Button>
+          </div>
+          {examples.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {examples.map(e => (
+                <div key={e.id} className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <span>{e.text}</span>
+                  <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={() => deleteExample(e.id)}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Блок со спарсенными отзывами */}
-      <div className="mt-8 pt-6 border-t border-gray-300">
-        <h4 className="text-md font-semibold text-gray-900 mb-3">{t.dashboard.card.reviewReply.externalTitle}</h4>
-        {loadingReviews ? (
-          <div className="text-sm text-gray-500">{t.dashboard.card.reviewReply.loading}</div>
-        ) : externalReviews.length === 0 ? (
-          <div className="text-sm text-gray-500">{t.dashboard.card.reviewReply.noReviews}</div>
-        ) : (
-          <div className="space-y-4">
-            {/* Пагинация сверху */}
-            {externalReviews.length > itemsPerPage && (
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-                <div className="text-sm text-gray-600">
-                  {t.dashboard.card.reviewReply.shown} {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} {t.dashboard.card.reviewReply.of} {externalReviews.length}
-                </div>
-                <div className="flex gap-2">
+      {/* Manual Generation Block */}
+      <div className={cn("bg-white rounded-2xl border border-gray-200 p-6 shadow-sm")}>
+        <h4 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-amber-500" />
+          Quick Generator
+        </h4>
+        <Textarea
+          rows={4}
+          value={review}
+          onChange={(e) => setReview(e.target.value)}
+          placeholder={t.dashboard.card.reviewReply.reviewPlaceholder}
+          className="rounded-xl border-gray-200 bg-gray-50 focus:bg-white transition-all mb-4 resize-none"
+        />
+
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button onClick={() => handleGenerate()} disabled={loading || !review.trim()} className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20">
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                {t.dashboard.card.reviewReply.generating}
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t.dashboard.card.reviewReply.generate}
+              </>
+            )}
+          </Button>
+        </div>
+
+        {reply && (
+          <div className="mt-6 bg-indigo-50/50 border border-indigo-100 p-5 rounded-2xl animate-in fade-in slide-in-from-top-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Generated Reply
+            </div>
+            {isEditing ? (
+              <div className="space-y-3">
+                <Textarea
+                  value={editableReply}
+                  onChange={(e) => setEditableReply(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border-indigo-200 focus:ring-indigo-500/20"
+                  placeholder={t.dashboard.card.reviewReply.editPlaceholder}
+                />
+                <div className="flex gap-2 justify-end">
                   <Button
+                    onClick={handleCancelEdit}
+                    variant="ghost"
                     size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
+                    className="text-gray-600 hover:bg-gray-100 rounded-lg"
                   >
-                    Назад
+                    {t.common.cancel || "Cancel"}
                   </Button>
-                  <span className="px-3 py-1 text-sm text-gray-700">
-                    {t.dashboard.card.reviewReply.page} {currentPage} {t.dashboard.card.reviewReply.of} {Math.ceil(externalReviews.length / itemsPerPage)}
-                  </span>
                   <Button
+                    onClick={handleSaveReply}
+                    disabled={saving || !editableReply.trim()}
                     size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(externalReviews.length / itemsPerPage), prev + 1))}
-                    disabled={currentPage >= Math.ceil(externalReviews.length / itemsPerPage)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
                   >
-                    Вперед
+                    {saving ? t.dashboard.card.reviewReply.saving : t.dashboard.card.reviewReply.save}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-gray-800 leading-relaxed whitespace-pre-wrap font-medium">{reply}</div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    onClick={handleEditReply}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigator.clipboard.writeText(reply)}
+                    className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-lg"
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-2" />
+                    Copy
                   </Button>
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </div>
 
+      {/* External Reviews List */}
+      <div className="pt-8 border-t border-gray-100">
+        <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <Globe className="w-5 h-5 text-gray-400" />
+          {t.dashboard.card.reviewReply.externalTitle}
+        </h4>
+
+        {loadingReviews ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+          </div>
+        ) : externalReviews.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">{t.dashboard.card.reviewReply.noReviews}</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
             {externalReviews
               .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
               .map((reviewItem) => (
-                <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="font-medium text-gray-900">{reviewItem.author_name || t.dashboard.card.reviewReply.anonymous}</span>
+                <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center text-indigo-600 font-bold">
+                        {(reviewItem.author_name || 'A')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900">{reviewItem.author_name || t.dashboard.card.reviewReply.anonymous}</div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          {reviewItem.published_at && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(reviewItem.published_at).toLocaleDateString(interfaceLanguage === 'ru' ? 'ru-RU' : 'en-US')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     {reviewItem.rating && (
-                      <span className="text-sm text-gray-600">⭐ {reviewItem.rating}</span>
-                    )}
-                    {reviewItem.published_at && (
-                      <span className="text-xs text-gray-500">
-                        {new Date(reviewItem.published_at).toLocaleDateString('ru-RU')}
-                      </span>
+                      <div className="flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={cn("w-3.5 h-3.5", i < reviewItem.rating! ? "text-amber-500 fill-amber-500" : "text-gray-200 fill-gray-200")} />
+                        ))}
+                      </div>
                     )}
                   </div>
 
-                  {/* Два столбца: отзыв слева, ответ справа */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Левая колонка: Отзыв клиента */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Client Review */}
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">{t.dashboard.card.reviewReply.clientReview}</label>
-                      <div className="bg-gray-50 border border-gray-200 rounded p-3 min-h-[100px]">
-                        {reviewItem.text ? (
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap">{reviewItem.text}</div>
-                        ) : (
-                          <div className="text-sm text-gray-400 italic">{t.dashboard.card.reviewReply.noReviewText}</div>
-                        )}
+                      <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                        {t.dashboard.card.reviewReply.clientReview}
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-4 text-gray-800 text-sm leading-relaxed min-h-[120px] relative">
+                        <Quote className="absolute top-3 right-3 w-4 h-4 text-gray-300 transform rotate-180" />
+                        {reviewItem.text || <span className="text-gray-400 italic">{t.dashboard.card.reviewReply.noReviewText}</span>}
                       </div>
                     </div>
 
-                    {/* Правая колонка: Ответ организации */}
+                    {/* Organization Reply */}
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">{t.dashboard.card.reviewReply.organizationReply}</label>
+                      <div className="text-xs font-bold uppercase tracking-wider text-primary">
+                        {t.dashboard.card.reviewReply.organizationReply}
+                      </div>
+
                       {reviewItem.has_response && reviewItem.response_text ? (
-                        <div className="bg-green-50 border border-green-200 rounded p-3 min-h-[100px]">
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap">{reviewItem.response_text}</div>
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-emerald-900 text-sm leading-relaxed min-h-[120px] relative">
+                          <div className="absolute top-2 right-2 p-1 bg-emerald-100 rounded-md">
+                            <Send className="w-3 h-3 text-emerald-600" />
+                          </div>
+                          {reviewItem.response_text}
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="flex flex-col h-full gap-2">
                           <Textarea
                             rows={4}
                             value={generatedReplies[reviewItem.id] || ''}
                             onChange={(e) => setGeneratedReplies(prev => ({ ...prev, [reviewItem.id]: e.target.value }))}
                             placeholder={t.dashboard.card.reviewReply.replyPlaceholder}
-                            className="w-full min-h-[100px]"
+                            className="flex-1 min-h-[120px] rounded-xl border-indigo-200 focus:ring-indigo-500/20 bg-white"
                           />
-                          <Button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleGenerate(reviewItem.text || '', reviewItem.id);
-                            }}
-                            disabled={generatingForReviewId === reviewItem.id || !reviewItem.text}
-                            size="sm"
-                            variant="outline"
-                            className="w-full"
-                          >
-                            {generatingForReviewId === reviewItem.id ? t.dashboard.card.reviewReply.generating : t.dashboard.card.reviewReply.generate}
-                          </Button>
-                          {generatedReplies[reviewItem.id] && (
-                            <div className="flex gap-2 mt-2">
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleGenerate(reviewItem.text || '', reviewItem.id);
+                              }}
+                              disabled={generatingForReviewId === reviewItem.id || !reviewItem.text}
+                              size="sm"
+                              className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
+                            >
+                              {generatingForReviewId === reviewItem.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              ) : (
+                                <> <Sparkles className="w-3.5 h-3.5 mr-2" /> {t.dashboard.card.reviewReply.generate} </>
+                              )}
+                            </Button>
+                            {generatedReplies[reviewItem.id] && (
                               <Button
                                 onClick={() => navigator.clipboard.writeText(generatedReplies[reviewItem.id])}
                                 size="sm"
                                 variant="outline"
-                                className="flex-1"
+                                className="bg-white border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg px-3"
+                                title="Copy"
                               >
-                                Копировать
+                                <Copy className="w-4 h-4" />
                               </Button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -471,11 +561,11 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
                 </div>
               ))}
 
-            {/* Пагинация внизу */}
+            {/* Pagination */}
             {externalReviews.length > itemsPerPage && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                <div className="text-sm text-gray-600">
-                  {t.dashboard.card.reviewReply.shown} {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} {t.dashboard.card.reviewReply.of} {externalReviews.length}
+              <div className="flex items-center justify-between pt-6">
+                <div className="text-sm text-gray-500 font-medium">
+                  {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} / {externalReviews.length}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -483,19 +573,18 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
                     variant="outline"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
+                    className="rounded-lg h-9 w-9 p-0"
                   >
-                    Назад
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <span className="px-3 py-1 text-sm text-gray-700">
-                    {t.dashboard.card.reviewReply.page} {currentPage} {t.dashboard.card.reviewReply.of} {Math.ceil(externalReviews.length / itemsPerPage)}
-                  </span>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setCurrentPage(prev => Math.min(Math.ceil(externalReviews.length / itemsPerPage), prev + 1))}
                     disabled={currentPage >= Math.ceil(externalReviews.length / itemsPerPage)}
+                    className="rounded-lg h-9 w-9 p-0"
                   >
-                    Вперед
+                    <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -506,5 +595,3 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     </div>
   );
 }
-
-
