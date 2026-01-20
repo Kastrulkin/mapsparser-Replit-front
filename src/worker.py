@@ -9,6 +9,7 @@ import signal
 import sys
 
 # New imports
+from database_manager import DatabaseManager
 from yandex_business_sync_worker import YandexBusinessSyncWorker
 # from google_business_sync_worker import GoogleBusinessSyncWorker  # Uncomment when ready
 

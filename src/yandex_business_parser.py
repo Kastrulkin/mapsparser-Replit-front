@@ -427,7 +427,9 @@ class YandexBusinessParser:
             
             try:
                 # Пробуем разные варианты полей с датой
+                # ВАЖНО: Яндекс теперь использует updatedTime!
                 published_at_str = (
+                    review_data.get("updatedTime") or  # NEW: Яндекс API 2026
                     review_data.get("published_at") or
                     review_data.get("publishedAt") or
                     review_data.get("date") or
@@ -457,14 +459,18 @@ class YandexBusinessParser:
                 has_response = False
                 
                 # Проверяем различные варианты структуры ответа
-                # В реальном API ответ находится в поле "owner_comment"
-                response_data = review_data.get("owner_comment")
+                # ВАЖНО: Яндекс теперь использует businessComment вместо owner_comment!
+                response_data = (
+                    review_data.get("businessComment") or  # NEW: Яндекс API 2026
+                    review_data.get("owner_comment")
+                )
                 
-                # Логируем структуру owner_comment для отладки (первые 3 отзыва)
+                # Логируем структуру для отладки (первые 3 отзыва)
                 if idx < 3:
-                    print(f"   🔍 DEBUG owner_comment для отзыва #{idx + 1}:", flush=True)
+                    print(f"   🔍 DEBUG response data для отзыва #{idx + 1}:", flush=True)
+                    print(f"      businessComment: {review_data.get('businessComment')}", flush=True)
                     print(f"      Тип: {type(response_data)}", flush=True)
-                    print(f"      Значение: {str(response_data)[:200]}", flush=True)
+                    print(f"      Значение: {str(response_data)[:200] if response_data else 'None'}", flush=True)
                 
                 # ВАЖНО: проверяем, что owner_comment не null и не пустой объект
                 if response_data is None:
