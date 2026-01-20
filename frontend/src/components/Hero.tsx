@@ -35,14 +35,14 @@ const Hero = () => {
               {t.hero.subtitle}
             </p>
 
-            <div className="flex items-center gap-4 text-sm font-medium text-gray-500 animate-in fade-in slide-in-from-bottom-7 duration-1000 delay-300">
-              <div className="flex -space-x-2">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200" />
-                ))}
-              </div>
-              <div>Joined by 1000+ businesses</div>
-            </div>
+          </div>
+
+          <div className="relative animate-in fade-in slide-in-from-left-8 duration-1000 delay-200">
+            <img
+              src={heroImage}
+              alt="BeautyBot Hero"
+              className="w-full h-auto rounded-2xl shadow-2xl"
+            />
           </div>
 
           <div className="relative animate-in fade-in slide-in-from-right-8 duration-1000 delay-300">
@@ -53,8 +53,8 @@ const Hero = () => {
               "ring-1 ring-gray-900/5"
             )}>
               <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Get Your Free Report</h3>
-                <p className="text-gray-500">Enter your details to receive a comprehensive audit.</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{t.hero.formTitle}</h3>
+                <p className="text-gray-500">{t.hero.formSubtitle}</p>
               </div>
 
               <form
@@ -94,7 +94,7 @@ const Hero = () => {
                 className="space-y-5"
               >
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700 ml-1">Email</label>
+                  <label className="text-sm font-semibold text-gray-700 ml-1">{t.hero.emailLabel}</label>
                   <input
                     name="email"
                     type="email"
@@ -105,7 +105,7 @@ const Hero = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700 ml-1">Yandex Maps Link</label>
+                  <label className="text-sm font-semibold text-gray-700 ml-1">{t.hero.mapsLinkLabel}</label>
                   <input
                     name="yandexUrl"
                     type="url"
@@ -134,13 +134,6 @@ const Hero = () => {
                   )}
                 </Button>
               </form>
-
-              <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>Free 14-day trial</span>
-                <span className="w-1 h-1 rounded-full bg-gray-300 mx-1" />
-                <span>No credit card required</span>
-              </div>
             </div>
 
             {/* Decorative elements behind form */}
