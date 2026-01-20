@@ -3,11 +3,29 @@ import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Wand2, Network } from 'lucide-react';
+import {
+  Wand2,
+  Network,
+  Star,
+  MessageSquare,
+  TrendingUp,
+  Plus,
+  Search,
+  Filter,
+  Trash2,
+  Edit3,
+  AlertCircle,
+  CheckCircle2,
+  MapPin,
+  Sparkles,
+  LayoutGrid,
+  List,
+  Newspaper
+} from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
@@ -171,12 +189,12 @@ export const CardOverviewPage = () => {
         setNewService({ category: '', name: '', description: '', keywords: '', price: '' });
         setShowAddService(false);
         await loadUserServices();
-        setSuccess(t.success);
+        setSuccess(t.common.success || "Success");
       } else {
-        setError(data.error || t.error);
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError(t.error + ': ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     }
   };
 
@@ -209,7 +227,7 @@ export const CardOverviewPage = () => {
         // Исправляем keywords
         let fixedKeywords = [];
         if (Array.isArray(service.keywords)) {
-          fixedKeywords = service.keywords.map(k => {
+          fixedKeywords = service.keywords.map((k: any) => {
             if (typeof k === 'string') {
               try {
                 const parsed = JSON.parse(k);
@@ -236,16 +254,16 @@ export const CardOverviewPage = () => {
 
         try {
           await updateService(serviceId, updateData);
-          setSuccess(t.success);
+          setSuccess(t.common.success || "Success");
           await loadUserServices();
         } catch (updateError: any) {
-          setError(t.error);
+          setError(t.common.error || "Error");
         }
       } else {
-        setError(data.error || t.error);
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError(t.error + ': ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     } finally {
       setOptimizingServiceId(null);
     }
@@ -272,9 +290,9 @@ export const CardOverviewPage = () => {
     if (data.success) {
       setEditingService(null);
       await loadUserServices();
-      setSuccess(t.success);
+      setSuccess(t.common.success || "Success");
     } else {
-      throw new Error(data.error || t.error);
+      throw new Error(data.error || t.common.error || "Error");
     }
   };
 
@@ -292,39 +310,36 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success) {
         await loadUserServices();
-        setSuccess(t.success);
+        setSuccess(t.common.success || "Success");
       } else {
-        setError(data.error || t.error);
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError(t.error + ': ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Blur Overlay for Network Master Accounts */}
       {isNetworkMaster && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
-          <div className="bg-white rounded-lg border-2 border-orange-200 shadow-2xl p-8 max-w-md mx-4 text-center">
-            <div className="mb-4 flex justify-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
-                <Network className="w-8 h-8 text-orange-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-md">
+          <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 max-w-md mx-4 text-center")}>
+            <div className="mb-6 flex justify-center">
+              <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center shadow-inner">
+                <Network className="w-10 h-10 text-orange-600" />
               </div>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
               {t.dashboard.card.networkNotice?.title || "Сетевой аккаунт"}
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-8 leading-relaxed">
               {t.dashboard.card.networkNotice?.message ||
                 "Перейдите на страницу точки, чтобы работать с карточкой точки на картах"}
             </p>
             <Button
-              onClick={() => {
-                // Navigate to profile page where network locations are shown
-                window.location.href = '/dashboard/profile';
-              }}
-              className="w-full"
+              onClick={() => window.location.href = '/dashboard/profile'}
+              className="w-full h-12 text-lg shadow-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
             >
               {t.dashboard.card.networkNotice?.action || "Выбрать точку"}
             </Button>
@@ -332,236 +347,303 @@ export const CardOverviewPage = () => {
         </div>
       )}
 
-      <div className={isNetworkMaster ? "pointer-events-none select-none blur-sm" : ""}>
-        <div className="flex justify-between items-center">
+      <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.card.title}</h1>
-            <p className="text-gray-600 mt-1">{t.dashboard.card.subtitle}</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <LayoutGrid className="w-6 h-6 text-orange-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title}</h1>
+            </div>
+            <p className="text-gray-600 text-lg">{t.dashboard.card.subtitle}</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowWizard(true)}>{t.dashboard.card.optimizationWizard}</Button>
+          <div className="flex gap-3">
+            {/* Progress Status Badge */}
+            <a href="/dashboard/progress" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium hover:bg-indigo-100 transition-colors">
+              <TrendingUp className="w-4 h-4" />
+              <span>{t.dashboard.card.progressTab}</span>
+            </a>
+            <Button
+              onClick={() => setShowWizard(true)}
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg hover:shadow-xl hover:from-violet-700 hover:to-indigo-700 transition-all"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {t.dashboard.card.optimizationWizard}
+            </Button>
           </div>
         </div>
 
-        {/* Пояснение о парсинге */}
-        <p className="text-xs text-gray-500 text-right">
-          {t.dashboard.card.parsingNote}
-          <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
-            {t.dashboard.card.progressTab}
-          </a>.
-        </p>
-
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
+          <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-            {success}
+          <div className="bg-emerald-50/80 backdrop-blur-sm border border-emerald-200 text-emerald-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <p>{success}</p>
           </div>
         )}
 
-        <Tabs defaultValue="services" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="services">{t.dashboard.card.tabServices || "Services"}</TabsTrigger>
-            <TabsTrigger value="reviews">{t.dashboard.card.tabReviews || "Reviews"}</TabsTrigger>
-            <TabsTrigger value="news">{t.dashboard.card.tabNews || "News"}</TabsTrigger>
+        <Tabs defaultValue="services" className="space-y-8">
+          <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start">
+            <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <List className="w-4 h-4" />
+              {t.dashboard.card.tabServices || "Services"}
+            </TabsTrigger>
+            <TabsTrigger value="reviews" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <MessageSquare className="w-4 h-4" />
+              {t.dashboard.card.tabReviews || "Reviews"}
+            </TabsTrigger>
+            <TabsTrigger value="news" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <Newspaper className="w-4 h-4" />
+              {t.dashboard.card.tabNews || "News"}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="services" className="space-y-6">
-            {/* Блок с рейтингом и количеством отзывов */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center gap-4">
-                {loadingSummary ? (
-                  <div className="text-gray-500">{t.dashboard.subscription.processing}</div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xl font-bold text-gray-900">
-                        {rating != null ? Number(rating).toFixed(1) : '—'}
-                      </span>
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-2xl ${rating !== null && star <= Math.floor(rating)
-                              ? 'text-yellow-400'
-                              : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                                ? 'text-yellow-400'
-                                : 'text-gray-300'
-                              }`}
-                          >
-                            ★
+            {/* Rating Summary Card */}
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 relative overflow-hidden")}>
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Star className="w-48 h-48" />
+              </div>
+              <div className="relative z-10">
+                <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                  Rating Overview
+                </h3>
+
+                <div className="flex items-center gap-8">
+                  {loadingSummary ? (
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                      {t.dashboard.subscription.processing}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-700">
+                            {rating != null ? Number(rating).toFixed(1) : '—'}
                           </span>
-                        ))}
+                          <span className="text-gray-400 font-medium">/ 5.0</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-gray-600">
-                      <span className="font-medium">{reviewsTotal}</span> {t.dashboard.card.reviews}
-                    </div>
-                  </>
-                )}
+
+                      <div className="h-12 w-px bg-gray-200" />
+
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={cn(
+                                "w-6 h-6",
+                                rating !== null && star <= Math.floor(rating)
+                                  ? "text-amber-400 fill-amber-400"
+                                  : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
+                                    ? "text-amber-400 fill-amber-400" // Half star logic could be better but simplified
+                                    : "text-gray-200 fill-gray-100"
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <div className="text-gray-500 font-medium ml-1">
+                          {reviewsTotal} {t.dashboard.card.reviews}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
-
-            {/* Услуги */}
-            <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-              boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-            }}>
-              <div className="flex justify-between items-center mb-4">
+            {/* Services Section */}
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8")}>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{t.dashboard.card.services}</h2>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h2 className="text-2xl font-bold text-gray-900">{t.dashboard.card.services}</h2>
+                  <p className="text-gray-500 mt-1">
                     {t.dashboard.card.servicesSubtitle}
                   </p>
                 </div>
+                {!showAddService && (
+                  <Button onClick={() => setShowAddService(true)} className="bg-primary text-white shadow-md hover:shadow-lg">
+                    <Plus className="w-4 h-4 mr-2" />
+                    {t.dashboard.card.addService}
+                  </Button>
+                )}
               </div>
 
-              {/* Форма добавления услуги */}
+              {/* Add Service Form */}
               {showAddService && (
-                <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">{t.dashboard.card.addService}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.category}</label>
+                <div className="mb-8 bg-gray-50/50 border border-gray-200 rounded-xl p-6 shadow-inner">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-primary" />
+                    {t.dashboard.card.addService}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.category}</label>
                       <input
                         type="text"
                         value={newService.category}
                         onChange={(e) => setNewService({ ...newService, category: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                         placeholder={t.dashboard.card.placeholders.category}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.serviceName}</label>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.serviceName}</label>
                       <input
                         type="text"
                         value={newService.name}
                         onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                         placeholder={t.dashboard.card.placeholders.name}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.description}</label>
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.description}</label>
                       <textarea
                         value={newService.description}
                         onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        rows={3}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[100px]"
                         placeholder={t.dashboard.card.placeholders.desc}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.keywords}</label>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.keywords}</label>
                       <input
                         type="text"
                         value={newService.keywords}
                         onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                         placeholder={t.dashboard.card.placeholders.keywords}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t.dashboard.card.price}</label>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.price}</label>
                       <input
                         type="text"
                         value={newService.price}
                         onChange={(e) => setNewService({ ...newService, price: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                         placeholder={t.dashboard.card.placeholders.price}
                       />
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button onClick={addService}>{t.dashboard.card.add}</Button>
-                    <Button onClick={() => setShowAddService(false)} variant="outline">{t.dashboard.card.cancel}</Button>
+                  <div className="flex gap-3 justify-end mt-8">
+                    <Button onClick={() => setShowAddService(false)} variant="outline" className="border-gray-200 text-gray-600 hover:bg-gray-100">
+                      {t.dashboard.card.cancel}
+                    </Button>
+                    <Button onClick={addService} className="bg-primary text-white">
+                      {t.dashboard.card.add}
+                    </Button>
                   </div>
                 </div>
               )}
 
-              {/* Функционал оптимизатора услуг (только загрузка файла) */}
-              <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-1">{t.dashboard.card.seo.title}</h2>
-                  <p className="text-sm text-gray-600">{t.dashboard.card.seo.desc1}</p>
-                  <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc2}</p>
-                  <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc3}</p>
-                  <p className="text-sm text-gray-600 mt-2">{t.dashboard.card.seo.desc4}</p>
+              {/* Service Optimizer Wizard Block */}
+              {!showAddService && (
+                <div className="mb-8 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-5 h-5 text-indigo-600" />
+                      <h3 className="font-semibold text-indigo-900">{t.dashboard.card.seo.title}</h3>
+                    </div>
+                    <p className="text-indigo-700/80 text-sm leading-relaxed max-w-2xl">
+                      {t.dashboard.card.seo.desc1} {t.dashboard.card.seo.desc2}
+                    </p>
+                  </div>
+                  <div className="flex gap-3 shrink-0">
+                    <ServiceOptimizer
+                      businessName={currentBusiness?.name}
+                      businessId={currentBusinessId}
+                      tone={wizardTone}
+                      region={wizardRegion}
+                      descriptionLength={wizardLength}
+                      instructions={wizardInstructions}
+                      hideTextInput={true}
+                    />
+                    {userServices.length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          userServices.forEach(s => optimizeService(s.id));
+                        }}
+                        className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      >
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        {t.dashboard.card.optimizeAll}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center">
-                  <Button onClick={() => setShowAddService(true)}>+ {t.dashboard.card.addService}</Button>
-                  <ServiceOptimizer
-                    businessName={currentBusiness?.name}
-                    businessId={currentBusinessId}
-                    tone={wizardTone}
-                    region={wizardRegion}
-                    descriptionLength={wizardLength}
-                    instructions={wizardInstructions}
-                    hideTextInput={true}
-                  />
-                  {userServices.length > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        userServices.forEach(s => optimizeService(s.id));
-                      }}
-                    >
-                      {t.dashboard.card.optimizeAll}
-                    </Button>
-                  )}
-                </div>
-              </div>
+              )}
 
-              {/* Список услуг */}
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+              {/* Services List */}
+              <div className="overflow-hidden rounded-xl border border-gray-100">
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-100">
                     {loadingServices ? (
                       <tr>
-                        <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.subscription.processing}</td>
+                        <td className="px-6 py-8 text-center" colSpan={5}>
+                          <div className="flex justify-center items-center gap-2 text-gray-500">
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                            <span>{t.dashboard.subscription.processing}</span>
+                          </div>
+                        </td>
                       </tr>
                     ) : userServices.length === 0 ? (
                       <tr>
-                        <td className="px-4 py-3 text-gray-500" colSpan={5}>{t.dashboard.network.noData}</td>
+                        <td className="px-6 py-12 text-center text-gray-500" colSpan={5}>
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="p-3 bg-gray-50 rounded-full">
+                              <Search className="w-8 h-8 text-gray-300" />
+                            </div>
+                            <p>{t.dashboard.network.noData}</p>
+                          </div>
+                        </td>
                       </tr>
                     ) : (
                       userServices
                         .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
                         .map((service, index) => (
-                          <tr key={service.id || index}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <tr key={service.id || index} className="group hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap align-top">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {service.category}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900 align-top max-w-[250px]">
                               <div className="space-y-3">
                                 {service.name && (
-                                  <div className="text-gray-900">{service.name}</div>
+                                  <div className="font-semibold">{service.name}</div>
                                 )}
                                 {service.optimized_name && (
-                                  <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
-                                    <div className="absolute top-0 right-0 p-2 opacity-10">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
-                                    </div>
-                                    <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                  <div className="mt-2 bg-indigo-50/80 border border-indigo-100 rounded-lg p-3 space-y-2 relative animate-in fade-in">
+                                    <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3" />
                                       {t.dashboard.card.seo.proposal}
                                     </div>
-                                    <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
+                                    <div className="text-gray-800 leading-snug text-sm">{service.optimized_name}</div>
                                     <div className="flex gap-2 pt-1">
                                       <Button
                                         size="sm"
-                                        variant="outline"
+                                        variant="ghost"
                                         onClick={async () => {
                                           await updateService(service.id, {
                                             category: service.category,
@@ -572,16 +654,17 @@ export const CardOverviewPage = () => {
                                             keywords: service.keywords,
                                             price: service.price
                                           });
-                                          setSuccess(t.success);
+                                          setSuccess(t.common.success || "Accepted");
                                           await loadUserServices();
                                         }}
-                                        className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                        className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                                       >
+                                        <CheckCircle2 className="w-3 h-3 mr-1" />
                                         {t.dashboard.card.seo.accept}
                                       </Button>
                                       <Button
                                         size="sm"
-                                        variant="outline"
+                                        variant="ghost"
                                         onClick={async () => {
                                           await updateService(service.id, {
                                             category: service.category,
@@ -592,10 +675,10 @@ export const CardOverviewPage = () => {
                                             keywords: service.keywords,
                                             price: service.price
                                           });
-                                          setSuccess(t.success);
+                                          setSuccess(t.common.success || "Rejected");
                                           await loadUserServices();
                                         }}
-                                        className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                        className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                                       >
                                         {t.dashboard.card.seo.reject}
                                       </Button>
@@ -603,29 +686,26 @@ export const CardOverviewPage = () => {
                                   </div>
                                 )}
                                 {!service.name && !service.optimized_name && (
-                                  <span className="text-gray-400">—</span>
+                                  <span className="text-gray-300 italic">—</span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
+                            <td className="px-6 py-4 text-sm text-gray-600 align-top max-w-[350px]">
                               <div className="space-y-3">
                                 {service.description && (
-                                  <div className="text-gray-700 leading-relaxed">{service.description}</div>
+                                  <div className="leading-relaxed">{service.description}</div>
                                 )}
                                 {service.optimized_description && (
-                                  <div className="mt-2 bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 relative">
-                                    <div className="absolute top-0 right-0 p-2 opacity-10">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
-                                    </div>
-                                    <div className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 10 10 0 0 0-10 10" /></svg>
+                                  <div className="mt-2 bg-indigo-50/80 border border-indigo-100 rounded-lg p-3 space-y-2 relative animate-in fade-in">
+                                    <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3" />
                                       {t.dashboard.card.seo.proposal}
                                     </div>
-                                    <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
+                                    <div className="text-gray-800 leading-relaxed text-sm">{service.optimized_description}</div>
                                     <div className="flex gap-2 pt-1">
                                       <Button
                                         size="sm"
-                                        variant="outline"
+                                        variant="ghost"
                                         onClick={async () => {
                                           await updateService(service.id, {
                                             category: service.category,
@@ -635,16 +715,17 @@ export const CardOverviewPage = () => {
                                             keywords: service.keywords,
                                             price: service.price
                                           });
-                                          setSuccess(t.success);
+                                          setSuccess(t.common.success || "Accepted");
                                           await loadUserServices();
                                         }}
-                                        className="text-xs h-7 border-gray-300 hover:bg-gray-100"
+                                        className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                                       >
+                                        <CheckCircle2 className="w-3 h-3 mr-1" />
                                         {t.dashboard.card.seo.accept}
                                       </Button>
                                       <Button
                                         size="sm"
-                                        variant="outline"
+                                        variant="ghost"
                                         onClick={async () => {
                                           await updateService(service.id, {
                                             category: service.category,
@@ -654,10 +735,10 @@ export const CardOverviewPage = () => {
                                             keywords: service.keywords,
                                             price: service.price
                                           });
-                                          setSuccess(t.success);
+                                          setSuccess(t.common.success || "Rejected");
                                           await loadUserServices();
                                         }}
-                                        className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
+                                        className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                                       >
                                         {t.dashboard.card.seo.reject}
                                       </Button>
@@ -665,19 +746,19 @@ export const CardOverviewPage = () => {
                                   </div>
                                 )}
                                 {!service.description && !service.optimized_description && (
-                                  <span className="text-gray-400">—</span>
+                                  <span className="text-gray-300 italic">—</span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">{service.price}</td>
-                            <td className="px-4 py-3 text-sm text-gray-500">
-                              <div className="flex gap-1 justify-end">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">{service.price}</td>
+                            <td className="px-6 py-4 text-right text-sm text-gray-500 align-top">
+                              <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => optimizeService(service.id)}
                                   disabled={optimizingServiceId === service.id}
-                                  className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                  className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
                                   title={t.dashboard.card.optimize}
                                 >
                                   {optimizingServiceId === service.id ? (
@@ -690,9 +771,9 @@ export const CardOverviewPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => deleteService(service.id)}
-                                  className="h-8 w-8 hover:bg-red-50"
+                                  className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
                                 >
-                                  <span className="text-lg">🗑️</span>
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </td>
@@ -702,17 +783,20 @@ export const CardOverviewPage = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination controls could go here */}
+
             </div>
           </TabsContent>
 
           <TabsContent value="reviews">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
               <ReviewReplyAssistant businessName={currentBusiness?.name} />
             </div>
           </TabsContent>
 
           <TabsContent value="news">
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
               <NewsGenerator
                 services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
                 businessId={currentBusinessId}

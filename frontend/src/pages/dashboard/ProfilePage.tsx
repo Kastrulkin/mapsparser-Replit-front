@@ -459,9 +459,9 @@ export const ProfilePage = () => {
       )}
 
       {/* Заполненность профиля */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white shadow-xl">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Trophy className="w-32 h-32" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 p-6 text-white shadow-xl">
+        <div className="absolute top-0 right-0 p-4 opacity-20">
+          <Trophy className="w-32 h-32 text-yellow-100" />
         </div>
         <div className="relative z-10 flex items-center gap-6">
           <div className="relative w-20 h-20 shrink-0">
