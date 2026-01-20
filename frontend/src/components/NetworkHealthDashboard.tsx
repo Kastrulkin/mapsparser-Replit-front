@@ -4,7 +4,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { useApiData } from '../hooks/useApiData';
 import { Star, AlertTriangle, TrendingUp, MapPin, MessageCircle, Image, Newspaper } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '../lib/utils';
 
 interface NetworkHealthData {
@@ -45,7 +45,7 @@ interface NetworkHealthDashboardProps {
 }
 
 const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ networkId, businessId }) => {
-    const { t } = useTranslation();
+    const { t } = useLanguage();
 
     // Fetch network health metrics
     const { data: healthResponse, loading: loadingHealth, error: errorHealth } = useApiData<{ data: NetworkHealthData }>(
@@ -134,7 +134,7 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
-                        {t('networkHealth.title')}
+                        {t.networkHealth?.title || 'Состояние сети'}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -154,7 +154,7 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                 <CardHeader>
                     <CardTitle className="text-destructive flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5" />
-                        {t('common.error')}
+                        {t.common?.error || 'Ошибка'}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -175,10 +175,10 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                         <div>
                             <CardTitle className="flex items-center gap-2 text-xl">
                                 <TrendingUp className="h-5 w-5 text-primary" />
-                                {t('networkHealth.title')}
+                                {t.networkHealth?.title || 'Состояние сети'}
                             </CardTitle>
                             <CardDescription>
-                                {t('networkHealth.description')}
+                                {t.networkHealth?.description || 'Мониторинг здоровья всех точек сети'}
                             </CardDescription>
                         </div>
                     </div>
@@ -186,23 +186,23 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <MetricCard
-                            title={t('networkHealth.avgRating')}
+                            title={t.networkHealth?.avgRating || 'Средний рейтинг'}
                             value={health.avg_rating.toFixed(1)}
                             icon={Star}
                             variant={health.avg_rating >= 4.0 ? 'success' : 'default'}
                         />
                         <MetricCard
-                            title={t('networkHealth.totalReviews')}
+                            title={t.networkHealth?.totalReviews || 'Всего отзывов'}
                             value={health.total_reviews}
                             icon={MessageCircle}
                         />
                         <MetricCard
-                            title={t('networkHealth.locationsCount')}
+                            title={t.networkHealth?.locationsCount || 'Точек сети'}
                             value={health.locations_count}
                             icon={MapPin}
                         />
                         <MetricCard
-                            title={t('networkHealth.unansweredReviews')}
+                            title={t.networkHealth?.unansweredReviews || 'Неотвеченных отзывов'}
                             value={health.unanswered_reviews_count}
                             icon={AlertTriangle}
                             variant={health.unanswered_reviews_count > 0 ? 'warning' : 'default'}
@@ -217,10 +217,10 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-orange-600" />
-                            {t('networkHealth.needsAttention')}
+                            {t.networkHealth?.needsAttention || 'Требуют внимания'}
                         </CardTitle>
                         <CardDescription>
-                            {t('networkHealth.locationsRequiringAction', { count: locations.length })}
+                            {t.networkHealth?.locationsRequiringAction?.replace('{{count}}', locations.length.toString()) || `${locations.length} точек требуют внимания`}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -242,7 +242,7 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                                                 )}
                                             </div>
                                             <Badge variant="outline" className="text-xs">
-                                                {location.alerts.length} {t('networkHealth.alerts.count')}
+                                                {location.alerts.length} {t.networkHealth?.alerts?.count || 'алерта'}
                                             </Badge>
                                         </div>
 
@@ -262,10 +262,10 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                                                             <p className="text-sm font-medium">{alert.message}</p>
                                                             {alert.days_since && alert.threshold && (
                                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                                    {t('networkHealth.alerts.daysInfo', {
-                                                                        days: alert.days_since,
-                                                                        threshold: alert.threshold
-                                                                    })}
+                                                                    {t.networkHealth?.alerts?.daysInfo
+                                                                        ?.replace('{{days}}', alert.days_since.toString())
+                                                                        ?.replace('{{threshold}}', alert.threshold.toString())
+                                                                        || `${alert.days_since} дней (порог: ${alert.threshold})`}
                                                                 </p>
                                                             )}
                                                         </div>
@@ -290,10 +290,10 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                         </div>
                         <div>
                             <p className="font-semibold text-green-900">
-                                {t('networkHealth.allGood')}
+                                {t.networkHealth?.allGood || 'Всё отлично!'}
                             </p>
                             <p className="text-sm text-green-700">
-                                {t('networkHealth.noAlertsMessage')}
+                                {t.networkHealth?.noAlertsMessage || 'Все точки сети в хорошем состоянии'}
                             </p>
                         </div>
                     </CardContent>
