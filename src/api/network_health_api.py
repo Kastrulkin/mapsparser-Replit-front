@@ -85,7 +85,7 @@ def get_network_health(current_user):
         business_id = request.args.get('business_id')
         
         # Build WHERE clause
-        where_clauses = ["b.user_id = ?"]
+        where_clauses = ["b.owner_id = ?"]
         params = [user_id]
         
         if network_id:
@@ -195,7 +195,7 @@ def get_location_alerts(current_user):
         alert_type = request.args.get('alert_type')
         
         # Build WHERE clause
-        where_clauses = ["b.user_id = ?"]
+        where_clauses = ["b.owner_id = ?"]
         params = [user_id]
         
         if network_id:
