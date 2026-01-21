@@ -33,7 +33,7 @@ def get_metrics_history(business_id):
             cursor.execute("""
                 SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
                 FROM MapParseResults 
-                WHERE business_id = ? AND rating != '' AND rating IS NOT NULL
+                WHERE business_id = ? 
                 GROUP BY parse_date 
             """, (business_id,))
             
@@ -73,8 +73,55 @@ def get_metrics_history(business_id):
                     
             db.conn.commit()
         except Exception as e:
-            print(f"⚠️ Ошибка синхронизации истории метрик: {e}")
-        # --- SYNC LEGACY PARSES END ---
+            db.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка синхронизации истории метрик из MapParseResults: {e}")
+
+        # --- SYNC EXTERNAL STATS START ---
+        try:
+            # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
+            cursor.execute("""
+                SELECT source, date, rating, reviews_total 
+                FROM ExternalBusinessStats 
+                WHERE business_id = ? AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
+            """, (business_id,))
+            
+            stats_rows = cursor.fetchall()
+            for row in stats_rows:
+                source = row[0]
+                metric_date = row[1]
+                rating = row[2]
+                reviews_count = row[3]
+                
+                # Проверяем, есть ли запись
+                cursor.execute("""
+                    SELECT id FROM BusinessMetricsHistory 
+                    WHERE business_id = ? AND metric_date = ? AND source = ?
+                """, (business_id, metric_date, source))
+                
+                existing = cursor.fetchone()
+                
+                if not existing:
+                    metric_id = str(uuid.uuid4())
+                    cursor.execute("""
+                        INSERT INTO BusinessMetricsHistory (
+                            id, business_id, metric_date, rating, reviews_count, 
+                            photos_count, news_count, source
+                        )
+                        VALUES (?, ?, ?, ?, ?, 0, 0, ?)
+                    """, (metric_id, business_id, metric_date, rating, reviews_count, source))
+                else:
+                    # Обновляем
+                    cursor.execute("""
+                        UPDATE BusinessMetricsHistory
+                        SET rating = COALESCE(?, rating), reviews_count = COALESCE(?, reviews_count)
+                        WHERE id = ?
+                    """, (rating, reviews_count, existing[0]))
+            
+            db.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка синхронизации истории метрик из ExternalBusinessStats: {e}")
+        # --- SYNC EXTERNAL STATS END ---
 
         # Загружаем историю метрик
         cursor.execute("""

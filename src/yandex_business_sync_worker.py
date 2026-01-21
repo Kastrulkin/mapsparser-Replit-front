@@ -291,6 +291,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 photos_count=photos_count,
                 products=products
             )
+            db.conn.commit()
 
             self._update_account_sync_status(db, account['id'])
             print(f"✅ Синхронизация аккаунта {account_id} завершена")
@@ -300,6 +301,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             traceback.print_exc()
             if db:
                 self._update_account_sync_status(db, account_id, error=str(e))
+            raise e
         finally:
             if db:
                 db.close()

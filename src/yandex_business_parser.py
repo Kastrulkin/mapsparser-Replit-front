@@ -881,6 +881,21 @@ class YandexBusinessParser:
                     info["rating"] = round(avg_rating, 1)
                     print(f"   📊 Вычислен средний рейтинг из {len(ratings)} отзывов: {info['rating']}")
         
+        # Если рейтинг всё ещё не найден, пробуем получить из статистики
+        if not info["rating"]:
+            try:
+                stats = self.fetch_stats(account_row)
+                if stats and len(stats) > 0:
+                    # Ищем последнюю статистику с рейтингом
+                    stats.sort(key=lambda x: x.date, reverse=True)
+                    for stat in stats:
+                        if stat.rating and stat.rating > 0:
+                            info["rating"] = stat.rating
+                            print(f"   📊 Рейтинг получен из статистики: {info['rating']}")
+                            break
+            except Exception as e:
+                print(f"⚠️ Ошибка получения рейтинга из статистики: {e}")
+        
         # Получаем количество новостей и фото из реальных методов
         if info["news_count"] == 0:
             try:
