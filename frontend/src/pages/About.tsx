@@ -329,7 +329,6 @@ const About = () => {
                   <div>- {t.about.pricingOption2Point2}</div>
                   <div>- {t.about.pricingOption2Point3}</div>
                   <div>- {t.about.pricingOption2Point4}</div>
-                  <div>- {t.about.pricingOption2Point5}</div>
                 </div>
                 <div className="text-sm text-muted-foreground italic mt-4">
                   {t.about.pricingOption2Note}
