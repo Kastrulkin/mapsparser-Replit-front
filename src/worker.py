@@ -456,11 +456,67 @@ def process_queue():
                     # Убеждаемся, что колонка unanswered_reviews_count существует
                     _ensure_column_exists(cursor, conn, "MapParseResults", "unanswered_reviews_count", "INTEGER")
                     
-                    # Всегда используем колонку (она будет создана если её нет)
+                    # Убеждаемся, что колонки для профайла бизнеса существуют
+                    profile_columns = [
+                        ("is_verified", "INTEGER DEFAULT 0"),
+                        ("phone", "TEXT"),
+                        ("website", "TEXT"),
+                        ("messengers", "TEXT"),  # JSON
+                        ("working_hours", "TEXT"),  # JSON
+                        ("services_count", "INTEGER DEFAULT 0"),
+                        ("profile_completeness", "INTEGER DEFAULT 0"),
+                    ]
+                    for col_name, col_type in profile_columns:
+                        _ensure_column_exists(cursor, conn, "MapParseResults", col_name, col_type)
+                    
+                    # Извлекаем данные профайла из card_data
+                    phone = card_data.get('phone', '') or ''
+                    website = card_data.get('site', '') or card_data.get('website', '') or ''
+                    
+                    # Messengers (собираем из social_links)
+                    messengers = []
+                    social_links = card_data.get('social_links', [])
+                    for link in social_links:
+                        link_lower = link.lower()
+                        if 'whatsapp' in link_lower or 'wa.me' in link_lower:
+                            messengers.append({'type': 'whatsapp', 'url': link})
+                        elif 't.me' in link_lower or 'telegram' in link_lower:
+                            messengers.append({'type': 'telegram', 'url': link})
+                        elif 'viber' in link_lower:
+                            messengers.append({'type': 'viber', 'url': link})
+                    messengers_json = json.dumps(messengers, ensure_ascii=False) if messengers else None
+                    
+                    # Working hours (преобразуем в структурированный JSON)
+                    hours_full = card_data.get('hours_full', [])
+                    hours_json = json.dumps({'schedule': hours_full}, ensure_ascii=False) if hours_full else None
+                    
+                    # Services count
+                    products = card_data.get('products', [])
+                    services_count = sum(len(cat.get('items', [])) for cat in products)
+                    
+                    # Verification badge (пока данных нет, будет добавлено позже)
+                    is_verified = 0  # TODO: добавить парсинг синей галочки
+                    
+                    # Profile completeness calculation
+                    completeness = 0
+                    if phone: completeness += 15
+                    if website: completeness += 15
+                    if hours_json: completeness += 10
+                    if photos_count >= 3: completeness += 15
+                    if services_count >= 5: completeness += 15
+                    if card_data.get('description'): completeness += 10
+                    if messengers: completeness += 10
+                    if is_verified: completeness += 10
+                    profile_completeness = min(completeness, 100)
+                    
+                    # Всегда используем колонки (они будут созданы если их нет)
                     cursor.execute("""
                         INSERT INTO MapParseResults
-                        (id, business_id, url, map_type, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, report_path, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        (id, business_id, url, map_type, rating, reviews_count, unanswered_reviews_count, 
+                         news_count, photos_count, report_path, 
+                         is_verified, phone, website, messengers, working_hours, services_count, profile_completeness,
+                         created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """, (
                         parse_result_id,
                         business_id,
@@ -471,10 +527,18 @@ def process_queue():
                         int(unanswered_reviews_count),
                         int(news_count or 0),
                         int(photos_count or 0),
-                        report_path
+                        report_path,
+                        is_verified,
+                        phone,
+                        website,
+                        messengers_json,
+                        hours_json,
+                        services_count,
+                        profile_completeness
                     ))
                     
                     print(f"✅ Результаты сохранены в MapParseResults: {parse_result_id}")
+                    print(f"   📊 Профайл: телефон={bool(phone)}, сайт={bool(website)}, часы={bool(hours_json)}, услуг={services_count}, заполненность={profile_completeness}%")
                     
                     # Сохраняем отзывы в ExternalBusinessReviews с датами и ответами организации
                     if reviews_list:
