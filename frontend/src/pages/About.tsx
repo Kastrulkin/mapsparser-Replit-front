@@ -241,10 +241,10 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
-                  {isRu ? "Начальный" : "Starter"}
+                  {t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "1200 рублей в месяц" : "$15 / month"}
+                  {t.about.pricingStarterPrice}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingStarterPoint1}</div>
