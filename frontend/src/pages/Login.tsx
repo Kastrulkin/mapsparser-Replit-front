@@ -79,10 +79,10 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    
+
     try {
       const { user, error } = await newAuth.signIn(loginForm.email, loginForm.password);
-      
+
       if (error) {
         if (error.includes('NEED_PASSWORD')) {
           // Пользователь существует, но не установил пароль
@@ -113,20 +113,20 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    
+
     // Валидация
     if (!registerForm.email || !registerForm.password) {
       setError('Email и пароль обязательны');
       setLoading(false);
       return;
     }
-    
+
     if (!registerForm.business_name || !registerForm.business_address || !registerForm.business_city) {
       setError('Название бизнеса, адрес и город обязательны');
       setLoading(false);
       return;
     }
-    
+
     try {
       // Используем новый endpoint для регистрации с бизнесом
       const response = await fetch('/api/auth/register-with-business', {
@@ -145,9 +145,9 @@ const Login = () => {
           business_country: registerForm.business_country
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok && data.success) {
         const tierFromUrl = searchParams.get('tier');
 
@@ -188,7 +188,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
-    
+
     try {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
@@ -199,9 +199,9 @@ const Login = () => {
           email: registerForm.email
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
         setInfo('Инструкции по восстановлению пароля отправлены на email. Проверьте почту!');
       } else {
@@ -231,31 +231,28 @@ const Login = () => {
           <div className="flex space-x-1 mb-6">
             <button
               onClick={() => setTab('login')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                tab === 'login'
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'login'
                   ? 'bg-indigo-100 text-indigo-700'
                   : 'text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               {isRu ? 'Вход' : 'Login'}
             </button>
             <button
               onClick={() => setTab('register')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                tab === 'register'
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'register'
                   ? 'bg-indigo-100 text-indigo-700'
                   : 'text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               {isRu ? 'Регистрация' : 'Register'}
             </button>
             <button
               onClick={() => setTab('reset')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                tab === 'reset'
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${tab === 'reset'
                   ? 'bg-indigo-100 text-indigo-700'
                   : 'text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               {isRu ? 'Восстановление' : 'Reset'}
             </button>
@@ -285,7 +282,7 @@ const Login = () => {
                   type="email"
                   required
                   value={loginForm.email}
-                  onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
@@ -298,13 +295,13 @@ const Login = () => {
                   type="password"
                   required
                   value={loginForm.password}
-                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full btn-iridescent"
                 disabled={loading}
               >
                 {loading ? (isRu ? 'Вход...' : 'Signing in...') : (isRu ? 'Войти' : 'Sign in')}
@@ -326,7 +323,7 @@ const Login = () => {
                       id="register-name"
                       type="text"
                       value={registerForm.name}
-                      onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -339,7 +336,7 @@ const Login = () => {
                       type="email"
                       required
                       value={registerForm.email}
-                      onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -352,7 +349,7 @@ const Login = () => {
                       type="password"
                       required
                       value={registerForm.password}
-                      onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -364,7 +361,7 @@ const Login = () => {
                       id="register-phone"
                       type="tel"
                       value={registerForm.phone}
-                      onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, phone: e.target.value })}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -383,7 +380,7 @@ const Login = () => {
                       type="text"
                       required
                       value={registerForm.business_name}
-                      onChange={(e) => setRegisterForm({...registerForm, business_name: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, business_name: e.target.value })}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
@@ -396,7 +393,7 @@ const Login = () => {
                       type="text"
                       required
                       value={registerForm.business_address}
-                      onChange={(e) => setRegisterForm({...registerForm, business_address: e.target.value})}
+                      onChange={(e) => setRegisterForm({ ...registerForm, business_address: e.target.value })}
                       placeholder="Например: 123 Main St"
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
@@ -411,7 +408,7 @@ const Login = () => {
                         type="text"
                         required
                         value={registerForm.business_city}
-                        onChange={(e) => setRegisterForm({...registerForm, business_city: e.target.value})}
+                        onChange={(e) => setRegisterForm({ ...registerForm, business_city: e.target.value })}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     </div>
@@ -469,7 +466,7 @@ const Login = () => {
                   type="email"
                   required
                   value={registerForm.email}
-                  onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>

@@ -276,7 +276,7 @@ const ROICalculator: React.FC<ROICalculatorProps> = ({ onUpdate }) => {
               <div className="text-4xl mb-4">📊</div>
               <p className="text-lg mb-2">{t.dashboard.finance.roi.notCalculated}</p>
               <p className="text-sm mb-4">{t.dashboard.finance.roi.addData}</p>
-              <Button onClick={() => setEditMode(true)}>
+              <Button className="btn-iridescent" onClick={() => setEditMode(true)}>
                 {t.dashboard.finance.roi.calculate}
               </Button>
             </div>

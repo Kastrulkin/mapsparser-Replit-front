@@ -169,7 +169,7 @@ const CTA = () => {
               <Button
                 variant="default"
                 size="lg"
-                className="text-lg px-10 py-7 w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-xl shadow-orange-500/30 hover:shadow-orange-600/40 transition-all duration-300"
+                className="text-lg px-10 py-7 w-full btn-iridescent"
                 onClick={() => navigate('/contact')}
               >
                 {t.cta.contactExpert}

@@ -220,6 +220,7 @@ def parse_yandex_card(url: str) -> dict:
             data['news'] = parse_news(page)
             data['photos_count'] = get_photos_count(page)
             data['photos'] = parse_photos(page)
+            # data['photos'] = []
             data['features_full'] = parse_features(page)
             data['competitors'] = parse_competitors(page)
 
@@ -466,7 +467,12 @@ def parse_overview_data(page):
             "span.business-rating-badge-view__rating-text",
             "div.business-header-rating-view__rating span",
             "span[class*='rating-text']",
-            "span.business-summary-rating-badge-view__rating-text"
+            "span.business-summary-rating-badge-view__rating-text",
+            # New broad selectors
+            "div.business-rating-badge-view__rating",
+            "div.business-header-rating-view__rating",
+            "div[class*='rating-badge']",
+            "span.business-rating-amount-view__processed"
         ]
 
         data['rating'] = ''
@@ -476,7 +482,11 @@ def parse_overview_data(page):
                 rating_text = rating_el.inner_text().replace(',', '.').strip()
                 if rating_text and rating_text != '':
                     data['rating'] = rating_text
+                    print(f"✅ Найден рейтинг: {rating_text} (селектор: {selector})")
                     break
+        
+        if not data['rating']:
+            print("❌ Рейтинг не найден ни по одному селектору")
     except Exception:
         data['rating'] = ''
 

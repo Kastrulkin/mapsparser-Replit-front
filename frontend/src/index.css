@@ -110,4 +110,8 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  .btn-iridescent {
+    @apply bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-[length:200%_auto] border border-orange-300/50 text-white shadow-lg shadow-orange-500/20 transition-all duration-300 hover:bg-[position:100%_0] hover:scale-[1.02] active:scale-[0.98] font-semibold;
+  }
 }

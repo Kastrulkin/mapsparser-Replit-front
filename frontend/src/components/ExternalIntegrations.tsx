@@ -264,7 +264,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
           </div>
           <Button
             onClick={handleGoogleAuth}
-            className="w-full sm:w-auto min-w-[200px]"
+            className="w-full sm:w-auto min-w-[200px] btn-iridescent"
             disabled={!currentBusinessId}
           >
             {t.dashboard.settings.external.connectGoogle}

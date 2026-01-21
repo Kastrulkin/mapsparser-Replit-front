@@ -1,3 +1,84 @@
+## 2026-01-21 - Novamed Parsing Debug (Rating Issue)
+
+### Current Task
+Investigating why Novamed parsing tasks "disappear" and result in incomplete data (specifically missing rating) in the admin panel history.
+
+### Findings
+- **"Disappearing" Tasks:** Completed tasks (success or error) are removed from the "Active Tasks" list and moved to history. This is expected behavior. The user's confusion stems from the fact that the resulting history entries have missing data ("Rating: —").
+- **Missing Data (Rating):** Initial local reproduction hit Captcha errors (which explains the "Error" tasks seen by the user). However, analysis of `yandex_maps_scraper.py` revealed that the rating selectors were likely outdated or insufficient for the specific layout of the Novamed page.
+- **Captcha:** The "Error" tasks in the list are confirmed to be likely caused by Yandex CAPTCHA blocking the scraper.
+
+### Architecture Decision
+- **Enhanced Selectors:** Added multiple "broad" CSS selectors for rating extraction (`div.business-rating-badge-view__rating`, etc.) to `yandex_maps_scraper.py` to be more robust against DOM changes.
+- **Logging:** Added explicit logging ("✅ Найден рейтинг: ...") to `parse_overview_data` to make future debugging easier.
+
+### Files to Modify
+- `src/yandex_maps_scraper.py`: Added new selectors for rating and logging.
+
+### Status
+- [x] Completed (Code Updated)
+- [ ] Verification on Server (Requires Deployment)
+
+---
+
+## 2026-01-20 - Button Styling Update
+
+### Current Task
+Applying an "orange-gold iridescent" gradient style to specific buttons across the frontend application to enhance visual appeal and consistency for Call-to-Action elements.
+
+### Architecture Decision
+- Introduced a global CSS class `.btn-iridescent` in `index.css` using Tailwind utility classes for gradients (`from-orange-400 via-amber-400 to-orange-500`) and animations.
+- Applied this class directly to `Button` components in React, avoiding inline styles or multiple disparate implementations.
+
+### Files to Modify
+- `frontend/src/index.css` - Added `.btn-iridescent` class.
+- `frontend/src/components/Header.tsx` - Styled "Try Free".
+- `frontend/src/components/Hero.tsx` - Styled submit button.
+- `frontend/src/pages/Login.tsx` - Styled login/register buttons.
+- `frontend/src/pages/WizardYandex.tsx` - Styled wizard navigation.
+- `frontend/src/components/ROICalculator.tsx` - Styled "Calculate".
+- `frontend/src/components/TelegramConnection.tsx` - Styled "Generate Token" and fixed a type error.
+- `frontend/src/components/ExternalIntegrations.tsx` - Styled "Connect Google".
+- `frontend/src/components/MetricsHistoryCharts.tsx` - Styled "Add Manual".
+- `frontend/src/components/CTA.tsx` & `frontend/src/pages/About.tsx` - Styled "Contact Expert".
+
+### Trade-offs & Decisions
+- **Consistency**: Using a single global class ensures all primary buttons look identical and can be updated in one place.
+- **Maintainability**: Reduced code duplication compared to applying full Tailwind classes to every button instance.
+
+### Dependencies
+- No new package dependencies.
+- Relies on existing Tailwind CSS configuration.
+
+### Status
+- [x] Completed
+
+---
+
+## 2026-01-21 - Parser Fix for Novamed & Homepage UI Improvements
+
+### Current Task
+Fix Novamed parsing issues (missing phone, services) and improve Homepage UI (sticky header, font sizes).
+
+### Architecture Decision
+- **Parser**: Updated `yandex_maps_scraper.py` with new CSS selectors found via DOM inspection. Added logic to parse services from `.related-product-view`.
+- **UI**: Added scroll listener to Header for transparency effect. Reduced Hero typography sizes for better visual balance.
+
+### Files to Modify
+- `src/yandex_maps_scraper.py` - Updated selectors for phone, services, and button clicks. [Committed]
+- `frontend/src/components/Header.tsx` - Added scroll-based transparency. [Committed]
+- `frontend/src/components/Hero.tsx` - Reduced text sizes. [Committed]
+
+### Trade-offs & Decisions
+- **Parser**: Direct DOM parsing with Playwright chosen over API for reliability with dynamic content.
+- **UI**: CSS classes used for sticky header for simplicity and performance.
+
+### Dependencies
+- No new external dependencies.
+
+### Status
+- [x] Completed
+
 ## 2026-01-21 - Улучшение парсера Яндекс.Карт и редизайн отчётов
 
 ### Current Task

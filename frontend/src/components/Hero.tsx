@@ -119,7 +119,7 @@ const Hero = () => {
                   type="submit"
                   size="lg"
                   disabled={isSubmitting}
-                  className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-8 py-6 text-lg font-bold rounded-xl shadow-xl shadow-orange-500/20 transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:transform-none"
+                  className="w-full btn-iridescent text-white px-8 py-6 text-lg font-bold rounded-xl shadow-xl shadow-orange-500/20 transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-70 disabled:transform-none"
                 >
                   {isSubmitting ? (
                     <>

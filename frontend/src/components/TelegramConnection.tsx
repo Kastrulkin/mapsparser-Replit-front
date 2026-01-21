@@ -95,7 +95,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         setError(errorData.error || t.dashboard.settings.telegram.errorToken);
       }
     } catch (e: any) {
-      setError(t.error + ': ' + e.message);
+      setError(t.common.error + ': ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -160,7 +160,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   <li>{t.dashboard.settings.telegram.step3} <code className="bg-gray-100 px-1 rounded">/start &lt;code&gt;</code></li>
                   <li>{t.dashboard.settings.telegram.step4}</li>
                 </ol>
-                <Button onClick={generateToken} disabled={loading}>
+                <Button className="btn-iridescent" onClick={generateToken} disabled={loading}>
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

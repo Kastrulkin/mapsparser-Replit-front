@@ -195,7 +195,7 @@ export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ busi
                             <CardTitle className="text-2xl">📊 {t.dashboard.progress.charts.title}</CardTitle>
                             <CardDescription>{t.dashboard.progress.charts.subtitle}</CardDescription>
                         </div>
-                        <Button onClick={() => setShowAddModal(true)} size="sm">
+                        <Button className="btn-iridescent" onClick={() => setShowAddModal(true)} size="sm">
                             <Plus className="h-4 w-4 mr-2" />
                             {t.dashboard.progress.charts.addManual}
                         </Button>

@@ -177,7 +177,7 @@ const About = () => {
                 </div>
                 <Button
                   size="lg"
-                  className="mt-2 text-lg px-10 py-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30"
+                  className="mt-2 text-lg px-10 py-6 btn-iridescent"
                   onClick={() => {
                     window.location.href = '/#hero-form';
                   }}
@@ -217,7 +217,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-10 py-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30 mt-2"
+                  className="text-lg px-10 py-6 btn-iridescent mt-2"
                   onClick={() => {
                     navigate('/contact');
                   }}
@@ -255,7 +255,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white border-none shadow-lg shadow-orange-500/30 hover:shadow-orange-600/40 transition-all duration-300 mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("starter")}
                 >
                   {t.about.pricingStarterButton}
@@ -286,7 +286,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("professional")}
                 >
                   {t.about.pricingOption0Button}
@@ -313,7 +313,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("concierge")}
                 >
                   {t.about.pricingOption1Button}
@@ -340,7 +340,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => navigate("/contact")}
                 >
                   {t.about.contactUs}
@@ -363,7 +363,7 @@ const About = () => {
             {t.about.finalText}
           </p>
           <div className="flex justify-center">
-            <Button size="lg" className="text-lg px-8 py-3"
+            <Button size="lg" className="text-lg px-8 py-3 btn-iridescent"
               onClick={() => navigate('/contact')}
             >
               {t.about.contactUs}

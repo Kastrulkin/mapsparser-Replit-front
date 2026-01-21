@@ -65,8 +65,8 @@ const Header = () => {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${isScrolled
-          ? "bg-background/80 backdrop-blur-md border-b border-border shadow-sm"
-          : "bg-transparent border-transparent"
+        ? "bg-background/80 backdrop-blur-md border-b border-border shadow-sm"
+        : "bg-transparent border-transparent"
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -141,7 +141,7 @@ const Header = () => {
               </Button>
             </Link>
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
-              <Button>{t.header.tryFree}</Button>
+              <Button className="btn-iridescent">{t.header.tryFree}</Button>
             </Link>
           </div>
 
@@ -197,6 +197,7 @@ const Header = () => {
                     key={item.name}
                     href={item.href}
                     className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     {item.name}
                   </a>
@@ -217,7 +218,7 @@ const Header = () => {
                   </Button>
                 </Link>
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
-                  <Button className="w-full justify-start mx-3">{t.header.tryFree}</Button>
+                  <Button className="w-full justify-start mx-3 btn-iridescent">{t.header.tryFree}</Button>
                 </Link>
               </div>
             </div>
