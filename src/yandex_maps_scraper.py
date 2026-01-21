@@ -277,6 +277,8 @@ def parse_overview_data(page):
             "button[class*='phone']",
             "[aria-label*='телефон'] button",
             "div.business-phones-view button",
+            "div.card-phones-view__more-wrapper button",
+            "button[class*='card-phones-view__more']",
             # Альтернативный селектор по примеру пользователя
             "div.card-feature-view__content > div > div > div > div > div > div"
         ]
@@ -309,6 +311,8 @@ def parse_overview_data(page):
             # Новые точные селекторы от пользователя
             "div.orgpage-header-view__contacts > div.orgpage-header-view__contact > div > div > div",
             "div.orgpage-header-view__contacts > div.orgpage-header-view__contact > div > div",
+            "div.card-phones-view__phone-number",
+            "div[class*='card-phones-view']",
             # Стандартные селекторы
             "span.business-phones-view__text",
             "div.business-contacts-view__phone-number span",
@@ -688,6 +692,40 @@ def parse_overview_data(page):
             })
         data['products'] = products
         data['product_categories'] = product_categories  # Сохраняем список категорий
+
+        # Дополнительный парсинг для структуры related-product-view (Novamed)
+        if not products:
+            try:
+                print("Пробуем альтернативный парсинг услуг (related-product-view)...")
+                # Ищем контейнеры категорий или просто списки
+                related_items = page.query_selector_all("div.related-product-view")
+                if related_items:
+                    items = []
+                    for item in related_items:
+                        name_el = item.query_selector("div.related-product-view__title, a.related-product-view__title")
+                        price_el = item.query_selector("span.related-product-view__price")
+                        
+                        name = name_el.inner_text().strip() if name_el else ""
+                        price = price_el.inner_text().strip() if price_el else ""
+                        
+                        if name:
+                            items.append({
+                                'name': name,
+                                'description': '',
+                                'price': price,
+                                'duration': '',
+                                'photo': ''
+                            })
+                    
+                    if items:
+                        products.append({
+                            'category': 'Услуги',
+                            'items': items
+                        })
+                        print(f"Найдено {len(items)} услуг через related-product-view")
+                        data['products'] = products
+            except Exception as e:
+                print(f"Ошибка при альтернативном парсинге услуг: {e}")
     except Exception:
         data['products'] = []
         data['product_categories'] = []
