@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { useApiData } from '../hooks/useApiData';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { YandexBusinessReport } from './YandexBusinessReport';
 
 interface MapParseItem {
   id: string;
@@ -13,6 +14,13 @@ interface MapParseItem {
   newsCount: number;
   photosCount: number;
   reportPath: string | null;
+  isVerified?: boolean;
+  phone?: string;
+  website?: string;
+  messengers?: string;
+  workingHours?: string;
+  servicesCount?: number;
+  profileCompleteness?: number;
   createdAt: string;
 }
 
@@ -23,6 +31,7 @@ interface MapParseTableProps {
 const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
   const { t } = useLanguage();
   const [viewHtml, setViewHtml] = useState<string | null>(null);
+  const [viewData, setViewData] = useState<MapParseItem | null>(null);
 
   const { data, loading, error } = useApiData<MapParseItem[]>(
     businessId ? `${window.location.origin}/api/business/${businessId}/map-parses` : null,
@@ -32,24 +41,9 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
   );
   const items = data || [];
 
-  const viewReport = async (id: string) => {
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/map-report/${id}`, {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      if (!res.ok) {
-        // Since useApiData handles the error state, we can't easily update 'error' here unless we manage it locally
-        // But for simplicity/correctness, we'll log it or use toast if available.
-        // For now adhering to existing pattern, but maybe setting specific view error would be better.
-        console.error(t.dashboard.parsing.history.noReport);
-        return;
-      }
-      const html = await res.text();
-      setViewHtml(html);
-    } catch (e) {
-      console.error(t.dashboard.parsing.history.noReport);
-    }
+  const viewReport = async (item: MapParseItem) => {
+    // Show new report component with structured data
+    setViewData(item);
   };
 
   return (
@@ -109,7 +103,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                   <td className="px-3 py-2 border-b text-right">{item.photosCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">
                     {item.reportPath ? (
-                      <Button size="sm" variant="outline" onClick={() => viewReport(item.id)}>
+                      <Button size="sm" variant="outline" onClick={() => viewReport(item)}>
                         {t.dashboard.parsing.history.viewReport}
                       </Button>
                     ) : (
@@ -123,17 +117,17 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
         </div>
       )}
 
-      {viewHtml && (
+      {viewData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto relative">
-            <div className="flex justify-between items-center border-b px-4 py-2">
-              <h4 className="font-semibold text-gray-900">{t.dashboard.parsing.history.columns.report}</h4>
-              <Button size="sm" variant="outline" onClick={() => setViewHtml(null)}>
+            <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
+              <h4 className="font-semibold text-gray-900">Отчёт по Яндекс.Картам</h4>
+              <Button size="sm" variant="outline" onClick={() => setViewData(null)}>
                 {t.dashboard.parsing.history.close}
               </Button>
             </div>
-            <div className="p-4">
-              <div dangerouslySetInnerHTML={{ __html: viewHtml }} />
+            <div className="p-6">
+              <YandexBusinessReport data={viewData} />
             </div>
           </div>
         </div>
