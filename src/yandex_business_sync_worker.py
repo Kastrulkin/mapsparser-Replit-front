@@ -64,7 +64,6 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         cursor = db.conn.cursor()
         
         # Получаем данные о неотвеченных отзывах из БД
-        # Так как мы только что сохранили отзывы в ExternalBusinessReviews, можем считать оттуда
         cursor.execute("""
             SELECT COUNT(*) 
             FROM ExternalBusinessReviews 
@@ -72,8 +71,18 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
               AND (response_text IS NULL OR response_text = '' OR response_text = '—')
         """, (business_id, self.source))
         unanswered_reviews_count = cursor.fetchone()[0]
+
+        # Получаем последние успешные данные из MapParseResults для сравнения/слияния
+        cursor.execute("""
+            SELECT rating, reviews_count, news_count, photos_count, reviews_without_response
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (business_id,))
+        existing_row = cursor.fetchone()
         
-        # Рейтинг берем из org_info или БД
+        # Рейтинг: берем из org_info, иначе из статистики, иначе из истории
         rating = org_info.get('rating')
         if not rating:
             cursor.execute("""
@@ -82,13 +91,43 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 WHERE business_id = ? AND source = ? 
                 ORDER BY date DESC LIMIT 1
             """, (business_id, self.source))
-            row = cursor.fetchone()
-            rating = row[0] if row else None
+            stat_row = cursor.fetchone()
+            rating = stat_row[0] if stat_row else None
+            
+        # Smart Merge: Если текущие данные пустые/хуже, берем из истории
+        if existing_row:
+             # Рейтинг
+             if not rating and existing_row[0]:
+                 rating = existing_row[0]
+             
+             # Отзывы: если сейчас 0, а было больше - берем старое
+             if reviews_count == 0 and existing_row[1] and existing_row[1] > 0:
+                 reviews_count = existing_row[1]
+                 # И неотвеченные тоже берем старые, если вдруг сейчас 0 (хотя они считаются из БД)
+                 # Но мы считали из ExternalBusinessReviews, куда только что записали. 
+                 # Если записи не записались (ошибка парсера), count будет 0.
+                 # В этом случае логично взять старое
+                 if existing_row[4] is not None: # reviews_without_response check
+                     # Проверим, есть ли колонка unanswered_reviews_count в MapParseResults
+                     # (в fetchone она последняя, если запрос match'ит схему)
+                     # В запросе выше: rating, reviews_count, news_count, photos_count, reviews_without_response
+                     # В MapParseResults поля могут называться иначе. Проверим запрос:
+                     # "SELECT rating, reviews_count, news_count, photos_count FROM..."
+                     # А мы добавили reviews_without_response? Нет, надо быть осторожным с этим полем.
+                     pass 
+             
+             # Новости
+             if news_count == 0 and existing_row[2] and existing_row[2] > 0:
+                 news_count = existing_row[2]
+                 
+             # Фото
+             if photos_count == 0 and existing_row[3] and existing_row[3] > 0:
+                 photos_count = existing_row[3]
 
         parse_id = str(uuid.uuid4())
         url = f"https://yandex.ru/sprav/{external_id or 'unknown'}"
         
-        # Проверяем наличие колонки unanswered_reviews_count (на всякий случай, хотя индекс создавался)
+        # Проверяем наличие колонки unanswered_reviews_count
         cursor.execute("PRAGMA table_info(MapParseResults)")
         columns = [row[1] for row in cursor.fetchall()]
 

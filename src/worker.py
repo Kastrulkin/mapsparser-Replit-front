@@ -907,11 +907,57 @@ def _process_sync_yandex_business_task(queue_dict):
             existing_data = cursor.fetchone()
             
             # Используем данные из кабинета (приоритет кабинету)
-            rating = org_info.get('rating') if org_info and org_info.get('rating') else (existing_data[0] if existing_data and existing_data[0] else None)
-            reviews_count = len(reviews) if reviews else (existing_data[1] if existing_data and existing_data[1] else 0)
-            reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else (existing_data[2] if existing_data and has_unanswered and existing_data[2] else 0)
-            news_count = len(posts) if posts else (existing_data[2] if existing_data and not has_unanswered else (existing_data[3] if existing_data and has_unanswered and existing_data[3] else 0))
-            photos_count = org_info.get('photos_count', 0) if org_info else (existing_data[3] if existing_data and not has_unanswered else (existing_data[4] if existing_data and has_unanswered and existing_data[4] else 0))
+            # Используем данные из кабинета, но с защитой от перезаписи нулями
+            # Рейтинг
+            rating = org_info.get('rating')
+            if not rating and existing_data and existing_data[0]:
+                rating = existing_data[0]
+            
+            # Отзывы
+            current_reviews_count = len(reviews) if reviews else 0
+            if current_reviews_count == 0 and existing_data:
+                # Определяем индекс reviews_count в existing_data
+                # Запрос: rating (0), reviews_count (1), ...
+                if existing_data[1] and existing_data[1] > 0:
+                    reviews_count = existing_data[1]
+                else:
+                    reviews_count = 0
+            else:
+                reviews_count = current_reviews_count
+
+            # Неотвеченные
+            current_unanswered = sum(1 for r in reviews if not r.response_text) if reviews else 0
+            if current_reviews_count == 0 and existing_data and has_unanswered:
+                # rating(0), reviews(1), unanswered(2)
+                if existing_data[2] is not None:
+                     reviews_without_response = existing_data[2]
+                else:
+                     reviews_without_response = 0
+            else:
+                reviews_without_response = current_unanswered
+                
+            # Новости (posts)
+            current_news = len(posts) if posts else 0
+            if current_news == 0 and existing_data:
+                # Индекс зависит от has_unanswered
+                idx = 3 if has_unanswered else 2
+                if existing_data[idx] and existing_data[idx] > 0:
+                    news_count = existing_data[idx]
+                else:
+                    news_count = 0
+            else:
+                 news_count = current_news
+                 
+            # Фото
+            current_photos = org_info.get('photos_count', 0) if org_info else 0
+            if current_photos == 0 and existing_data:
+                idx = 4 if has_unanswered else 3
+                if existing_data[idx] and existing_data[idx] > 0:
+                     photos_count = existing_data[idx]
+                else:
+                     photos_count = 0
+            else:
+                photos_count = current_photos
             
             # Сохраняем в MapParseResults
             parse_id = str(uuid.uuid4())
