@@ -143,7 +143,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
 
         # Получаем последние успешные данные из MapParseResults для сравнения/слияния
         cursor.execute("""
-            SELECT rating, reviews_count, news_count, photos_count, reviews_without_response
+            SELECT rating, reviews_count, news_count, photos_count, unanswered_reviews_count
             FROM MapParseResults
             WHERE business_id = ?
             ORDER BY created_at DESC
