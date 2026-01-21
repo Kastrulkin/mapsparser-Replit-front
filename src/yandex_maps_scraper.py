@@ -492,15 +492,24 @@ def parse_overview_data(page):
         ]
 
         data['rating'] = ''
+        import re
         for selector in rating_selectors:
             rating_el = page.query_selector(selector)
             if rating_el:
-                rating_text = rating_el.inner_text().replace(',', '.').strip()
-                if rating_text and rating_text != '':
+                raw_text = rating_el.inner_text().strip()
+                # Ищем число (например 4.9 или 4,9)
+                match = re.search(r'(\d+[.,]\d+)', raw_text)
+                if match:
+                    rating_text = match.group(1).replace(',', '.')
                     data['rating'] = rating_text
-                    print(f"✅ Найден рейтинг: {rating_text} (селектор: {selector})")
+                    print(f"✅ Найден рейтинг: {rating_text} (из '{raw_text}', селектор: {selector})")
                     break
-        
+                elif raw_text and raw_text[0].isdigit():
+                     # Fallback for single digit like '5' without decimal
+                     rating_text = raw_text.split()[0].replace(',', '.')
+                     data['rating'] = rating_text
+                     print(f"✅ Найден рейтинг (fallback): {rating_text} (из '{raw_text}')")
+                     break
         if not data['rating']:
             print("❌ Рейтинг не найден ни по одному селектору")
     except Exception:
