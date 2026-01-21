@@ -19,4 +19,4 @@ playwright install chromium > /dev/null 2>&1
 
 # Run worker
 echo "Starting worker..."
-python src/worker.py
+python -u src/worker.py
