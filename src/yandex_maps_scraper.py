@@ -251,12 +251,23 @@ def parse_overview_data(page):
     try:
         title_el = page.query_selector("h1.card-title-view__title, h1")
         data['title'] = title_el.inner_text().strip() if title_el else ''
+        
+        # Проверка на галочку верификации (синяя галочка)
+        verified_el = page.query_selector("span.business-verified-badge")
+        data['is_verified'] = True if verified_el else False
+        if data['is_verified']:
+            print("✅ Организация верифицирована (синяя галочка)")
+            
     except Exception:
         data['title'] = ''
+        data['is_verified'] = False
 
     # Полный адрес
     try:
         address_selectors = [
+            # User provided selector (High Priority)
+            "div.orgpage-header-view__contacts > a",
+            # Standard selectors
             "div.business-contacts-view__address",
             "a.business-contacts-view__address-link",
             "div.business-contacts-view__address-link",
@@ -288,6 +299,10 @@ def parse_overview_data(page):
         page.wait_for_timeout(2000)
 
         phone_btn_selectors = [
+            # User provided selectors
+            "div.orgpage-header-view__contacts > div.orgpage-header-view__contact", 
+            "div.orgpage-header-view__contacts > div.orgpage-header-view__contact > div > div",
+            # Standard
             "button:has-text('Показать телефон')",
             "div.business-contacts-view__phone button",
             "span:has-text('Показать телефон')",
@@ -479,13 +494,16 @@ def parse_overview_data(page):
 
     # Рейтинг
     try:
-        rating_selectors = [
+            # User provided selectors
+            "div.business-header-rating-view__text._clickable",
+            "div.business-rating-badge-view__rating",
             "span.business-rating-badge-view__rating-text",
+            "div.business-rating-badge-view__stars", 
+            # Standard
             "div.business-header-rating-view__rating span",
             "span[class*='rating-text']",
             "span.business-summary-rating-badge-view__rating-text",
             # New broad selectors
-            "div.business-rating-badge-view__rating",
             "div.business-header-rating-view__rating",
             "div[class*='rating-badge']",
             "span.business-rating-amount-view__processed"
@@ -497,7 +515,7 @@ def parse_overview_data(page):
             rating_el = page.query_selector(selector)
             if rating_el:
                 raw_text = rating_el.inner_text().strip()
-                # Ищем число (например 4.9 или 4,9)
+                 # Ищем число (например 4.9 или 4,9)
                 match = re.search(r'(\d+[.,]\d+)', raw_text)
                 if match:
                     rating_text = match.group(1).replace(',', '.')
@@ -549,6 +567,9 @@ def parse_overview_data(page):
     # Краткое время работы (на главной) - улучшенный парсинг
     try:
         hours_selectors = [
+            # User provided
+            "div.business-working-status-view",
+            # Standard
             "div.card-feature-view__wrapper",
             "div.business-working-status-view__text",
             "div[class*='working-status']",
@@ -590,7 +611,7 @@ def parse_overview_data(page):
 
     # Клик по кнопке "График" для полного расписания
     try:
-        schedule_btn = page.query_selector("div.card-feature-view__additional, div.card-feature-view__value")
+        schedule_btn = page.query_selector("div.business-working-status-view, div.card-feature-view__additional, div.card-feature-view__value")
         if schedule_btn and schedule_btn.is_visible():
             print("Кликаем по кнопке 'График' для полного расписания")
             schedule_btn.click()
@@ -672,7 +693,8 @@ def parse_overview_data(page):
         data['social_links'] = []
 
     # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
-    products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), button:has-text('Товары и услуги'), div.tabs-select-view__title._name_prices")
+    # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
+    products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), div[role='tab']:has-text('Услуги'), div[role='tab']:has-text('Цены'), button:has-text('Товары и услуги'), button:has-text('Услуги'), div.tabs-select-view__title._name_prices")
     if products_tab:
         products_tab.click()
         print("Клик по вкладке 'Товары и услуги'")
