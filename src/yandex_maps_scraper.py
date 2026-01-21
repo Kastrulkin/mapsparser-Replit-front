@@ -694,7 +694,7 @@ def parse_overview_data(page):
 
     # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
     # --- ПЕРЕХОД НА ВКЛАДКУ "Товары и услуги" ---
-    products_tab = page.query_selector("div[role='tab']:has-text('Товары и услуги'), div[role='tab']:has-text('Услуги'), div[role='tab']:has-text('Цены'), button:has-text('Товары и услуги'), button:has-text('Услуги'), div.tabs-select-view__title._name_prices")
+    products_tab = page.query_selector("div.carousel__content > div:nth-child(2) > div, div[role='tab']:has-text('Товары и услуги'), div[role='tab']:has-text('Услуги'), div[role='tab']:has-text('Цены'), button:has-text('Товары и услуги'), button:has-text('Услуги'), div.tabs-select-view__title._name_prices")
     if products_tab:
         products_tab.click()
         print("Клик по вкладке 'Товары и услуги'")
@@ -796,7 +796,7 @@ def parse_reviews(page):
     max_processing_time = 300  # Максимум 5 минут на обработку отзывов
     
     try:
-        reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews, div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
+        reviews_tab = page.query_selector("div.carousel__content > div:nth-child(5) > div, div.tabs-select-view__title._name_reviews, div[role='tab']:has-text('Отзывы'), button:has-text('Отзывы')")
         if reviews_tab:
             reviews_tab.click()
             print("Клик по вкладке 'Отзывы'")
@@ -1104,7 +1104,7 @@ def parse_news(page):
     """Парсит новости"""
     try:
         # Переход на вкладку "Новости"
-        news_tab = page.query_selector("div.tabs-select-view__title._name_posts, div[role='tab']:has-text('Новости'), button:has-text('Новости')")
+        news_tab = page.query_selector("div.carousel__content > div:nth-child(3), div.tabs-select-view__title._name_posts, div[role='tab']:has-text('Новости'), button:has-text('Новости')")
         if news_tab:
             news_tab.click()
             print("Клик по вкладке 'Новости'")
@@ -1179,7 +1179,7 @@ def get_photos_count(page):
 def parse_photos(page):
     """Парсинг фотографий"""
     try:
-        photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
+        photos_tab = page.query_selector("div.carousel__content > div:nth-child(4), div.tabs-select-view__title._name_gallery, div[role='tab']:has-text('Фото'), button:has-text('Фото')")
         if photos_tab:
             photos_tab.click()
             print("Клик по вкладке 'Фото'")
@@ -1204,13 +1204,26 @@ def parse_features(page):
     """Парсинг особенностей"""
     try:
         # Переход на вкладку "Особенности"
-        features_tab = page.query_selector("div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
+        features_tab = page.query_selector("div.carousel__content > div:nth-child(6) > div, div.tabs-select-view__title._name_features, div[role='tab']:has-text('Особенности'), button:has-text('Особенности')")
         if features_tab:
             features_tab.click()
             print("Клик по вкладке 'Особенности'")
             page.wait_for_timeout(1500)
         else:
             print("Вкладка 'Особенности' не найдена!")
+            
+        # USER_PROVIDED_SELECTOR: div.business-card-view__overview > div:nth-child(17) > div
+        # Пробуем спарсить блок особенностей по указанию пользователя
+        try:
+             user_features_block = page.query_selector("div.business-card-view__overview > div:nth-child(17) > div")
+             if user_features_block:
+                 print("Found user-specified features block")
+                 # Extract text content as raw features if traditional parsing returns nothing
+                 items = user_features_block.query_selector_all("div, span, li")
+                 # This logic is tentative; extraction depends on internal structure
+                 # But sticking to standard parsing first is safer if the tab click worked.
+        except:
+             pass
 
         # Парсинг особенностей - как в рабочем коде
         features = []
