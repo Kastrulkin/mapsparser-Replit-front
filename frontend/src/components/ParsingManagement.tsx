@@ -16,7 +16,7 @@ interface ParsingTask {
   task_type: string;
   account_id?: string;
   source?: string;
-  status: 'pending' | 'processing' | 'done' | 'error' | 'captcha';
+  status: 'pending' | 'processing' | 'completed' | 'error' | 'captcha';
   retry_after?: string;
   error_message?: string;
   created_at: string;
@@ -211,7 +211,7 @@ export const ParsingManagement: React.FC = () => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       'pending': { label: t.dashboard.parsing.status.pending, className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
       'processing': { label: t.dashboard.parsing.status.processing, className: 'bg-blue-50 text-blue-800 border-blue-200' },
-      'done': { label: t.dashboard.parsing.status.done, className: 'bg-green-50 text-green-800 border-green-200' },
+      'completed': { label: t.dashboard.parsing.status.completed, className: 'bg-green-50 text-green-800 border-green-200' },
       'error': { label: t.dashboard.parsing.status.error, className: 'bg-red-50 text-red-800 border-red-200' },
       'captcha': { label: t.dashboard.parsing.status.captcha, className: 'bg-orange-50 text-orange-800 border-orange-200' }
     };
@@ -329,7 +329,7 @@ export const ParsingManagement: React.FC = () => {
                 <option value="">{t.dashboard.parsing.filters.statusAll}</option>
                 <option value="pending">{t.dashboard.parsing.status.pending}</option>
                 <option value="processing">{t.dashboard.parsing.status.processing}</option>
-                <option value="done">{t.dashboard.parsing.status.done}</option>
+                <option value="completed">{t.dashboard.parsing.status.completed}</option>
                 <option value="error">{t.dashboard.parsing.status.error}</option>
                 <option value="captcha">{t.dashboard.parsing.status.captcha}</option>
               </select>
