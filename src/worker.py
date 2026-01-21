@@ -7,6 +7,10 @@ import re
 from datetime import datetime, timedelta
 import signal
 import sys
+print(f"DEBUG: sys.executable: {sys.executable}")
+print(f"DEBUG: sys.path: {sys.path}")
+print(f"DEBUG: CWD: {os.getcwd()}")
+
 
 # New imports
 from database_manager import DatabaseManager
