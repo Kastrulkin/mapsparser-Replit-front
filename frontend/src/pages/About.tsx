@@ -240,7 +240,7 @@ const About = () => {
             {/* Starter */}
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
+                <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
                   {t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
@@ -278,6 +278,10 @@ const About = () => {
                   <div>- {t.about.pricingOption0Point2}</div>
                   <div>- {t.about.pricingOption0Point3}</div>
                   <div>- {t.about.pricingOption0Point4}</div>
+                  <div>- {t.about.pricingOption0Point5}</div>
+                  <div>- {t.about.pricingOption0Point6}</div>
+                  <div>- {t.about.pricingOption0Point7}</div>
+                  <div>- {t.about.pricingOption0Point8}</div>
                 </div>
                 <Button
                   variant="default"
