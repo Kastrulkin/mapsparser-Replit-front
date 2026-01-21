@@ -27,7 +27,7 @@ const Stats = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/30">
               <TrendingUp className="w-10 h-10 text-white" />
             </div>
-            <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
+            <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
               {t.stats.stat1}
             </div>
             <div className="h-1 w-16 bg-gradient-to-r from-orange-500 to-amber-500 mx-auto rounded-full mb-2" />
@@ -37,7 +37,7 @@ const Stats = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-amber-500/30">
               <Calendar className="w-10 h-10 text-white" />
             </div>
-            <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
+            <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
               {t.stats.stat2}
             </div>
             <div className="h-1 w-16 bg-gradient-to-r from-amber-500 to-orange-600 mx-auto rounded-full mb-2" />
@@ -47,7 +47,7 @@ const Stats = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-600 to-amber-500 rounded-2xl mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-600/30">
               <Users className="w-10 h-10 text-white" />
             </div>
-            <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
+            <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
               {t.stats.stat3}
             </div>
             <div className="h-1 w-16 bg-gradient-to-r from-orange-600 to-amber-500 mx-auto rounded-full mb-2" />
