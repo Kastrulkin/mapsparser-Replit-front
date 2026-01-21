@@ -683,11 +683,26 @@ def parse_overview_data(page):
     # Социальные сети
     try:
         social_links = []
-        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me']")
+        # General search + WhatsApp
+        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me'], a[href*='whatsapp.com'], a[href*='wa.me']")
         for el in social_els:
             href = el.get_attribute('href')
-            if href:
+            if href and href not in social_links:
                 social_links.append(href)
+        
+        # Specific search in "Messengers" block (User provided)
+        try:
+            messenger_block = page.query_selector("div.business-contacts-view__social-links")
+            if messenger_block:
+                messenger_links = messenger_block.query_selector_all("a")
+                for link in messenger_links:
+                    href = link.get_attribute('href')
+                    if href and href not in social_links:
+                        print(f"Ссылка из блока мессенджеров: {href}")
+                        social_links.append(href)
+        except Exception as e:
+            print(f"Ошибка при парсинге блока мессенджеров: {e}")
+
         data['social_links'] = social_links
     except Exception:
         data['social_links'] = []
