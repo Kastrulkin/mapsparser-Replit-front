@@ -4717,48 +4717,68 @@ def get_map_parses(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        # Проверяем наличие колонки unanswered_reviews_count
+        # Проверяем какие колонки существуют
         cursor.execute("PRAGMA table_info(MapParseResults)")
         columns = [row[1] for row in cursor.fetchall()]
+        
         has_unanswered_col = 'unanswered_reviews_count' in columns
+        has_profile_fields = 'profile_completeness' in columns
+        
+        # Формируем SELECT с учётом существующих колонок
+        base_fields = "id, url, map_type, rating, reviews_count"
         
         if has_unanswered_col:
-            cursor.execute("""
-                SELECT id, url, map_type, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, report_path, created_at
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY datetime(created_at) DESC
-            """, (business_id,))
+            select_fields = f"{base_fields}, unanswered_reviews_count, news_count, photos_count, report_path"
         else:
-            cursor.execute("""
-                SELECT id, url, map_type, rating, reviews_count, 0 as unanswered_reviews_count, news_count, photos_count, report_path, created_at
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY datetime(created_at) DESC
-            """, (business_id,))
+            select_fields = f"{base_fields}, 0 as unanswered_reviews_count, news_count, photos_count, report_path"
+        
+        if has_profile_fields:
+            select_fields += ", is_verified, phone, website, messengers, working_hours, services_count, profile_completeness"
+        
+        select_fields += ", created_at"
+        
+        cursor.execute(f"""
+            SELECT {select_fields}
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY datetime(created_at) DESC
+        """, (business_id,))
         
         rows = cursor.fetchall()
         db.close()
 
         items = []
         for r in rows:
-            items.append({
-                "id": r[0],
-                "url": r[1],
-                "mapType": r[2],
-                "rating": r[3],
-                "reviewsCount": r[4],
-                "unansweredReviewsCount": r[5] if has_unanswered_col else 0,
-                "newsCount": r[6] if has_unanswered_col else r[5],
-                "photosCount": r[7] if has_unanswered_col else r[6],
-                "reportPath": r[8] if has_unanswered_col else r[7],
-                "createdAt": r[9] if has_unanswered_col else r[8]
-            })
+            idx = 0
+            item = {
+                "id": r[idx], "url": r[idx+1], "mapType": r[idx+2],
+                "rating": r[idx+3], "reviewsCount": r[idx+4],
+                "unansweredReviewsCount": r[idx+5],
+                "newsCount": r[idx+6], "photosCount": r[idx+7],
+                "reportPath": r[idx+8]
+            }
+            idx = 9
+            
+            # Добавляем новые поля если они есть
+            if has_profile_fields:
+                item["isVerified"] = bool(r[idx]) if r[idx] is not None else False
+                item["phone"] = r[idx+1]
+                item["website"] = r[idx+2]
+                item["messengers"] = r[idx+3]
+                item["workingHours"] = r[idx+4]
+                item["servicesCount"] = r[idx+5] if r[idx+5] is not None else 0
+                item["profileCompleteness"] = r[idx+6] if r[idx+6] is not None else 0
+                idx += 7
+            
+            item["createdAt"] = r[idx]
+            items.append(item)
 
         return jsonify({"success": True, "items": items})
 
     except Exception as e:
         print(f"❌ Ошибка получения результатов парсинга: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
