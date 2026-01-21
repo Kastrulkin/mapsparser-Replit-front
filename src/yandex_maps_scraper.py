@@ -256,14 +256,30 @@ def parse_overview_data(page):
 
     # Полный адрес
     try:
-        addr_elem = page.query_selector("div.business-contacts-view__address")
-        if addr_elem:
-            data['address'] = addr_elem.inner_text().strip()
-        else:
-            # Альтернативный селектор
-            addr_elem = page.query_selector("[class*='business-contacts-view'] [class*='address']")
-            data['address'] = addr_elem.inner_text().strip() if addr_elem else ''
-    except Exception:
+        address_selectors = [
+            "div.business-contacts-view__address",
+            "a.business-contacts-view__address-link",
+            "div.business-contacts-view__address-link",
+            "[class*='business-contacts-view'] [class*='address']",
+            "div[class*='orgpage-header-view__address']",
+            "div.orgpage-header-view__address",
+            "a[href*='/maps/'][aria-label*='Россия']" # Often address is a link to map
+        ]
+        
+        data['address'] = ''
+        for selector in address_selectors:
+            addr_elem = page.query_selector(selector)
+            if addr_elem:
+                addr_text = addr_elem.inner_text().strip()
+                if addr_text:
+                    data['address'] = addr_text
+                    print(f"✅ Найден адрес: {addr_text} (селектор: {selector})")
+                    break
+                    
+        if not data['address']:
+             print("❌ Адрес не найден ни по одному селектору")
+    except Exception as e:
+        print(f"Ошибка при парсинге адреса: {e}")
         data['address'] = ''
 
     # Клик по кнопке "Показать телефон" перед парсингом - улучшенная версия

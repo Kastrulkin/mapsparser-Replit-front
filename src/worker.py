@@ -721,8 +721,9 @@ def process_queue():
                     print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
             
             # Обновляем статус на "done" и удаляем заявку из очереди
-            cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("done", queue_dict["id"]))
-            cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_dict["id"],))
+            # Обновляем статус на "completed" (чтобы задача осталась в списке)
+            cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("completed", queue_dict["id"]))
+            # cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_dict["id"],)) -> Удаление отключено по просьбе пользователя
             conn.commit()
             
             print(f"✅ Заявка {queue_dict['id']} обработана и удалена из очереди.")

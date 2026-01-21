@@ -1,3 +1,28 @@
+## 2026-01-21 - Fix Task Visibility & Address Parsing
+
+### Current Task
+Addressing user reports that:
+1.  Novamed parsing tasks disappear from the "Active List" upon completion, unlike other tasks.
+2.  The latest parsing attempt failed with `missing_address`.
+
+### Findings
+- **Task Visibility:** `worker.py` (lines 724-725) was explicitly deleting `parse_card` tasks upon success (`DELETE FROM ParseQueue`). Other task types used `UPDATE status='completed'` without deletion.
+- **Address Parsing:** The "missing_address" error indicates the scraper failed to find the address element. The existing selectors were limited (`div.business-contacts-view__address` only).
+
+### Architecture Decision
+- **Unified Task Retention:** Modified `worker.py` to **disable deletion** of completed tasks. Instead, their status is updated to `'completed'`, matching the behavior of fallback parsing tasks. This ensures they remain visible in the admin panel for filtering.
+- **Robust Selectors:** Updated `yandex_maps_scraper.py` with expanded address selectors (including header address and link-based selectors) to prevent `missing_address` failures.
+
+### Files to Modify
+- `src/worker.py`: Commented out `DELETE` statement.
+- `src/yandex_maps_scraper.py`: Added list of address selectors.
+
+### Status
+- [x] Completed (Code Updated)
+- [ ] Verification on Server (Requires Deployment)
+
+---
+
 ## 2026-01-21 - Novamed Parsing Debug (Rating Issue)
 
 ### Current Task
