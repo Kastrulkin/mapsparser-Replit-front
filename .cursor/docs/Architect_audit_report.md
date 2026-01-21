@@ -1,22 +1,25 @@
-## 2026-01-21 - Fix Sync Worker Error Handling
+## 2026-01-21 - Fix Parser Data & DB Schema
 
 ### Current Task
-Investigate why "Fallback" parsing tasks show as "Completed" (green status) but have no data in the "Progress" tab.
+Resolve missing data (products, reviews, rating) in parser results.
 
 ### Architecture Decision
-- Modified `YandexBusinessSyncWorker.sync_account` to **re-raise exceptions**. Previously, it swallowed exceptions, causing the calling `worker.py` logic to assume success and mark the task as "completed".
-- Added explicit `db.conn.commit()` after updating `MapParseResults` in `sync_account` to ensure data persistence.
+1.  **DB Schema Update**: Added `products` column to `MapParseResults`.
+    *   *Hotfix*: Applied via `sqlite3` CLI on server.
+    *   *Formalization*: Created `src/migrate_add_products_to_map_parse_results.py`.
+2.  **Parser Fix**: `YandexBusinessSyncWorker` now ensures `external_id` is passed to the parser (fixing missing reviews).
+3.  **Logging**: Enabled unbuffered logging (`python -u`) in `run_worker.sh` for real-time debugging.
 
 ### Files to Modify
-- `src/yandex_business_sync_worker.py` - added `raise e` and `commit()`.
+- `src/yandex_business_sync_worker.py` (Fixed `external_id` logic)
+- `src/run_worker.sh` (Added `-u` flag)
+- `src/migrate_add_products_to_map_parse_results.py` (New migration)
 
 ### Trade-offs & Decisions
-- **Error Visibility**: Now, if a sync task fails (e.g., due to auth errors or timeouts), the UI will show an **Error** status instead of a misleading "Completed" status. This helps in debugging the root cause (auth failure, network, etc.).
-- **Data Safety**: Explicit commit reduces the risk of data loss if the connection closes unexpectedly.
+- **Manual vs Migrations**: User correctly insisted on migrations. The new script ensures the change is reproducible for future deployments/dev environments.
 
 ### Dependencies
 - None.
-- Requires restart of `worker.py`.
 
 ### Status
 - [x] Completed
