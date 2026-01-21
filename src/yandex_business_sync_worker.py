@@ -249,6 +249,11 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             
             parser = YandexBusinessParser(auth_data_dict)
             
+            # Ensure external_id is in account dict for fetch_reviews
+            if 'external_id' not in account and 'external_id' in locals():
+                account['external_id'] = external_id
+
+            
             # Fetch & Upsert
             reviews = parser.fetch_reviews(account)
             repository.upsert_reviews(reviews)
