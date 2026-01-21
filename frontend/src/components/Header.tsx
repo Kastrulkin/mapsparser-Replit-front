@@ -13,13 +13,13 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  
+
   // ЛК отключён: всегда скрываем элементы аутентификации
   // Скрываем Header на странице Dashboard (там свой хедер)
   useEffect(() => {
     setIsAuth(false);
   }, []);
-  
+
   useEffect(() => {
     if (window.location.hash === "#agents") {
       const el = document.getElementById("agents");
@@ -28,7 +28,7 @@ const Header = () => {
       }
     }
   }, []);
-  
+
   // Не показываем Header на страницах кабинета (/dashboard...)
   if (location.pathname.startsWith('/dashboard')) {
     return null;
@@ -51,21 +51,21 @@ const Header = () => {
   ];
 
   return (
-    <header className="bg-card border-b border-border">
+    <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
-                <img 
-                  src={logo} 
-                  alt="BeautyBot Logo" 
+                <img
+                  src={logo}
+                  alt="BeautyBot Logo"
                   className="h-12 w-auto"
                 />
               </Link>
             </div>
           </div>
-          
+
           <nav className="hidden md:flex items-center space-x-14">
             {navigation.map((item) => (
               item.href === '/#agents' ? (
