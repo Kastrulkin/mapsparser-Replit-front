@@ -242,6 +242,7 @@ export const ru = {
     pricingOption1Button: "Настроить работу",
     pricingOption2Title: "🟠 ЭЛИТ",
     pricingOption2Price: "7% от прибыли",
+    pricingOption2Subtitle: "Работаем за результат, вы растёте",
     pricingOption2Tagline: "Работаем за результат, вы растёте",
     pricingOption2Point1: "Всё из тарифа Консьерж",
     pricingOption2Point2: "Полное управление клиентским потоком",
