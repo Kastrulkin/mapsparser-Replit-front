@@ -1,25 +1,25 @@
-## 2026-01-21 - Fix Parser Data & DB Schema
+## 2026-01-21 - Fix Missing Environment Variables (Local Debugging)
 
 ### Current Task
-Resolve missing data (products, reviews, rating) in parser results.
+Diagnose why `worker.py` failed to decrypt auth tokens, leading to empty parser results.
+User requested local debugging to find the cause.
 
 ### Architecture Decision
-1.  **DB Schema Update**: Added `products` column to `MapParseResults`.
-    *   *Hotfix*: Applied via `sqlite3` CLI on server.
-    *   *Formalization*: Created `src/migrate_add_products_to_map_parse_results.py`.
-2.  **Parser Fix**: `YandexBusinessSyncWorker` now ensures `external_id` is passed to the parser (fixing missing reviews).
-3.  **Logging**: Enabled unbuffered logging (`python -u`) in `run_worker.sh` for real-time debugging.
+1.  **Local Reproduction**: Created `local_check_env.py` which confirmed that `src/worker.py` was NOT loading variables from `.env`.
+2.  **Fix**: Added `from dotenv import load_dotenv; load_dotenv()` to:
+    *   `src/worker.py` (Main entry point)
+    *   `src/yandex_business_sync_worker.py` (Safety measure for direct usage)
 
 ### Files to Modify
-- `src/yandex_business_sync_worker.py` (Fixed `external_id` logic)
-- `src/run_worker.sh` (Added `-u` flag)
-- `src/migrate_add_products_to_map_parse_results.py` (New migration)
+- `src/worker.py`
+- `src/yandex_business_sync_worker.py`
+- Created temporary `local_check_env.py` and `.env` (will be ignored/deleted).
 
 ### Trade-offs & Decisions
-- **Manual vs Migrations**: User correctly insisted on migrations. The new script ensures the change is reproducible for future deployments/dev environments.
+- **Explicit Loading**: Relying on system environment variables is cleaner for containerization, but since we use `nohup python ...` and a `.env` file on the server, explicit `load_dotenv()` is required.
 
 ### Dependencies
-- None.
+- `python-dotenv` (already in requirements.txt).
 
 ### Status
 - [x] Completed

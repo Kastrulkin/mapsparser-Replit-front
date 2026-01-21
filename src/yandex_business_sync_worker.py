@@ -10,6 +10,9 @@ import uuid
 import traceback
 from typing import List, Optional
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from database_manager import DatabaseManager
 from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint

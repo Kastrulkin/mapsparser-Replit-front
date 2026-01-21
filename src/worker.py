@@ -7,7 +7,10 @@ import re
 from datetime import datetime, timedelta
 import signal
 import sys
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 
 # New imports
 from database_manager import DatabaseManager
