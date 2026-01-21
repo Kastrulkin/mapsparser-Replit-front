@@ -27,11 +27,11 @@ const Hero = () => {
               {t.hero.newClients}
             </div>
 
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-8 leading-tight tracking-tight animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-100">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-8 leading-tight tracking-tight animate-in fade-in slide-in-from-bottom-5 duration-1000 delay-100">
               {t.hero.title}
             </h1>
 
-            <p className="text-xl text-gray-600 mb-10 leading-relaxed max-w-lg animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
+            <p className="text-lg text-gray-600 mb-10 leading-relaxed max-w-lg animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
               {t.hero.subtitle}
             </p>
 
