@@ -1,3 +1,25 @@
+## 2026-01-21 - Sync Parsed Services to Database
+
+### Current Task
+The AI Agent was unable to "see" services because it queries the `UserServices` table, which was not being populated by the parser (which only saved to `MapParseResults`).
+
+### Architecture Decision
+- **Service Synchronization:** Implemented `_sync_parsed_services_to_db` in `worker.py`.
+- **Logic:** This function is called immediately after successful parsing. It iterates through the parsed products/services and upserts them into the `UserServices` table (matching on `business_id` and `name`).
+- **Data Enrichment:** Parses price strings (e.g., "1500 ₽") into integer cents for consistency.
+
+### Files to Modify
+- `src/worker.py`: Added synchronization logic and integration point.
+
+### Trade-offs & Decisions
+- **Duplication:** Data is now stored in both `MapParseResults` (raw JSON) and `UserServices` (structured). This is necessary because the AI Agent is designed to work with the structured `UserServices` table managed by users.
+- **Automation:** Services are automatically marked as active (`is_active=1`), ensuring immediate availability to the Agent.
+
+### Status
+- [x] Completed
+
+---
+
 ## 2026-01-21 - Fix Task Visibility & Address Parsing
 
 ### Current Task

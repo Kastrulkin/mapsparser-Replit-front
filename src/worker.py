@@ -684,6 +684,10 @@ def process_queue():
                     datetime.now().isoformat()
                 ))
                 
+                # Попытка синхронизации сервисов даже для старой схемы (если есть owner_id)
+                # Но у нас нет business_id здесь, поэтому пропускаем
+                pass
+                
                 print(f"Выполняем ИИ-анализ для карточки {card_id}...")
                 
                 try:
@@ -719,6 +723,17 @@ def process_queue():
                         
                 except Exception as analysis_error:
                     print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
+            
+            # --- SYNC SERVICES AFTER PARSING (NEW) ---
+            if business_id and card_data.get('products'):
+                try:
+                    print(f"🔄 Синхронизация услуг для business_id={business_id}...")
+                    _sync_parsed_services_to_db(business_id, card_data.get('products'), conn)
+                    print(f"✅ Услуги успешно синхронизированы.")
+                except Exception as sync_error:
+                    print(f"⚠️ Ошибка синхронизации услуг: {sync_error}")
+                    import traceback
+                    traceback.print_exc()
             
             # Обновляем статус на "done" и удаляем заявку из очереди
             # Обновляем статус на "completed" (чтобы задача осталась в списке)
@@ -772,6 +787,94 @@ def process_queue():
             )
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
+
+def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.Connection):
+    """
+    Синхронизирует распаршенные услуги в таблицу UserServices.
+    Добавляет новые, обновляет цены существующих.
+    """
+    if not products:
+        return
+
+    cursor = conn.cursor()
+    
+    # 1. Проверяем наличие таблицы UserServices и нужных колонок
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
+    if not cursor.fetchone():
+        # Если таблицы нет, создаём (должна быть, но на всякий случай)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS UserServices (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                category TEXT,
+                price INTEGER, -- цена в копейках
+                duration INTEGER DEFAULT 60,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+    
+    count_new = 0
+    count_updated = 0
+    
+    for category_data in products:
+        category_name = category_data.get('category', 'Разное')
+        items = category_data.get('items', [])
+        
+        for item in items:
+            name = item.get('name')
+            if not name:
+                continue
+                
+            raw_price = item.get('price', '')
+            description = item.get('description', '')
+            
+            # Парсинг цены
+            price_cents = None
+            if raw_price:
+                # Удаляем все нецифровые символы кроме разделителей
+                try:
+                    # Ищем числа в строке
+                    import re
+                    # "от 1 500 ₽" -> "1500"
+                    digits = re.sub(r'[^0-9]', '', str(raw_price))
+                    if digits:
+                        price_cents = int(digits) * 100 # В копейки
+                except:
+                    pass
+            
+            # Ищем существующую услугу по имени и business_id
+            cursor.execute("""
+                SELECT id FROM UserServices 
+                WHERE business_id = ? AND name = ?
+            """, (business_id, name))
+            
+            row = cursor.fetchone()
+            
+            if row:
+                # Обновляем существующую
+                service_id = row[0]
+                cursor.execute("""
+                    UPDATE UserServices 
+                    SET price = ?, description = ?, category = ?, updated_at = CURRENT_TIMESTAMP, is_active = 1
+                    WHERE id = ?
+                """, (price_cents, description, category_name, service_id))
+                count_updated += 1
+            else:
+                # Создаем новую
+                service_id = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO UserServices (id, business_id, name, description, category, price, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                """, (service_id, business_id, name, description, category_name, price_cents))
+                count_new += 1
+                
+    conn.commit()
+    print(f"📊 Синхронизация услуг завершена: {count_new} новых, {count_updated} обновлено.")
 
 def _process_sync_yandex_business_task(queue_dict):
     """Обработка синхронизации Яндекс.Бизнес через кабинет"""
