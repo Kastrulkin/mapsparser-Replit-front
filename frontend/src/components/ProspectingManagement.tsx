@@ -35,7 +35,7 @@ export const ProspectingManagement: React.FC = () => {
     const [loadingLeads, setLoadingLeads] = useState(false);
 
     useEffect(() => {
-        // fetchSavedLeads(); // FIX: Commented out to prevent White Screen crash
+        fetchSavedLeads();
     }, []);
 
     const fetchSavedLeads = async () => {
