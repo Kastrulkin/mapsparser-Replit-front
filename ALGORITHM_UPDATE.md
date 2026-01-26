@@ -53,18 +53,29 @@ ls -lh dist/assets/index-*.js
 # Если дата старая - сборка не прошла или используется старый файл
 ```
 
-#### Шаг 3: Если бэкенд отдаёт статику - перезапустить Flask сервер
-```bash
-# Остановить старый процесс
-pkill -9 -f "python.*main.py" || true
-sleep 2
+#### Шаг 3: Автоматическое обновление (РЕКОМЕНДУЕТСЯ)
+Вместо ручной сборки используйте скрипт `update_server.sh` в корне проекта. Он сам соберет фронтенд, скопирует файлы в `/var/www/html` и перезапустит сервисы.
 
-# Запустить новый
-cd ..
-source venv/bin/activate
-python src/main.py >/tmp/seo_main.out 2>&1 &
-sleep 3
+```bash
+cd /root/mapsparser-Replit-front
+bash update_server.sh
 ```
+
+**Почему только скрипт?**
+- `npm run build` обновляет папку `dist` внутри `frontend`, но Nginx смотрит в `/var/www/html`.
+- Скрипт копирует файлы из `dist` в `/var/www/html`.
+- Без этого действия вы будете видеть старую версию сайта даже после успешного билда!
+
+#### Шаг 4 (опционально): Если скрипт недоступен — ручное обновление
+Если нужно обновить вручную, не забудьте скопировать файлы:
+```bash
+cd frontend
+npm run build
+cp -r dist/* /var/www/html/  # <-- КРИТИЧЕСКИ ВАЖНО!
+service nginx reload
+```
+
+#### Шаг 5: Очистить кеш браузера
 
 #### Шаг 4: Проверить сервер
 ```bash
@@ -123,25 +134,21 @@ systemctl status telegram-bot telegram-reviews-bot
 # Должны быть "active (running)"
 ```
 
-#### Шаг 4: Остановить старый процесс Flask и убедиться, что порт 8000 свободен
+#### Шаг 4: Перезапуск через Systemd (РЕКОМЕНДУЕТСЯ)
+
+На сервере настроены systemd сервисы:
+- `seo-api` — основной Flask сервер (порт 8000)
+- `seo-worker` — фоновый обработчик задач
+
+Для перезапуска используйте:
 ```bash
-# Найти и убить только процессы main.py и worker.py
-# ⚠️ НЕ трогаем telegram_bot.py и telegram_reviews_bot.py!
-pkill -9 -f "python.*main.py" || true
-pkill -9 -f "python.*worker.py" || true
-sleep 2
-
-# Если что‑то всё ещё слушает 8000 — добиваем по PID
-PID=$(lsof -tiTCP:8000 -sTCP:LISTEN || true)
-if [ ! -z "$PID" ]; then
-    echo "⚠️ Порт 8000 всё ещё занят, убиваю PID $PID"
-    kill -9 "$PID"
-    sleep 2
-fi
-
-# Проверить, что порт свободен
-lsof -iTCP:8000 -sTCP:LISTEN || echo "✅ Порт 8000 свободен"
+systemctl restart seo-api
+systemctl restart seo-worker
 ```
+
+Или используйте `bash update_server.sh`, который сделает это за вас.
+
+**⚠️ ВАЖНО:** Сервиса с именем `mapsparser` не существует! Используйте `seo-api`.
 
 #### Шаг 5: Запустить новый процесс Flask
 ```bash
