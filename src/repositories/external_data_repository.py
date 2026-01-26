@@ -16,11 +16,11 @@ class ExternalDataRepository:
             cursor.execute(
                 """
                 INSERT INTO ExternalBusinessReviews (
-                    id, business_id, account_id, source, external_review_id,
+                    id, business_id, source, external_review_id,
                     rating, author_name, text, response_text, response_at,
                     published_at, raw_payload, created_at, updated_at
                 )
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     rating=excluded.rating,
                     author_name=excluded.author_name,
@@ -55,12 +55,12 @@ class ExternalDataRepository:
             cursor.execute(
                 """
                 INSERT INTO ExternalBusinessStats (
-                    id, business_id, account_id, source, date,
+                    id, business_id, source, date,
                     views_total, clicks_total, actions_total,
                     rating, reviews_total, raw_payload,
                     created_at, updated_at
                 )
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     views_total=excluded.views_total,
                     clicks_total=excluded.clicks_total,
@@ -93,11 +93,11 @@ class ExternalDataRepository:
             cursor.execute(
                 """
                 INSERT INTO ExternalBusinessPosts (
-                    id, business_id, account_id, source, external_post_id,
+                    id, business_id, source, external_post_id,
                     title, text, published_at, image_url, raw_payload,
                     created_at, updated_at
                 )
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     title=excluded.title,
                     text=excluded.text,
@@ -128,11 +128,11 @@ class ExternalDataRepository:
             cursor.execute(
                 """
                 INSERT INTO ExternalBusinessPhotos (
-                    id, business_id, account_id, source, external_photo_id,
+                    id, business_id, source, external_photo_id,
                     url, thumbnail_url, uploaded_at, raw_payload,
                     created_at, updated_at
                 )
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     url=excluded.url,
                     thumbnail_url=excluded.thumbnail_url,

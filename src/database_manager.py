@@ -992,6 +992,62 @@ class DatabaseManager:
         
         return reports
 
+    # ===== PROSPECTING LEADS =====
+
+    def get_all_leads(self) -> List[Dict[str, Any]]:
+        """Получить все лиды"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM ProspectingLeads ORDER BY created_at DESC")
+        return [dict(zip([d[0] for d in cursor.description], row)) for row in cursor.fetchall()]
+
+    def save_lead(self, lead_data: Dict[str, Any]) -> str:
+        """Сохранить лид (если уже есть google_id - обновить)"""
+        cursor = self.conn.cursor()
+        
+        # Проверяем дубликат по google_id
+        google_id = lead_data.get('google_id')
+        if google_id:
+            cursor.execute("SELECT id FROM ProspectingLeads WHERE google_id = ?", (google_id,))
+            existing = cursor.fetchone()
+            if existing:
+                return existing[0]
+
+        lead_id = str(uuid.uuid4())
+        fields = ['id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count', 
+                  'source_url', 'google_id', 'category', 'location', 'status']
+        
+        values = [lead_id]
+        for f in fields[1:]:
+            values.append(lead_data.get(f))
+            
+        placeholders = ', '.join(['?' for _ in values])
+        
+        cursor.execute(f"""
+            INSERT INTO ProspectingLeads ({', '.join(fields)}, created_at, updated_at)
+            VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, values)
+        
+        self.conn.commit()
+        return lead_id
+
+    def update_lead_status(self, lead_id: str, status: str) -> bool:
+        """Обновить статус лида"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE ProspectingLeads 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (status, lead_id))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def delete_lead(self, lead_id: str) -> bool:
+        """Удалить лид"""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM ProspectingLeads WHERE id = ?", (lead_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
 def main():
     """Основная функция для тестирования"""
     db = DatabaseManager()

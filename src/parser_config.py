@@ -6,7 +6,7 @@ import os
 
 # Переменная окружения для выбора парсера
 # Значения: 'interception' (новый, быстрый) или 'legacy' (старый, надежный)
-PARSER_MODE = os.getenv('PARSER_MODE', 'interception').lower()
+PARSER_MODE = os.getenv('PARSER_MODE', 'legacy').lower()
 
 def get_parser():
     """

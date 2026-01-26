@@ -10,6 +10,9 @@ import uuid
 import traceback
 from typing import List, Optional
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from database_manager import DatabaseManager
 from external_sources import ExternalSource, ExternalReview, ExternalStatsPoint
@@ -48,13 +51,82 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         repository = ExternalDataRepository(db)
         repository.upsert_stats(stats)
     
+    def _sync_services_to_db(self, conn, business_id: str, products: list):
+        """
+        Синхронизирует распаршенные услуги в таблицу UserServices.
+        (Дубликат логики из worker.py для избежания циклических импортов)
+        """
+        if not products:
+            return
+
+        cursor = conn.cursor()
+        
+        # 1. Проверяем наличие таблицы UserServices и нужных колонок
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
+        if not cursor.fetchone():
+            return # Если таблицы нет, то и синхронизировать некуда (она создается в worker.py или миграции)
+        
+        count_new = 0
+        count_updated = 0
+        
+        for category_data in products:
+            category_name = category_data.get('category', 'Разное')
+            items = category_data.get('items', [])
+            
+            for item in items:
+                name = item.get('name')
+                if not name:
+                    continue
+                    
+                raw_price = item.get('price', '')
+                description = item.get('description', '')
+                
+                # Парсинг цены
+                price_cents = None
+                if raw_price:
+                    try:
+                        import re
+                        digits = re.sub(r'[^0-9]', '', str(raw_price))
+                        if digits:
+                            price_cents = int(digits)  # Store exact digit value (1200 RUB -> 1200)
+                    except:
+                        pass
+                
+                # Ищем существующую услугу
+                cursor.execute("""
+                    SELECT id FROM UserServices 
+                    WHERE business_id = ? AND name = ?
+                """, (business_id, name))
+                
+                row = cursor.fetchone()
+                
+                if row:
+                    service_id = row[0]
+                    cursor.execute("""
+                        UPDATE UserServices 
+                        SET price = ?, description = ?, category = ?, updated_at = CURRENT_TIMESTAMP, is_active = 1
+                        WHERE id = ?
+                    """, (price_cents, description, category_name, service_id))
+                    count_updated += 1
+                else:
+                    service_id = str(uuid.uuid4())
+                    cursor.execute("""
+                        INSERT INTO UserServices (id, business_id, name, description, category, price, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                    """, (service_id, business_id, name, description, category_name, price_cents))
+                    count_new += 1
+                    
+        conn.commit()
+        print(f"📊 [SyncWorker] Синхронизация услуг: {count_new} новых, {count_updated} обновлено.")
+
     def _upsert_posts(self, db: DatabaseManager, posts: list) -> None:
         """Вставка/обновление постов (для совместимости с main.py)"""
         repository = ExternalDataRepository(db)
         repository.upsert_posts(posts)
 
     def _update_map_parse_results(self, db: DatabaseManager, account: dict, 
-                                  org_info: dict, reviews_count: int, news_count: int, photos_count: int) -> None:
+                                  org_info: dict, reviews_count: int, news_count: int, photos_count: int,
+                                  products: list = None) -> None:
         """Обновление таблицы MapParseResults для отображения статуса в дашборде"""
         business_id = account.get('business_id')
         external_id = account.get('external_id')
@@ -74,7 +146,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
 
         # Получаем последние успешные данные из MapParseResults для сравнения/слияния
         cursor.execute("""
-            SELECT rating, reviews_count, news_count, photos_count, reviews_without_response
+            SELECT rating, reviews_count, news_count, photos_count, unanswered_reviews_count
             FROM MapParseResults
             WHERE business_id = ?
             ORDER BY created_at DESC
@@ -127,47 +199,28 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         parse_id = str(uuid.uuid4())
         url = f"https://yandex.ru/sprav/{external_id or 'unknown'}"
         
-        # Проверяем наличие колонки unanswered_reviews_count
+        # Проверяем наличие колонки unanswered_reviews_count и products
         cursor.execute("PRAGMA table_info(MapParseResults)")
         columns = [row[1] for row in cursor.fetchall()]
 
+        # Динамическое построение запроса
+        fields = ["id", "business_id", "url", "map_type", "rating", "reviews_count", "news_count", "photos_count", "created_at"]
+        values_qm = ["?", "?", "?", "?", "?", "?", "?", "?", "CURRENT_TIMESTAMP"]
+        values = [parse_id, business_id, url, 'yandex', str(rating) if rating else None, reviews_count, news_count, photos_count]
+
         if 'unanswered_reviews_count' in columns:
-            cursor.execute("""
-                INSERT INTO MapParseResults (
-                    id, business_id, url, map_type, rating, reviews_count, 
-                    unanswered_reviews_count, news_count, photos_count, 
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                parse_id,
-                business_id,
-                url,
-                'yandex',
-                str(rating) if rating else None,
-                reviews_count,
-                unanswered_reviews_count,
-                news_count,
-                photos_count,
-            ))
-        else:
-             cursor.execute("""
-                INSERT INTO MapParseResults (
-                    id, business_id, url, map_type, rating, reviews_count, 
-                    news_count, photos_count, 
-                    created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                parse_id,
-                business_id,
-                url,
-                'yandex',
-                str(rating) if rating else None,
-                reviews_count,
-                news_count,
-                photos_count,
-            ))
+            fields.append("unanswered_reviews_count")
+            values_qm.append("?")
+            values.append(unanswered_reviews_count)
+            
+        if 'products' in columns and products:
+            fields.append("products")
+            values_qm.append("?")
+            values.append(json.dumps(products, ensure_ascii=False))
+
+        query = f"INSERT INTO MapParseResults ({', '.join(fields)}) VALUES ({', '.join(values_qm)})"
+        
+        cursor.execute(query, tuple(values))
         # Не делаем commit здесь, он будет в sync_account
 
     def sync_account(self, account_id: str) -> None:
@@ -199,6 +252,11 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             
             parser = YandexBusinessParser(auth_data_dict)
             
+            # Ensure external_id is in account dict for fetch_reviews
+            if 'external_id' not in account and 'external_id' in locals():
+                account['external_id'] = external_id
+
+            
             # Fetch & Upsert
             reviews = parser.fetch_reviews(account)
             repository.upsert_reviews(reviews)
@@ -221,13 +279,27 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             
             photos_count = parser.fetch_photos_count(account)
             
+            # --- EXTRACT AND SYNC SERVICES (NEW) ---
+            try:
+                products = parser.fetch_products(account)
+                if products:
+                    print(f"📦 Получено {len(products)} категорий услуг")
+                    self._sync_services_to_db(db.conn, account['business_id'], products)
+                else:
+                    print("⚠️ Услуги не найдены или пустой список")
+            except Exception as e:
+                print(f"⚠️ Ошибка при синхронизации услуг: {e}")
+                products = []
+            
             # Обновляем MapParseResults для совместимости с UI
             self._update_map_parse_results(
                 db, account, org_info, 
                 reviews_count=len(reviews), 
                 news_count=len(posts), 
-                photos_count=photos_count
+                photos_count=photos_count,
+                products=products
             )
+            db.conn.commit()
 
             self._update_account_sync_status(db, account['id'])
             print(f"✅ Синхронизация аккаунта {account_id} завершена")
@@ -237,6 +309,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             traceback.print_exc()
             if db:
                 self._update_account_sync_status(db, account_id, error=str(e))
+            raise e
         finally:
             if db:
                 db.close()

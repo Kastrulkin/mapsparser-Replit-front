@@ -47,6 +47,7 @@ from api.stage_progress_api import stage_progress_bp
 from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
+from api.admin_prospecting import admin_prospecting_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -85,7 +86,8 @@ app = Flask(__name__)
 # В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-CORS(app, supports_credentials=True, origins=allowed_origins)
+# For local debugging, allow all origins temporarily if needed, or ensure user's IP is here.
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"])
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:
@@ -126,6 +128,14 @@ app.register_blueprint(stage_progress_bp)
 app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
+app.register_blueprint(admin_prospecting_bp)
+
+try:
+    from api.wordstat_api import wordstat_bp
+    app.register_blueprint(wordstat_bp)
+except ImportError as e:
+    print(f"⚠️ Could not import wordstat_bp: {e}")
+
 if google_business_bp:
     app.register_blueprint(google_business_bp)
 
@@ -221,6 +231,35 @@ def save_card_to_db(card: dict) -> None:
 
     card_id = card.get('id') or str(uuid.uuid4())
     overview = card.get('overview') or {}
+
+    # === АВТОМАТИЧЕСКИЙ АНАЛИЗ ПРИ СОХРАНЕНИИ ===
+    try:
+        from services.analytics_service import calculate_profile_completeness, generate_seo_recommendations
+        
+        # Подготовка данных для анализа
+        analysis_data = {
+            'phone': (overview or {}).get('phone'),
+            'website': (overview or {}).get('site'),
+            'schedule': (overview or {}).get('working_hours') or card.get('hours') or card.get('hours_full'),
+            'photos_count': card.get('photos_count') or len(card.get('photos', [])),
+            'services_count': card.get('services_count') or len(card.get('products', [])),
+            'description': (overview or {}).get('description'),
+            'messengers': card.get('messengers'),
+            'is_verified': card.get('is_verified')
+        }
+        
+        # Расчет баллов
+        seo_score = calculate_profile_completeness(analysis_data)
+        recommendations = generate_seo_recommendations(analysis_data)
+        
+        # Обновляем объект card перед сохранением
+        card['seo_score'] = seo_score
+        card['recommendations'] = json.dumps(recommendations, ensure_ascii=False)
+        print(f"📊 [save_card_to_db] Auto-Analysis: Score {seo_score}%")
+        
+    except Exception as e:
+        print(f"⚠️ Warning: Auto-analysis failed in save_card_to_db: {e}")
+    # ============================================
 
     cur.execute(
         """
@@ -3536,11 +3575,52 @@ def get_services():
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
                     select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
-                    print(f"🔍 DEBUG get_services: SQL запрос = {select_sql}", flush=True)
-                    print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
-                    print(f"🔍 DEBUG get_services: has_optimized_name = {has_optimized_name}, has_optimized_desc = {has_optimized_desc}", flush=True)
-                    
                     cursor.execute(select_sql, (business_id,))
+                    
+                    user_services = []
+                    rows = cursor.fetchall()
+                    for r in rows:
+                        srv = {
+                            "id": r[0], "category": r[1], "name": r[2], 
+                            "description": r[3], "keywords": r[4], 
+                            "price": r[5], "created_at": r[6]
+                        }
+                         # Если есть оптимизированные поля, добавляем их
+                        idx_offset = 0
+                        if has_optimized_desc:
+                             srv["optimized_description"] = r[7]
+                             idx_offset += 1
+                        if has_optimized_name:
+                             srv["optimized_name"] = r[7 + idx_offset]
+                        
+                        user_services.append(srv)
+
+                    # Получаем внешние услуги
+                    external_services = []
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ExternalBusinessServices'")
+                    if cursor.fetchone():
+                        cursor.execute("""
+                            SELECT id, name, price, description, category, created_at
+                            FROM ExternalBusinessServices
+                            WHERE business_id = ?
+                        """, (business_id,))
+                        for r in cursor.fetchall():
+                            external_services.append({
+                                "id": r[0],
+                                "name": r[1],
+                                "price": r[2],
+                                "description": r[3],
+                                "category": r[4],
+                                "created_at": r[5],
+                                "is_external": True
+                            })
+
+                    db.close()
+                    return jsonify({
+                        "success": True, 
+                        "services": user_services,
+                        "external_services": external_services
+                    })
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -9032,19 +9112,7 @@ def business_optimization_wizard(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Создаем таблицу если её нет
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                step INTEGER DEFAULT 1,
-                data TEXT,
-                completed INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
-            )
-        """)
+
         
         # Проверяем доступ к бизнесу
         owner_id = get_business_owner_id(cursor, business_id)

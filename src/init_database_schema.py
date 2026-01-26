@@ -441,6 +441,71 @@ def init_database_schema():
         """)
         print("✅ Таблица ReviewExchangeDistribution создана/проверена")
         
+        # ExternalBusinessReviews - отзывы из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessReviews (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                external_review_id TEXT,
+                rating INTEGER,
+                author_name TEXT,
+                text TEXT,
+                published_at TIMESTAMP,
+                response_text TEXT,
+                response_at TIMESTAMP,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessReviews создана/проверена")
+
+        # ExternalBusinessStats - статистика из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessStats (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                date TEXT NOT NULL,
+                views_total INTEGER,
+                clicks_total INTEGER,
+                actions_total INTEGER,
+                rating REAL,
+                reviews_total INTEGER,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE,
+                UNIQUE(business_id, source, date)
+            )
+        """)
+        print("✅ Таблица ExternalBusinessStats создана/проверена")
+        
+        # Индексы для внешних таблиц
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_id ON ExternalBusinessReviews(business_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_reviews_source ON ExternalBusinessReviews(source)")
+        
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_business_id ON ExternalBusinessStats(business_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_source ON ExternalBusinessStats(source)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_date ON ExternalBusinessStats(date)")
+        print("✅ Индексы для внешних таблиц созданы/проверены")
+        
+        # WordstatKeywords - популярные запросы (SEO)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS WordstatKeywords (
+                id TEXT PRIMARY KEY,
+                keyword TEXT UNIQUE NOT NULL,
+                views INTEGER DEFAULT 0,
+                category TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_views ON WordstatKeywords(views DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_category ON WordstatKeywords(category)")
+        print("✅ Таблица WordstatKeywords создана/проверена")
+        
         # ===== ОПТИМИЗАЦИЯ =====
         
         # BusinessOptimizationWizard - данные мастера оптимизации
