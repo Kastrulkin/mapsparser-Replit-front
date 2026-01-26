@@ -295,9 +295,6 @@ def update_service(service_id):
         
         db.conn.commit()
         db.close()
-        
-        return jsonify({"success": True})
-    
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}")
         import traceback

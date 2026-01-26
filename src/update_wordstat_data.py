@@ -81,31 +81,81 @@ def main():
             all_queries.extend(popular_data['data'])
         all_queries.extend(similar_queries)
         
-        # Обрабатываем и сохраняем данные
-        processor = WordstatDataProcessor()
+        # Обрабатываем и сохраняем данные в БД
+        from database_manager import DatabaseManager
+        from service_categorizer import categorizer
+        import uuid
         
-        # Создаем структуру данных для API
-        api_data = {'data': all_queries}
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
         
-        # Путь к файлу с популярными запросами
-        prompts_dir = Path(__file__).parent.parent / "prompts"
-        file_path = prompts_dir / "popular_queries_with_clicks.txt"
+        print("💾 Сохранение данных в таблицу WordstatKeywords...")
         
-        # Сохраняем в файл
-        processor.save_queries_to_file(api_data, str(file_path))
+        saved_count = 0
+        updated_count = 0
         
-        print(f"✅ Данные успешно обновлены и сохранены в {file_path}")
-        print(f"📈 Обработано {len(all_queries)} запросов")
+        try:
+            for item in all_queries:
+                keyword = item.get('key', '').strip()
+                if not keyword:
+                    continue
+                    
+                views = int(item.get('clicks', 0))
+                
+                # Категоризация
+                # Используем categorizer.categorize_service, чтобы определить наиболее подходящую категорию
+                # Он возвращает (category_key, confidence, matched_keywords)
+                category, confidence, _ = categorizer.categorize_service(keyword)
+                
+                if confidence < 0.3:
+                    category = 'other'
+
+                # Проверяем существование
+                cursor.execute("SELECT id FROM WordstatKeywords WHERE keyword = ?", (keyword,))
+                existing = cursor.fetchone()
+                
+                if existing:
+                    cursor.execute("""
+                        UPDATE WordstatKeywords 
+                        SET views = ?, category = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    """, (views, category, existing[0]))
+                    updated_count += 1
+                else:
+                    new_id = str(uuid.uuid4())
+                    cursor.execute("""
+                        INSERT INTO WordstatKeywords (id, keyword, views, category, updated_at) 
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (new_id, keyword, views, category))
+                    saved_count += 1
+            
+            db.conn.commit()
+            print(f"✅ Данные успешно сохранены в БД")
+            print(f"   ➕ Новых: {saved_count}")
+            print(f"   🔄 Обновлено: {updated_count}")
+            
+        except Exception as db_err:
+            print(f"❌ Ошибка записи в БД: {db_err}")
+            db.conn.rollback()
+            return False
+            
+        finally:
+            db.close()
         
-        # Сохраняем метаданные обновления
+        # Сохраняем метаданные обновления (все еще полезно)
         metadata = {
             'last_update': datetime.now().isoformat(),
-            'queries_count': len(all_queries),
+            'queries_count': saved_count + updated_count,
             'region': config.default_region,
             'region_name': config.get_region_name(config.default_region)
         }
         
+        prompts_dir = Path(__file__).parent.parent / "prompts"
+        if not prompts_dir.exists():
+            prompts_dir.mkdir(parents=True, exist_ok=True)
+            
         metadata_path = prompts_dir / "wordstat_metadata.json"
+        
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         
@@ -115,6 +165,8 @@ def main():
         
     except Exception as e:
         print(f"❌ Ошибка при обновлении данных: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def check_update_needed() -> bool:
