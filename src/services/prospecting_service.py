@@ -1,12 +1,21 @@
 import os
-from apify_client import ApifyClient
+try:
+    from apify_client import ApifyClient
+    APIFY_AVAILABLE = True
+except ImportError:
+    ApifyClient = None
+    APIFY_AVAILABLE = False
+    print("Warning: apify_client not installed. Prospecting features disabled.")
 from typing import List, Dict, Any, Optional
 import datetime
 
 class ProspectingService:
     def __init__(self, api_token: Optional[str] = None):
         self.api_token = api_token or os.environ.get('APIFY_TOKEN')
-        if not self.api_token:
+        if not APIFY_AVAILABLE:
+            print("Warning: apify_client not available. Prospecting service disabled.")
+            self.client = None
+        elif not self.api_token:
             print("Warning: APIFY_TOKEN is not set. Prospecting service will not work.")
             self.client = None
         else:
