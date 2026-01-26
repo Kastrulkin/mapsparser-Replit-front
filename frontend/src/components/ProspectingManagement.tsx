@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Badge } from "./ui/badge";
 import { Loader2, Search, Save, MapPin, Phone, Globe, Star, Users } from "lucide-react";
-import { api } from "@/services/api";
+import { api } from "../services/api";
 
 type Lead = {
     id?: string;
@@ -297,3 +297,5 @@ export const ProspectingManagement: React.FC = () => {
         </div>
     );
 };
+
+export default ProspectingManagement;
