@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { useApiData } from '../hooks/useApiData';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { YandexBusinessReport } from './YandexBusinessReport';
+import { CheckCircle2 } from 'lucide-react';
 
 interface MapParseItem {
   id: string;
@@ -85,9 +86,14 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                     {new Date(item.createdAt).toLocaleDateString('ru-RU')}
                   </td>
                   <td className="px-3 py-2 border-b max-w-xs truncate">
-                    <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                      {item.url}
-                    </a>
+                    <div className="flex items-center gap-1">
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline truncate">
+                        {item.url}
+                      </a>
+                      {item.isVerified && (
+                        <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-100 flex-shrink-0" />
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 border-b capitalize">{item.mapType || '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.rating || '—'}</td>

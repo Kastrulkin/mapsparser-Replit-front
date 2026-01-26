@@ -29,10 +29,17 @@ const Header = () => {
     }
   }, []);
 
-  // Не показываем Header на страницах кабинета (/dashboard...)
-  if (location.pathname.startsWith('/dashboard')) {
-    return null;
-  }
+  // Handle scroll effect
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -50,17 +57,10 @@ const Header = () => {
     { name: t.header.prices, href: '/about#pricing' },
   ];
 
-  // Handle scroll effect
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  // Не показываем Header на страницах кабинета (/dashboard...)
+  if (location.pathname.startsWith('/dashboard')) {
+    return null;
+  }
 
   return (
     <header

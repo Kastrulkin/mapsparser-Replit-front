@@ -49,15 +49,9 @@ export const ProfilePage = () => {
         return;
       }
       try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/network-locations`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setIsNetworkMaster(data.is_network || false);
-          if (data.locations) setNetworkLocations(data.locations);
-        }
+        const data = await newAuth.makeRequest(`/business/${currentBusinessId}/network-locations`);
+        setIsNetworkMaster(data.is_network || false);
+        if (data.locations) setNetworkLocations(data.locations);
       } catch (error) {
         console.error('Network check error:', error);
       }
@@ -93,23 +87,14 @@ export const ProfilePage = () => {
     if (!currentBusinessId) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/client-info?business_id=${currentBusinessId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.owner) {
-          // Показываем данные владельца бизнеса
-          setForm({
-            email: data.owner.email || "",
-            phone: data.owner.phone || "",
-            name: data.owner.name || ""
-          });
-        }
+      const data = await newAuth.makeRequest(`/client-info?business_id=${currentBusinessId}`);
+      if (data.owner) {
+        // Показываем данные владельца бизнеса
+        setForm({
+          email: data.owner.email || "",
+          phone: data.owner.phone || "",
+          name: data.owner.name || ""
+        });
       }
     } catch (error) {
       console.error('Ошибка загрузки данных владельца:', error);
@@ -118,54 +103,45 @@ export const ProfilePage = () => {
 
   useEffect(() => {
     // Загружаем типы бизнеса (теперь используем локализацию, но API может вернуть список)
-    // В данном случае мы можем использовать локализованные типы из t.dashboard.profile.businessTypes
-    // Если API возвращает ключи, мы их мэпим.
   }, []);
 
   useEffect(() => {
     const loadClientInfo = async () => {
       try {
         const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
-        const response = await fetch(`${window.location.origin}/api/client-info${qs}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
+        const data = await newAuth.makeRequest(`/client-info${qs}`);
 
-          // Если есть данные владельца бизнеса и это не наш бизнес, обновляем форму
-          if (data.owner && currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
-            setForm({
-              email: data.owner.email || "",
-              phone: data.owner.phone || "",
-              name: data.owner.name || ""
-            });
-          }
-
-          // Загружаем точки сети ТОЛЬКО если текущий бизнес является частью сети
-          if (currentBusiness?.network_id) {
-            loadNetworkLocations();
-          }
-
-          // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
-          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
-            ? data.mapLinks.map((link: any) => ({
-              id: link.id,
-              url: link.url || '',
-              mapType: link.mapType || link.map_type
-            }))
-            : []);
-
-          const businessType = data.businessType || currentBusiness?.business_type || '';
-          setClientInfo({
-            businessName: data.businessName || '',
-            businessType: businessType,
-            address: data.address || '',
-            workingHours: data.workingHours || t.dashboard.profile.workingHoursPlaceholder,
-            mapLinks: normalizedMapLinks
+        // Если есть данные владельца бизнеса и это не наш бизнес, обновляем форму
+        if (data.owner && currentBusiness && currentBusiness.owner_id && currentBusiness.owner_id !== user?.id) {
+          setForm({
+            email: data.owner.email || "",
+            phone: data.owner.phone || "",
+            name: data.owner.name || ""
           });
         }
+
+        // Загружаем точки сети ТОЛЬКО если текущий бизнес является частью сети
+        if (currentBusiness?.network_id) {
+          loadNetworkLocations();
+        }
+
+        // Нормализуем mapLinks: сервер возвращает объекты с полями id, url, mapType, createdAt
+        const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
+          ? data.mapLinks.map((link: any) => ({
+            id: link.id,
+            url: link.url || '',
+            mapType: link.mapType || link.map_type
+          }))
+          : []);
+
+        const businessType = data.businessType || currentBusiness?.business_type || '';
+        setClientInfo({
+          businessName: data.businessName || '',
+          businessType: businessType,
+          address: data.address || '',
+          workingHours: data.workingHours || t.dashboard.profile.workingHoursPlaceholder,
+          mapLinks: normalizedMapLinks
+        });
       } catch (error) {
         console.error('Ошибка загрузки информации о бизнесе:', error);
       }
@@ -178,19 +154,9 @@ export const ProfilePage = () => {
 
     try {
       setLoadingLocations(true);
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setIsNetwork(data.is_network || false);
-        setNetworkLocations(data.locations || []);
-      }
+      const data = await newAuth.makeRequest(`/business/${currentBusinessId}/network-locations`);
+      setIsNetwork(data.is_network || false);
+      setNetworkLocations(data.locations || []);
     } catch (error) {
       console.error('Ошибка загрузки точек сети:', error);
     } finally {
@@ -201,12 +167,8 @@ export const ProfilePage = () => {
   const handleUpdateProfile = async () => {
     try {
       if (currentBusinessId) {
-        const response = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/profile`, {
+        const data = await newAuth.makeRequest(`/business/${currentBusinessId}/profile`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-          },
           body: JSON.stringify({
             contact_name: form.name,
             contact_phone: form.phone,
@@ -214,13 +176,9 @@ export const ProfilePage = () => {
           })
         });
 
-        if (response.ok) {
-          setEditMode(false);
-          setSuccess(t.dashboard.profile.profileUpdated);
-        } else {
-          const errorData = await response.json();
-          setError(errorData.error || t.dashboard.profile.errorSave);
-        }
+        // newAuth.makeRequest throws if not success/ok, assuming success
+        setEditMode(false);
+        setSuccess(t.dashboard.profile.profileUpdated);
       } else {
         const { user: updatedUser, error } = await newAuth.updateProfile({
           name: form.name,
@@ -235,9 +193,9 @@ export const ProfilePage = () => {
         setEditMode(false);
         setSuccess(t.dashboard.profile.profileUpdated);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Ошибка обновления профиля:', error);
-      setError(t.dashboard.profile.errorSave);
+      setError(error.message || t.dashboard.profile.errorSave);
     }
   };
 
@@ -254,7 +212,7 @@ export const ProfilePage = () => {
         }
         // Если есть название бизнеса в clientInfo - ищем по имени
         else if (clientInfo.businessName) {
-          const foundBusiness = businesses.find(b =>
+          const foundBusiness = businesses.find((b: any) =>
             b.name && b.name.toLowerCase().trim() === clientInfo.businessName.toLowerCase().trim()
           );
           if (foundBusiness) {
@@ -305,92 +263,69 @@ export const ProfilePage = () => {
         payload.businessId = effectiveBusinessId;
       }
 
-      const response = await fetch(`${window.location.origin}/api/client-info`, {
+      await newAuth.makeRequest('/client-info', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
         body: JSON.stringify(payload)
       });
 
-      if (response.ok) {
-        const data = await response.json();
-
-        // Всегда перезагружаем данные после сохранения для синхронизации
-        // Если businessId был определён - используем его, иначе загружаем без параметра
-        const qs = effectiveBusinessId ? `?business_id=${effectiveBusinessId}` : '';
-        const reloadResponse = await fetch(`${window.location.origin}/api/client-info${qs}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-          }
-        });
-        if (reloadResponse.ok) {
-          const reloadData = await reloadResponse.json();
-          const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks)
-            ? reloadData.mapLinks.map((link: any) => ({
-              id: link.id,
-              url: link.url || '',
-              mapType: link.mapType || link.map_type
-            }))
-            : []);
-          const businessType = reloadData.businessType || currentBusiness?.business_type || '';
-          setClientInfo({
-            businessName: reloadData.businessName || '',
-            businessType: businessType,
-            address: reloadData.address || '',
-            workingHours: reloadData.workingHours || t.dashboard.profile.workingHoursPlaceholder,
-            mapLinks: normalizedMapLinks
-          });
-        } else {
-          // Если перезагрузка не удалась, используем данные из ответа
-          const normalizedMapLinks = (data.mapLinks && Array.isArray(data.mapLinks)
-            ? data.mapLinks.map((link: any) => ({
-              id: link.id,
-              url: link.url || '',
-              mapType: link.mapType || link.map_type
-            }))
-            : []);
-          setClientInfo({
-            ...clientInfo,
-            businessType: data.businessType || clientInfo.businessType,
-            mapLinks: normalizedMapLinks
-          });
-        }
-
-        setEditClientInfo(false);
-        setSuccess(t.dashboard.profile.saveSuccess);
-
-        // Обновляем название бизнеса в списке businesses локально
-        if (effectiveBusinessId && updateBusiness) {
-          updateBusiness(effectiveBusinessId, {
-            name: clientInfo.businessName,
-            business_type: clientInfo.businessType,
-            address: clientInfo.address,
-            working_hours: clientInfo.workingHours
-          });
-        }
-
-        // Перезагружаем список бизнесов из API для синхронизации (особенно важно для суперадмина)
-        if (reloadBusinesses) {
-          await reloadBusinesses();
-        }
-      } else {
-        // Проверяем, не истёк ли токен
-        if (response.status === 401) {
-          setError(t.common.error);
-          localStorage.removeItem('auth_token');
-          setTimeout(() => {
-            window.location.href = '/login';
-          }, 2000);
-        } else {
-          const errorData = await response.json();
-          setError(errorData.error || t.dashboard.profile.errorSave);
-        }
+      // Всегда перезагружаем данные после сохранения для синхронизации
+      // Если businessId был определён - используем его, иначе загружаем без параметра
+      const qs = effectiveBusinessId ? `?business_id=${effectiveBusinessId}` : '';
+      let reloadData;
+      try {
+        reloadData = await newAuth.makeRequest(`/client-info${qs}`);
+      } catch (e) {
+        console.error("Reload failed", e);
       }
-    } catch (error) {
+
+      if (reloadData) {
+        const normalizedMapLinks = (reloadData.mapLinks && Array.isArray(reloadData.mapLinks)
+          ? reloadData.mapLinks.map((link: any) => ({
+            id: link.id,
+            url: link.url || '',
+            mapType: link.mapType || link.map_type
+          }))
+          : []);
+        const businessType = reloadData.businessType || currentBusiness?.business_type || '';
+        setClientInfo({
+          businessName: reloadData.businessName || '',
+          businessType: businessType,
+          address: reloadData.address || '',
+          workingHours: reloadData.workingHours || t.dashboard.profile.workingHoursPlaceholder,
+          mapLinks: normalizedMapLinks
+        });
+      }
+
+      setEditClientInfo(false);
+      setSuccess(t.dashboard.profile.saveSuccess);
+
+      // Обновляем название бизнеса в списке businesses локально
+      if (effectiveBusinessId && updateBusiness) {
+        updateBusiness(effectiveBusinessId, {
+          name: clientInfo.businessName,
+          business_type: clientInfo.businessType,
+          address: clientInfo.address,
+          working_hours: clientInfo.workingHours
+        });
+      }
+
+      // Перезагружаем список бизнесов из API для синхронизации (особенно важно для суперадмина)
+      if (reloadBusinesses) {
+        await reloadBusinesses();
+      }
+
+    } catch (error: any) {
       console.error('Ошибка сохранения информации:', error);
-      setError(t.dashboard.profile.errorSave);
+      // Проверяем, не истёк ли токен
+      if (error.message && error.message.includes('401')) {
+        setError(t.common.error);
+        localStorage.removeItem('auth_token');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      } else {
+        setError(error.message || t.dashboard.profile.errorSave);
+      }
     } finally {
       setSavingClientInfo(false);
     }
@@ -665,22 +600,10 @@ export const ProfilePage = () => {
                   setError(null);
                   setSuccess(null);
                   try {
-                    const token = localStorage.getItem('auth_token');
-                    const response = await fetch(`/api/superadmin/businesses/${currentBusinessId}/send-credentials`, {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                      }
+                    const data = await newAuth.makeRequest(`/superadmin/businesses/${currentBusinessId}/send-credentials`, {
+                      method: 'POST'
                     });
-
-                    if (response.ok) {
-                      const data = await response.json();
-                      setSuccess(data.message || 'Credentials sent');
-                    } else {
-                      const errorData = await response.json();
-                      setError(errorData.error || t.common.error);
-                    }
+                    setSuccess(data.message || 'Credentials sent');
                   } catch (err: any) {
                     setError(t.common.error + ': ' + err.message);
                   } finally {
@@ -798,93 +721,81 @@ export const ProfilePage = () => {
                   <button
                     key={option.label}
                     type="button"
-                    onClick={() => {
-                      let newValue = clientInfo.workingHours || '';
-                      if (newValue) newValue += ', ';
-                      newValue += option.val;
-                      setClientInfo({ ...clientInfo, workingHours: newValue });
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+                    onClick={() => setClientInfo({ ...clientInfo, workingHours: option.val })}
+                    className="px-2.5 py-1 text-xs font-medium bg-gray-100/80 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"
                   >
-                    + {option.label}
+                    {option.label}
                   </button>
                 ))}
               </div>
             )}
           </div>
-        </div>
-
-        {/* Секция ссылок на карты */}
-        <div className="mt-8 pt-8 border-t border-gray-100">
-          <label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-            <MapPin className="w-4 h-4 text-gray-400" />
-            {t.dashboard.profile.mapLinks}
-          </label>
-          <div className="space-y-4">
-            {clientInfo.mapLinks.map((link, index) => {
-              const getMapServiceName = (url: string) => {
-                if (!url) return null;
-                const lower = url.toLowerCase();
-                if (lower.includes('yandex') || lower.includes('ya.ru')) return 'Yandex';
-                if (lower.includes('2gis') || lower.includes('dgis')) return '2GIS';
-                if (lower.includes('google') && lower.includes('maps')) return 'Google Maps';
-                if (lower.includes('goo.gl')) return 'Google Maps';
-                if (lower.includes('zoon')) return 'Zoon';
-                return null;
+          <div className="col-span-1 md:col-span-2 space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.mapLinks}
+            </label>
+            {(clientInfo.mapLinks || []).map((link, index) => {
+              const detectMapType = (url: string) => {
+                if (!url) return 'other';
+                if (url.includes('yandex.ru') || url.includes('yandex.com')) return 'yandex';
+                if (url.includes('2gis.ru') || url.includes('2gis.com')) return '2gis';
+                if (url.includes('google.com/maps') || url.includes('goo.gl')) return 'google';
+                return 'other';
               };
 
-              const serviceName = getMapServiceName(link.url);
+              const currentType = detectMapType(link.url);
 
               return (
-                <div key={index} className="flex gap-3 items-center group">
+                <div key={index} className="flex gap-2 items-center">
                   <div className="relative flex-1">
                     <input
                       type="text"
                       value={link.url}
                       onChange={(e) => {
+                        const newUrl = e.target.value;
+                        const newType = detectMapType(newUrl);
                         const newLinks = [...clientInfo.mapLinks];
-                        newLinks[index].url = e.target.value;
+                        newLinks[index] = { ...newLinks[index], url: newUrl, mapType: newType };
                         setClientInfo({ ...clientInfo, mapLinks: newLinks });
                       }}
                       disabled={!editClientInfo}
                       className={cn(
-                        "w-full px-4 py-2.5 border rounded-xl pr-28 transition-all",
-                        editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100" : "border-gray-200 bg-gray-50/50"
+                        "w-full px-4 py-2.5 border rounded-xl transition-all duration-200 pr-24", // Right padding for badge
+                        editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
                       )}
-                      placeholder={t.dashboard.profile.pasteLink}
+                      placeholder="Ссылка на карты (Яндекс, 2ГИС, Google)"
                     />
-                    {serviceName && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200 pointer-events-none shadow-sm">
-                        {serviceName}
-                      </span>
+                    {link.url && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-600 uppercase tracking-wider">
+                        {currentType === 'other' ? 'WEB' : currentType}
+                      </div>
                     )}
                   </div>
+
                   {editClientInfo && (
                     <Button
                       variant="ghost"
-                      size="icon"
                       onClick={() => {
                         const newLinks = clientInfo.mapLinks.filter((_, i) => i !== index);
                         setClientInfo({ ...clientInfo, mapLinks: newLinks });
                       }}
-                      className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
                     >
-                      <span className="text-xl">×</span>
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
-              );
+              )
             })}
             {editClientInfo && (
               <Button
                 variant="outline"
-                onClick={() => setClientInfo({
-                  ...clientInfo,
-                  mapLinks: [...clientInfo.mapLinks, { url: '' }]
-                })}
-                className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 py-6 rounded-xl"
+                onClick={() => setClientInfo({ ...clientInfo, mapLinks: [...clientInfo.mapLinks, { url: '', mapType: 'other' }] })}
+                className="w-full mt-2"
               >
-                + {t.dashboard.profile.addLink}
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить ссылку
               </Button>
             )}
           </div>
@@ -892,65 +803,14 @@ export const ProfilePage = () => {
 
         {editClientInfo && (
           <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-gray-100">
-            <Button onClick={() => setEditClientInfo(false)} variant="ghost">
-              {t.dashboard.profile.cancel}
-            </Button>
-            <Button onClick={handleSaveClientInfo} disabled={savingClientInfo} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]">
-              {savingClientInfo ? (
-                <span className="flex items-center gap-2">
-                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                  {t.dashboard.profile.sending}...
-                </span>
-              ) : t.dashboard.profile.save}
-            </Button>
+            <Button onClick={() => setEditClientInfo(false)} variant="ghost">{t.dashboard.profile.cancel}</Button>
+            <Button onClick={handleSaveClientInfo} className="bg-blue-600 hover:bg-blue-700">{t.dashboard.profile.save}</Button>
           </div>
         )}
       </div>
-
-      {/* Точки сети - показываем только для мастер-аккаунта */}
-      {isNetworkMaster && networkLocations.length > 0 && (
-        <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">
-              <Network className="w-6 h-6" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">{t.dashboard.profile.networkLocations}</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {networkLocations.map((loc) => (
-              <div key={loc.id} className="group flex items-center justify-between p-5 bg-white/50 hover:bg-white rounded-xl border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 bg-white p-2.5 rounded-full border border-gray-100 shadow-sm text-purple-600">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 text-lg group-hover:text-purple-700 transition-colors">{loc.name}</div>
-                    {loc.address && <div className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 block" /> {loc.address}
-                    </div>}
-                    {loc.id === currentBusinessId && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 mt-3">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Current
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {loc.id !== currentBusinessId && onBusinessChange && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => onBusinessChange(loc.id)}
-                    className="text-gray-400 hover:text-purple-600 hover:bg-purple-50"
-                  >
-                    {t.dashboard.profile.goToLocation} →
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
+
+// Import Plus and Trash2 which were missing in imports and used in the code
+import { Plus, Trash2 } from 'lucide-react';

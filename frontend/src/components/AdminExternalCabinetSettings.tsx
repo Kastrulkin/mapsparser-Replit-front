@@ -61,30 +61,19 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
 
   const handleRunParser = async () => {
     if (!businessId) return;
-    
+
     setParseStatus('processing');
     try {
-      const token = await newAuth.getToken();
-      const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${businessId}`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const data = await newAuth.makeRequest(`/admin/yandex/sync/business/${businessId}`, {
+        method: 'POST'
       });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        toast({
-          title: 'Успешно',
-          description: data.message || 'Парсинг выполнен',
-        });
-        // Перезагружаем данные аккаунта
-        loadAccounts();
-      } else {
-        throw new Error(data.error || 'Ошибка парсинга');
-      }
+
+      toast({
+        title: 'Успешно',
+        description: data.message || 'Парсинг выполнен',
+      });
+      // Перезагружаем данные аккаунта
+      loadAccounts();
     } catch (error: any) {
       console.error('Ошибка парсинга:', error);
       toast({
@@ -102,71 +91,62 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
-      const token = await newAuth.getToken();
-      const response = await fetch(`/api/business/${businessId}/external-accounts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const data = await newAuth.makeRequest(`/business/${businessId}/external-accounts`);
+      const accounts = data.accounts || [];
 
-      if (response.ok) {
-        const data = await response.json();
-        const accounts = data.accounts || [];
-        
-        const yandex = accounts.find((a: ExternalAccount) => a.source === 'yandex_business');
-        const twoGis = accounts.find((a: ExternalAccount) => a.source === '2gis');
-        
-        setYandexAccount(yandex || null);
-        setTwoGisAccount(twoGis || null);
-        
-        if (yandex) {
-          setYandexForm(prev => {
-            // Загружаем cookies из sessionStorage, если они там есть
-            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
-            return {
-              external_id: yandex.external_id || '',
-              display_name: yandex.display_name || '',
-              // Используем сохраненные cookies из sessionStorage или текущие из формы
-              auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
-            };
-          });
-        } else {
-          // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
-          setYandexForm(prev => {
-            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
-            return {
-              external_id: '',
-              display_name: '',
-              auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
-            };
-          });
-        }
-        
-        if (twoGis) {
-          setTwoGisForm(prev => {
-            // Загружаем cookies из sessionStorage, если они там есть
-            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
-            return {
-              external_id: twoGis.external_id || '',
-              display_name: twoGis.display_name || '',
-              // Используем сохраненные cookies из sessionStorage или текущие из формы
-              auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
-            };
-          });
-        } else {
-          // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
-          setTwoGisForm(prev => {
-            const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
-            return {
-              external_id: '',
-              display_name: '',
-              auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
-            };
-          });
-        }
+      const yandex = accounts.find((a: ExternalAccount) => a.source === 'yandex_business');
+      const twoGis = accounts.find((a: ExternalAccount) => a.source === '2gis');
+
+      setYandexAccount(yandex || null);
+      setTwoGisAccount(twoGis || null);
+
+      if (yandex) {
+        setYandexForm(prev => {
+          // Загружаем cookies из sessionStorage, если они там есть
+          const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
+          return {
+            external_id: yandex.external_id || '',
+            display_name: yandex.display_name || '',
+            // Используем сохраненные cookies из sessionStorage или текущие из формы
+            auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
+          };
+        });
+      } else {
+        // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
+        setYandexForm(prev => {
+          const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(yandexCookiesKey) || '') : '';
+          return {
+            external_id: '',
+            display_name: '',
+            auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
+          };
+        });
+      }
+
+      if (twoGis) {
+        setTwoGisForm(prev => {
+          // Загружаем cookies из sessionStorage, если они там есть
+          const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
+          return {
+            external_id: twoGis.external_id || '',
+            display_name: twoGis.display_name || '',
+            // Используем сохраненные cookies из sessionStorage или текущие из формы
+            auth_data: savedCookies || prev.auth_data || '', // Не показываем зашифрованные данные (из соображений безопасности)
+          };
+        });
+      } else {
+        // Если аккаунта нет, очищаем форму, но сохраняем cookies если они были введены
+        setTwoGisForm(prev => {
+          const savedCookies = typeof window !== 'undefined' ? (sessionStorage.getItem(twoGisCookiesKey) || '') : '';
+          return {
+            external_id: '',
+            display_name: '',
+            auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
+          };
+        });
       }
     } catch (error: any) {
       console.error('Ошибка загрузки аккаунтов:', error);
@@ -201,51 +181,19 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
 
     setTestingCookies(true);
     try {
-      const token = await newAuth.getToken();
       const authDataJson = JSON.stringify({
         cookies: formData.auth_data.trim(),
         headers: {},
       });
 
-      const response = await fetch(`/api/business/${businessId}/external-accounts/test`, {
+      const result = await newAuth.makeRequest(`/business/${businessId}/external-accounts/test`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           source,
           auth_data: authDataJson,
           external_id: formData.external_id || undefined,
         }),
       });
-
-      // Проверяем статус ответа
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Ошибка ответа сервера:', response.status, errorText);
-        toast({
-          title: '❌ Ошибка сервера',
-          description: `Статус ${response.status}: ${errorText.substring(0, 200)}`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Парсим JSON ответ
-      let result;
-      try {
-        result = await response.json();
-      } catch (e) {
-        console.error('Ошибка парсинга JSON:', e);
-        const text = await response.text();
-        toast({
-          title: '❌ Ошибка',
-          description: `Сервер вернул не JSON ответ: ${text.substring(0, 200)}`,
-          variant: 'destructive',
-        });
-        return;
-      }
 
       // Обрабатываем результат
       if (result.success) {
@@ -274,14 +222,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   const saveAccount = async (source: 'yandex_business' | '2gis', formData: typeof yandexForm) => {
     setSaving(true);
     try {
-      const token = await newAuth.getToken();
-      
       const account = source === 'yandex_business' ? yandexAccount : twoGisAccount;
-      
+
       // Сохраняем введенные cookies перед сохранением (чтобы не потерять их после перезагрузки)
       const hasNewCookies = formData.auth_data && formData.auth_data.trim().length > 0;
       const savedCookies = hasNewCookies ? formData.auth_data.trim() : null;
-      
+
       // Если cookies пустые, но аккаунт уже существует - не отправляем auth_data (чтобы не перезаписать существующие)
       let authDataJson = undefined;
       if (hasNewCookies) {
@@ -302,12 +248,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       }
       // Если аккаунт есть и cookies пустые - просто обновляем другие поля, не трогая cookies
 
-      const response = await fetch(`/api/business/${businessId}/external-accounts`, {
+      await newAuth.makeRequest(`/business/${businessId}/external-accounts`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           source,
           external_id: formData.external_id || undefined,
@@ -317,32 +259,27 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         }),
       });
 
-      if (response.ok) {
-        toast({
-          title: 'Успешно',
-          description: `Аккаунт ${source === 'yandex_business' ? 'Яндекс.Бизнес' : '2ГИС'} сохранён`,
-        });
-        
-        // Перезагружаем аккаунты
-        await loadAccounts();
-        
-        // Если были введены новые cookies, сохраняем их в форме и sessionStorage (чтобы они не пропали)
-        if (savedCookies) {
-          if (source === 'yandex_business') {
-            setYandexForm(prev => ({ ...prev, auth_data: savedCookies }));
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem(yandexCookiesKey, savedCookies);
-            }
-          } else if (source === '2gis') {
-            setTwoGisForm(prev => ({ ...prev, auth_data: savedCookies }));
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem(twoGisCookiesKey, savedCookies);
-            }
+      toast({
+        title: 'Успешно',
+        description: `Аккаунт ${source === 'yandex_business' ? 'Яндекс.Бизнес' : '2ГИС'} сохранён`,
+      });
+
+      // Перезагружаем аккаунты
+      await loadAccounts();
+
+      // Если были введены новые cookies, сохраняем их в форме и sessionStorage (чтобы они не пропали)
+      if (savedCookies) {
+        if (source === 'yandex_business') {
+          setYandexForm(prev => ({ ...prev, auth_data: savedCookies }));
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(yandexCookiesKey, savedCookies);
+          }
+        } else if (source === '2gis') {
+          setTwoGisForm(prev => ({ ...prev, auth_data: savedCookies }));
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(twoGisCookiesKey, savedCookies);
           }
         }
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка сохранения');
       }
     } catch (error: any) {
       toast({
@@ -408,13 +345,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 const lastSync = new Date(yandexAccount.last_sync_at);
                 const daysSinceSync = Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
                 const isOld = daysSinceSync > 14;
-                
+
                 return (
-                  <div className={`mb-2 p-2 border rounded text-sm ${
-                    isOld 
-                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800' 
+                  <div className={`mb-2 p-2 border rounded text-sm ${isOld
+                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
                       : 'bg-green-50 border-green-200 text-green-800'
-                  }`}>
+                    }`}>
                     {isOld ? (
                       <>
                         ⚠️ Cookies сохранены {daysSinceSync} дней назад (последняя синхронизация: {lastSync.toLocaleString('ru-RU')})
@@ -446,7 +382,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                     }
                   }
                 }}
-                placeholder={yandexAccount && yandexAccount.last_sync_at 
+                placeholder={yandexAccount && yandexAccount.last_sync_at
                   ? "Вставьте новые cookies для обновления (или оставьте пустым, чтобы не менять)"
                   : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"}
                 rows={6}
@@ -592,4 +528,3 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     </Card>
   );
 };
-

@@ -16,11 +16,13 @@ export interface AuthResponse {
   error?: string;
 }
 
+import { API_URL } from '../config/api';
+
 export class NewAuth {
   private static instance: NewAuth;
   private currentUser: User | null = null;
   private token: string | null = null;
-  private apiBaseUrl = `${window.location.origin}/api`;
+  private apiBaseUrl = `${API_URL}/api`;
 
   static getInstance(): NewAuth {
     if (!NewAuth.instance) {

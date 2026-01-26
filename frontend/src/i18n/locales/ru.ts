@@ -1065,7 +1065,7 @@ export const ru = {
       status: {
         pending: "Ожидает",
         processing: "В работе",
-        done: "Готово",
+        completed: "Готово",
         error: "Ошибка",
         captcha: "Капча"
       },

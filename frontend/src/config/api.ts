@@ -2,17 +2,7 @@
 // Определяет базовый URL для API запросов в зависимости от окружения
 
 const getApiUrl = (): string => {
-    // В разработке можно переопределить через .env
-    if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
-    }
-
-    // В продакшене используем текущий домен (относительный путь для корректной работы через Nginx)
-    if (import.meta.env.PROD) {
-        return window.location.origin;
-    }
-
-    // В локальной разработке - localhost
+    // HARDCODED FOR LOCAL DEBUGGING
     return 'http://localhost:8000';
 };
 

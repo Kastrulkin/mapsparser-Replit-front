@@ -25,6 +25,7 @@ import {
   Quote
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { newAuth } from '@/lib/auth_new';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
 
@@ -41,7 +42,7 @@ interface ExternalReview {
   has_response: boolean;
 }
 
-export default function ReviewReplyAssistant({ businessName }: { businessName?: string }) {
+export default function ReviewReplyAssistant({ businessName, selectedSource = 'all' }: { businessName?: string, selectedSource?: string }) {
   const { currentBusinessId } = useOutletContext<any>();
   const { language: interfaceLanguage, t } = useLanguage();
   const [tone, setTone] = useState<Tone>('professional');
@@ -75,11 +76,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
 
   const loadExamples = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/review-examples`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await newAuth.makeRequest('/review-examples');
       if (data.success) setExamples((data.examples || []).map((e: any) => ({ id: e.id, text: e.text })));
     } catch { }
   };
@@ -90,11 +87,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     if (!currentBusinessId) return;
     setLoadingReviews(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/reviews`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews`);
       if (data.success) {
         setExternalReviews(data.reviews || []);
       }
@@ -114,13 +107,11 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     const text = exampleInput.trim();
     if (!text) return;
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/review-examples`, {
+      const data = await newAuth.makeRequest('/review-examples', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
-      const data = await res.json();
       if (data.success) { setExampleInput(''); await loadExamples(); }
       else setError(data.error || t.dashboard.card.reviewReply.errorAddExample);
     } catch (e: any) { setError(e.message || t.dashboard.card.reviewReply.errorAddExample); }
@@ -128,12 +119,9 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
 
   const deleteExample = async (id: string) => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/review-examples/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const data = await newAuth.makeRequest(`/review-examples/${id}`, {
+        method: 'DELETE'
       });
-      const data = await res.json();
       if (data.success) await loadExamples(); else setError(data.error || t.dashboard.card.reviewReply.errorDeleteExample);
     } catch (e: any) { setError(e.message || t.dashboard.card.reviewReply.errorDeleteExample); }
   };
@@ -150,10 +138,9 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/reviews/reply`, {
+      const data = await newAuth.makeRequest('/reviews/reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           review: textToGenerate,
           tone,
@@ -162,9 +149,8 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
           examples: examples.map(e => e.text) // Передаём примеры для генерации
         })
       });
-      const data = await res.json();
 
-      if (!res.ok || data.error) {
+      if (data.error) {
         setError(data.error || t.dashboard.card.reviewReply.errorGenerate);
       } else {
         // Проверяем разные форматы ответа
@@ -215,19 +201,17 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
     setError(null);
 
     try {
-      const token = localStorage.getItem('auth_token');
       const replyId = `reply_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      const res = await fetch(`${window.location.origin}/api/review-replies/update`, {
+      const data = await newAuth.makeRequest('/review-replies/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           replyId,
           replyText: editableReply.trim()
         })
       });
 
-      const data = await res.json();
       if (data.success) {
         setReply(editableReply);
         setIsEditing(false);
@@ -463,6 +447,7 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
         ) : (
           <div className="space-y-6">
             {externalReviews
+              .filter(r => selectedSource === 'all' || (r.source && r.source.toLowerCase().includes(selectedSource)))
               .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
               .map((reviewItem) => (
                 <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -562,33 +547,40 @@ export default function ReviewReplyAssistant({ businessName }: { businessName?: 
               ))}
 
             {/* Pagination */}
-            {externalReviews.length > itemsPerPage && (
-              <div className="flex items-center justify-between pt-6">
-                <div className="text-sm text-gray-500 font-medium">
-                  {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, externalReviews.length)} / {externalReviews.length}
+            {(() => {
+              const filteredCount = externalReviews.filter(r => selectedSource === 'all' || (r.source && r.source.toLowerCase().includes(selectedSource))).length;
+              const totalPages = Math.ceil(filteredCount / itemsPerPage);
+
+              if (filteredCount <= itemsPerPage) return null;
+
+              return (
+                <div className="flex items-center justify-between pt-6">
+                  <div className="text-sm text-gray-500 font-medium">
+                    {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredCount)} / {filteredCount}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="rounded-lg h-9 w-9 p-0"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage >= totalPages}
+                      className="rounded-lg h-9 w-9 p-0"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-lg h-9 w-9 p-0"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(externalReviews.length / itemsPerPage), prev + 1))}
-                    disabled={currentPage >= Math.ceil(externalReviews.length / itemsPerPage)}
-                    className="rounded-lg h-9 w-9 p-0"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
       </div>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2 } from 'lucide-react'; // Force rebuild
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 import { useLanguage } from '@/i18n/LanguageContext';
@@ -51,62 +51,54 @@ export const ParsingManagement: React.FC = () => {
   });
   const { toast } = useToast();
 
-  const loadTasks = async () => {
+
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    setError(null);
-
-    try {
-      const token = await newAuth.getToken();
-      if (!token) {
-        setError('Требуется авторизация');
-        return;
-      }
-
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.task_type) params.append('task_type', filters.task_type);
-      if (filters.source) params.append('source', filters.source);
-      params.append('limit', '50');
-
-      const res = await fetch(`/api/admin/parsing/tasks?${params.toString()}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Ошибка загрузки задач');
-      }
-
-      setTasks(data.tasks || []);
-    } catch (e: any) {
-      setError(e.message || 'Ошибка загрузки задач');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
     try {
       const token = await newAuth.getToken();
       if (!token) return;
 
-      const res = await fetch('/api/admin/parsing/stats', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const timestamp = Date.now();
 
-      const data = await res.json();
-      if (data.success) {
-        setStats(data.stats);
+      // Parallel data fetching to eliminate waterfall
+      const [tasksRes, statsRes] = await Promise.all([
+        fetch(`/api/admin/parsing/tasks?status=${filters.status}&task_type=${filters.task_type}&source=${filters.source}`, { headers }),
+        fetch(`/api/admin/parsing/stats?_t=${timestamp}`, { headers })
+      ]);
+
+      if (tasksRes.status === 401 || statsRes.status === 401) {
+        setError("Ошибка авторизации. Попробуйте обновить страницу.");
+        return;
       }
-    } catch (e) {
-      console.error('Ошибка загрузки статистики:', e);
+
+      const [tasksData, statsData] = await Promise.all([
+        tasksRes.json(),
+        statsRes.json()
+      ]);
+
+      if (tasksData.tasks) setTasks(tasksData.tasks);
+      else if (tasksData.error) throw new Error(tasksData.error);
+
+      if (statsData.success) setStats(statsData.stats);
+
+      setError(null);
+    } catch (e: any) {
+      console.error('Ошибка загрузки данных:', e);
+      setError(e.message || 'Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [filters.status, filters.task_type, filters.source]);
 
   useEffect(() => {
-    loadTasks();
-    loadStats();
-  }, [filters.status, filters.task_type, filters.source]);
+    loadData();
+  }, [loadData]);
+
+  // Aliases for backward compatibility
+  const loadTasks = loadData;
+  const loadStats = loadData;
 
   const handleRestart = async (taskId: string) => {
     if (!confirm(t.dashboard.parsing.actions.restartConfirm)) return;
@@ -229,7 +221,8 @@ export const ParsingManagement: React.FC = () => {
     const labels: Record<string, string> = {
       'parse_card': t.dashboard.parsing.type.parse_card,
       'sync_yandex_business': t.dashboard.parsing.type.sync_yandex_business,
-      'parse_cabinet_fallback': t.dashboard.parsing.type.parse_cabinet_fallback
+      'parse_cabinet_fallback': t.dashboard.parsing.type.parse_cabinet_fallback,
+      'deep_parsing': 'Глубокий парсинг'
     };
     return labels[taskType] || taskType;
   };
@@ -397,7 +390,23 @@ export const ParsingManagement: React.FC = () => {
                   {tasks.map((task) => (
                     <tr key={task.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm font-mono text-foreground">
-                        {task.id.substring(0, 8)}...
+                        <div className="flex items-center gap-2 group">
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs select-all">
+                            {task.id}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => {
+                              navigator.clipboard.writeText(task.id);
+                              toast({ title: "ID copied", description: task.id, duration: 2000 });
+                            }}
+                            title="Copy ID"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-foreground">
                         {task.business_name || task.business_id || '—'}

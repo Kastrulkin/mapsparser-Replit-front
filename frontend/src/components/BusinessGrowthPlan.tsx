@@ -353,11 +353,11 @@ export const BusinessGrowthPlan: React.FC<BusinessGrowthPlanProps> = ({ business
                                                             {t.dashboard.progress.growthPlan.tasks} ({stage.tasks.filter(t => t.is_completed).length}/{stage.tasks.length}):
                                                         </h4>
                                                         <div className="space-y-2">
-                                                            {stage.tasks.map((task) => {
+                                                            {stage.tasks.map((task, tIdx) => {
                                                                 const isTaskCompleted = task.is_completed;
                                                                 return (
                                                                     <motion.div
-                                                                        key={task.number}
+                                                                        key={task.id || `task-${task.number}-${tIdx}`}
                                                                         whileHover={{ scale: 1.01, x: 4 }}
                                                                         className={cn(
                                                                             "flex items-center justify-between p-3 rounded-lg transition-colors group",

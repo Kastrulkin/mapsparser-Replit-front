@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { AlertCircle, MessageSquare, Newspaper, Camera, TrendingUp } from 'lucide-react';
+import { newAuth } from '@/lib/auth_new';
 
 interface MapParseItem {
   id: string;
@@ -32,12 +33,9 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
     if (!businessId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${businessId}/map-parses`, {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success && data.items && data.items.length > 0) {
+      const data = await newAuth.makeRequest(`/business/${businessId}/map-parses`);
+
+      if (data.success && data.items && data.items.length > 0) {
         const latest = data.items[0] as MapParseItem;
         const recs = generateRecommendations(latest, data.items);
         setRecommendations(recs);
@@ -60,8 +58,8 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
 
     // 1. Проверка неотвеченных отзывов
     if (latest.unansweredReviewsCount && latest.unansweredReviewsCount > 0) {
-      const countText = latest.unansweredReviewsCount === 1 ? 'отзыв' : 
-                       latest.unansweredReviewsCount < 5 ? 'отзыва' : 'отзывов';
+      const countText = latest.unansweredReviewsCount === 1 ? 'отзыв' :
+        latest.unansweredReviewsCount < 5 ? 'отзыва' : 'отзывов';
       recs.push(`${latest.unansweredReviewsCount} неотвеченных ${countText}! Ответ можно сгенерировать на вкладке "Работа с картами".`);
     }
 
@@ -73,7 +71,7 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
       const prevReviews = prev.reviewsCount || 0;
       const reviewsDiff = latestReviews - prevReviews;
       const daysBetween = Math.floor((new Date(latest.createdAt).getTime() - new Date(prev.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Если отзывы не увеличились и прошло больше недели
       if (reviewsDiff === 0 && daysBetween > 7) {
         const lastReviewDate = new Date(latest.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -96,7 +94,7 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
       const latestNews = latest.newsCount || 0;
       const prevNews = prev.newsCount || 0;
       const daysBetween = Math.floor((new Date(latest.createdAt).getTime() - new Date(prev.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Если новости не увеличились и прошло больше 2 недель
       if (latestNews === prevNews && daysBetween > 14) {
         recs.push(`Давно не обновлялись новости — новости лучше постить раз в неделю. Можно сгенерировать новую на вкладке "Работа с картами".`);
@@ -113,7 +111,7 @@ const MapRecommendations: React.FC<MapRecommendationsProps> = ({ businessId }) =
       const latestPhotos = latest.photosCount || 0;
       const prevPhotos = prev.photosCount || 0;
       const daysBetween = Math.floor((new Date(latest.createdAt).getTime() - new Date(prev.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Если фото не увеличились и прошло больше 2 недель
       if (latestPhotos === prevPhotos && daysBetween > 14) {
         recs.push(`Давно не обновлялись фото — фото надо добавлять не реже раз в 2 недели.`);
