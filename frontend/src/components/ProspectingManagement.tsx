@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Loader2, Search, Save, MapPin, Phone, Globe, Star, Users } from "lucide-react";
-import { api } from "../services/api";
+import { api } from "@/services/api";
 
 type Lead = {
     id?: string;
@@ -35,7 +35,8 @@ export const ProspectingManagement: React.FC = () => {
     const [loadingLeads, setLoadingLeads] = useState(false);
 
     useEffect(() => {
-        fetchSavedLeads();
+        // fetchSavedLeads(); // DEBUG: Commented out to prevent crash
+        console.log("ProspectingManagement mounted");
     }, []);
 
     const fetchSavedLeads = async () => {
