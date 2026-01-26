@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2 } from 'lucide-react'; // Force rebuild
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
-import { useLanguage } from '@/i18n/LanguageContext';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ParsingTask {
   id: string;
