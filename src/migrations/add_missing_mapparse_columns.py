@@ -70,5 +70,5 @@ def add_missing_columns(conn):
 
 if __name__ == "__main__":
     print("🚀 Adding missing columns to MapParseResults...")
-    safe_migrate("Add missing columns to MapParseResults", add_missing_columns)
+    safe_migrate(add_missing_columns, "Add missing columns to MapParseResults")
     print("✅ Migration completed!")
