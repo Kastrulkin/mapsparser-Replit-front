@@ -33,13 +33,9 @@ except ImportError:
         finally:
             conn.close()
 
-def add_missing_columns(conn):
+def add_missing_columns(cursor):
     """Add missing columns to MapParseResults table"""
-    cursor = conn.cursor()
-    
-    # Check existing columns
-    cursor.execute("PRAGMA table_info(MapParseResults)")
-    existing_columns = {row[1] for row in cursor.fetchall()}
+    # cursor is passed directly by safe_migrate on server
     
     columns_to_add = [
         ("title", "TEXT"),
