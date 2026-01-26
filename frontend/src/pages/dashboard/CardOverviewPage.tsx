@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
+import SEOKeywordsTab from "@/components/SEOKeywordsTab";
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 export const CardOverviewPage = () => {
@@ -41,7 +42,7 @@ export const CardOverviewPage = () => {
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [servicesCurrentPage, setServicesCurrentPage] = useState(1);
-  const servicesItemsPerPage = 10;
+  const servicesItemsPerPage = 1000;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
   const [newService, setNewService] = useState({
@@ -89,6 +90,9 @@ export const CardOverviewPage = () => {
     }
   };
 
+  // Состояния для вкладки новостей
+  const [externalPosts, setExternalPosts] = useState<any[]>([]);
+
   // Загрузка услуг
   const loadUserServices = async () => {
     if (!currentBusinessId) {
@@ -105,7 +109,13 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setUserServices(data.services || []);
+        // Объединяем пользовательские и внешние услуги
+        const services = [...(data.services || [])];
+        if (data.external_services) {
+          // Маркируем или просто добавляем. Можно добавить поле isExternal, если нужно
+          services.push(...data.external_services);
+        }
+        setUserServices(services);
       }
     } catch (e) {
       console.error('Ошибка загрузки услуг:', e);
@@ -114,10 +124,59 @@ export const CardOverviewPage = () => {
     }
   };
 
+  const loadExternalPosts = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/posts`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExternalPosts(data.posts || []);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки постов:', e);
+    }
+  };
+
+  // Map Sources Switcher Logic
+  const [mapSources, setMapSources] = useState<string[]>([]);
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+
+  const loadMapSources = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/client-info?business_id=${currentBusinessId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      const sources = new Set<string>();
+      if (data.mapLinks && Array.isArray(data.mapLinks)) {
+        data.mapLinks.forEach((link: any) => {
+          const url = link.url || '';
+          if (url.includes('yandex')) sources.add('yandex');
+          else if (url.includes('2gis')) sources.add('2gis');
+          else if (url.includes('google')) sources.add('google');
+        });
+      }
+
+      // Also check if we have data from sources that are not in mapLinks (legacy support)
+      if (externalPosts.length > 0) externalPosts.forEach(p => { if (p.source) sources.add(p.source.toLowerCase()); });
+      // We can't check reviews easily here without fetching them, but rely on mapLinks is safer for "configured" maps.
+
+      setMapSources(Array.from(sources));
+    } catch (e) { console.error('Error loading map sources', e); }
+  };
+
   useEffect(() => {
     if (currentBusinessId && context) {
       loadSummary();
       loadUserServices();
+      loadExternalPosts();
+      loadMapSources();
       checkIfNetworkMaster();
     }
   }, [currentBusinessId, context]);
@@ -354,7 +413,7 @@ export const CardOverviewPage = () => {
               <div className="p-2 bg-orange-100 rounded-lg">
                 <LayoutGrid className="w-6 h-6 text-orange-600" />
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title} (Updated)</h1>
             </div>
             <p className="text-gray-600 text-lg">{t.dashboard.card.subtitle}</p>
           </div>
@@ -388,6 +447,37 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
+        {/* Map Source Switcher */}
+        {mapSources.length > 0 && (
+          <div className="flex gap-2 mb-6 p-1 bg-gray-100/80 rounded-xl w-fit">
+            <button
+              onClick={() => setSelectedSource('all')}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                selectedSource === 'all'
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+              )}
+            >
+              Все карты
+            </button>
+            {mapSources.map(source => (
+              <button
+                key={source}
+                onClick={() => setSelectedSource(source)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize",
+                  selectedSource === source
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                )}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+        )}
+
         <Tabs defaultValue="services" className="space-y-8">
           <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
@@ -401,6 +491,10 @@ export const CardOverviewPage = () => {
             <TabsTrigger value="news" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
               <Newspaper className="w-4 h-4" />
               {t.dashboard.card.tabNews || "News"}
+            </TabsTrigger>
+            <TabsTrigger value="keywords" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <TrendingUp className="w-4 h-4" />
+              SEO (Wordstat)
             </TabsTrigger>
           </TabsList>
 
@@ -750,9 +844,11 @@ export const CardOverviewPage = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">{service.price}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">
+                              {service.price ? `${(Number(service.price) / 100).toLocaleString('ru-RU')} ₽` : '—'}
+                            </td>
                             <td className="px-6 py-4 text-right text-sm text-gray-500 align-top">
-                              <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex gap-1 justify-end">
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -790,18 +886,22 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="reviews">
-            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
-              <ReviewReplyAssistant businessName={currentBusiness?.name} />
-            </div>
+            <ReviewReplyAssistant
+              businessName={currentBusiness?.name}
+              selectedSource={selectedSource}
+            />
           </TabsContent>
 
           <TabsContent value="news">
-            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
-              <NewsGenerator
-                services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
-                businessId={currentBusinessId}
-              />
-            </div>
+            <NewsGenerator
+              services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
+              businessId={currentBusinessId}
+              externalPosts={externalPosts.filter(p => selectedSource === 'all' || (p.source && p.source.toLowerCase().includes(selectedSource)))}
+            />
+          </TabsContent>
+
+          <TabsContent value="keywords">
+            <SEOKeywordsTab />
           </TabsContent>
         </Tabs>
       </div>

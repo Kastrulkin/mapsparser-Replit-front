@@ -881,21 +881,6 @@ class YandexBusinessParser:
                     info["rating"] = round(avg_rating, 1)
                     print(f"   📊 Вычислен средний рейтинг из {len(ratings)} отзывов: {info['rating']}")
         
-        # Если рейтинг всё ещё не найден, пробуем получить из статистики
-        if not info["rating"]:
-            try:
-                stats = self.fetch_stats(account_row)
-                if stats and len(stats) > 0:
-                    # Ищем последнюю статистику с рейтингом
-                    stats.sort(key=lambda x: x.date, reverse=True)
-                    for stat in stats:
-                        if stat.rating and stat.rating > 0:
-                            info["rating"] = stat.rating
-                            print(f"   📊 Рейтинг получен из статистики: {info['rating']}")
-                            break
-            except Exception as e:
-                print(f"⚠️ Ошибка получения рейтинга из статистики: {e}")
-        
         # Получаем количество новостей и фото из реальных методов
         if info["news_count"] == 0:
             try:
@@ -2420,86 +2405,3 @@ class YandexBusinessParser:
         ]
 
 
-    def fetch_products(self, account_row: dict) -> List[Dict[str, Any]]:
-        """
-        Получить товары/услуги из кабинета Яндекс.Бизнес.
-        
-        Args:
-            account_row: Строка из ExternalBusinessAccounts
-        
-        Returns:
-            Список словарей с данными о товарах/услугах (категории и товары)
-        """
-        business_id = account_row["business_id"]
-        external_id = account_row.get("external_id")
-        
-        if not external_id:
-            return []
-            
-        print(f"🔍 Пробуем получить товары/услуги для {business_id}...")
-        
-        # Endpoints для товаров/услуг (Goods / Price Lists)
-        possible_urls = [
-            f"https://yandex.ru/sprav/api/{external_id}/goods",
-            f"https://yandex.ru/sprav/api/{external_id}/price-lists",
-            f"https://yandex.ru/sprav/api/company/{external_id}/goods",
-            f"https://business.yandex.ru/api/organizations/{external_id}/goods",
-        ]
-        
-        data = None
-        for url in possible_urls:
-            # Имитация
-            delay = random.uniform(1.0, 3.0)
-            time.sleep(delay)
-            
-            result = self._make_request(url)
-            if result:
-                data = result
-                print(f"✅ Успешно получены данные товаров с {url}")
-                break
-                
-        if not data:
-            print(f"⚠️ Не удалось получить товары через API endpoints.")
-            return []
-            
-        # Парсим ответ
-        # Ожидаемая структура: {"categories": [...]} или список категорий
-        categories = []
-        
-        if isinstance(data, list):
-            categories = data
-        elif isinstance(data, dict):
-            categories = data.get("categories") or data.get("groups") or data.get("goods") or []
-            
-        parsed_products = []
-        
-        for category in categories:
-            cat_name = category.get("name", "Разное")
-            items = category.get("items") or category.get("goods") or []
-            
-            parsed_items = []
-            for item in items:
-                # Извлекаем цену
-                price = item.get("price")
-                if isinstance(price, dict):
-                    price_val = price.get("value")
-                    currency = price.get("currency", "RUB")
-                    price_str = f"{price_val} {currency}" if price_val else ""
-                else:
-                    price_str = str(price) if price else ""
-                
-                parsed_items.append({
-                    "name": item.get("name"),
-                    "description": item.get("description"),
-                    "price": price_str,
-                    "photo_url": item.get("photos", [{}])[0].get("url") if item.get("photos") else None
-                })
-                
-            if parsed_items:
-                parsed_products.append({
-                    "category": cat_name,
-                    "items": parsed_items
-                })
-                
-        print(f"✅ Получено {len(parsed_products)} категорий товаров")
-        return parsed_products

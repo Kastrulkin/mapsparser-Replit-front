@@ -494,7 +494,6 @@ def parse_overview_data(page):
 
     # Рейтинг
     try:
-        rating_selectors = [
             # User provided selectors
             "div.business-header-rating-view__text._clickable",
             "div.business-rating-badge-view__rating",
