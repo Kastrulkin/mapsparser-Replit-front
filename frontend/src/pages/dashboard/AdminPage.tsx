@@ -430,7 +430,7 @@ export const AdminPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8 space-y-2">
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Административная панель
+            Административная панель (NEW)
           </h1>
           <p className="text-muted-foreground text-lg">Управление пользователями, бизнесами и ИИ агентами</p>
         </div>
