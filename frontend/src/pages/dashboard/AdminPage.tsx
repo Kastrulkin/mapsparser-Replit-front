@@ -421,7 +421,7 @@ export const AdminPage: React.FC = () => {
     { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
     { id: 'proxies' as const, label: 'Прокси', icon: Network },
     { id: 'parsing' as const, label: 'Парсинг', icon: MapPin },
-    { id: 'prospecting' as const, label: 'Prospecting', icon: Search },
+    { id: 'prospecting' as const, label: 'Поиск клиентов', icon: Search },
   ];
 
   return (
