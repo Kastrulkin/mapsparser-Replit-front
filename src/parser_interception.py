@@ -253,10 +253,34 @@ class YandexMapsInterceptionParser:
                 except Exception as e:
                     print(f"⚠️ Ошибка при обработке услуг: {e}")
 
+                # Проверка верификации через HTML (так как в JSON это может быть спрятано)
+                is_verified = False
+                try:
+                    verified_selectors = [
+                        ".business-verified-badge-view",
+                        "div._name_verified",
+                        ".business-card-view__verified-badge",
+                        "span[aria-label='Информация подтверждена владельцем']",
+                        "span.business-verified-badge", 
+                        "div.business-verified-badge"
+                    ]
+                    for sel in verified_selectors:
+                        # Используем короткий таймаут для проверки
+                        try:
+                            if page.query_selector(sel):
+                                is_verified = True
+                                print("✅ Найдена галочка верификации (HTML)")
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    print(f"Ошибка проверки верификации: {e}")
+
                 print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
                 
                 # Извлекаем данные из перехваченных ответов
                 data = self._extract_data_from_responses()
+                data['is_verified'] = is_verified
                 if extra_photos_count > 0:
                     data['photos_count'] = extra_photos_count
                 
