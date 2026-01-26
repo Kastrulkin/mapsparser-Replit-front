@@ -35,8 +35,7 @@ export const ProspectingManagement: React.FC = () => {
     const [loadingLeads, setLoadingLeads] = useState(false);
 
     useEffect(() => {
-        // fetchSavedLeads(); // DEBUG: Commented out to prevent crash
-        console.log("ProspectingManagement mounted");
+        fetchSavedLeads();
     }, []);
 
     const fetchSavedLeads = async () => {
