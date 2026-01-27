@@ -528,3 +528,20 @@ Services were still missing after the parser update.
 
 ### Status
 - [x] Completed
+
+## 2026-01-27 - Frontend Report Enhancement & Deployment Readiness
+
+### Current Task
+Enable display of detailed services, reviews, and posts in the Yandex Business Report table.
+
+### Architecture Decision
+- Refactored `YandexBusinessReport.tsx` to use a tabbed interface (Overview, Reviews, Services, Posts).
+- Implemented lazy loading for detail tabs to optimize performance.
+- Connected frontend to new API endpoints (`/api/business/:id/services`, `/api/business/:id/external/posts`).
+
+### Files to Modify
+- `frontend/src/components/YandexBusinessReport.tsx` - complete refactor with Shadcn Tabs.
+- `src/main.py` - verified endpoints.
+
+### Status
+- [x] Completed
