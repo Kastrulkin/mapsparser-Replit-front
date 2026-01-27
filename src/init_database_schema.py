@@ -267,6 +267,8 @@ def init_database_schema():
                 report_path TEXT,
                 analysis_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                title TEXT,
+                address TEXT,
                 FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
             )
         """)
