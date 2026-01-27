@@ -545,3 +545,19 @@ Enable display of detailed services, reviews, and posts in the Yandex Business R
 
 ### Status
 - [x] Completed
+
+## 2026-01-27 - Fix Date Parsing and Sorting
+
+### Current Task
+Fix incorrect date display (news showing parsing date, random dates) and sorting issues for reviews and news.
+
+### Architecture Decision
+- Identified that `dateutil` parser fails on Russian dates (e.g., "27 января"), causing fallback to "today".
+- Implemented `_parse_russian_date` helper in `worker.py` with a manual mapping of Russian month names.
+- Integrated validation in `reproduce_date_parsing.py`.
+
+### Files to Modify
+- `src/worker.py` - added Russian date parser logic.
+
+### Status
+- [x] Completed
