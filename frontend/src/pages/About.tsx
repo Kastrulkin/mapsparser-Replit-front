@@ -268,10 +268,10 @@ const About = () => {
               <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Профессиональный" : "Professional"}
+                  {isRu ? "Профессиональный" : t.about.pricingOption0Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "5000 рублей в месяц" : "$55 / month"}
+                  {isRu ? "5000 рублей в месяц" : t.about.pricingOption0Price}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption0Point1}</div>
@@ -298,10 +298,10 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Консьерж" : "Concierge"}
+                  {isRu ? "Консьерж" : t.about.pricingOption1Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "25000 рублей в месяц" : "$310 / month"}
+                  {isRu ? "25000 рублей в месяц" : t.about.pricingOption1Price}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption1Point1}</div>

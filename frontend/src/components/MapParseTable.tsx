@@ -133,7 +133,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
               </Button>
             </div>
             <div className="p-6">
-              <YandexBusinessReport data={viewData} />
+              <YandexBusinessReport data={viewData} businessId={businessId || undefined} />
             </div>
           </div>
         </div>

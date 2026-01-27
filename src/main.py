@@ -1809,6 +1809,61 @@ def get_external_posts(business_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/api/business/<business_id>/services", methods=["GET"])
+def get_business_services(business_id):
+    """
+    Получить список услуг бизнеса
+    """
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+            
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверка доступа
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+            
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Получение услуг
+        cursor.execute("""
+            SELECT id, category, name, description, price, created_at
+            FROM UserServices
+            WHERE business_id = ?
+            ORDER BY category, name
+        """, (business_id,))
+        
+        services = []
+        for row in cursor.fetchall():
+            services.append({
+                "id": row[0],
+                "category": row[1] or "Без категории",
+                "name": row[2],
+                "description": row[3],
+                "price": row[4],
+                "created_at": row[5]
+            })
+
+        db.close()
+        return jsonify({"success": True, "services": services})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения услуг: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # ==================== SUPERADMIN USER MANAGEMENT ====================
 # Эти маршруты должны быть ПЕРЕД SPA fallback, чтобы Flask их правильно обрабатывал
 

@@ -251,9 +251,9 @@ lsof -i :443   # Nginx HTTPS
 - **Основные категории таблиц:**
   - **Пользователи и авторизация**: Users, UserSessions, UserLoginHistory
   - **Бизнесы**: Businesses, Networks, BusinessMapLinks
-  - **Услуги и контент**: UserServices, UserExamples (объединены из UserNewsExamples, UserReviewExamples, UserServiceExamples)
+  - **Услуги и контент**: UserServices, UserNews, UserExamples (объединены из UserNewsExamples, UserReviewExamples, UserServiceExamples)
   - **Финансы**: FinancialTransactions, FinancialMetrics, ROIData
-  - **Парсинг**: ParseQueue, MapParseResults, ExternalBusinessAccounts, ExternalBusinessReviews, ExternalBusinessStats
+  - **Парсинг**: ParseQueue, MapParseResults, ExternalBusinessAccounts, ExternalBusinessReviews, ExternalBusinessPosts, ExternalBusinessPhotos, ExternalBusinessStats
   - **AI и интеграции**: AIAgents, AIAgentConversations, ChatGPTUserSessions, TokenUsage
   - **Бронирования**: Bookings, StripePayments, CRMIntegrations
   - **Telegram**: TelegramBindTokens, ReviewExchangeParticipants

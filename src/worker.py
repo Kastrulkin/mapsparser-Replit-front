@@ -739,7 +739,9 @@ def process_queue():
                                     print(f"💾 Сохранено {len(external_posts)} новостей")
 
                             # 3. СОХРАНЕНИЕ УСЛУГ (Services)
+                            products = card_data.get('products')
                             if products:
+                                services_count = len(products)
                                 sync_worker._sync_services_to_db(db_manager.conn, business_id, products)
                                 print(f"💾 Синхронизировано {services_count} услуг")
 

@@ -1,2872 +1,530 @@
-## 2026-01-21 - Fix Task Visibility & Address Parsing
+## 2026-01-21 - Fix Missing Environment Variables (Local Debugging)
 
 ### Current Task
-Addressing user reports that:
-1.  Novamed parsing tasks disappear from the "Active List" upon completion, unlike other tasks.
-2.  The latest parsing attempt failed with `missing_address`.
-
-### Findings
-- **Task Visibility:** `worker.py` (lines 724-725) was explicitly deleting `parse_card` tasks upon success (`DELETE FROM ParseQueue`). Other task types used `UPDATE status='completed'` without deletion.
-- **Address Parsing:** The "missing_address" error indicates the scraper failed to find the address element. The existing selectors were limited (`div.business-contacts-view__address` only).
+Diagnose why `worker.py` failed to decrypt auth tokens, leading to empty parser results.
+User requested local debugging to find the cause.
 
 ### Architecture Decision
-- **Unified Task Retention:** Modified `worker.py` to **disable deletion** of completed tasks. Instead, their status is updated to `'completed'`, matching the behavior of fallback parsing tasks. This ensures they remain visible in the admin panel for filtering.
-- **Robust Selectors:** Updated `yandex_maps_scraper.py` with expanded address selectors (including header address and link-based selectors) to prevent `missing_address` failures.
+1.  **Local Reproduction**: Created `local_check_env.py` which confirmed that `src/worker.py` was NOT loading variables from `.env`.
+2.  **Fix**: Added `from dotenv import load_dotenv; load_dotenv()` to:
+    *   `src/worker.py` (Main entry point)
+    *   `src/yandex_business_sync_worker.py` (Safety measure for direct usage)
 
 ### Files to Modify
-- `src/worker.py`: Commented out `DELETE` statement.
-- `src/yandex_maps_scraper.py`: Added list of address selectors.
-
-### Status
-- [x] Completed (Code Updated)
-- [ ] Verification on Server (Requires Deployment)
-
----
-
-## 2026-01-21 - Novamed Parsing Debug (Rating Issue)
-
-### Current Task
-Investigating why Novamed parsing tasks "disappear" and result in incomplete data (specifically missing rating) in the admin panel history.
-
-### Findings
-- **"Disappearing" Tasks:** Completed tasks (success or error) are removed from the "Active Tasks" list and moved to history. This is expected behavior. The user's confusion stems from the fact that the resulting history entries have missing data ("Rating: —").
-- **Missing Data (Rating):** Initial local reproduction hit Captcha errors (which explains the "Error" tasks seen by the user). However, analysis of `yandex_maps_scraper.py` revealed that the rating selectors were likely outdated or insufficient for the specific layout of the Novamed page.
-- **Captcha:** The "Error" tasks in the list are confirmed to be likely caused by Yandex CAPTCHA blocking the scraper.
-
-### Architecture Decision
-- **Enhanced Selectors:** Added multiple "broad" CSS selectors for rating extraction (`div.business-rating-badge-view__rating`, etc.) to `yandex_maps_scraper.py` to be more robust against DOM changes.
-- **Logging:** Added explicit logging ("✅ Найден рейтинг: ...") to `parse_overview_data` to make future debugging easier.
-
-### Files to Modify
-- `src/yandex_maps_scraper.py`: Added new selectors for rating and logging.
-
-### Status
-- [x] Completed (Code Updated)
-- [ ] Verification on Server (Requires Deployment)
-
----
-
-## 2026-01-20 - Button Styling Update
-
-### Current Task
-Applying an "orange-gold iridescent" gradient style to specific buttons across the frontend application to enhance visual appeal and consistency for Call-to-Action elements.
-
-### Architecture Decision
-- Introduced a global CSS class `.btn-iridescent` in `index.css` using Tailwind utility classes for gradients (`from-orange-400 via-amber-400 to-orange-500`) and animations.
-- Applied this class directly to `Button` components in React, avoiding inline styles or multiple disparate implementations.
-
-### Files to Modify
-- `frontend/src/index.css` - Added `.btn-iridescent` class.
-- `frontend/src/components/Header.tsx` - Styled "Try Free".
-- `frontend/src/components/Hero.tsx` - Styled submit button.
-- `frontend/src/pages/Login.tsx` - Styled login/register buttons.
-- `frontend/src/pages/WizardYandex.tsx` - Styled wizard navigation.
-- `frontend/src/components/ROICalculator.tsx` - Styled "Calculate".
-- `frontend/src/components/TelegramConnection.tsx` - Styled "Generate Token" and fixed a type error.
-- `frontend/src/components/ExternalIntegrations.tsx` - Styled "Connect Google".
-- `frontend/src/components/MetricsHistoryCharts.tsx` - Styled "Add Manual".
-- `frontend/src/components/CTA.tsx` & `frontend/src/pages/About.tsx` - Styled "Contact Expert".
+- `src/worker.py`
+- `src/yandex_business_sync_worker.py`
+- Created temporary `local_check_env.py` and `.env` (will be ignored/deleted).
 
 ### Trade-offs & Decisions
-- **Consistency**: Using a single global class ensures all primary buttons look identical and can be updated in one place.
-- **Maintainability**: Reduced code duplication compared to applying full Tailwind classes to every button instance.
+- **Explicit Loading**: Relying on system environment variables is cleaner for containerization, but since we use `nohup python ...` and a `.env` file on the server, explicit `load_dotenv()` is required.
 
 ### Dependencies
-- No new package dependencies.
-- Relies on existing Tailwind CSS configuration.
+- `python-dotenv` (already in requirements.txt).
 
 ### Status
 - [x] Completed
 
----
-
-## 2026-01-21 - Parser Fix for Novamed & Homepage UI Improvements
+## 2026-01-22 - Fix Frontend Login 501 Error (Local Debugging)
 
 ### Current Task
-Fix Novamed parsing issues (missing phone, services) and improve Homepage UI (sticky header, font sizes).
+User reported `501 Unsupported method ('POST')` when trying to log in locally.
+This error came from the Python SimpleHTTPRequestHandler (port 3000), meaning requests were **not** reaching the Flask backend (port 8000).
 
 ### Architecture Decision
-- **Parser**: Updated `yandex_maps_scraper.py` with new CSS selectors found via DOM inspection. Added logic to parse services from `.related-product-view`.
-- **UI**: Added scroll listener to Header for transparency effect. Reduced Hero typography sizes for better visual balance.
+- **Problem**: `frontend/src/lib/auth_new.ts` had a hardcoded `apiBaseUrl = window.location.origin + '/api'`, effectively forcing all API calls to localhost:3000.
+- **Fix**: Updated `auth_new.ts` to import and use `API_URL` from `../config/api`, which is correctly configured to `http://localhost:8000`.
 
 ### Files to Modify
-- `src/yandex_maps_scraper.py` - Updated selectors for phone, services, and button clicks. [Committed]
-- `frontend/src/components/Header.tsx` - Added scroll-based transparency. [Committed]
-- `frontend/src/components/Hero.tsx` - Reduced text sizes. [Committed]
+- `frontend/src/lib/auth_new.ts` - Changed `apiBaseUrl` initialization.
 
 ### Trade-offs & Decisions
-- **Parser**: Direct DOM parsing with Playwright chosen over API for reliability with dynamic content.
-- **UI**: CSS classes used for sticky header for simplicity and performance.
+- **Hardcoding vs Env**: Ideally `VITE_API_URL` should handle this, but for this local debug session, we hardcoded `src/config/api.ts` to ensuring stability. The fix in `auth_new.ts` aligns with using the centralized config.
+
+### Status
+- [x] Completed
+
+## 2026-01-22 - Исправление парсинга Яндекс.Карт (Selectors vs Endpoints)
+
+### Current Task
+Исправление проблем с отсутствующими данными (рейтинг, телефон, услуги) при парсинге карт.
+
+### Architecture Decision
+- Переключить `PARSER_MODE` по умолчанию с `interception` (endpoints) на `legacy` (selectors/HTML).
+- Значительно улучшить селекторы в `yandex_maps_scraper.py` (legacy parser), добавив эвристический поиск и regex для телефонов и рейтингов.
+- Endpoints (Interception) парсер пока менее стабилен из-за возможной обфускации API Яндекса и сложностей с Captcha.
+
+### Files to Modify
+- `src/yandex_maps_scraper.py` - добавлены robust selectors для Rating, Phone, Hours, Tabs.
+- `src/parser_config.py` - изменен дефолт на `legacy`.
+- `src/worker.py` - без изменений, используется через `parser_config`.
+
+### Trade-offs & Decisions
+- **Стабильность vs Скорость**: Endpoint-парсинг быстрее, но HTML-парсинг сейчас надежнее с новыми эвристиками.
+- **Backwards compatibility**: Legacy парсер полностью совместим с текущей БД и worker'ом.
 
 ### Dependencies
-- No new external dependencies.
+- Нет новых зависимостей (Playwright уже используется).
 
 ### Status
 - [x] Completed
 
-## 2026-01-21 - Улучшение парсера Яндекс.Карт и редизайн отчётов
+## 2026-01-22 - Исправление Type Error в Worker
 
 ### Current Task
-Расширение функционала парсера для извлечения данных о заполненности бизнес-профиля (контакты, часы работы, услуги) и создание современного UI для отчётов.
+Исправление ошибки `TypeError: '>=' not supported between instances of 'str' and 'int'`, возникающей при обработке данных парсера.
 
 ### Architecture Decision
-**Решение**: Расширить существующую систему парсинга без breaking changes:
-- Добавить новые поля в `MapParseResults` через миграцию с **обязательным автоматическим бекапом БД**
-- Использовать существующий `yandex_maps_scraper.py` который уже парсит все нужные данные
-- Обновить `worker.py` для извлечения и сохранения новых полей
-- Создать новый React компонент `YandexBusinessReport` вместо замены существующего HTML-отчёта
-- Рассчитывать заполненность профиля (0-100%) на стороне бэкенда
-
-**Почему так**:
-- Данные уже парсятся парсером, но не сохраняются → минимальные изменения
-- Новый компонент вместо замены старого → безопасно, старые отчёты работают
-- **Автобекап БД в миграции** → защита от потери данных (критично!)
-- Расчёт заполненности в worker.py → консистентность, не зависит от фронтенда
+- Ошибка возникала, так как `get_photos_count` (parser) возвращал строку, а `profile_completeness` (worker) сравнивал её с числом.
+- **Fix**: Добавлено принудительное приведение типов (`int()`) для метрик (`photos_count`, `reviews_count`, `news_count`) в `worker.py` перед использованием в логике.
 
 ### Files to Modify
-- `src/migrations/add_profile_completeness_fields.py` - **[NEW]** миграция БД с **автоматическим бекапом**
-- `src/worker.py` (строки 456-541) - извлечение phone, website, hours, services, messengers; расчёт profile_completeness
-- `frontend/src/components/YandexBusinessReport.tsx` - **[NEW]** современный компонент отчёта
-- `frontend/src/components/MapParseTable.tsx` - интеграция нового компонента вместо HTML
-
-### Trade-offs & Decisions
-
-#### 1. **Backward Compatibility vs Fresh Start**
-- **Выбрано**: Расширение существующей схемы, новый компонент параллельно старому
-- **Почему**: Старые отчёты продолжат работать, деплой без рисков
-- **Альтернатива**: Переписать всё с нуля → опасно для production
-
-#### 2. **Backend vs Frontend расчёт заполненности**
-- **Выбрано**: Backend (в `worker.py` при сохранении)
-- **Почему**: Единый источник истины, одинаковый результат везде
-- **Trade-off**: Нельзя изменить формулу без повторного парсинга
-
-#### 3. **Структура данных (JSON vs отдельные поля)**
-- **Выбрано**: JSON для messengers и working_hours, отдельные поля для остального
-- **Почему**: Баланс между гибкостью (messengers могут меняться) и удобством запросов (phone, website часто фильтруют)
-
-#### 4. **Автоматический бекап в миграции** ⚠️ КРИТИЧНО
-- **Выбрано**: ОБЯЗАТЕЛЬНЫЙ автоматический бекап перед ALTER TABLE
-- **Почему**: Критичная защита от потери данных, миграция не выполнится без бекапа
-- **Реализация**: `create_backup()` создаёт `.backup_YYYYMMDD_HHMMSS` перед любыми изменениями
-- **Trade-off**: Требует места на диске, но это необходимо → пользователь ПРАВ, это ОБЯЗАТЕЛЬНО
-
-### Dependencies
-
-#### Backend
-- **НЕТ** новых pip пакетов (используем встроенные: shutil, datetime, json)
-
-#### Frontend  
-- **НЕТ** новых npm пакетов (используем существующие: lucide-react, shadcn/ui)
-
-#### Database
-- Migration script: `src/migrations/add_profile_completeness_fields.py`
-- **Автоматический бекап**: `src/reports.db.backup_YYYYMMDD_HHMMSS` (создаётся автоматически)
-- 7 новых колонок в `MapParseResults`
-
-#### Переменные окружения
-- НЕТ изменений
-
-#### Systemd/Nginx
-- Worker: требуется рестарт после деплоя (стандартная процедура)
-- Frontend: rebuild + copy to `/var/www/html/`
-- Nginx: restart после копирования
-
-#### Breaking Changes
-- **НЕТ** - все изменения обратно совместимы
-- Старые записи в БД будут иметь NULL в новых полях (допустимо)
-- Парсер работает с любыми версиями схемы (благодаря `_ensure_column_exists`)
+- `src/worker.py`
 
 ### Status
 - [x] Completed
 
----
-
-# 🔍 Аудит проекта BeautyBot
-
-**Дата:** 2024  
-**Область проверки:** Простота, Производительность, Конфликты, Безопасность
-
----
-
-## 📊 Executive Summary
-
-### ✅ Сильные стороны
-- Единая точка подключения к БД через `safe_db_utils`
-- WAL режим SQLite для параллельной работы
-- Автоматические бэкапы перед миграциями
-- Правильное использование параметризованных запросов (защита от SQL injection)
-- Шифрование auth_data для внешних интеграций
-- Закрытие соединений в worker.py перед долгими операциями
-
-### ⚠️ Критические проблемы
-1. **Безопасность:** Слабый хеш пароля в `database_manager.py` (SHA256 без соли) ✅ ИСПРАВЛЕНО
-2. **Производительность:** N+1 запросы в `get_all_users_with_businesses()` ✅ ИСПРАВЛЕНО
-3. **Простота:** `main.py` слишком большой (8872 строки)
-4. **Безопасность:** CORS настроен только для localhost (не работает в продакшене) ✅ ИСПРАВЛЕНО
-
-### 🔧 Рекомендации
-- Рефакторинг `main.py` на Blueprint'ы
-- Добавить rate limiting на backend ✅ ИСПРАВЛЕНО
-- Исправить хеширование паролей ✅ ИСПРАВЛЕНО
-- Улучшить обработку соединений с БД
-
----
-
-## 📋 Архитектурные решения
-
-### 2025-01-03 - План оптимизации структуры базы данных
-
-#### Current Task
-Анализ структуры БД (46-50 таблиц) и разработка плана оптимизации для улучшения производительности и упрощения схемы
-
-#### Architecture Decision
-**Принято решение провести оптимизацию БД в 3 этапа:**
-
-**Этап 1 (Критично):** Добавление недостающих индексов
-**Этап 2 (Важно):** Удаление дублирующих таблиц
-**Этап 3 (Улучшения):** Объединение похожих таблиц
-
-#### Files to Modify
-- `src/init_database_schema.py` - добавление недостающих индексов
-- `src/migrate_remove_duplicate_tables.py` - создание миграции для удаления дублирующих таблиц
-- `src/migrate_merge_examples_tables.py` - создание миграции для объединения таблиц Examples
-- `.cursor/docs/VERIFICATION.md` - обновление документации структуры БД
-
-#### Trade-offs & Decisions
-
-**Производительность vs Простота:**
-- Добавление индексов улучшит производительность запросов в 5-10 раз
-- Удаление дублирующих таблиц упростит схему, но потребует миграции данных
-- Объединение таблиц Examples упростит запросы, но усложнит логику фильтрации по типу
-
-**Backwards compatibility:**
-- Удаление `ClientInfo` требует миграции данных в `Businesses`
-- Удаление `Cards` требует миграции в `MapParseResults`
-- Удаление `GigaChatTokenUsage` безопасно (есть `TokenUsage`)
-
-**Риски и митигация:**
-- Риск потери данных при удалении таблиц → использовать `safe_migrate()` с бэкапами
-- Риск замедления INSERT при добавлении индексов → минимальный (SQLite хорошо справляется)
-- Риск breaking changes → все изменения через миграции с проверкой данных
-
-**Альтернативные варианты:**
-- Оставить как есть → не решает проблемы производительности
-- Полная реструктуризация → слишком рискованно для продакшена
-- Выбранный вариант: постепенная оптимизация с бэкапами
-
-#### Dependencies
-
-**Новые миграции:**
-- `migrate_add_missing_indexes.py` - добавление недостающих индексов
-- `migrate_remove_duplicate_tables.py` - удаление дублирующих таблиц
-- `migrate_merge_examples_tables.py` - объединение таблиц Examples
-
-**Проверка перед применением:**
-- Создать полный бэкап БД
-- Проверить количество записей в таблицах для удаления
-- Убедиться, что данные мигрированы корректно
-
-**После применения:**
-- Перезапустить Flask сервер
-- Проверить производительность запросов
-- Обновить документацию
-
-#### План оптимизации (для Кодера)
-
-##### ЭТАП 1: Добавление недостающих индексов (Критично)
-
-**Файл:** `src/migrate_add_missing_indexes.py`
-
-**Индексы для добавления:**
-```sql
--- UserSessions (критично для авторизации)
-CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON UserSessions(token);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON UserSessions(expires_at);
-
--- Businesses (фильтрация активных)
-CREATE INDEX IF NOT EXISTS idx_businesses_active ON Businesses(is_active);
-CREATE INDEX IF NOT EXISTS idx_businesses_subscription_status ON Businesses(subscription_status);
-
--- Bookings (фильтрация по статусу)
-CREATE INDEX IF NOT EXISTS idx_bookings_status ON Bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_business_status ON Bookings(business_id, status);
-
--- ExternalBusinessReviews (сортировка по дате)
-CREATE INDEX IF NOT EXISTS idx_ext_reviews_published_at ON ExternalBusinessReviews(published_at);
-CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_published ON ExternalBusinessReviews(business_id, published_at);
-
--- ChatGPTRequests (мониторинг)
-CREATE INDEX IF NOT EXISTS idx_chatgpt_requests_business_status ON ChatGPTRequests(business_id, response_status);
-
--- TokenUsage (аналитика)
-CREATE INDEX IF NOT EXISTS idx_token_usage_business_created ON TokenUsage(business_id, created_at);
-```
-
-**Ожидаемый эффект:**
-- Ускорение проверки сессий: 10-50x
-- Ускорение фильтрации активных бизнесов: 5-10x
-- Ускорение запросов с несколькими условиями: 3-5x
-
----
-
-##### ЭТАП 2: Удаление дублирующих таблиц (Важно)
-
-**Файл:** `src/migrate_remove_duplicate_tables.py`
-
-**Таблицы для удаления:**
-
-1. **ClientInfo** → данные в `Businesses`
-   - Миграция: `business_name`, `business_type`, `address`, `working_hours`, `description` → `Businesses`
-   - Проверка: убедиться, что все данные перенесены
-
-2. **GigaChatTokenUsage** → заменена на `TokenUsage`
-   - Миграция: если есть данные, перенести в `TokenUsage`
-   - Проверка: убедиться, что `TokenUsage` содержит все данные
-
-3. **Cards** → мигрировать в `MapParseResults` (опционально)
-   - Миграция: перенести данные в `MapParseResults`
-   - Проверка: убедиться, что все отчеты доступны
-
-**Ожидаемый эффект:**
-- Упрощение схемы: -3 таблицы
-- Устранение дублирования данных
-- Упрощение запросов (не нужно JOIN с дублирующими таблицами)
-
----
-
-##### ЭТАП 3: Объединение похожих таблиц (Улучшения)
-
-**Файл:** `src/migrate_merge_examples_tables.py`
-
-**Таблицы для объединения:**
-- `UserNewsExamples` + `UserReviewExamples` + `UserServiceExamples` → `UserExamples`
-
-**Новая структура:**
-```sql
-CREATE TABLE UserExamples (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    example_type TEXT NOT NULL,  -- 'news', 'review', 'service'
-    example_text TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_user_examples_user_type ON UserExamples(user_id, example_type);
-```
-
-**Миграция:**
-- Перенести все данные из 3 таблиц в `UserExamples` с указанием `example_type`
-- Удалить старые таблицы
-
-**Ожидаемый эффект:**
-- Упрощение схемы: -2 таблицы
-- Упрощение запросов (один запрос вместо трех)
-- Легче добавлять новые типы примеров
-
----
-
-#### Порядок выполнения
-
-1. **Создать бэкап БД** (обязательно!)
-2. **Этап 1:** Добавить индексы (безопасно, можно откатить)
-3. **Этап 2:** Удалить дублирующие таблицы (требует миграции данных)
-4. **Этап 3:** Объединить таблицы Examples (требует миграции данных)
-5. **Проверить производительность** запросов
-6. **Обновить документацию**
-
-#### Проверка после оптимизации
-
-```sql
--- Проверить количество таблиц (должно быть ~40 вместо 46)
-SELECT COUNT(*) FROM sqlite_master WHERE type='table';
-
--- Проверить индексы
-SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%';
-
--- Проверить производительность (время выполнения запросов)
-EXPLAIN QUERY PLAN SELECT * FROM UserSessions WHERE token = ?;
-EXPLAIN QUERY PLAN SELECT * FROM Businesses WHERE is_active = 1;
-```
-
-#### Status
-- [x] Approved for Implementation
-- [x] In Progress (частично реализовано)
-- [ ] Completed (требуется исправление безопасности)
-
----
-
-### 2025-01-03 - Анализ предложений упростителя кода
-
-#### Current Task
-Анализ предложений упростителя кода из `.cursor/docs/SIMPLIFICATION.md` для оптимизации структуры БД
-
-#### Architecture Decision
-
-**Одобрены следующие упрощения:**
-
-1. ✅ **Создание helper функции `ensure_user_examples_table()`** - одобрено и реализовано
-   - Устраняет дублирование создания таблицы в 6 местах
-   - Упрощает поддержку (изменения в одном месте)
-   - Файл: `src/core/db_helpers.py` - создан
-
-2. ✅ **Вынесение функции `_migrate_table_data()`** - одобрено и реализовано
-   - Устраняет дублирование логики миграции данных
-   - Упрощает код миграций
-   - Файл: `src/migrate_remove_duplicate_tables.py` - реализовано
-
-3. ✅ **Использование guard clauses** - одобрено и реализовано
-   - Улучшает читаемость кода
-   - Уменьшает вложенность
-   - Файл: `src/migrate_merge_examples_tables.py` - реализовано
-
-4. ⚠️ **Убрать f-strings из SQL** - требует исправления
-   - **Проблема:** В коде все еще используются f-strings для SQL (строки 17, 32, 70)
-   - **Риск:** Потенциальная SQL injection (хотя имена таблиц из белого списка)
-   - **Решение:** Заменить на конкатенацию или проверку белого списка
-
-5. ✅ **Исправление конфликта имен переменных** - одобрено
-   - Улучшает читаемость
-   - Файл: `src/migrate_add_missing_indexes.py` - исправлено
-
-#### Files to Modify
-
-**Требуют исправления (безопасность):**
-- `src/migrate_remove_duplicate_tables.py` (строка 17) - убрать f-string из SQL
-- `src/migrate_merge_examples_tables.py` (строки 32, 70) - убрать f-strings из SQL
-
-**Уже реализовано:**
-- `src/core/db_helpers.py` - создан helper для `ensure_user_examples_table()`
-- `src/migrate_remove_duplicate_tables.py` - создана функция `_migrate_table_data()`
-- `src/migrate_merge_examples_tables.py` - использованы guard clauses
-
-#### Trade-offs & Decisions
-
-**Безопасность vs Простота:**
-- F-strings в SQL упрощают код, но создают потенциальную уязвимость
-- **Решение:** Заменить на конкатенацию с проверкой белого списка (имена таблиц из белого списка, безопасно)
-
-**Читаемость vs Безопасность:**
-- Guard clauses улучшают читаемость, но требуют больше строк
-- **Решение:** Использовать guard clauses (улучшение читаемости важнее)
-
-**Дублирование vs Переиспользование:**
-- Helper функции устраняют дублирование, но добавляют зависимость
-- **Решение:** Создать `core/db_helpers.py` для переиспользуемых функций (правильное решение)
-
-#### Dependencies
-
-**Нет новых зависимостей** - все изменения в существующем коде
-
-**Требуется исправление:**
-- Убрать f-strings из SQL в миграциях (безопасность)
-
-#### Рекомендации для кодера
-
-1. **Исправить f-strings в SQL:**
-   ```python
-   # Было (небезопасно):
-   cursor.execute(f"SELECT COUNT(*) FROM {source_table}")
-   cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-   
-   # Стало (безопасно):
-   # Вариант 1: конкатенация (если table_name из белого списка)
-   ALLOWED_TABLES = {'ClientInfo', 'GigaChatTokenUsage', 'Cards', 'UserNewsExamples', ...}
-   if table_name not in ALLOWED_TABLES:
-       raise ValueError(f"Неразрешенная таблица: {table_name}")
-   cursor.execute("SELECT COUNT(*) FROM " + table_name)
-   cursor.execute("DROP TABLE IF EXISTS " + table_name)
-   ```
-
-2. **Проверить все миграции на использование f-strings в SQL**
-
-#### Status
-- [x] Approved for Implementation
-- [x] Partially Implemented
-- [ ] Requires Security Fix (f-strings in SQL)
-
----
-
-### 2024-12-XX - Исправление ошибки "no such column: business_id" в ClientInfo (продолжение)
-
-#### Current Task
-Проблема: миграция говорит что business_id уже существует, но ошибка "no such column: business_id" все еще появляется. Нужно проверить реальную структуру таблицы и исправить скрипт миграции.
-
-#### Architecture Decision
-- Улучшить логику автоматической миграции таблицы ClientInfo в эндпоинте `/api/client-info`
-- Сохранять структуру колонок перед удалением таблицы для корректного восстановления данных
-- При восстановлении данных пытаться найти `business_id` из таблицы Businesses по `user_id`
-- Создать отдельный скрипт миграции `migrate_clientinfo_add_business_id.py` для ручного запуска
-
-#### Files to Modify
-- `src/main.py` (строки 3035-3073) - улучшена логика миграции ClientInfo:
-  - Сохранение структуры колонок перед удалением таблицы
-  - Правильный маппинг данных при восстановлении
-  - Поиск business_id из таблицы Businesses при отсутствии в старых данных
-- `src/migrate_clientinfo_add_business_id.py` - исправлен скрипт миграции:
-  - Удален несуществующий импорт `from core.helpers import find_business_id_for_user`
-  - Добавлен прямой поиск business_id из таблицы Businesses
-  - Исправлена ошибка с `updated_at` в INSERT
-- `src/check_clientinfo_structure.py` - создан скрипт для проверки структуры таблицы
-
-#### Trade-offs & Decisions
-- **Автоматическая vs Ручная миграция**: Выбрана автоматическая миграция при первом запросе + скрипт для ручного запуска
-- **Потеря данных**: Миграция сохраняет все существующие данные перед пересозданием таблицы
-- **Business_id для старых записей**: Если business_id нет, пытаемся найти его из Businesses, иначе используем user_id как fallback
-
-#### Dependencies
-- Нет новых зависимостей
-- Требуется перезапуск сервера для применения изменений
-- При первом запросе к `/api/client-info` миграция выполнится автоматически
-
-#### Диагностика проблемы
-1. Скрипт миграции говорит "✅ Колонка business_id уже существует", но ошибка все еще есть
-2. Возможные причины:
-   - Проверка в скрипте миграции неправильная
-   - Миграция в main.py не срабатывает при запросе
-   - Таблица действительно не имеет business_id, но проверка дает ложный положительный результат
-
-#### Решение
-1. Запустить `python src/check_clientinfo_structure.py` для проверки реальной структуры
-2. Если business_id отсутствует - запустить исправленный скрипт миграции
-3. Перезапустить Flask сервер (не только worker!)
-
-#### Status
-- [x] Completed
-
----
-
-### 2024-12-XX - Настройка workflow архитектора
-
-#### Current Task
-Создание правил работы архитектора и настройка автоматического обновления Architect_audit_report.md
-
-#### Architecture Decision
-- Создать файл `.cursor/rules/architect-workflow.mdc` с правилами работы архитектора
-- Переместить `AUDIT_REPORT.md` в `.cursor/docs/Architect_audit_report.md`
-- Настроить обязательное обновление файла в конце каждой задачи
-
-#### Files to Modify
-- `.cursor/rules/architect-workflow.mdc` - создан файл с правилами работы архитектора
-- `.cursor/docs/Architect_audit_report.md` - создан/обновлен файл для документирования архитектурных решений
-- `AUDIT_REPORT.md` - удален (перемещен в `.cursor/docs/`)
-
-#### Trade-offs & Decisions
-- **Централизация документации**: Все архитектурные решения теперь в одном месте
-- **Автоматизация**: Правила в `.cursor/rules/` применяются автоматически (alwaysApply: true)
-- **Структурированность**: Четкая структура обновлений помогает отслеживать решения
-
-#### Dependencies
-- Нет новых зависимостей
-- Файлы правил применяются автоматически Cursor IDE
-
-#### Status
-- [x] Completed
-
----
-
-### 2024-12-XX - Исправление критических проблем безопасности
-
-#### Current Task
-Исправление замечаний из аудита: хеширование паролей, CORS, rate limiting, N+1 запросы
-
-#### Architecture Decision
-- Удалить метод `authenticate_user` из `database_manager.py` (унификация на PBKDF2 из `auth_system.py`)
-- Настроить CORS через переменную окружения `ALLOWED_ORIGINS` для поддержки продакшена
-- Добавить rate limiting через `flask-limiter` с декоратором `rate_limit_if_available()`
-- Оптимизировать `get_all_users_with_businesses()`: 4 запроса вместо N+1 (группировка в Python)
-
-#### Files to Modify
-- `src/database_manager.py` - удален метод `authenticate_user`, оптимизирован `get_all_users_with_businesses()`
-- `src/main.py` - добавлен CORS через env переменную, добавлен rate limiting с декоратором
-- `requirements.txt` - добавлен `flask-limiter>=3.5.0`
-
-#### Trade-offs & Decisions
-- **Простота vs Безопасность**: Выбрана безопасность - удален небезопасный метод с SHA256
-- **Производительность**: Оптимизация N+1 запросов улучшит производительность админ-панели при большом количестве пользователей
-- **Backwards compatibility**: Изменения не ломают существующий код (метод `authenticate_user` не использовался в проекте)
-- **Гибкость**: CORS через env переменную позволяет легко настраивать для разных окружений
-
-#### Dependencies
-- **Новая зависимость**: `flask-limiter>=3.5.0` (нужно установить: `pip install "flask-limiter>=3.5.0"`)
-- **Переменная окружения**: `ALLOWED_ORIGINS` в `.env` (по умолчанию: `http://localhost:3000,http://127.0.0.1:3000` для dev)
-- **Для продакшена**: добавить в `.env`: `ALLOWED_ORIGINS=https://yourdomain.com`
-
-#### Status
-- [x] Completed
-
----
-
-## 🔒 БЕЗОПАСНОСТЬ
-
-### ✅ Исправлено: Слабый хеш пароля
-
-**Файл:** `src/database_manager.py:82-98` (удален)
-
-**Решение:**
-- Метод `authenticate_user` с SHA256 удален
-- Используется только `auth_system.authenticate_user` с PBKDF2
-
-**Приоритет:** 🔴 Критично ✅ ИСПРАВЛЕНО
-
----
-
-### ✅ Исправлено: CORS настроен только для localhost
-
-**Файл:** `src/main.py:70-74`
-
-**Решение:**
-```python
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-CORS(app, supports_credentials=True, origins=allowed_origins)
-```
-
-**Приоритет:** 🟡 Средний (для продакшена) ✅ ИСПРАВЛЕНО
-
----
-
-### ✅ Исправлено: Нет rate limiting на backend
-
-**Файл:** `src/main.py:76-86, 88-95`
-
-**Решение:**
-- Добавлен `flask-limiter` с декоратором `rate_limit_if_available()`
-- Эндпоинт `/api/auth/login` ограничен: 5 запросов/минуту
-- Общие лимиты: 200/день, 50/час
-
-**Приоритет:** 🟡 Средний ✅ ИСПРАВЛЕНО
-
----
-
-### ⚠️ Фиксированная соль в dev режиме шифрования
-
-**Файл:** `src/auth_encryption.py:41`
-
-**Проблема:**
-- Фиксированная соль снижает безопасность
-- Все зашифрованные данные используют одну соль
-
-**Решение:**
-- Для продакшена: хранить соль в переменной окружения или генерировать уникальную для каждого шифрования
-- Текущий подход с PBKDF2 приемлем, но соль должна быть уникальной
-
-**Приоритет:** 🟢 Низкий (улучшение)
-
----
-
-### ✅ SQL Injection защита
-
-**Статус:** ✅ Хорошо
-
-Все SQL запросы используют параметризованные запросы:
-```python
-cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
-```
-
-**Примечание:** Использование f-strings для имен полей безопасно:
-```python
-# Безопасно: имена полей из белого списка
-cursor.execute(f"UPDATE Businesses SET {', '.join(updates)} WHERE id = ?", params)
-```
-
----
-
-## ⚡ ПРОИЗВОДИТЕЛЬНОСТЬ
-
-### ✅ Исправлено: N+1 запросы в `get_all_users_with_businesses()`
-
-**Файл:** `src/database_manager.py:610-681`
-
-**Решение:**
-- Вместо N+1 запросов используется 4 запроса с группировкой в Python
-- Получаем все данные одним запросом, затем группируем по `owner_id` и `network_id`
-- Улучшена производительность при большом количестве пользователей
-
-**Приоритет:** 🟡 Средний (при большом количестве пользователей) ✅ ИСПРАВЛЕНО
-
----
-
-### ⚠️ Множественные создания DatabaseManager
-
-**Проблема:**
-- 162 использования `DatabaseManager()` в проекте
-- Не все соединения закрываются явно
-- Риск утечки соединений при исключениях
-
-**Решение:**
-- Использовать context manager везде:
-```python
-with DatabaseManager() as db:
-    # автоматическое закрытие
-```
-
-**Приоритет:** 🟡 Средний
-
----
-
-### ✅ WAL режим SQLite
-
-**Статус:** ✅ Хорошо
-
-WAL режим включен в `safe_db_utils.py`, что позволяет:
-- Параллельные чтения
-- Улучшенная производительность при конкурентном доступе
-
----
-
-### ⚠️ Большой таймаут для БД
-
-**Файл:** `src/safe_db_utils.py:31`
-
-```python
-conn = sqlite3.connect(db_path, timeout=30.0)
-```
-
-**Проблема:**
-- 30 секунд — очень долго для ожидания разблокировки
-- Может привести к накоплению запросов
-
-**Рекомендация:**
-- Уменьшить до 5-10 секунд
-- Добавить retry логику на уровне приложения
-
-**Приоритет:** 🟢 Низкий
-
----
-
-## 🏗️ ПРОСТОТА И АРХИТЕКТУРА
-
-### ❌ `main.py` слишком большой (8872 строки)
-
-**Проблема:**
-- Нарушение Single Responsibility Principle
-- Сложно поддерживать и тестировать
-- Смешаны разные домены (auth, business, finance, admin)
-
-**Решение:**
-- Вынести эндпоинты в отдельные Blueprint'ы:
-  - `business_api.py` — все `/api/business/*`
-  - `finance_api.py` — все `/api/finance/*`
-  - `admin_api.py` — все `/api/admin/*`
-  - `auth_api.py` — все `/api/auth/*`
-
-**Приоритет:** 🟡 Средний (рефакторинг)
-
----
-
-### ⚠️ Дублирование логики извлечения данных из sqlite3.Row
-
-**Файл:** `src/auth_system.py:100-123`
-
-**Проблема:**
-```python
-if hasattr(user, 'keys'):
-    user_id = user['id'] if 'id' in user.keys() else None
-    # ... много повторяющегося кода
-else:
-    user_id = user[0] if len(user) > 0 else None
-    # ...
-```
-
-**Решение:**
-Создать утилиту:
-```python
-def row_to_dict(row, columns=None):
-    if hasattr(row, 'keys'):
-        return dict(row)
-    if columns:
-        return dict(zip(columns, row))
-    return dict(row)
-```
-
-**Приоритет:** 🟢 Низкий (улучшение читаемости)
-
----
-
-### ⚠️ Два способа работы с БД
-
-**Проблема:**
-- `DatabaseManager()` — высокоуровневый API
-- `get_db_connection()` — низкоуровневый доступ
-
-**Статус:** ✅ Приемлемо
-- Разные уровни абстракции оправданы
-- Но нужно документировать, когда что использовать
-
----
-
-### ⚠️ Сложная обработка ошибок
-
-**Проблема:**
-- Разные подходы к обработке исключений
-- Иногда `except Exception`, иногда конкретные типы
-- Не всегда логируются ошибки
-
-**Рекомендация:**
-- Стандартизировать обработку ошибок
-- Использовать централизованный error handler в Flask
-
-**Приоритет:** 🟢 Низкий
-
----
-
-## 🔄 КОНФЛИКТЫ
-
-### ✅ Нет конфликтов в архитектуре
-
-**Статус:** ✅ Хорошо
-
-- Worker правильно закрывает соединения перед долгими операциями
-- Нет конфликтов между Blueprint'ами
-- Миграции используют безопасные утилиты
-
----
-
-### ✅ Исправлено: Потенциальный конфликт: два способа хеширования паролей
-
-**Проблема:**
-- `auth_system.py` использует PBKDF2 (правильно)
-- `database_manager.py` использовал SHA256 (неправильно) ✅ УДАЛЕНО
-
-**Решение:**
-- Метод `authenticate_user` удален из `database_manager.py`
-- Используется только `auth_system.authenticate_user`
-
-**Приоритет:** 🟡 Средний ✅ ИСПРАВЛЕНО
-
----
-
-## 📋 ПЛАН ДЕЙСТВИЙ
-
-### Критично (сделать немедленно)
-1. ✅ Исправить хеширование пароля в `database_manager.py`
-2. ✅ Настроить CORS для продакшена
-
-### Важно (сделать в ближайшее время)
-3. ✅ Добавить rate limiting на backend
-4. ✅ Исправить N+1 запросы в `get_all_users_with_businesses()`
-5. ✅ Унифицировать хеширование паролей
-
-### Улучшения (можно отложить)
-6. 🔄 Рефакторинг `main.py` на Blueprint'ы
-7. 🔄 Стандартизировать обработку ошибок
-8. 🔄 Улучшить управление соединениями с БД
-9. 🔄 Создать утилиту для работы с sqlite3.Row
-
----
-
-## 📈 МЕТРИКИ КАЧЕСТВА
-
-| Критерий | Оценка | Комментарий |
-|----------|--------|-------------|
-| **Безопасность** | 🟢 9/10 | Критические проблемы исправлены |
-| **Производительность** | 🟢 9/10 | N+1 запросы исправлены, WAL режим работает |
-| **Простота** | 🟡 6/10 | `main.py` слишком большой |
-| **Масштабируемость** | 🟢 8/10 | SQLite с WAL работает хорошо для текущей нагрузки |
-
-**Общая оценка:** 🟢 **8.0/10** (было 7.25/10)
-
----
-
-## ✅ ЧТО РАБОТАЕТ ХОРОШО
-
-1. ✅ Единая точка подключения к БД
-2. ✅ Автоматические бэкапы
-3. ✅ Параметризованные SQL запросы
-4. ✅ WAL режим для параллельной работы
-5. ✅ Шифрование auth_data
-6. ✅ Правильное закрытие соединений в worker
-7. ✅ Модульная структура Blueprint'ов
-
----
-
-**Вывод:** Критические проблемы безопасности исправлены. Проект готов к онбордингу первых пользователей с SQLite. При росте нагрузки (50+ пользователей) рекомендуется миграция на PostgreSQL.
-
----
-
-## 📊 План оптимизации структуры базы данных
-
-### Текущее состояние
-- **46-50 таблиц** (много для SQLite)
-- **Дублирование данных:** ClientInfo, Cards, GigaChatTokenUsage
-- **Недостаточно индексов:** отсутствуют индексы на часто используемых полях
-- **Похожие таблицы:** UserNewsExamples, UserReviewExamples, UserServiceExamples можно объединить
-
-### План оптимизации (3 этапа)
-
-#### ЭТАП 1: Добавление недостающих индексов (Критично)
-**Файл:** `src/migrate_add_missing_indexes.py`
-
-**Индексы:**
-- `UserSessions.token`, `UserSessions.expires_at`
-- `Businesses.is_active`, `Businesses.subscription_status`
-- `Bookings.status`, `Bookings(business_id, status)` - составной
-- `ExternalBusinessReviews.published_at`, `ExternalBusinessReviews(business_id, published_at)` - составной
-- `ChatGPTRequests(business_id, response_status)` - составной
-- `TokenUsage(business_id, created_at)` - составной
-
-**Ожидаемый эффект:** Ускорение запросов в 5-10 раз
-
----
-
-#### ЭТАП 2: Удаление дублирующих таблиц (Важно)
-**Файл:** `src/migrate_remove_duplicate_tables.py`
-
-**Таблицы для удаления:**
-1. `ClientInfo` → мигрировать данные в `Businesses`
-2. `GigaChatTokenUsage` → мигрировать в `TokenUsage` (если есть данные)
-3. `Cards` → мигрировать в `MapParseResults` (опционально)
-
-**Ожидаемый эффект:** -3 таблицы, устранение дублирования
-
----
-
-#### ЭТАП 3: Объединение похожих таблиц (Улучшения)
-**Файл:** `src/migrate_merge_examples_tables.py`
-
-**Таблицы для объединения:**
-- `UserNewsExamples` + `UserReviewExamples` + `UserServiceExamples` → `UserExamples`
-- Добавить поле `example_type` ('news', 'review', 'service')
-
-**Ожидаемый эффект:** -2 таблицы, упрощение запросов
-
----
-
-### Итоговый результат
-
-**До оптимизации:**
-- 46-50 таблиц
-- Дублирование данных
-- Медленные запросы (нет индексов)
-
-**После оптимизации:**
-- 40-41 таблица (-5-9 таблиц)
-- Ускорение запросов в 5-10 раз
-- Упрощение схемы и запросов
-- Устранение дублирования данных
-
-**Подробный план:** см. секцию "2025-01-03 - План оптимизации структуры базы данных" выше.
-
----
-
-### 2025-01-03 - Исправление таймаутов Nginx для синхронизации Яндекс.Бизнес
-
-#### Current Task
-Исправление проблемы обрыва синхронизации Яндекс.Бизнес по таймауту Nginx
-
-#### Architecture Decision
-
-**Принято решение:** Увеличить таймауты Nginx до 600 секунд (10 минут) для синхронизации Яндекс.Бизнес
-
-**Альтернативное решение (для будущего):** Сделать синхронизацию асинхронной через очередь (как обычный парсер)
-
-#### Files to Modify
-
-**Вариант 1 (быстрое решение):**
-- Конфигурация Nginx на сервере (обычно `/etc/nginx/sites-available/default`)
-  - Увеличить `proxy_read_timeout` до 600s
-  - Увеличить `proxy_connect_timeout` до 600s
-  - Увеличить `proxy_send_timeout` до 600s
-
-**Вариант 2 (правильное решение):**
-- `src/main.py` - изменить эндпоинт `/api/admin/yandex/sync/business/<business_id>` (строки 5484-5595)
-- `src/worker.py` - добавить обработку задач синхронизации
-- Создать таблицу `SyncQueue` или использовать `ParseQueue` с новым типом задачи
-
-#### Trade-offs & Decisions
-
-**Простота vs Правильность:**
-- Вариант 1 (увеличить таймауты) - простое решение, но не решает проблему полностью
-- Вариант 2 (асинхронная обработка) - правильное решение, но требует больше изменений
-
-**Время выполнения:**
-- Синхронизация может занимать 5-10 минут для бизнесов с большим объемом данных
-- Текущие таймауты (300 секунд) недостаточны
-- Рекомендуется увеличить до 600 секунд (10 минут)
-
-**Риски:**
-- Увеличение таймаутов может привести к накоплению долгих запросов
-- Асинхронная обработка требует создания очереди и worker'а
-
-**Решение:**
-- Сначала увеличить таймауты (быстрое решение)
-- Потом сделать асинхронную обработку (правильное решение)
-
-#### Dependencies
-
-**Нет новых зависимостей** - только изменения в конфигурации Nginx или коде
-
-**Проверка после применения:**
-- Проверить логи Nginx после синхронизации
-- Проверить логи Flask для диагностики проблем
-- Убедиться, что синхронизация завершается успешно
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробная задача:** см. `TASK_NGINX_TIMEOUTS_FIX.md`
-
----
-
-### 2025-01-03 - Объединение SyncQueue и ParseQueue в единую очередь
-
-#### Current Task
-Объединение двух очередей (ParseQueue и SyncQueue) в одну для единой логики обработки задач
-
-#### Architecture Decision
-
-**Принято решение:** Объединить SyncQueue в ParseQueue, добавив поле `task_type` для различения типов задач
-
-**Преимущества:**
-- Единая точка обработки задач
-- Упрощение логики worker.py
-- Легче добавлять новые типы задач
-- Упрощение мониторинга (одна таблица)
-
-#### Files to Modify
-
-**Миграция:**
-- `src/migrate_syncqueue_to_parsequeue.py` - создание миграции для переноса данных
-
-**Изменения структуры:**
-- `src/init_database_schema.py` - добавить поля в ParseQueue, убрать SyncQueue
-
-**Изменения логики:**
-- `src/worker.py` - объединить `process_queue()` и `process_sync_queue()`
-- `src/main.py` - использовать ParseQueue вместо SyncQueue для синхронизации
-
-#### Trade-offs & Decisions
-
-**Простота vs Миграция:**
-- Объединение упростит код, но потребует миграции данных
-- **Решение:** Создать миграцию с бэкапом, перенести данные, удалить SyncQueue
-
-**Обратная совместимость:**
-- Старые задачи парсинга (без `task_type`) должны работать
-- **Решение:** Использовать `task_type = 'parse_card'` по умолчанию
-
-**Типы задач:**
-- `parse_card` - парсинг публичных карт (текущий)
-- `sync_yandex_business` - синхронизация Яндекс.Бизнес
-- `sync_google_business` - синхронизация Google Business
-- `sync_2gis` - синхронизация 2ГИС
-
-#### Dependencies
-
-**Новые поля в ParseQueue:**
-- `task_type TEXT DEFAULT 'parse_card'`
-- `account_id TEXT`
-- `source TEXT`
-- `error_message TEXT`
-- `updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
-
-**Миграция данных:**
-- Перенести все записи из SyncQueue в ParseQueue
-- Удалить SyncQueue после миграции
-
-**Изменения в worker.py:**
-- Объединить обработку очередей
-- Добавить обработку разных типов задач
-
-#### Status
-- [x] Approved for Implementation
-- [x] In Progress
-- [x] Completed
-
-**Подробная задача:** см. `TASK_UNIFY_QUEUES.md`
-
-**Реализовано:**
-- Создана миграция `src/migrate_syncqueue_to_parsequeue.py` для переноса данных
-
----
-
-### 2025-01-03 - Парсинг из кабинета как fallback и ротация IP-адресов
-
-#### Current Task
-1. Добавить парсинг из кабинета как третью очередь для допарсинга неуспешного публичного парсинга
-2. Реализовать ротацию IP-адресов через прокси для обхода блокировок Яндекс
-
-#### Architecture Decision
-
-**1. Fallback парсинг через кабинет:**
-- Добавить `task_type = 'parse_cabinet_fallback'` в ParseQueue
-- После неуспешного публичного парсинга (капча, неполные данные, ошибки) проверять наличие кабинета
-- Если есть кабинет → создавать задачу fallback → дополнять данные через YandexBusinessParser
-
-**2. Ротация IP через прокси:**
-- Создать таблицу `ProxyServers` для хранения прокси
-- Создать модуль `ProxyManager` для управления прокси
-- Интегрировать прокси в все парсеры (interception, legacy, yandex_business)
-- Ротация через round-robin с приоритетом на неиспользуемые прокси
-
-#### Files to Modify
-
-**Fallback парсинг:**
-- `src/worker.py` - добавить функции проверки успешности и обработки fallback
-- `src/init_database_schema.py` - уже есть поля в ParseQueue (task_type, account_id)
-
-**Ротация IP:**
-- `src/init_database_schema.py` - создать таблицу ProxyServers
-- `src/proxy_manager.py` - создать модуль управления прокси
-- `src/parser_interception.py` - интегрировать прокси
-- `src/parser.py` - интегрировать прокси
-- `src/yandex_business_parser.py` - интегрировать прокси
-- `src/main.py` - добавить эндпоинты для управления прокси
-
-#### Trade-offs & Decisions
-
-**Fallback парсинг:**
-- **Простота vs Полнота данных:** Fallback усложняет логику, но дает более полные данные
-- **Производительность:** Fallback парсинг медленнее (HTTP запросы к API кабинета)
-- **Решение:** Использовать только при необходимости (неуспешный публичный парсинг)
-
-**Ротация IP:**
-- **Стоимость vs Надежность:** Прокси требуют расходов, но дают надежность
-- **Производительность:** Прокси могут замедлить запросы на 10-20%
-- **Решение:** Использовать резидентные прокси (меньше банов, выше скорость)
-
-**Альтернативы:**
-- VPN ротация (медленнее переключение)
-- Tor (очень медленно, не для продакшена)
-- Бесплатные прокси (менее надежно)
-
-#### Dependencies
-
-**Fallback парсинг:**
-- Уже есть поля в ParseQueue (task_type, account_id)
-- Использует существующий YandexBusinessParser
-- Требует наличия аккаунта в ExternalBusinessAccounts
-
-**Ротация IP:**
-- Новая таблица: `ProxyServers`
-- Новый модуль: `proxy_manager.py`
-- Зависимости: requests (уже есть), playwright (уже есть)
-- Прокси-серверы (нужно приобрести/настроить)
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробные задачи:**
-- `TASK_CABINET_FALLBACK_PARSING.md` - fallback парсинг через кабинет
-- `TASK_IP_ROTATION.md` - ротация IP-адресов через прокси
-
----
-
-### 2025-01-03 - Исправление парсинга отзывов, дат и генерации
-
-#### Current Task
-Исправление критических багов:
-1. Парсинг отзывов не спарсил ни одного ответа организации
-2. Нужно добавить дату отзыва - непонятно, когда они написаны
-3. Генерация новостей не работает (500 ошибка)
-4. Ответ на отзыв также не генерируется (500 ошибка: "string indices must be integers, not 'str'")
-
-#### Architecture Decision
-
-**1. Генерация ответов на отзывы:**
-- Проблема: `analyze_text_with_gigachat()` возвращает строку, но код пытается обращаться к ней как к словарю
-- Решение: Правильно обрабатывать строку, парсить JSON из строки, иметь fallback
-
-**2. Генерация новостей:**
-- Проблема: Ошибка 500 при обработке результата
-- Решение: Правильно обрабатывать результат (строка или словарь), проверять на ошибки, добавлять логирование
-
-**3. Парсинг ответов организации:**
-- Проблема: Ответы не парсятся или не сохраняются
-- Решение: Проверить извлечение ответов в парсерах, добавить логирование, проверить сохранение
-
-**4. Дата отзыва:**
-- Проблема: Дата может не отображаться везде
-- Решение: Убедиться, что дата парсится и сохраняется, проверить отображение в UI
-
-#### Files to Modify
-
-**Критичные исправления:**
-- `src/main.py` (строки 2659-2682) - исправить обработку результата в `/api/reviews/reply`
-- `src/main.py` (строки 2246-2272) - исправить обработку результата в `/api/news/generate`
-
-**Парсинг ответов:**
-- `src/parser_interception.py` - проверить извлечение ответов из API
-- `src/parser.py` - проверить парсинг HTML ответов
-- `src/worker.py` - проверить сохранение ответов
-
-**Дата отзыва:**
-- `src/parser_interception.py` - проверить извлечение даты
-- `src/parser.py` - проверить парсинг даты
-- `frontend/src/components/ReviewReplyAssistant.tsx` - проверить отображение даты
-
-#### Trade-offs & Decisions
-
-**Обработка результатов GigaChat:**
-- `analyze_text_with_gigachat()` всегда возвращает строку
-- Нужно парсить JSON из строки, если он есть
-- Fallback на использование строки как есть, если JSON не распарсился
-
-**Логирование:**
-- Добавить логирование типов и значений для отладки
-- Логировать первые 200 символов результата
-
-#### Dependencies
-
-**Нет новых зависимостей** - только исправления существующего кода
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробная задача:** см. `TASK_FIX_REVIEWS_AND_GENERATION.md`
-
----
-
-### 2025-01-06 - Добавление полей и таблиц для ИИ-агента
-
-#### Current Task
-Обновление документации после миграции полей и таблиц для ИИ-агента
-
-#### Architecture Decision
-
-**Добавлены поля в Businesses:**
-- `waba_phone_id`, `waba_access_token` - для интеграции с WhatsApp Business API
-- `telegram_bot_token` - токен пользовательского Telegram бота
-- `ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions` - настройки ИИ-агента
-
-**Созданы новые таблицы:**
-- `AIAgentConversations` - разговоры с ИИ-агентом (WhatsApp, Telegram)
-- `AIAgentMessages` - сообщения в разговорах с ИИ-агентом
-
-**Статус миграции:**
-- ✅ Миграция применена на сервере (2025-01-06)
-- ✅ Таблицы созданы с индексами
-- ✅ Поля добавлены в Businesses
-
-#### Files to Modify
-
-**Документация:**
-- `README.md` - обновить информацию о структуре БД
-- `.cursor/docs/VERIFICATION.md` - обновить документацию таблиц Businesses, AIAgentConversations, AIAgentMessages
-
-#### Trade-offs & Decisions
-
-**Нет архитектурных изменений** - только обновление документации после применения миграции
-
-#### Dependencies
-
-**Нет новых зависимостей** - миграция уже применена
-
-#### Status
-- [x] Approved for Implementation
-- [x] In Progress
-- [x] Completed
-
-**Миграция:** `migrations/migrate_ai_agent_fields.py` (применено 2025-01-06)
-
----
-
-### 2025-01-06 - Исправление API услуг и UI редактирования
-
-#### Current Task
-Критические баги в функциональности услуг:
-1. Поля `optimized_name` и `optimized_description` не возвращаются из API (более 30 попыток исправления)
-2. Кнопка "Редактировать" не работает - нет модального окна
-3. UI оптимизации - проверить отображение предложенных формулировок
-
-#### Architecture Decision
-
-**1. API get_services():**
-- Проблема: Неправильное извлечение данных из `sqlite3.Row`
-- Решение: Использовать `dict(service)` для преобразования Row в словарь, или прямое обращение по индексу
-- Добавить детальное логирование для отладки
-
-**2. Кнопка "Редактировать":**
-- Проблема: `setEditingService()` устанавливает состояние, но нет модального окна
-- Решение: Добавить модальное окно с формой редактирования услуги
-- Добавить состояние `editingForm` и `useEffect` для заполнения формы
-
-**3. UI оптимизации:**
-- Код для отображения уже есть (строки 663-785 в CardOverviewPage.tsx)
-- После исправления API проверить работу кнопок "Принять"/"Отклонить"
-
-#### Files to Modify
-
-**Backend:**
-- `src/main.py` (строки 3078-3171) - исправить извлечение данных из `sqlite3.Row` в функции `get_services()`
-
-**Frontend:**
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx`:
-  - Добавить состояние `editingForm`
-  - Добавить `useEffect` для заполнения формы
-  - Добавить модальное окно редактирования услуги
-  - Проверить отображение `optimized_name` и `optimized_description`
-
-#### Trade-offs & Decisions
-
-**Извлечение данных из sqlite3.Row:**
-- `sqlite3.Row` может не работать как словарь в некоторых случаях
-- Использовать `dict(service)` для гарантированного преобразования
-- Альтернатива: прямое обращение по индексу, зная порядок полей
-
-**Модальное окно редактирования:**
-- Использовать существующий паттерн с `showAddService` как пример
-- Модальное окно должно быть доступно и удобно для пользователя
-
-#### Dependencies
-
-**Нет новых зависимостей** - только исправления существующего кода
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробная задача:** см. `TASK_FIX_SERVICES_API_AND_UI.md`
-
----
-
-### 2025-01-06 - Интеграция Google Business Profile API и улучшение Дашборда
-
-#### Current Task
-1. Полная интеграция Google Business Profile API (получение и публикация данных)
-2. Подвкладки в "Работа с картами" по сервисам карт
-3. Переименование "Прогресс" → "Дашборд" с улучшенным функционалом
-4. Статус парсинга в Дашборде
-
-#### Architecture Decision
-
-**1. Google Business Profile API:**
-- OAuth 2.0 аутентификация через Google Cloud Console
-- Получение данных: отзывы, статистика, посты, фото
-- Публикация данных: ответы на отзывы, посты/новости
-- ⚠️ Ограничение: услуги нельзя редактировать через API (только через веб-интерфейс)
-- Статистика: просмотры, клики, построение маршрутов, переходы на сайт, запросы на звонок
-
-**2. Подвкладки в "Работа с картами":**
-- Определение типа карты по URL (Яндекс, Google, 2ГИС)
-- Создание подвкладок на основе ссылок из `BusinessMapLinks`
-- Фильтрация данных (услуги, отзывы, новости) по активной вкладке
-
-**3. Дашборд:**
-- Переименование "Прогресс" → "Дашборд"
-- Агрегированная статистика со всех карт по выбранному бизнесу
-- Графики прогресса изменений (отзывы, рейтинг, посетители)
-- Статус парсинга в блоке "Парсинг карт"
-
-#### Files to Modify
-
-**Google Business API:**
-- `src/google_business_auth.py` (создать) - OAuth 2.0 аутентификация
-- `src/google_business_api.py` (создать) - API клиент
-- `src/google_business_sync_worker.py` - заменить заглушки на реальные вызовы
-- `src/api/google_business_api.py` (создать Blueprint) - API эндпоинты
-- `requirements.txt` - добавить зависимости Google API
-
-**Подвкладки и Дашборд:**
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - добавить подвкладки
-- `frontend/src/pages/dashboard/ProgressPage.tsx` → `DashboardPage.tsx` (переименовать)
-- `frontend/src/App.tsx` - обновить маршруты
-- `frontend/src/components/MapParseTable.tsx` - добавить статус парсинга
-- `src/main.py` - добавить endpoints для статистики и статуса парсинга
-
-#### Trade-offs & Decisions
-
-**Google Business API:**
-- Использовать OAuth 2.0 с offline access для refresh token
-- Шифровать credentials в БД через `auth_encryption.py`
-- Ограничение: услуги нельзя редактировать через API - пользователь должен знать об этом
-
-**Подвкладки:**
-- Определять тип карты по URL при сохранении
-- Сохранять `map_type` в `BusinessMapLinks` для быстрого доступа
-- Fallback для неизвестных типов карт
-
-**Дашборд:**
-- Агрегировать данные из `ExternalBusinessStats` для всех источников
-- Показывать средние значения и суммы
-- Разбивка по источникам для детального анализа
-
-#### Dependencies
-
-**Google API:**
-- `google-api-python-client>=2.100.0`
-- `google-auth-httplib2>=0.1.1`
-- `google-auth-oauthlib>=1.1.0`
-
-**Переменные окружения:**
-- `GOOGLE_CLIENT_ID` - OAuth 2.0 Client ID
-- `GOOGLE_CLIENT_SECRET` - OAuth 2.0 Client Secret
-- `GOOGLE_REDIRECT_URI` - Redirect URI для OAuth callback
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробные задачи:**
-- `TASK_GOOGLE_BUSINESS_API.md` - полная интеграция Google Business Profile API
-- `TASK_MAPS_TABS_AND_DASHBOARD.md` - подвкладки карт и переименование Дашборда
-- `FRONTEND_GOOGLE_OAUTH_WIDGET.md` - виджет авторизации Google на фронтенде
-- `TASK_ADMIN_PARSING_TAB.md` - вкладка "Парсинг" в административной панели
-
-**Важно:** OAuth 2.0 настраивается один раз для всего проекта в Google Cloud Console. Пользователи авторизуются через виджет/кнопку на сайте - им не нужно настраивать Google Cloud Console самостоятельно.
-
----
-
-### 2025-01-06 - Вкладка "Парсинг" в административной панели
-
-#### Current Task
-Добавить в административную панель "Базич" новую вкладку "Парсинг" для мониторинга и управления задачами парсинга без необходимости открывать консоль.
-
-#### Architecture Decision
-
-**Цель:** Администратор должен видеть статусы задач парсинга и управлять ими через UI, а не через консоль.
-
-**Подход:**
-- Создать компонент `ParsingManagement.tsx` для отображения задач из ParseQueue
-- Добавить API эндпоинты для получения задач, статистики, перезапуска и удаления
-- Обновление статусов по кнопке "Обновить" (без постоянного polling)
-- Показывать зависшие задачи (processing более 30 минут) с возможностью перезапуска
-
-**Функциональность:**
-- Список задач с фильтрацией (статус, тип, источник)
-- Статистика по статусам, типам задач, источникам
-- Перезапуск зависших или ошибочных задач
-- Удаление задач из очереди
-- Визуальные индикаторы статусов
-
-#### Files to Modify
-
-**Backend:**
-- `src/main.py` - добавить эндпоинты:
-  - `GET /api/admin/parsing/tasks` - список задач с фильтрацией
-  - `POST /api/admin/parsing/tasks/<id>/restart` - перезапуск задачи
-  - `DELETE /api/admin/parsing/tasks/<id>` - удаление задачи
-  - `GET /api/admin/parsing/stats` - статистика парсинга
-
-**Frontend:**
-- `frontend/src/components/ParsingManagement.tsx` (создать) - компонент управления парсингом
-- `frontend/src/pages/dashboard/AdminPage.tsx` - добавить вкладку "Парсинг"
-
-#### Trade-offs & Decisions
-
-**Обновление статусов:**
-- По кнопке "Обновить" вместо постоянного polling
-- Пользователь сам решает, когда обновить данные
-- Экономия ресурсов и снижение нагрузки на сервер
-
-**Зависшие задачи:**
-- Задачи в статусе "processing" более 30 минут считаются зависшими
-- Показывать предупреждение и возможность перезапуска
-
-**Безопасность:**
-- Все эндпоинты доступны только суперадмину
-- Проверка прав доступа перед каждым действием
-
-#### Dependencies
-
-**Нет новых зависимостей** - только использование существующих компонентов UI
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробная задача:** см. `TASK_ADMIN_PARSING_TAB.md`
-- Обновлен `src/init_database_schema.py` - ParseQueue расширена полями task_type, account_id, source, error_message, updated_at
-- Объединена обработка очередей в `src/worker.py` - process_queue() теперь обрабатывает и parse_card, и sync_yandex_business задачи
-- Обновлены эндпоинты в `src/main.py` - используют ParseQueue вместо SyncQueue
-- Добавлены белые списки таблиц для безопасности SQL запросов
-
-**Примечание:** Таблица SyncQueue пока не удалена, будет удалена после успешного тестирования.
-
----
-
-### 2025-01-06 - Сборка всех задач для кодера
-
-#### Current Task
-Собрать все задачи из последних сообщений в один документ для передачи кодеру.
-
-#### Architecture Decision
-
-**Цель:** Создать единый документ со всеми задачами, структурированный по приоритетам и категориям, для удобной передачи кодеру.
-
-**Подход:**
-- Создать файл `ALL_TASKS_FOR_CODER.md` в корне проекта
-- Структурировать задачи по категориям: критические исправления, интеграция Google, улучшения UI/UX, оптимизация парсинга, административная панель
-- Указать приоритеты и рекомендуемый порядок выполнения
-- Добавить ссылки на детальные задачи
-- Включить общие замечания и принципы работы
-
-**Структура документа:**
-1. Критические исправления (2 задачи)
-2. Интеграция Google Business Profile (2 задачи)
-3. Улучшения UI/UX (1 задача)
-4. Оптимизация парсинга (4 задачи)
-5. Административная панель (1 задача)
-
-#### Files to Modify
-
-**Создан:**
-- `ALL_TASKS_FOR_CODER.md` - сводный документ со всеми задачами
-
-#### Trade-offs & Decisions
-
-**Структурирование:**
-- Задачи сгруппированы по функциональным областям
-- Критические исправления вынесены в начало
-- Рекомендуемый порядок выполнения указан в конце
-
-**Полнота:**
-- Все 10 задач из последних сообщений включены
-- Каждая задача содержит ссылку на детальный документ
-- Добавлены общие замечания и принципы работы
-
-#### Dependencies
-
-**Нет новых зависимостей** - только документирование существующих задач
-
-#### Status
-- [x] Approved for Implementation
-- [x] Completed
-
-**Создан документ:** `ALL_TASKS_FOR_CODER.md`
-- Содержит все 10 задач из последних сообщений
-- Структурирован по приоритетам и категориям
-- Включены ссылки на детальные задачи
-- Добавлены общие замечания и принципы работы
-
----
-
-### 2025-01-06 - Исправление сортировки отзывов и парсинга дат
-
-#### Current Task
-Исправить критические проблемы с отображением и парсингом отзывов:
-1. Отзывы отображаются от старого к новому (нужно наоборот)
-2. Даты не парсятся (все 67 отзывов имеют published_at: None)
-3. Селектор для даты не подходит (нужно добавить Review-RatingDate)
-
-#### Architecture Decision
-
-**Цель:** Исправить сортировку отзывов и обеспечить корректный парсинг дат во всех парсерах.
-
-**Подход:**
-- Исправить SQL сортировку с обработкой NULL значений
-- Добавить селектор `div.Review-RatingDate` для парсинга из кабинета
-- Улучшить парсинг дат во всех парсерах (parser.py, parser_interception.py, worker.py)
-- Добавить логирование для отладки парсинга дат
-
-**Функциональность:**
-- Отзывы сортируются от новых к старым (новые сверху)
-- Даты парсятся и сохраняются в БД
-- Все отзывы имеют published_at (или created_at если дата не найдена)
-
-#### Files to Modify
-
-**Backend:**
-- `src/main.py` - исправить SQL сортировку (строки 1101-1108)
-- `src/parser.py` - добавить селектор Review-RatingDate, улучшить парсинг даты (строки 828-856)
-- `src/parser_interception.py` - улучшить парсинг даты из API (строки 472-491)
-- `src/worker.py` - улучшить парсинг даты из строки (строки 325-363)
-
-#### Trade-offs & Decisions
-
-**Сортировка:**
-- Использовать `COALESCE(published_at, created_at) DESC` для обработки NULL
-- Новые отзывы всегда сверху, даже если дата не найдена
-
-**Парсинг дат:**
-- Обрабатывать все форматы: timestamp, ISO, относительные ("2 дня назад")
-- Логировать ошибки парсинга для отладки
-- Если дата не найдена, использовать created_at
-
-**Селектор Review-RatingDate:**
-- Это селектор из личного кабинета Яндекс.Бизнес
-- Для публичных карт может не работать
-- Добавлен как приоритетный селектор
-
-#### Dependencies
-
-**Нет новых зависимостей** - только улучшение существующего кода
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-- [ ] Completed
-
-**Подробная задача:** см. `TASK_FIX_REVIEWS_SORTING_AND_DATES.md`
-
----
-
-### 2026-01-09 - Архитектурный рефакторинг парсеров и воркеров
-
-#### Current Task
-Устранение дублирования кода (80% между Yandex/Google воркерами), декомпозиция "God Object" `worker.py` и централизация работы с БД.
-
-#### Architecture Decision
-
-1. **Базовый класс `BaseSyncWorker`**:
-   - Создать абстрактный класс для синхронизации.
-   - Вынести общую логику: загрузка аккаунтов, обработка ошибок, логирование.
-   - Наследовать `GoogleBusinessSyncWorker` и `YandexBusinessSyncWorker` от него.
-
-2. **Централизация доступа к данным (`ExternalDataRepository`)**:
-   - Убрать прямой SQL из воркеров.
-   - Создать репозиторий (или расширить `DatabaseManager`) для методов `upsert_reviews`, `upsert_stats`, `upsert_posts`.
-
-3. **Декомпозиция `worker.py`**:
-   - `worker.py` должен только *диспетчеризировать* задачи.
-   - Логику парсинга (Playwright) вынести в `yandex_maps_scraper.py` (бывший `parser.py`).
-   - Логику синхронизации вызывать через соответствующие воркеры.
-
-4. **Нейминг**:
-   - Переименовать `src/parser.py` -> `src/yandex_maps_scraper.py` (чтобы отличать от `yandex_business_parser.py`).
-
-#### Files to Modify
-- `src/base_sync_worker.py` (NEW)
-- `src/repositories/external_data_repository.py` (NEW)
-- `src/google_business_sync_worker.py` (REFACTOR)
-- `src/yandex_business_sync_worker.py` (REFACTOR)
-- `src/worker.py` (REFACTOR)
-- `src/parser.py` -> `src/yandex_maps_scraper.py` (RENAME)
-
-#### Trade-offs & Decisions
-- **Complexity vs Maintainability**: Добавление слоев (репозиторий, наследование) увеличивает количество файлов, но радикально упрощает поддержку и снижает дублирование.
-- **Backward Compatibility**: Переименование `parser.py` потребует обновления импортов.
-
-#### Status
-- [x] Approved for Implementation
-- [ ] In Progress
-
-
-## 2026-01-09 - Исправление ошибок Frontend и миграции Backend
+## 2026-01-22 - Разделение логики Парсинга и Оценки (Robust Worker)
 
 ### Current Task
-Исправление ошибок, о которых сообщил пользователь:
-1. Ошибка 500 на `/api/business/{id}/stages` (отсутствуют таблицы этапов роста)
-2. Ошибка "Connection Refused" на вкладке Финансы (hardcoded localhost)
-3. Ошибка 500 на создание AI агента (схема БД рассинхронизирована с кодом)
+Разделить "сбор данных" и "аналитику", чтобы ошибки в аналитике (например, Type Error) не блокировали сохранение данных.
 
 ### Architecture Decision
-1. **Frontend**: Исправлены хардкорные URL `localhost:8000` на использование `getApiEndpoint()` helper'а.
-2. **Backend**:
-   - Создана миграция `migrate_growth_stages.py` для создания таблиц `BusinessTypes`, `GrowthStages`, `GrowthTasks`.
-   - Обновлен `init_database_schema.py` для включения таблицы `AIAgents` со всеми полями для новых инсталляций.
+- Реализовать концепцию "Safe Analytics Execution" внутри `worker.py`.
+- **Refactor**: 
+    1. Расчет `profile_completeness` обернут в `try/except` блок.
+    2. Добавлена повторная валидация типов (`_safe_photos`, `_safe_services`) перед использованием в логике.
+    3. При ошибке аналитики ставится дефолтное значение (0), но "сырые" данные (телефон, сайт, часы работы) всё равно сохраняются.
 
 ### Files to Modify
-- `frontend/src/components/NetworkSwitcher.tsx` - fix localhost
-- `frontend/src/components/NetworkDashboard.tsx` - fix localhost
-- `migrations/migrate_growth_stages.py` - [NEW] создание таблиц этапов
-- `src/init_database_schema.py` - добавлена таблица `AIAgents`
+- `src/worker.py`
 
-### Trade-offs & Decisions
-- **Consistency**: Обновление `init_database_schema.py` гарантирует, что новые развертывания будут иметь правильную схему сразу, без необходимости накатывать кучу миграций.
-- **Safety**: Миграция `migrate_growth_stages.py` использует `IF NOT EXISTS` и безопасные методы.
-
-### Dependencies
-- Требуется запустить миграции:
-  1. `python migrations/migrate_ai_agents_table.py`
-  2. `python migrations/migrate_workflow_agents.py`
-  3. `python migrations/migrate_growth_stages.py`
-- Пересборка Frontend обязательна (`npm run build`).
-
-### Status
 - [x] Completed
 
----
-
-## 2026-01-09 - Implementing Growth Stages Feature
+## 2026-01-22 - Unified Analytics Service (Decoupling)
 
 ### Current Task
-Implement the "Growth Stages" feature (BizDev roadmap) for businesses.
-This includes:
-- Backend API to fetch stages.
-- Frontend UI to display the roadmap.
+Обеспечить запуск анализа (SEO Score, Recommendations) при ручном изменении данных, а не только при парсинге.
 
 ### Architecture Decision
-- **Backend**: Create a new Blueprint `src/api/growth_api.py`.
-- **Database**: Tables already exist (migration script ready).
-- **Frontend**: Create `GrowthStages.tsx` using shadcn/ui.
+- Создан новый сервис `src/services/analytics_service.py`, инкапсулирующий логику оценки.
+- **Integration**:
+    1. **Worker**: Использует сервис для оценки после парсинга.
+    2. **Main API (`save_card_to_db`)**: Автоматически пересчитывает баллы перед КАЖДЫМ сохранением карточки в БД.
 
 ### Files to Modify
-- `src/api/growth_api.py` - [NEW] Blueprint with `/api/business/<id>/stages` endpoint.
-- `src/main.py` - Register `growth_bp`.
-- `frontend/src/components/GrowthStages.tsx` - [NEW] UI Component.
+- `src/services/analytics_service.py` [NEW]
+- `src/worker.py`
+- `src/main.py`
 
-### Trade-offs & Decisions
-- **New Blueprint**: Better modularity.
-- **Raw SQL**: Consistent with project pattern.
+- [x] Completed
 
-### Dependencies
-- No new dependencies.
+- [x] Completed
 
-### Status
-- [ ] Approved for Implementation
-
-
----
-
-## 2026-01-09 - Critical Hotfix: White Screen Crash Safeguards (Round 2)
+## 2026-01-22 - Fix Missing Database Tables (ExtReviews & ExtStats)
 
 ### Current Task
-Resolving persistent "White Screen" crashes caused by unsafe `.toFixed()` usage on undefined values in frontend dashboard components.
+Воркер падал с ошибками `no such table: ExternalBusinessReviews` и `no such table: ExternalBusinessStats`.
 
 ### Architecture Decision
-- Identified and patched multiple instances where API data (specifically `rating` and `roi_percentage`) could be `undefined/null`, causing crashes when accessing methods like `.toFixed()`.
-- Enforced strict null-checks (`!= null`) and fallback values (`|| 0`) in:
-    - `CardOverviewPage.tsx`
-    - `ROICalculator.tsx`
-    - `NetworkDashboard.tsx` (verified)
-    - `FinancialMetrics.tsx` (verified)
+- Две таблицы для внешних данных (отзывы и статистика) отсутствовали в БД.
+- **Fix**: 
+    1. Созданы и запущены миграции: 
+        - `src/migrations/add_external_reviews_table.py`
+        - `src/migrations/add_external_stats_table.py`
+    2. Определения обеих таблиц и индексов добавлены в `src/init_database_schema.py`.
 
 ### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Replaced `Trash2` icon with `🗑️` emoji
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Removed unused `Trash2` import
-
-### Trade-offs & Decisions
-- **Consistency**: Using emojis for actions aligns effectively with the current design language without adding extra icon dependencies for simple actions.
+- `src/migrations/add_external_stats_table.py` [NEW]
+- `src/init_database_schema.py`
 
 ### Status
 - [x] Completed
 
-## 2026-01-12 - Restoration of "Reviews" and "News" Tabs in Maps Management
+## 2026-01-22 - Fix URL Logic & Parsing Timeouts
 
 ### Current Task
-Restore the missing "Reviews", "News", and "etc." sections in the "Maps Management" tab (`CardOverviewPage`), which were reportedly lost. Also fix the tooltip for the optimization icon.
+Пользователь сообщал о "пустом результате" и таймаутах (10 мин).
+Причина: 
+1. Использовалась **админская ссылка** (`/sprav/`), которая возвращает 404 для парсера.
+2. Парсер слишком долго скроллил (100 итераций), вызывая таймаут воркера.
 
 ### Architecture Decision
-- Implement a **Tabbed Interface** using `shadcn/ui` `Tabs` within `CardOverviewPage`.
-- Structure:
-    - **Services Tab**: Contains the existing service management and optimization UI.
-    - **Reviews Tab**: Integrates `ReviewReplyAssistant`.
-    - **News Tab**: Integrates `NewsGenerator`.
-- Localization: Added specific keys (`tabServices`, `tabReviews`, `tabNews`) to `ru.ts` and `en.ts` to ensure correct localized headers.
+- **URL Normalization**: В `worker.py` добавлена авто-замена ссылок `sprav/{id}` -> `maps/org/redirect/{id}`.
+- **Optimization**: В `yandex_maps_scraper.py` лимиты скролла уменьшены, добавлен **авто-клик по баннерам/диалогам**, которые перекрывали контент.
 
 ### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Wrapped content in `Tabs`, added `TabsContent` for Reviews and News.
-- `frontend/src/i18n/locales/ru.ts` - Added tab keys and `optimize` key.
-- `frontend/src/i18n/locales/en.ts` - Added tab keys and `optimize` key.
-
-### Trade-offs & Decisions
-- **Reuse vs New**: Reused existing `ReviewReplyAssistant` and `NewsGenerator` components instead of rebuilding them, ensuring consistency with the dashboard logic.
-- **Data Passing**: Passed `currentBusinessId` to `NewsGenerator` to enable transaction-based news generation logic if supported.
-
-### Dependencies
-- `shadcn/ui` Tabs component (already present in project).
+- `src/worker.py` - авто-коррекция URL
+- `src/yandex_maps_scraper.py` - оптимизация циклов и закрытие диалогов
 
 ### Status
 - [x] Completed
 
----
-
-## 2026-01-09 - Hotfix: Relaxing API Rate Limits
+## 2026-01-22 - Fix Dialog Handling & Analytics Verification
 
 ### Current Task
-User encountered `429 Too Many Requests` errors blocking authentication. The previous limit of 50 requests/hour was too strict for SPA usage.
+Verification of parsing logic fixes revealed `NameError: name '_close_dialogs' is not defined` when running e2e tests.
+Also needed to verify the new unified `analytics_service`.
 
 ### Architecture Decision
-- Increased default rate limits in `src/main.py`:
-  - Daily: 200 -> 10000
-  - Hourly: 50 -> 1000
-- This change balances security with usability, ensuring valid user sessions aren't blocked.
+1.  **Code Fix**: Moved `_close_dialogs` in `src/yandex_maps_scraper.py` from nested scope to module level to be accessible by all scraper functions (`parse_reviews`, `parse_yandex_card`). Use global definition to avoid scope issues.
+2.  **Verification**: Created `src/test_analytics.py` to unit test the profile completeness logic. Confirmed robust handling of mixed types and empty inputs.
+3.  **Parsing Status**: Code logic confirmed correct. Parsing is currently intermittent due to CAPTCHA blocks, but the underlying mechanisms (URL correction, dialog closing, timeout handling) are fixed.
 
 ### Files to Modify
-- `src/main.py` - Updated `default_limits` in Limiter configuration.
+- `src/yandex_maps_scraper.py`
+- `src/test_analytics.py` [NEW]
 
-### Trade-offs & Decisions
-- **Security vs Usability**: Relaxed limits reduce protection against brute force but significantly improve user experience for legitimate users. 1000/hour is still low enough to prevent massive abuse.
+### Status
+- [x] Completed
+- [x] Completed
 
----
-
-## 2026-01-09 - Hotfix: Temporarily Disable Rate Limiting
+## 2026-01-23 - Debugging Stuck Worker
 
 ### Current Task
-User continued to face `429 Too Many Requests` errors despite relaxed limits, likely due to persistence or default limit overrides.
+User reported a task stuck in "Pending" status for hours.
 
 ### Architecture Decision
-- **Disabled Rate Limiting**: Set `RATE_LIMITER_AVAILABLE = False` in `src/main.py`.
-- This completely bypasses `flask-limiter` initialization and all decorators.
-- **Why**: Immediate unblocking of the user is higher priority than abuse protection right now.
+1.  **Diagnosis**: 
+    - Worker process was not running (`ps aux | grep worker.py` failed).
+    - Database query confirmed task was `pending`.
+2.  **Fix**:
+    - Restarted worker using `nohup python3 src/worker.py > worker.log 2>&1 &`.
+    - Worker immediately picked up the task.
+3.  **Outcome**:
+    - Task hit CAPTCHA (Yandex is aggressive).
+    - System correctly switched to **Fallback Parsing** (ID: `d2ee9418...`).
+    - Fallback is currently `processing`.
 
 ### Files to Modify
-- `src/main.py` - Forced `RATE_LIMITER_AVAILABLE` to `False`.
-
-### Trade-offs & Decisions
-- **Security**: Temporarily exposing the API to potential brute force (low risk for now).
-- **Resolution**: Guarantees the 429 error stops.
+- None (Operational Fix).
 
 ### Status
 - [x] Completed
 
-### Status
-- [x] Completed
-
----
-
-## 2026-01-09 - Defensive Coding for Frontend Crashes
+## 2026-01-23 - Disable Automatic Fallback to Cabinet Parsing
 
 ### Current Task
-Resolve persistent "white screen" crashes caused by `.toFixed()` being called on non-numeric values (undefined, strings, or objects).
+User requested to make "Cabinet Parsing" (Yandex Business) a manual choice only.
 
 ### Architecture Decision
-- Implement "Paranoid" type checking in frontend components receiving financial/stats data.
-- Explicitly cast all values to `Number()` before calling mathematical methods like `.toFixed()`.
-- Use `isNaN()` checks to return safe fallbacks ('0', '—') instead of crashing.
-
-### Files toModify
-- `frontend/src/components/FinancialMetrics.tsx`
-- `frontend/src/components/NetworkDashboard.tsx`
-- (`CardOverviewPage.tsx` and `ROICalculator.tsx` were patched previously)
-
-### Status
-- [x] Completed
-
-## 2026-01-09 - Growth Stages Feature Implementation
-
-### Current Task
-Implement dynamic Growth Stages feature (Database, Admin API, Frontend migration).
-
-### Architecture Decision
-- Created `BusinessTypes` and `GrowthStages` tables in SQLite to store dynamic plans.
-- Implemented `admin_growth_api.py` Blueprint for CRUD operations.
-- Migrated `GrowthPlan.tsx` to fetch data from API instead of hardcoded JSON.
-- Exposed methods in `auth_new.ts` (`makeRequest`) to allow components to fetch data safely.
+1.  **Change**: Disabled logic in `src/worker.py` that automatically created a `parse_cabinet_fallback` task when public parsing failed (e.g. due to Captcha).
+2.  **Behavior**:
+    - Parsing Fail/Captcha -> Task status becomes `error` or `captcha`.
+    - No new task is created automatically.
+    - User can still manually start Cabinet parsing via UI (Admin Panel).
 
 ### Files to Modify
-- `src/database_manager.py` (via `init_growth_db.py` migration)
-- `src/api/admin_growth_api.py` [NEW]
-- `src/main.py` - Registered new blueprint
-- `frontend/src/components/GrowthPlan.tsx` - Rewritten for dynamic data
-- `frontend/src/lib/auth_new.ts` - Made `makeRequest` public
-
-### Trade-offs & Decisions
-- **Dynamic vs Hardcoded**: Moved to database-driven approach to allow Admin editing without code changes.
-- **Frontend Refactor**: Complete rewrite of `GrowthPlan` component was necessary to support async data loading and state management.
-- **Backwards Compatibility**: Migration script safeguards existing data; Verified DB was empty before migration, so no data usage concerns.
-
-### Dependencies
-- No new external dependencies.
-- Database migration required (handled by `init_growth_db.py`).
+- `src/worker.py`
 
 ### Status
 - [x] Completed
 
----
-
-## 2026-01-09 - Dashboard Localization Refinement
+## 2026-01-23 - Wordstat Integration (SEO Keywords)
 
 ### Current Task
-Localize critical dashboard pages (`Bookings`, `Chats`, `Finance`, `AIChatPromotion`, `Progress`) and fix hardcoded strings using dynamic keys.
+User requested to make SEO optimization transparent by storing Wordstat keywords in the database and managing them via UI.
 
 ### Architecture Decision
-- Refactor `AIChatPromotionPage` to use array-based configuration in `locales` to remove hardcoded steps and allow easier adding/removing of steps via config.
-- Refactor `ProgressPage` wizard to use localization keys for all options and labels.
-- Use `useLanguage` hook across all refactored components for consistent locale access.
-- Propagate new keys to `ru.ts` and `en.ts` fully.
-- Use English values as fallback for `es.ts` and other locales to ensure runtime stability.
+1.  **Database**: Created `WordstatKeywords` table to store keywords, views, and categories.
+2.  **Backend**: Updated `update_wordstat_data.py` to populate this table instead of a text file. Used `ServiceCategorizer` to categorize keywords during import.
+3.  **API**: Added `GET /api/wordstat/keywords` and `POST /api/wordstat/update` to expose this data to the frontend.
+4.  **Frontend**: Added "SEO Keywords" tab to `CardOverviewPage` using new `SEOKeywordsTab` component.
 
 ### Files to Modify
-- `frontend/src/i18n/locales/ru.ts` - added keys for `contacts`, `finance`, `progress`, `chats`, `aiChatPromotion`.
-- `frontend/src/i18n/locales/en.ts` - added corresponding keys.
-- `frontend/src/i18n/locales/es.ts` (and others) - partially updated with English fallback.
-- `frontend/src/pages/dashboard/AIChatPromotionPage.tsx` - rewritten.
-- `frontend/src/pages/dashboard/ProgressPage.tsx` - rewritten.
-- `frontend/src/pages/dashboard/FinancePage.tsx` - refactored.
-- `frontend/src/pages/dashboard/ChatsPage.tsx` - refactored.
-- `frontend/src/pages/dashboard/BookingsPage.tsx` - refactored.
-
-### Trade-offs & Decisions
-- **Complexity vs Maintainability**: Moving `AIChatPromotion` data to locales increases locale file size but makes the component cleaner and purely presentational.
-- **Fallback Strategy**: Using English for secondary locales (`es`, `de`, etc.) prevents runtime errors immediately without blocking the release on professional translation.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Worker Timeout & Syntax Error
-
-### Current Task
-Fix "stuck" parser tasks causing the worker to hang indefinitely, and resolve a subsequent syntax error introduced during the fix.
-
-### Architecture Decision
-- **Timeout Logic**: Added `signal.alarm(600)` (10 minutes) to the `parse_card` task in `worker.py`. If Selenium/GeckoDriver hangs, the signal handler raises `TimeoutError` and the worker moves to the next task.
-- **Polling Interval**: Reduced `time.sleep` from 300s (5m) to 10s to make the worker more responsive.
-- **Syntax Fix**: Removed a redundant nested `try:` block that caused a `SyntaxError` in `worker.py`.
-
-### Files to Modify
-- `src/worker.py` - Added `signal` import, timeout handler, reduced sleep time, fixed try/except block.
-
-### Trade-offs & Decisions
-- **Signal vs Threading**: Used `signal.alarm` for simplicity as it works well on Linux/Mac for main thread timeouts.
-- **Responsiveness**: 10s interval increases DB load slightly but failing to pick up tasks for 5m is user-hostile.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Worker Database Cleanup Safety
-
-### Current Task
-Resolve `AttributeError: 'NoneType' object has no attribute 'close'` causing worker crashes. This occurs when database connection/cursor variables fail to initialize (e.g. due to earlier errors) but cleanup code unconditionally tries to `.close()` them.
-
-### Architecture Decision
-- **Defensive Cleanup**: Wrapped all `.close()` calls for `db`, `conn`, and `cursor` objects in `try...except` blocks with checks for existence (`if var:`).
-- **Scope Safety**: Used `if 'var' in locals()` checks where appropriate to handle `UnboundLocalError` cases safely (though Python's scoping usually handles this, explicit checks prevent edge cases in nested blocks).
-
-### Files to Modify
-- `src/worker.py` - Patched `process_queue` finally block, `_process_sync_yandex_business_task` error handlers, and success paths.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Worker Syntax Error Restore
-
-### Current Task
-Resolve `SyntaxError` (unexpected EOF while parsing) in `worker.py` which caused the service to exit immediately.
-
-### Architecture Decision
-- **Restoration**: Restored missing arguments (`news_count`, `photos_count`) and closing parenthesis `))` to the `cursor.execute` call for the `else` branch in `_process_sync_yandex_business_task`. These were accidentally removed during the previous hotfix.
-
-### Files to Modify
-- `src/worker.py` - Restored lines 841-844.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Parser Interception Cleanup Safety
-
-### Current Task
-Resolve `AttributeError: 'NoneType' object has no attribute 'close'` in `process_worker` logs. This was traced to `parser_interception.py` where a failed Playwright launch leaves the `browser` variable as `None`, causing subsequent `.close()` calls in `finally/except` blocks to crash the worker.
-
-### Architecture Decision
-- **Defensive Browser Cleanup**: Wrapped `browser.close()` calls in `src/parser_interception.py` with `if browser:` checks to handle initialization failures gracefully.
-
-### Files to Modify
-- `src/parser_interception.py` - Updated cleanup logic in success path, TimeoutError handler, and generic Exception handler.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Captcha Detection & Empty Result Prevention
-
-### Current Task
-Resolve issue where parser detected captcha but returned empty data, which worker then saved as "successful" completion, leading to empty reports and tasks disappearing from queue.
-
-### Architecture Decision
-1. **Explicit Captcha Return**: `parser_interception.py` now returns `{'error': 'captcha_detected'}` immediately upon detecting captcha, triggering the worker's rescheduling logic.
-2. **Strict Success Validation**: `worker.py` now checks `_is_parsing_successful()`. If validation fails (and it's not a handled captcha), the task is marked as `error` with a descriptive message instead of `done`. This prevents empty/broken data from being silently accepted.
-
-### Files to Modify
-- `src/parser_interception.py` - Added early return on captcha detection.
-- `src/worker.py` - Added check for `is_successful` before saving results to `MapParseResults`.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Critical Hotfix: Visibility of Orphan Networks in Superadmin
-
-### Current Task
-Resolve issue where Networks (and consequently their businesses) were disappearing from the Superadmin "Businesses" list if the Network Owner was deleted or did not exist in the `Users` table. The API `/api/admin/users-with-businesses` iterates over `Users`, thus skipping orphan networks.
-
-### Architecture Decision
-- **Unified Orphan Handling**: Updated `get_all_users_with_businesses` in `DatabaseManager` to explicitly fetch orphan networks (`WHERE u.id IS NULL`).
-- **Data Grouping**: Orphan networks are now grouped under a synthetic `[Без владельца]` user entry in the API response, ensuring they are visible in the frontend without requiring UI changes.
-
-### Files to Modify
-- `src/database_manager.py` - Added SQL query for orphan networks and logic to merge them into the result set.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - UI Improvement: SEO Suggestion Visual Separation
-
-### Current Task
-Visual separation of SEO optimization suggestions from original service text in the Service List table (`CardOverviewPage`). The previous layout caused text to blend together.
-
-### Architecture Decision
-- **Visual Distinction**: Applied `bg-primary/5` and `border-primary/20` to suggestion blocks to leverage the project's primary color (orange) without being overwhelming.
-- **Spacing**: Added `mt-2` to strictly separate the suggestion from the original text.
-- **Iconography**: Added subtle sparkle icons to reinforce the "AI Suggestion" context.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Updated `optimized_name` and `optimized_description` rendering blocks.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - UI Fix: Restore Optimize Button & Icon Update
-
-### Current Task
-User reported missing "Optimize" button in Service List actions. Also replaced emoji icons with Lucide icons for consistency.
-
-### Architecture Decision
-- **Interactive Elements**: Restored "Optimize" button using `Wand2` icon (Magic Wand) to signify AI action.
-- **Consistency**: Replaced `🗑️` emoji with `Trash2` icon.
-- **Feedback**: Added loading spinner state to the Optimize button during processing.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Updated `actions` column in service table, added imports.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - UI Adjustment: Revert Icon Style
-
-### Current Task
-User requested to revert the "Delete" icon back to the previous style (emoji) while keeping the new "Optimize" button.
-
-### Architecture Decision
-- **Visual Preference**: Reverted `Trash2` icon to `🗑️` emoji based on user feedback.
-- **Functionality Preservation**: "Optimize" button remains as `Wand2` icon.
-
-### Files to Modify
-### Files to Modify
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - Replaced `Trash2` with emoji, removed unused import.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - Fix: JSON Artifacts in Generated News
-
-### Current Task
-User reported that generated news sometimes contains raw JSON (e.g., `{"news": "..."}`) or technical artifacts, especially when the content has unescaped quotes or is empty.
-
-### Architecture Decision
-- **Robust JSON Parsing**: Updated `news_generate` in `src/main.py` to:
-    - Initialize `parsed_result` explicitly to avoid scope errors.
-    - Use specific key checks (`if 'news' in parsed_result`) instead of falsy checks (`get('news') or ...`) to correctly handle empty strings.
-    - **Regex Fallback**: Added a regex extraction step (`r'"news"\s*:\s*"(.*)"\s*\}`) to handle `JSONDecodeError` caused by unescaped quotes in the LLM response.
-
-### Files to Modify
-- `src/main.py` - Updated `news_generate` function logic.
-
-### Trade-offs & Decisions
-- **Regex vs library**: Used standard `re` module for fallback instead of installing a "dirty json" library to keep dependencies minimal and deployment simple.
-- **Empty string handling**: Explicitly treating empty string as a valid result allows the UI to show "no content" cleanly rather than dumping the raw JSON error.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-12 - UI Fix: Progress Page Duplication & Metrics History
-
-### Current Task
-User reported duplicate headers on the "Progress" page (Legacy "Business Growth Plan" + new banner). Also reported that parsed metrics were not appearing in the "Business Metrics" history chart.
-
-### Architecture Decision
-- **UI Cleanup**: Removed the legacy `ProgressTracker` component from `ProgressPage.tsx`, keeping only the new gamified `BusinessGrowthPlan`.
-- **Metrics Sync**: Updated `src/worker.py` to automatically save parsed data (rating, reviews, photos, news) into the `BusinessMetricsHistory` table. Previously, this data sat only in `MapParseResults`, so the history charts (which query `BusinessMetricsHistory`) came up empty.
-- **Auto-Progress**: (Previously implemented) Integrated `ProgressCalculator` into `stage_progress_api.py` to auto-complete growth tasks.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/ProgressPage.tsx` - Removed `ProgressTracker`.
-- `src/worker.py` - Added SQL INSERT/UPDATE to `BusinessMetricsHistory` after successful parsing.
-- `src/api/stage_progress_api.py` - Integrated auto-calculation.
-- `src/api/metrics_history_api.py` - Added smart legacy sync logic. Now handles empty strings (`''`) correctly by filtering them out in source and allowing overwrite of valid data over empty/null data in history.
-- `src/yandex_maps_scraper.py` - Improved `get_photos_count` robustness by adding multiple selectors for the "Photos" tab, aligning it with `parse_photos` logic.
-- `frontend/src/components/BusinessSwitcher.tsx` - Hidden network sub-locations from Superadmin dropdown (now consistent for all users).
-- `src/add_beauty_salon_strategy.py` - Updated growth plan texts to be geo-neutral (removed specific mentions of Yandex/Google/2GIS).
-- `frontend/src/i18n/locales/ru.ts` - Added missing translation keys for `aiChatPromotion` to fix frontend crash.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-13 - Исправление зацикливания парсинга и багов
-
-### Current Task
-Исправление проблемы, когда парсер "Оливер" зацикливался каждые 2-3 часа (Captcha -> Fallback -> Captcha Retry). Также обновление селекторов для отзывов и добавление утилиты для обновления email владельца.
-
-### Architecture Decision
-- **Fix Parsing Loop**: Изменен `worker.py`. Теперь, если обнаружена Капча, но успешно выполнен Fallback (через API кабинета), основная задача помечается как `done`, а не `captcha`. Это разрывает цикл повторений.
-- **Harden Selectors**: Обновлены селекторы в `yandex_maps_scraper.py` (review parsing) — добавлены wildcard селекторы `div[class*='business-review-view']` для повышения устойчивости к изменениям классов Яндекса.
-- **Scripted Updates**: Создан скрипт `src/scripts/update_oliver_email.py` для безопасного обновления email и установки пароля (с правильным хешированием через `auth_system.py`) на сервере.
-
-### Files to Modify
-- `src/worker.py` - Добавлена проверка `fallback_created` перед rescheduling on captcha.
-- `src/yandex_maps_scraper.py` - Улучшены селекторы парсинга отзывов.
-- `src/scripts/update_oliver_email.py` - Создан новый скрипт для обновления кредов.
-
-### Trade-offs & Decisions
-- **Fallback Marking**: Решение помечать задачу как `done` при успешном фоллбэке принято для остановки спама. Формально задача парсинга (Playwright) не выполнена, но бизнес-цель ("получить данные") достигнута через API.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-15 - Интеграция 2ГИС (Implementation)
-
-### Current Task
-Реализация боевого парсинга данных из личного кабинета 2ГИС.
-
-### Architecture Decision
-- Изменен подход с Direct API на **Browser Automation (Playwright)**. Причина: отсутствие документации по внутреннему API и сложность реверс-инжиниринга аутентификации.
-- `TwoGisBusinessParser` использует `playwright.sync_api` для запуска браузера, установки cookies из `auth_data` и перехвата сетевых ответов (`page.on("response", ...)`).
-- Интерфейс `TwoGisBusinessSyncWorker` остался прежним, но теперь он расшифровывает cookies и передает их в парсер.
-
-### Files to Modify
-- `src/two_gis_business_parser.py` - Переписан на Playwright. Реализован перехват сетевых запросов для получения отзывов.
-- `src/two_gis_business_sync_worker.py` - Обновлен для работы с реальным парсером.
-
-### Trade-offs & Decisions
-- **Browser Automation (Playwright)**:
-    - *Плюсы*: Надежность (эмуляция реального пользователя), не нужно ломать голову над подписью запросов.
-    - *Минусы*: Тяжелее и медленнее, чем requests. Требует установки браузеров.
-    - *Решение*: Выбрана надежность, так как 2ГИС часто меняет API и имеет сложную защиту.
-- **Network Interception**: Вместо парсинга HTML (DOM) используется перехват JSON ответов от внутреннего API, так как это более стабильно (структура JSON меняется реже, чем верстка).
-
-### Dependencies
-- Требуется `playwright` (уже есть в зависимостях) и установленные браузеры (`playwright install`).
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-15 - Fixing Profile Update and User Data Corruption
-
-### Current Task
-Debug and fix issue where updating the "Oliver" account profile name fails (reverts to "Alexander" or previous value).
-
-### Architecture Decision
-- Modify `/api/client-info` endpoint to prioritize reading contact info (name, phone, email) from the `BusinessProfiles` table.
-- This connects the write path (which uses `/api/business/<id>/profile` -> `BusinessProfiles`) with the read path (which previously ignored it).
-- Repair corrupted user record for `tislitskaya@yandex.ru` in `Users` table (shifted columns).
-
-### Files to Modify
-- `src/main.py` - Updated `client_info` function to query `BusinessProfiles` and override owner data if found.
-
-### Trade-offs & Decisions
-- **Consistency**: Ensures that profile updates made in the "Business Profile" section are actually displayed to the user.
-- **Data Integrity**: Repaired a specific user record that had data shifted across columns (phone in name column, etc.), restoring proper labeling.
-- **Backwards Compatibility**: The change in `client_info` falls back to `Users` table if no profile exists, preserving existing behavior for users who haven't updated their profile yet.
-
-### Dependencies
-- None. `BusinessProfiles` table schema was already defined in the codebase.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-15 - User Profile Link in Header
-
-### Current Task
-Add a link with the authenticated user's email in the dashboard header, pointing to the profile page.
-
-### Architecture Decision
-- Modified `DashboardHeader.tsx` (the logged-in header) to display `currentUser.email` as a link to `/dashboard/profile`.
-- Placed next to the `LanguageSwitcher` for visibility.
-
-### Files to Modify
-- `frontend/src/components/DashboardHeader.tsx` - Added `Link` import and rendering logic.
-
-### Trade-offs & Decisions
-- **UX**: Provides quick access to profile settings and clear indication of which account is logged in.
-
-### Status
-- [x] Completed
-
-## 2024-01-18 - Debugging and Fixing Yandex Maps Parser
-
-### Current Task
-Debug and fix the Yandex Maps parser to accurately scrape reviews, news, and photos count.
-
-### Architecture Decision
-- Enhance `parser_interception.py` to explicitly interact with UI tabs (Reviews, Photos, News) to trigger XHR requests.
-- Implement aggressive scrolling logic (30 scrolls) to ensure deep pagination.
-- Add specific CSS selectors for tabs to avoid text-based ambiguity.
-- Implement explicit extraction of `photos_count` from the tab text.
-
-### Files to Modify
-- `src/parser_interception.py` - Added tab interaction logic, deep scrolling, and photo count extraction.
-- `src/yandex_maps_scraper.py` - Updated review text selector (legacy parser).
-- `src/parser_config_cookies.py` - Updated with fresh session cookies.
-
-### Trade-offs & Decisions
-- **Interactive Parsing vs Passive**: Decided to make the interception parser "interactive" (clicking tabs) because Yandex now lazy-loads data only on tab activation.
-- **Performance**: Deep scrolling adds time (approx 30-40s) but is necessary for complete data.
-
-### Dependencies
-- Valid cookies in `src/parser_config_cookies.py` are critical.
-
-### Status
-- [x] Completed
-
-## 2024-01-18 - Restore Report Generation and Services Parsing
-
-### Current Task
-Restore client report generation and parse "Services/Prices" tab data.
-
-### Architecture Decision
-- **Services Parsing**: Added interaction with "Prices" tab (supports text fallbacks "Товары и услуги", "Цены"). Intercept `fetchGoods`, `prices`, and `search` API endpoints to extract products.
-- **Data Grouping**: Implemented grouping of flat product list into categories within `parser_interception.py` to match `report.py` expectations.
-- **Report Generation**: Updated `worker.py` to use `gigachat_analyzer` (Expert SEO Analysis) instead of simple rule-based analyzer for the new parsing flow.
-
-### Files to Modify
-- `src/parser_interception.py` - Added Services tab interaction, API extraction, and product grouping.
-- `src/worker.py` - Switched to `gigachat_analyzer` for legacy-compatible report generation.
-
-### Trade-offs & Decisions
-- **Services Extraction**: Yandex API structure varies. We intercept multiple endpoints (`search`, `fetchGoods`) and use a loose extraction heuristic to catch most cases.
-- **Report Quality**: Reverted to using GigaChat for analysis to ensure high-quality "Expert" reports as requested.
-
-### Dependencies
-- None.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-18 - Network Account Dashboard Features
-
-### Current Task
-Implement network-specific UI adaptations for master network accounts in 3 phases: profile indicators, blocked maps tab, and comprehensive network dashboard with Growth Plan integration.
-
-### Architecture Decision
-
-**Three-phase UI enhancement approach**:
-
-1. **Profile Indicators**: Add "(сеть)" badge to business information header 
-2. **Maps Tab Blocking**: Blur CardOverviewPage with modal directing to location selection
-3. **Network Dashboard**: Replace standard Progress view with network analytics for master accounts
-
-**Key Decision**: Leverage existing Growth Plan (Схема роста) system for network health validation
-
-- Growth Plan requirements define "ideal state" for each business type
-- Network dashboard compares location metrics vs. Growth Plan standards  
-- If no Growth Plan configured → show warning "Обратиться к администратору"
-- Enforces business-type-specific standards across all network locations
-
-### Files Modified
-
-#### Frontend Changes
-
-**[MODIFIED]** `frontend/src/pages/dashboard/ProfilePage.tsx`
-- Added "(сеть)" badge to business info header for network masters
-- Uses `isNetwork` state from `/api/business/${businessId}/network-locations`
-- Styled with orange theme: `bg-orange-50 border-orange-200`
-
-**[MODIFIED]** `frontend/src/pages/dashboard/CardOverviewPage.tsx`
-- Added `isNetworkMaster` detection via network-locations API
-- Fixed overlay (`z-50`) with blur effect and modal dialog
-- Content blurred (`blur-sm`) and disabled (`pointer-events-none`)
-- Network icon + message + CTA button to navigate to location selection
-
-**[MODIFIED]** `frontend/src/pages/dashboard/ProgressPage.tsx`
-- Added `isNetworkMaster` check and conditional routing
-- Network masters → NetworkDashboard, single locations → standard view
-- Imports existing `NetworkDashboard` component
-
-**[EXISTING]** `frontend/src/components/NetworkDashboard.tsx` 
-- Leveraged for network analytics with Growth Plan integration
-- Displays aggregated metrics and location health cards
-
-### Trade-offs & Decisions
-
-**1. Growth Plan Integration** ✅
-- **Decision**: Require Growth Plan for network dashboard
-- **Rationale**: Provides objective standards for location health
-- **Trade-off**: Adds setup requirement (admin must configure plan)
-- **Mitigation**: Clear warning with admin CTA
-
-**2. Health Status Algorithm**
-- **Decision**: Threshold-based scoring (healthy/warning/critical)
-- **Criteria**: Unanswered reviews > 0, rating < 4.5, photos < 5, no news
-- **Calculation**: 3+ flags → critical; 1+ flags → warning; 0 flags → healthy
-- **Future**: Could integrate Growth Plan task completion percentage
-
-**3. Maps Tab Blocking Approach** ✅
-- **Decision**: Full page blur + modal (not just disabled state)
-- **Rationale**: Strong visual signal of intentional unavailability
-- **Alternative**: Empty state → rejected (less clear)
-
-### Dependencies
-
-**No new npm dependencies** - uses existing:
-- shadcn/ui components (`Card`, `Button`)
-- `lucide-react` icons
-- Tailwind utilities for blur/styling
-
-**Backend API dependencies:**
-- `/api/business/${businessId}/network-locations` - network detection
-- `/api/networks/${networkId}/locations` - all locations list
-- `/api/networks/${networkId}/stats` - aggregated statistics
-- `/api/admin/growth-stages/${businessTypeId}` - Growth Plan config
-
-**Data requirements:**
-- `Businesses.network_id` populated for network relationships
-- Growth Plan configured for business type
-- Network stats endpoints correctly aggregating data
-
-### Status
-- [x] Completed
-
-**Commits:**
-- `325f5d6`: feat: Add network account UI indicators
-- `daf139c`: feat: Add Network Dashboard to Progress page
-
-### Future Enhancements
-
-1. **Deeper Growth Plan Integration**: Compare actual weekly metrics (photos, news) against plan requirements
-2. **Trend Charts**: NetworkReviewsChart, location comparison table
-3. **Alert Panel**: Dedicated panel listing all network issues
-4. **Admin Quick Actions**: Bulk reply, network-wide content scheduling
-
-**Technical Debt:**
-- TypeScript errors for missing `networkNotice` localization keys (non-blocking, fallbacks provided)
-- Could add refresh mechanism for network stats
-
-
-### 2026-01-19 - Исправление проблем с переводом (i18n)
-
-#### Current Task
-Устранение hardcoded строк (русский текст) в компонентах интерфейса для обеспечения полноценной поддержки многоязычности (9 языков).
-
-#### Architecture Decision
-- **Принято решение:** Систематическая замена жестко закодированных строк на вызовы функции перевода `t()`.
-- **Локализация:** Добавлены полные ключи для Russian (`ru.ts`) и English (`en.ts`) как основных языков. Остальные языки будут использовать английский fallack или требуют до-перевода.
-- **Структура ключей:** Иерархическая структура `dashboard.card.*`, `dashboard.finance.*`, `dashboard.settings.*` для логической группировки.
-
-#### Files to Modify
-- `frontend/src/i18n/locales/ru.ts` - добавлено ~150 ключей
-- `frontend/src/i18n/locales/en.ts` - добавлено ~150 ключей
-- `frontend/src/components/ReviewReplyAssistant.tsx` - полный рефакторинг UI текстов
-- `frontend/src/components/NewsGenerator.tsx` - полный рефакторинг UI текстов
-- `frontend/src/components/FinancialMetrics.tsx` - полный рефакторинг UI текстов
-- `frontend/src/pages/dashboard/ProgressPage.tsx` - заголовки разделов
-- `frontend/src/components/WABACredentials.tsx` - настройки WhatsApp
-- `frontend/src/components/TelegramBotCredentials.tsx` - настройки Telegram
-- `frontend/src/components/AIAgentsManagement.tsx` - настройки агентов
-
-#### Trade-offs & Decisions
-- **Скорость vs Охват языков:** Сфокусировались на полном покрытии UI ключами в RU/EN. Остальные 7 языков требуют обновления файлов локализации (сейчас там могут быть пропуски).
-- **Generic vs Specific:** В некоторых админских компонентах (Agents) использованы существующие общие ключи, чтобы не раздувать файлы локализации ради редких текстов.
-- **Безопасность изменений:** Использована автоматизированная замена (sed) для минимизации опечаток в больших файлах.
-
-#### Dependencies
-- Нет новых npm зависимостей.
-- Требуется пересборка фронтенда (`npm run build`).
-
-#### Status
-
----
-
-## 2026-01-19 - Debugging White Screen & Fix Import Warnings
-
-### Current Task
-Diagnose and fix the "White Screen" issue occurring after deployment. The app loads but renders a blank screen.
-
-### Architecture Decision
-- **Enhanced Diagnostics**: Deployed an upgraded `ErrorBoundary` that captures and displays runtime errors with stack traces directly in the UI (replacing the generic "blank" state).
-- **Import Fix**: Refactored `AIAgentSettings.tsx` to use **static import** of `newAuth` instead of dynamic `await import()`.
-  - **Reason**: Vite emitted warnings about `auth_new.ts` being both statically and dynamically imported. This ambiguity can cause module loading race conditions or undefined behaviors in production builds, potentially crashing the app at startup.
-
-### Files to Modify
-- `frontend/src/components/ErrorBoundary.tsx` - improved error visualization (red box with details).
-- `frontend/src/components/AIAgentSettings.tsx` - changed dynamic import to static.
-
-### Trade-offs & Decisions
-- **Static Import**: Increases initial bundle size slightly (vs dynamic), but guarantees `newAuth` is initialized consistently with `AIAgentsManagement`. Stability > micro-optimization of bundle size here.
-- **Visible Errors**: Exposing stack traces in production is generally bad practice, but necessary for this specific debugging session where SSH access logs are insufficient to see client-side failures. Will be reverted after fix.
-
-### Dependencies
-- None.
-
-### Status
-- [ ] In Progress (Waiting for user verification)
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-19 - Progress Tab Translation
-
-### Current Task
-Translate "Progress" tab components (`MetricsHistoryCharts.tsx` and `BusinessGrowthPlan.tsx`) to eliminate hardcoded Russian strings and use the `t()` function.
-
-### Architecture Decision
-- **Unified Translation Structure**: Adopted a nested structure in `en.ts` and `ru.ts` under `dashboard.progress` (e.g., `dashboard.progress.charts`, `dashboard.progress.growthPlan`) for better organization.
-- **Component Refactoring**:
-    - `MetricsHistoryCharts.tsx`: Added `useLanguage` hook, destructured `t`, and replaced strings.
-    - `BusinessGrowthPlan.tsx`: Added `useLanguage` hook, destructured `t`, and replaced strings.
-
-### Files to Modify
-- `frontend/src/i18n/locales/ru.ts` - Added keys for charts and growth plan.
-- `frontend/src/i18n/locales/en.ts` - Added corresponding English keys.
-- `frontend/src/components/MetricsHistoryCharts.tsx` - Replaced strings with `t()` calls.
-- `frontend/src/components/BusinessGrowthPlan.tsx` - Replaced strings with `t()` calls.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-14 - Localization Updates for Network & Parsing Management
-
-### Current Task
-Refactoring translation files to support Network and Parsing management features, and fixing syntax errors in locale files.
-
-### Architecture Decision
-- Added a global `common` object to `ru.ts` and `en.ts` for shared translations.
-- Merged new `network` management keys into the existing `network` object structure within `dashboard` to preserve existing analytics translations while supporting the new UI.
-- Updated `dashboard.network.title` to "Network Management" (was "Network Dashboard") to reflect the expanded functionality involved in managing networks, not just viewing stats.
-- Added a new `parsing` object to `dashboard` for the Parsing Management UI.
-- Fixed syntax errors (missing `export const` declarations and premature closing braces) in `ru.ts` and `en.ts`.
-
-### Files to Modify
-- `frontend/src/i18n/locales/ru.ts` - structure fixed, generic keys moved to `common`, `network` extended, `parsing` added.
-- `frontend/src/i18n/locales/en.ts` - structure fixed, generic keys moved to `common`, `network` extended, `parsing` added.
-
-### Trade-offs & Decisions
-- **Merging vs Separation**: Decided to merge the new `network` management keys into the existing `dashboard.network` object. This avoids namespace collision and allows `dashboard.network` to be the single source of truth for all network-related translations, though it mixes analytics and management keys.
-- **Title Update**: Changed the existing `title` from "Network Dashboard" to "Network Management". This was necessary for the new UI context. If the old analytics dashboard relies on this specific string, the context might slightly shift, but "Network Management" is broad enough to cover both.
-- **Structure Repair**: The files had syntax errors (missing exports) and nesting issues. These were fixed to restore compilation.
-
-### Dependencies
-- None. Pure frontend resource update.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-14 - Global Localization Updates (All Languages)
-
-### Current Task
-Applying the structural fixes and new translation keys (Network & Parsing) to all remaining language files: `fr.ts`, `es.ts`, `de.ts`, `el.ts`, `th.ts`, `ar.ts`, `ha.ts`.
-
-### Architecture Decision
-- **Consistent Structure**: Applied the same `common` root object and `dashboard.network` / `dashboard.parsing` structure to all files as established in `ru.ts`/`en.ts`.
-- **Syntax Correction**: Identified and fixed a syntax error where the key `2gis` was unquoted. It has been corrected to `"2gis"` in all updated files to ensure valid TypeScript objects.
-- **Fallbacks**: Used English translations for new technical keys (like Parsing management) where native translations were not immediately available, ensuring functionality is not blocked by missing text.
-- **Title Localization**: Preserved or updated the `dashboard.network.title` to the correct local language equivalents (e.g., "Netzwerkverwaltung" for German) where the term was already present or easily deducible.
-
-### Files to Modify
-- `frontend/src/i18n/locales/fr.ts`
-- `frontend/src/i18n/locales/es.ts`
-- `frontend/src/i18n/locales/de.ts`
-- `frontend/src/i18n/locales/el.ts`
-- `frontend/src/i18n/locales/th.ts`
-- `frontend/src/i18n/locales/ar.ts`
-- `frontend/src/i18n/locales/ha.ts`
-
-### Trade-offs & Decisions
-- **English Fallbacks**: Choosing to ship with English fallbacks for advanced/admin features (Parsing/Network management) allows us to release the feature globally without waiting for professional translation of technical terms.
-- **Quoted Keys**: The usage of numerical keys like `2gis` requires quotes. This was a critical fix to prevent build errors.
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-19 - Progress Tab Translations Fix
-
-### Current Task
-Fix "Russian text" appearing in "Progress" tab for non-English/Russian locales (e.g., German).
-
-### Architecture Decision
-- **Detected Issue**: The `dashboard.progress` section (Business Metrics, Growth Plan) was added to `ru.ts` and `en.ts` but missing from other locale files (`de`, `fr`, etc.), causing the UI to fall back to the default language (likely Russian or key names).
-- **Resolution**: Propagated the comprehensive `dashboard.progress` block from `en.ts` to all 7 other locale files (`fr.ts`, `es.ts`, `de.ts`, `el.ts`, `th.ts`, `ar.ts`, `ha.ts`). Used English as the fallback content to ensuring immediate usability.
-
-### Files to Modify
-- `frontend/src/i18n/locales/fr.ts`
-- `frontend/src/i18n/locales/es.ts`
-- `frontend/src/i18n/locales/de.ts`
-- `frontend/src/i18n/locales/el.ts`
-- `frontend/src/i18n/locales/th.ts`
-- `frontend/src/i18n/locales/ar.ts`
-- `frontend/src/i18n/locales/ha.ts`
-
-### Status
-- [x] Completed
-
----
-
-## 2026-01-13 - Comprehensive Localization Updates
-
-### Current Task
-Fixing remaining hardcoded Russian strings in "Progress", "Finance", "News", and "Settings" tabs, and propagating translation keys to all supported languages.
-
-### Architecture Decision
-- **Translation Propagation**: Expanded `common`, `dashboard.finance`, and `dashboard.progress` keys to all 9 locale files. Used English strings as fallback.
-- **Component Localization**: Replaced hardcoded strings with `t()` calls in `ROICalculator.tsx`, `TransactionTable.tsx`, `MetricsHistoryCharts.tsx`, `WABACredentials.tsx`, `TelegramBotCredentials.tsx`, `NewsGenerator.tsx`.
-- **Dynamic Formatting**: Implemented `useLanguage()` based date and currency formatting.
-
-### Files to Modify
-- `src/i18n/locales/*.ts` (all 9 files)
-- `src/components/ROICalculator.tsx`
-- `src/components/TransactionTable.tsx`
-- `src/components/MetricsHistoryCharts.tsx`
-- `src/components/WABACredentials.tsx`
-- `src/components/TelegramBotCredentials.tsx`
-- `src/components/NewsGenerator.tsx`
-
-### Trade-offs & Decisions
-- **English Fallback**: Chosen to use English for new keys in other languages to speed up implementation.
-- **Batched Updates**: Grouped updates by tab to minimize file edits.
-
-### Dependencies
-- None.
-
-### Status
-- [x] Completed
-
-## 2026-01-19 - Final Localization Polish
-
-### Current Task
-Eliminate remaining hardcoded strings in `FinancialMetrics.tsx` and translate English fallbacks in non-core languages (fr, de, es, el, th, ar, ha).
-
-### Architecture Decision
-- **Elimination of Fallbacks**: Replaced English fallback text in `dashboard.network` and `dashboard.parsing` sections for all non-English languages with native translations (Hausa, Arabic, Thai, French, German, Spanish, Greek).
-- **Financial Metrics**: Replaced hardcoded Russian headers with `t()` calls in `FinancialMetrics.tsx`.
-
-### Files Modified
-- `frontend/src/components/FinancialMetrics.tsx` - Removed Russian strings.
-- `frontend/src/i18n/locales/ha.ts` - Translated Network & Parsing.
-- `frontend/src/i18n/locales/ar.ts` - Translated Parsing.
-- `frontend/src/i18n/locales/th.ts` - Translated Parsing.
-- `frontend/src/i18n/locales/fr.ts` - Translated Parsing.
-- `frontend/src/i18n/locales/de.ts` - Translated Parsing.
-- `frontend/src/i18n/locales/es.ts` - Translated Parsing.
-- `frontend/src/i18n/locales/el.ts` - Translated Parsing.
-
-### Trade-offs & Decisions
-- **Manual Translation**: Used AI context to generate translations for technical terms in less common languages (Hausa, Thai), assuming standard terminology.
-- **Completeness**: Prioritized having translated UI over perfect linguistic accuracy for administrative features (Parsing/Network), to meet the "no English fallbacks" requirement.
-
-### Status
-- [x] Completed
-
-## 2026-01-19 - Growth Plan Stages Localization
-
-### Current Task  
-Translate dynamic Growth Plan stages (titles, descriptions, goals, tasks) from Russian database values to support all 9 languages.
-
-### Architecture Decision
-- **Frontend Translation Layer**: Instead of modifying the database, created a translation mapping in locale files that maps `stage_number` → localized content
-- **Component Modification**: Modified `BusinessGrowthPlan.tsx` to use `translateStage()` helper function that applies translations before rendering
-- **Fallback Strategy**: If translation doesn't exist for a stage, component falls back to database value (Russian)
-
-### Files Modified
-- `frontend/src/components/BusinessGrowthPlan.tsx` - Added `translateStage()` helper, applies translations in render loop
-- `frontend/src/i18n/locales/ru.ts` - Added `growthStages` object with Russian translations (from DB)
-- `frontend/src/i18n/locales/en.ts` - Added `growthStages` object with English translations
-- `frontend/src/i18n/locales/*.ts` (fr, es, de, el, th, ar, ha) - Added `growthStages` with English as temporary base
-
-### Trade-offs & Decisions
-- **Database vs Frontend**: Chose frontend translation over adding language columns to database
-  - **Pro**: Simpler implementation, no database migration needed, easier for translators to update
-  - **Con**: Large locale file size (+200 lines per language), but acceptable for 16 stages
-- **English as Temporary Base**: Non-English/Russian languages use English translations temporarily
-  - Can be replaced with native translations later without code changes
-  - Ensures UI displays properly in all languages immediately
-
-### Data Structure
-Each stage contains:
-- `title`, `description`, `goal`, `expectedResult`, `duration`: String fields
-- `tasks`: Array of task strings (5-10 tasks per stage)
-- Total: 16 stages for "beauty_salon" business type
-
-### Verification
-- ✅ Build passed (`npm run build` successful)
-- ✅ All 9 locale files updated with proper TypeScript syntax
-- ✅ Changes committed and pushed to `main` (commit `57371e5`)
-
-### Status
-- [x] Completed
-
-## 2026-01-19 - Network Health Dashboard + Playwright Headless Fix
-
-### Current Task
-Implement network health dashboard for Progress tab + fix critical Playwright parsing error.
-
-### Architecture Decision
-- Created `/api/network/health` and `/api/network/locations-alerts` endpoints
-- Added alert thresholds to BusinessTypes table (news/photos/reviews days)
-- Built NetworkHealthDashboard.tsx component (metric cards + location alerts)
-- Fixed Playwright parsing error: changed headless=False to headless=True (parser_interception.py, analyzer.py)
-- Integrated dashboard into Progress tab (replaced ProgressTracker)
-
-### Files Modified
-**Backend:**
-- `src/api/network_health_api.py` (NEW)
-- `src/main.py` - registered network_health_bp
-- `src/parser_interception.py` - line 71: headless=True
-- `src/analyzer.py` - line 402: headless=True
-- `src/reports.db` - added 3 columns to BusinessTypes
-
-**Frontend:**
-- `frontend/src/components/NetworkHealthDashboard.tsx` (NEW)
-- `frontend/src/pages/Dashboard.tsx` - integrated into Progress tab
-- `frontend/src/i18n/locales/ru.ts` - added networkHealth translations
-- `frontend/src/i18n/locales/en.ts` - added networkHealth translations
-- `frontend/package.json` - added react-i18next, i18next
-
-### Trade-offs
-- **Alert thresholds in BusinessTypes**: Simple but less flexible than separate table
-- **Replaced ProgressTracker**: Growth stages no longer visible (requested by user)
-- **Headless=True**: Cannot debug CAPTCHA visually on server, but required for Linux
-- **Russian-first localization**: Other languages use English fallback for now
-
-### Dependencies
-- Added: react-i18next, i18next (frontend)
-- DB migration: 3 new columns in BusinessTypes table
-
-### Status
-- [x] Completed
-- Commit: a236cdb
-- Pushed to main
-- Pending server deployment
-
-
-## 2026-01-20 - Debugging Frontend Deployment & Network Health Dashboard
-
-### Current Task
-Deploying the Network Health Dashboard and resolving persistent issues where frontend updates were not reflecting in the browser.
-
-### Architecture Decision
-- **Cache Busting Strategy**: Implemented aggressive cache busting by manually versioning build artifacts (`index-TIMESTAMP.js`) and updating `index.html`. This bypasses Nginx's `immutable` cache headers which were preventing updates.
-- **Component Association**: Identified that the `/dashboard/progress` route is handled by `ProgressPage.tsx`, not `Dashboard.tsx` (legacy). Switched implementation to `ProgressPage.tsx`.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/ProgressPage.tsx` - Updated to render `NetworkHealthDashboard` and `FinancialMetrics`.
-- `frontend/src/components/NetworkHealthDashboard.tsx` - Full implementation of the network health metrics.
-- `frontend/src/i18n/locales/*.ts` - Fixed duplicate `growthStages` keys in all languages.
-
-### Trade-offs & Decisions
-- **Manual Cache Busting vs Config Change**: Chosen to force-rename files via script (`sed` in `index.html`) rather than risking Nginx config changes on a live production server without full access to reload strategies.
-- **Direct SCP vs Git Pull**: Used `scp` for rapid iteration during debugging to bypass potential git/build pipeline latency or state mismatches.
-
-### Dependencies
-- No new external dependencies.
-- valid `auth_new` library usage in `ProgressPage.tsx`.
-
-### Debugging Learnings (Root Cause Analysis)
-1.  **Nginx Caching**: The server configuration has `expires 1y; add_header Cache-Control "public, immutable";` for assets. Rebuilding Vite apps often produces the same filename (`index-HASH.js`) if code changes are minor. Nginx (and browsers) ignored the new content because the filename didn't change.
-    *   *Fix*: Appending a timestamp to the filename (`mv old.js new-123.js`) forces a fresh download.
-2.  **Routing Mismatch**: The project has legacy (`Dashboard.tsx`) and new (`dashboard/ProgressPage.tsx`) routing. We were editing the legacy file while the app was routing to the new one.
-    *   *Fix*: Identified correct component via `grep "Управление сетью"` and updated `ProgressPage.tsx`.
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - Yandex Maps 5-Star Growth Strategy
-
-### Current Task
-Implement the new "5 Stars on Yandex Maps" growth strategy guide as actionable stages and tasks in the application.
-
-### Architecture Decision
-- **Schema Extension**: Extended `GrowthTasks` table with `check_logic`, `reward_value`, `reward_type`, `tooltip`, `link_url`, `link_text`, `is_auto_verifiable` to support rich task features.
-- **Content Population**: Created a dedicated script `populate_yandex_growth.py` to parse and insert the specific Yandex guide content, keeping content separation from logic.
-- **Frontend Enhancement**: Updated `BusinessGrowthPlan.tsx` to render rich task details (tooltips, time-saved rewards) and adapted the data interface.
-
-### Files to Modify
-- `src/init_database_schema.py` - Checked base schema.
-- `src/scripts/migrate_growth_tasks_schema.py` - Created migration for new columns.
-- `src/api/growth_api.py` - Updated API to expose new fields.
-- `src/scripts/populate_yandex_growth.py` - Created content population script.
-- `frontend/src/components/BusinessGrowthPlan.tsx` - Updated UI to show tooltips and rewards.
-
-### Trade-offs & Decisions
-- **Database Schema vs JSON**: Selected explicit columns/schema extension for `GrowthTasks` over a JSON blob for better queryability and data integrity.
-- **Russian-Native Content**: The provided guide is in Russian. Populated directly into DB. Frontend translation logic falls back to DB values, which is acceptable for the target audience.
-
-### Dependencies
-- No new external dependencies.
-- Requires running migration and population scripts once.
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - UI/UX Pro Enhancements
-
-### Current Task
-Enhance the UI/UX of the "Growth Plan" using professional design standards (glassmorphism, advanced typography, iconic consistency).
-
-### Architecture Decision
-- **Design Tokens**: Created `frontend/src/lib/design-tokens.ts` to centralize "Pro" styles (glassmorphism, gradients, motion).
-- **Iconography**: Replaced 100% of emojis in `BusinessGrowthPlan.tsx` with `lucide-react` SVG icons for vector consistency.
-- **Glassmorphism**: Applied backdrop-blur and translucent backgrounds to cards and tooltips using the new tokens.
-
-### Files to Modify
-- `frontend/src/lib/design-tokens.ts` (NEW) - Central design system configs.
-- `frontend/src/components/BusinessGrowthPlan.tsx` - Refactored to use new tokens and icons.
-
-### Trade-offs & Decisions
-- **Standard Icons**: Chose Lucide items over custom SVGs for immediate consistency with the rest of the generic UI.
-- **Tailwind Extension**: Used `clsx` + `tailwind-merge` (standard `cn` utility) for dynamic class composition.
-
-### Dependencies
-- `lucide-react`, `clsx`, `tailwind-merge` (already present in package.json).
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - Fix Deployment Script (UI Not Updating)
-
-### Current Task
-The UI was not updating on the server because the accumulated build artifacts in `frontend/dist` were not being copied to the Nginx web root `/var/www/html`.
-
-### Architecture Decision
-Updated `deploy_network_health.sh` to explicitly clean and copy the new build to the web root.
-
-### Files to Modify
-- `deploy_network_health.sh` - added `cp -r dist/* /var/www/html/`
-
-### Status
-- [x] Completed
-
-### Fix Database Population
-The `populate_yandex_growth.py` script failed because of Foreign Key constraints.
-- Updated script to delete `GrowthTasks` before deleting `GrowthStages`.
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - Interactive Growth Plan
-
-### Current Task
-Make the Growth Stages interactive so checks (Rating 4.5, 15 Reviews) are verified automatically against real data.
-
-### Architecture Decision
-- **Safe Read-Only Logic**: The check logic runs on-the-fly in `get_business_stages` API.
-- **Frontend**: Updated `BusinessGrowthPlan.tsx` to show green checkmarks ✅ for completed tasks.
-
-### Files to Modify
-- `src/api/growth_api.py` - Added `check_task_status` logic.
-- `frontend/src/components/BusinessGrowthPlan.tsx` - Added visual completion states and removed manual toggle.
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - Merging Growth Plans
-
-### Current Task
-User requested to combine the new Yandex "5 Stars" plan (5 stages) with the previous extensive growth plan (formerly stages 3-16), keeping the new ones as 1-5 and appending the old ones as 6-19.
-
-### Architecture Decision
-- Modified `populate_yandex_growth.py`:
-    - Kept the new interactive Yandex stages (1-5).
-    - Appended the old stages from `ru.ts` (formerly 3-16) as new stages 6-19.
-    - Converted old stages to the new `GrowthTasks` format in the Python script.
-    - Set `check_logic = 'manual_check'` for old stages (since they don't have auto-verification logic yet).
-    - Used `.get('tooltip')` to handle missing tooltips in old tasks.
-
-### Files to Modify
-- `src/scripts/populate_yandex_growth.py` - Added 14 old stages to the population list.
-
-### Trade-offs & Decisions
-- **Manual vs Auto**: Old stages are restored as "Manual Check" tasks. This preserves the content but doesn't block the user (they can manually check them off).
-- **Hardcoding vs DB**: Moving everything to DB means we have a single source of truth and removed the conflict with `ru.ts`.
-
-### Dependencies
-- None.
-
-### Status
-- [x] Completed
-
-## 2026-01-20 - UI/UX Pro Enhancements (Settings, Profile, Card)
-
-### Current Task
-Refactoring the `/dashboard/settings`, `/dashboard/profile`, and `/dashboard/card` pages to align with the new "Pro" design standard.
-
-### Architecture Decision
-- **Settings Page**: Replaced inline styles with `DESIGN_TOKENS`, added Lucide icons, glassmorphism.
-- **Profile Page**: Refactored logic-preserving `ProfilePage.tsx` with glassmorphism. **Updated gradient** to Orange/Gold (user preference).
-- **Card Page**: Complete rewrite of `CardOverviewPage.tsx` using specialized "Pro" glass components, refined typography, and Lucide icons suitable for service management.
-- **Localization**: Ensured `t.common.error` is used for consistent error messaging.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/SettingsPage.tsx`
-- `frontend/src/components/SubscriptionManagement.tsx`
-- `frontend/src/components/AIAgentSettings.tsx`
-- `frontend/src/pages/dashboard/ProfilePage.tsx`
+- `src/migrations/add_wordstat_table.py` [NEW]
+- `src/init_database_schema.py`
+- `src/update_wordstat_data.py`
+- `src/api/wordstat_api.py` [NEW]
+- `src/main.py`
+- `frontend/src/components/SEOKeywordsTab.tsx` [NEW]
 - `frontend/src/pages/dashboard/CardOverviewPage.tsx`
 
-### Trade-offs & Decisions
-- **Visual Consistency**: Unified all main dashboard pages under the same design system (`design-tokens.ts`).
-- **User Preference**: Switched Profile completion banner to Orange/Gold to match "Progress" tab as requested.
-
-### Dependencies
-- `lucide-react`, `clsx`, `tailwind-merge`
-
 ### Status
-- [x] Completed (Local Code)
-- [ ] Deployment (Manual Git Pull Required)
+- [x] Completed
 
-## 2026-01-20 - UI/UX Pro Enhancements (Reviews & News)
+## 2026-01-23 - Bug Fixes (Parsing & Wordstat)
 
 ### Current Task
-Completing the "Pro" redesign for the `/dashboard/card` page by refactoring the Reviews and News child components.
+Fixing "Not Found" error in SEO tab and incorrect price parsing (120000 instead of 1200).
 
 ### Architecture Decision
-- **ReviewReplyAssistant**: Redesigned to use glass settings panel, quick generator, and card-based layout for reviews. Added detailed `Lucide` icons.
-- **NewsGenerator**: Redesigned utilizing a 2-column settings layout, gradient action buttons, and clean card lists for generated/external news.
-- **Consistency**: Both components now share the same visual language as `CardOverviewPage`.
+1.  **Price Parsing**: Modified `yandex_business_sync_worker.py` to remove `* 100` multiplication. Prices are now stored as is (e.g. 1200).
+2.  **API Not Found**: Identified as server restart issue.
 
 ### Files to Modify
-- `frontend/src/components/ReviewReplyAssistant.tsx`
-- `frontend/src/components/NewsGenerator.tsx`
-
-### Status
-- [x] Completed (Local Code)
-- [ ] Deployment (Manual Git Pull Required)
-
-
-## 2026-01-22 - UI Polish & Landing Page Redesign
-
-### Current Task
-Refine UI/UX of Profile and Card pages (Network Points visibility, scrollbars, button colors) and redesign the Landing Page (Hero section) to match "Pro" standards.
-
-### Architecture Decision
-- **Network Points Visibility**: Implemented logic in `ProfilePage.tsx` to conditionally render network points only for the parent account (`isNetworkMaster`).
-- **Button Colors**: Updated primary action buttons in `CardOverviewPage`, `ReviewReplyAssistant`, `NewsGenerator`, and `Hero` to use an orange/amber gradient (`from-amber-500 to-orange-600`) instead of blue/violet.
-- **Scrollbars**: Removed visible scrollbars from tabs in `CardOverviewPage` using `[&::-webkit-scrollbar]:hidden` utility class for cleaner UI.
-- **Landing Page (Hero)**: Refactored `Hero.tsx` to use glassmorphism for the form container and applied the new color scheme. Added `networkNotice` to translation files to support `CardOverviewPage` alerts.
-
-### Files to Modify
-- `frontend/src/pages/dashboard/ProfilePage.tsx` - added conditional rendering for network points.
-- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - button colors, scrollbar removal.
-- `frontend/src/components/ReviewReplyAssistant.tsx` - button colors.
-- `frontend/src/components/NewsGenerator.tsx` - button colors.
-- `frontend/src/components/Hero.tsx` - landing page refactoring (glassmorphism, colors).
-- `frontend/src/i18n/locales/en.ts`, `ru.ts` - added `networkNotice` translation object.
+- `src/yandex_business_sync_worker.py`
+- `src/worker.py` (Fix: missing commit for external data, deterministic IDs for reviews)
 
 ### Trade-offs & Decisions
-- **Modifying Translations**: Added `networkNotice` to translations to fix runtime errors and support the UI update in `CardOverviewPage`, ensuring internationalization consistency.
-- **Glassmorphism**: Applied lightweight glassmorphism using Tailwind/CSS utilities (`backdrop-blur`, `bg-white/70`) which assumes modern browser support (standard today).
+- **Fix (Data Loss)**: `worker.py` was failing to commit transactions for Reviews, News, and Stats (processed via `db_manager`), causing them to disappear despite successful parsing. Added explicit `commit()`.
+- **Fix (Duplicates)**: Changed review ID generation to `uuid5` (deterministic hash of content) to prevent creating 652+ duplicates on repeated parses.
+- **Fix (UI Limits)**: Increased `CardOverviewPage` services limit from 10 to 50 to ensure all services are displayed.
+- **Fix (Deadlock)**: Added intermediate `conn.commit()` in `worker.py` to release SQLite write lock before initializing `DatabaseManager` for detailed data saving.
+- **Fix (Infinite Parser Loop)**: Implemented in-memory deduplication in `yandex_maps_scraper.py` to handle infinite scroll duplication, preventing 6X duplicated data.
+
+### Status
+- [x] Completed
+
+## 2026-01-23 - Fix 500 Error in Metrics History
+
+### Current Task
+User reported 500 Internal Server Error when loading metrics history.
+Diagnosis: `ValueError: could not convert string to float: ''` in `src/api/metrics_history_api.py`.
+
+### Architecture Decision
+- **Root Cause**: `MapParseResults` table can contain empty strings for ratings. The API attempted `float('')`.
+- **Fix**: Added explicit check `if row[2] != ''` before conversion in `metrics_history_api.py`.
+
+### Files to Modify
+- `src/api/metrics_history_api.py`
+
+### Status
+- [x] Completed
+
+## 2026-01-26 - Fix Infinite Loading (DB Deadlock) & Missing Data Tables
+
+### Current Task
+1.  **Infinite Loading**: User reported "spinning" loading screen. Diagnosis: `src/main.py` was executing `CREATE TABLE IF NOT EXISTS` inside an API route, causing lock contention with the worker process.
+2.  **Missing Data**: "Work with Maps" tab was empty despite parser "History" showing 144 reviews. Diagnosis: `ExternalBusinessPosts`, `ExternalBusinessPhotos` tables were missing from the database.
+
+### Architecture Decision
+1.  **Deadlock Fix**: Use `safe_migrate` pattern for table creation instead of ad-hoc DDL in API handlers.
+    *   Moved `BusinessOptimizationWizard` table creation to `src/migrate_create_wizard_table.py`.
+    *   Removed `CREATE TABLE` logic from `src/main.py`.
+2.  **Missing Tables Fix**: Created safe migration `src/migrate_create_missing_external_tables.py` to create `ExternalBusinessPosts` and `ExternalBusinessPhotos`.
+
+### Files to Modify
+- `src/main.py` (Removed unsafe DDL)
+- `src/migrate_create_wizard_table.py` [NEW]
+- `src/migrate_create_missing_external_tables.py` [NEW]
+
+### Trade-offs & Decisions
+- **Safety**: `safe_migrate` ensures backups are created before schema changes.
+- **Performance**: Removing DDL from hot paths (API routes) eliminates lock waiting time.
 
 ### Dependencies
-- No new package dependencies.
-- Relies on existing `DESIGN_TOKENS` and `cn` utility.
+- None.
+
+### Status
+- [x] Completed
+## 2026-01-26 - Fix Backend Crash (Missing Dependency)
+
+### Current Task
+User reported "Connection Refused" and backend failing to start.
+Logs showed `ModuleNotFoundError: No module named 'apify_client'`.
+
+### Architecture Decision
+- The `apify-client` library was used in `prospecting_service.py` but was missing from the environment.
+- **Fix**: Installed `apify-client` and `cryptography`. Updated `requirements.txt`.
+- **Path Fix**: Also corrected `start_servers.sh` which was pointing to an incorrect directory.
+
+### Files to Modify
+- `requirements.txt`
+- `start_servers.sh`
+
+### Status
+- [x] Completed
+## 2026-01-26 - Fix React Key Warning
+
+### Current Task
+User reported "Warning: Each child in a list should have a unique 'key' prop" in `BusinessGrowthPlan`.
+
+### Architecture Decision
+- The tasks list rendering in `BusinessGrowthPlan.tsx` used `task.number` as a key. If data had duplicates or issues, this caused a warning.
+- **Fix**: Updated key generation to be robust: `key={task.id || \`task-${task.number}-${tIdx}\`}`.
+
+### Files to Modify
+- `frontend/src/components/BusinessGrowthPlan.tsx`
+
+### Status
+- [x] Completed
+## 2026-01-26 - Исправление отображения статуса верификации в истории парсинга
+
+### Current Task
+В таблице "История парсинга" (Work with Maps -> Отчеты) не отображалась "Синяя галочка" верификации, хотя бэкенд собирал эти данные. Также требовалось убедиться в корректности отображения количества отзывов.
+
+### Architecture Decision
+- Добавлена иконка `CheckCircle2` (синяя галочка) рядом с URL в таблице `MapParseTable`.
+- Иконка отображается условно, если флаг `isVerified` равен `true`.
+- Используется библиотека `lucide-react` для иконок, соответствующая дизайн-системе проекта.
+
+### Files to Modify
+- `frontend/src/components/MapParseTable.tsx` - добавлен импорт иконки и логика отображения.
+
+### Trade-offs & Decisions
+- **UX**: Галочка размещена рядом с URL, так как это логичное место для статуса подтверждения сущности (карточки).
+- **Производительность**: Изменения минимальны (клиентский рендеринг), не влияют на API.
+
+### Dependencies
+- Нет новых зависимостей (используется существующая `lucide-react`).
+
+### Status
+- [x] Completed
+## 2026-01-26 - Синхронизация распарсенных данных с UI (Услуги, Новости, Отзывы)
+
+### Current Task
+Обеспечить отображение данных из парсера (услуги, отзывы, новости) в соответствующих вкладках раздела "Работа с картами" (CardOverviewPage).
+
+### Architecture Decision
+1.  **Backend (`src/main.py`)**:
+    - Обновлен метод `get_services`: теперь он возвращает не только пользовательские услуги, но и спарсенные из `ExternalBusinessServices`.
+    - Добавлен метод `get_external_posts`: возвращает новости из `ExternalBusinessPosts` (ранее endpoint отсутствовал).
+    - Endpoint для отзывов (`get_external_reviews`) уже существовал и работал корректно.
+
+2.  **Frontend (`CardOverviewPage.tsx`)**:
+    - Обновлена функция `loadUserServices`: теперь она объединяет пользовательские и внешние услуги в единый список для отображения.
+    - Добавлена функция `loadExternalPosts`: загружает новости и передает их в компонент `NewsGenerator`.
+    - Компонент `ReviewReplyAssistant` работает автономно и уже загружает отзывы с правильного endpoint'а.
+
+### Files to Modify
+- `src/main.py` - добавление `get_external_posts` и обновление `get_services`.
+- `frontend/src/pages/dashboard/CardOverviewPage.tsx` - логика загрузки и передачи данных.
+
+### Trade-offs & Decisions
+- **Объединение услуг**: Внешние услуги пока просто добавляются в общий список. В будущем может потребоваться UI для их "импорта" или редактирования, но сейчас цель - просто показать.
+- **Монолитный `main.py`**: Новые методы добавлены в `main.py` для консистентности с текущей структурой, хотя лучше было бы вынести их в `src/api/`. Рефакторинг отложен.
+
+### Dependencies
+- Нет новых зависимостей.
+
+### Status
+- [x] Completed
+
+## 2026-01-26 - Server Deployment Recovery & React Fixes
+
+### Current Task
+Recover server state after failed deployment. Issues: 500 Internal Server Error (caused by missing DB tables), missing "Prospecting" tab (caused by build failure/bad cache), and missing Verification Badge data.
+
+### Architecture Decision
+1.  **Server Recovery Strategy**: Adopted "Hard Reset" approach (`git reset --hard origin/main`) on server to guarantee code synchronization, followed by explicit migration execution and clean frontend rebuild.
+2.  **React Build Fixes**: Fixed absolute path imports (`@/i18n/...`) in `ProspectingManagement.tsx` and `ParsingManagement.tsx` which were causing silent build failures or runtime errors (Error #300, #310). Changed to relative paths.
+3.  **Missing Data Fix**: Identified that `ExternalBusinessPosts` and `UserNews` tables were missing on production DB. Created/ran `migrate_create_missing_external_tables.py`.
+
+### Files to Modify
+- `frontend/src/pages/dashboard/ProspectingManagement.tsx` (Fix imports)
+- `frontend/src/components/ParsingManagement.tsx` (Fix imports)
+- `src/migrate_create_missing_external_tables.py` [NEW]
+
+### Dependencies
+- None.
+
+### Status
+- [x] Completed
+
+## 2026-01-26 - Feature: Verification Badge (Blue Checkmark)
+
+### Current Task
+Add support for capturing and displaying "Blue Checkmark" (verification status) from Yandex Maps. It worked locally (Legacy scraper) but not on server (Interception parser).
+
+### Architecture Decision
+1.  **Database**: Added `is_verified` column (INTEGER) to `MapParseResults` table via new migration.
+2.  **Parser (Interception)**: Injected HTML-based verification check into `parser_interception.py` (since JSON structure for verification is obscure/variable). It now scrapes the badge selector from the loaded page before closing the browser.
+3.  **Parser (Legacy)**: Already supported this.
+4.  **Worker**: Updated `worker.py` to persist the `is_verified` flag to the database.
+
+### Files to Modify
+- `src/migrations/add_verification_column.py` [NEW]
+- `src/parser_interception.py`
+- `src/worker.py`
+
+### Trade-offs & Decisions
+- **Hybrid Parsing**: Even in "Interception" mode (which relies on network logs), we now do a quick DOM query for the badge. This is a pragmatic hybrid approach to ensure data completeness without full DOM scraping penalty.
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - Fix Pricing Display & Translation Issues
+
+### Current Task
+User requested fixes for pricing display:
+1.  **Separate Starter Plan Price**: Isolate price from title string (e.g. "Starter - $5" -> "Starter").
+2.  **Standardize Pricing**: Fix inconsistent price for Starter ($5 vs $15) in non-RU locales.
+3.  **Complete Professional Plan**: Add missing description points (4 lines missing in EN/TH/DE).
+
+### Architecture Decision
+1.  **About.tsx Refactor**: Updated `About.tsx` to use dynamic translation keys (`t.about.pricingOption0Title/Price` etc.) for Professional and Concierge plans in non-Russian languages. Kept hardcoded Russian strings (`isRu ? ...`) to minimize risk of regressions for the primary audience, but enabled dynamic content for others.
+2.  **Translation Update**: Updated `en.ts`, `th.ts`, `de.ts` to split merged strings (e.g. "Title $XX") into separate `Title` and `Price` keys. Added missing usage points for Professional plan.
+
+### Files to Modify
+- `frontend/src/i18n/locales/en.ts`
+- `frontend/src/i18n/locales/th.ts`
+- `frontend/src/i18n/locales/de.ts`
+- `frontend/src/pages/About.tsx`
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - Database Schema Integrity Verification
+
+### Current Task
+Verify if all necessary tables are present via `init_database_schema.py` and detect any missing ones that caused parser issues.
+
+### Architecture Decision
+- **UserNews Table**: Identified as missing from `init_database_schema.py` but created ad-hoc in `main.py` (concurrency risk). Added to `init` schema and created migration.
+- **TokenUsage Table**: Identified as missing but optional (handled in code). Prioritized `UserNews` fix.
+- **Migration Strategy**: Use `safe_migrate` with `sqlite3` fallback for adding columns (handling `CURRENT_TIMESTAMP` limitation in SQLite).
+
+### Files to Modify
+- `src/init_database_schema.py` - Added `UserNews` table definition.
+- `src/migrate_create_user_news.py` - [NEW] Migration to create `UserNews` or adds `updated_at` column if missing.
+
+### Trade-offs & Decisions
+- **Consistency**: Centralizing schema in `init_database_schema.py` prevents future "ghost tables" created only by runtime code.
+- **Safety**: Migration script handles `updated_at` backfill to avoid limits of SQLite `ADD COLUMN`.
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - MapParserResults Schema Fix
+
+### Current Task
+Fix `sqlite3.OperationalError: table MapParseResults has no column named title`.
+
+### Architecture Decision
+- **Missing Columns**: `title`, `address`, and `analysis_json` were missing from the production schema for `MapParseResults`.
+- **Typo Confusion**: Error message referenced `MapParserResults` (extra 'r') in UI, but DB table is `MapParseResults` and was missing columns.
+- **Fix**: Added columns to `init_database_schema.py` and created `src/migrate_fix_map_parse_results.py`.
+
+### Files to Modify
+- `src/init_database_schema.py` - Added 3 missing columns.
+- `src/migrate_fix_map_parse_results.py` - [NEW] Migration script.
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - Fix Services in Manual Parser (Working with Maps)
+
+### Current Task
+User reported that "Services" were still missing in the report for "Working with Maps" (manual parsing), while Reviews and News appeared.
+
+### Architecture Decision
+- Identified that `src/yandex_maps_scraper.py` (Manual Parser) completely lacked logic to extract products/services (unlike the API parser).
+- Implemented `parse_products` function in `yandex_maps_scraper.py`.
+- Supports parsing from "Prices", "Products", or "Services" tabs.
+- Extracts categories and items (name, price, description).
+- Updated `parse_yandex_card` to call `parse_products` and populate `data['products']`, which is then synced to `UserServices` by `worker.py`.
+
+### Files to Modify
+- `src/yandex_maps_scraper.py` - added `parse_products` and updated main parsing function.
+
+### Trade-offs & Decisions
+- **Robustness**: Uses multiple selectors for tab names and item structures to handle Yandex Maps variations.
+- **Performance**: Adds a few seconds to parsing time to click the tab and scroll, but necessary for data completeness.
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - Fix Services in Worker (Variable Scope)
+
+### Current Task
+Services were still missing after the parser update.
+
+### Architecture Decision
+- Identified a critical bug in `worker.py`: the `products` variable used in the services sync block (`if products:`) was **undefined** in the scope of the manual processing block.
+- It was assumed to be extracted from `card_data` but the line `products = card_data.get('products')` was missing.
+
+### Files to Modify
+- `src/worker.py` - added proper extraction of `products` from `card_data`.
 
 ### Status
 - [x] Completed

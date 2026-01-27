@@ -47,6 +47,36 @@
 
 ## История упрощений
 
+### 2026-01-24 - Оптимизация состояния базы данных (DB Schema Simplification)
+
+**Источник:** Навык `.cursor/docs/SIMPLIFICATION.md` + запрос пользователя на оптимизацию.
+
+#### Файлы, которые запускались
+- `src/migrate_add_missing_indexes.py` - добавление индексов
+- `src/migrate_remove_duplicate_tables.py` - удаление дублирующих таблиц
+- `src/migrate_merge_examples_tables.py` - объединение таблиц примеров
+
+#### Что было упрощено
+1. **Удалены дублирующие таблицы:**
+   - `ClientInfo` (данные перенесены в Businesses или удалены за ненадобностью)
+   - `GigaChatTokenUsage` (дубликат TokenUsage)
+   - `Cards` (устаревшая таблица парсинга)
+
+2. **Объединены таблицы примеров:**
+   - Удалены: `UserNewsExamples`, `UserReviewExamples`, `UserServiceExamples`
+   - Все данные теперь живут в единой таблице `UserExamples` с полем `example_type`
+
+3. **Добавлены индексы:**
+   - Создано 6 недостающих индексов для ускорения выборок (включая `idx_user_sessions_token`, `idx_businesses_active`)
+
+#### Результаты
+- **Удалено таблиц:** 6 штук (`ClientInfo`, `GigaChatTokenUsage`, `Cards`, `UserNewsExamples`, `UserReviewExamples`, `UserServiceExamples`)
+- **Текущее количество таблиц:** ~36 (было 42)
+- **Улучшена производительность:** За счет добавления индексов и уменьшения размера БД.
+- **Упрощена схема:** Меньше сущностей, централизованное хранение примеров.
+
+---
+
 ### 2026-01-10 - Упрощение кода после реализации Progress Page UX Redesign
 
 **Источник:** Реализация gamified Business Growth Plan и Metrics History Charts

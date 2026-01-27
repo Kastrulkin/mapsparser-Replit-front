@@ -258,6 +258,7 @@ def parse_yandex_card(url: str) -> dict:
             data['photos_count'] = get_photos_count(page)
             data['photos'] = parse_photos(page)
             # data['photos'] = []
+            data['products'] = parse_products(page)
             data['features_full'] = parse_features(page)
             data['competitors'] = parse_competitors(page)
 
@@ -1398,13 +1399,13 @@ def parse_features(page):
         features = []
         feature_blocks = page.query_selector_all("[class*='features-view__item']")
         for block in feature_blocks:
-            name_el = block.query_selector("[class*='features-view__item-title']")
-            value_el = block.query_selector("[class*='features-view__item-value']")
-            name = name_el.inner_text().strip() if name_el else ''
-            value = value_el.inner_text().strip() if value_el else ''
-            if name or value:
-                features.append({"name": name, "value": value})
-
+            title = block.query_selector("div.features-view__name, div.card-feature-view__name")
+            val = block.query_selector("div.features-view__value, div.card-feature-view__value")
+            if title:
+                t = title.inner_text().strip()
+                v = val.inner_text().strip() if val else "Да"
+                features.append({"name": t, "value": v})
+                
         # Парсинг булевых особенностей (галочки с типом)
         features_bool = []
         bool_items = page.query_selector_all("div.business-features-view__bool-item")
@@ -1467,6 +1468,158 @@ def parse_features(page):
             "prices": [],
             "categories": []
         }
+
+def parse_products(page):
+    """Парсинг товаров и услуг"""
+    print("Начинаем парсинг услуг/товаров...")
+    try:
+        # 1. Поиск и клик по вкладке "Цены" или "Товары"
+        products_tab_selectors = [
+            "div[role='tab']:has-text('Цены')",
+            "div[role='tab']:has-text('Товары')",
+            "div[role='tab']:has-text('Услуги')",
+            "button:has-text('Цены')",
+            "div.tabs-select-view__title._name_prices",
+            "div.tabs-select-view__title._name_products"
+        ]
+        
+        products_tab = None
+        for selector in products_tab_selectors:
+            try:
+                products_tab = page.query_selector(selector)
+                if products_tab and products_tab.is_visible():
+                    print(f"Найдена вкладка услуг: {selector}")
+                    break
+            except:
+                continue
+                
+        if products_tab:
+            try:
+                products_tab.click()
+                print("Клик по вкладке услуг")
+                page.wait_for_timeout(2000)
+                
+                # Скролл для подгрузки
+                for i in range(3):
+                    page.mouse.wheel(0, 1000)
+                    time.sleep(1)
+            except Exception as e:
+                print(f"Ошибка при клике/скролле услуг: {e}")
+        else:
+            print("Вкладка 'Цены/Товары' не найдена")
+
+        products = []
+        
+        # 2. Парсинг категорий и товаров
+        # Попробуем найти контейнеры категорий
+        category_selectors = [
+            "div.business-full-items-view__category",
+            "div.related-items-view__category",
+            "div.business-prices-view__category"
+        ]
+        
+        found_categories = False
+        
+        for cat_selector in category_selectors:
+            cat_blocks = page.query_selector_all(cat_selector)
+            if cat_blocks:
+                found_categories = True
+                print(f"Найдено {len(cat_blocks)} категорий по селектору {cat_selector}")
+                
+                for block in cat_blocks:
+                    try:
+                        cat_title_el = block.query_selector("div.business-full-items-view__category-title, div.related-items-view__category-title, h2")
+                        cat_name = cat_title_el.inner_text().strip() if cat_title_el else "Разное"
+                        
+                        items_in_cat = []
+                        # Ищем товары внутри категории
+                        item_selectors = [
+                            "div.business-full-items-view__item",
+                            "div.related-item-view",
+                            "div.business-prices-view__item"
+                        ]
+                        
+                        for item_sel in item_selectors:
+                            item_els = block.query_selector_all(item_sel)
+                            for item_el in item_els:
+                                try:
+                                    name_el = item_el.query_selector("div.related-item-view__title, div.business-full-items-view__title, div.business-prices-view__name")
+                                    if not name_el: continue
+                                    name = name_el.inner_text().strip()
+                                    
+                                    price_el = item_el.query_selector("div.related-item-view__price, div.business-full-items-view__price, div.business-prices-view__price")
+                                    price = price_el.inner_text().strip() if price_el else ""
+                                    
+                                    desc_el = item_el.query_selector("div.related-item-view__description, div.business-full-items-view__description")
+                                    desc = desc_el.inner_text().strip() if desc_el else ""
+                                    
+                                    items_in_cat.append({
+                                        "name": name,
+                                        "price": price,
+                                        "description": desc
+                                    })
+                                except:
+                                    continue
+                            if items_in_cat: break 
+                            
+                        if items_in_cat:
+                            products.append({
+                                "category": cat_name,
+                                "items": items_in_cat
+                            })
+                    except Exception as e:
+                        print(f"Ошибка парсинга категории: {e}")
+                        continue
+                break 
+        
+        # Если категории не найдены, ищем плоский список
+        if not products:
+            print("Категории не найдены, ищем плоский список товаров...")
+            flat_items = []
+            item_selectors = [
+                "div.business-full-items-view__item",
+                "div.related-item-view",
+                "div.business-prices-view__item",
+                "div.business-card-price-view" 
+            ]
+            
+            for item_sel in item_selectors:
+                item_els = page.query_selector_all(item_sel)
+                if item_els:
+                    print(f"Найдено {len(item_els)} товаров (flat) по селектору {item_sel}")
+                    for item_el in item_els:
+                        try:
+                            name_el = item_el.query_selector("div.related-item-view__title, div.business-full-items-view__title, div.business-prices-view__name, div.business-card-price-view__name")
+                            if not name_el: continue
+                            name = name_el.inner_text().strip()
+                            
+                            price_el = item_el.query_selector("div.related-item-view__price, div.business-full-items-view__price, div.business-prices-view__price, div.business-card-price-view__value")
+                            price = price_el.inner_text().strip() if price_el else ""
+                            
+                            desc_el = item_el.query_selector("div.related-item-view__description, div.business-full-items-view__description")
+                            desc = desc_el.inner_text().strip() if desc_el else ""
+                            
+                            flat_items.append({
+                                "name": name,
+                                "price": price,
+                                "description": desc
+                            })
+                        except:
+                            continue
+                    if flat_items: break
+            
+            if flat_items:
+                products.append({
+                    "category": "Основные услуги",
+                    "items": flat_items
+                })
+
+        print(f"Спарсено категорий услуг: {len(products)}")
+        return products
+
+    except Exception as e:
+        print(f"Ошибка при парсинге услуг: {e}")
+        return []
 
 def parse_competitors(page):
     """Парсинг конкурентов из секции 'Похожие места рядом'"""
