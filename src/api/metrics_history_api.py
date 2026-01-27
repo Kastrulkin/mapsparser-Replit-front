@@ -80,8 +80,9 @@ def get_metrics_history(business_id):
         # --- SYNC EXTERNAL STATS START ---
         try:
             # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
+            # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
             cursor.execute("""
-                SELECT source, date, rating, reviews_total 
+                SELECT source, date, rating, reviews_total, unanswered_reviews_count
                 FROM ExternalBusinessStats 
                 WHERE business_id = ? AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
             """, (business_id,))
@@ -92,6 +93,7 @@ def get_metrics_history(business_id):
                 metric_date = row[1]
                 rating = row[2]
                 reviews_count = row[3]
+                unanswered = row[4]
                 
                 # Проверяем, есть ли запись
                 cursor.execute("""
@@ -106,17 +108,19 @@ def get_metrics_history(business_id):
                     cursor.execute("""
                         INSERT INTO BusinessMetricsHistory (
                             id, business_id, metric_date, rating, reviews_count, 
-                            photos_count, news_count, source
+                            photos_count, news_count, unanswered_reviews_count, source
                         )
-                        VALUES (?, ?, ?, ?, ?, 0, 0, ?)
-                    """, (metric_id, business_id, metric_date, rating, reviews_count, source))
+                        VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+                    """, (metric_id, business_id, metric_date, rating, reviews_count, unanswered, source))
                 else:
                     # Обновляем
                     cursor.execute("""
                         UPDATE BusinessMetricsHistory
-                        SET rating = COALESCE(?, rating), reviews_count = COALESCE(?, reviews_count)
+                        SET rating = COALESCE(?, rating), 
+                            reviews_count = COALESCE(?, reviews_count),
+                            unanswered_reviews_count = COALESCE(?, unanswered_reviews_count)
                         WHERE id = ?
-                    """, (rating, reviews_count, existing[0]))
+                    """, (rating, reviews_count, unanswered, existing[0]))
             
             db.conn.commit()
         except Exception as e:
@@ -126,7 +130,7 @@ def get_metrics_history(business_id):
         # Загружаем историю метрик
         cursor.execute("""
             SELECT id, metric_date, rating, reviews_count, 
-                   photos_count, news_count, source, created_at
+                   photos_count, news_count, unanswered_reviews_count, source, created_at
             FROM BusinessMetricsHistory
             WHERE business_id = ?
             ORDER BY metric_date DESC
@@ -142,8 +146,9 @@ def get_metrics_history(business_id):
                 "reviews_count": row[3],
                 "photos_count": row[4],
                 "news_count": row[5],
-                "source": row[6],
-                "created_at": row[7]
+                "unanswered_reviews_count": row[6],
+                "source": row[7],
+                "created_at": row[8]
             })
         
         db.close()

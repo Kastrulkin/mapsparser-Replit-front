@@ -57,16 +57,18 @@ class ExternalDataRepository:
                 INSERT INTO ExternalBusinessStats (
                     id, business_id, source, date,
                     views_total, clicks_total, actions_total,
-                    rating, reviews_total, raw_payload,
+                    rating, reviews_total, unanswered_reviews_count, raw_payload,
+                    created_at, updated_at
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     views_total=excluded.views_total,
                     clicks_total=excluded.clicks_total,
                     actions_total=excluded.actions_total,
                     rating=excluded.rating,
                     reviews_total=excluded.reviews_total,
+                    unanswered_reviews_count=excluded.unanswered_reviews_count,
                     raw_payload=excluded.raw_payload,
                     updated_at=CURRENT_TIMESTAMP
                 """,
@@ -80,6 +82,7 @@ class ExternalDataRepository:
                     s.actions_total,
                     s.rating,
                     s.reviews_total,
+                    s.unanswered_reviews_count,
                     json.dumps(s.raw_payload or {}),
                 ),
             )

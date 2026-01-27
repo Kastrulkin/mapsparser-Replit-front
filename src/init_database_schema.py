@@ -533,6 +533,7 @@ def init_database_schema():
                 actions_total INTEGER,
                 rating REAL,
                 reviews_total INTEGER,
+                unanswered_reviews_count INTEGER,
                 raw_payload TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -541,6 +542,16 @@ def init_database_schema():
             )
         """)
         print("✅ Таблица ExternalBusinessStats создана/проверена")
+        
+        # Миграция для ExternalBusinessStats: проверка наличия поля unanswered_reviews_count
+        try:
+            cursor.execute("PRAGMA table_info(ExternalBusinessStats)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'unanswered_reviews_count' not in columns:
+                cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN unanswered_reviews_count INTEGER")
+                print("✅ Добавлено поле unanswered_reviews_count в ExternalBusinessStats")
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки ExternalBusinessStats: {e}")
         
         # Индексы для внешних таблиц
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_id ON ExternalBusinessReviews(business_id)")
@@ -567,6 +578,38 @@ def init_database_schema():
         
         # ===== ОПТИМИЗАЦИЯ =====
         
+        # BusinessOptimizationWizard - данные мастера оптимизации
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessMetricsHistory (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                metric_date DATE NOT NULL,
+                rating FLOAT,
+                reviews_count INTEGER,
+                photos_count INTEGER,
+                news_count INTEGER,
+                unanswered_reviews_count INTEGER,
+                source TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_metrics_history_business_date 
+            ON BusinessMetricsHistory(business_id, metric_date DESC)
+        """)
+        print("✅ Таблица BusinessMetricsHistory создана/проверена")
+
+        # Миграция для BusinessMetricsHistory: проверка наличия поля unanswered_reviews_count
+        try:
+            cursor.execute("PRAGMA table_info(BusinessMetricsHistory)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'unanswered_reviews_count' not in columns:
+                cursor.execute("ALTER TABLE BusinessMetricsHistory ADD COLUMN unanswered_reviews_count INTEGER")
+                print("✅ Добавлено поле unanswered_reviews_count в BusinessMetricsHistory")
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки BusinessMetricsHistory: {e}")
+
         # BusinessOptimizationWizard - данные мастера оптимизации
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (

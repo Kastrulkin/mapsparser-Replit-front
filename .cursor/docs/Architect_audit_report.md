@@ -561,3 +561,59 @@ Fix incorrect date display (news showing parsing date, random dates) and sorting
 
 ### Status
 - [x] Completed
+
+## 2026-01-27 - Fixing Pricing, Metrics, and Report UI
+
+### Current Task
+Fixing incorrect service pricing display (converting "тыс." to numbers), adding 'unanswered reviews count' to metrics history and dashboard, and reverting YandexBusinessReport UI to a single-page summary.
+
+### Architecture Decision
+- **Pricing**: Modified `src/yandex_business_sync_worker.py` to use regex for parsing "тыс" and "млн" suffixes in service prices.
+- **Metrics**: Added `unanswered_reviews_count` column to `ExternalBusinessStats` and `BusinessMetricsHistory` tables. Modified sync worker to calculate this count from reviews during sync and store it. Updated API `metrics_history_api.py` to return this metric.
+- **UI**: 
+    - Updated `MetricsHistoryCharts.tsx` to display 'Unanswered' metric.
+    - Reverted `YandexBusinessReport.tsx` to remove tabs and fetch logic, making it a pure presentation component for the summary data passed from `CardOverviewPage`.
+
+### Files to Modify
+- `src/init_database_schema.py` - Added migration for `unanswered_reviews_count` in `ExternalBusinessStats` and `BusinessMetricsHistory`.
+- `src/yandex_business_sync_worker.py` - Updated `_sync_services_to_db` (pricing) and `sync_account` (metrics).
+- `src/repositories/external_data_repository.py` - Updated `upsert_stats`.
+- `src/api/metrics_history_api.py` - Updated `get_metrics_history` to include new metric.
+- `frontend/src/components/MetricsHistoryCharts.tsx` - Added 'unanswered' metric type and config.
+- `frontend/src/components/YandexBusinessReport.tsx` - Reverted to single page.
+
+### Trade-offs & Decisions
+- **Schema**: Added column to both `ExternalBusinessStats` (raw data) and `BusinessMetricsHistory` (app history) to ensure consistent data flow.
+- **Worker**: Calculated `unanswered_count` in python instead of SQL aggregation during sync to keep logic in one place and reuse existing `reviews` list.
+- **UI**: Decided to keep `YandexBusinessReport` simple as per user request, delegating detailed views to the main dashboard tabs.
+
+### Dependencies
+- No new external dependencies.
+- Database migration required (handled by `init_database_schema.py`).
+
+### Status
+- [x] Completed
+
+## 2026-01-27 - Fix Missing Text Content (Description, News, Replies)
+
+### Current Task
+User reported that text content (Service descriptions, News text, Review replies) was missing/empty in the application, despite the parser seeming to work.
+
+### Architecture Decision
+1.  **Diagnosis**:
+    - **Scraper**: Correctly extracted text (`description`, `response_text`, `text`).
+    - **Worker**: Correctly passed data to repository.
+    - **Database**: Schema (`ExternalBusinessReviews`, `ExternalBusinessPosts`) had the correct columns.
+    - **Repository**: **ROOT CAUSE**. `ExternalDataRepository.upsert_reviews` and `upsert_posts` methods were missing the text fields in their SQL `INSERT` and `UPDATE` statements, effectively discarding the text.
+2.  **Fix**:
+    - Updated `ExternalDataRepository.py` to include `response_text` (for reviews) and `title`, `text` (for posts) in the SQL queries.
+    - Verified `UserServices` table and `yandex_business_sync_worker` logic for descriptions (logic was correct, missing data likely due to parsing failures or old syncs).
+
+### Files to Modify
+- `src/repositories/external_data_repository.py` - Added missing fields to SQL.
+
+### Trade-offs & Decisions
+- **Data Recovery**: The fix enables *future* syncs to save text. Existing data in DB cannot be "recovered" without a re-sync/re-scrape, as the text was never saved.
+
+### Status
+- [x] Completed

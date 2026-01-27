@@ -86,9 +86,23 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 if raw_price:
                     try:
                         import re
-                        digits = re.sub(r'[^0-9]', '', str(raw_price))
-                        if digits:
-                            price_cents = int(digits)  # Store exact digit value (1200 RUB -> 1200)
+                        raw_str = str(raw_price).strip().lower()
+                        # Заменяем запятую на точку для float
+                        clean_str = raw_str.replace(',', '.')
+                        
+                        # Коэффициенты
+                        multiplier = 1.0
+                        if 'тыс' in raw_str:
+                            multiplier = 1000.0
+                        elif 'млн' in raw_str:
+                            multiplier = 1000000.0
+                            
+                        # Извлекаем число (например "1.2")
+                        # Регулярка ищет число с плавающей точкой
+                        match = re.search(r'(\d+(?:\.\d+)?)', clean_str)
+                        if match:
+                            val = float(match.group(1))
+                            price_cents = int(val * multiplier)
                     except:
                         pass
                 
@@ -265,13 +279,40 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             # Доп. логика для org_info в последней точке статистики
             org_info = parser.fetch_organization_info(account)
             
-            if stats:
                 if org_info:
                     last_stat = stats[-1]
                     if last_stat.raw_payload:
                         last_stat.raw_payload.update(org_info)
                     else:
                         last_stat.raw_payload = org_info
+                
+                # --- Calculates Unanswered Reviews ---
+                unanswered_count = 0
+                for r in reviews:
+                    # Считаем неотвеченным, если нет текста ответа или он пустой/прочерк
+                    if not r.response_text or r.response_text.strip() == '' or r.response_text.strip() == '—':
+                        unanswered_count += 1
+                
+                # Обновляем стат-поинты (или добавляем в последний)
+                if stats:
+                    # Проставляем во всех? Или только в последнем?
+                    # Логичнее в последнем (актуальном)
+                    stats[-1].unanswered_reviews_count = unanswered_count
+                else:
+                    # Если статов нет, создаем синтетическую точку за сегодня
+                    today_str = datetime.now().strftime('%Y-%m-%d')
+                    stat_id = f"{account['business_id']}_{self.source}_{today_str}"
+                    new_stat = ExternalStatsPoint(
+                        id=stat_id,
+                        business_id=account['business_id'],
+                        source=self.source,
+                        date=today_str,
+                        unanswered_reviews_count=unanswered_count,
+                        rating=org_info.get('rating') if org_info else None,
+                        reviews_total=len(reviews)
+                    )
+                    stats = [new_stat]
+
                 repository.upsert_stats(stats)
             
             posts = parser.fetch_posts(account)

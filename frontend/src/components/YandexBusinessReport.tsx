@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { CheckCircle2, Phone, Globe, Clock, Package, MessageSquare, Star, Users, Image as ImageIcon, Newspaper, AlertCircle, ExternalLink, MapPin, Calendar } from 'lucide-react';
+import { CheckCircle2, Phone, Globe, Clock, Package, MessageSquare, Star, Users, Image as ImageIcon, Newspaper, AlertCircle, ExternalLink, MapPin } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface YandexBusinessReportProps {
@@ -27,93 +25,9 @@ interface YandexBusinessReportProps {
     businessId?: string;
 }
 
-interface Review {
-    id: string;
-    author_name: string;
-    rating: number;
-    text: string;
-    published_at: string;
-    response_text?: string;
-    response_at?: string;
-}
-
-interface Service {
-    id: string;
-    name: string;
-    description?: string;
-    price?: string;
-    category?: string;
-}
-
-interface Post {
-    id: string;
-    title?: string;
-    text?: string;
-    published_at: string;
-    image_url?: string;
-}
-
-export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data, businessId }) => {
+export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { t } = useLanguage();
-
-    // Detailed Data State
-    const [reviews, setReviews] = useState<Review[]>([]);
-    const [services, setServices] = useState<Service[]>([]);
-    const [posts, setPosts] = useState<Post[]>([]);
-    const [loadingDetails, setLoadingDetails] = useState(false);
-
-    // Fetch detailed data if businessId is provided
-    useEffect(() => {
-        if (!businessId) return;
-
-        const fetchDetails = async () => {
-            setLoadingDetails(true);
-            try {
-                const token = localStorage.getItem('token');
-                const headers = { 'Authorization': `Bearer ${token}` };
-
-                // Fetch Reviews
-                try {
-                    const reviewsRes = await fetch(`/api/business/${businessId}/external/reviews`, { headers });
-                    if (reviewsRes.ok) {
-                        const reviewsData = await reviewsRes.json();
-                        setReviews(reviewsData.reviews || []);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch reviews", e);
-                }
-
-                // Fetch Services
-                try {
-                    const servicesRes = await fetch(`/api/business/${businessId}/services`, { headers });
-                    if (servicesRes.ok) {
-                        const servicesData = await servicesRes.json();
-                        setServices(servicesData.services || []);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch services", e);
-                }
-
-                // Fetch Posts
-                try {
-                    const postsRes = await fetch(`/api/business/${businessId}/external/posts`, { headers });
-                    if (postsRes.ok) {
-                        const postsData = await postsRes.json();
-                        setPosts(postsData.posts || []);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch posts", e);
-                }
-
-            } catch (error) {
-                console.error("Error fetching detailed report data:", error);
-            } finally {
-                setLoadingDetails(false);
-            }
-        };
-
-        fetchDetails();
-    }, [businessId]);
 
     // Parse JSON fields
     const messengers = data.messengers ? JSON.parse(data.messengers) : [];
@@ -128,8 +42,8 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
 
     const completeness = data.profileCompleteness || 0;
 
-    const OverviewTab = () => (
-        <div className="space-y-6 print:space-y-4">
+    return (
+        <div className="space-y-6 print:space-y-4 w-full">
             {/* Header */}
             <Card className="border-2">
                 <CardHeader className="pb-4">
@@ -308,7 +222,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                 </Card>
             )}
 
-            {/* Summaries but check for details */}
+            {/* Services Stats */}
             {(data.servicesCount || 0) > 0 && (
                 <Card>
                     <CardHeader>
@@ -334,6 +248,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                 </Card>
             )}
 
+            {/* News Stats */}
             {(data.newsCount || 0) > 0 && (
                 <Card>
                     <CardHeader>
@@ -410,154 +325,22 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                     </CardContent>
                 </Card>
             )}
-        </div>
-    );
 
-    const ReviewsTab = () => (
-        <div className="space-y-4">
-            <h3 className="text-xl font-semibold mb-4">Отзывы ({reviews.length})</h3>
-            {reviews.length === 0 ? (
-                <div className="text-center p-8 bg-gray-50 rounded-lg text-gray-500">Нет загруженных отзывов</div>
-            ) : (
-                <div className="grid gap-4">
-                    {reviews.map((review) => (
-                        <Card key={review.id} className="border border-gray-100">
-                            <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="font-semibold">{review.author_name}</div>
-                                    <div className="flex items-center text-amber-500">
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <span className="ml-1 text-sm font-medium">{review.rating}</span>
-                                    </div>
-                                </div>
-                                <div className="text-sm text-gray-500 mb-2">{new Date(review.published_at).toLocaleDateString()}</div>
-                                <p className="text-gray-700 whitespace-pre-wrap">{review.text}</p>
-                                {review.response_text && (
-                                    <div className="mt-3 pl-4 border-l-2 border-blue-200 bg-blue-50/50 p-2 rounded">
-                                        <div className="text-xs font-semibold text-blue-700 mb-1">Ответ организации:</div>
-                                        <p className="text-sm text-gray-700">{review.response_text}</p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-
-    const ServicesTab = () => (
-        <div className="space-y-4">
-            <h3 className="text-xl font-semibold mb-4">Услуги и товары ({services.length})</h3>
-            {services.length === 0 ? (
-                <div className="text-center p-8 bg-gray-50 rounded-lg text-gray-500">Нет загруженных услуг</div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                    {services.map((service) => (
-                        <Card key={service.id} className="hover:shadow-md transition-shadow">
-                            <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="font-semibold text-lg text-gray-900">{service.name}</div>
-                                    {service.price && (
-                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                            {service.price}
-                                        </Badge>
-                                    )}
-                                </div>
-                                {service.category && (
-                                    <div className="text-xs text-indigo-600 bg-indigo-50 inline-block px-2 py-1 rounded mb-2">
-                                        {service.category}
-                                    </div>
-                                )}
-                                {service.description && (
-                                    <p className="text-sm text-gray-600 line-clamp-3">{service.description}</p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-
-    const PostsTab = () => (
-        <div className="space-y-4">
-            <h3 className="text-xl font-semibold mb-4">Новости и анонсы ({posts.length})</h3>
-            {posts.length === 0 ? (
-                <div className="text-center p-8 bg-gray-50 rounded-lg text-gray-500">Нет загруженных новостей</div>
-            ) : (
-                <div className="grid gap-6">
-                    {posts.map((post) => (
-                        <Card key={post.id} className="overflow-hidden">
-                            <div className="flex flex-col md:flex-row">
-                                {post.image_url && (
-                                    <div className="md:w-1/4 h-48 md:h-auto bg-gray-100">
-                                        <img src={post.image_url} alt={post.title || "News"} className="w-full h-full object-cover" />
-                                    </div>
-                                )}
-                                <div className={`p-4 flex-1 ${post.image_url ? 'md:w-3/4' : 'w-full'}`}>
-                                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-                                        <Calendar className="w-4 h-4" />
-                                        {new Date(post.published_at).toLocaleDateString()}
-                                    </div>
-                                    {post.title && <h4 className="font-bold text-lg mb-2">{post.title}</h4>}
-                                    <p className="text-gray-700 whitespace-pre-wrap">{post.text}</p>
-                                </div>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-
-    return (
-        <div className="w-full">
-            <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-6">
-                    <TabsTrigger value="overview">Обзор</TabsTrigger>
-                    <TabsTrigger value="reviews">Отзывы {reviews.length > 0 && `(${reviews.length})`}</TabsTrigger>
-                    <TabsTrigger value="services">Услуги {services.length > 0 && `(${services.length})`}</TabsTrigger>
-                    <TabsTrigger value="posts">Новости {posts.length > 0 && `(${posts.length})`}</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                    <OverviewTab />
-                </TabsContent>
-
-                <TabsContent value="reviews">
-                    {loadingDetails ? <div className="text-center p-8 text-gray-500">Загрузка отзывов...</div> : <ReviewsTab />}
-                </TabsContent>
-
-                <TabsContent value="services">
-                    {loadingDetails ? <div className="text-center p-8 text-gray-500">Загрузка услуг...</div> : <ServicesTab />}
-                </TabsContent>
-
-                <TabsContent value="posts">
-                    {loadingDetails ? <div className="text-center p-8 text-gray-500">Загрузка новостей...</div> : <PostsTab />}
-                </TabsContent>
-            </Tabs>
             {/* Print Styles */}
             <style>{`
-        @media print {
-          body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
-          }
-          
-          .print\\:text-xl {
-            font-size: 1.25rem;
-          }
-          
-          .print\\:space-y-4 > * + * {
-            margin-top: 1rem;
-          }
-          
-          .print\\:hidden {
-            display: none !important;
-          }
-        }
-      `}</style>
+                @media print {
+                    body {
+                        print-color-adjust: exact;
+                        -webkit-print-color-adjust: exact;
+                    }
+                    .print\\:text-xl {
+                        font-size: 1.25rem;
+                    }
+                    .print\\:space-y-4 > * + * {
+                        margin-top: 1rem;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
