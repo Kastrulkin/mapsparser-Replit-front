@@ -359,6 +359,24 @@ def init_database_schema():
         """)
         print("✅ Таблица UserServices создана/проверена")
         
+        # UserNews - сгенерированные новости
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_news_user_id ON UserNews(user_id)")
+        print("✅ Таблица UserNews создана/проверена")
+        
         # ===== СЕТИ И МАСТЕРА =====
         
         # Networks - сети бизнесов
