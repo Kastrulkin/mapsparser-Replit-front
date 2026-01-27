@@ -19,7 +19,8 @@ export const ru = {
     whatWeDo: "Что мы делаем?",
     whoWeAre: "Кто мы?",
     prices: "Цены",
-    tryFree: "Попробовать бесплатно"
+    tryFree: "Попробовать бесплатно",
+    login: "Вход"
   },
 
   // Footer

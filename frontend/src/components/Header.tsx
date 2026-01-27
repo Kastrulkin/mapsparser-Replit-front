@@ -137,7 +137,7 @@ const Header = () => {
                 className="flex items-center gap-2"
               >
                 <LogIn className="w-4 h-4" />
-                <span>Вход</span>
+                <span>{t.header.login}</span>
               </Button>
             </Link>
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
@@ -214,7 +214,7 @@ const Header = () => {
                     className="w-full justify-start"
                   >
                     <LogIn className="w-4 h-4 mr-2" />
-                    Вход
+                    {t.header.login}
                   </Button>
                 </Link>
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">

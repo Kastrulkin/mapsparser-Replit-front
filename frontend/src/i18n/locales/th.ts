@@ -17,7 +17,8 @@ export const th = {
     whatWeDo: "เราทำอะไร?",
     whoWeAre: "เราเป็นใคร?",
     prices: "ราคา",
-    tryFree: "ลองใช้ฟรี"
+    tryFree: "ลองใช้ฟรี",
+    login: "เข้าสู่ระบบ"
   },
   footer: {
     title: "BeautyBot",

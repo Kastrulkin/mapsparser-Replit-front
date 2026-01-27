@@ -19,7 +19,8 @@ export const en = {
     whatWeDo: "What We Do?",
     whoWeAre: "Who We Are?",
     prices: "Prices",
-    tryFree: "Try Free"
+    tryFree: "Try Free",
+    login: "Log In"
   },
 
   // Footer
