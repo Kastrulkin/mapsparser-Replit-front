@@ -482,6 +482,45 @@ def init_database_schema():
         """)
         print("✅ Таблица ExternalBusinessReviews создана/проверена")
 
+        # ExternalBusinessPosts - посты из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessPosts (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                account_id TEXT,
+                source TEXT NOT NULL,
+                external_post_id TEXT,
+                title TEXT,
+                text TEXT,
+                published_at TIMESTAMP,
+                image_url TEXT,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessPosts создана/проверена")
+
+        # ExternalBusinessPhotos - фото из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessPhotos (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                account_id TEXT,
+                source TEXT NOT NULL,
+                external_photo_id TEXT,
+                url TEXT NOT NULL,
+                thumbnail_url TEXT,
+                uploaded_at TIMESTAMP,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessPhotos создана/проверена")
+
         # ExternalBusinessStats - статистика из внешних источников
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ExternalBusinessStats (
