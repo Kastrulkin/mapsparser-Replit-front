@@ -15,7 +15,8 @@ export const ru = {
     delete: "Удалить",
     add: "Добавить",
     confirmDelete: "Вы уверены, что хотите удалить?",
-    noData: "Нет данных"
+    noData: "Нет данных",
+    updated: "Обновлено"
   },
 
   // Page title

@@ -15,7 +15,8 @@ export const en = {
     delete: "Delete",
     add: "Add",
     confirmDelete: "Are you sure you want to delete?",
-    noData: "No data"
+    noData: "No data",
+    updated: "Updated"
   },
 
   // Page title
@@ -1061,7 +1062,7 @@ export const en = {
       status: {
         pending: "Pending",
         processing: "In Progress",
-        done: "Done",
+        completed: "Done",
         error: "Error",
         captcha: "Captcha"
       },

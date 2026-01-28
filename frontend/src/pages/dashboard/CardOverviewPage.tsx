@@ -701,17 +701,30 @@ export const CardOverviewPage = () => {
                 <table className="min-w-full divide-y divide-gray-100">
                   <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.category}</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.name}</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.description}</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.price}</th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.table.actions}</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
+                        {t.dashboard.card.table.category}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">
+                        {t.dashboard.card.table.name}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">
+                        {t.dashboard.card.table.description}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
+                        {t.dashboard.card.table.price}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
+                        {t.common?.updated || "Updated"}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
+                        {t.dashboard.card.table.actions}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
                     {loadingServices ? (
                       <tr>
-                        <td className="px-6 py-8 text-center" colSpan={5}>
+                        <td className="px-6 py-8 text-center" colSpan={6}>
                           <div className="flex justify-center items-center gap-2 text-gray-500">
                             <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
                             <span>{t.dashboard.subscription.processing}</span>
@@ -863,6 +876,14 @@ export const CardOverviewPage = () => {
                             </td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">
                               {service.price ? `${(Number(service.price) / 100).toLocaleString('ru-RU')} ₽` : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap align-top">
+                              {service.updated_at ? new Date(service.updated_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : '—'}
                             </td>
                             <td className="px-6 py-4 text-right text-sm text-gray-500 align-top">
                               <div className="flex gap-1 justify-end">

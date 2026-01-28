@@ -10,7 +10,8 @@ export const th = {
     loading: "กำลังโหลด...",
     back: "Back",
     next: "Next",
-    select: "Select"
+    select: "เลือก",
+    updated: "อัปเดตเมื่อ"
   },
 
   header: {
@@ -527,7 +528,7 @@ export const th = {
       status: {
         pending: "รอดำเนินการ",
         processing: "กำลังประมวลผล",
-        done: "เสร็จสิ้น",
+        completed: "เสร็จสิ้น",
         error: "ข้อผิดพลาด",
         captcha: "Captcha"
       },
