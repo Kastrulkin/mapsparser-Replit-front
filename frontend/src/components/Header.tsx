@@ -5,7 +5,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
 import { useLanguage } from "../i18n/LanguageContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import logo from "../assets/images/logo.png"; // Импортируем логотип
+import logo from "@/assets/images/logo.png"; // Импортируем логотип
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

@@ -1,5 +1,5 @@
 """
-main.py — Веб-сервер для SEO-анализатора Яндекс.Карт
+main.py - Веб-сервер для SEO-анализатора Яндекс.Карт
 """
 import os
 import sys
@@ -74,7 +74,7 @@ except ImportError as e:
 # Автоматическая загрузка переменных окружения из .env / .env.test
 try:
     from dotenv import load_dotenv
-    # Если FLASK_ENV=test|testing — используем .env.test, иначе обычный .env
+    # Если FLASK_ENV=test|testing - используем .env.test, иначе обычный .env
     env_file = ".env.test" if os.getenv("FLASK_ENV", "").lower() in ("test", "testing") else ".env"
     load_dotenv(env_file)
 except ImportError:
@@ -341,7 +341,7 @@ def _detect_country_code() -> str:
 
 @app.route('/')
 def index():
-    """Главная страница — раздаём собранный SPA"""
+    """Главная страница - раздаём собранный SPA"""
     try:
         return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
     except Exception as e:
@@ -2058,7 +2058,7 @@ def spa_fallback(path):
         # Если файл существует в dist, отдаем его напрямую
         return send_from_directory(FRONTEND_DIST_DIR, path)
 
-    # Иначе — SPA индекс
+    # Иначе - SPA индекс
     response = send_from_directory(FRONTEND_DIST_DIR, 'index.html')
     # Для index.html отключаем кэширование, чтобы всегда получать свежую версию приложения
     if response:
@@ -2432,7 +2432,7 @@ def services_optimize():
                 user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
                 user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
                 user_prompt = user_prompt.replace('{length}', str(length or 150))
-                user_prompt = user_prompt.replace('{instructions}', str(instructions or '—'))
+                user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
                 user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
                 user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
                 user_prompt = user_prompt.replace('{content}', str(content[:4000]))
@@ -2442,7 +2442,7 @@ def services_optimize():
                 
             except FileNotFoundError:
                 # Fallback на старый промпт
-                default_prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                default_prompt_template = """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -2483,7 +2483,7 @@ def services_optimize():
                     .replace('{tone}', str(tone or 'профессиональный'))
                     .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
-                    .replace('{instructions}', str(instructions or '—'))
+                    .replace('{instructions}', str(instructions or '-'))
                     .replace('{frequent_queries}', str(frequent_queries))
                     .replace('{content}', str(content[:4000]))
                 )
@@ -2822,8 +2822,8 @@ def news_generate():
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt = """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+        default_prompt = """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
 Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
@@ -3340,7 +3340,7 @@ def reviews_reply():
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt_template = """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+        default_prompt_template = """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
@@ -3850,28 +3850,22 @@ def update_service(service_id):
         print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
         print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
         
-        try:
-            if has_optimized_description and has_optimized_name:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
-                print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
-                
-                # Проверяем, что данные сохранились
-                    WHERE id = ?
-                """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id))
-            else:
-                print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-            import traceback
-            traceback.print_exc()
-            db.close()
-            raise
+        if has_optimized_description and has_optimized_name:
+            print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
+            print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
+
+        else:
+            print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, description, keywords_str, price, service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -7962,7 +7956,7 @@ def get_prompts():
         if not rows:
             default_prompts = [
                 ('service_optimization', 
-                 """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                 """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -7994,7 +7988,7 @@ def get_prompts():
 {content}""",
                  'Промпт для оптимизации услуг и прайс-листа'),
                 ('review_reply',
-                 """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+                 """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
@@ -8003,8 +7997,8 @@ Write the reply in {language_name}.
 Отзыв клиента: {review_text[:1000]}""",
                  'Промпт для генерации ответов на отзывы'),
                 ('news_generation',
-                 """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+                 """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
 Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
@@ -9658,41 +9652,6 @@ def update_business_profile(business_id):
         print(f"❌ Ошибка обновления профиля бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/business/<business_id>/services', methods=['GET'])
-def get_business_services(business_id):
-    """Получить услуги конкретного бизнеса"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        db = DatabaseManager()
-        
-        # Проверяем доступ к бизнесу
-        business = db.get_business_by_id(business_id)
-        if not business:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        
-        # Проверяем права доступа
-        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-        
-        services = db.get_services_by_business(business_id)
-        db.close()
-        
-        return jsonify({"success": True, "services": services})
-        
-    except Exception as e:
-        print(f"❌ Ошибка получения услуг бизнеса: {e}")
-        return jsonify({"error": str(e)}), 500
 
 def send_email(to_email, subject, body, from_name="BeautyBot"):
     """Универсальная функция для отправки email"""
