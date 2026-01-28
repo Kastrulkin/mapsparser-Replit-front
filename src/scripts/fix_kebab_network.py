@@ -61,12 +61,19 @@ def fix_network():
     print(f"\n📦 Found {len(businesses)} businesses owned by user.")
     
     for b in businesses:
+        # SAFETY CHECK: Only link if name contains "Kebab" or "Кебаб"
+        name_lower = b['name'].lower()
+        if 'kebab' not in name_lower and 'кебаб' not in name_lower:
+            print(f"⚠️ SKIPPING non-kebab business: {b['name']} (ID: {b['id']})")
+            continue
+
         if b['network_id'] == network_id:
             count_linked += 1
         else:
             # Update network_id
             cursor.execute("UPDATE Businesses SET network_id = ? WHERE id = ?", (network_id, b['id']))
             count_updated += 1
+            print(f"🔗 Linked: {b['name']}")
 
     conn.commit()
     conn.close()
