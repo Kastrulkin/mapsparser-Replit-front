@@ -36,6 +36,7 @@ export const CardOverviewPage = () => {
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
+  const [lastParseDate, setLastParseDate] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Состояния для услуг
@@ -82,6 +83,7 @@ export const CardOverviewPage = () => {
       if (data.success) {
         setRating(data.rating);
         setReviewsTotal(data.reviews_total || 0);
+        setLastParseDate(data.last_parse_date || null);
       }
     } catch (e) {
       console.error('Ошибка загрузки сводки:', e);
@@ -505,10 +507,25 @@ export const CardOverviewPage = () => {
                 <Star className="w-48 h-48" />
               </div>
               <div className="relative z-10">
-                <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                  <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                  Rating Overview
-                </h3>
+                <div className="flex justify-between items-start mb-6">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    {t.dashboard.card.rating || "Rating Overview"}
+                  </h3>
+                  {lastParseDate && (
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{t.dashboard.card.lastUpdate}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                          day: 'numeric',
+                          month: 'long',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-8">
                   {loadingSummary ? (

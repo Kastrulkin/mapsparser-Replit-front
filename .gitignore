@@ -20,4 +20,8 @@ node_modules/
 *.sqlite3
 *.db
 *.db-shm
-*.db-wal 
+*.db-wal
+
+# Frontend Build
+frontend/dist/
+frontend/node_modules/

@@ -566,6 +566,7 @@ export const en = {
       progressTab: "Progress tab",
       rating: "Rating",
       reviews: "reviews",
+      lastUpdate: "Last updated",
       tabServices: "Services",
       tabReviews: "Reviews",
       tabNews: "News",

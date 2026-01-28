@@ -1697,6 +1697,20 @@ def get_external_summary(business_id):
             (business_id,),
         )
         reviews_row = cursor.fetchone()
+
+        # Получаем дату последнего парсинга
+        cursor.execute(
+            """
+            SELECT created_at
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        parse_row = cursor.fetchone()
+        last_parse_date = parse_row[0] if parse_row else None
         
         db.close()
 
@@ -1712,6 +1726,7 @@ def get_external_summary(business_id):
             "reviews_with_response": reviews_with_response,
             "reviews_without_response": reviews_without_response,
             "last_sync_date": stats_row[2] if stats_row else None,
+            "last_parse_date": last_parse_date,
         })
 
     except Exception as e:
