@@ -15,7 +15,8 @@ load_dotenv()
 # New imports
 from database_manager import DatabaseManager
 from yandex_business_sync_worker import YandexBusinessSyncWorker
-# from google_business_sync_worker import GoogleBusinessSyncWorker  # Uncomment when ready
+from external_sources import ExternalReview, ExternalSource, ExternalPost, ExternalStatsPoint, make_stats_id
+from dateutil import parser as date_parser
 
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
@@ -654,9 +655,6 @@ def process_queue():
                     
                     # --- ИНИЦИАЛИЗАЦИЯ SyncWorker ДЛЯ СОХРАНЕНИЯ ДЕТАЛЬНЫХ ДАННЫХ ---
                     try:
-                        from external_sources import ExternalReview, ExternalSource, ExternalPost, ExternalStatsPoint, make_stats_id
-                        from yandex_business_sync_worker import YandexBusinessSyncWorker
-                        from dateutil import parser as date_parser
                         import re
                         
                         db_manager = None
