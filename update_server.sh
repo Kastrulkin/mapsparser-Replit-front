@@ -9,7 +9,8 @@ echo ""
 
 # 1. Update Code
 echo "📥 1. Pulling latest changes from GitHub..."
-git pull origin main
+git fetch origin main
+git reset --hard origin/main
 
 # 2. Frontend Update
 echo "📦 2. Updating Frontend..."
@@ -17,8 +18,11 @@ cd frontend
 echo "   - Installing dependencies..."
 npm install --legacy-peer-deps
 
-echo "   - Building project..."
+echo "   - Cleaning caches..."
+rm -rf node_modules/.vite
 rm -rf dist
+
+echo "   - Building project..."
 npm run build
 
 # Check if build was successful
