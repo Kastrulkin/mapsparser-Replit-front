@@ -1130,6 +1130,7 @@ export const ru = {
           unanswered: "Без ответа",
           news: "Новости",
           photos: "Фото",
+          services: "Услуги",
           report: "Отчет"
         }
       }

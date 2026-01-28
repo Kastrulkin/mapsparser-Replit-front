@@ -75,6 +75,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                 <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.unanswered}</th>
                 <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.news}</th>
                 <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.photos}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.services || "Services"}</th>
                 <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.report}</th>
               </tr>
             </thead>
@@ -107,6 +108,7 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                   </td>
                   <td className="px-3 py-2 border-b text-right">{item.newsCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.photosCount ?? '—'}</td>
+                  <td className="px-3 py-2 border-b text-right">{item.servicesCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">
                     {item.reportPath ? (
                       <Button size="sm" variant="outline" onClick={() => viewReport(item)}>

@@ -227,6 +227,13 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             values_qm.append("?")
             values.append(unanswered_reviews_count)
             
+        if 'services_count' in columns:
+            fields.append("services_count")
+            values_qm.append("?")
+            # Calculate services count from products list
+            s_count = len(products) if products else 0
+            values.append(s_count)
+            
         if 'products' in columns and products:
             fields.append("products")
             values_qm.append("?")

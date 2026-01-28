@@ -617,3 +617,45 @@ User reported that text content (Service descriptions, News text, Review replies
 
 ### Status
 - [x] Completed
+
+## 2026-01-28 - Fix Deployment Failures (Missing File & Services)
+
+### Current Task
+User reported frontend build failure (`AddMetricModal` not found) and missing systemd units (`beautybot-backend.service`, `beautybot-worker.service`) during deployment.
+
+### Architecture Decision
+1.  **Frontend Fix**: Created `frontend/src/components/AddMetricModal.tsx` which was referenced in `MetricsHistoryCharts.tsx` but missing from the codebase.
+2.  **Service Fix**: Created `beautybot-backend.service` and `beautybot-worker.service` files in the repository root (cloned from existing `seo-api.service` templates) to ensure consistent deployment names.
+
+### Files to Modify
+- `frontend/src/components/AddMetricModal.tsx` [NEW]
+- `beautybot-backend.service` [NEW]
+- `beautybot-worker.service` [NEW]
+
+### Status
+- [x] Completed
+
+
+## 2026-01-29 - Fix Missing "Services" Column in Parsing History
+
+### Current Task
+User reported that "Services" column was missing in the parsing history table and not showing up in reports, leading to confusion about data completeness.
+
+### Architecture Decision
+1.  **Database Schema**: Added `services_count` (INTEGER) and `products` (TEXT/JSON) columns to `MapParseResults` table.
+2.  **Worker Logic**: Updated `YandexBusinessSyncWorker` (`src/yandex_business_sync_worker.py`) to calculate `services_count` from parsed products and persist it to `MapParseResults`.
+3.  **Frontend**: Added "Services" column to `MapParseTable.tsx` to display the count.
+
+### Files to Modify
+- `src/init_database_schema.py` - Updated schema definition for future deploys.
+- `src/yandex_business_sync_worker.py` - Updated insert/update logic.
+- `frontend/src/components/MapParseTable.tsx` - Added table column.
+- `src/migrate_add_map_parse_columns.py` [NEW] - Migration script for existing servers.
+- `frontend/src/i18n/locales/ru.ts` - Added translation key.
+
+### Trade-offs & Decisions
+- **Migration**: Created a dedicated migration script to ensure data integrity on existing servers without requiring a full schema reset.
+- **UI**: Added column to the history table to provide immediate feedback on whether services were successfully parsed.
+
+### Status
+- [x] Completed

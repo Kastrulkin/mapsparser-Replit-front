@@ -1106,6 +1106,7 @@ export const en = {
           unanswered: "No Reply",
           news: "News",
           photos: "Photos",
+          services: "Services",
           report: "Report"
         }
       }

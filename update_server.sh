@@ -44,10 +44,22 @@ if systemctl list-units --full -all | grep -q "seo-worker.service"; then
     systemctl restart seo-worker
 fi
 
+# Restart beautybot-worker if it exists
+if systemctl list-units --full -all | grep -q "beautybot-worker.service"; then
+    echo "   - Restarting beautybot-worker..."
+    systemctl restart beautybot-worker
+fi
+
 # Restart seo-api if it exists
 if systemctl list-units --full -all | grep -q "seo-api.service"; then
     echo "   - Restarting seo-api..."
     systemctl restart seo-api
+fi
+
+# Restart beautybot-backend if it exists
+if systemctl list-units --full -all | grep -q "beautybot-backend.service"; then
+    echo "   - Restarting beautybot-backend..."
+    systemctl restart beautybot-backend
 fi
 
 # 4. Nginx Update
