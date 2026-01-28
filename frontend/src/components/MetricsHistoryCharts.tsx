@@ -3,8 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { getTranslations } from '@/utils/translations';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
     DropdownMenu,
@@ -36,8 +35,7 @@ interface MetricsHistoryChartsProps {
 }
 
 export const MetricsHistoryCharts: React.FC<MetricsHistoryChartsProps> = ({ businessId }) => {
-    const { language } = useLanguage();
-    const t = getTranslations(language);
+    const { language, t } = useLanguage();
     const { toast } = useToast();
 
     const [history, setHistory] = useState<MetricHistoryItem[]>([]);

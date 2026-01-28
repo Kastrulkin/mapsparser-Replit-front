@@ -8,7 +8,14 @@ export const en = {
     back: "Back",
     next: "Next",
     select: "Select",
-    fillAllFields: "Please fill all fields"
+    fillAllFields: "Please fill in all fields",
+    date: "Date",
+    source: "Source",
+    actions: "Actions",
+    delete: "Delete",
+    add: "Add",
+    confirmDelete: "Are you sure you want to delete?",
+    noData: "No data"
   },
 
   // Page title
@@ -928,6 +935,7 @@ export const en = {
     progress: {
       title: "Progress",
       subtitle: "Track your progress and achievements",
+      historyTable: "History",
       businessMetrics: "Business Metrics",
       charts: {
         title: "Business Metrics",

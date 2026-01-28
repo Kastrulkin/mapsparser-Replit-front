@@ -8,7 +8,14 @@ export const ru = {
     back: "Назад",
     next: "Вперед",
     select: "Выбрать",
-    fillAllFields: "Заполните все поля"
+    fillAllFields: "Заполните все поля",
+    date: "Дата",
+    source: "Источник",
+    actions: "Действия",
+    delete: "Удалить",
+    add: "Добавить",
+    confirmDelete: "Вы уверены, что хотите удалить?",
+    noData: "Нет данных"
   },
 
   // Page title
@@ -952,6 +959,7 @@ export const ru = {
     progress: {
       title: "Прогресс",
       subtitle: "Отслеживайте ваш прогресс и достижения",
+      historyTable: "История изменений",
       businessMetrics: "Метрики бизнеса",
       charts: {
         title: "Метрики Бизнеса",

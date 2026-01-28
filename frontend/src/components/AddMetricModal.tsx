@@ -4,8 +4,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { X, Calendar, Star, MessageSquare, Image as ImageIcon, Newspaper } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { getTranslations } from '@/utils/translations';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface AddMetricModalProps {
     isOpen: boolean;
@@ -20,8 +19,7 @@ export const AddMetricModal: React.FC<AddMetricModalProps> = ({
     onSuccess,
     businessId
 }) => {
-    const { language } = useLanguage();
-    const t = getTranslations(language);
+    const { language, t } = useLanguage();
 
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
