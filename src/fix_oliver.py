@@ -3,14 +3,30 @@ import sqlite3
 import os
 import sys
 
-DB_PATH = 'reports.db'
+def get_db_path():
+    # List of potential paths to check
+    paths = [
+        os.path.join(os.getcwd(), 'src', 'reports.db'),  # If running from root
+        os.path.join(os.getcwd(), 'reports.db'),         # If running from src or root
+        'src/reports.db',
+        'reports.db'
+    ]
+    
+    for path in paths:
+        if os.path.exists(path):
+            # Verify it's not a zero-byte file or check headers if needed, 
+            # but usually existence check is enough for established DBs
+            return path
+    return None
 
 def fix_oliver():
-    if not os.path.exists(DB_PATH):
-        print(f"Database not found at {DB_PATH}")
+    db_path = get_db_path()
+    if not db_path:
+        print("❌ Error: 'reports.db' not found in src/ or current directory.")
         return
 
-    conn = sqlite3.connect(DB_PATH)
+    print(f"📂 Using Database: {db_path}")
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
