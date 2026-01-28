@@ -3637,8 +3637,8 @@ def get_services():
                     has_optimized_desc = 'optimized_description' in columns
                     has_optimized_name = 'optimized_name' in columns
                     
-                    # Формируем SELECT с учетом наличия полей
-                    select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+    # Формируем SELECT с учетом наличия полей
+                    select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
                     if has_optimized_desc:
                         select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
                     if has_optimized_name:
@@ -3653,15 +3653,15 @@ def get_services():
                         srv = {
                             "id": r[0], "category": r[1], "name": r[2], 
                             "description": r[3], "keywords": r[4], 
-                            "price": r[5], "created_at": r[6]
+                            "price": r[5], "created_at": r[6], "updated_at": r[7]
                         }
                          # Если есть оптимизированные поля, добавляем их
                         idx_offset = 0
                         if has_optimized_desc:
-                             srv["optimized_description"] = r[7]
+                             srv["optimized_description"] = r[8]
                              idx_offset += 1
                         if has_optimized_name:
-                             srv["optimized_name"] = r[7 + idx_offset]
+                             srv["optimized_name"] = r[8 + idx_offset]
                         
                         user_services.append(srv)
 
@@ -3669,13 +3669,23 @@ def get_services():
                     external_services = []
                     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ExternalBusinessServices'")
                     if cursor.fetchone():
-                        cursor.execute("""
-                            SELECT id, name, price, description, category, created_at
+                        # Проверяем колонки ExternalBusinessServices
+                        cursor.execute("PRAGMA table_info(ExternalBusinessServices)")
+                        ext_cols = [col[1] for col in cursor.fetchall()]
+                        ext_has_updated_at = 'updated_at' in ext_cols
+                        
+                        query_cols = "id, name, price, description, category, created_at"
+                        if ext_has_updated_at:
+                            query_cols += ", updated_at"
+                            
+                        cursor.execute(f"""
+                            SELECT {query_cols}
                             FROM ExternalBusinessServices
                             WHERE business_id = ?
                         """, (business_id,))
+                        
                         for r in cursor.fetchall():
-                            external_services.append({
+                            srv_obj = {
                                 "id": r[0],
                                 "name": r[1],
                                 "price": r[2],
@@ -3683,7 +3693,13 @@ def get_services():
                                 "category": r[4],
                                 "created_at": r[5],
                                 "is_external": True
-                            })
+                            }
+                            if ext_has_updated_at:
+                                srv_obj["updated_at"] = r[6]
+                            else:
+                                srv_obj["updated_at"] = r[5] # Fallback to created_at
+                                
+                            external_services.append(srv_obj)
 
                     db.close()
                     return jsonify({
