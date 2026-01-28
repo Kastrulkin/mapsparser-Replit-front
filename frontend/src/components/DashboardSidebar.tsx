@@ -160,7 +160,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           <span className="text-xs font-bold uppercase tracking-wider text-white/90">Pro Max</span>
         </div>
         <p className="text-xs text-white/80 leading-relaxed">
-          Ваш бизнес растет с космической скоростью! 🚀
+          {t.dashboard.sidebar.greeting}
         </p>
       </div>
     </div>

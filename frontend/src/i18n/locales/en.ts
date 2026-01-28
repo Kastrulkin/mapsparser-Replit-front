@@ -277,7 +277,8 @@ export const en = {
       finance: "Finance",
       aiChatPromotion: "AI Chat Promotion",
       settings: "Settings",
-      network: "Network Management"
+      network: "Network Management",
+      greeting: "Get rid of routine! 🚀"
     },
     subscription: {
       currentSubscription: "Current Subscription",
