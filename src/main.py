@@ -3861,36 +3861,13 @@ def update_service(service_id):
                 print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
                 
                 # Проверяем, что данные сохранились
-                cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
-                check_row = cursor.fetchone()
-                if check_row:
-                    print(f"✅ DEBUG update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
-                else:
-                    print(f"❌ DEBUG update_service: Услуга не найдена после UPDATE!", flush=True)
-            elif has_optimized_description:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_description", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
-            elif has_optimized_name:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_name", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, optimized_name, description, keywords_str, price, service_id, user_id))
+                    WHERE id = ?
+                """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id))
             else:
-                print(f"🔍 DEBUG update_service: Обновление без optimized полей (обратная совместимость)", flush=True)
-                # Если полей нет - обновляем без них (для обратной совместимости)
+                print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
                 cursor.execute("""
                     UPDATE UserServices SET
                     category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, description, keywords_str, price, service_id, user_id))
-        except Exception as sql_err:
-            print(f"❌ Ошибка SQL запроса: {sql_err}", flush=True)
             import traceback
             traceback.print_exc()
             db.close()
