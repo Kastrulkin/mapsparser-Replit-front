@@ -124,12 +124,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                 </div>
             )}
 
-            {/* DEBUG OVERLAY */}
-            <div style={{ position: 'fixed', bottom: 10, right: 10, background: 'rgba(255,0,0,0.8)', color: 'white', padding: 5, zIndex: 9999, fontSize: 12 }}>
-                NetworkSwitcher Debug:<br />
-                Loading: {loading ? 'YES' : 'NO'}<br />
-                Locs: {locations.length}
-            </div>
+
         </div>
     );
 };
