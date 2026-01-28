@@ -1580,7 +1580,9 @@ def parse_products(page):
                 "div.business-full-items-view__item",
                 "div.related-item-view",
                 "div.business-prices-view__item",
-                "div.business-card-price-view" 
+                "div.business-card-price-view",
+                "div[class*='related-item-view']",
+                "div[class*='business-items-view__item']"
             ]
             
             for item_sel in item_selectors:

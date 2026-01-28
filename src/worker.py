@@ -642,7 +642,7 @@ def process_queue():
                         hours_json,
                         services_count,
                         profile_completeness,
-                        card_data.get('name', ''),
+                        card_data.get('name') or card_data.get('title', ''),
                         card_data.get('address', '')
                     ))
                     
