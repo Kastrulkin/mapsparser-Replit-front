@@ -3653,7 +3653,8 @@ def get_services():
                         srv = {
                             "id": r[0], "category": r[1], "name": r[2], 
                             "description": r[3], "keywords": r[4], 
-                            "price": r[5], "created_at": r[6], "updated_at": r[7]
+                            "price": r[5], "created_at": r[6],
+                            "updated_at": r[7].replace(" ", "T") if r[7] else None
                         }
                          # Если есть оптимизированные поля, добавляем их
                         idx_offset = 0
@@ -3695,9 +3696,11 @@ def get_services():
                                 "is_external": True
                             }
                             if ext_has_updated_at:
-                                srv_obj["updated_at"] = r[6]
+                                val = r[6]
+                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
                             else:
-                                srv_obj["updated_at"] = r[5] # Fallback to created_at
+                                val = r[5] # Fallback to created_at
+                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
                                 
                             external_services.append(srv_obj)
 
