@@ -285,6 +285,59 @@ class YandexMapsInterceptionParser:
                     data['photos_count'] = extra_photos_count
                 
                 # Если не удалось извлечь данные через API, fallback на HTML парсинг
+                # ПЕРЕД ЭТИМ: Hybrid Mode для отдельных секций
+                
+                # 1. Услуги/Товары (часто скрыты в API)
+                if not data.get('products'):
+                    print("⚠️ Услуги не найдены через API, пробуем HTML парсинг (Hybrid Mode)...")
+                    try:
+                        # Импорт здесь, чтобы избежать циклических зависимостей
+                        from yandex_maps_scraper import parse_products
+                        
+                        # Убедимся, что мы на вкладке товаров (мы туда кликали ранее)
+                        # Но на всякий случай проверим
+                        html_products = parse_products(page)
+                        if html_products:
+                            print(f"✅ Услуги найдены через HTML: {len(html_products)}")
+                            data['products'] = html_products
+                            
+                            # Пересобираем overview grouped products
+                            grouped_products = {}
+                            for prod in html_products:
+                                cat = prod.get('category', 'Другое') or 'Другое'
+                                if cat not in grouped_products:
+                                    grouped_products[cat] = []
+                                grouped_products[cat].append(prod)
+                            
+                            final_products = []
+                            for cat, items in grouped_products.items():
+                                final_products.append({
+                                    'category': cat,
+                                    'items': items
+                                })
+                            # Обновляем основной список (flat)
+                            # Note: wrapper above creates nested structure, but data['products'] expects flat list?
+                            # Let's check _extract_data_from_responses (Line 384+).
+                            # It converts flat list to grouped.
+                            # So here we should probably keep flat list in data['products'] 
+                            # and let the logic loop handle it?
+                            # Wait, data['products'] IS MODIFIED by _extract_data_from_responses to be GROUPED at line 401.
+                            # So if I assign flat list here, I need to group it myself or re-run grouping.
+                            # Grouping logic logic is:
+                            # 384: if data.get('products'): ... -> data['products'] = final_products
+                            # So data['products'] is ALREADY grouped (list of categories).
+                            # If I overwrite it with flat list from HTML, the Worker will be confused?
+                            # Worker expects: MapParseResults.services -> serialized JSON.
+                            # worker.py Line 700: services = card_data.get('products', [])
+                            # worker.py _sync_services_to_db iterates services.
+                            # Does it expect flat or grouped?
+                            # Let's check worker.py
+                            data['products'] = final_products 
+                        else:
+                             print("⚠️ HTML парсинг услуг тоже не вернул результатов")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка Hybrid Mode для услуг: {e}")
+
                 if not data.get('title') and not data.get('overview', {}).get('title'):
                     print("⚠️ Не удалось извлечь данные через API, используем HTML парсинг как fallback")
                     data = self._fallback_html_parsing(page, url)
