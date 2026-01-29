@@ -704,8 +704,12 @@ def process_queue():
                                     review_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_string))
                                     external_review_id = raw_id or f"html_{review_id}"
                                     
-                                    # Парсим дату
+                                    # Инициализация переменных
                                     published_at = None
+                                    response_text = None
+                                    response_at = None
+                                    
+                                    # Парсим дату
                                     date_value = _extract_date_from_review(review)
                                     
                                     if date_value:
