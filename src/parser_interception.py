@@ -893,17 +893,21 @@ class YandexMapsInterceptionParser:
         
         def find_products(data):
             if isinstance(data, dict):
+                # LOGGING: Print all keys if we suspect this dictates products but we missed it
+                if any(k in data for k in ['data', 'result', 'search']):
+                     print(f"🔍 DEBUG PRODUCTS: Validating dict with keys: {list(data.keys())}")
+
                 # Ищем список товаров
-                for key in ['goods', 'items', 'products', 'prices']:
+                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results']:
                     if key in data and isinstance(data[key], list):
                         # LOGGING STRUCTURE
                         if len(data[key]) > 0:
                             item0 = data[key][0]
                             if isinstance(item0, dict):
                                 print(f"🔍 DEBUG PRODUCTS: Found list in '{key}', Item keys: {list(item0.keys())}")
-
+                        
                         for item in data[key]:
-                            if isinstance(item, dict) and ('price' in item or 'name' in item):
+                            if isinstance(item, dict) and ('price' in item or 'name' in item or 'title' in item or 'text' in item):
                                 # Проверяем, что это похоже на товар/услугу
                                 name = item.get('name', item.get('title', ''))
                                 if not name:
