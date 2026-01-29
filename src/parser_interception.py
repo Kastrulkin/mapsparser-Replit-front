@@ -546,7 +546,7 @@ class YandexMapsInterceptionParser:
                     if isinstance(rating, (int, float)):
                         result['rating'] = str(rating)
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value', ''))
+                        result['rating'] = str(rating.get('value') or rating.get('score') or rating.get('val', ''))
                 
                 if 'reviewsCount' in data or 'reviews_count' in data:
                     result['reviews_count'] = int(data.get('reviewsCount') or data.get('reviews_count', 0))
@@ -826,10 +826,40 @@ class YandexMapsInterceptionParser:
                     if key in data and isinstance(data[key], list):
                         for item in data[key]:
                             if isinstance(item, dict):
+                                # Извлекаем дату (может быть в разных форматах)
+                                date_fields = [
+                                    'date', 'publishedAt', 'published_at', 'createdAt', 'created_at',
+                                    'time', 'timestamp', 'created', 'published',
+                                    'dateCreated', 'datePublished'
+                                ]
+                                date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
+                                date = ''
+                                if date_raw:
+                                    # Если это timestamp (число)
+                                    if isinstance(date_raw, (int, float)):
+                                        try:
+                                            from datetime import datetime
+                                            # Проверяем, в миллисекундах или секундах
+                                            if date_raw > 1e10:  # Вероятно миллисекунды
+                                                date = datetime.fromtimestamp(date_raw / 1000.0).isoformat()
+                                            else:  # Секунды
+                                                date = datetime.fromtimestamp(date_raw).isoformat()
+                                        except Exception as e:
+                                            pass
+                                    # Если это строка ISO формата
+                                    elif isinstance(date_raw, str):
+                                        try:
+                                            from datetime import datetime
+                                            # Убираем Z и заменяем на +00:00
+                                            date_clean = date_raw.replace('Z', '+00:00')
+                                            date = date_clean
+                                        except:
+                                            date = date_raw
+                                
                                 post = {
                                     'title': item.get('title', ''),
                                     'text': item.get('text', item.get('content', item.get('message', ''))),
-                                    'date': item.get('date', item.get('publishedAt', item.get('createdAt', ''))),
+                                    'date': date,
                                     'url': item.get('url', '')
                                 }
                                 if post['text'] or post['title']:
@@ -843,6 +873,10 @@ class YandexMapsInterceptionParser:
                     find_posts(item)
         
         find_posts(json_data)
+        if posts:
+            print(f"✅ Извлечено {len(posts)} новостей/постов")
+            # Логируем первую новость для отладки
+            print(f"📰 Пример новости: {posts[0].get('title', '')[:50]}... ({posts[0].get('date', 'нет даты')})")
         return posts
     
     def _extract_products_from_api(self, json_data: Any) -> List[Dict[str, Any]]:
