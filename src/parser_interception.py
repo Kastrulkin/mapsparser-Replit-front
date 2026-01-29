@@ -623,9 +623,11 @@ class YandexMapsInterceptionParser:
             date_fields = [
                 'date', 'publishedAt', 'published_at', 'createdAt', 'created_at',
                 'time', 'timestamp', 'created', 'published',
-                'dateCreated', 'datePublished', 'reviewDate', 'review_date'
+                'dateCreated', 'datePublished', 'reviewDate', 'review_date',
+                'updatedTime'
             ]
             date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
+
             date = ''
             if date_raw:
                 # Если это timestamp (число)
@@ -824,13 +826,19 @@ class YandexMapsInterceptionParser:
             if isinstance(data, dict):
                 for key in ['posts', 'publications', 'news', 'items']:
                     if key in data and isinstance(data[key], list):
+                        # LOGGING STRUCTURE
+                        if len(data[key]) > 0:
+                            item0 = data[key][0]
+                            if isinstance(item0, dict):
+                                print(f"🔍 DEBUG POSTS: Found list in '{key}', Item keys: {list(item0.keys())}")
+
                         for item in data[key]:
                             if isinstance(item, dict):
                                 # Извлекаем дату (может быть в разных форматах)
                                 date_fields = [
                                     'date', 'publishedAt', 'published_at', 'createdAt', 'created_at',
                                     'time', 'timestamp', 'created', 'published',
-                                    'dateCreated', 'datePublished'
+                                    'dateCreated', 'datePublished', 'updatedTime'
                                 ]
                                 date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
                                 date = ''
@@ -888,6 +896,12 @@ class YandexMapsInterceptionParser:
                 # Ищем список товаров
                 for key in ['goods', 'items', 'products', 'prices']:
                     if key in data and isinstance(data[key], list):
+                        # LOGGING STRUCTURE
+                        if len(data[key]) > 0:
+                            item0 = data[key][0]
+                            if isinstance(item0, dict):
+                                print(f"🔍 DEBUG PRODUCTS: Found list in '{key}', Item keys: {list(item0.keys())}")
+
                         for item in data[key]:
                             if isinstance(item, dict) and ('price' in item or 'name' in item):
                                 # Проверяем, что это похоже на товар/услугу
