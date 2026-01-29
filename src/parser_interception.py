@@ -952,7 +952,7 @@ class YandexMapsInterceptionParser:
                      print(f"🔍 DEBUG PRODUCTS: Validating dict with keys: {list(data.keys())}")
 
                 # Ищем список товаров
-                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results']:
+                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results', 'categoryItems', 'features']:
                     if key in data and isinstance(data[key], list):
                         # LOGGING STRUCTURE
                         if len(data[key]) > 0:
