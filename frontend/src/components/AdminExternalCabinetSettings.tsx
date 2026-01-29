@@ -59,12 +59,16 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     }
   }, [businessId]);
 
-  const handleRunParser = async () => {
+  const handleRunParser = async (source: 'yandex' | '2gis' = 'yandex') => {
     if (!businessId) return;
 
     setParseStatus('processing');
     try {
-      const data = await newAuth.makeRequest(`/admin/yandex/sync/business/${businessId}`, {
+      const endpoint = source === 'yandex'
+        ? `/admin/yandex/sync/business/${businessId}`
+        : `/admin/2gis/sync/business/${businessId}`;
+
+      const data = await newAuth.makeRequest(endpoint, {
         method: 'POST'
       });
 
@@ -348,8 +352,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
 
                 return (
                   <div className={`mb-2 p-2 border rounded text-sm ${isOld
-                      ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                      : 'bg-green-50 border-green-200 text-green-800'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    : 'bg-green-50 border-green-200 text-green-800'
                     }`}>
                     {isOld ? (
                       <>
@@ -447,7 +451,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
               </Button>
               <Button
-                onClick={handleRunParser}
+                onClick={() => handleRunParser('yandex')}
                 disabled={parseStatus === 'processing' || !businessId || !yandexAccount}
                 variant="default"
                 className="ml-auto"
@@ -516,15 +520,25 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 )}
               </div>
             )}
-            <Button
-              onClick={() => saveAccount('2gis', twoGisForm)}
-              disabled={saving || !twoGisForm.auth_data}
-            >
-              {saving ? 'Сохранение...' : twoGisAccount ? 'Обновить' : 'Сохранить'}
-            </Button>
+            <div className="flex gap-2 items-center">
+              <Button
+                onClick={() => saveAccount('2gis', twoGisForm)}
+                disabled={saving || !twoGisForm.auth_data}
+              >
+                {saving ? 'Сохранение...' : twoGisAccount ? 'Обновить' : 'Сохранить'}
+              </Button>
+              <Button
+                onClick={() => handleRunParser('2gis')}
+                disabled={parseStatus === 'processing' || !businessId || !twoGisAccount}
+                variant="default"
+                className="ml-auto"
+              >
+                {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
-    </Card>
+    </Card >
   );
 };

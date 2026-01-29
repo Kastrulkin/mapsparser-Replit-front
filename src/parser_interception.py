@@ -898,7 +898,18 @@ class YandexMapsInterceptionParser:
                                     'time', 'timestamp', 'created', 'published',
                                     'dateCreated', 'datePublished', 'updatedTime'
                                 ]
-                                date_raw = next((item.get(field) for field in date_fields if item.get(field)), None)
+                                
+                                date_raw = None
+                                for field in date_fields:
+                                    val = item.get(field)
+                                    if val:
+                                        date_raw = val
+                                        break
+                                
+                                # Fallback: check for nested date object (e.g. date: { value: ... })
+                                if not date_raw and isinstance(item.get('date'), dict):
+                                    date_raw = item.get('date').get('value')
+
                                 date = ''
                                 if date_raw:
                                     # Если это timestamp (число)
@@ -911,17 +922,21 @@ class YandexMapsInterceptionParser:
                                             else:  # Секунды
                                                 date = datetime.fromtimestamp(date_raw).isoformat()
                                         except Exception as e:
-                                            pass
+                                            print(f"⚠️ Error parsing timestamp {date_raw}: {e}")
                                     # Если это строка ISO формата
                                     elif isinstance(date_raw, str):
                                         try:
-                                            from datetime import datetime
                                             # Убираем Z и заменяем на +00:00
                                             date_clean = date_raw.replace('Z', '+00:00')
                                             date = date_clean
                                         except:
                                             date = date_raw
                                 
+                                if not date:
+                                    print(f"⚠️ DEBUG POSTS: No date found for item. Keys: {list(item.keys())}")
+                                    if 'date' in item:
+                                        print(f"   Date field content: {item['date']}")
+
                                 post = {
                                     'title': item.get('title', ''),
                                     'text': item.get('text', item.get('content', item.get('message', ''))),
@@ -952,24 +967,39 @@ class YandexMapsInterceptionParser:
         def find_products(data):
             if isinstance(data, dict):
                 # LOGGING: Print all keys if we suspect this dictates products but we missed it
-                if any(k in data for k in ['data', 'result', 'search']):
-                     print(f"🔍 DEBUG PRODUCTS: Validating dict with keys: {list(data.keys())}")
+                if any(k in data for k in ['data', 'result', 'search', 'goods', 'items']):
+                    # Too verbose to print everything, just keys
+                    pass 
 
                 # Ищем список товаров
-                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results', 'categoryItems', 'features']:
+                # Added: 'searchResult', 'results', 'data' to search path
+                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results', 'categoryItems', 'features', 'documents']:
                     if key in data and isinstance(data[key], list):
                         # LOGGING STRUCTURE
                         if len(data[key]) > 0:
                             item0 = data[key][0]
                             if isinstance(item0, dict):
-                                print(f"🔍 DEBUG PRODUCTS: Found list in '{key}', Item keys: {list(item0.keys())}")
+                                 # Debug log only if it looks somewhat like a product (has name/price)
+                                 if any(k in item0 for k in ['name', 'title', 'price', 'text']):
+                                     print(f"🔍 DEBUG PRODUCTS: Found list in '{key}', Item keys: {list(item0.keys())}")
                         
                         for item in data[key]:
-                            if isinstance(item, dict) and ('price' in item or 'name' in item or 'title' in item or 'text' in item):
-                                # Проверяем, что это похоже на товар/услугу
+                            if isinstance(item, dict):
+                                # Check if it's a product
                                 name = item.get('name', item.get('title', ''))
+                                
+                                # Deep search for name if not found at top level
+                                if not name and 'name' in item.get('data', {}):
+                                    name = item.get('data', {}).get('name')
+
                                 if not name:
-                                    continue
+                                    # Try 'text' as fallback for name if short
+                                    text_val = item.get('text', '')
+                                    if text_val and len(text_val) < 100: 
+                                         # Might be a category or simple item
+                                         pass
+                                    else:
+                                         continue
                                     
                                 price = item.get('price', {})
                                 price_val = ''
@@ -978,25 +1008,42 @@ class YandexMapsInterceptionParser:
                                 else:
                                     price_val = str(price)
                                 
-                                category = item.get('category', {}).get('name', '') if isinstance(item.get('category'), dict) else str(item.get('category', ''))
+                                # Категория
+                                category = ''
+                                if isinstance(item.get('category'), dict):
+                                    category = item.get('category').get('name', '')
+                                else:
+                                    category = str(item.get('category', ''))
                                 
-                                products.append({
-                                    'name': name,
-                                    'price': price_val,
-                                    'description': item.get('description', ''),
-                                    'category': category,
-                                    'photo': item.get('image', {}).get('url', '') if isinstance(item.get('image'), dict) else ''
-                                })
+                                # Если есть description, берем его
+                                description = item.get('description', '')
+                                
+                                photo = ''
+                                if isinstance(item.get('image'), dict):
+                                    photo = item.get('image').get('url', '')
+                                
+                                # Only add if it seems valid
+                                if name:
+                                    products.append({
+                                        'name': name,
+                                        'price': price_val,
+                                        'description': description,
+                                        'category': category,
+                                        'photo': photo
+                                    })
                 
                 # Рекурсивный поиск
-                for value in data.values():
-                    find_products(value)
+                for key, value in data.items():
+                    if isinstance(value, (dict, list)):
+                        find_products(value)
             
             elif isinstance(data, list):
                 for item in data:
                     find_products(item)
                     
         find_products(json_data)
+        if len(products) > 0:
+            print(f"📦 DEBUG PRODUCTS: Extracted {len(products)} total items")
         return products
     
     def _fallback_html_parsing(self, page, url: str) -> Dict[str, Any]:

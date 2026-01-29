@@ -1701,7 +1701,7 @@ def get_external_summary(business_id):
         # Получаем дату последнего парсинга
         cursor.execute(
             """
-            SELECT created_at
+            SELECT created_at, competitors
             FROM MapParseResults
             WHERE business_id = ?
             ORDER BY created_at DESC
@@ -1727,6 +1727,7 @@ def get_external_summary(business_id):
             "reviews_without_response": reviews_without_response,
             "last_sync_date": stats_row[2] if stats_row else None,
             "last_parse_date": last_parse_date,
+            "competitors": parse_row[1] if parse_row and len(parse_row) > 1 else None
         })
 
     except Exception as e:
@@ -4863,6 +4864,7 @@ def get_map_parses(business_id):
         
         has_unanswered_col = 'unanswered_reviews_count' in columns
         has_profile_fields = 'profile_completeness' in columns
+        has_competitors = 'competitors' in columns
         
         # Формируем SELECT с учётом существующих колонок
         base_fields = "id, url, map_type, rating, reviews_count"
@@ -4875,6 +4877,9 @@ def get_map_parses(business_id):
         if has_profile_fields:
             select_fields += ", is_verified, phone, website, messengers, working_hours, services_count, profile_completeness"
         
+        if has_competitors:
+            select_fields += ", competitors"
+            
         select_fields += ", created_at"
         
         cursor.execute(f"""
@@ -4909,6 +4914,10 @@ def get_map_parses(business_id):
                 item["servicesCount"] = r[idx+5] if r[idx+5] is not None else 0
                 item["profileCompleteness"] = r[idx+6] if r[idx+6] is not None else 0
                 idx += 7
+            
+            if has_competitors:
+                item["competitors"] = r[idx]
+                idx += 1
             
             item["createdAt"] = r[idx]
             items.append(item)

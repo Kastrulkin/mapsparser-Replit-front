@@ -20,7 +20,8 @@ import {
   Sparkles,
   LayoutGrid,
   List,
-  Newspaper
+  Newspaper,
+  Trophy
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
@@ -37,6 +38,7 @@ export const CardOverviewPage = () => {
   const [rating, setRating] = useState<number | null>(null);
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
   const [lastParseDate, setLastParseDate] = useState<string | null>(null);
+  const [competitors, setCompetitors] = useState<any[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Состояния для услуг
@@ -84,6 +86,16 @@ export const CardOverviewPage = () => {
         setRating(data.rating);
         setReviewsTotal(data.reviews_total || 0);
         setLastParseDate(data.last_parse_date || null);
+        try {
+          if (data.competitors) {
+            setCompetitors(typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors);
+          } else {
+            setCompetitors([]);
+          }
+        } catch (e) {
+          console.error("Error parsing competitors:", e);
+          setCompetitors([]);
+        }
       }
     } catch (e) {
       console.error('Ошибка загрузки сводки:', e);
@@ -498,7 +510,54 @@ export const CardOverviewPage = () => {
               <TrendingUp className="w-4 h-4" />
               SEO (Wordstat)
             </TabsTrigger>
+            <TabsTrigger value="competitors" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <Trophy className="w-4 h-4" />
+              Конкуренты
+            </TabsTrigger>
           </TabsList>
+
+
+          <TabsContent value="competitors" className="space-y-6">
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8")}>
+              <div className="flex items-center gap-2 mb-6">
+                <Trophy className="w-6 h-6 text-amber-500" />
+                <h2 className="text-2xl font-bold text-gray-900">Конкуренты</h2>
+              </div>
+              {competitors.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {competitors.map((comp: any, idx: number) => (
+                    <div key={idx} className="bg-white/50 border border-gray-100 p-4 rounded-xl hover:shadow-md transition-all">
+                      <div className="font-semibold text-lg text-gray-900 mb-1">{comp.name || "Без названия"}</div>
+                      <div className="text-sm text-gray-500 mb-3">{comp.category}</div>
+                      <div className="flex items-center gap-4 text-sm">
+                        {comp.rating && (
+                          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+                            <Star className="w-3 h-3 fill-amber-600" />
+                            <span className="font-medium">{comp.rating}</span>
+                          </div>
+                        )}
+                        {comp.reviews && (
+                          <div className="text-gray-500">
+                            {comp.reviews}
+                          </div>
+                        )}
+                      </div>
+                      {comp.url && (
+                        <a href={comp.url} target="_blank" rel="noreferrer" className="mt-4 block text-center py-2 w-full bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium">
+                          Посмотреть на карте
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Trophy className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p>Конкуренты не найдены. Попробуйте обновить данные парсинга.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
             {/* Rating Summary Card */}

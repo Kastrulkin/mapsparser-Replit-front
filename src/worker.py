@@ -785,7 +785,7 @@ def process_queue():
                                         external_post_id=f"html_{post_id}", # Нет реального ID в HTML
                                         title=item.get('title') or (post_text[:30] + '...'),
                                         text=post_text,
-                                        published_at=pub_at or datetime.now(), # Fallback to now if no date
+                                        published_at=pub_at, # Keep None if not found, don't fake it with now()
                                         image_url=None, # HTML scraper rarely gets clean image URLs for news context
                                         raw_payload=item
                                     )

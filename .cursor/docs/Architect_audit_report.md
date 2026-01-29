@@ -687,3 +687,28 @@ User reported that "Services" column was missing in the parsing history table an
 
 ### Status
 - [x] Completed
+
+## 2026-01-29 - Fix Interception Parser (Missing Services & News Dates)
+
+### Current Task
+1.  **News Dates**: Interception parser failed to extract dates from timestamps, causing `worker.py` to default to "today" for all news.
+2.  **Missing Services**: Parser found 0 services because Yandex API structure has variations (`searchResult` vs `goods`).
+
+### Architecture Decision
+1.  **Parser Enhancement**:
+    *   Updated `parser_interception.py`:
+        *   `_extract_posts`: Added logic to parse UNIX timestamps (ms/s) and ISO strings. Added fallback for `date: { value: ... }` structure.
+        *   `_extract_products_from_api`: Added recursive search for `searchResult`, `results`, `data` keys. Added detailed logging.
+2.  **Worker Fix**:
+    *   Removed `published_at=pub_at or datetime.now()` in `worker.py`. Now if date is missing, it remains `None` (avoiding false "new" posts).
+
+### Files to Modify
+- `src/parser_interception.py` - parsing logic.
+- `src/worker.py` - removed date fallback.
+
+### Trade-offs & Decisions
+- **Logging**: Added verbose logging only for "suspicious" cases (empty lists) to avoid log spam but allow debugging in production.
+- **Accuracy vs Coverage**: Better to have NO date than WRONG date for news.
+
+### Status
+- [x] Completed

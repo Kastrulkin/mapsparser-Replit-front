@@ -22,6 +22,7 @@ interface MapParseItem {
   workingHours?: string;
   servicesCount?: number;
   profileCompleteness?: number;
+  competitors?: string;
   createdAt: string;
 }
 

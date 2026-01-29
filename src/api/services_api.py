@@ -104,7 +104,7 @@ def get_services():
         has_optimized_name = 'optimized_name' in columns
         
         # Формируем SELECT с учетом наличия полей
-        select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+        select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
         if has_optimized_desc:
             select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
         if has_optimized_name:
