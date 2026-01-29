@@ -1041,11 +1041,12 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
     # Получаем owner_id бизнеса
     cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
     row = cursor.fetchone()
-    if not row or not row[0]:
-        print(f"⚠️ Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден")
+    if not row or row[0] is None:
+        print(f"⚠️ Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден (row={row})")
         return
         
     owner_id = row[0]
+    print(f"👤 Syncing services for owner_id: {owner_id}")
     
     for category_data in products:
         category_name = category_data.get('category', 'Разное')

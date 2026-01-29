@@ -84,7 +84,7 @@ class GigaChatAnalyzer:
                 "Authorization": f"Basic {auth_base64}"
             }
             try:
-                response = requests.post(url, data=data, headers=headers, timeout=30)
+                response = requests.post(url, data=data, headers=headers, timeout=30, verify=False)
                 if response.status_code in (401, 403):
                     # Неверный/просроченный ключ — пробуем следующий
                     last_error = RuntimeError(f"Auth failed for key index {self.current_index}: {response.status_code}")
@@ -408,7 +408,7 @@ class GigaChatAnalyzer:
                 "max_tokens": 4000
             }
             
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = requests.post(url, headers=headers, json=data, timeout=60, verify=False)
             response.raise_for_status()
             
             result = response.json()
