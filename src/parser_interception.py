@@ -300,6 +300,7 @@ class YandexMapsInterceptionParser:
                         if html_products:
                             print(f"✅ Услуги найдены через HTML: {len(html_products)}")
                             data['products'] = html_products
+                            data['fallback_used'] = True # MARKER for worker.py warning
                             
                             # Пересобираем overview grouped products
                             grouped_products = {}

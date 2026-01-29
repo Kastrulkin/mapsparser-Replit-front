@@ -941,9 +941,16 @@ def process_queue():
                     import traceback
                     traceback.print_exc()
             
-            # Обновляем статус на "done" и удаляем заявку из очереди
             # Обновляем статус на "completed" (чтобы задача осталась в списке)
-            cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("completed", queue_dict["id"]))
+            warning_msg = None
+            if card_data.get('fallback_used'):
+                warning_msg = "⚠️ Fast Endpoint Outdated (Used HTML Fallback)"
+                
+            if warning_msg:
+                 cursor.execute("UPDATE ParseQueue SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("completed", warning_msg, queue_dict["id"]))
+            else:
+                 cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("completed", queue_dict["id"]))
+            
             # cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_dict["id"],)) -> Удаление отключено по просьбе пользователя
             conn.commit()
             
