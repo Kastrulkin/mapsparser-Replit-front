@@ -508,7 +508,9 @@ class YandexMapsInterceptionParser:
                     if isinstance(rating, (int, float)):
                         result['rating'] = str(rating)
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value', ''))
+                        result['rating'] = str(rating.get('value', rating.get('score', rating.get('val', ''))))
+                elif 'score' in data:
+                    result['rating'] = str(data['score'])
                 
                 # Ищем количество отзывов
                 if 'reviewsCount' in data:
@@ -600,7 +602,9 @@ class YandexMapsInterceptionParser:
                     if isinstance(rating, (int, float)):
                         result['rating'] = str(rating)
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value') or rating.get('score') or rating.get('val', ''))
+                         result['rating'] = str(rating.get('value', rating.get('score', rating.get('val', ''))))
+                elif 'score' in data:
+                    result['rating'] = str(data['score'])
                 
                 if 'reviewsCount' in data or 'reviews_count' in data:
                     result['reviews_count'] = int(data.get('reviewsCount') or data.get('reviews_count', 0))

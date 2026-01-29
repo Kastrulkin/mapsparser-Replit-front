@@ -59,7 +59,16 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         if not products:
             return
 
-        cursor = conn.cursor()
+        cursor = self.db.conn.cursor()
+        
+        # Получаем owner_id бизнеса
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            print(f"⚠️ [SyncWorker] Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден")
+            return
+            
+        owner_id = row[0]
         
         # 1. Проверяем наличие таблицы UserServices и нужных колонок
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
@@ -125,9 +134,9 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 else:
                     service_id = str(uuid.uuid4())
                     cursor.execute("""
-                        INSERT INTO UserServices (id, business_id, name, description, category, price, is_active, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                    """, (service_id, business_id, name, description, category_name, price_cents))
+                        INSERT INTO UserServices (id, business_id, user_id, name, description, category, price, is_active, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                    """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
                     count_new += 1
                     
         conn.commit()

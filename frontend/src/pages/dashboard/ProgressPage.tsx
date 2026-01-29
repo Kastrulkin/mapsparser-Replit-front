@@ -121,6 +121,12 @@ export const ProgressPage = () => {
       </div>
 
       <BusinessGrowthPlan businessId={currentBusinessId} />
+
+      <div className="mt-8 mb-4">
+        <h2 className="text-2xl font-bold tracking-tight">{t.dashboard?.progress?.charts?.title || "Метрики Бизнеса"}</h2>
+        <p className="text-muted-foreground">{t.dashboard?.progress?.charts?.subtitle || "История изменений показателей"}</p>
+      </div>
+
       <MetricsHistoryCharts businessId={currentBusinessId} />
       <MapRecommendations businessId={currentBusinessId} />
       <MapParseTable businessId={currentBusinessId} />

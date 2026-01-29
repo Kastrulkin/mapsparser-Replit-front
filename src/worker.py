@@ -1034,6 +1034,15 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
     count_new = 0
     count_updated = 0
     
+    # Получаем owner_id бизнеса
+    cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+    row = cursor.fetchone()
+    if not row or not row[0]:
+        print(f"⚠️ Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден")
+        return
+        
+    owner_id = row[0]
+    
     for category_data in products:
         category_name = category_data.get('category', 'Разное')
         items = category_data.get('items', [])
@@ -1081,9 +1090,9 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
                 # Создаем новую
                 service_id = str(uuid.uuid4())
                 cursor.execute("""
-                    INSERT INTO UserServices (id, business_id, name, description, category, price, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
-                """, (service_id, business_id, name, description, category_name, price_cents))
+                    INSERT INTO UserServices (id, business_id, user_id, name, description, category, price, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
                 count_new += 1
                 
     conn.commit()
