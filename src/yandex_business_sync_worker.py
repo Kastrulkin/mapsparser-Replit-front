@@ -51,24 +51,22 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         repository = ExternalDataRepository(db)
         repository.upsert_stats(stats)
     
-    def _sync_services_to_db(self, conn, business_id: str, products: list):
+    def _sync_services_to_db(self, conn, business_id: str, products: list, owner_id: str):
         """
         Синхронизирует распаршенные услуги в таблицу UserServices.
         (Дубликат логики из worker.py для избежания циклических импортов)
         """
         if not products:
             return
+            
+        if not owner_id:
+             print(f"⚠️ [SyncWorker] Service sync skipped: owner_id missing for {business_id}")
+             # Fail fast
+             raise ValueError(f"owner_id is required for service sync for {business_id}")
 
         cursor = self.db.conn.cursor()
         
-        # Получаем owner_id бизнеса
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-        row = cursor.fetchone()
-        if not row or not row[0]:
-            print(f"⚠️ [SyncWorker] Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден")
-            return
-            
-        owner_id = row[0]
+        # REMOVED: Internal SELECT owner_id from Businesses
         
         # 1. Проверяем наличие таблицы UserServices и нужных колонок
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
@@ -286,6 +284,14 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             if 'external_id' not in account and 'external_id' in locals():
                 account['external_id'] = external_id
 
+            # FETCH OWNER ID (Strict)
+            cursor = db.conn.cursor()
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (account['business_id'],))
+            row = cursor.fetchone()
+            owner_id = row[0] if row else None
+            
+            if not owner_id:
+                print(f"⚠️ [SyncAccount] Owner ID missing for business {account['business_id']}. Service sync may fail.")
             
             # Fetch & Upsert
             reviews = parser.fetch_reviews(account)
@@ -341,7 +347,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 products = parser.fetch_products(account)
                 if products:
                     print(f"📦 Получено {len(products)} категорий услуг")
-                    self._sync_services_to_db(db.conn, account['business_id'], products)
+                    self._sync_services_to_db(db.conn, account['business_id'], products, owner_id=owner_id)
                 else:
                     print("⚠️ Услуги не найдены или пустой список")
             except Exception as e:

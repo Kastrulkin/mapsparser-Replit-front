@@ -659,3 +659,31 @@ User reported that "Services" column was missing in the parsing history table an
 
 ### Status
 - [x] Completed
+
+## 2026-01-29 - Fix Date Parsing & UserServices Integrity Error
+
+### Current Task
+1.  **Date Parsing**: Russian dates with punctuation (e.g., "5 сентября,") failed to parse.
+2.  **Integrity Error**: `sqlite3.IntegrityError: NOT NULL constraint failed: UserServices.user_id` occurred during service sync.
+
+### Architecture Decision
+1.  **Date Parsing**: Updated `_parse_russian_date` in `worker.py` to strip punctuation using regex `re.sub(r'[^\w\s]', '', month_str)` before dictionary lookup. Confirmed with `tests/test_date_parsing_strict.py`.
+2.  **Integrity Error**:
+    *   **Root Cause**: `worker.py` and `yandex_business_sync_worker.py` implicitly relied on fetching `owner_id` from `Businesses` table inside the sync function, which could fail or return None.
+    *   **Fix**: Refactored `_sync_parsed_services_to_db` to require `user_id` (str) as a mandatory argument.
+    *   **Fetch Once**: Moved `owner_id` fetching to the top-level `sync_account` method in `yandex_business_sync_worker.py` and `process_queue` in `worker.py`.
+    *   **Migration**: Created `src/migration_fix_orphan_services.py` which fixed 41 existing orphan records by linking them to their business owners.
+
+### Files to Modify
+- `src/worker.py` - Regex fix and signature change.
+- `src/yandex_business_sync_worker.py` - Signature change and fetch logic.
+- `src/migration_fix_orphan_services.py` [NEW] - Data repair script.
+- `tests/test_date_parsing_strict.py` [NEW] - Verification test.
+- `tests/test_services_sync_logic.py` [NEW] - Logic verification test.
+
+### Trade-offs & Decisions
+- **Strictness**: Fail-fast approach (raising `ValueError` if `user_id` is missing) chosen over silent failure to prevent data corruption.
+- **Migration**: Manual script chosen over auto-migration on startup to allow controlled execution and backup.
+
+### Status
+- [x] Completed

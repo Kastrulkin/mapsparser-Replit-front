@@ -106,7 +106,6 @@ def _parse_relative_date(date_str: str) -> datetime | None:
     return None
 
 def _parse_russian_date(date_str: str) -> datetime | None:
-    """Парсинг русских дат типа '27 января 2026' или '10 октября'"""
     try:
         months = {
             'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4, 'мая': 5, 'июня': 6,
@@ -124,6 +123,8 @@ def _parse_russian_date(date_str: str) -> datetime | None:
             # Очистка от лишних символов
             day_str = re.sub(r'\D', '', day_str)
             year_str = re.sub(r'\D', '', year_str)
+            # Очищаем месяц от знаков препинания (запятые, точки)
+            month_str = re.sub(r'[^\w\s]', '', month_str, flags=re.UNICODE) 
             
             if not day_str or not month_str:
                 return None
@@ -330,7 +331,11 @@ def process_queue():
         # Fallback парсинг через кабинет
         _process_cabinet_fallback_task(queue_dict)
         return
-    elif task_type in ["sync_google_business", "sync_2gis"]:
+    elif task_type == "sync_2gis":
+        # Синхронизация 2ГИС API
+        _process_sync_2gis_task(queue_dict)
+        return
+    elif task_type == "sync_google_business":
         # Другие источники (будущее)
         print(f"⚠️ Тип задачи {task_type} пока не реализован")
         conn = get_db_connection()
@@ -540,6 +545,7 @@ def process_queue():
                         ("website", "TEXT"),
                         ("messengers", "TEXT"),  # JSON
                         ("working_hours", "TEXT"),  # JSON
+                        ("competitors", "TEXT"),    # JSON
                         ("services_count", "INTEGER DEFAULT 0"),
                         ("profile_completeness", "INTEGER DEFAULT 0"),
                     ]
@@ -566,6 +572,10 @@ def process_queue():
                     # Working hours (преобразуем в структурированный JSON)
                     hours_full = card_data.get('hours_full', [])
                     hours_json = json.dumps({'schedule': hours_full}, ensure_ascii=False) if hours_full else None
+                    
+                    # Competitors
+                    competitors = card_data.get('competitors', [])
+                    competitors_json = json.dumps(competitors, ensure_ascii=False) if competitors else None
                     
                     # Services count
                     products = card_data.get('products', [])
@@ -621,10 +631,10 @@ def process_queue():
                         INSERT INTO MapParseResults
                         (id, business_id, url, map_type, rating, reviews_count, unanswered_reviews_count, 
                          news_count, photos_count, report_path, 
-                         is_verified, phone, website, messengers, working_hours, services_count, profile_completeness,
+                         is_verified, phone, website, messengers, working_hours, competitors, services_count, profile_completeness,
                          title, address,
                          created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """, (
                         parse_result_id,
                         business_id,
@@ -641,6 +651,7 @@ def process_queue():
                         website,
                         messengers_json,
                         hours_json,
+                        competitors_json,
                         services_count,
                         profile_completeness,
                         card_data.get('name') or card_data.get('title', ''),
@@ -1005,13 +1016,19 @@ def process_queue():
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
 
-def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.Connection):
+def _sync_parsed_services_to_db(business_id: str, products: list, user_id: str, conn: sqlite3.Connection):
     """
     Синхронизирует распаршенные услуги в таблицу UserServices.
     Добавляет новые, обновляет цены существующих.
     """
     if not products:
         return
+
+    # STRICT CHECK: user_id required
+    if not user_id:
+        print(f"⚠️ Service sync skipped: user_id is missing for business {business_id}")
+        # Raising error to fail fast as per plan, but let's confirm logic
+        raise ValueError(f"user_id (str) is required for service sync for business {business_id}")
 
     cursor = conn.cursor()
     
@@ -1031,6 +1048,7 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
                 is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_id TEXT,
                 FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
             )
         """)
@@ -1038,17 +1056,12 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
     count_new = 0
     count_updated = 0
     
-    # Получаем owner_id бизнеса
-    cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
-    row = cursor.fetchone()
-    if not row or row[0] is None:
-        print(f"⚠️ Невозможно синхронизировать услуги для бизнеса {business_id}: владелец не найден (row={row})")
-        return
-        
-    owner_id = row[0]
+    # REMOVED: Fetching owner_id from Businesses (Pass explicitly)
+    owner_id = user_id
     print(f"👤 Syncing services for owner_id: {owner_id}")
     
     for category_data in products:
+
         category_name = category_data.get('category', 'Разное')
         items = category_data.get('items', [])
         
@@ -1542,6 +1555,182 @@ def _process_cabinet_fallback_task(queue_dict):
         import traceback
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
+        _handle_worker_error(queue_dict["id"], str(e))
+
+def _process_sync_2gis_task(queue_dict):
+    """Обработка задачи синхронизации с 2ГИС через API"""
+    business_id = queue_dict.get("business_id")
+    target_url = queue_dict.get("url")
+    user_id = queue_dict.get("user_id")
+    
+    print(f"🔄 Запуск синхронизации 2ГИС для бизнеса {business_id}...", flush=True)
+    
+    try:
+        from services.two_gis_client import TwoGISClient
+        from external_sources import ExternalSource, ExternalStatsPoint, make_stats_id
+        
+        # Инициализация клиента
+        # TODO: Можно брать ключ из настроек бизнеса, если мы разрешаем клиентам свои ключи
+        # Пока берем из ENV
+        if not os.getenv("TWOGIS_API_KEY"):
+            raise ValueError("TWOGIS_API_KEY не установлен в .env")
+
+        client = TwoGISClient()
+        
+        org_data = None
+        
+        # 1. Если есть URL, пробуем извлечь ID или найти по нему
+        if target_url:
+            # Извлекаем ID из URL вида https://2gis.ru/city/firm/70000001007629561
+            import re
+            match = re.search(r'/firm/(\d+)', target_url)
+            if match:
+                org_id = match.group(1)
+                print(f"🔍 Найден ID организации в URL: {org_id}")
+                org_data = client.search_organization_by_id(org_id)
+            else:
+                # Если URL сложный, можно попробовать поискать по названию, но это неточно
+                pass
+        
+        # 2. Если по URL не нашли (или его нет), ищем по названию/адресу из БД
+        if not org_data:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT name, address FROM Businesses WHERE id = ?", (business_id,))
+                row = cursor.fetchone()
+                if row:
+                    name, address = row
+                    query = f"{name} {address}"
+                    print(f"🔍 Поиск в 2ГИС по запросу: {query}")
+                    items = client.search_organization_by_text(query)
+                    if items:
+                        # Берем первый результат. В идеале нужно сравнение адресов.
+                        org_data = items[0]
+                        print(f"✅ Найдена организация: {org_data.get('name')}")
+            finally:
+                cursor.close()
+                conn.close()
+
+        if not org_data:
+            raise Exception("Не удалось найти организацию в 2ГИС по ID или названию")
+
+        # 3. Сохраняем данные
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Нормализация данных для MapParseResults
+            # В отличие от Yandex Maps Scraper, API 2GIS дает меньше данных в бесплатной версии
+            
+            # Rating & Reviews
+            reviews_data = org_data.get('reviews', {})
+            rating = reviews_data.get('general_rating')
+            reviews_count = reviews_data.get('general_review_count', 0)
+            
+            # Details
+            name = org_data.get('name')
+            address = org_data.get('address_name') or org_data.get('adm_div', [{}])[0].get('name')
+            
+            # Phone / Website
+            contacts = org_data.get('contact_groups', [])
+            phone = None
+            website = None
+            for group in contacts:
+                for contact in group.get('contacts', []):
+                    if contact.get('type') == 'phone_number':
+                        phone = contact.get('value') or contact.get('text')
+                    if contact.get('type') == 'website':
+                        website = contact.get('value') or contact.get('text')
+
+            # Schedule
+            schedule = org_data.get('schedule')
+            schedule_json = json.dumps(schedule, ensure_ascii=False) if schedule else None
+            
+            # Generating ID
+            parse_result_id = str(uuid.uuid4())
+            
+            # Map Parse Results (Profile)
+            _ensure_column_exists(cursor, conn, "MapParseResults", "unanswered_reviews_count", "INTEGER")
+            profile_columns = [
+                ("is_verified", "INTEGER DEFAULT 0"),
+                ("phone", "TEXT"),
+                ("website", "TEXT"),
+                ("messengers", "TEXT"),
+                ("working_hours", "TEXT"),
+                ("competitors", "TEXT"),
+                ("services_count", "INTEGER DEFAULT 0"),
+                ("profile_completeness", "INTEGER DEFAULT 0"),
+            ]
+            for col_name, col_type in profile_columns:
+                _ensure_column_exists(cursor, conn, "MapParseResults", col_name, col_type)
+
+            cursor.execute("""
+                INSERT INTO MapParseResults
+                (id, business_id, url, map_type, rating, reviews_count, unanswered_reviews_count, 
+                 news_count, photos_count, report_path, 
+                 is_verified, phone, website, messengers, working_hours, competitors, services_count, profile_completeness,
+                 title, address,
+                 created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                parse_result_id,
+                business_id,
+                target_url or "",
+                "2gis",
+                str(rating) if rating else None,
+                int(reviews_count or 0),
+                0, # API doesn't give unanswered count easily
+                0, # No news in API
+                0, # Photos might be available but let's skip for MVP
+                None, # report path
+                0, # verification status unknown
+                phone,
+                website,
+                None, # messengers
+                schedule_json,
+                None, # competitors
+                0, # services count
+                0, # completeness
+                name,
+                address
+            ))
+            
+            # External Stats (Rating History)
+            if rating is not None:
+                today = datetime.now().strftime('%Y-%m-%d')
+                stats_id = make_stats_id(business_id, ExternalSource.TWO_GIS, today)
+                
+                # Check if exists to update or insert
+                cursor.execute("""
+                    INSERT OR REPLACE INTO ExternalBusinessStats
+                    (id, business_id, source, date, rating, reviews_total, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (stats_id, business_id, "2gis", today, float(rating), int(reviews_count)))
+                print(f"✅ Статистика 2ГИС обновлена: Рейтинг {rating}, Отзывов {reviews_count}")
+
+            # Update Queue Status
+            cursor.execute("""
+                UPDATE ParseQueue 
+                SET status = 'done', 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (queue_dict["id"],))
+            
+            conn.commit()
+            print(f"✅ Синхронизация с 2ГИС успешно завершена для {business_id}")
+            
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cursor.close()
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Ошибка синхронизации 2ГИС: {e}", flush=True)
+        # import traceback
+        # traceback.print_exc()
         _handle_worker_error(queue_dict["id"], str(e))
 
 
