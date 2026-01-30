@@ -712,3 +712,202 @@ User reported that "Services" column was missing in the parsing history table an
 
 ### Status
 - [x] Completed
+
+## 2026-01-29 - Fix 'Oliver' Parsing (Robust Services Filter & Title Validation)
+
+### Current Task
+Debug and fix Yandex Parser for 'Oliver' salon.
+Issues:
+1.  **Pollution**: Parser extracted 3000+ items (map features like toilets, entrances) as services.
+2.  **Wrong Title**: Extracted "Saint Petersburg" instead of "Oliver".
+3.  **Missing Data**: Services tab was hard to find.
+
+### Architecture Decision
+1.  **Robust Product Filtering**: 
+    - Updated `_extract_products_from_api` in `parser_interception.py`.
+    - **Logic**: 
+        - Exclude objects with `workingTime`, `ratingData` (other organizations).
+        - Exclude objects from `features` keys.
+        - **Strict Rule**: If item comes from generic lists (`items`, `searchResult`), it MUST have a **price**.
+2.  **Organization Title Validation**:
+    - Updated `_extract_location_info` and `_extract_search_api_data`.
+    - **Blacklist**: Ignore titles matching toponyms (`['Санкт-Петербург', 'Россия', 'Яндекс Карты', 'Москва']`).
+3.  **Fallback Mechanism**:
+    - Updated fallback HTML parsing to use user-provided selectors if API fails.
+    - Replaced incorrect import of `YandexMapsScraper` class with direct function calls (`parse_products`).
+
+### Files to Modify
+- `src/parser_interception.py` - Core logic updates.
+
+### Trade-offs & Decisions
+- **Strict Price Filter**: We might miss valid services that truly have no price listed in the map data, but this is preferable to importing 3000 "toilets".
+- **Toponym Blacklist**: Necessary because `location-info` API sometimes returns the city object if the specific organization data is nested or malformed.
+
+### Status
+- [x] Completed
+
+## 2026-01-29 - Fix Duplicate Services (Dedup Logic)
+
+### Current Task
+User reported services count discrepancy (36 vs 44 extracted).
+Investigation showed 8 identical duplicates (same name/price/category).
+
+### Architecture Decision
+1.  **Deduplication**: Added post-processing step in `_extract_data_from_responses`.
+2.  **Logic**: Filter products by unique key: `(name + price)`.
+3.  **Result**: 44 items -> 36 unique items (exact match with Yandex UI).
+
+### Files to Modify
+- `src/parser_interception.py`
+
+### Status
+- [x] Completed
+
+## 2026-01-30 - Fix Parser Sync Errors (NameError & AttributeError)
+
+### Current Task
+User parsing failed to save services (`NameError: user_id`) and detailed stats (`AttributeError: no attribute 'db'`).
+This blocked the correct display of parsed data in the dashboard.
+
+### Architecture Decision
+1.  **NameError Fix**: Removed invalid assignment `owner_id = user_id` in `worker.py`. The `owner_id` was already passed correctly as a function argument.
+2.  **AttributeError Fix**: Updated `YandexBusinessSyncWorker._sync_services_to_db` to use the explicitly passed `conn` connection object instead of `self.db` (which is not initialized in that context).
+
+### Files to Modify
+- `src/worker.py`
+- `src/yandex_business_sync_worker.py`
+
+### Status
+- [x] Completed
+
+## 2026-01-30 - Business Health Widget Implementation
+
+### Current Task
+Create a dedicated "Business Health" widget for single businesses, replacing the reused "Network Dashboard".
+Requirements: Isolation, Security, Single-business focus.
+
+### Architecture Decision
+1.  **Backend Security**:
+    - Updated `src/api/network_health_api.py` (`/api/network/health` and `/api/network/locations-alerts`).
+    - Added **Strict Verification**: Returns 404 if business not found, 403 if user is not owner.
+    - Added **Isolation Policy**: Returns 400 if the business ID belongs to a network (enforcing use of network endpoints for networks).
+2.  **Frontend Architecture**:
+    - Created isolated module `BusinessHealthWidget` (not reusing Network dashboard code to avoid complexity).
+    - Uses `react-query` with robust token handling (checks both `token` and `auth_token`).
+    - Implemented "Graceful Degradation": component hides itself on 403 error.
+3.  **Integration**:
+    - Embedded into `ProgressPage.tsx` standard view.
+
+### Files to Modify
+- `src/api/network_health_api.py`
+- `frontend/src/components/business/BusinessHealthWidget/*` [NEW]
+- `frontend/src/pages/dashboard/ProgressPage.tsx`
+
+### Status
+- [x] Completed
+
+## 2026-01-30 - Audit of Previous Fixes (Response to Critique)
+
+### Current Task
+Validate the safety of recent fixes ("Parser Sync Errors") against identified risks (Root Cause, Transaction Safety, Regression).
+Critique raised concerns about:
+1.  `owner_id` usage in `worker.py` (potential regression if None).
+2.  Transaction mismatch in `yandex_business_sync_worker.py` (conn vs self.db).
+
+### Architecture Decision
+1.  **Code Audit Findings**:
+    - **worker.py**: Confirmed that `owner_id` is explicitly fetched from DB (`SELECT owner_id ...`) immediately before calling `_sync_parsed_services_to_db`. If fetch fails, the function is NOT called. Thus, removing the fallback `owner_id = user_id` was safe and correct.
+    - **yandex_business_sync_worker.py**: Confirmed `_sync_services_to_db` uses the passed `conn` argument for both cursor creation and commit (`conn.commit()`). It does NOT use `self.db`. No transaction mismatch exists.
+2.  **Verification Improvement**:
+    - Created automation script `tests/smoke_test_parsing_results.py` to verify data persistence (UserServices and Reviews count) instead of relying on logs.
+
+### Files to Modify
+- `tests/smoke_test_parsing_results.py` [NEW]
+
+### Status
+- [x] Completed (Audit Passed)
+
+## 2026-01-30 - PostgreSQL Migration Phase 0: Database Agnosticism
+
+### Current Task
+Prepare the codebase for migration from SQLite to PostgreSQL without disrupting production functionality.
+The key challenge is the SQL syntax incompatibility: SQLite uses `?` for placeholders, while PostgreSQL uses `%s`.
+
+### Architecture Decision
+1.  **Strict Query Adapter**: Implemented `src/query_adapter.py`.
+    - Automatically translates `?` to `%s` when `DB_TYPE=postgres`.
+    - **Safety**: Uses Regex to ensure `?` inside string literals (e.g. "What?") are NOT replaced.
+    - **Validation**: Enforces strict parameter count matching.
+2.  **Transparent Wrappers**:
+    - Created `DBConnectionWrapper` and `DBCursorWrapper` in `src/database_manager.py`.
+    - Intercepts `execute()` and `executemany()` calls.
+    - Applies adaptation only if `DB_TYPE` env var is set to `postgres`.
+3.  **No Logic Changes**: The business logic remains untouched. The adaptation layer is invisible to the application code.
+
+### Files to Modify
+- `src/query_adapter.py` [NEW]
+- `src/database_manager.py` (Injected wrappers)
+- `tests/test_query_adapter.py` [NEW]
+
+### Trade-offs & Decisions
+- **Adapter vs ORM**: Chosen Adapter pattern (4 hours) over full SQLAlchemy refactor (2 weeks) to enable immediate migration readiness with minimal code churn.
+- **Strict Mode**: Prioritized safety over flexibility. The adapter throws errors on ambiguous queries (e.g., mismatching params) rather than guessing, preventing silent data corruption.
+
+### Status
+- [x] Completed
+
+## 2026-01-30 - PostgreSQL Migration Phase 1: Infrastructure Preparation
+
+### Current Task
+Prepare the Database Schema (DDL) and Data Migration Scripts for the upcoming switch to PostgreSQL.
+
+### Architecture Decision
+1.  **Postgres Schema Definition**:
+    - Created `src/schema_postgres.sql` mirroring the exact structure of `init_database_schema.py`.
+    - **Type Mapping**: 
+        - `INTEGER` (boolean) -> `BOOLEAN`.
+        - `INTEGER PRIMARY KEY` -> `TEXT PRIMARY KEY` (to safely import existing UUID strings without validation errors).
+        - `DATETIME` -> `TIMESTAMP`.
+    - Included all 28 tables covering Core, Parsing, Finance, and Content.
+
+2.  **Migration Tooling**:
+    - Developed `scripts/migrate_to_postgres.py`.
+    - **Features**:
+        - **Dependency-aware ordering**: Migrates tables in topological order (Users -> Businesses -> Others) to satisfy Foreign Key constraints.
+        - **Type Casting**: Automatically detects Boolean columns from SQL schema and converts SQLite `0/1` to Postgres `False/True`.
+        - **Performance**: Uses `psycopg2.extras.execute_values` for bulk insertion.
+
+### Files to Modify
+- `requirements.txt` (Added `psycopg2-binary`).
+- `src/schema_postgres.sql` [NEW].
+- `scripts/migrate_to_postgres.py` [NEW].
+
+### Status
+- [x] Completed
+
+## 2026-01-30 - PostgreSQL Migration Phase 2: Deployment & Resource Optimization
+
+### Current Task
+Plan deployment strategy for HP C2-M4-D20 server (2 vCPU, 4GB RAM, 20GB Disk).
+The resource constraints are strict, requiring custom PostgreSQL tuning.
+
+### Architecture Decision
+1.  **Optimization Configuration**:
+    - Defined strict limits in `postgresql.conf` to prevent OOM and Disk exhaustion:
+        - `shared_buffers = 1GB` (25% RAM)
+        - `work_mem = 16MB`
+        - `max_connections = 50`
+        - `max_wal_size = 1GB` (Log rotation)
+2.  **Deployment Guide**:
+    - Created `postgres_migration_guide.md` with copy-paste instructions for the server admin.
+    - Includes `VACUUM` advice and logging configuration.
+
+### Files to Modify
+- `postgres_migration_guide.md` [NEW Artifact].
+
+### Trade-offs & Decisions
+- **Max Connections**: Reduced to 50 (standard is 100) to save RAM per connection.
+- **WAL Size**: Capped at 1GB to protect the small 20GB SSD.
+
+### Status
+- [x] Completed

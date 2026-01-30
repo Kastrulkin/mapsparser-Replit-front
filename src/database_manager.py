@@ -7,10 +7,72 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
+
+from src.query_adapter import QueryAdapter
+import os
+
+class DBCursorWrapper:
+    """Wrapper around database cursor to intercept and adapt queries"""
+    def __init__(self, cursor, db_type='sqlite'):
+        self.cursor = cursor
+        self.db_type = db_type
+        
+    def execute(self, query, params=()):
+        if self.db_type == 'postgres':
+            try:
+                query = QueryAdapter.adapt_query(query, params)
+                params = QueryAdapter.adapt_params(params)
+            except Exception as e:
+                import logging
+                logging.getLogger('db_adapter').error(f"Adapter Error: {e}")
+                raise
+        return self.cursor.execute(query, params)
+        
+    def executemany(self, query, params_list):
+        if self.db_type == 'postgres':
+            # executemany is trickier. We adapt the query once.
+            if params_list:
+                first_params = params_list[0]
+                query = QueryAdapter.adapt_query(query, first_params)
+                # Then adapt all params
+                params_list = [QueryAdapter.adapt_params(p) for p in params_list]
+        return self.cursor.executemany(query, params_list)
+        
+    def fetchone(self):
+        return self.cursor.fetchone()
+        
+    def fetchall(self):
+        return self.cursor.fetchall()
+        
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
+
+class DBConnectionWrapper:
+    """Wrapper around database connection"""
+    def __init__(self, conn):
+        self.conn = conn
+        self.db_type = os.getenv('DB_TYPE', 'sqlite')
+        
+    def cursor(self):
+        return DBCursorWrapper(self.conn.cursor(), self.db_type)
+        
+    def commit(self):
+        return self.conn.commit()
+        
+    def rollback(self):
+        return self.conn.rollback()
+        
+    def close(self):
+        return self.conn.close()
+        
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
     from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+    conn = _get_db_connection()
+    return DBConnectionWrapper(conn)
 
 class DatabaseManager:
     """Менеджер для работы с базой данных"""
