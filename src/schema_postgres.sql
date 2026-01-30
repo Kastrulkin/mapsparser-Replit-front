@@ -198,6 +198,10 @@ CREATE TABLE MapParseResults (
     working_hours TEXT,
     features TEXT,
     posts_count INTEGER DEFAULT 0
+    first_photo_url TEXT, -- Found in worker.py but not explicitly in migrations, adding just in case or skipping if valid
+    -- Missing columns from migrations/add_profile_completeness_fields.py
+    messengers TEXT,
+    profile_completeness INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_map_parse_results_business_id ON MapParseResults(business_id);
 

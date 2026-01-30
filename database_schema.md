@@ -105,7 +105,10 @@ Cached results of map parsing.
 - `website` (TEXT)
 - `working_hours` (TEXT)
 - `features` (TEXT)
+- `features` (TEXT)
 - `posts_count` (INTEGER)
+- `messengers` (TEXT)
+- `profile_completeness` (INTEGER)
 
 ### PricelistOptimizations
 ### PricelistOptimizations

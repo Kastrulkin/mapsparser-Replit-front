@@ -348,3 +348,19 @@ Resolve `column "phone" of relation "mapparseresults" does not exist` error duri
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (MapParseResults Part 2)
+
+### Current Task
+Resolve `column "messengers" of relation "mapparseresults" does not exist` error during migration.
+
+### Architecture Decision
+- Identified additional missing columns in `MapParseResults` from `src/migrations/add_profile_completeness_fields.py`: `messengers`, `profile_completeness`, `first_photo_url`.
+- Added them to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed
