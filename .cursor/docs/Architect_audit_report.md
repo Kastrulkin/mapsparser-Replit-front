@@ -475,3 +475,34 @@ Resolve `invalid input syntax for type double precision: ""` error during migrat
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Postgres Migration Success
+
+### Current Task
+Finalize migration from SQLite to PostgreSQL.
+
+### Architecture Decision
+- Migration script `scripts/migrate_to_postgres.py` executed successfully on production.
+- All tables migrated, including those with schema drift fixes.
+
+### Next Steps
+- Switch `DB_TYPE=postgres` in `.env`.
+- Restart systemd services.
+
+### Status
+- [x] Completed
+
+## 2026-01-31 - Fix Service Startup (Import Error)
+
+### Current Task
+Services failed to start with `ModuleNotFoundError: No module named 'src'`.
+
+### Architecture Decision
+- Modified `src/database_manager.py` to use a try-except block for importing `QueryAdapter`. This ensures compatibility whether running as a package (`src.query_adapter`) or directly from the directory (`query_adapter`).
+- This fixes the import error when running via systemd/gunicorn where the execution context might differ from local development.
+
+### Files to Modify
+- `src/database_manager.py` - added import fallback.
+
+### Status
+- [x] Completed

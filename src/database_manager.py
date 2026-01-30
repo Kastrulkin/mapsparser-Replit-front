@@ -8,7 +8,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 
-from src.query_adapter import QueryAdapter
+try:
+    from src.query_adapter import QueryAdapter
+except ImportError:
+    from query_adapter import QueryAdapter
 import os
 
 class DBCursorWrapper:
