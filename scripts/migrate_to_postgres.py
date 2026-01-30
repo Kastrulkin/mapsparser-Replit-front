@@ -152,7 +152,7 @@ def migrate():
             clean_rows.append(tuple(values))
             
         # Bulk Insert
-        placeholders = %s
+        # Bulk Insert
         cols_str = ', '.join([f'"{c}"' for c in columns]) # Quote columns to be safe
         
         query = f'INSERT INTO "{table}" ({cols_str}) VALUES %s ON CONFLICT (id) DO NOTHING'
