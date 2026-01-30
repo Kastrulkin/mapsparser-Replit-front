@@ -101,6 +101,11 @@ Cached results of map parsing.
 - `rating`, `reviews_count`, `news_count`, `photos_count`
 - `products` (TEXT): JSON string of parsed products/services.
 - `is_verified` (BOOLEAN)
+- `phone` (TEXT)
+- `website` (TEXT)
+- `working_hours` (TEXT)
+- `features` (TEXT)
+- `posts_count` (INTEGER)
 
 ### PricelistOptimizations
 ### PricelistOptimizations

@@ -191,7 +191,13 @@ CREATE TABLE MapParseResults (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     title TEXT,
     address TEXT,
-    is_verified BOOLEAN DEFAULT FALSE -- Added during recent updates
+    is_verified BOOLEAN DEFAULT FALSE, -- Added during recent updates
+    -- Missing columns from migrations/add_missing_mapparse_columns.py
+    phone TEXT,
+    website TEXT,
+    working_hours TEXT,
+    features TEXT,
+    posts_count INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_map_parse_results_business_id ON MapParseResults(business_id);
 

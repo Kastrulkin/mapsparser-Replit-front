@@ -332,3 +332,19 @@ Resolve `column "original_file_path" of relation "pricelistoptimizations" does n
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (MapParseResults)
+
+### Current Task
+Resolve `column "phone" of relation "mapparseresults" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing columns in `MapParseResults` table which were added via `src/migrations/add_missing_mapparse_columns.py` in SQLite.
+- Added `phone`, `website`, `working_hours`, `features`, `posts_count` to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed
