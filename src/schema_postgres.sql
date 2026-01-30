@@ -72,12 +72,18 @@ CREATE TABLE Businesses (
     ai_agent_tone TEXT,
     ai_agent_restrictions TEXT,
     -- Yandex Sync Fields
+    -- Yandex Sync Fields
     yandex_org_id TEXT,
     yandex_url TEXT,
     yandex_rating DOUBLE PRECISION,
     yandex_reviews_total INTEGER,
     yandex_reviews_30d INTEGER,
-    yandex_last_sync TIMESTAMP
+    yandex_last_sync TIMESTAMP,
+    
+    -- Legacy/ChatGPT Sync Fields
+    chatgpt_enabled BOOLEAN DEFAULT FALSE,
+    chatgpt_context TEXT,
+    ai_agents_config TEXT
     
 );
 CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON Businesses(owner_id);
@@ -251,6 +257,7 @@ CREATE TABLE UserServices (
     keywords TEXT,
     price TEXT,
     optimized_name TEXT,
+    chatgpt_context TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -45,6 +45,7 @@ Represents individual beauty salons or service providers.
     - Telegram: `telegram_bot_token`
     - AI Agent: `ai_agent_enabled`, `ai_agent_type`, `ai_agent_id`, `ai_agent_tone`, `ai_agent_restrictions`, `ai_agent_language`
     - Yandex: `yandex_org_id`, `yandex_url`, `yandex_rating`, `yandex_reviews_total`, `yandex_reviews_30d`, `yandex_last_sync`
+    - **Legacy/Deprecated**: `chatgpt_enabled`, `chatgpt_context`, `ai_agents_config`
 
 ### UserSessions
 Active user sessions / JWT tokens.
@@ -62,6 +63,7 @@ Services offered by a business.
 - `price` (TEXT)
 - `description`, `keywords`
 - `optimized_name` (TEXT): AI-optimized name for SEO.
+- `chatgpt_context` (TEXT): Context for AI generation.
 
 ### Masters
 Employees or specialists working at a business.
