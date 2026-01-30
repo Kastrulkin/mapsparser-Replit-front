@@ -232,6 +232,32 @@ Resolve `column "ai_agent_tone" specified more than once` error and document dat
 ### Status
 - [x] Completed
 
+## 2026-01-30 - Fix Schema Drift (Legacy & Integration Columns)
+
+### Current Task
+Resolve `column "telegram_bot_connected" of relation "businesses" does not exist` error during migration.
+
+### Architecture Decision
+- Analyzed full SQLite schema dump provided by user.
+- Identified numerous missing columns in `Businesses` table:
+    - Legacy ChatGPT: `chatgpt_enabled`, `chatgpt_context`, `chatgpt_api_key`, `chatgpt_model`, `ai_agents_config`
+    - Telegram: `telegram_bot_connected`, `telegram_username`
+    - Stripe: `stripe_customer_id`, `stripe_subscription_id`
+    - Subscription: `trial_ends_at`, `subscription_ends_at`
+    - Moderation: `moderation_status`, `moderation_notes`
+- Added ALL these columns to `src/schema_postgres.sql`.
+- Updated `database_schema.md` to document these fields.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added 13 missing columns.
+- `database_schema.md` - updated documentation.
+
+### Trade-offs & Decisions
+- **Legacy Support**: Adding these columns ensures data migration succeeds without data loss, even if some features (like old ChatGPT integration) are deprecated.
+
+### Status
+- [x] Completed
+
 ## 2026-01-30 - Fix Schema Drift (Legacy ChatGPT Columns)
 
 ### Current Task

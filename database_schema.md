@@ -46,6 +46,9 @@ Represents individual beauty salons or service providers.
     - AI Agent: `ai_agent_enabled`, `ai_agent_type`, `ai_agent_id`, `ai_agent_tone`, `ai_agent_restrictions`, `ai_agent_language`
     - Yandex: `yandex_org_id`, `yandex_url`, `yandex_rating`, `yandex_reviews_total`, `yandex_reviews_30d`, `yandex_last_sync`
     - **Legacy/Deprecated**: `chatgpt_enabled`, `chatgpt_context`, `chatgpt_api_key`, `chatgpt_model`, `ai_agents_config`
+    - **Integrations**: `telegram_bot_connected`, `telegram_username`, `stripe_customer_id`, `stripe_subscription_id`
+    - **Subscription**: `trial_ends_at`, `subscription_ends_at`
+    - **Moderation**: `moderation_status`, `moderation_notes`
 
 ### UserSessions
 Active user sessions / JWT tokens.

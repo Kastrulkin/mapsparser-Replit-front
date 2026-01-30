@@ -85,7 +85,17 @@ CREATE TABLE Businesses (
     chatgpt_context TEXT,
     chatgpt_api_key TEXT,
     chatgpt_model TEXT,
-    ai_agents_config TEXT
+    ai_agents_config TEXT,
+    
+    -- Missing fields from SQLite dump
+    telegram_bot_connected BOOLEAN DEFAULT FALSE,
+    telegram_username TEXT,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    trial_ends_at TIMESTAMP,
+    subscription_ends_at TIMESTAMP,
+    moderation_status TEXT DEFAULT 'pending',
+    moderation_notes TEXT
     
 );
 CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON Businesses(owner_id);
