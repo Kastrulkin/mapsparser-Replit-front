@@ -19,7 +19,7 @@ CREATE TABLE Users (
     is_superadmin BOOLEAN DEFAULT FALSE,
     verification_token TEXT,
     reset_token TEXT,
-    reset_token_expires_at TIMESTAMP
+    reset_token_expires TIMESTAMP
 );
 
 -- Networks
