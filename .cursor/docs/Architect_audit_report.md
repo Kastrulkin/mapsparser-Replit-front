@@ -413,3 +413,35 @@ Resolve `column "review_confirmed" of relation "reviewexchangedistribution" does
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (ExternalBusinessReviews)
+
+### Current Task
+Resolve `column "account_id" of relation "externalbusinessreviews" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing `account_id` column in `ExternalBusinessReviews`.
+- Added it to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing column.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (ExternalBusinessReviews Part 2)
+
+### Current Task
+Sync `ExternalBusinessReviews` schema with SQLite dump.
+
+### Architecture Decision
+- Identified additional missing columns from user dump: `author_profile_url`, `lang`.
+- Added them to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed

@@ -352,14 +352,17 @@ DROP TABLE IF EXISTS ExternalBusinessReviews CASCADE;
 CREATE TABLE ExternalBusinessReviews (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
+    account_id TEXT, -- Missing from initial schema but present in others
     source TEXT NOT NULL,
     external_review_id TEXT,
     rating INTEGER,
     author_name TEXT,
+    author_profile_url TEXT, -- Missing from initial schema
     text TEXT,
     published_at TIMESTAMP,
     response_text TEXT,
     response_at TIMESTAMP,
+    lang TEXT, -- Missing from initial schema
     raw_payload TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
