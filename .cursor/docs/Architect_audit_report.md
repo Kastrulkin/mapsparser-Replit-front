@@ -364,3 +364,20 @@ Resolve `column "messengers" of relation "mapparseresults" does not exist` error
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (MapParseResults Part 3)
+
+### Current Task
+Resolve missing `competitors` column in `MapParseResults`. Matches SQLite dump.
+
+### Architecture Decision
+- User confirmed `competitors` exists in SQLite but `features` does not.
+- Added `competitors` to `src/schema_postgres.sql`.
+- Commented out `features` to prevent migration errors if it doesn't exist.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added `competitors`, removed `features`.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed

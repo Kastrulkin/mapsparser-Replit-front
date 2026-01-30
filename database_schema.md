@@ -109,6 +109,7 @@ Cached results of map parsing.
 - `posts_count` (INTEGER)
 - `messengers` (TEXT)
 - `profile_completeness` (INTEGER)
+- `competitors` (TEXT)
 
 ### PricelistOptimizations
 ### PricelistOptimizations
