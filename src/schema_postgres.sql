@@ -71,10 +71,6 @@ CREATE TABLE Businesses (
     ai_agent_id TEXT,
     ai_agent_tone TEXT,
     ai_agent_restrictions TEXT,
-    ai_agent_tone TEXT,
-    ai_agent_restrictions TEXT,
-    ai_agent_language TEXT DEFAULT 'en',
-    
     -- Yandex Sync Fields
     yandex_org_id TEXT,
     yandex_url TEXT,
