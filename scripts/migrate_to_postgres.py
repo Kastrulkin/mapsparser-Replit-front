@@ -26,8 +26,8 @@ def get_boolean_columns(schema_path):
     tables = {}
     
     # improved regex to capture table name and body
-    # Matches "CREATE TABLE Name (" then content until ");"
-    table_matches = re.finditer(r'CREATE\s+TABLE\s+(\w+)\s*\((.*?)\);', sql, re.DOTALL | re.IGNORECASE)
+    # Matches "CREATE TABLE [IF NOT EXISTS] Name (" then content until ");"
+    table_matches = re.finditer(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);', sql, re.DOTALL | re.IGNORECASE)
     
     for match in table_matches:
         table_name = match.group(1)
