@@ -365,7 +365,8 @@ CREATE TABLE ExternalBusinessReviews (
     lang TEXT, -- Missing from initial schema
     raw_payload TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_ext_reviews_business_source_id UNIQUE (business_id, source, external_review_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_id ON ExternalBusinessReviews(business_id);
 CREATE INDEX IF NOT EXISTS idx_ext_reviews_source ON ExternalBusinessReviews(source);
@@ -420,7 +421,7 @@ CREATE TABLE ExternalBusinessStats (
     raw_payload TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(business_id, source, date)
+    CONSTRAINT uq_ext_stats_business_source_date UNIQUE (business_id, source, date)
 );
 CREATE INDEX IF NOT EXISTS idx_ext_stats_business_id ON ExternalBusinessStats(business_id);
 CREATE INDEX IF NOT EXISTS idx_ext_stats_source ON ExternalBusinessStats(source);
