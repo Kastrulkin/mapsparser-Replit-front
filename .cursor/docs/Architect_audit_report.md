@@ -298,3 +298,19 @@ Resolve `column "chatgpt_enabled", "chatgpt_api_key" of relation "businesses" do
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (PricelistOptimizations)
+
+### Current Task
+Resolve `column "user_id" of relation "pricelistoptimizations" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing `user_id` column in `PricelistOptimizations` table.
+- Added it to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added column.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed
