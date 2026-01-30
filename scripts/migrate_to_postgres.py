@@ -153,9 +153,12 @@ def migrate():
             
         # Bulk Insert
         # Bulk Insert
-        cols_str = ', '.join([f'"{c}"' for c in columns]) # Quote columns to be safe
+        # Postgres lowercases unquoted identifiers in CREATE TABLE. We match that here.
+        pg_table = table.lower()
+        pg_cols = [c.lower() for c in columns]
+        cols_str = ', '.join([f'"{c}"' for c in pg_cols]) 
         
-        query = f'INSERT INTO "{table}" ({cols_str}) VALUES %s ON CONFLICT (id) DO NOTHING'
+        query = f'INSERT INTO "{pg_table}" ({cols_str}) VALUES %s ON CONFLICT (id) DO NOTHING'
         try:
             psycopg2.extras.execute_values(pg_cursor, query, clean_rows)
             print(f"   ✅ Migrated {len(clean_rows)} rows.")
