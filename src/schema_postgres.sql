@@ -408,14 +408,15 @@ DROP TABLE IF EXISTS ExternalBusinessStats CASCADE;
 CREATE TABLE ExternalBusinessStats (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
+    account_id TEXT, -- Missing from initial schema but present in others
     source TEXT NOT NULL,
-    date TEXT NOT NULL, -- Assuming YYYY-MM-DD
+    date DATE NOT NULL,
     views_total INTEGER,
     clicks_total INTEGER,
     actions_total INTEGER,
     rating DOUBLE PRECISION,
     reviews_total INTEGER,
-    unanswered_reviews_count INTEGER,
+    unanswered_reviews_count INTEGER, -- Missing from initial schema
     raw_payload TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

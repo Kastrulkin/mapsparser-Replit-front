@@ -445,3 +445,19 @@ Sync `ExternalBusinessReviews` schema with SQLite dump.
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (ExternalBusinessStats)
+
+### Current Task
+Resolve `column "account_id" of relation "externalbusinessstats" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing `account_id` and `unanswered_reviews_count` columns in `ExternalBusinessStats` from SQLite dump.
+- Added them to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed

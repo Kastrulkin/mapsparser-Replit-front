@@ -128,7 +128,7 @@ Cached results of map parsing.
 ### External Data Tables
 Captured data from external platforms (Yandex, Google, 2GIS).
 - **ExternalBusinessReviews**: Reviews text, rating, author, response status, `account_id`, `author_profile_url`, `lang`.
-- **ExternalBusinessStats**: Daily statistics (views, clicks, actions).
+- **ExternalBusinessStats**: Daily statistics (views, clicks, actions), `account_id`, `unanswered_reviews_count`.
 - **ExternalBusinessPosts**: News posts/updates.
 - **ExternalBusinessPhotos**: Business photos.
 - **ExternalBusinessAccounts**: Auth data (cookies/tokens) for syncing.
