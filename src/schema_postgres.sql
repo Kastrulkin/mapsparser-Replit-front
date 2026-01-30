@@ -15,6 +15,7 @@ CREATE TABLE Users (
     telegram_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
     is_superadmin BOOLEAN DEFAULT FALSE,
     verification_token TEXT,
