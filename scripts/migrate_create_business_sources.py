@@ -56,7 +56,7 @@ def migrate_business_sources():
             # Check if already exists to avoid bad duplicates if script re-runs
             cursor.execute("""
                 INSERT INTO business_sources (business_id, source, external_id, url)
-                VALUES (%s, 'yandex', %s, %s)
+                VALUES (?, 'yandex', ?, ?)
                 ON CONFLICT (business_id, source) 
                 DO UPDATE SET 
                     external_id = EXCLUDED.external_id,
