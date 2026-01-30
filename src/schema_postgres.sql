@@ -83,6 +83,8 @@ CREATE TABLE Businesses (
     -- Legacy/ChatGPT Sync Fields
     chatgpt_enabled BOOLEAN DEFAULT FALSE,
     chatgpt_context TEXT,
+    chatgpt_api_key TEXT,
+    chatgpt_model TEXT,
     ai_agents_config TEXT
     
 );
