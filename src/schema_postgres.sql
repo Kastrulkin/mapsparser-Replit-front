@@ -5,7 +5,8 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users
-CREATE TABLE IF NOT EXISTS Users (
+DROP TABLE IF EXISTS Users CASCADE;
+CREATE TABLE Users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
@@ -21,7 +22,8 @@ CREATE TABLE IF NOT EXISTS Users (
 );
 
 -- Networks
-CREATE TABLE IF NOT EXISTS Networks (
+DROP TABLE IF EXISTS Networks CASCADE;
+CREATE TABLE Networks (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     owner_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
@@ -31,7 +33,8 @@ CREATE TABLE IF NOT EXISTS Networks (
 );
 
 -- Businesses
-CREATE TABLE IF NOT EXISTS Businesses (
+DROP TABLE IF EXISTS Businesses CASCADE;
+CREATE TABLE Businesses (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
@@ -69,13 +72,12 @@ CREATE TABLE IF NOT EXISTS Businesses (
     ai_agent_language TEXT DEFAULT 'en'
     
 );
--- Indexes (CREATE INDEX IF NOT EXISTS is supported in newer PG, but CREATE INDEX is usually fine if name conflict we ignore or handle. 
--- Standard PG doesn't support IF NOT EXISTS for INDEX until v11/12, we are on 14/16. Safe to use IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON Businesses(owner_id);
 CREATE INDEX IF NOT EXISTS idx_businesses_network_id ON Businesses(network_id);
 
 -- UserSessions
-CREATE TABLE IF NOT EXISTS UserSessions (
+DROP TABLE IF EXISTS UserSessions CASCADE;
+CREATE TABLE UserSessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
     token TEXT UNIQUE NOT NULL,
@@ -84,7 +86,8 @@ CREATE TABLE IF NOT EXISTS UserSessions (
 );
 
 -- ParseQueue
-CREATE TABLE IF NOT EXISTS ParseQueue (
+DROP TABLE IF EXISTS ParseQueue CASCADE;
+CREATE TABLE ParseQueue (
     id TEXT PRIMARY KEY,
     url TEXT,
     user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
@@ -104,7 +107,8 @@ CREATE INDEX IF NOT EXISTS idx_parsequeue_user_id ON ParseQueue(user_id);
 CREATE INDEX IF NOT EXISTS idx_parsequeue_created_at ON ParseQueue(created_at);
 
 -- SyncQueue
-CREATE TABLE IF NOT EXISTS SyncQueue (
+DROP TABLE IF EXISTS SyncQueue CASCADE;
+CREATE TABLE SyncQueue (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     account_id TEXT NOT NULL,
@@ -119,7 +123,8 @@ CREATE INDEX IF NOT EXISTS idx_syncqueue_business_id ON SyncQueue(business_id);
 CREATE INDEX IF NOT EXISTS idx_syncqueue_created_at ON SyncQueue(created_at);
 
 -- ProxyServers
-CREATE TABLE IF NOT EXISTS ProxyServers (
+DROP TABLE IF EXISTS ProxyServers CASCADE;
+CREATE TABLE ProxyServers (
     id TEXT PRIMARY KEY,
     proxy_type TEXT NOT NULL,
     host TEXT NOT NULL,
@@ -139,7 +144,8 @@ CREATE INDEX IF NOT EXISTS idx_proxy_servers_active ON ProxyServers(is_active, i
 CREATE INDEX IF NOT EXISTS idx_proxy_servers_last_used ON ProxyServers(last_used_at);
 
 -- MapParseResults
-CREATE TABLE IF NOT EXISTS MapParseResults (
+DROP TABLE IF EXISTS MapParseResults CASCADE;
+CREATE TABLE MapParseResults (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
@@ -161,7 +167,8 @@ CREATE TABLE IF NOT EXISTS MapParseResults (
 CREATE INDEX IF NOT EXISTS idx_map_parse_results_business_id ON MapParseResults(business_id);
 
 -- BusinessMapLinks
-CREATE TABLE IF NOT EXISTS BusinessMapLinks (
+DROP TABLE IF EXISTS BusinessMapLinks CASCADE;
+CREATE TABLE BusinessMapLinks (
     id TEXT PRIMARY KEY,
     user_id TEXT,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
@@ -172,7 +179,8 @@ CREATE TABLE IF NOT EXISTS BusinessMapLinks (
 CREATE INDEX IF NOT EXISTS idx_business_map_links_business_id ON BusinessMapLinks(business_id);
 
 -- Masters
-CREATE TABLE IF NOT EXISTS Masters (
+DROP TABLE IF EXISTS Masters CASCADE;
+CREATE TABLE Masters (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -181,7 +189,8 @@ CREATE TABLE IF NOT EXISTS Masters (
 );
 
 -- FinancialTransactions
-CREATE TABLE IF NOT EXISTS FinancialTransactions (
+DROP TABLE IF EXISTS FinancialTransactions CASCADE;
+CREATE TABLE FinancialTransactions (
     id TEXT PRIMARY KEY,
     user_id TEXT,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
@@ -197,7 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_financial_transactions_business_id ON FinancialTr
 CREATE INDEX IF NOT EXISTS idx_financial_transactions_date ON FinancialTransactions(transaction_date);
 
 -- FinancialMetrics
-CREATE TABLE IF NOT EXISTS FinancialMetrics (
+DROP TABLE IF EXISTS FinancialMetrics CASCADE;
+CREATE TABLE FinancialMetrics (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     period_start DATE NOT NULL,
@@ -209,7 +219,8 @@ CREATE TABLE IF NOT EXISTS FinancialMetrics (
 );
 
 -- ROIData
-CREATE TABLE IF NOT EXISTS ROIData (
+DROP TABLE IF EXISTS ROIData CASCADE;
+CREATE TABLE ROIData (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     investment DOUBLE PRECISION NOT NULL,
@@ -221,7 +232,8 @@ CREATE TABLE IF NOT EXISTS ROIData (
 );
 
 -- UserServices
-CREATE TABLE IF NOT EXISTS UserServices (
+DROP TABLE IF EXISTS UserServices CASCADE;
+CREATE TABLE UserServices (
     id TEXT PRIMARY KEY,
     user_id TEXT,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
@@ -236,7 +248,8 @@ CREATE TABLE IF NOT EXISTS UserServices (
 CREATE INDEX IF NOT EXISTS idx_user_services_business_id ON UserServices(business_id);
 
 -- UserNews
-CREATE TABLE IF NOT EXISTS UserNews (
+DROP TABLE IF EXISTS UserNews CASCADE;
+CREATE TABLE UserNews (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
     service_id TEXT REFERENCES UserServices(id) ON DELETE SET NULL,
@@ -249,7 +262,8 @@ CREATE TABLE IF NOT EXISTS UserNews (
 CREATE INDEX IF NOT EXISTS idx_user_news_user_id ON UserNews(user_id);
 
 -- TelegramBindTokens
-CREATE TABLE IF NOT EXISTS TelegramBindTokens (
+DROP TABLE IF EXISTS TelegramBindTokens CASCADE;
+CREATE TABLE TelegramBindTokens (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
     business_id TEXT REFERENCES Businesses(id) ON DELETE CASCADE,
@@ -260,7 +274,8 @@ CREATE TABLE IF NOT EXISTS TelegramBindTokens (
 );
 
 -- ReviewExchangeParticipants
-CREATE TABLE IF NOT EXISTS ReviewExchangeParticipants (
+DROP TABLE IF EXISTS ReviewExchangeParticipants CASCADE;
+CREATE TABLE ReviewExchangeParticipants (
     id TEXT PRIMARY KEY,
     telegram_id TEXT UNIQUE NOT NULL,
     telegram_username TEXT,
@@ -278,7 +293,8 @@ CREATE TABLE IF NOT EXISTS ReviewExchangeParticipants (
 );
 
 -- ReviewExchangeDistribution
-CREATE TABLE IF NOT EXISTS ReviewExchangeDistribution (
+DROP TABLE IF EXISTS ReviewExchangeDistribution CASCADE;
+CREATE TABLE ReviewExchangeDistribution (
     id TEXT PRIMARY KEY,
     sender_participant_id TEXT NOT NULL REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
     receiver_participant_id TEXT NOT NULL REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
@@ -287,7 +303,8 @@ CREATE TABLE IF NOT EXISTS ReviewExchangeDistribution (
 );
 
 -- ExternalBusinessReviews
-CREATE TABLE IF NOT EXISTS ExternalBusinessReviews (
+DROP TABLE IF EXISTS ExternalBusinessReviews CASCADE;
+CREATE TABLE ExternalBusinessReviews (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     source TEXT NOT NULL,
@@ -306,7 +323,8 @@ CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_id ON ExternalBusinessReview
 CREATE INDEX IF NOT EXISTS idx_ext_reviews_source ON ExternalBusinessReviews(source);
 
 -- ExternalBusinessPosts
-CREATE TABLE IF NOT EXISTS ExternalBusinessPosts (
+DROP TABLE IF EXISTS ExternalBusinessPosts CASCADE;
+CREATE TABLE ExternalBusinessPosts (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     account_id TEXT,
@@ -322,7 +340,8 @@ CREATE TABLE IF NOT EXISTS ExternalBusinessPosts (
 );
 
 -- ExternalBusinessPhotos
-CREATE TABLE IF NOT EXISTS ExternalBusinessPhotos (
+DROP TABLE IF EXISTS ExternalBusinessPhotos CASCADE;
+CREATE TABLE ExternalBusinessPhotos (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     account_id TEXT,
@@ -337,7 +356,8 @@ CREATE TABLE IF NOT EXISTS ExternalBusinessPhotos (
 );
 
 -- ExternalBusinessStats
-CREATE TABLE IF NOT EXISTS ExternalBusinessStats (
+DROP TABLE IF EXISTS ExternalBusinessStats CASCADE;
+CREATE TABLE ExternalBusinessStats (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     source TEXT NOT NULL,
@@ -358,7 +378,8 @@ CREATE INDEX IF NOT EXISTS idx_ext_stats_source ON ExternalBusinessStats(source)
 CREATE INDEX IF NOT EXISTS idx_ext_stats_date ON ExternalBusinessStats(date);
 
 -- WordstatKeywords
-CREATE TABLE IF NOT EXISTS WordstatKeywords (
+DROP TABLE IF EXISTS WordstatKeywords CASCADE;
+CREATE TABLE WordstatKeywords (
     id TEXT PRIMARY KEY,
     keyword TEXT UNIQUE NOT NULL,
     views INTEGER DEFAULT 0,
@@ -369,7 +390,8 @@ CREATE INDEX IF NOT EXISTS idx_wordstat_views ON WordstatKeywords(views DESC);
 CREATE INDEX IF NOT EXISTS idx_wordstat_category ON WordstatKeywords(category);
 
 -- BusinessMetricsHistory
-CREATE TABLE IF NOT EXISTS BusinessMetricsHistory (
+DROP TABLE IF EXISTS BusinessMetricsHistory CASCADE;
+CREATE TABLE BusinessMetricsHistory (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id),
     metric_date DATE NOT NULL,
@@ -384,7 +406,8 @@ CREATE TABLE IF NOT EXISTS BusinessMetricsHistory (
 CREATE INDEX IF NOT EXISTS idx_metrics_history_business_date ON BusinessMetricsHistory(business_id, metric_date DESC);
 
 -- BusinessOptimizationWizard
-CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
+DROP TABLE IF EXISTS BusinessOptimizationWizard CASCADE;
+CREATE TABLE BusinessOptimizationWizard (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     step INTEGER DEFAULT 1,
@@ -395,7 +418,8 @@ CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
 );
 
 -- PricelistOptimizations
-CREATE TABLE IF NOT EXISTS PricelistOptimizations (
+DROP TABLE IF EXISTS PricelistOptimizations CASCADE;
+CREATE TABLE PricelistOptimizations (
     id TEXT PRIMARY KEY,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     original_text TEXT,
@@ -404,7 +428,8 @@ CREATE TABLE IF NOT EXISTS PricelistOptimizations (
 );
 
 -- AIPrompts
-CREATE TABLE IF NOT EXISTS AIPrompts (
+DROP TABLE IF EXISTS AIPrompts CASCADE;
+CREATE TABLE AIPrompts (
     id TEXT PRIMARY KEY,
     prompt_type TEXT UNIQUE NOT NULL,
     prompt_text TEXT NOT NULL,
@@ -414,7 +439,8 @@ CREATE TABLE IF NOT EXISTS AIPrompts (
 );
 
 -- AIAgents
-CREATE TABLE IF NOT EXISTS AIAgents (
+DROP TABLE IF EXISTS AIAgents CASCADE;
+CREATE TABLE AIAgents (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
