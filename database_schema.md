@@ -55,7 +55,10 @@ Active user sessions / JWT tokens.
 - `id` (TEXT, PK)
 - `user_id` (TEXT, FK -> Users.id)
 - `token` (TEXT, UNIQUE)
+- `token` (TEXT, UNIQUE)
 - `expires_at` (TIMESTAMP)
+- `ip_address` (TEXT)
+- `user_agent` (TEXT)
 
 ### UserServices
 Services offered by a business.
@@ -121,6 +124,7 @@ Captured data from external platforms (Yandex, Google, 2GIS).
 - **ReviewExchange* **: Tables for cross-promotion review system.
 - **AIPrompts**: System prompts for AI generation features.
 - **AIAgents**: Configuration for AI agents.
+- **Invites**: User invitation system.
 
 ## Relationships
 - **Users** 1:N **Businesses** (via `owner_id`)

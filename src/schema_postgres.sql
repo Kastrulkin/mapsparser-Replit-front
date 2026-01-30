@@ -109,6 +109,8 @@ CREATE TABLE UserSessions (
     user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
     token TEXT UNIQUE NOT NULL,
     expires_at TIMESTAMP NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -487,3 +489,17 @@ CREATE TABLE AIAgents (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Invites (Referenced in auth_system.py)
+DROP TABLE IF EXISTS Invites CASCADE;
+CREATE TABLE Invites (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    invited_by TEXT,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_invites_email ON Invites(email);
+CREATE INDEX IF NOT EXISTS idx_invites_token ON Invites(token);

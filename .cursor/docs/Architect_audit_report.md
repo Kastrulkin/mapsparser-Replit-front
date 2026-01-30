@@ -259,28 +259,22 @@ Resolve `column "ai_agent_language" of relation "businesses" does not exist` err
 ### Status
 - [x] Completed
 
-## 2026-01-30 - Fix Schema Drift (Legacy & Integration Columns)
+## 2026-01-31 - Fix Schema Drift (UserSessions & Invites)
 
 ### Current Task
-Resolve `column "telegram_bot_connected" of relation "businesses" does not exist` error during migration.
+Resolve `column "ip_address" of relation "usersessions" does not exist` error during migration.
 
 ### Architecture Decision
-- Analyzed full SQLite schema dump provided by user.
-- Identified numerous missing columns in `Businesses` table:
-    - Legacy ChatGPT: `chatgpt_enabled`, `chatgpt_context`, `chatgpt_api_key`, `chatgpt_model`, `ai_agents_config`
-    - Telegram: `telegram_bot_connected`, `telegram_username`
-    - Stripe: `stripe_customer_id`, `stripe_subscription_id`
-    - Subscription: `trial_ends_at`, `subscription_ends_at`
-    - Moderation: `moderation_status`, `moderation_notes`
-- Added ALL these columns to `src/schema_postgres.sql`.
-- Updated `database_schema.md` to document these fields.
+- Identified missing columns `ip_address` and `user_agent` in `UserSessions` table (used in `auth_system.py`).
+- Discovered missing `Invites` table (referenced in `auth_system.py`).
+- Added these to `src/schema_postgres.sql` to support full application functionality and data migration.
 
 ### Files to Modify
-- `src/schema_postgres.sql` - added 13 missing columns.
+- `src/schema_postgres.sql` - added columns and table.
 - `database_schema.md` - updated documentation.
 
 ### Trade-offs & Decisions
-- **Legacy Support**: Adding these columns ensures data migration succeeds without data loss, even if some features (like old ChatGPT integration) are deprecated.
+- **Completeness**: Even if `Invites` table is empty or rarely used, it is part of the `auth_system` logic, so it must exist in Postgres to prevent runtime errors.
 
 ### Status
 - [x] Completed
