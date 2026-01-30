@@ -449,13 +449,21 @@ CREATE TABLE BusinessOptimizationWizard (
 );
 
 -- PricelistOptimizations
+-- PricelistOptimizations
 DROP TABLE IF EXISTS PricelistOptimizations CASCADE;
 CREATE TABLE PricelistOptimizations (
     id TEXT PRIMARY KEY,
-    user_id TEXT REFERENCES Users(id) ON DELETE SET NULL,
-    business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES Users(id) ON DELETE CASCADE,
+    -- Columns from main.py usage
+    original_file_path TEXT,
+    optimized_data TEXT,
+    services_count INTEGER DEFAULT 0,
+    expires_at TIMESTAMP,
+    -- Columns from migrate_fix_pricelist_optimizations.py / legacy / alternative usage
+    business_id TEXT REFERENCES Businesses(id) ON DELETE CASCADE,
     original_text TEXT,
     optimized_text TEXT,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

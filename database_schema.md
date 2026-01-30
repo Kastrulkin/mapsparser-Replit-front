@@ -103,8 +103,13 @@ Cached results of map parsing.
 - `is_verified` (BOOLEAN)
 
 ### PricelistOptimizations
+### PricelistOptimizations
 - `id` (TEXT, PK)
 - `user_id` (TEXT, FK -> Users.id)
+- `original_file_path` (TEXT)
+- `optimized_data` (TEXT, JSON)
+- `services_count` (INTEGER)
+- `expires_at` (TIMESTAMP)
 - `business_id` (TEXT, FK -> Businesses.id)
 - `original_text`, `optimized_text`
 

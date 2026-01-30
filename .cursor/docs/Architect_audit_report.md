@@ -314,3 +314,21 @@ Resolve `column "user_id" of relation "pricelistoptimizations" does not exist` e
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (PricelistOptimizations Part 2)
+
+### Current Task
+Resolve `column "original_file_path" of relation "pricelistoptimizations" does not exist` error during migration.
+
+### Architecture Decision
+- Discovered that `PricelistOptimizations` usage in `main.py` differs significantly from what was implied by `migrate_fix_...` scripts.
+- It uses `original_file_path`, `optimized_data`, `services_count`, and `expires_at`.
+- Updated schema to include BOTH sets of columns (Superset) to ensure compatibility with all potential data sources and logic phases.
+- Made `business_id` nullable as `main.py` does not populate it during file upload.
+
+### Files to Modify
+- `src/schema_postgres.sql` - redefined table with superset columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed
