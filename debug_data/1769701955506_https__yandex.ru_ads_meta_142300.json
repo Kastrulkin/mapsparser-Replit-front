@@ -1,0 +1,419 @@
+{
+  "matchUrls": [
+    " https://px.arcspire.io/yndx?id=9d4cd41a-f59d-4815-8a89-9d30806f5389",
+    "https://a.adspector.io/sync?ssp=69",
+    "https://acint.net/rmatch/?dp=151&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fsapeis%2F%24%7BUSER_ID%7D",
+    "https://ads.betweendigital.com/match?bidder_id=43554&callback_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbetweendigitalis%2F%24%7BUSER_ID%7D",
+    "https://bs.serving-sys.ru/Serving/adServer.bs?cn=sync&c=2&pli=1088653317&rtu=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fyaadserving%2F",
+    "https://cm.a.mts.ru/cm/tech?flowId=0ff25d7e-e56b-471c-8825-9c24c8b56cdc",
+    "https://cm.tns-counter.ru/yacm",
+    "https://cmr.bidderstack.com/yandex/cm?user_id=",
+    "https://cr-frontend.weborama-tech.ru/cr?key=yandex&url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fdmpweborama%2F{WEBO_CID}",
+    "https://dm.hybrid.ai/match?id=182",
+    "https://dm.hybrid.ai/yandexdmp-match",
+    "https://dmg.digitaltarget.ru/1/119/i/i?i=1769701955",
+    "https://dsp.mpartner.digital/dmp/syncsspdmp?sspid=4",
+    "https://euw-ice.360yield.com/server_match?partner_id=N&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fazerionis%2F{PUB_USER_ID}",
+    "https://events.myweb3id.io/cookie-sync/yandex?userId={DSP_UID}",
+    "https://exchange.buzzoola.com/cookiesync/redirect/yandex?redirect_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbuzzooladspis%2F%24%7BUUID%7D",
+    "https://eye.targetads.io/sync/yandex/",
+    "https://kimberlite.io/rtb/sync/yandex",
+    "https://kimberlite.io/rtb/sync/yandex_direct",
+    "https://match.new-programmatic.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://match.targetrtb.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://mitdmp.whiteboxdigital.ru/pixel?id=a&source=yandex&redirect=false&href=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fqbitis%2F%7Bmiid%7D",
+    "https://nr.bidderstack.com/yandex/cm?user_id={partner_user_id}",
+    "https://pixel.dsp.onetarget.ru/yandex/sync",
+    "https://px.adhigh.net/p/cm/yandexssp",
+    "https://rtb-eu-warsaw.intent.ai/um/y",
+    "https://rtb.dynotech.io/yndx/sync/",
+    "https://s.uuidksinc.net/match/501",
+    "https://shopnetic.com/api/rtb/dmp/pixel?partner=yandex",
+    "https://sm.rtb.mts.ru/p?ssp=yandex&id=map",
+    "https://sp.linkssp.ru/cm?key=e4fb10164a09f3d874b563de89b97a56&location=http%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Flinksspis%2F%7Buid%7D",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?dsp_id=109",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?ssp_id=19",
+    "https://ssp.al-adtech.com/api/sync/yandex",
+    "https://sync.bumlam.com/?src=yandex2",
+    "https://sync.dmp.otm-r.com/match/yandexortb",
+    "https://sync.gonet-ads.com/match/yandex?id=[buyerUid]",
+    "https://sync.upravel.com/yandex/sync",
+    "https://sync.upravel.com/yandex2/sync",
+    "https://t.adx.opera.com/pub/sync?pubid=pub9166643429696",
+    "https://tracker.smartcallback.ru/matching/yandex-direct",
+    "https://tt.ttarget.ru/rtb/ya/sync",
+    "https://x01.aidata.io/0.gif?pid=YANDEX",
+    "https://yandex-dmp-sync.rutarget.ru/sync",
+    "https://yandex-sync.rutarget.ru/sync",
+    "https://yandex.ru/an/mapuid/admaticssp/ ",
+    "https://yandex.ru/an/mapuid/adobedmp/",
+    "https://yandex.ru/an/mapuid/betweenru/",
+    "https://yandex.ru/an/mapuid/mailweb/",
+    "https://yandex.ru/an/mapuid/operacom/",
+    "https://yandex.ru/an/mapuid/operaru/",
+    "https://yandex.ru/an/mapuid/sbersellssp/",
+    "https://yandex.ru/an/mapuid/soltadspis/~uid~",
+    "https://yandex.ru/an/mapuid/viberssp/",
+    "https://yandex.ru/an/mapuid/videonowssp/"
+  ],
+  "visibilitySettings": {
+    "delay": 2000,
+    "bannerVisibilityPercent": 30
+  },
+  "settings": {
+    "14": {
+      "sizes": {
+        "width": 300,
+        "minHeight": 500,
+        "maxHeight": 500
+      },
+      "linkTail": "https://yandex.ru/an/rtbcount/1LZpMdaP0fG200000000U9nJv5Pp4TzOOT1eQ2SoOufiBYUpfNDJTIO347Z2H4AzouASO-zeCp6aCWB5C-r4bfI3n4lvWBnQ9Y3HoWWYPpBUR0KfO61Oo7Zk6fZ1i1BEsilu8uI7uIYOVvOHfEugcBpBo232mF2NST4XFvUvJ21pbZBf02NMCdq1acUP_WF1AoO1HjEiANP0XVPxaczqUB8n_6NY0bdCp0eaUva5WEHKPWuWEPSPPCH6vfkNVVozWzLqJZB3V7YL6MmTc7pAR1WhhVMJsS697-9Wbdg7L31h0yj_663SmS9uW8Nb0ikx3qtp3Xp_T5JY9Wl4Bn_i7y9PRrb0Fbh0AdYIzQ--65Zm0kk21Z1WkSaAi_qhAyZ8NwoSvWPc9iPc9WQ63MmRTxszmDJ1ri0oWQtxp8HT4wVDcz78E8Fjuu4jZ0lOrbvhthDqmgqf1nbNii7iEi2MV8ADvH4RRvYlePMdbsL8QMAucSLFkFn4TXXh5ZkxeR61iPcbwG9snXNiZ1lOdNUmyvnW5t_0VlxTzo-hvku-m_M3dQU3ese21-C2ZflTR2iupgrbtW0YTd0mtkB02F05d0tCApZlCcxWvB_0oVA1a_479sC7L-EgxNUP5t21z7CrpFVy28eKXWCtNpaqSiDOdM3MXDWV3XUuspgQ7ZGsD3GoFk1cVCiTTr4iv1Et08Zw_vy13W1muyvo",
+      "horizontalAlign": false,
+      "adFilter": "yabs.NzIwNTc2MTE1ODQzOTU4OTY=",
+      "filterSizes": true,
+      "bannerFlags": "animated",
+      "viewabilityTracking": [
+        {
+          "url": "https://yandex.ru/an/tracking/WX0ejI_zOoVX2Lbv0HKG0BETSJINsbe2vXe4T6Q8i0VHw46KlH0ZZPDdCg1QtaxZXPsoZx93NkexuvuqAcrc7V2P0B7F8K_8sQ7JwEsyRPWFVxJOMmNx8Kn_yDBYAt5h7_OFJsOUnhw78r_Mb5-MCqaFOZy0ryGVlGDMOX4ym5S9vm5qd2fvD0PrwSLKWWXux0bWpE1W_StNHW-IdAiAMuICAiB1Z863sATjl67SvB5l4DU9MvXe6FiQSZF95qskPYnJ4tQ0gORBr7LTr_MzHa_wyp132jMd8e0Y9Pp00N1DjE4mV22jXeG0lZIemmjWwu0MZFULu-TZ2eE-T88IzaICpAsxm9t0_V6OPS5SmWbiOVTCMw-i7d5QFgalqwXiHf0T1ysPK2fh6i0A0Ueno9JXo6HZAEWmvIQJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbSewmjW5529ccdf5Fhl3qmoJGFlZF_UyIoVSAKEHhPoP_De16NTTrB6qMwh7Jkr2FdTxwtIyDovF_b-3ZeHydG1UvX-U_CNYGKNZUwx5H-geq-YsjwqpOA7rL6hrsn9CiDv_DiEL3wtKEKo04eFRDbKgbKeW4x0cRlg7yP3vvL4gbKXaG_CoW03tULB15RgdY0p7vDKJtxgLkZaoa_RQ1T7PAjNRvRNUfTv6tytZshvhThKdhmKq5R7-3yly0~2?action-id=25",
+          "time": 5000
+        },
+        {
+          "url": "https://yandex.ru/an/tracking/WX0ejI_zOoVX2Lbv0HKG0BETSJINsbe2vXe4T6Q8i0VHw46KlH0ZZPDdCg1QtaxZXPsoZx93NkexuvuqAcrc7V2P0B7F8K_8sQ7JwEsyRPWFVxJOMmNx8Kn_yDBYAt5h7_OFJsOUnhw78r_Mb5-MCqaFOZy0ryGVlGDMOX4ym5S9vm5qd2fvD0PrwSLKWWXux0bWpE1W_StNHW-IdAiAMuICAiB1Z863sATjl67SvB5l4DU9MvXe6FiQSZF95qskPYnJ4tQ0gORBr7LTr_MzHa_wyp132jMd8e0Y9Pp00N1DjE4mV22jXeG0lZIemmjWwu0MZFULu-TZ2eE-T88IzaICpAsxm9t0_V6OPS5SmWbiOVTCMw-i7d5QFgalqwXiHf0T1ysPK2fh6i0A0Ueno9JXo6HZAEWmvIQJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbSewmjW5529ccdf5Fhl3qmoJGFlZF_UyIoVSAKEHhPoP_De16NTTrB6qMwh7Jkr2FdTxwtIyDovF_b-3ZeHydG1UvX-U_CNYGKNZUwx5H-geq-YsjwqpOA7rL6hrsn9CiDv_DiEL3wtKEKo04eFRDbKgbKeW4x0cRlg7yP3vvL4gbKXaG_CoW03tULB15RgdY0p7vDKJtxgLkZaoa_RQ1T7PAjNRvRNUfTv6tytZshvhThKdhmKq5R7-3yly0~2?action-id=26",
+          "time": 10000
+        }
+      ],
+      "feedRecHit": 0,
+      "feedShownFormats": "",
+      "showReturnFullscreen": false,
+      "viewNotices": [
+        "https://yandex.ru/an/tracking/WX0ejI_zOoVX2Lbv0HKG0BETSJINsbe2vXe4T6Q8i0VHw46KlH0ZZPDdCg1QtaxZXPsoZx93NkexuvuqAcrc7V2P0B7F8K_8sQ7JwEsyRPWFVxJOMmNx8Kn_yDBYAt5h7_OFJsOUnhw78r_Mb5-MCqaFOZy0ryGVlGDMOX4ym5S9vm5qd2fvD0PrwSLKWWXux0bWpE1W_StNHW-IdAiAMuICAiB1Z863sATjl67SvB5l4DU9MvXe6FiQSZF95qskPYnJ4tQ0gORBr7LTr_MzHa_wyp132jMd8e0Y9Pp00N1DjE4mV22jXeG0lZIemmjWwu0MZFULu-TZ2eE-T88IzaICpAsxm9t0_V6OPS5SmWbiOVTCMw-i7d5QFgalqwXiHf0T1ysPK2fh6i0A0Ueno9JXo6HZAEWmvIQJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbSewmjW5529ccdf5Fhl3qmoJGFlZF_UyIoVSAKEHhPoP_De16NTTrB6qMwh7Jkr2FdTxwtIyDovF_b-3ZeHydG1UvX-U_CNYGKNZUwx5H-geq-YsjwqpOA7rL6hrsn9CiDv_DiEL3wtKEKo04eFRDbKgbKeW4x0cRlg7yP3vvL4gbKXaG_CoW03tULB15RgdY0p7vDKJtxgLkZaoa_RQ1T7PAjNRvRNUfTv6tytZshvhThKdhmKq5R7-3yly0~2?action-id=16"
+      ],
+      "bannerIds": [
+        "72057611584395896"
+      ],
+      "winNotice": "https://yandex.ru/an/tracking/WX0ejI_zOoVX2Lbv0HKG0BETSJINsbe2vXe4T6Q8i0VHw46KlH0ZZPDdCg1QtaxZXPsoZx93NkexuvuqAcrc7V2P0B7F8K_8sQ7JwEsyRPWFVxJOMmNx8Kn_yDBYAt5h7_OFJsOUnhw78r_Mb5-MCqaFOZy0ryGVlGDMOX4ym5S9vm5qd2fvD0PrwSLKWWXux0bWpE1W_StNHW-IdAiAMuICAiB1Z863sATjl67SvB5l4DU9MvXe6FiQSZF95qskPYnJ4tQ0gORBr7LTr_MzHa_wyp132jMd8e0Y9Pp00N1DjE4mV22jXeG0lZIemmjWwu0MZFULu-TZ2eE-T88IzaICpAsxm9t0_V6OPS5SmWbiOVTCMw-i7d5QFgalqwXiHf0T1ysPK2fh6i0A0Ueno9JXo6HZAEWmvIQJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbSewmjW5529ccdf5Fhl3qmoJGFlZF_UyIoVSAKEHhPoP_De16NTTrB6qMwh7Jkr2FdTxwtIyDovF_b-3ZeHydG1UvX-U_CNYGKNZUwx5H-geq-YsjwqpOA7rL6hrsn9CiDv_DiEL3wtKEKo04eFRDbKgbKeW4x0cRlg7yP3vvL4gbKXaG_CoW03tULB15RgdY0p7vDKJtxgLkZaoa_RQ1T7PAjNRvRNUfTv6tytZshvhThKdhmKq5R7-3yly0~2?action-id=11",
+      "reach": true,
+      "mrcImpressions": [
+        "https://yandex.ru/an/count/WPSejI_zOoVX2Lal0KqC0EFKK4pE4TOse0WXaq0L3wBHWoZx7QyttE7wdQoEezVPA-HaJ-Je_eFPVsWiuJo0ZbCbZyQWBhsOIX01Zpq1Z1aSBBF3DwY3rxU1iznibtUwJUDoogOCjl4gbKgbKWE9BpOxEAnb-Plov0lvn4RtV5aig6yuJr881pC63k80Dd0rZ9E0FT5gs9j9WBnfDMnz3Jc6PlkaqNgQR8R6FtQa2Hn0s0UGpHA0lWM3UUa49Uo969bRTu5RHAbKAfNAm3uBS9vfwvNL8qxB9sLX-sKQbSq8ikEWEHDAPKq3M250FGQPCXoPR0m5dTPr7HiZzZ1c6aPCGKcK3Xq6NAFLTHZlSWBH03R4QXg0wJ8vHrZRW2A4J5EFsTpzRmoWKTTr7KkRcsXUKv9qOmSUElXAMmJXIiDPeBC1g7s5IC2U8A7yT50WPQoeqU945loG9i_jWaq4paFuHRp_PLrEFzEROaQVZogP_dpNt5SVemhk6HLkyxR1dWFScFSEioC4Xo8ERU_TneQnu1nUb3OHb000~2=Wb4ejI_zOoVX2Lcl0HqI05EYXNwgpdf5RwtJN6fh2PYPd2EiRK0HGYQ1AZw1i3TCG6ycONGoWe2t1W7TnEAO4viNB1CEwEA566cSF9C1rV9s6Y_ib7sK7V9Itnb3dy_bpfxjT-wyuSvNsOmWEmwQCw5KrZI05GBKOz1np107rYdtf55fC-k05S5D6Of-yD1X2Y1BI06D4IZg1PGrk4ihGAl17Le1MWtkpWhGQd1dLe1MWxko0hGQrEqLeDMWJgy0hGPruGAq6jGXAK2hGLrU0LeDweuKeDMW3gy0hOWhh2fjaKF8dXIGXL6MalEbnTugM1D_z0vOYKNm05yVpDIyQ9c43IcysQMxNLNGIU06C7F3jqxSmcJ3rjSHAd5A0lOa2P0tfgxhkgxlDJg78uv8m5xOHaOQRWpDjWs7uGDfDIG4yAL17Lu0MmUqOBol9X_MZYKOiaMKIgLIgGpiim1dOSSAApfcjlIF2kMRAs0AvXWAEanvWfavdj08Cw6CXyKnv2QJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbDhd-DowHV765fnycWVR1V-v_bqY-TudaSvbcVnUWoDVEJFxip2JJJ2-zGZrsUXVgiTDRNqSuv-NDNkpBVlTBm_Ba_oNuUEZ72T15xk7vRmmUP1IUztfibBugZNvBwpeJDafVbKQl7V4aoyrdCspvq7hTJm4gGeMPVJrvFE8m1G8D0Uq0hKO21rmZ10pytyat4dMtbZ-FkR1P4c3bOoEW6OP96HFWXsPJJ3lWV2JhdDYw2Ct_0G00~2",
+        "https://www.tns-counter.ru/V13a****oom_ad/ru/UTF-8/tmsec=okkamoom_cid1308772-posid3625365/1129477707",
+        "https://view.adjust.com/impression/1ej142gd?idfa=&oaid=&gps_adid=&android_id=&ya_click_id=4008414108248965119&publisher_id=5702111906&advertising_id=&rnd=1129477707&campaign=media_ydd_c2c_good_avito_el-cybermon_t2_jan-feb_26_byps&adgroup=yandex-direct_regions_all_crm_banner_cpo_cpm_cr1&creative=banner_cpo",
+        "https://ad.adriver.ru/cgi-bin/rle.cgi?sid=1&bt=55&ad=832416&pid=4717572&bid=13957392&bn=13957392&exss=&exs0=yandex&exs6=%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3,2&exs10=&exs11=&exs12=&exs13=&exs14=&rnd=1129477707&rnd=2040594250",
+        "https://mc.yandex.ru/pixel/8887269587256058814?rnd=1129477707",
+        "https://yandex.ru/an/tracking/WX0ejI_zOoVX2Lbv0HKG0BETSJINsbe2vXe4T6Q8i0VHw46KlH0ZZPDdCg1QtaxZXPsoZx93NkexuvuqAcrc7V2P0B7F8K_8sQ7JwEsyRPWFVxJOMmNx8Kn_yDBYAt5h7_OFJsOUnhw78r_Mb5-MCqaFOZy0ryGVlGDMOX4ym5S9vm5qd2fvD0PrwSLKWWXux0bWpE1W_StNHW-IdAiAMuICAiB1Z863sATjl67SvB5l4DU9MvXe6FiQSZF95qskPYnJ4tQ0gORBr7LTr_MzHa_wyp132jMd8e0Y9Pp00N1DjE4mV22jXeG0lZIemmjWwu0MZFULu-TZ2eE-T88IzaICpAsxm9t0_V6OPS5SmWbiOVTCMw-i7d5QFgalqwXiHf0T1ysPK2fh6i0A0Ueno9JXo6HZAEWmvIQJzev9ZmAB4TCnkeSnFxKmt-K4eW5iYDKq0DDbSewmjW5529ccdf5Fhl3qmoJGFlZF_UyIoVSAKEHhPoP_De16NTTrB6qMwh7Jkr2FdTxwtIyDovF_b-3ZeHydG1UvX-U_CNYGKNZUwx5H-geq-YsjwqpOA7rL6hrsn9CiDv_DiEL3wtKEKo04eFRDbKgbKeW4x0cRlg7yP3vvL4gbKXaG_CoW03tULB15RgdY0p7vDKJtxgLkZaoa_RQ1T7PAjNRvRNUfTv6tytZshvhThKdhmKq5R7-3yly0~2?action-id=14"
+      ],
+      "renderLinkTail": "https://yandex.ru/an/rtbcount/1QljPB0S0fG200000000U9nJv5Pp4TzOOT1eQ2SoOufiBYUpfNDJTIO347Z2H4AzouASO-zeCp6aCWB5C-r4bfI3n4lvWBnQ9Y3HoWWYPpBUR0KfO61Oo7Zk6fZ1i1BEsilu8uI7uIYOVvQH6IXobH6a-YuZWmW3mr_6HOVyNEOoWSnPogG3b5ZBz0L8dcNw3mIlc0GOJREcs04Lskz9lj7XoSRmbuaBP34pAv3iPHO0abEPEO3aN6QG4HkPRrxsyVSELjCvoGppuLLci7LWyYcpOQoqrazc1oT-Y8DPwXrImQmDBFzXW7472-C15fOBBEy-DCqxSFpJKOcRB12_VB1_26UzPG7vQ06hu4dMl_fYOC4Bh0iQm83b9YlCzg-i82D_iNAQ6vYP69kP61Wsi6tSzVO2KmTR0yi4jkup4tPDd3PlHYFZ3BQF1xOmBc1RUwrvpz89jwOSP5p91hFh05lo2JQMHsoyORw6LfvUbY6bYU5c5Z_XyXFPOQnPxEo6nWR6PfQc2zWPLx0pRc1tti7ESu9T_07x-NVVlwoQk_iCrmzsdWwEgWaSZ0iuRdQphU0ujvPv0uZOmS5uYmCZm1TmDZ2luBpBk86J_m8domTEnX-SZ1rSZQkstsLUm0NIpzKmt_CZA58O3jnyvT383MDrWbaJOdyuNE1kwsXwqDZGqCZuW9lnBNVSHR6GJzm28Eh_VmOu001r6yvq",
+      "blockId": "R-I-142300-14",
+      "isProductPromo": false,
+      "intersectionVisibility": "1"
+    }
+  },
+  "rtbAuctionInfo": {
+    "bidReqId": 218826030718653500,
+    "bidReqIdStr": "218826030718653502",
+    "bsGeneratedUniqID": "9309073131769701899",
+    "dspId": 1
+  },
+  "common": {
+    "pageId": "142300",
+    "cpdPageType": "0",
+    "sspBidId": "",
+    "isStaff": "false",
+    "whyThisAdLandingLink": "https://adreasons.yandex-team.ru/?hitlogid=218826030232900670",
+    "actualBannerCount": 1,
+    "sspId": "",
+    "pageLang": "0",
+    "detailedDeviceType": 16,
+    "labelsLang": "1",
+    "stationaryConnection": "1",
+    "productType": "media-creative-reach",
+    "userRegion": "RU",
+    "uniformat": true,
+    "sdkSettings": {
+      "AutoRefreshPeriod": 0,
+      "TimeToClose": 5,
+      "MaxHeight": 0,
+      "TimeToReward": 5,
+      "EndCardEnable": true,
+      "AdPodEnable": true,
+      "MinHeight": 0,
+      "MaxWidth": 0,
+      "MinWidth": 0
+    },
+    "reloadTimeout": "30",
+    "externalDSP": "0",
+    "impId": "14",
+    "hitlogId": "218826030232900670",
+    "shop_id": "0",
+    "labelTuneLanguage": "ru",
+    "isYandex": "0",
+    "adId": "yabs.NzIwNTc2MTE1ODQzOTU4OTY=",
+    "isYandexPage": "1",
+    "bidReqIdStr": "218826030718653502",
+    "deviceType": "5",
+    "i18n": {
+      "banners": {
+        "AD_POD_PROGRESS_OF": "Из",
+        "APPLICATION": "Приложение",
+        "ARM_DEFAULT_TITLE": "Больше информации на сайте рекламодателя",
+        "ARTICLE": "Статья",
+        "BACK_TO_APP": "Вернуться в приложение",
+        "BASED_ON_FIVE_REVIEWS": "На основе {val} отзывов",
+        "BASED_ON_ONE_REVIEW": "На основе {val} отзыва",
+        "BASED_ON_TWO_REVIEWS": "На основе {val} отзывов",
+        "CALL_FEED_BUTTON_TEXT": "Ваша персональная лента объявлений",
+        "CANCELLATION": "Отмена",
+        "CLOSE": "Закрыть",
+        "CONTINUE_TO_APP": "Перейти в приложение",
+        "COPIED": "Скопировано",
+        "COPY_AND_OPEN": "Скопировать и перейти",
+        "DAYS_LEFT": [
+          "Ещё {count} день",
+          "Ещё {count} дня",
+          "Ещё {count} дней",
+          ""
+        ],
+        "DETAILS": "Подробнее",
+        "DISCLAIMER_ALCOHOL": "Чрезмерное потребление вредно",
+        "DISCLAIMER_DIETARYSUPPL": "Не является лекарством",
+        "DISCLAIMER_MEDICINE": "Есть противопоказания. Посоветуйтесь с врачом",
+        "DISCLAIMER_PRICE_ONLINE_ONLY": "Цены доступны только онлайн",
+        "FEED_POPUP_TITLE": "Лента объявлений",
+        "FREE": "Бесплатно",
+        "GO_TO_REVIEWS": "Перейти к отзывам",
+        "GO_TO_SITE": "Перейти на сайт",
+        "HOURS_LEFT": [
+          "Ещё {count} час",
+          "Ещё {count} часа",
+          "Ещё {count} часов",
+          ""
+        ],
+        "INSTALL": "Установить",
+        "INSTALL_FROM_STORE": "Установить из {store}",
+        "INTERSTITIAL_CLOSE_IN_SEC": "Реклама скроется через {val} сек",
+        "LEARN_MORE": "Узнать больше",
+        "MORE": "Перейти",
+        "MORE_IN_STORES": [
+          "Еще в {count} магазине",
+          "Еще в {count} магазинах",
+          "Еще в {count} магазинах",
+          ""
+        ],
+        "MORE_ON_THE_WEBSITE": "Подробнее на сайте",
+        "OPEN": "Открыть",
+        "ORGANIZATION_RATING": "рейтинг организации",
+        "PAYMENT_IN_PARTS": "Оплата частями без комиссии",
+        "PRICE_CAN_CHANGE": [
+          "Цена может измениться",
+          "Цены могут измениться",
+          "Цены могут измениться",
+          ""
+        ],
+        "PRICE_FROM": "от",
+        "PRICE_MONTHLY_FROM": "Ежемесячный платеж от",
+        "PRICE_TO": "до",
+        "REVIEWS_PROVIDED_BY": "Отзывы предоставлены сервисом",
+        "REWARDED_BEFORE_REWARD_MESSAGE": "Награда начислится через",
+        "REWARDED_CLOSE_MESSAGE": "Вы не получите вознаграждение, если пропустите рекламу",
+        "REWARDED_CONTINUE": "Продолжить просмотр",
+        "REWARDED_LOSE_REWARD": "Отказаться от награды",
+        "REWARD_IN_SEC": "Награда через {val} сек",
+        "REWARD_RECEIVED": "Награда получена",
+        "REWARD_REMAINING": "Осталось {val} сек",
+        "SHOPPING": "За покупками",
+        "SHOW_MORE_GOODS": "Ещё товары",
+        "SITE_RATING": "рейтинг сайта",
+        "SOCIAL_ADV_SHORT": "Соцреклама",
+        "TIME_IN_MINUTES": "{val} мин",
+        "VIDEO_IN_COMBO_LEARN_MORE": "Подробнее",
+        "YANDEX_BROWSER": "Яндекс.Браузер",
+        "YANDEX_BUSINESS": "Я.Бизнес",
+        "YANDEX_MAPS": "Яндекс.Карты",
+        "YA_PROMO_PAGES": "ПромоСтраницы"
+      },
+      "common": {
+        "ADVERTISEMENT": "Реклама",
+        "APPLY": "Подать заявку",
+        "APP_BUTTON_GET": "Скачать",
+        "BOOK": "Забронировать",
+        "BUY": "Купить",
+        "BU_LABEL_TOOLTIP_TEXT": "Работает на технологиях Яндекса",
+        "CALL_SPECIALIST": "Вызвать специалиста",
+        "CHOOSE": "Выбрать",
+        "DOWNLOAD": "Скачать",
+        "DOWNLOAD_APP": "Скачать",
+        "GET": "Скачать",
+        "GET_CONSULTATION": "Получить консультацию",
+        "GET_DISCOUNT": "Получить скидку",
+        "GET_OFFER": "Получить предложение",
+        "GET_PRICE": "Узнать цену",
+        "GO": "Перейти",
+        "GO_TO_WEBSITE": "Перейти на сайт",
+        "INSTALL": "Установить",
+        "LISTEN": "Слушать",
+        "MORE": "Узнать больше",
+        "MORE_2": "Узнать больше",
+        "OPEN": "Открыть",
+        "ORDER": "Заказать",
+        "PLAY": "Играть",
+        "REGISTER": "Зарегистрироваться",
+        "REPEAT": "Повторить",
+        "REQUEST_CALLBACK": "Заказать звонок",
+        "SIGN_UP": "Записаться",
+        "SIGN_UP_ONLINE": "Записаться онлайн",
+        "START": "Начать",
+        "SUBSCRIBE": "Подписаться",
+        "SURVEY": "Опрос",
+        "TRY": "Попробовать",
+        "TURN_ON": "Включить",
+        "UPDATE": "Обновить",
+        "VIEW_CATALOG": "Посмотреть каталог",
+        "WATCH": "Смотреть",
+        "WRITE_TELEGRAM": "Написать в Telegram",
+        "WRITE_WHATSAPP": "Написать в WhatsApp"
+      }
+    },
+    "testIds": "918196,0,92;1387855,0,60;1475615,0,99;1478332,0,76;1384009,0,61;1457622,0,66;1404022,0,51;1447467,0,16;1471934,0,3;1471793,0,16;1467262,0,93;1353316,0,72;1473956,0,83;1473477,0,57;1474011,0,13;1472681,0,8;1467536,0,62;1467594,0,60;1476248,0,48;1464632,0,72;1473605,0,65;681842,0,5",
+    "csrReason": 10,
+    "flagsMap": {
+      "YASPSTABLEVER": [
+        {
+          "value": "1.762.13663",
+          "testId": "1478067"
+        }
+      ],
+      "VAS_STABLE_VERSION": [
+        {
+          "value": "1301686",
+          "testId": "1347458"
+        }
+      ],
+      "VAS_LOG_CONTENT_DURATION_PERCENT": [
+        {
+          "value": "1",
+          "testId": "1327062"
+        }
+      ],
+      "DISABLE_DESTROY_EXTERNAL_CREATIVE_AD_USER_CLOSE_EVENT": [
+        {
+          "value": "exp",
+          "testId": "1449275"
+        },
+        {
+          "value": "exp",
+          "testId": "1449272"
+        }
+      ],
+      "VAS_RECALCULATE_REQUEST_METHOD_FOR_WRAPPER_URL": [
+        {
+          "value": "exp",
+          "testId": "1450545"
+        }
+      ],
+      "QR_BLACK_LIST_CLIENT_IDS": [
+        {
+          "value": "109238945:88772210:309062065",
+          "testId": "1471021"
+        }
+      ],
+      "PCODE_STABLE_VERSION": [
+        {
+          "value": "1303695",
+          "testId": "1477977"
+        }
+      ],
+      "SENAEV_1": [
+        {
+          "value": "control",
+          "testId": "918196"
+        }
+      ],
+      "YASPVER": [
+        {
+          "value": "1.0-13668",
+          "testId": "1478332"
+        }
+      ],
+      "NEW_KEBAB": [
+        {
+          "value": "exp",
+          "testId": "1471793"
+        }
+      ],
+      "USE_NEW_KEBAB_SIZE": [
+        {
+          "value": "exp",
+          "testId": "1471793"
+        }
+      ],
+      "ADD_IMAGE_GALLERY_IN_NEURO_DESIGN": [
+        {
+          "value": "exp",
+          "testId": "1467262"
+        }
+      ],
+      "HAPPINESS_SURVEY_ICON": [
+        {
+          "value": "emoji",
+          "testId": "1353316"
+        }
+      ],
+      "ADDING_ADDITIONAL_PARAMETERS_FOR_DISTRIBUTION": [
+        {
+          "value": "ctl",
+          "testId": "1473956"
+        }
+      ],
+      "USE_SEQUENTIAL_LOAD_AD_FOR_SKIP_TOKEN": [
+        {
+          "value": "ctl",
+          "testId": "1473477"
+        }
+      ],
+      "USE_BK_WIZ_COLOR_FOR_AVG_COLOR": [
+        {
+          "value": "exp",
+          "testId": "1474011"
+        }
+      ],
+      "SUPPORT_VERTICAL_SNAP_FOR_SCROLLING": [
+        {
+          "value": "exp",
+          "testId": "1472681"
+        }
+      ]
+    },
+    "activeTestIds": [
+      "1353316,0,72"
+    ]
+  },
+  "rtb": {
+    "domain": "avito.ru",
+    "html": "<!doctype html>\n<!--\n\tNOTES:\n\t1. All tokens are represented by '$' sign in the template.\n\t2. You can write your code only wherever mentioned.\n\t3. All occurrences of existing tokens will be replaced by their appropriate values.\n\t4. Blank lines will be removed automatically.\n\t5. Remove unnecessary comments before creating your template.\n-->\n<html>\n <head> \n  <script>var yandexHTML5BannerApi = (function() {\n\n    var _clickUrls = [\"https://yandex.ru/an/count/WnmejI_zOoVX2LaW0tKO00EigZINsbe2vWIg-0J2tZ01lPc4qSa80juQ17GJYsDER5wmJ3YW2_JvNExisNxdpXlkVFsErnlkS9tG9pw5Ed7diqIr2AbQX1J2Wo8h3IEb7oGX92i79Qf2IDOG9N0xQGHhY1AtdJI2DKI9fvqqWZL42TjE6i4QeeJJJXh16k8fuhvjQFtCGTWeGFGuVKf4aqQmEfD6i8OeaPGqWhK8ACHpUakXqzikKHK22l6KGgMs52zH5JeA4RNnvvrtTy2KpGYouw0v4qfbJGDO8K0z1Xt7375WdR8Yk2b3qGyUEam1P0afe342HRs0iWPtQGLeDRX3Aq2hmTrP0LeDximAq6fmLrQ0LeEwlGAq6jJf5Q3Le2vSW5Q3EYG5Q3Meooj0gq7TaGAq6jJX5Q0LSOLLfIro2DcJ0h8mob9olhJOMmLhue_U0Ikn21xWAu_6e2wzc4eG0Oyz0OmP7AmlWYMe5JBN58Xsu_rWfkP5ooHiIE7DBjtjge9EpkSR9XilCp203TmwSGkJPXAm9reDUpC9a3UjXYrJrtLTr_SQdSCHHoHWBsmZ8mqtXcRRXiFmWRGQ4WBuqg0EBu2j0remtXSVreub6BAUQUkLrIDEooTbOMjXnmehE3BPcojWc38U5iUGcqpQEoOz2Yn6JCVe7iRyrC9ybnE81h0XLjC0J9V9ESBQ1XGXP9fwlt69v8ihFFqm2RGF_dF_kqJolG8K-TgPoPzbBhq1DEgwhcDfSnFDQqgIRXJgiTExK8-TtbgWixwESCxBcxtOb_tkbuRboVzByF7GZsaFJe0kSW_FVsFm8AFmlDTZe_HLQVHRMjUPi57wgZHwxOWdMMu-cs7BXzRhVWfG4IhCxEl9un67AH1e26W70b3xvagbKYb40lQ4xNLTny3CKVwO2ehEAsgqE14V_43Lcy-eoy_DHHsLRSaktdMuErsY7ZdKzv2Z0v5iwlGE1SmKEnbITEnKUKkHDzXY1n03tEjrYUuqa_Ay4rAJ-_AW7PgnpEqcRsiuv4gLy9OE9I7RBlhPx9FncyBlKlP_~2\",\"https://yandex.ru/an/count/WnqejI_zOoVX2LaX0tqO01FigZINsbe2vWIg-0J2tZ01lPc4qSa80juQ17GJYsDER5wmJ3YW2_JvNExisNxdpXlkVFsErnlkS9tG9pw5Ed7diqIr2AbQX1J2Wo8h3IEb7oGX92i79Qf2IDOG9N0xQGHhY1AtdJI2DKI9fvqqWZL42TjE6i4QeeJJJXh16k8fuhvjQFtCGTWeGFGuVKf4aqQmEfD6i8OeaPGqWhK8ACHpUakXqzikKHK22l6KGgMs52zH5JeA4RNnvvrtTy2KpGYouw0v4qfbJGDO8K0z1Xt7375WdR8Yk2b3qGyUEam1P0afe342HRs0iWPtQGLeDRX3Aq2hmTrP0LeDximAq6fmLrQ0LeEwlGAq6jJf5Q3Le2vSW5Q3EYG5Q3Meooj0gq7TaGAq6jJX5Q0LSOLLfIro2DcJ0h8mob9olhJOMmLhue_U0Ikn21xWAu_6e2wzc4eG0Oyz0OmP7AmlWYMe5JBN58Xsu_rWfkP5ooHiIE7DBjtjge9EpkSR9XilCp203TmwSGkJPXAm9reDUpC9a3UjXYrJrtLTr_SQdSCHHoHWBsmZ8mqtXcRRXiFmWRGQ4WBuqg0EBu2j0remtXSVreub6BAUQUkLrIDEooTbOMjXnmehE3BPcojWc38U5iUGcqpQEoOz2Yn6JCVe7iRyrC9ybnE81h0XLjC0J9V9ESBQ1XGXP9fwlt69v8ihFFqm2RGF_dF_kqJolG8K-TgPoPzbBhq1DEgwhcDfSnFDQqgIRXJgiTExK8-TtbgWixwESCxBcxtOb_tkbuRboVzByF7GZpsZ1oT05xc7vxynU91HUDxhiL7wgZJwBQthJDWeVLKQlNR4aomtdysmvKFhTJy5g0WLPlRrvF68mnG8D0Iq0m6eVNEbKgaK8W5xmlQwhcDW4g3yRaigvXKrMfm87_n0rPlFgSlFpKKT5Mx9hjvrk3nTeYuvrF-GeoEHREhq3YNC53ivKdGiLVcM8Y5ciGHe0E_ikdHtcibvu0cgotrvs0xDsEPs4xWr77QbIdbBXvAmRHVzSFR9E6xXTodxFm00~2\"];\n\n    function getClickMacro() {\n        var clickMacro = '';\n        var res = /click_macro=([^&$]+)/.exec(getBaseURI());\n        if (res) {\n            try {\n                clickMacro = decodeURIComponent(res[1]);\n            } catch (err) {}\n        }\n        return clickMacro;\n    }\n\n    function getBaseURI() {\n        var baseURI = document.baseURI;\n        if (baseURI === null || typeof baseURI === 'undefined') {\n            var baseTag = document.querySelector('base');\n            if (baseTag) {\n                baseURI = baseTag.href;\n            } else {\n                baseURI = document.URL;\n            }\n        }\n        return baseURI;\n    }\n\n    var clickMacro = getClickMacro();\n    return {\n        getClickURLNum: function(num) {\n            var url = _clickUrls[--num];\n            if (clickMacro) {\n                return \"\" + clickMacro + encodeURIComponent(url);\n            }\n            return url;\n        }\n    };\n})();\n</script>\n  <meta charset=\"UTF-8\"> \n  <meta name=\"authoring-tool\" content=\"Adobe_Animate_CC\"> \n  <meta name=\"ad.size\" content=\"width=300,height=500\"> \n  <title>index</title> \n  <!-- write your code here --> \n  <script src=\"https://storage.mds.yandex.net/get-bstor/16501070/15a74aaa-fd1b-4692-8673-1e52eb6a6a0e.js\"></script> \n  <script src=\"index.js\"></script> \n  <script>\nvar canvas, stage, exportRoot, anim_container, dom_overlay_container, fnStartAnimation;\nfunction init() {\n\tcanvas = document.getElementById(\"canvas\");\n\tanim_container = document.getElementById(\"animation_container\");\n\tdom_overlay_container = document.getElementById(\"dom_overlay_container\");\n\tvar comp=AdobeAn.getComposition(\"2CEFEEB11AA247619FED844F36321F9B\");\n\tvar lib=comp.getLibrary();\n\tvar loader = new createjs.LoadQueue(false);\n\tloader.addEventListener(\"fileload\", function(evt){handleFileLoad(evt,comp)});\n\tloader.addEventListener(\"complete\", function(evt){handleComplete(evt,comp)});\n\tvar lib=comp.getLibrary();\n\tloader.loadManifest(lib.properties.manifest);\n}\nfunction handleFileLoad(evt, comp) {\n\tvar images=comp.getImages();\t\n\tif (evt && (evt.item.type == \"image\")) { images[evt.item.id] = evt.result; }\t\n}\nfunction handleComplete(evt,comp) {\n\t//This function is always called, irrespective of the content. You can use the variable \"stage\" after it is created in token create_stage.\n\tvar lib=comp.getLibrary();\n\tvar ss=comp.getSpriteSheet();\n\tvar queue = evt.target;\n\tvar ssMetadata = lib.ssMetadata;\n\tfor(i=0; i<ssMetadata.length; i++) {\n\t\tss[ssMetadata[i].name] = new createjs.SpriteSheet( {\"images\": [queue.getResult(ssMetadata[i].name)], \"frames\": ssMetadata[i].frames} )\n\t}\n\texportRoot = new lib._300x500();\n\tstage = new lib.Stage(canvas);\t\n\t//Registers the \"tick\" event listener.\n\tfnStartAnimation = function() {\n\t\tstage.addChild(exportRoot);\n\t\tcreatejs.Ticker.framerate = lib.properties.fps;\n\t\tcreatejs.Ticker.addEventListener(\"tick\", stage);\n\t}\t    \n\t//Code to support hidpi screens and responsive scaling.\n\tAdobeAn.makeResponsive(false,'both',false,1,[canvas,anim_container,dom_overlay_container]);\t\n\tAdobeAn.compositionLoaded(lib.properties.id);\n\tfnStartAnimation();\n}\n</script> \n  <!-- write your code here --> \n </head> \n <body onload=\"init();\" style=\"margin:0px;\"> \n  <a id=\"click_area\" href=\"#\" target=\"_blank\">\n   <div id=\"animation_container\" style=\"background-color:rgba(255, 255, 255, 1.00); width:300px; height:500px\"> \n    <canvas id=\"canvas\" width=\"300\" height=\"500\" style=\"position: absolute; display: block; background-color:rgba(255, 255, 255, 1.00);\"></canvas> \n    <div id=\"dom_overlay_container\" style=\"pointer-events:none; overflow:hidden; width:300px; height:500px; position: absolute; left: 0px; top: 0px; display: block;\"> \n    </div> \n   </div></a>  \n  <script>document.getElementById(\"click_area\").href = yandexHTML5BannerApi.getClickURLNum(1);</script>\n </body>\n</html>",
+    "abuseLink": "https://yandex.ru/an/abuse/WD0ejI_z8oVX2Ldu7GO0muef9Pm7q76gvD4OrAKNKmaYuB4dW363WxNHWoJdgi8M8QEAS33NYLkO-1goiXb1TXmqPqAfh6a0AmIeno1JXYEJfNLTrsF4D8nuEO5e01jYDGt0T9cS8wnjG152fgadr6EdTo_svVyb-7ZenmdGHUxX-Q_7HkchqkYtjAupOQFqLMdqMZy5g0WLPlRrvF4e0BLlhbGgbK8aO4_OIhFo4r2tGSoA6YrE10VyiXvy13m_uVKTfBxVtG8lOG89lAShuFu7~2",
+    "erid": "j1SUnT7bZ9pkQhT1A",
+    "clientData": {
+      "clientId": "96058067",
+      "clientName": "ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ \"КЕХ ЕКОММЕРЦ\"",
+      "clientAlternativeTin": "",
+      "clientTin": "7710668349",
+      "clientType": 1
+    },
+    "advertInfoUrl": "https://yandex.ru/ads/advertiser_info/WD0ejI_z8oVX2Ldu7GO0muef9Pm7q76gvD4OrAKNKmaYuB4dW363WxNHWoJdgi8M8QEAS33NYLkO-1goiXb1TXmqPqAfh6a0AmIeno1JXYEJfNLTrsF4D8nuEO5e01jYDGt0T9cS8wnjG152fgadr6EdTo_svVyb-7ZenmdGHUxX-Q_7HkchqkYtjAupOQFqLMdqMZy5g0WLPlRrvF4e0BLlhbGgbK8aO4_OIhFo4r2tGSoA6YrE10VyiXvy13m_uVKTfBxVtG8lOG89lAShuFu7~2",
+    "punyDomain": "avito.ru",
+    "bidreqid": "218826030718653502",
+    "eventHash": "1729759705141898710",
+    "isErir": 0,
+    "flexible": "0",
+    "retailCandidateType": 0,
+    "html5": true,
+    "bannerSizes": {
+      "height": 500,
+      "width": 300
+    },
+    "width": 300,
+    "buttonClick": "https://yandex.ru/an/count/WnmejI_zOoVX2LaW0tKO00EigZINsbe2vWIg-0J2tZ01lPc4qSa80juQ17GJYsDER5wmJ3YW2_JvNExisNxdpXlkVFsErnlkS9tG9pw5Ed7diqIr2AbQX1J2Wo8h3IEb7oGX92i79Qf2IDOG9N0xQGHhY1AtdJI2DKI9fvqqWZL42TjE6i4QeeJJJXh16k8fuhvjQFtCGTWeGFGuVKf4aqQmEfD6i8OeaPGqWhK8ACHpUakXqzikKHK22l6KGgMs52zH5JeA4RNnvvrtTy2KpGYouw0v4qfbJGDO8K0z1Xt7375WdR8Yk2b3qGyUEam1P0afe342HRs0iWPtQGLeDRX3Aq2hmTrP0LeDximAq6fmLrQ0LeEwlGAq6jJf5Q3Le2vSW5Q3EYG5Q3Meooj0gq7TaGAq6jJX5Q0LSOLLfIro2DcJ0h8mob9olhJOMmLhue_U0Ikn21xWAu_6e2wzc4eG0Oyz0OmP7AmlWYMe5JBN58Xsu_rWfkP5ooHiIE7DBjtjge9EpkSR9XilCp203TmwSGkJPXAm9reDUpC9a3UjXYrJrtLTr_SQdSCHHoHWBsmZ8mqtXcRRXiFmWRGQ4WBuqg0EBu2j0remtXSVreub6BAUQUkLrIDEooTbOMjXnmehE3BPcojWc38U5iUGcqpQEoOz2Yn6JCVe7iRyrC9ybnE81h0XLjC0J9V9ESBQ1XGXP9fwlt69v8ihFFqm2RGF_dF_kqJolG8K-TgPoPzbBhq1DEgwhcDfSnFDQqgIRXJgiTExK8-TtbgWixwESCxBcxtOb_tkbuRboVzByF7GZsaFJe0kSW_FVsFm8AFmlDTZe_HLQVHRMjUPi57wgZHwxOWdMMu-cs7BXzRhVWfG4IhCxEl9un67AH1e26W70b3xvagbKYb40lQ4xNLTny3CKVwO2ehEAsgqE14V_43Lcy-eoy_DHHsLRSaktdMuErsY7ZdKzv2Z0v5iwlGE1SmKEnbITEnKUKkHDzXY1n03tEjrYUuqa_Ay4rAJ-_AW7PgnpEqcRsiuv4gLy9OE9I7RBlhPx9FncyBlKlP_~2",
+    "basePath": "https://storage.mds.yandex.net/get-canvas-html5/979535/5ff2925f-e3f4-46eb-9233-3904053ee43f/",
+    "height": 500,
+    "campaignid": "706436401"
+  }
+}

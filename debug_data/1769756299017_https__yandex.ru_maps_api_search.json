@@ -1,0 +1,3751 @@
+{
+  "data": {
+    "requestId": "1769756298378576-2149106824-addrs-upper-yp-110",
+    "requestSerpId": "1769756298378576-2149106824-addrs-upper-yp-110",
+    "requestContext": "ZAAAAAgBEAAaKAoSCQAAAAAAkHZAEQAAAAAAoGZAEhIJAAAAAAAA8L8RAAAAAAAA8L8iBQABAgMEKAo4AED+//////////8BSAFqAJ0BzczMPaABAKgBAL0BO2jDF8IBBYDf8IZYggIAigIAkgIAmgIMZGVza3RvcC1tYXBz",
+    "requestQuery": "empty",
+    "requestCorrectedQuery": "empty",
+    "requestBounds": [
+      [
+        37.048427,
+        55.43644866
+      ],
+      [
+        38.175903,
+        56.04690174
+      ]
+    ],
+    "displayType": "multiple",
+    "totalResultCount": 1,
+    "requestResults": 1,
+    "items": [
+      {
+        "type": "business",
+        "requestId": "1769756298378576-2149106824-addrs-upper-yp-110",
+        "index": 0,
+        "analyticsId": "0",
+        "title": "Art-team Studio",
+        "description": "Приморский просп., 137, корп. 1, Санкт-Петербург",
+        "address": "Приморский просп., 137, корп. 1, Санкт-Петербург",
+        "coordinates": [
+          30.216207,
+          59.983176
+        ],
+        "displayCoordinates": [
+          30.216207,
+          59.983176
+        ],
+        "bounds": [
+          [
+            30.213748,
+            59.981663
+          ],
+          [
+            30.221958,
+            59.985777
+          ]
+        ],
+        "uri": "ymapsbm1://org?oid=23636750208",
+        "logId": "dHlwZT1iaXpmaW5kZXI7aWQ9MjM2MzY3NTAyMDg=",
+        "id": "23636750208",
+        "metro": [
+          {
+            "id": "2523478454",
+            "name": "Беговая",
+            "distance": "1,27 км",
+            "distanceValue": 1274.75,
+            "coordinates": [
+              30.203178293,
+              59.988245792
+            ],
+            "type": "metro",
+            "color": "#3aa63a"
+          },
+          {
+            "id": "2523477374",
+            "name": "Зенит",
+            "distance": "1,69 км",
+            "distanceValue": 1690.67,
+            "coordinates": [
+              30.211924154,
+              59.972733676
+            ],
+            "type": "metro",
+            "color": "#3aa63a"
+          },
+          {
+            "id": "station__9805910",
+            "name": "Старая Деревня",
+            "distance": "2,96 км",
+            "distanceValue": 2964.93,
+            "coordinates": [
+              30.255481899,
+              59.989606853
+            ],
+            "type": "metro",
+            "color": "#8647b2"
+          }
+        ],
+        "stops": [
+          {
+            "id": "stop__10078215",
+            "name": "Яхтенная улица",
+            "distance": "209 м",
+            "distanceValue": 209.877,
+            "coordinates": [
+              30.213533331,
+              59.983299297
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10073412",
+            "name": "Приморский проспект, 139",
+            "distance": "252 м",
+            "distanceValue": 252.702,
+            "coordinates": [
+              30.212411614,
+              59.983137276
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10078220",
+            "name": "Улица Савушкина / Яхтенная улица",
+            "distance": "780 м",
+            "distanceValue": 783.293,
+            "coordinates": [
+              30.215938171,
+              59.987888361
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10075737",
+            "name": "Гипермаркет Лента",
+            "distance": "800 м",
+            "distanceValue": 799.146,
+            "coordinates": [
+              30.226445877,
+              59.985507793
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10186839",
+            "name": "Торговый комплекс Лента",
+            "distance": "820 м",
+            "distanceValue": 819.085,
+            "coordinates": [
+              30.225621057,
+              59.985775161
+            ],
+            "type": "common"
+          }
+        ],
+        "photos": {
+          "count": 259,
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16478002/2a0000019c092d97348f9cc90b3ce37f1a54/%s",
+          "items": [
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16478002/2a0000019c092d97348f9cc90b3ce37f1a54/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/6334827/2a000001803cbee8029da7b2484b53cc3e2e/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/14578051/2a000001950877cd1931f99d4f461b58c144/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18780150/2a0000019bb35cf3db69cd34514bda6b6dd2/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18708590/2a0000019bb35cf47a1f265f317ee8a2b481/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/11093519/2a00000189fd4580a863d54ec82c07346901/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18133168/2a0000019bb35cf47919958484156b52ef97/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16378552/2a00000198d217a7a6482b599c5653467c8d/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/15650736/2a00000198b2e8f60c1fe8f35ffc43a0f65e/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/18105464/2a0000019bb35cf12736f404292e010a55d9/%s"
+            }
+          ]
+        },
+        "entrances": [
+          {
+            "coordinates": [
+              30.216194,
+              59.983176
+            ],
+            "azimuth": 262.6786441393982,
+            "tilt": 0
+          }
+        ],
+        "routePoint": {
+          "context": "djJ8ChQKEglol299WDc-QBEmGw-22P1NQBIqChIJJoNpOUw3PkAR-MQZR9X9TUASDTIzNjM2NzUwMjA4XzAdAACAPyAM"
+        },
+        "panorama": {
+          "id": "1253988554_625814581_23_1627372810",
+          "direction": [
+            41.194428,
+            9.064023
+          ],
+          "point": {
+            "type": "Point",
+            "coordinates": [
+              30.216213,
+              59.983095
+            ]
+          },
+          "preview": "https://static-pano.maps.yandex.ru/v1/?panoid=1253988554_625814581_23_1627372810&size=500%2C240&azimuth=41.194428&tilt=9.064023&api_key=maps&signature=lhMkUTpQY_X1hfCbTLuCPzNQx6QnSc6S8hjiIDLCIgA="
+        },
+        "shortTitle": "Art-team Studio",
+        "fullAddress": "Санкт-Петербург, Приморский проспект, 137, корп. 1",
+        "country": "Россия",
+        "status": "open",
+        "businessLinks": [
+          {
+            "type": "booking",
+            "aref": "#yandex_booking",
+            "href": "https://n48679.yclients.com/"
+          }
+        ],
+        "ratingData": {
+          "ratingCount": 406,
+          "ratingValue": 5,
+          "reviewCount": 269
+        },
+        "sources": [
+          {
+            "id": "yandex",
+            "name": "Яндекс",
+            "href": "https://ya.ru/"
+          }
+        ],
+        "categories": [
+          {
+            "id": "184105814",
+            "name": "Салон красоты",
+            "class": "spa",
+            "seoname": "beauty_salon",
+            "pluralName": "Салоны красоты"
+          },
+          {
+            "id": "20476284572",
+            "name": "ногтевая студия",
+            "class": "nail studio",
+            "seoname": "nail_salon",
+            "pluralName": "Ногтевые студии"
+          },
+          {
+            "id": "184105812",
+            "name": "парикмахерская",
+            "class": "hairdressers",
+            "seoname": "hairdresser",
+            "pluralName": "Парикмахерские"
+          }
+        ],
+        "phones": [
+          {
+            "number": "+7 (812) 720-21-57",
+            "type": "phone",
+            "value": "+78127202157"
+          },
+          {
+            "number": "+7 (921) 954-45-55",
+            "type": "phone",
+            "value": "+79219544555",
+            "info": "ежедневно 10:00-21:00"
+          }
+        ],
+        "features": [
+          {
+            "id": "women_haircut",
+            "value": "от 2600 ₽",
+            "name": "цена женской стрижки",
+            "type": "text",
+            "important": true
+          },
+          {
+            "id": "man_haircut",
+            "value": "от 1900 ₽",
+            "name": "цена мужской стрижки",
+            "type": "text",
+            "important": true
+          },
+          {
+            "id": "pedicure_bin",
+            "value": true,
+            "name": "педикюр",
+            "type": "bool",
+            "important": true
+          },
+          {
+            "id": "cosmetology_services",
+            "value": [
+              {
+                "id": "dyeing_eyelashes",
+                "name": "окрашивание бровей/ресниц"
+              },
+              {
+                "id": "eyebrow",
+                "name": "коррекция бровей"
+              },
+              {
+                "id": "make_up",
+                "name": "визаж"
+              }
+            ],
+            "name": "косметологические услуги",
+            "type": "enum",
+            "important": true
+          },
+          {
+            "id": "manicure_bin",
+            "value": true,
+            "name": "маникюр",
+            "type": "bool",
+            "important": true
+          },
+          {
+            "id": "hair_removal",
+            "value": [
+              {
+                "id": "waxing",
+                "name": "восковая депиляция"
+              },
+              {
+                "id": "facial_depilation",
+                "name": "депиляция лица"
+              },
+              {
+                "id": "triding",
+                "name": "тридинг"
+              },
+              {
+                "id": "mens_depilation",
+                "name": "мужская"
+              }
+            ],
+            "name": "эпиляция/депиляция",
+            "type": "enum",
+            "important": true
+          },
+          {
+            "id": "gift_certificate",
+            "value": true,
+            "name": "подарочный сертификат",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "kaspi_red",
+            "value": true,
+            "name": "Kaspi Red",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "good_place",
+            "value": true,
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "hairdressing_services",
+            "value": [
+              {
+                "id": "pickling",
+                "name": "декапирование"
+              },
+              {
+                "id": "pony_tail",
+                "name": "пони-тейл"
+              },
+              {
+                "id": "dyeing_hair",
+                "name": "окрашивание"
+              },
+              {
+                "id": "toning",
+                "name": "тонирование"
+              },
+              {
+                "id": "hair_straightening",
+                "name": "кератиновое выпрямление"
+              },
+              {
+                "id": "coloring",
+                "name": "колорирование"
+              },
+              {
+                "id": "french_braids",
+                "name": "французские косички"
+              },
+              {
+                "id": "african_braids",
+                "name": "африканские косички"
+              },
+              {
+                "id": "child_hairdressing",
+                "name": "для детей"
+              },
+              {
+                "id": "evening_laying",
+                "name": "вечерняя/свадебная укладка"
+              },
+              {
+                "id": "curls",
+                "name": "локоны/керли"
+              },
+              {
+                "id": "conditioning_treatment",
+                "name": "лечение волос"
+              },
+              {
+                "id": "highlights",
+                "name": "мелирование"
+              },
+              {
+                "id": "hairdo",
+                "name": "укладка"
+              },
+              {
+                "id": "cutting",
+                "name": "стрижка"
+              },
+              {
+                "id": "ombre_hair",
+                "name": "омбре"
+              },
+              {
+                "id": "hair_care_procedures",
+                "name": "уходовые процедуры для волос"
+              },
+              {
+                "id": "hair_contouring",
+                "name": "контуринг волос"
+              },
+              {
+                "id": "perm",
+                "name": "химическая завивка"
+              },
+              {
+                "id": "complex_coloring",
+                "name": "сложное окрашивание"
+              },
+              {
+                "id": "hair_modeling",
+                "name": "моделирование"
+              },
+              {
+                "id": "colored_strands",
+                "name": "цветные пряди"
+              },
+              {
+                "id": "keratin_hair_restoration",
+                "name": "кератиновое восстановление волос"
+              },
+              {
+                "id": "screening_hair",
+                "name": "экранирование"
+              },
+              {
+                "id": "hair_diagnosis",
+                "name": "диагностика состояния волос"
+              },
+              {
+                "id": "biochemistry_hair",
+                "name": "биохимия"
+              },
+              {
+                "id": "molecular_polishing_hair",
+                "name": "молекулярное глянцевание волос"
+              },
+              {
+                "id": "brondirovanie_hair",
+                "name": "брондирование"
+              },
+              {
+                "id": "afro_tails",
+                "name": "афрохвосты"
+              },
+              {
+                "id": "kanekalon_hairstyles",
+                "name": "прически с канекалоном"
+              },
+              {
+                "id": "bio_perm_hair",
+                "name": "био-завивка волос"
+              },
+              {
+                "id": "hair_lightening",
+                "name": "осветление "
+              },
+              {
+                "id": "ripple",
+                "name": "гофре"
+              },
+              {
+                "id": "nanoplastic",
+                "name": "нанопластика"
+              },
+              {
+                "id": "chemical_straightening",
+                "name": "химическое распрямление"
+              },
+              {
+                "id": "braiding_your_own_hair",
+                "name": "плетение из собственных волос"
+              },
+              {
+                "id": "express_haircut",
+                "name": "экспресс стрижка"
+              },
+              {
+                "id": "dredokudri",
+                "name": "дредокудри"
+              },
+              {
+                "id": "thermal_substitution",
+                "name": "термозамещение"
+              },
+              {
+                "id": "afrokudri",
+                "name": "афрокудри"
+              },
+              {
+                "id": "curls_frame",
+                "name": "кудри на каркас"
+              },
+              {
+                "id": "root_hair_volume",
+                "name": "прикорневой объем"
+              },
+              {
+                "id": "ce_de_sets_interweaving",
+                "name": "вплетение комплектов СЕ и ДЕ"
+              },
+              {
+                "id": "frosting_hair",
+                "name": "глазирование"
+              },
+              {
+                "id": "bio_straightening",
+                "name": "био-выпрямление волос"
+              }
+            ],
+            "name": "парикмахерские услуги",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "petfriendly",
+            "value": [
+              {
+                "id": "animals_are_prohibited",
+                "name": "запрещено с животными"
+              }
+            ],
+            "name": "посещение с животными",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "car_park",
+            "value": true,
+            "name": "парковка",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "payment_method",
+            "value": [
+              {
+                "id": "cash",
+                "name": "наличными"
+              },
+              {
+                "id": "payment_card",
+                "name": "оплата картой"
+              },
+              {
+                "id": "electronic_money",
+                "name": "электронными деньгами"
+              },
+              {
+                "id": "wire_transfer",
+                "name": "банковским переводом"
+              },
+              {
+                "id": "qr_code",
+                "name": "QR-код"
+              },
+              {
+                "id": "contactless_payment",
+                "name": "бесконтактная оплата"
+              },
+              {
+                "id": "by_credit_card",
+                "name": "оплата кредитной картой"
+              },
+              {
+                "id": "by_the_link",
+                "name": "по ссылке"
+              },
+              {
+                "id": "fast_payment_system",
+                "name": "СБП"
+              },
+              {
+                "id": "online_payment",
+                "name": "онлайн"
+              },
+              {
+                "id": "cashless_payment",
+                "name": "безналичная"
+              }
+            ],
+            "name": "способ оплаты",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "henna_staining",
+            "value": true,
+            "name": "окрашивание хной",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "wheelchair_accessability",
+            "value": true,
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "promotions",
+            "value": [
+              {
+                "id": "gifts",
+                "name": "подарки"
+              },
+              {
+                "id": "bonuses",
+                "name": "бонусы"
+              },
+              {
+                "id": "special_offers",
+                "name": "спецпредложения"
+              },
+              {
+                "id": "discounts",
+                "name": "скидки"
+              },
+              {
+                "id": "promotions",
+                "name": "акции"
+              }
+            ],
+            "name": "акции",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "classic_female_manicure_coated",
+            "value": "от 2600 ₽",
+            "name": "классический женский маникюр с покрытием",
+            "type": "text",
+            "important": false
+          },
+          {
+            "id": "combined_manicure",
+            "value": "от 1500 ₽",
+            "name": "комбинированный маникюр",
+            "type": "text",
+            "important": false
+          },
+          {
+            "id": "beauty_services",
+            "value": [
+              {
+                "id": "makeup",
+                "name": "макияж"
+              },
+              {
+                "id": "men_haircuts",
+                "name": "мужские стрижки"
+              },
+              {
+                "id": "massage_serv",
+                "name": "массаж"
+              },
+              {
+                "id": "hairdressing",
+                "name": "женские стрижки"
+              },
+              {
+                "id": "manicure_beauty",
+                "name": "маникюр"
+              },
+              {
+                "id": "skin_peeling",
+                "name": "пилинг"
+              },
+              {
+                "id": "body_care_m",
+                "name": "уход за телом"
+              },
+              {
+                "id": "epilation",
+                "name": "эпиляция"
+              },
+              {
+                "id": "conditioning_treatment_m",
+                "name": "лечение волос и кожи головы"
+              },
+              {
+                "id": "children_haircuts",
+                "name": "детские стрижки"
+              },
+              {
+                "id": "facials_m",
+                "name": "уход за лицом"
+              },
+              {
+                "id": "eyelash_m",
+                "name": "наращивание ресниц"
+              },
+              {
+                "id": "pedicure_services_m",
+                "name": "педикюр"
+              },
+              {
+                "id": "permanent_makeup_",
+                "name": "перманентный макияж"
+              },
+              {
+                "id": "hair_care",
+                "name": "уход за волосами"
+              },
+              {
+                "id": "cold_hair_restoration",
+                "name": "холодное восстановление волос"
+              },
+              {
+                "id": "washing_your_hair",
+                "name": "мытье волос"
+              },
+              {
+                "id": "hair_botox",
+                "name": "ботокс волос"
+              },
+              {
+                "id": "eyelash laminating",
+                "name": "ламинирование ресниц"
+              }
+            ],
+            "name": "услуги салона",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "preliminary_registration",
+            "value": true,
+            "name": "предварительная запись",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "medical_pedicure",
+            "value": true,
+            "name": "медицинский педикюр",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "ramp",
+            "value": true,
+            "name": "пандус",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "barbershop",
+            "value": true,
+            "name": "барбершоп",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "payment_by_credit_card",
+            "value": true,
+            "name": "Оплата картой",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "bike_parking",
+            "value": true,
+            "name": "велопарковка",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "wheelchair_access",
+            "value": [
+              {
+                "id": "full_access",
+                "name": "доступно"
+              }
+            ],
+            "name": "доступность входа на инвалидной коляске",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "wi_fi",
+            "value": true,
+            "name": "Wi-Fi",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "online_recording",
+            "value": true,
+            "name": "Онлайн запись",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "nail_procedures",
+            "value": [
+              {
+                "id": "pedicure",
+                "name": "женский педикюр"
+              },
+              {
+                "id": "manicure",
+                "name": "женский маникюр"
+              },
+              {
+                "id": "man_manicure",
+                "name": "мужской маникюр"
+              },
+              {
+                "id": "men_pedicure",
+                "name": "мужской педикюр"
+              },
+              {
+                "id": "permanent_manicure",
+                "name": "перманентный маникюр"
+              },
+              {
+                "id": "nail_design",
+                "name": "дизайн ногтей"
+              },
+              {
+                "id": "paraffin",
+                "name": "парафинотерапия"
+              },
+              {
+                "id": "child_manicure",
+                "name": "детский маникюр"
+              },
+              {
+                "id": "manicure_spa",
+                "name": "spa-маникюр"
+              },
+              {
+                "id": "hot_manicure",
+                "name": "горячий маникюр"
+              },
+              {
+                "id": "hardware_pedicure",
+                "name": "аппаратный педикюр"
+              },
+              {
+                "id": "combi_manicure",
+                "name": "комби маникюр"
+              },
+              {
+                "id": "combi_pedicure",
+                "name": "комби педикюр"
+              },
+              {
+                "id": "hardware_manicure",
+                "name": "аппаратный маникюр"
+              },
+              {
+                "id": "manicure_removing",
+                "name": "снятие маникюра"
+              },
+              {
+                "id": "medical_manicure",
+                "name": "медицинский маникюр"
+              },
+              {
+                "id": "podology_nail_procedures",
+                "name": "подология"
+              },
+              {
+                "id": "smart_pedicure",
+                "name": "smart-педикюр"
+              },
+              {
+                "id": "medical_pedicure",
+                "name": "медицинский педикюр"
+              },
+              {
+                "id": "titanium_manicure",
+                "name": "титановый маникюр"
+              },
+              {
+                "id": "nail_file_manicure",
+                "name": "пилочный маникюр"
+              }
+            ],
+            "name": "для ногтей",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "wheelchair_accessible_vocabulary",
+            "value": [
+              {
+                "id": "wheelchair_accessible_a",
+                "name": "доступно"
+              }
+            ],
+            "name": "доступность помещения на инвалидной коляске",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "mens_nail_services",
+            "value": true,
+            "name": "мужской ногтевой сервис",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "curly_salon",
+            "value": true,
+            "name": "салон для кудрявых",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "show_briefly_about_the_place_block",
+            "value": true,
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "nail_artdesign",
+            "value": true,
+            "name": "артдизайн",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "beauty_bar",
+            "value": true,
+            "name": "бьюти бар",
+            "type": "bool",
+            "important": false
+          }
+        ],
+        "mediaOrderTemplate": "p,v,p,v,v,p,v*,p*",
+        "featureGroups": [
+          {
+            "name": "Услуги",
+            "featureIds": [
+              "cosmetology_services",
+              "manicure_bin",
+              "pedicure_bin",
+              "hairdressing_services",
+              "nail_procedures",
+              "hair_removal",
+              "privilege_haircut",
+              "beauty_services",
+              "tattoo removal",
+              "nail_extension_2",
+              "barbershop",
+              "nail_artdesign"
+            ]
+          },
+          {
+            "name": "Цены",
+            "featureIds": [
+              "man_haircut",
+              "classic_female_manicure_coated",
+              "women_haircut"
+            ]
+          },
+          {
+            "name": "Общая информация",
+            "featureIds": [
+              "payment_method",
+              "gift_certificate",
+              "promotions",
+              "payment_by_credit_card",
+              "wi_fi",
+              "car_park",
+              "home_visit",
+              "nursery"
+            ]
+          },
+          {
+            "name": "Особенности",
+            "featureIds": [
+              "medical_pedicure",
+              "mens_nail_services"
+            ]
+          },
+          {
+            "name": "Доступность",
+            "featureIds": [
+              "wheelchair_accessability",
+              "elevator_wheelchair_accessible",
+              "ramp",
+              "wheelchair_access",
+              "call_button",
+              "toilet_for_disabled",
+              "parking_disabled",
+              "automatic_door",
+              "wheelchair_accessible_vocabulary"
+            ]
+          },
+          {
+            "name": "Достижения",
+            "featureIds": [
+              "good_place"
+            ]
+          }
+        ],
+        "businessProperties": {
+          "has_verified_owner": true,
+          "geoproduct_poi_color": "#F58CB6",
+          "geoproduct_poi_label_color": "#D46C95"
+        },
+        "seoname": "art_team_studio",
+        "geoId": 120664,
+        "compositeAddress": {
+          "country": "Россия",
+          "locality": "Санкт-Петербург",
+          "street": "Приморский проспект",
+          "house": "137, корп. 1"
+        },
+        "modularCard": {
+          "showClaimOrganization": true,
+          "showTaxiButton": true,
+          "showFeedbackButton": true,
+          "showReviews": true,
+          "showAddPhotoButton": true,
+          "showCompetitors": false,
+          "showDirectBanner": false,
+          "showAdditionalAds": false,
+          "showWorkHours": true,
+          "showContacts": true,
+          "showFriendsLiked": false,
+          "showVisualPricesTab": true,
+          "showHotelEnrichment": false,
+          "promoBadgeFeature": [],
+          "showCourierButton": false,
+          "hotelReviewsStubType": 0
+        },
+        "modularPin": {
+          "subtitleHints": [
+            {
+              "text": "5",
+              "type": "RATING",
+              "properties": null
+            },
+            {
+              "text": "Стрижка: от 2600 ₽",
+              "type": "PRICE",
+              "properties": {
+                "price": {
+                  "name": "Стрижка",
+                  "priceRange": {
+                    "lower": 2600,
+                    "text": "от 2600 ₽",
+                    "currency": "₽"
+                  }
+                }
+              }
+            }
+          ],
+          "allowMultilineSubtitle": false
+        },
+        "modularSnippet": {
+          "showNeurosummary": false,
+          "showMentionedOnSite": false,
+          "showTitle": "SHORT_TITLE",
+          "showAddress": "SHORT_ADDRESS",
+          "showCategory": "ALL_CATEGORIES",
+          "showRating": "FIVE_STAR_RATING",
+          "showPhoto": "GALLERY",
+          "showWorkHours": true,
+          "showVerified": true,
+          "showDistanceFromTransit": false,
+          "showBookmark": true,
+          "showEta": true,
+          "showGeoproductOffer": true,
+          "subtitleHint": [],
+          "galleryButton": [
+            "BOOKING",
+            "PRICES"
+          ],
+          "shownGoodsNumber": 3,
+          "showDescription": false,
+          "showCollectionBadge": true,
+          "showFriendsLiked": false,
+          "showCourierButton": false,
+          "showYandexEatsOrderButton": false,
+          "infoBlock": [],
+          "serpActionButtons": [
+            8,
+            1,
+            3,
+            5,
+            0
+          ],
+          "awards": [
+            0
+          ],
+          "promoBadgeFeature": [],
+          "showHotelEnrichment": false
+        },
+        "tzOffset": 10800,
+        "workingTimeText": "ежедневно, 10:00–21:00",
+        "workingTime": [
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ]
+        ],
+        "currentWorkingStatus": {
+          "isOpenNow": false,
+          "text": "До открытия 2 мин",
+          "shortText": "С 10:00",
+          "tag": [
+            "opening_soon"
+          ]
+        },
+        "socialLinks": [
+          {
+            "type": "vkontakte",
+            "href": "https://vk.com/art_teamstudio",
+            "readableHref": "vk.com/art_teamstudio"
+          },
+          {
+            "type": "viber",
+            "href": "https://viber.click/79219544555",
+            "readableHref": "viber.click/79219544555"
+          },
+          {
+            "type": "whatsapp",
+            "href": "https://wa.me/79219544555?text=%D0%9E%D0%B1%D1%80%D0%B0%D1%89%D0%B5%D0%BD%D0%B8%D0%B5+%D0%B8%D0%B7+%D0%AF%D0%BD%D0%B4%D0%B5%D0%BA%D1%81+%D0%9A%D0%B0%D1%80%D1%82%0A%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!+%D0%9C%D0%B5%D0%BD%D1%8F+%D0%B7%D0%B0%D0%B8%D0%BD%D1%82%D0%B5%D1%80%D0%B5%D1%81%D0%BE%D0%B2%D0%B0%D0%BB%D0%BE+%D0%B2%D0%B0%D1%88%D0%B5+%D0%BF%D1%80%D0%B5%D0%B4%D0%BB%D0%BE%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5",
+            "readableHref": "+79219544555"
+          },
+          {
+            "type": "telegram",
+            "href": "https://t.me/artim_studio",
+            "readableHref": "@artim_studio"
+          }
+        ],
+        "urls": [
+          "https://artteam-studio.ru/"
+        ],
+        "advert": {
+          "title": "",
+          "text": "",
+          "url": "",
+          "ordInfo": {
+            "client": {
+              "id": "97599112",
+              "tin": "472006028361",
+              "name": "ИП Мкртчян Артем Александрович"
+            }
+          },
+          "isBko": false,
+          "actionButtons": [
+            {
+              "type": "url",
+              "title": "Записаться",
+              "value": "https://n48679.yclients.com/company/66489/personal/menu?o="
+            }
+          ],
+          "highlighted": true,
+          "products": [
+            {
+              "title": "Женская стрижка с укладкой (средние волосы)",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13942545/2a0000019127bca2972b136aea99afd2b02c/M_height",
+              "price": "2600 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2GA2s",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2GA2s"
+            },
+            {
+              "title": "Мужская стрижка",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13817446/2a00000191279e9c93d55def8e51fe07938e/M_height",
+              "price": "2400 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2F9jn",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2F9jn"
+            },
+            {
+              "title": "Сложное окрашивание (длинные волосы)",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13853165/2a0000019127f86cf95ce477081c432b5bef/M_height",
+              "price": "13000 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2FVDr",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2FVDr"
+            },
+            {
+              "title": "Бережное окрашивание волос!",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/5550457/2a00000180660cdb70d2aa9578b23f127078/M_height",
+              "price": "9500 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHtt6nGx3bRhUQ",
+              "ordToken": "3MtFQRkqfB2huzBcHHtt6nGx3bRhUQ"
+            },
+            {
+              "title": "Частичное сложное окрашивание (средние волосы)",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13942545/2a0000019127b464dc15e7b8e6b797ad4ca1/M_height",
+              "price": "7500 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5VzpBZg",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5VzpBZg"
+            },
+            {
+              "title": "Keralex - реконструкция волос",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/6446788/2a00000180cc3911ae81b9d55b9e647a9406/M_height",
+              "price": "3500 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHtt6nGx3bRhUR",
+              "ordToken": "3MtFQRkqfB2huzBcHHtt6nGx3bRhUR"
+            },
+            {
+              "title": "Вечерний макияж",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13940820/2a00000191288e8f3f22e5e70ef03cfcc94d/M_height",
+              "price": "4000 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5PgcEb5",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5PgcEb5"
+            },
+            {
+              "title": "Коррекция бровей",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/9822098/2a0000019128727801f633fe3d92490b64cc/M_height",
+              "price": "800 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5Vzor5i",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5Vzor5i"
+            },
+            {
+              "title": "Ламинирование ресниц",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/14109191/2a00000191287f8a23864e28feadc5e15b30/M_height",
+              "price": "2300 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5VzorEb",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5VzorEb"
+            },
+            {
+              "title": "маникюр+снятие+покрытие гель-лаком френч",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13937799/2a00000191286fbe3e5213678d04cfe071ef/M_height",
+              "price": "2900 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2FUqg",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2FUqg"
+            },
+            {
+              "title": "Женская стрижка с укладкой (длинные волосы)",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13298029/2a00000191286bc8da2f96a9003a47dbb439/M_height",
+              "price": "3000 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2FUqj",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2FUqj"
+            },
+            {
+              "title": "Визаж дневной",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13940820/2a000001912827bdeca891ad2f6ad8141efd/M_height",
+              "price": "3500 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2FUvA",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2FUvA"
+            },
+            {
+              "title": "Детская стрижка (до 10 лет) с укладкой",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/13915308/2a0000019128238011e162468b77f2bc9983/M_height",
+              "price": "1800 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHttGDb5W2FV9R",
+              "ordToken": "3MtFQRkqfB2huzBcHHttGDb5W2FV9R"
+            },
+            {
+              "title": "Стильные стрижки!",
+              "img": "https://avatars.mds.yandex.net/get-tycoon/6596045/2a0000017fb1293c62a2b1273e98803814a2/M_height",
+              "price": "2400 р.",
+              "url": "https://artteam-studio.ru/?erid=3MtFQRkqfB2huzBcHHtt6nGx3bRhUP",
+              "ordToken": "3MtFQRkqfB2huzBcHHtt6nGx3bRhUP"
+            }
+          ]
+        },
+        "businessImages": {
+          "logo": {
+            "urlTemplate": "https://avatars.mds.yandex.net/get-altay/4286041/2a00000182b01266101f20caeb22f5fa9484/%s",
+            "tag": [
+              "owner_photo"
+            ],
+            "id": "R6WKPJkm-LMmQ04S1eknVplRTcp569"
+          }
+        },
+        "references": [
+          {
+            "id": "3991002430",
+            "scope": "nyak"
+          },
+          {
+            "id": "177550",
+            "scope": "yclients_base"
+          },
+          {
+            "id": "66489",
+            "scope": "yclients_base"
+          },
+          {
+            "id": "yclients__66489",
+            "scope": "yandex_booking"
+          },
+          {
+            "id": "2104712",
+            "scope": "napopravku"
+          },
+          {
+            "id": "72057609514244621",
+            "scope": "geoprod-21246"
+          }
+        ],
+        "subtitleItems": [
+          {
+            "type": "working_hours",
+            "text": "С 10:00",
+            "property": [
+              {
+                "key": "is_open",
+                "value": "0"
+              },
+              {
+                "key": "short_text",
+                "value": "С 10:00"
+              },
+              {
+                "key": "text",
+                "value": "До открытия 2 мин"
+              },
+              {
+                "key": "tag",
+                "value": "opening_soon"
+              }
+            ]
+          },
+          {
+            "type": "rating",
+            "text": "10",
+            "property": [
+              {
+                "key": "value",
+                "value": "10"
+              },
+              {
+                "key": "value_5",
+                "value": "5"
+              },
+              {
+                "key": "yandex_star",
+                "value": "1"
+              }
+            ]
+          }
+        ],
+        "metrika": {
+          "counter": 58496758,
+          "goals": {
+            "call": "make-call",
+            "cta": "cta-button",
+            "route": "make-route",
+            "site": "site",
+            "whatsapp": "whatsapp",
+            "telegram": "telegram",
+            "viber": "viber",
+            "vkontakte": "vkontakte",
+            "youtube": "social-youtube",
+            "odnoklassniki": "social-odnoklassniki",
+            "instagram": "instagram_subscribe",
+            "stories": "stories-button",
+            "taxi": "call-taxi",
+            "booking": "booking",
+            "subscribe": "subscribe",
+            "send-to-phone": "send-to-phone",
+            "booking-open": "booking-open",
+            "share": "share",
+            "booking-confirmed": "booking-confirmed",
+            "booking-visited": "booking-visited",
+            "start-route": "start-route",
+            "visited-organization": "visited-organization"
+          }
+        },
+        "topObjects": {
+          "hasPhotos": true,
+          "isYandexEda": false,
+          "rubric": "beauty",
+          "categories": [
+            {
+              "categoryName": "popular",
+              "categoryItems": [
+                {
+                  "title": "Женская стрижка",
+                  "description": "Цена от и зависит от профессионализма парикмахера, длины волос и объема волос и самой работы. Стрижка с укладкой для вашего идеального образа. В услугу входит стрижка, мытье головы, укладка.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1521147/2a0000019becf1390db005ed4c3c21ccd6de/{size}",
+                  "price": "2600",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Пилинг с уходом для волос и стрижкой",
+                  "description": "Цена от и зависит от профессионализма стилиста по волосам и работы. Полный комплекс за уходом кожей головы и обновления волос. Уход поможет восстановить поврежденные волосы, а стрижка обновит образ.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/13944716/2a0000019becff8526ba3e31bcec7f9262b5/{size}",
+                  "price": "3500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Сложное окрашивание",
+                  "description": "Цена от и зависит от профессионализма колориста, длины и объема волос и самой работы. Сложные техники требующие большого опыта и знаний. Необходима предварительная консультация. В стоимость входит окрашивание, тонирование, материалы, мытье и сушка.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1521147/2a0000019becf09c66d5349ef1c110a80bca/{size}",
+                  "price": "10500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Окрашивание в один тон",
+                  "description": "Цена от, зависит от профессионализма колориста, длины и объема волос и самой работы.Классическое стойкое окрашивание в один оттенок по всей длине, с перекрытием седины. В услугу входит однотонное окрашивание без переходов, материалы, мытье, сушка.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/13944716/2a0000019becf3cde60e93b8013beff8e26e/{size}",
+                  "price": "4500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Шитье седины",
+                  "description": "Цена от и зависит от профессионализма колориста и работы. Техника по созданию рельефного окрашивания где седина смотриться максимально натурально и гармонично. В услугу входит осветление прядей, тонирование волос, материалы, мытье, сушка волос.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2805495/2a0000019becf5906a083b7e920d24f586cb/{size}",
+                  "price": "7500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Кералекс с стрижкой",
+                  "description": "Мастер 4900/ Топ-мастер 5900. Молекулярная реконструкция волос с восстановление до 100% структуры волос, а стрижка позволит полностью обновить образ. Акция на первый визит в нашу студию красоты",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/4079840/2a0000019becf5cb2707e25213c16d64edd4/{size}",
+                  "price": "4900",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Маникюр, снятие и покрытие гель лак",
+                  "description": "Знакомство с мастером маникюра в нашей студии красоты. Комбинированный маникюр с снятием старого покрытия гель-лак и покрытием однотонного гель лак.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1521147/2a0000019becff48f302f3c65340f955565e/{size}",
+                  "price": "3200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская стрижка",
+                  "description": "Цена от и зависит от профессионализма парикмахера. Создание идеального образа исходя из ваших предпочтений или особенностей. В услугу входит сама стрижка машинкой и ножницами, мытье головы, сушка и укладка.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/4079840/2a0000019becf1c4e47894b781008c193bbd/{size}",
+                  "price": "2700",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская стрижка и стрижка бороды",
+                  "description": "Полный комплекс по обновлению внешнего вида. Полный апгрейд в внешнем стиле от нашего Арт Директора Артема Мкртчян.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/944742/2a0000019becf1e4aec31d8e6c0029711192/{size}",
+                  "price": "8200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская завивка волос",
+                  "description": "Цена от, зависит от профессионализма стилиста по волосам и работы. Мужская перманентная завивка волос для создания идеальных кудрей. С услугу входит завивка, материалы, мытье, укладка. Если вам необходимо обновить длину, не забудьте добавить стрижку.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1530321/2a0000019becf4f496e1f6a6f93d2ae079bf/{size}",
+                  "price": "7000",
+                  "currency": "₽"
+                }
+              ]
+            }
+          ],
+          "fullObjectsCount": 90,
+          "relevance": {
+            "lastUploadTime": "2026-01-29T19:11:16.683312Z",
+            "lastUpdateTime": "2026-01-24T21:43:27.401046Z"
+          },
+          "source": {
+            "id": "TYCOON",
+            "name": "Представитель организации"
+          }
+        },
+        "parentRubrics": [
+          0,
+          0
+        ],
+        "histogramData": {
+          "wednesday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.00864247311827957,
+            0.011720430107526882,
+            0.011572580645161291,
+            0.012083333333333333,
+            0.013198924731182796,
+            0.013145161290322581,
+            0.013346774193548388,
+            0.014650537634408602,
+            0.014946236559139785,
+            0.013723118279569893,
+            0.01021505376344086,
+            0,
+            0,
+            0
+          ],
+          "sunday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.008669354838709679,
+            0.012379032258064516,
+            0.013198924731182796,
+            0.013091397849462366,
+            0.013763440860215054,
+            0.014368279569892475,
+            0.015309139784946238,
+            0.014166666666666666,
+            0.014206989247311827,
+            0.013857526881720431,
+            0.010349462365591398,
+            0,
+            0,
+            0
+          ],
+          "friday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.009206989247311828,
+            0.012701612903225806,
+            0.012473118279569893,
+            0.012540322580645162,
+            0.012970430107526881,
+            0.014690860215053763,
+            0.014448924731182797,
+            0.014502688172043011,
+            0.014287634408602149,
+            0.01360215053763441,
+            0.009543010752688173,
+            0,
+            0,
+            0
+          ],
+          "tuesday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.008266129032258065,
+            0.011478494623655914,
+            0.012325268817204301,
+            0.011626344086021506,
+            0.011868279569892472,
+            0.01288978494623656,
+            0.013024193548387096,
+            0.01435483870967742,
+            0.014193548387096775,
+            0.013924731182795698,
+            0.009865591397849462,
+            0,
+            0,
+            0
+          ],
+          "monday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.007943548387096775,
+            0.010470430107526883,
+            0.010618279569892473,
+            0.011639784946236558,
+            0.012150537634408601,
+            0.012177419354838709,
+            0.012513440860215053,
+            0.013413978494623656,
+            0.014435483870967741,
+            0.014663978494623657,
+            0.011155913978494624,
+            0,
+            0,
+            0
+          ],
+          "thursday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.007849462365591399,
+            0.010483870967741934,
+            0.011344086021505377,
+            0.011518817204301075,
+            0.011895161290322582,
+            0.01325268817204301,
+            0.013091397849462366,
+            0.014973118279569892,
+            0.015873655913978494,
+            0.012809139784946237,
+            0.008561827956989248,
+            0,
+            0,
+            0
+          ],
+          "saturday": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.009771505376344086,
+            0.01377688172043011,
+            0.01442204301075269,
+            0.01489247311827957,
+            0.015000000000000001,
+            0.014758064516129033,
+            0.015309139784946236,
+            0.014905913978494624,
+            0.014368279569892473,
+            0.014005376344086022,
+            0.009650537634408603,
+            0,
+            0,
+            0
+          ]
+        },
+        "eventsPreviews": {
+          "count": 10,
+          "uri": "tycoon_events/1.x",
+          "items": [
+            {
+              "id": 61037321,
+              "contentShort": "Современные формы. Мягкие линии. Лёгкость, за которую клиенты платят снова и снова.\nK-POP — это не просто мода.\n\nЭто новый язык стиля, где с...",
+              "text": "Современные формы. Мягкие линии. Лёгкость, за которую клиенты платят снова и снова.\nK-POP — это не просто мода.\n\nЭто новый язык стиля, где с...",
+              "publicationTime": 1769445020827,
+              "photos": [
+                {
+                  "id": "b6a8e723-49d2-4310-8bc6-b70c2328097c",
+                  "size": {
+                    "width": 2363,
+                    "height": 2363
+                  },
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/19677858/2a0000019bfb2430a692c3fc8bfd2aafe9c8/%s",
+                  "possibleSizes": [
+                    "S",
+                    "M",
+                    "L",
+                    "XL"
+                  ]
+                }
+              ],
+              "uri": "tycoon_events/1.x/post/61037321",
+              "urls": [],
+              "itemType": "post"
+            },
+            {
+              "id": 60966244,
+              "description": "Настоящее мастерство не рождается из моды —\nоно строится на чистоте формы, точности линии и понимании структуры волос.\n\nЭтот семинар — для тех, кто хочет владеть ножницами, а не просто стричь. Обучение проходит в интерактивной форме, где мастера шаг за шагом повторяют действия преподавателя.\n\nПродолжительность: 2 дня\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "name": "Женские стрижки.3 формы БОБ в технике Vidal Sasson",
+              "text": "Настоящее мастерство не рождается из моды —\nоно строится на чистоте формы, точности линии и понимании структуры волос.\n\nЭтот семинар — для тех, кто хочет владеть ножницами, а не просто стричь. Обучение проходит в интерактивной форме, где мастера шаг за шагом повторяют действия преподавателя.\n\nПродолжительность: 2 дня\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "publicationTime": 1769291506214,
+              "photos": [
+                {
+                  "size": {
+                    "width": 2363,
+                    "height": 2363
+                  },
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/19677858/2a0000019bf1fd6aa2c9b30c5a698fcaceab/%s",
+                  "possibleSizes": [
+                    "S",
+                    "M",
+                    "L",
+                    "XL"
+                  ]
+                }
+              ],
+              "startTime": 1773126000000,
+              "finishTime": 1773239400000,
+              "offsetTz": 10800000,
+              "type": "lecture",
+              "minAge": "18",
+              "uri": "tycoon_events/1.x/event/60966244",
+              "urls": [],
+              "itemType": "event"
+            },
+            {
+              "id": 60966238,
+              "description": "Химическая завивка — это не прошлое, это деньги, которые парикмахеры теряют каждый день, отказываясь от процедуры, которую клиенты снова хотят!\n\nПродолжительность: 1 день\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "name": "Семинар Химическая завивка без страха и ошибок",
+              "text": "Химическая завивка — это не прошлое, это деньги, которые парикмахеры теряют каждый день, отказываясь от процедуры, которую клиенты снова хотят!\n\nПродолжительность: 1 день\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "publicationTime": 1769291402498,
+              "photos": [
+                {
+                  "size": {
+                    "width": 2363,
+                    "height": 2363
+                  },
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/19677858/2a0000019bf1fb8f4f04b2d91a18c8e9acfc/%s",
+                  "possibleSizes": [
+                    "S",
+                    "M",
+                    "L",
+                    "XL"
+                  ]
+                }
+              ],
+              "startTime": 1771484400000,
+              "finishTime": 1771509600000,
+              "offsetTz": 10800000,
+              "type": "lecture",
+              "minAge": "18",
+              "uri": "tycoon_events/1.x/event/60966238",
+              "urls": [],
+              "itemType": "event"
+            },
+            {
+              "id": 60966232,
+              "description": "Современные формы. Мягкие линии. Лёгкость, за которую клиенты платят снова и снова.\nK-POP — это не просто мода.\n\nЭто новый язык стиля, где стрижка выглядит дорого даже без укладки.\n\nПродолжительность: 2 дня.\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "name": "Семинар Корейские стрижки в стиле K-POP",
+              "text": "Современные формы. Мягкие линии. Лёгкость, за которую клиенты платят снова и снова.\nK-POP — это не просто мода.\n\nЭто новый язык стиля, где стрижка выглядит дорого даже без укладки.\n\nПродолжительность: 2 дня.\n\nПо окончанию семинара вручается диплом ARTTEAM ACADEMY о прохождении курса.",
+              "publicationTime": 1769291297153,
+              "photos": [
+                {
+                  "size": {
+                    "width": 2363,
+                    "height": 2363
+                  },
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/19677858/2a0000019bf1f9bf11866d40fc1497e21c72/%s",
+                  "possibleSizes": [
+                    "S",
+                    "M",
+                    "L",
+                    "XL"
+                  ]
+                }
+              ],
+              "startTime": 1770274800000,
+              "finishTime": 1770388200000,
+              "offsetTz": 10800000,
+              "type": "lecture",
+              "minAge": "18",
+              "uri": "tycoon_events/1.x/event/60966232",
+              "urls": [],
+              "itemType": "event"
+            },
+            {
+              "id": 60715941,
+              "contentShort": "СЕГОДНЯ РАССКАЖЕМ О НАШЕЙ КОСМЕТИКЕ\n\nИдеальный уход для любых волос на каждый день от ART-TEAM STUDIO — это профессиональный уход, созданный...",
+              "text": "СЕГОДНЯ РАССКАЖЕМ О НАШЕЙ КОСМЕТИКЕ\n\nИдеальный уход для любых волос на каждый день от ART-TEAM STUDIO — это профессиональный уход, созданный...",
+              "publicationTime": 1768486632505,
+              "photos": [
+                {
+                  "id": "2bffe96e-fc6b-47ca-84b4-d802d4c2f6f9",
+                  "size": {
+                    "width": 1280,
+                    "height": 853
+                  },
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/17781767/2a0000019bc2046d8da33838863e350e6832/%s",
+                  "possibleSizes": [
+                    "S",
+                    "M",
+                    "L",
+                    "XL"
+                  ]
+                }
+              ],
+              "uri": "tycoon_events/1.x/post/60715941",
+              "urls": [],
+              "itemType": "post"
+            }
+          ]
+        },
+        "awards": {
+          "goodPlaceYear": "2025"
+        },
+        "hasStories": true,
+        "lastMileStory": {
+          "id": "6328866",
+          "createdAt": 1768582359878,
+          "title": "Как пройти",
+          "coverUrlTemplate": "https://avatars.mds.yandex.net/get-maps_stories/18127679/2a0000019bf17224f1e90b5e05153c98a187/%s",
+          "screens": [
+            {
+              "id": "0",
+              "type": "photo",
+              "content": [
+                {
+                  "width": 1080,
+                  "height": 1920,
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-maps_stories/18127679/2a0000019bf17224f1e90b5e05153c98a187/%s"
+                }
+              ],
+              "buttonsV2": [
+                {
+                  "type": "openURL",
+                  "title": "Заблудились?",
+                  "url": "https://t.me/ARTTEAMSTUDIO?text=%D0%94%D0%BE%D0%B1%D1%80%D1%8B%D0%B9%20%D0%B4%D0%B5%D0%BD%D1%8C!%20%D0%9F%D0%BE%D0%BC%D0%BE%D0%B3%D0%B8%D1%82%D0%B5%20%D0%BF%D0%BE%D0%B6%D0%B0%D0%BB%D1%83%D0%B9%D1%81%D1%82%D0%B0%20%D0%BD%D0%B0%D0%B9%D1%82%D0%B8%20%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D1%83%20%D0%B4%D0%BE%20%D0%B2%D0%B0%D1%81.%20%D0%AF%20%D1%81%D0%B5%D0%B9%D1%87%D0%B0%D1%81%20%D0%BD%D0%B0%D1%85%D0%BE%D0%B6%D1%83%D1%81%D1%8C",
+                  "target": "_blank"
+                }
+              ]
+            },
+            {
+              "id": "1",
+              "type": "photo",
+              "content": [
+                {
+                  "width": 1080,
+                  "height": 1920,
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-maps_stories/18127679/2a0000019bfb2330638ee7316ec64cc9a778/%s"
+                }
+              ],
+              "buttonsV2": [
+                {
+                  "type": "openURL",
+                  "title": "Заблудились?",
+                  "url": "https://t.me/ARTTEAMSTUDIO?text=%D0%94%D0%BE%D0%B1%D1%80%D1%8B%D0%B9%20%D0%B4%D0%B5%D0%BD%D1%8C!%20%D0%9F%D0%BE%D0%BC%D0%BE%D0%B3%D0%B8%D1%82%D0%B5%20%D0%BF%D0%BE%D0%B6%D0%B0%D0%BB%D1%83%D0%B9%D1%81%D1%82%D0%B0%20%D0%BD%D0%B0%D0%B9%D1%82%D0%B8%20%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D1%83%20%D0%B4%D0%BE%20%D0%B2%D0%B0%D1%81.%20%D0%AF%20%D1%81%D0%B5%D0%B9%D1%87%D0%B0%D1%81%20%D0%BD%D0%B0%D1%85%D0%BE%D0%B6%D1%83%D1%81%D1%8C",
+                  "target": "_blank"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "type": "photo",
+              "content": [
+                {
+                  "width": 1080,
+                  "height": 1920,
+                  "urlTemplate": "https://avatars.mds.yandex.net/get-maps_stories/17707377/2a0000019bfb23339e0b5c349fd739155ff9/%s"
+                }
+              ],
+              "buttonsV2": [
+                {
+                  "type": "openURL",
+                  "title": "Заблудились?",
+                  "url": "https://t.me/ARTTEAMSTUDIO?text=%D0%94%D0%BE%D0%B1%D1%80%D1%8B%D0%B9%20%D0%B4%D0%B5%D0%BD%D1%8C!%20%D0%9F%D0%BE%D0%BC%D0%BE%D0%B3%D0%B8%D1%82%D0%B5%20%D0%BF%D0%BE%D0%B6%D0%B0%D0%BB%D1%83%D0%B9%D1%81%D1%82%D0%B0%20%D0%BD%D0%B0%D0%B9%D1%82%D0%B8%20%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D1%83%20%D0%B4%D0%BE%20%D0%B2%D0%B0%D1%81.%20%D0%AF%20%D1%81%D0%B5%D0%B9%D1%87%D0%B0%D1%81%20%D0%BD%D0%B0%D1%85%D0%BE%D0%B6%D1%83%D1%81%D1%8C",
+                  "target": "_blank"
+                }
+              ]
+            }
+          ],
+          "permalinks": [
+            "23636750208"
+          ],
+          "moderation": {
+            "status": 1,
+            "reasons": []
+          },
+          "tags": [
+            "lastMile"
+          ]
+        },
+        "booking": {
+          "originalId": "yclients__66489",
+          "partner": {
+            "name": "yclients",
+            "legalName": "ООО «УАЙКЛАЕНТС»",
+            "logoUrl": "https://avatars.mds.yandex.net/get-bunker/135516/07a49cbfc62fc2c5c6dba35b266da10e24eff809/svg",
+            "linkUrl": "https://www.yclients.com/?utm_source=yandex&utm_medium=map"
+          },
+          "standaloneWidgetPath": "/web-maps/webview?mode=booking&booking[permalink]=23636750208&booking[standalone]=true&source=partner-cta",
+          "slotsWidgetAvailable": false,
+          "advertButton": {
+            "ignore": true
+          },
+          "bookingType": "beauty",
+          "shouldShowInSearchResults": true
+        },
+        "aspects": [
+          {
+            "id": "3502044050",
+            "isTrusted": true,
+            "text": "Персонал",
+            "count": 246,
+            "positive": 235,
+            "neutral": 5,
+            "negative": 6,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5307539/2a000001803cc1d05a35520c5ca8655edc2a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/228191/2a00000187b835cd682582cf178553061968/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13906970/2a00000193981ded2af23bf87ffc4ba9026a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14578051/2a000001950877cd1931f99d4f461b58c144/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4449685/2a00000189fd457e6520745c057ef7d06638/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15288852/2a00000194b7371c457c1afce3c46d1e146a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9237948/2a00000189fd458634c0a7a46d882155ed96/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11093519/2a00000189fd4580a863d54ec82c07346901/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9714262/2a00000189fd458e4cffa2a52f47b60cb87d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4552098/2a000001803d373ab4a1bf7174b459253b3e/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502204799",
+            "isTrusted": true,
+            "text": "Компетентность",
+            "count": 138,
+            "positive": 137,
+            "neutral": 0,
+            "negative": 1,
+            "photos": []
+          },
+          {
+            "id": "3502066487",
+            "isTrusted": true,
+            "text": "Стрижка",
+            "count": 113,
+            "positive": 108,
+            "neutral": 1,
+            "negative": 4,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/939994/2a000001870375350162d7d72a8a64c841a8/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/2436798/2a000001803cc212853ac0efa6ada5242f80/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15153151/2a000001954113e4973523bcd0833d8cd4f1/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6065996/2a0000017fc7120dfacc34c9f25aef5d4e79/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6528051/2a00000190b22ad08d195ed0300e76d6decf/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5099256/2a000001803cbde73d0ff56e8b5117ad9859/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14540206/2a0000019555dd48a6650797ac0050aea7d0/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6065996/2a000001803d348b49bbbde145aaa701e927/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15461420/2a00000194f3f31a3a544a75872a66f3aa74/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4552098/2a000001803d39b0be303babefdec81ddfc7/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502044230",
+            "isTrusted": true,
+            "text": "Атмосфера",
+            "count": 103,
+            "positive": 102,
+            "neutral": 1,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11400839/2a0000018cf9b4337ad17e692906f9ed853b/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4437246/2a00000179c6f9ee3577106c83209d51fccd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/226077/2a000001606f06e72c421d6871b64e2c3146/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4012790/2a00000179c6fb116c0cc49c64f5f76523d9/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/910613/2a000001606f06ac1c97f26d9dfc39c6714a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6237886/2a0000018065f77ad76df0679172b751269b/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12731162/2a0000018fb4c369a9a5e5e1c908cf484f24/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7730113/2a0000018fb4c33ea5fe51ddc8f04c027a03/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10845257/2a0000018cf9b485d787c86a35551f15a39c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9916116/2a000001895563b0879b8adb42c0c43a73a7/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502086898",
+            "isTrusted": true,
+            "text": "Окрашивание волос",
+            "count": 38,
+            "positive": 38,
+            "neutral": 0,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5469293/2a000001803d355038625489166b18b0f684/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5179687/2a000001803d3673eadf87a84489e3eff4ed/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5584339/2a0000017fc70f32cffae6f8f1a754956a1f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/918124/2a0000018636dda668e9392ddd5ea8426b10/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13071651/2a00000193a68cf7807ff85627701a672272/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15153151/2a000001954113e4973523bcd0833d8cd4f1/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13286098/2a000001906f42d49db983e338bbacd934d8/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5485499/2a000001803d38741d182748897aad05ac86/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4716261/2a0000018fb9fb9292c1b094cd1591985cc0/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a000001905034ec83686280f4d3d2e2c840/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502086905",
+            "isTrusted": true,
+            "text": "Укладка",
+            "count": 33,
+            "positive": 31,
+            "neutral": 1,
+            "negative": 1,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a000001905034ec83686280f4d3d2e2c840/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14333651/2a00000194794629e1430595e99fef59612c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4379646/2a000001906eb1d6f948669625af8c52beb5/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5234599/2a000001803d332a0269d354c65276533a41/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5584339/2a0000017fc70f32cffae6f8f1a754956a1f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5099256/2a000001803cbde73d0ff56e8b5117ad9859/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13286098/2a000001906f42d49db983e338bbacd934d8/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15288852/2a00000194b7371c457c1afce3c46d1e146a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15153151/2a000001954113e4973523bcd0833d8cd4f1/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11093519/2a00000189fd4580a863d54ec82c07346901/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502043730",
+            "isTrusted": true,
+            "text": "Интерьер",
+            "count": 32,
+            "positive": 32,
+            "neutral": 0,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4437246/2a00000179c6f9ee3577106c83209d51fccd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11400839/2a0000018cf9b4337ad17e692906f9ed853b/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4012790/2a00000179c6fb116c0cc49c64f5f76523d9/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12731162/2a0000018fb4c369a9a5e5e1c908cf484f24/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7730113/2a0000018fb4c33ea5fe51ddc8f04c027a03/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/910613/2a000001606f06ac1c97f26d9dfc39c6714a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10845257/2a0000018cf9b485d787c86a35551f15a39c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4432502/2a000001803d37c2b5a31b7a94198a84ff5c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/5483032/2a000001803cbe2ff5d565721f1ee1d3951b/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/226077/2a000001606f06e72c421d6871b64e2c3146/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502066474",
+            "isTrusted": true,
+            "text": "Маникюр",
+            "count": 21,
+            "positive": 18,
+            "neutral": 3,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/8072793/2a0000018703732147fabc2cabd1ff69ded3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6264381/2a0000018ee71e04238cf99d0094b0d81faa/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13451497/2a0000018fb9fa787c43ac348521e17f88e9/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1007082/2a000001870376a624ed622fbef76aed03a2/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6382111/2a0000018fb9fa7895c6171bcfe00163f15c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14578051/2a0000019556e0468f4713b0434bccda9b35/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12800836/2a0000018fb9fa794743a619af7b25180195/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1903890/2a0000018636dea47ceabbaa7574e7daab9a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/938969/2a0000018d0df1d95eae1d8572e1a1e40bff/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11383855/2a0000018cea28d8ea84563ef7e49f173332/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502044082",
+            "isTrusted": true,
+            "text": "Кофе",
+            "count": 20,
+            "positive": 17,
+            "neutral": 3,
+            "negative": 0,
+            "photos": []
+          },
+          {
+            "id": "3502086910",
+            "isTrusted": true,
+            "text": "Уход за бровями",
+            "count": 18,
+            "positive": 18,
+            "neutral": 0,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11622009/2a00000190b22fdd7797d8053be1c38aa47a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14763246/2a00000194e11376d7fc7e293115bb42bf7f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1007647/2a0000018703788a7df671d93b2fa0808fba/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1489947/2a000001870372dbfcecc0fe9d19e713a504/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a0000018fb51c5f8719f4d1816713258559/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12594487/2a00000191280ce57d6b8a6b3b4981718c44/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12595784/2a0000018fb51c6139df3b1b3523453b6904/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14376766/2a00000195329becc92efcb14f5ec74c5d12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13197739/2a0000018fb51c5e6ecc7115bba7cf9d0d21/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7979597/2a0000018fb51c59ed896a30555c85475748/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502043729",
+            "isTrusted": true,
+            "text": "Чистота",
+            "count": 16,
+            "positive": 15,
+            "neutral": 1,
+            "negative": 0,
+            "photos": []
+          },
+          {
+            "id": "3502086903",
+            "isTrusted": true,
+            "text": "Уход за ресницами",
+            "count": 16,
+            "positive": 14,
+            "neutral": 0,
+            "negative": 2,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10247515/2a00000190447a576b8a6bf445ae84750356/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13197739/2a0000018fb51c5e6ecc7115bba7cf9d0d21/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7979597/2a0000018fb51c59ed896a30555c85475748/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12594487/2a00000191280ce57d6b8a6b3b4981718c44/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a0000018fb51c5f8719f4d1816713258559/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12595784/2a0000018fb51c6139df3b1b3523453b6904/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14814101/2a0000019509295fffce56f6c2b3b24ce255/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14376766/2a00000195329becc92efcb14f5ec74c5d12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1007647/2a0000018703788a7df671d93b2fa0808fba/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14763246/2a00000194e11376d7fc7e293115bb42bf7f/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502044686",
+            "isTrusted": true,
+            "text": "Время ожидания",
+            "count": 14,
+            "positive": 11,
+            "neutral": 1,
+            "negative": 2,
+            "photos": []
+          },
+          {
+            "id": "3502086906",
+            "isTrusted": true,
+            "text": "Наращивание ресниц",
+            "count": 13,
+            "positive": 11,
+            "neutral": 0,
+            "negative": 2,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7979597/2a0000018fb51c59ed896a30555c85475748/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10247515/2a00000190447a576b8a6bf445ae84750356/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13197739/2a0000018fb51c5e6ecc7115bba7cf9d0d21/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12594487/2a00000191280ce57d6b8a6b3b4981718c44/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a0000018fb51c5f8719f4d1816713258559/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12595784/2a0000018fb51c6139df3b1b3523453b6904/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14814101/2a0000019509295fffce56f6c2b3b24ce255/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14763246/2a00000194e11376d7fc7e293115bb42bf7f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14376766/2a00000195329becc92efcb14f5ec74c5d12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1007647/2a0000018703788a7df671d93b2fa0808fba/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502086899",
+            "isTrusted": true,
+            "text": "Окрашивание бровей",
+            "count": 11,
+            "positive": 11,
+            "neutral": 0,
+            "negative": 0,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11622009/2a00000190b22fdd7797d8053be1c38aa47a/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14763246/2a00000194e11376d7fc7e293115bb42bf7f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1007647/2a0000018703788a7df671d93b2fa0808fba/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4961567/2a0000018fb51c5f8719f4d1816713258559/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12594487/2a00000191280ce57d6b8a6b3b4981718c44/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14376766/2a00000195329becc92efcb14f5ec74c5d12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13197739/2a0000018fb51c5e6ecc7115bba7cf9d0d21/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12595784/2a0000018fb51c6139df3b1b3523453b6904/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/1489947/2a000001870372dbfcecc0fe9d19e713a504/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7979597/2a0000018fb51c59ed896a30555c85475748/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          }
+        ],
+        "neurosummaryData": {
+          "bold": {
+            "end": 0,
+            "is_bolded": false,
+            "start": 0
+          },
+          "crop_start": 0,
+          "puid": 1774512071,
+          "review_crop": "Очень понравился салон, лакшери оформление!",
+          "review_id": "Q6P1I4qQbw2CAjx2A5LIWOf8_RXd_Fz",
+          "review_text": "Очень понравился салон, лакшери оформление! Стильная грамотная администратор, мастер Екатерина, которая сделала отличную стрижку, от самого Артёма в восторге. Харизма, профессионализм, море обаяния! Прекрасное место! Всей команде всех благ))"
+        },
+        "houseEncodedCoordinates": "Z0kYdAZnQUAEQFtjfXV5cnthZA==",
+        "videos": {
+          "items": [
+            {
+              "id": "vsEt8DjOQrzo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vsEt8DjOQrzo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4012523/2a00000194f524385d38786f787a71e7e152/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vBqR1NZ8S6Vw",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vBqR1NZ8S6Vw",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13741064/2a0000019bb359887b6f7874030ed775ccd6/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v8_zyQ_O-7l4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v8_zyQ_O-7l4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6327983/2a0000019797361308cce314658410fb1d65/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vOCvhVxHpGhU",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vOCvhVxHpGhU",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14711823/2a0000019bcc558fdf6538439621453793df/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vsEsMEb5lIwc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vsEsMEb5lIwc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14411480/2a0000019bcc5666a152f620d15112777a86/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "v9mzL2FftGlo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v9mzL2FftGlo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14331150/2a00000197fd9cdd373d688adeeb7cd67af5/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vNkFpDeljalM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vNkFpDeljalM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/16017614/2a000001999a5c041dc45066422337ba0e18/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vBoIxdDoFbhY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vBoIxdDoFbhY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15065920/2a0000019ac4e9a48909836e7d05c245ec56/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vC6_k1-hZFAE",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vC6_k1-hZFAE",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/16017614/2a0000019932cab4fd99847e73541322fac8/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vn6Uh-JLv5xo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vn6Uh-JLv5xo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6335966/2a000001987e7dfa123da09aacb479a87a91/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vMTmTEmWD-RY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vMTmTEmWD-RY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13950505/2a00000194e47339854d7d67a613932172e1/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vhIxl2GEybhU",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vhIxl2GEybhU",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13590591/2a00000198e1941acfb8e6350625dc376d56/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vKNewwr3Ebm8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vKNewwr3Ebm8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5023540/2a00000193d4d4a6678e4400541d5eeea168/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vpHNapCyZU2I",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vpHNapCyZU2I",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13749859/2a00000193a6763f261d23d443f3dae65239/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vVi5VjjPh2Tc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vVi5VjjPh2Tc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5396437/2a000001935d72131ef902e68a22fb673325/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v7szd1q-qCSc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v7szd1q-qCSc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5105395/2a00000194c5955f0e9ddaf1a96c976338f6/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vmaByYDSjzC4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vmaByYDSjzC4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5102996/2a00000194a384f7d69a10c4582b0ccf809e/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v6yGBSa-egSo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v6yGBSa-egSo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6320168/2a000001948eb17ac43df7b44ddede4ccaaa/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vMT2GOQmcsxY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vMT2GOQmcsxY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5109374/2a000001944a0e2f3cf948dc26dc6d15c831/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vRSBAHhk6OTM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vRSBAHhk6OTM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4886358/2a00000192e7086dd2d1b8d32569841f2a03/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v35V-sp3DhhM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v35V-sp3DhhM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5217116/2a0000019395db4b0926744741b91ee49b2a/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vWwST5mAE1jo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vWwST5mAE1jo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4012523/2a0000019343bdf20845608fbf38cb34de10/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vPD8HJluM_SA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vPD8HJluM_SA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6212107/2a00000193343353a4b85aa0a1f74b696bf8/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vr38_rkuLc1E",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vr38_rkuLc1E",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5395787/2a000001932aeccd43643f295e67b3981fb0/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v_rM_D6wLE38",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v_rM_D6wLE38",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5115385/2a000001929af41d4e3c9a04e96e14f757c0/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vLY-1boQjeig",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vLY-1boQjeig",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6320168/2a00000192240faa789e8ceb53eaf12713ae/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vBEoU_hyd9Dg",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vBEoU_hyd9Dg",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5332272/2a000001902ffc3ff7e3597525c11dfcda4c/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vSpbpVskcwSw",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vSpbpVskcwSw",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6360136/2a0000019006a878ef8a1e1097c2b8e55854/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vwZaSEL8QPHM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vwZaSEL8QPHM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6474479/2a0000018b236a2d86436d51bd12b484b64c/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vDBCB8tXxTGM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vDBCB8tXxTGM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6474479/2a0000018b235272e61925e7a6b038414988/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vmJezsIPkEg0",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vmJezsIPkEg0",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6495623/2a0000018b23514aba06bdb560513f039462/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v96j11YDAQVs",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v96j11YDAQVs",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6502245/2a0000018b23510782523c9fff45e47098a3/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v_FtYiehUDDQ",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v_FtYiehUDDQ",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5405585/2a0000018ae59b3e14ba790479617d20c594/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vCRxZVSfaMDA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vCRxZVSfaMDA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6887669/2a0000018ae57b89e0ef83838aa6abe150ad/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "v0c3sW4t6CWQ",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v0c3sW4t6CWQ",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6516250/2a00000189fd0f2061f78ac85d39b9430f88/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vmx-laFQ6F1Y",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vmx-laFQ6F1Y",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6332636/2a00000189fd100b773411197cb43b80d5c1/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v2pi81P-QCHc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v2pi81P-QCHc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6871497/2a00000189fd0d9e3b1d4c6dfc47b06a7597/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vhS_pDDVtATM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vhS_pDDVtATM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6275370/2a00000189d93d7354d3cde69470b8a90b64/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vpS5lvEM0g2g",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vpS5lvEM0g2g",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6387763/2a00000189d93df1de6a8fa8bc9b51ea0bf4/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "voumh4uzskl4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/voumh4uzskl4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6275370/2a00000189d93be6cc9599f466d4bb123d73/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vGfNOUNbh6VA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vGfNOUNbh6VA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6256830/2a00000189d934c2f2bb9689ab24f702b233/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vD_IKNWCQ5VA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vD_IKNWCQ5VA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6256830/2a00000189d93117f0cc4eed74d48e4cf8cb/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vqdnw2LxVPhI",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vqdnw2LxVPhI",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6474479/2a00000189d92f9a2e829494ac305e343a8a/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 592
+            },
+            {
+              "id": "vYY95jcHLf0A",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vYY95jcHLf0A",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6249895/2a00000189d92e066c52b8db735d5ed82517/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 700
+            },
+            {
+              "id": "vCLwwj1TqPCI",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vCLwwj1TqPCI",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6920051/2a00000189d92a61ef463e3a01b497a405bb/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vaiLV3b86Gxw",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vaiLV3b86Gxw",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5098303/2a00000189d589555bdbd4e238c5b0a2df85/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vYO90hw-klyY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vYO90hw-klyY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6871497/2a00000189d5865ea711caec700637b07fc1/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v9VArDgg8VFE",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v9VArDgg8VFE",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6254782/2a00000189d582333a3fc1787e92f61fa0dd/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vynWRfiLnm2I",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vynWRfiLnm2I",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/10502771/2a0000019508817f75b3ce0b608cbd9b1974/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vVnnkSQGVVno",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vVnnkSQGVVno",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5283769/2a000001953200b056f790648faac05d0096/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vw2G_1hkPfUI",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vw2G_1hkPfUI",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14300945/2a00000195e68850fce89d082d0fb5706488/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vvWAaAvm_Ej4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vvWAaAvm_Ej4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5097949/2a00000195d2636e3d68256ce210b89c8eef/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 960
+            },
+            {
+              "id": "vylBmLexbxm4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vylBmLexbxm4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5353805/2a00000195af322e59ef57a74cf984724866/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vB67UVj0JFBo",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vB67UVj0JFBo",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13965829/2a000001959dd23e0167b423dc407201f0a9/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vbiOB2IwnbVM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vbiOB2IwnbVM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5117499/2a0000019584d2f2ddfbf17c9b4014425ec3/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vj3xFycjR70A",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vj3xFycjR70A",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5407608/2a000001956a55f6f78e3c45089b1451cd36/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 464
+            },
+            {
+              "id": "vXOxl9HSC4WA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vXOxl9HSC4WA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5395787/2a00000195411681368866deb5d164f6a64f/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vLKiAeLdVMEE",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vLKiAeLdVMEE",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6360136/2a00000196621f2ad2eddacad03a7fe28835/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v_3fJhjA9UkA",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v_3fJhjA9UkA",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5102996/2a000001964d5355d8a395d5d02af6895298/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vRQ63OA8hwBw",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vRQ63OA8hwBw",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5235207/2a000001937c17b3c572c300f900bcd6790f/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v2urbtX-Emm8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v2urbtX-Emm8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5109306/2a00000196a50c3874b937c1cb0528bf137e/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 848,
+              "width": 480
+            },
+            {
+              "id": "vOjdbjwOmfjk",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vOjdbjwOmfjk",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6335966/2a00000194e47226e76de135d6b2ac0a9472/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1050
+            },
+            {
+              "id": "v_t_9tJ34hEY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v_t_9tJ34hEY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15056847/2a00000196ca392fba1a1132442c45d51375/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vkDcPf2Sw0mM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vkDcPf2Sw0mM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5106453/2a000001971b07249012e1064f3e40714aa7/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vyVc_ExInLBc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vyVc_ExInLBc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14906787/2a00000196fc4b7e467fdcecfd141f6155f2/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v_39cuD0fETg",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v_39cuD0fETg",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4834374/2a00000193e4a34d12fd3ea56d5cc67d61ba/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vFH4mbIaG3iE",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vFH4mbIaG3iE",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6243117/2a00000196f1f4dd3a131434352872223103/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vEOejbrX7hSU",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vEOejbrX7hSU",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5395787/2a00000196e4227d06a1e347927e81ce1c12/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vrV-aAcRl_HQ",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vrV-aAcRl_HQ",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5097949/2a00000197443d323fe30993f9f8a7e41299/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vw9Kn2vkgzWw",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vw9Kn2vkgzWw",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6243117/2a000001978215216f06917bd4675d09f1e9/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "v2IJTHsN9_zg",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v2IJTHsN9_zg",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15357851/2a0000019758e0811f6cde933c04f9a96353/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vZ8d-ytyPLCs",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vZ8d-ytyPLCs",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15357851/2a00000196f79e6eee92c1e6f3272780ef46/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 960
+            },
+            {
+              "id": "vKKzF0oromSE",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vKKzF0oromSE",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13740974/2a00000197b056b90b59684b540b00e9adc9/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vXO9ZN2ciMB8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vXO9ZN2ciMB8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15327179/2a000001998a3956ea0be541d605af711623/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            },
+            {
+              "id": "vyhIeRNjo_UY",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vyhIeRNjo_UY",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/10268831/2a00000197c11aabed11903dc8835f2ca0cd/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1280,
+              "width": 720
+            }
+          ]
+        },
+        "promo": {
+          "hasActiveAdvert": true,
+          "promoAction": {
+            "name": "Кералекс с стрижкой",
+            "description": "В ваш первый визит уход для волос с стрижкой по приятной цене. Запишитесь сейчас!",
+            "url": "https://n48679.yclients.com/",
+            "photo": {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-sprav-posts/17781767/2a0000019bcc8e2b9a0bfb21a309aec7f086/%s",
+              "possibleSizes": [
+                "S",
+                "M",
+                "L",
+                "XL"
+              ]
+            }
+          }
+        },
+        "region": {
+          "id": 2,
+          "type": 6,
+          "capitalId": 0,
+          "hierarchy": [
+            225,
+            10174,
+            2
+          ],
+          "seoname": "saint-petersburg",
+          "bounds": [
+            [
+              29.647787,
+              59.631827369843656
+            ],
+            [
+              30.982207000000002,
+              60.242925369843654
+            ]
+          ],
+          "longitude": 30.314997,
+          "latitude": 59.938784,
+          "zoom": 11,
+          "names": {
+            "ablative": "",
+            "accusative": "Санкт‑Петербург",
+            "dative": "Санкт‑Петербургу",
+            "directional": "",
+            "genitive": "Санкт‑Петербурга",
+            "instrumental": "Санкт‑Петербургом",
+            "locative": "",
+            "nominative": "Санкт‑Петербург",
+            "preposition": "в",
+            "prepositional": "Санкт‑Петербурге"
+          }
+        },
+        "breadcrumbs": [
+          {
+            "name": "Карты",
+            "type": "root",
+            "url": "https://yandex.ru/maps/"
+          },
+          {
+            "name": "Санкт‑Петербург",
+            "type": "region",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/",
+            "region": {
+              "center": [
+                30.314997,
+                59.938784
+              ],
+              "zoom": 11
+            }
+          },
+          {
+            "category": {
+              "id": "184105814",
+              "name": "Салон красоты",
+              "class": "spa",
+              "seoname": "beauty_salon",
+              "pluralName": "Салоны красоты"
+            },
+            "name": "Салоны красоты",
+            "type": "category",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/category/beauty_salon/184105814/"
+          }
+        ],
+        "events": []
+      }
+    ],
+    "pageCount": 1,
+    "resultsCount": 1,
+    "bounds": [
+      [
+        30.2135481,
+        59.981563
+      ],
+      [
+        30.2221579,
+        59.985877
+      ]
+    ],
+    "categories": [],
+    "filters": [
+      {
+        "id": "worktime",
+        "isTop": true,
+        "name": "открыто",
+        "type": "worktime",
+        "values": {
+          "openNow": {
+            "id": "open_now",
+            "disabled": true,
+            "name": "открыто",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "open24h": {
+            "id": "open_24h",
+            "disabled": true,
+            "name": "круглосуточно",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "openInNextTwoHours": {
+            "id": "open_in_next_two_hours",
+            "name": "",
+            "selected": false,
+            "type": "boolean"
+          },
+          "openAt": {
+            "id": "open_at",
+            "name": "Открыто в указанное время",
+            "type": "datetime",
+            "from": null,
+            "to": null,
+            "minValue": "2026-01-30T00:00:00.000Z",
+            "maxValue": "2026-02-06T00:00:00.000Z"
+          }
+        }
+      },
+      {
+        "id": "payment_by_credit_card",
+        "name": "Оплата картой",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "car_park",
+        "name": "парковка",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "has_photo",
+        "name": "с фото",
+        "type": "boolean",
+        "selected": false
+      }
+    ],
+    "filterGroups": []
+  }
+}

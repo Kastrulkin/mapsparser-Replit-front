@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
+import { BusinessHealthWidget } from '@/components/business/BusinessHealthWidget';
 import MapParseTable from '@/components/MapParseTable';
 import MapRecommendations from '@/components/MapRecommendations';
 import { BusinessGrowthPlan } from '@/components/BusinessGrowthPlan';
@@ -120,6 +121,7 @@ export const ProgressPage = () => {
         </div>
       </div>
 
+      <BusinessHealthWidget businessId={currentBusinessId} className="mb-6" />
       <BusinessGrowthPlan businessId={currentBusinessId} />
 
       <div className="mt-8 mb-4">

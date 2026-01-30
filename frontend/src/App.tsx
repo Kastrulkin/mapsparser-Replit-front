@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import { DashboardLayout } from "./components/DashboardLayout";
+import { NetworkDashboardPage } from "./pages/dashboard/network/NetworkDashboardPage";
 import { ProfilePage } from "./pages/dashboard/ProfilePage";
 import { CardOverviewPage } from "./pages/dashboard/CardOverviewPage";
 import { ProgressPage } from "./pages/dashboard/ProgressPage";
@@ -62,6 +63,7 @@ const AppContent = () => {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />
+            <Route path="network" element={<NetworkDashboardPage />} />
             <Route path="bazich" element={<AdminPage />} />
           </Route>
           {/* Legacy route - keep for backward compatibility */}

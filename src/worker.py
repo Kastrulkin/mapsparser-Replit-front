@@ -799,8 +799,14 @@ def process_queue():
                             products = card_data.get('products')
                             if products:
                                 services_count = len(products)
-                                sync_worker._sync_services_to_db(db_manager.conn, business_id, products)
-                                print(f"💾 Синхронизировано {services_count} услуг")
+                                # Fetch owner_id for service syncing
+                                owner_row = cursor.execute("SELECT owner_id FROM Businesses WHERE id=?", (business_id,)).fetchone()
+                                if owner_row:
+                                    owner_id = owner_row[0]
+                                    sync_worker._sync_services_to_db(db_manager.conn, business_id, products, owner_id)
+                                    print(f"💾 Синхронизировано {services_count} услуг (owner_id={owner_id})")
+                                else:
+                                    print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
 
                             # 4. СОХРАНЕНИЕ СТАТИСТИКИ (Rating History)
                             if rating and reviews_count is not None:
@@ -948,9 +954,16 @@ def process_queue():
             # --- SYNC SERVICES AFTER PARSING (NEW) ---
             if business_id and card_data.get('products'):
                 try:
-                    print(f"🔄 Синхронизация услуг для business_id={business_id}...")
-                    _sync_parsed_services_to_db(business_id, card_data.get('products'), conn)
-                    print(f"✅ Услуги успешно синхронизированы.")
+                    # Need owner_id for sync
+                    cursor = conn.cursor() # Ensure we have cursor
+                    owner_row = cursor.execute("SELECT owner_id FROM Businesses WHERE id=?", (business_id,)).fetchone()
+                    if owner_row:
+                        owner_id = owner_row[0]
+                        print(f"🔄 Синхронизация услуг для business_id={business_id} (owner_id={owner_id})...")
+                        _sync_parsed_services_to_db(business_id, card_data.get('products'), conn, owner_id)
+                        print(f"✅ Услуги успешно синхронизированы.")
+                    else:
+                        print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
                 except Exception as sync_error:
                     print(f"⚠️ Ошибка синхронизации услуг: {sync_error}")
                     import traceback
@@ -1016,7 +1029,7 @@ def process_queue():
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
 
-def _sync_parsed_services_to_db(business_id: str, products: list, user_id: str, conn: sqlite3.Connection):
+def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.Connection, owner_id: str):
     """
     Синхронизирует распаршенные услуги в таблицу UserServices.
     Добавляет новые, обновляет цены существующих.
@@ -1024,11 +1037,11 @@ def _sync_parsed_services_to_db(business_id: str, products: list, user_id: str, 
     if not products:
         return
 
-    # STRICT CHECK: user_id required
-    if not user_id:
-        print(f"⚠️ Service sync skipped: user_id is missing for business {business_id}")
+    # STRICT CHECK: owner_id required
+    if not owner_id:
+        print(f"⚠️ Service sync skipped: owner_id is missing for business {business_id}")
         # Raising error to fail fast as per plan, but let's confirm logic
-        raise ValueError(f"user_id (str) is required for service sync for business {business_id}")
+        raise ValueError(f"owner_id (str) is required for service sync for business {business_id}")
 
     cursor = conn.cursor()
     
@@ -1056,11 +1069,10 @@ def _sync_parsed_services_to_db(business_id: str, products: list, user_id: str, 
     count_new = 0
     count_updated = 0
     
-    # REMOVED: Fetching owner_id from Businesses (Pass explicitly)
-    owner_id = user_id
     print(f"👤 Syncing services for owner_id: {owner_id}")
     
     for category_data in products:
+
 
         category_name = category_data.get('category', 'Разное')
         items = category_data.get('items', [])

@@ -1,0 +1,429 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            300,
+            149,
+            9
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 5
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152332,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Мга",
+          "HotspotMetaData": {
+            "id": 53152332,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      34.71021398319135,
+                      211.9951777929782
+                    ],
+                    [
+                      55.78978601670315,
+                      211.9951777929782
+                    ],
+                    [
+                      55.78978601670315,
+                      202.8786927793517
+                    ],
+                    [
+                      34.71021398319135,
+                      202.8786927793517
+                    ],
+                    [
+                      34.71021398319135,
+                      211.9951777929782
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      42.74999999994543,
+                      218.46875000006185
+                    ],
+                    [
+                      47.74999999994543,
+                      218.46875000006185
+                    ],
+                    [
+                      47.74999999994543,
+                      211.9951777929782
+                    ],
+                    [
+                      42.74999999994543,
+                      211.9951777929782
+                    ],
+                    [
+                      42.74999999994543,
+                      218.46875000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjMzMhKAAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCa0LjRgNC-0LLRgdC60LjQuSDRgNCw0LnQvtC9LCDQs9C-0YDQvtC00YHQutC-0Lkg0L_QvtGB0ZHQu9C-0Log0JzQs9CwIgoNin74QRXLB29C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.75760770610851,
+            31.061782836913906
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152333,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Назия",
+          "HotspotMetaData": {
+            "id": 53152333,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      221.24412410338118,
+                      150.9089080382073
+                    ],
+                    [
+                      251.5683758965115,
+                      150.9089080382073
+                    ],
+                    [
+                      251.5683758965115,
+                      142.80536580387343
+                    ],
+                    [
+                      221.24412410338118,
+                      142.80536580387343
+                    ],
+                    [
+                      221.24412410338118,
+                      150.9089080382073
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      233.90624999994543,
+                      157.21875000006185
+                    ],
+                    [
+                      238.90624999994543,
+                      157.21875000006185
+                    ],
+                    [
+                      238.90624999994543,
+                      150.9089080382073
+                    ],
+                    [
+                      233.90624999994543,
+                      150.9089080382073
+                    ],
+                    [
+                      233.90624999994543,
+                      157.21875000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjMzMxKEAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCa0LjRgNC-0LLRgdC60LjQuSDRgNCw0LnQvtC9LCDQs9C-0YDQvtC00YHQutC-0Lkg0L_QvtGB0ZHQu9C-0Log0J3QsNC30LjRjyIKDdqx_EEVmV5vQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.8423740957032,
+            31.58680915832504
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149635,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Шлиссельбург",
+          "HotspotMetaData": {
+            "id": 53149635,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      -6.717451026575873,
+                      77.81517098098993
+                    ],
+                    [
+                      77.52995102646673,
+                      77.81517098098993
+                    ],
+                    [
+                      77.52995102646673,
+                      65.93369959133997
+                    ],
+                    [
+                      -6.717451026575873,
+                      65.93369959133997
+                    ],
+                    [
+                      -6.717451026575873,
+                      77.81517098098993
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      32.90624999994361,
+                      82.90625000006185
+                    ],
+                    [
+                      37.90624999994361,
+                      82.90625000006185
+                    ],
+                    [
+                      37.90624999994361,
+                      77.81517098098993
+                    ],
+                    [
+                      32.90624999994361,
+                      77.81517098098993
+                    ],
+                    [
+                      32.90624999994361,
+                      82.90625000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTYzNRJw0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0JrQuNGA0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCo0LvQuNGB0YHQtdC70YzQsdGD0YDQsyIKDStH-EEVo8dvQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.94492821344843,
+            31.034746170043785
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152228,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Приладожский",
+          "HotspotMetaData": {
+            "id": 53152228,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      103.61997488362067,
+                      127.28791008180269
+                    ],
+                    [
+                      180.81752511626837,
+                      127.28791008180269
+                    ],
+                    [
+                      180.81752511626837,
+                      117.23886376027804
+                    ],
+                    [
+                      103.61997488362067,
+                      117.23886376027804
+                    ],
+                    [
+                      103.61997488362067,
+                      127.28791008180269
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      139.71874999994543,
+                      132.6250000000582
+                    ],
+                    [
+                      144.71874999994725,
+                      132.6250000000582
+                    ],
+                    [
+                      144.71874999994725,
+                      127.28791008180269
+                    ],
+                    [
+                      139.71874999994543,
+                      127.28791008180269
+                    ],
+                    [
+                      139.71874999994543,
+                      132.6250000000582
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjIyOBKSAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCa0LjRgNC-0LLRgdC60LjQuSDRgNCw0LnQvtC9LCDQs9C-0YDQvtC00YHQutC-0Lkg0L_QvtGB0ZHQu9C-0Log0J_RgNC40LvQsNC00L7QttGB0LrQuNC5IgoNIKD6QRVsgW9C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.8763495916366,
+            31.32811546325668
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149558,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Кировск",
+          "HotspotMetaData": {
+            "id": 53149558,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      -8.233289001964295,
+                      127.94979291558775
+                    ],
+                    [
+                      40.233289001853336,
+                      127.94979291558775
+                    ],
+                    [
+                      40.233289001853336,
+                      116.73657765673488
+                    ],
+                    [
+                      -8.233289001964295,
+                      116.73657765673488
+                    ],
+                    [
+                      -8.233289001964295,
+                      127.94979291558775
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      13.499999999943611,
+                      133.3750000000582
+                    ],
+                    [
+                      18.49999999994361,
+                      133.3750000000582
+                    ],
+                    [
+                      18.49999999994361,
+                      127.94979291558775
+                    ],
+                    [
+                      13.499999999943611,
+                      127.94979291558775
+                    ],
+                    [
+                      13.499999999943611,
+                      133.3750000000582
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTU1OBJH0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0JrQuNGA0L7QstGB0LoiCg0G2vdBFVeAb0I,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.87531400473457,
+            30.98144531249984
+          ]
+        }
+      }
+    ]
+  }
+}

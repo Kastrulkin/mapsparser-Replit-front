@@ -64,7 +64,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
              # Fail fast
              raise ValueError(f"owner_id is required for service sync for {business_id}")
 
-        cursor = self.db.conn.cursor()
+        cursor = conn.cursor()
         
         # REMOVED: Internal SELECT owner_id from Businesses
         

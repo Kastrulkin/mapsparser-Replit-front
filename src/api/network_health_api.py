@@ -93,6 +93,25 @@ def get_network_health(current_user):
             params.append(network_id)
         
         if business_id:
+            # Phase 0.1: Security & Validation
+            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = ?", (business_id,))
+            biz_row = cursor.fetchone()
+            
+            if not biz_row:
+                return jsonify({"error": "Business not found"}), 404
+                
+            owner_id, biz_network_id = biz_row
+            
+            # 403 Forbidden
+            if owner_id != user_id and not current_user.get('is_superadmin'):
+                return jsonify({"error": "Access denied"}), 403
+                
+            # 400 Bad Request (Isolation policy)
+            # If business is part of a network, client should use network endpoints or network_id filter?
+            # The requirement: "If business_id is part of network -> 400 with message 'Use network_id for network entities'"
+            if biz_network_id:
+                 return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
+
             where_clauses.append("b.id = ?")
             params.append(business_id)
         
@@ -192,6 +211,7 @@ def get_location_alerts(current_user):
         
         user_id = current_user['id']
         network_id = request.args.get('network_id')
+        business_id = request.args.get('business_id')  # NEW: Support business_id
         alert_type = request.args.get('alert_type')
         
         # Build WHERE clause
@@ -201,6 +221,25 @@ def get_location_alerts(current_user):
         if network_id:
             where_clauses.append("b.network_id = ?")
             params.append(network_id)
+
+        if business_id:
+            # Phase 0.1: Security & Validation
+            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = ?", (business_id,))
+            biz_row = cursor.fetchone()
+            
+            if not biz_row:
+                return jsonify({"error": "Business not found"}), 404
+                
+            owner_id, biz_network_id = biz_row
+            
+            if owner_id != user_id and not current_user.get('is_superadmin'):
+                return jsonify({"error": "Access denied"}), 403
+            
+            if biz_network_id:
+                 return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
+
+            where_clauses.append("b.id = ?")
+            params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
         

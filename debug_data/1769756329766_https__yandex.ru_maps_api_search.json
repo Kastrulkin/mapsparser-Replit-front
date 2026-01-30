@@ -1,0 +1,1117 @@
+{
+  "data": {
+    "requestId": "1769756325954734-4263222243-addrs-upper-yp-112",
+    "requestSerpId": "1769756325954734-4263222243-addrs-upper-yp-112",
+    "requestContext": "ZAAAAAgBEAAaKAoSCQAAAAAAkHZAEQAAAAAAoGZAEhIJAAAAAAAA8L8RAAAAAAAA8L8iBQABAgMEKAo4AED+//////////8BSAFqAJ0BzczMPaABAKgBAL0BJ68/Y8IBBuKpgar1BYICAIoCAJICAJoCDGRlc2t0b3AtbWFwcw==",
+    "requestQuery": "empty",
+    "requestCorrectedQuery": "empty",
+    "requestBounds": [
+      [
+        37.048427,
+        55.43644866
+      ],
+      [
+        38.175903,
+        56.04690174
+      ]
+    ],
+    "displayType": "multiple",
+    "totalResultCount": 1,
+    "requestResults": 10,
+    "items": [
+      {
+        "type": "business",
+        "requestId": "1769756325954734-4263222243-addrs-upper-yp-112",
+        "index": 0,
+        "analyticsId": "0",
+        "title": "Оливер",
+        "description": "ул. Савушкина, 127, Санкт-Петербург",
+        "address": "ул. Савушкина, 127, Санкт-Петербург",
+        "coordinates": [
+          30.219413,
+          59.987283
+        ],
+        "displayCoordinates": [
+          30.219413,
+          59.987283
+        ],
+        "bounds": [
+          [
+            30.215176,
+            59.985246
+          ],
+          [
+            30.223387,
+            59.98936
+          ]
+        ],
+        "uri": "ymapsbm1://org?oid=203293742306",
+        "logId": "dHlwZT1iaXpmaW5kZXI7aWQ9MjAzMjkzNzQyMzA2",
+        "id": "203293742306",
+        "shortTitle": "Оливер",
+        "fullAddress": "Санкт-Петербург, улица Савушкина, 127",
+        "country": "Россия",
+        "postalCode": "197374",
+        "status": "open",
+        "businessLinks": [],
+        "ratingData": {
+          "ratingCount": 0,
+          "ratingValue": 0,
+          "reviewCount": 0
+        },
+        "sources": [
+          {
+            "id": "yandex",
+            "name": "Яндекс",
+            "href": "https://ya.ru/"
+          }
+        ],
+        "categories": [
+          {
+            "id": "184105814",
+            "name": "Салон красоты",
+            "class": "spa",
+            "seoname": "beauty_salon",
+            "pluralName": "Салоны красоты"
+          },
+          {
+            "id": "20476284572",
+            "name": "ногтевая студия",
+            "class": "nail studio",
+            "seoname": "nail_salon",
+            "pluralName": "Ногтевые студии"
+          },
+          {
+            "id": "184105812",
+            "name": "парикмахерская",
+            "class": "hairdressers",
+            "seoname": "hairdresser",
+            "pluralName": "Парикмахерские"
+          }
+        ],
+        "phones": [
+          {
+            "number": "+7 (962) 684-69-80",
+            "type": "phone",
+            "value": "+79626846980"
+          },
+          {
+            "number": "+7 (921) 903-24-76",
+            "type": "phone",
+            "value": "+79219032476"
+          }
+        ],
+        "features": [
+          {
+            "id": "women_haircut",
+            "value": "1400–2800 ₽",
+            "name": "цена женской стрижки",
+            "type": "text",
+            "important": true
+          },
+          {
+            "id": "man_haircut",
+            "value": "800–1800 ₽",
+            "name": "цена мужской стрижки",
+            "type": "text",
+            "important": true
+          },
+          {
+            "id": "pedicure_bin",
+            "value": true,
+            "name": "педикюр",
+            "type": "bool",
+            "important": true
+          },
+          {
+            "id": "cosmetology_services",
+            "value": [
+              {
+                "id": "eyebrow",
+                "name": "коррекция бровей"
+              },
+              {
+                "id": "dyeing_eyelashes",
+                "name": "окрашивание бровей/ресниц"
+              },
+              {
+                "id": "facial_massage",
+                "name": "массаж лица"
+              }
+            ],
+            "name": "косметологические услуги",
+            "type": "enum",
+            "important": true
+          },
+          {
+            "id": "Possible_with_dog",
+            "value": true,
+            "name": "Можно с собакой",
+            "type": "bool",
+            "important": true
+          },
+          {
+            "id": "manicure_bin",
+            "value": true,
+            "name": "маникюр",
+            "type": "bool",
+            "important": true
+          },
+          {
+            "id": "gift_certificate",
+            "value": true,
+            "name": "подарочный сертификат",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "hairdressing_services",
+            "value": [
+              {
+                "id": "child_hairdressing",
+                "name": "для детей"
+              }
+            ],
+            "name": "парикмахерские услуги",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "petfriendly",
+            "value": [
+              {
+                "id": "allowed_with_dogs_35_cm",
+                "name": "разрешено с собаками до 35 см."
+              }
+            ],
+            "name": "посещение с животными",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "car_park",
+            "value": true,
+            "name": "парковка",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "payment_method",
+            "value": [
+              {
+                "id": "cash",
+                "name": "наличными"
+              },
+              {
+                "id": "wire_transfer",
+                "name": "банковским переводом"
+              },
+              {
+                "id": "qr_code",
+                "name": "QR-код"
+              }
+            ],
+            "name": "способ оплаты",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "promotions",
+            "value": [
+              {
+                "id": "special_offers",
+                "name": "спецпредложения"
+              }
+            ],
+            "name": "акции",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "combined_manicure",
+            "value": "1500–2500 ₽",
+            "name": "комбинированный маникюр",
+            "type": "text",
+            "important": false
+          },
+          {
+            "id": "beauty_services",
+            "value": [
+              {
+                "id": "pedicure_services_m",
+                "name": "педикюр"
+              },
+              {
+                "id": "washing_your_hair",
+                "name": "мытье волос"
+              },
+              {
+                "id": "manicure_beauty",
+                "name": "маникюр"
+              },
+              {
+                "id": "ear_piercing_beauty",
+                "name": "прокол ушей"
+              },
+              {
+                "id": "nail_extension_m",
+                "name": "наращивание ногтей"
+              },
+              {
+                "id": "eyelash laminating",
+                "name": "ламинирование ресниц"
+              },
+              {
+                "id": "children_haircuts",
+                "name": "детские стрижки"
+              },
+              {
+                "id": "massage_serv",
+                "name": "массаж"
+              },
+              {
+                "id": "men_haircuts",
+                "name": "мужские стрижки"
+              },
+              {
+                "id": "hairdressing",
+                "name": "женские стрижки"
+              }
+            ],
+            "name": "услуги салона",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "preliminary_registration",
+            "value": true,
+            "name": "предварительная запись",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "bike_parking",
+            "value": true,
+            "name": "велопарковка",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "online_recording",
+            "value": true,
+            "name": "Онлайн запись",
+            "type": "bool",
+            "important": false
+          },
+          {
+            "id": "wheelchair_accessible_vocabulary",
+            "value": [
+              {
+                "id": "wheelchair_accessible_na",
+                "name": "недоступно"
+              }
+            ],
+            "name": "доступность помещения на инвалидной коляске",
+            "type": "enum",
+            "important": false
+          },
+          {
+            "id": "privilege_haircut",
+            "value": true,
+            "name": "льготная стрижка",
+            "type": "bool",
+            "important": false
+          }
+        ],
+        "mediaOrderTemplate": "p,v,p,v,v,p,v*,p*",
+        "featureGroups": [
+          {
+            "name": "Услуги",
+            "featureIds": [
+              "cosmetology_services",
+              "manicure_bin",
+              "pedicure_bin",
+              "hairdressing_services",
+              "privilege_haircut",
+              "beauty_services",
+              "tattoo removal"
+            ]
+          },
+          {
+            "name": "Цены",
+            "featureIds": [
+              "man_haircut",
+              "women_haircut"
+            ]
+          },
+          {
+            "name": "Общая информация",
+            "featureIds": [
+              "payment_method",
+              "gift_certificate",
+              "promotions",
+              "payment_by_credit_card",
+              "wi_fi",
+              "car_park",
+              "home_visit",
+              "nursery"
+            ]
+          },
+          {
+            "name": "Доступность",
+            "featureIds": [
+              "elevator_wheelchair_accessible",
+              "ramp",
+              "call_button",
+              "toilet_for_disabled",
+              "automatic_door",
+              "wheelchair_accessible_vocabulary"
+            ]
+          }
+        ],
+        "businessProperties": {
+          "has_verified_owner": true,
+          "geoproduct_poi_color": "#F58CB6",
+          "level": "3",
+          "geoproduct_poi_label_color": "#D46C95"
+        },
+        "seoname": "oliver",
+        "geoId": 120664,
+        "compositeAddress": {
+          "country": "Россия",
+          "locality": "Санкт-Петербург",
+          "street": "улица Савушкина",
+          "house": "127"
+        },
+        "modularCard": {
+          "showClaimOrganization": true,
+          "showTaxiButton": true,
+          "showFeedbackButton": true,
+          "showReviews": true,
+          "showAddPhotoButton": true,
+          "showCompetitors": true,
+          "showDirectBanner": true,
+          "showAdditionalAds": true,
+          "showWorkHours": true,
+          "showContacts": true,
+          "showFriendsLiked": false,
+          "showVisualPricesTab": true,
+          "showHotelEnrichment": false,
+          "promoBadgeFeature": [],
+          "showCourierButton": false,
+          "hotelReviewsStubType": 0
+        },
+        "modularPin": {
+          "subtitleHints": [
+            {
+              "text": "4.8",
+              "type": "RATING",
+              "properties": null
+            },
+            {
+              "text": "До открытия 2 мин",
+              "type": "WORKING_HOURS",
+              "properties": {
+                "workingHours": {
+                  "shortText": "С 10:00",
+                  "isOpen": false,
+                  "tag": [
+                    "opening_soon"
+                  ]
+                }
+              }
+            }
+          ],
+          "allowMultilineSubtitle": false
+        },
+        "modularSnippet": {
+          "showNeurosummary": false,
+          "showMentionedOnSite": false,
+          "showTitle": "SHORT_TITLE",
+          "showAddress": "SHORT_ADDRESS",
+          "showCategory": "ALL_CATEGORIES",
+          "showRating": "FIVE_STAR_RATING",
+          "showPhoto": "GALLERY",
+          "showWorkHours": true,
+          "showVerified": true,
+          "showDistanceFromTransit": false,
+          "showBookmark": true,
+          "showEta": true,
+          "showGeoproductOffer": true,
+          "subtitleHint": [],
+          "galleryButton": [
+            "PRICES"
+          ],
+          "shownGoodsNumber": 3,
+          "showDescription": false,
+          "showCollectionBadge": true,
+          "showFriendsLiked": false,
+          "showCourierButton": false,
+          "showYandexEatsOrderButton": false,
+          "infoBlock": [],
+          "serpActionButtons": [
+            6,
+            1,
+            3,
+            5,
+            0
+          ],
+          "awards": [],
+          "promoBadgeFeature": [],
+          "showHotelEnrichment": false
+        },
+        "tzOffset": 10800,
+        "workingTimeText": "ежедневно, 10:00–21:00",
+        "workingTime": [
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 10,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 21,
+                "minutes": 0
+              }
+            }
+          ]
+        ],
+        "currentWorkingStatus": {
+          "isOpenNow": false,
+          "text": "До открытия 2 мин",
+          "shortText": "С 10:00",
+          "tag": [
+            "opening_soon"
+          ]
+        },
+        "socialLinks": [
+          {
+            "type": "vkontakte",
+            "href": "https://vk.com/oliver_barbershop",
+            "readableHref": "vk.com/oliver_barbershop"
+          },
+          {
+            "type": "whatsapp",
+            "href": "https://wa.me/79626846980?text=%D0%9E%D0%B1%D1%80%D0%B0%D1%89%D0%B5%D0%BD%D0%B8%D0%B5+%D0%B8%D0%B7+%D0%AF%D0%BD%D0%B4%D0%B5%D0%BA%D1%81+%D0%9A%D0%B0%D1%80%D1%82%0A%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!+%D0%9C%D0%B5%D0%BD%D1%8F+%D0%B7%D0%B0%D0%B8%D0%BD%D1%82%D0%B5%D1%80%D0%B5%D1%81%D0%BE%D0%B2%D0%B0%D0%BB%D0%BE+%D0%B2%D0%B0%D1%88%D0%B5+%D0%BF%D1%80%D0%B5%D0%B4%D0%BB%D0%BE%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5",
+            "readableHref": "+79626846980"
+          }
+        ],
+        "urls": [
+          "https://oliver-ulitsa-savushkina.clients.site/"
+        ],
+        "references": [
+          {
+            "id": "4356099766",
+            "scope": "nyak"
+          }
+        ],
+        "topObjects": {
+          "hasPhotos": true,
+          "isYandexEda": false,
+          "rubric": "beauty",
+          "categories": [
+            {
+              "categoryName": "popular",
+              "categoryItems": [
+                {
+                  "title": "Маникюр с покрытием",
+                  "description": "Комплексный маникюр с покрытием гель-лаком или классическим лаком. Включает коррекцию формы, обработку кутикулы, нанесение базы, двух слоёв цвета и закрепителя. Длится 60–90 минут, стойкий эффект до 3 недель.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2808945/2a000001999febcdfea34fca43244578644f/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Первая стрижка ребенка в салоне",
+                  "description": "Торжественная первая стрижка в салоне с особым подходом к маленьким клиентам. Создаем комфортную атмосферу, используем специальные детские кресла и игрушки. В подарок — первый локон в конвертике и памятная фотография.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2413620/2a00000199ba08e74b163a1893351f6c90e7/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Короткая стрижка женская",
+                  "description": "Модные женские стрижки на короткие волосы в Приморском районе. Подбираем форму по типу лица, создаём стильный образ с лёгкой укладкой. 10 минут от метро Беговая, на Савушкина.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2760763/2a00000199853b503aa0251cecaffcce76da/{size}",
+                  "price": "1200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Женские стрижки на средние волосы",
+                  "description": "Стильные женские стрижки на средние волосы в Приморском районе — каре, каскад, лесенка до плеч. Подбираем форму с учётом типа лица и структуры волос. Удобно добираться: 10 минут пешком от метро Беговая на Савушкина.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1530321/2a00000199b9f2b8a53c6ba04e9a352997b4/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская стрижка машинкой (2 насадки)",
+                  "description": "Классическая мужская стрижка машинкой с использованием 2 насадок — быстро, аккуратно и стильно. Короткие виски и затылок с плавным переходом к макушке. Идеально для активных мужчин, которые ценят простоту в уходе и всегда опрятный вид.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2791887/2a00000199c3c95ab8b9d703d2306b595d3d/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Модельная мужская стрижка",
+                  "description": "Модельная мужская стрижка с индивидуальным подходом — создаем стиль с учетом формы лица, типа волос и образа жизни. Сочетание классической техники с креативными элементами для современного мужчины. Включает мытье и укладку.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1424222/2a00000199b9fe1dc28ec76cb3eb633425b7/{size}",
+                  "price": "1000",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Коррекция бровей",
+                  "description": "Профессиональная коррекция бровей: моделирование оптимальной формы и лёгкое тонирование хной или краской. Быстро, аккуратно, с учётом вашего типа бровей и оттенка волос.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2808945/2a0000019986cbc9ff365ad4d7e6cc863d2a/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Окрашивание бровей",
+                  "description": "Профессиональное окрашивание бровей краской или хной с подбором идеального оттенка. Стойкий результат до 4 недель, чёткий контур и натуральный эффект. Включает коррекцию формы и уходовый гель для сохранения цвета и здоровья волосков.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2899371/2a0000019986d18f64ffcbeac6bece5bcab8/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                }
+              ]
+            }
+          ],
+          "fullObjectsCount": 36,
+          "relevance": {
+            "lastUploadTime": "2026-01-29T19:20:34.413085Z",
+            "lastUpdateTime": "2025-11-28T13:10:39.540193Z"
+          },
+          "source": {
+            "id": "TYCOON",
+            "name": "Представитель организации"
+          }
+        },
+        "parentRubrics": [
+          0,
+          0
+        ],
+        "fullObjects": {
+          "hasPhotos": false,
+          "rubric": "beauty",
+          "categories": [
+            {
+              "categoryName": "Без категории",
+              "categoryItems": [
+                {
+                  "title": "Салон красоты Беговая",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Салон красоты рядом",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Окрашивание волос рядом",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "3000",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Массаж",
+              "categoryItems": [
+                {
+                  "title": "Японский массаж лица Кобидо",
+                  "description": "Древний японский массаж Кобидо для естественного омоложения. Деликатная работа с мышцами лица улучшает кровообращение, разглаживает морщины и восстанавливает упругость кожи без инвазивных процедур. Длительность 60–90 минут.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/4078836/2a00000199cd3c7c0363985c1b29ead16180/{size}",
+                  "price": "3500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Курс японского массажа Кобидо (10 сеансов)",
+                  "description": "Полный курс японского массажа лица Кобидо из 10 сеансов для максимального эффекта омоложения. Системный подход обеспечивает стойкую подтяжку, разглаживание морщин и улучшение тонуса кожи. Экономия 5000 рублей при покупке курса — 30 000 вместо 35 000.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "30000",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Энергетический массаж Access Bars",
+                  "description": "Уникальная техника Access Bars — энергетический массаж 32 точек на голове для глубокого расслабления и освобождения от стресса. Мягкое прикосновение активирует процессы самовосстановления, улучшает сон и ясность мышления. Сеанс 60–90 минут.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2757887/2a00000199cd34b0012c75ab63fb44b51883/{size}",
+                  "price": "7050",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Педикюр",
+              "categoryItems": [
+                {
+                  "title": "Педикюр без покрытия",
+                  "description": "Классический педикюр без покрытия: обрезная обработка кутикулы, коррекция формы ногтей, уход за стопами (массаж, скраб), нанесение питательного крема. Идеальный уход для здоровья и комфорта ног. Длительность — 60–75 минут.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Педикюр с покрытием",
+                  "description": "Комплексный педикюр с покрытием гель-лаком или классическим лаком: обрезная обработка кутикулы, коррекция формы, пилинг стоп и расслабляющий массаж, нанесение базы, двух слоёв цвета и топа. Стойкий эффект до 4 недель. Длительность 75–90 минут.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "2000",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Маникюр",
+              "categoryItems": [
+                {
+                  "title": "Маникюр без покрытия",
+                  "description": "Классический маникюр без покрытия: коррекция формы ногтей пилкой, аккуратная обработка кутикулы, лёгкий массаж пальцев и нанесение питательного крема. Идеально для здоровья ногтей и естественного ухода. Длительность — 45–60 минут.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "700",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Маникюр с покрытием",
+                  "description": "Комплексный маникюр с покрытием гель-лаком или классическим лаком. Включает коррекцию формы, обработку кутикулы, нанесение базы, двух слоёв цвета и закрепителя. Длится 60–90 минут, стойкий эффект до 3 недель.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2808945/2a000001999febcdfea34fca43244578644f/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Маникюр Беговая",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Детские стрижки",
+              "categoryItems": [
+                {
+                  "title": "Детская стрижка (до 2 лет)",
+                  "description": "Первая стрижка малышей до 2 лет в игровой форме без стресса и слез. Опытные мастера работают с самыми маленькими клиентами, используя безопасные инструменты и отвлекающие игрушки. Включает сохранение первого локона на память.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/13672565/2a00000199b9daabe2fe42dcbfde89edfcf8/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Первая стрижка ребенка в салоне",
+                  "description": "Торжественная первая стрижка в салоне с особым подходом к маленьким клиентам. Создаем комфортную атмосферу, используем специальные детские кресла и игрушки. В подарок — первый локон в конвертике и памятная фотография.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2413620/2a00000199ba08e74b163a1893351f6c90e7/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Модельная детская стрижка (мальчик/девочка)",
+                  "description": "Индивидуальная модельная стрижка для детей — мальчиков и девочек. Создаем модные образы с учётом формы лица и структуры волос: от аккуратного каре до стильного пикси и классического боба. Включает лёгкую укладку и советы по уходу.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1530321/2a00000199b9e5c9a521bc532d15874ef771/{size}",
+                  "price": "900",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Детская стрижка метро Беговая",
+                  "description": "Аккуратная детская стрижка в дружелюбной атмосфере — мастера умеют найти подход к каждому ребенку. Используем безопасные инструменты, создаем комфортные условия для малышей и подростков. Быстро, качественно, без слез и капризов.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Детская стрижка на Савушкина",
+                  "description": "Аккуратная детская стрижка в дружелюбной атмосфере — мастера умеют найти подход к каждому ребенку. Используем безопасные инструменты, создаем комфортные условия для малышей и подростков. Быстро, качественно, без слез и капризов.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Женские стрижки",
+              "categoryItems": [
+                {
+                  "title": "Короткая стрижка женская",
+                  "description": "Модные женские стрижки на короткие волосы в Приморском районе. Подбираем форму по типу лица, создаём стильный образ с лёгкой укладкой. 10 минут от метро Беговая, на Савушкина.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2760763/2a00000199853b503aa0251cecaffcce76da/{size}",
+                  "price": "1200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Женские стрижки на средние волосы",
+                  "description": "Стильные женские стрижки на средние волосы в Приморском районе — каре, каскад, лесенка до плеч. Подбираем форму с учётом типа лица и структуры волос. Удобно добираться: 10 минут пешком от метро Беговая на Савушкина.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1530321/2a00000199b9f2b8a53c6ba04e9a352997b4/{size}",
+                  "price": "1500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Женские стрижки на длинные волосы",
+                  "description": "Профессиональные стрижки с сохранением длины — каскад, лесенка, градуировка. Подравниваем кончики, создаём объём и красивую форму. Работаем с любым типом волос.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Женская стрижка на Савушкина",
+                  "description": "Профессиональная женская стрижка у Савушкина — от модного боба до элегантного каре. Подбираем форму и длину по типу лица и структуре волос, чтобы создать объёмный и ухоженный образ. Салон в 10 минутах от метро Беговая, удобно добираться пешком.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Женская стрижка у метро Беговая",
+                  "description": "Современные женские стрижки у метро Беговая — боб, каре, каскад и другие виды. Мастера подбирают форму по типу лица и структуре волос, создавая объём и лёгкую укладку. Быстрая запись, салон в пешей доступности.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Сухой срез кончиков волос",
+                  "description": "Профессиональное подравнивание кончиков методом сухого среза — удаляем секущиеся концы без потери длины. Стрижка выполняется на полностью сухих волосах для максимальной точности и здорового вида.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1000",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Льготная стрижка для пенсионеров (будни 10:00-13:00)",
+                  "description": "Специальная акция — профессиональная стрижка для пенсионеров по льготной цене в будние дни с 10:00 до 13:00. Женские и мужские стрижки с учётом возрастных особенностей. При записи необходимо пенсионное удостоверение.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Стрижка чёлки",
+                  "description": "Профессиональная стрижка чёлки с подбором формы по типу лица — прямая, косая, рваная или градуированная. Корректируем длину и густоту, создаём аккуратный контур для обновления образа. Быстро, точно и с учётом особенностей вашей стрижки.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Окрашивание волос",
+              "categoryItems": [
+                {
+                  "title": "Сложное окрашивание (до 3 часов)",
+                  "description": "Индивидуальное сложное окрашивание волос с использованием техники балаяж, омбре, шатуш и растяжки цвета. Процедура до 3 часов: включает подбор оттенков, щадящее осветление, тонирование и уходовую маску для сохранения блеска и здоровья волос. Резул...",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "7400",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Однотонное окрашивание (1,5–2 ч)",
+                  "description": "Профессиональное окрашивание волос в один тон от корней до кончиков за 1,5–2 часа. Включает подбор идеального оттенка по вашему цветотипу, щадящее тонирование и уходовую маску для блеска и мягкости. Подходит для любого типа и длины волос.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/4078836/2a0000019985c4612966a3b7fee1fb377515/{size}",
+                  "price": "3200",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Окрашивание своей краской",
+                  "description": "Профессиональное нанесение окрашивания вашими материалами — работаем с любой краской клиента. Мастер выполнит равномерное распределение, учтёт время выдержки и технику нанесения. Включает мытье и сушку волос. Материалы приносит клиент.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "1600",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Контуринг волос (до 10 прядей, 2 ч)",
+                  "description": "Деликатное контурное окрашивание до 10 прядей вокруг лица за 2 часа. Мастер подберёт оттенки для мягких бликов, подчеркнёт черты и придаст объёма. Включает щадящее осветление, тонирование и восстанавливающую маску для гладкости и блеска.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "4000",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Мужские стрижки",
+              "categoryItems": [
+                {
+                  "title": "Мужская стрижка машинкой (2 насадки)",
+                  "description": "Классическая мужская стрижка машинкой с использованием 2 насадок — быстро, аккуратно и стильно. Короткие виски и затылок с плавным переходом к макушке. Идеально для активных мужчин, которые ценят простоту в уходе и всегда опрятный вид.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2791887/2a00000199c3c95ab8b9d703d2306b595d3d/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Модельная мужская стрижка",
+                  "description": "Модельная мужская стрижка с индивидуальным подходом — создаем стиль с учетом формы лица, типа волос и образа жизни. Сочетание классической техники с креативными элементами для современного мужчины. Включает мытье и укладку.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/1424222/2a00000199b9fe1dc28ec76cb3eb633425b7/{size}",
+                  "price": "1000",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Оформление бороды",
+                  "description": "Профессиональное оформление бороды с подбором формы по типу лица — стрижка, коррекция контуров и укладка. Создаём аккуратный мужской образ с использованием машинки, триммера и профессиональной косметики. Включает оформление усов.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская стрижка метро Беговая",
+                  "description": "Модельная мужская стрижка с индивидуальным подходом — создаем стиль с учетом формы лица, типа волос и образа жизни. Сочетание классической техники с креативными элементами для современного мужчины. Включает мытье и укладку.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Мужская стрижка на Савушкина",
+                  "description": "Модельная мужская стрижка с индивидуальным подходом — создаем стиль с учетом формы лица, типа волос и образа жизни. Сочетание классической техники с креативными элементами для современного мужчины. Включает мытье и укладку.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2701203/2a00000199c3c4691ceed678372745175e65/{size}",
+                  "price": "800",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Брови",
+              "categoryItems": [
+                {
+                  "title": "Коррекция бровей",
+                  "description": "Профессиональная коррекция бровей: моделирование оптимальной формы и лёгкое тонирование хной или краской. Быстро, аккуратно, с учётом вашего типа бровей и оттенка волос.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2808945/2a0000019986cbc9ff365ad4d7e6cc863d2a/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                },
+                {
+                  "title": "Окрашивание бровей",
+                  "description": "Профессиональное окрашивание бровей краской или хной с подбором идеального оттенка. Стойкий результат до 4 недель, чёткий контур и натуральный эффект. Включает коррекцию формы и уходовый гель для сохранения цвета и здоровья волосков.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2899371/2a0000019986d18f64ffcbeac6bece5bcab8/{size}",
+                  "price": "500",
+                  "currency": "₽"
+                }
+              ]
+            },
+            {
+              "categoryName": "Пирсинг ушей",
+              "categoryItems": [
+                {
+                  "title": "Прокол ушей Studex System 75 (прокол+серьги)",
+                  "description": "Безопасный прокол мочек ушей стерильной системой Studex System 75 с минимальной болью и риском. В стоимость 3500 ₽ включены гипоаллергенные серьги-студекс. Быстрое заживление под контролем опытного мастера.",
+                  "photoLink": "https://avatars.mds.yandex.net/get-sprav-products/2773996/2a0000019a0c5ba2483338216c15752a57df/{size}",
+                  "price": "3500",
+                  "currency": "₽"
+                }
+              ]
+            }
+          ]
+        },
+        "eventsPreviews": {
+          "count": 7,
+          "uri": "tycoon_events/1.x",
+          "items": []
+        },
+        "hasStories": false,
+        "houseEncodedCoordinates": "Z0kYdAZpS00GQFtjfXV5dn9jZw==",
+        "region": {
+          "id": 2,
+          "type": 6,
+          "capitalId": 0,
+          "hierarchy": [
+            225,
+            10174,
+            2
+          ],
+          "seoname": "saint-petersburg",
+          "bounds": [
+            [
+              29.647787,
+              59.631827369843656
+            ],
+            [
+              30.982207000000002,
+              60.242925369843654
+            ]
+          ],
+          "longitude": 30.314997,
+          "latitude": 59.938784,
+          "zoom": 11,
+          "names": {
+            "ablative": "",
+            "accusative": "Санкт‑Петербург",
+            "dative": "Санкт‑Петербургу",
+            "directional": "",
+            "genitive": "Санкт‑Петербурга",
+            "instrumental": "Санкт‑Петербургом",
+            "locative": "",
+            "nominative": "Санкт‑Петербург",
+            "preposition": "в",
+            "prepositional": "Санкт‑Петербурге"
+          }
+        },
+        "breadcrumbs": [
+          {
+            "name": "Карты",
+            "type": "root",
+            "url": "https://yandex.ru/maps/"
+          },
+          {
+            "name": "Санкт‑Петербург",
+            "type": "region",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/",
+            "region": {
+              "center": [
+                30.314997,
+                59.938784
+              ],
+              "zoom": 11
+            }
+          },
+          {
+            "category": {
+              "id": "184105814",
+              "name": "Салон красоты",
+              "class": "spa",
+              "seoname": "beauty_salon",
+              "pluralName": "Салоны красоты"
+            },
+            "name": "Салоны красоты",
+            "type": "category",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/category/beauty_salon/184105814/"
+          }
+        ],
+        "events": []
+      }
+    ],
+    "pageCount": 1,
+    "resultsCount": 1,
+    "bounds": [
+      [
+        30.21497608,
+        59.985146
+      ],
+      [
+        30.22358692,
+        59.98946
+      ]
+    ],
+    "categories": [],
+    "filters": [
+      {
+        "id": "worktime",
+        "isTop": true,
+        "name": "открыто",
+        "type": "worktime",
+        "values": {
+          "openNow": {
+            "id": "open_now",
+            "disabled": true,
+            "name": "открыто",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "open24h": {
+            "id": "open_24h",
+            "disabled": true,
+            "name": "круглосуточно",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "openInNextTwoHours": {
+            "id": "open_in_next_two_hours",
+            "name": "",
+            "selected": false,
+            "type": "boolean"
+          },
+          "openAt": {
+            "id": "open_at",
+            "name": "Открыто в указанное время",
+            "type": "datetime",
+            "from": null,
+            "to": null,
+            "minValue": "2026-01-30T00:00:00.000Z",
+            "maxValue": "2026-02-06T00:00:00.000Z"
+          }
+        }
+      },
+      {
+        "id": "payment_by_credit_card",
+        "disabled": true,
+        "name": "Оплата картой",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "car_park",
+        "name": "парковка",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "has_photo",
+        "name": "с фото",
+        "type": "boolean",
+        "selected": false
+      }
+    ],
+    "filterGroups": []
+  }
+}

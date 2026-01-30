@@ -1,0 +1,2239 @@
+{
+  "matchUrls": [
+    " https://px.arcspire.io/yndx?id=9d4cd41a-f59d-4815-8a89-9d30806f5389",
+    "https://a.adspector.io/sync?ssp=69",
+    "https://acint.net/rmatch/?dp=151&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fsapeis%2F%24%7BUSER_ID%7D",
+    "https://ads.betweendigital.com/match?bidder_id=43554&callback_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbetweendigitalis%2F%24%7BUSER_ID%7D",
+    "https://bs.serving-sys.ru/Serving/adServer.bs?cn=sync&c=2&pli=1088653317&rtu=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fyaadserving%2F",
+    "https://cm.a.mts.ru/cm/tech?flowId=0ff25d7e-e56b-471c-8825-9c24c8b56cdc",
+    "https://cm.tns-counter.ru/yacm",
+    "https://cmr.bidderstack.com/yandex/cm?user_id=",
+    "https://cr-frontend.weborama-tech.ru/cr?key=yandex&url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fdmpweborama%2F{WEBO_CID}",
+    "https://dm.hybrid.ai/match?id=182",
+    "https://dm.hybrid.ai/yandexdmp-match",
+    "https://dmg.digitaltarget.ru/1/119/i/i?i=1769702159",
+    "https://dsp.mpartner.digital/dmp/syncsspdmp?sspid=4",
+    "https://euw-ice.360yield.com/server_match?partner_id=N&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fazerionis%2F{PUB_USER_ID}",
+    "https://events.myweb3id.io/cookie-sync/yandex?userId={DSP_UID}",
+    "https://exchange.buzzoola.com/cookiesync/redirect/yandex?redirect_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbuzzooladspis%2F%24%7BUUID%7D",
+    "https://eye.targetads.io/sync/yandex/",
+    "https://kimberlite.io/rtb/sync/yandex",
+    "https://kimberlite.io/rtb/sync/yandex_direct",
+    "https://match.new-programmatic.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://match.targetrtb.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://mitdmp.whiteboxdigital.ru/pixel?id=a&source=yandex&redirect=false&href=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fqbitis%2F%7Bmiid%7D",
+    "https://nr.bidderstack.com/yandex/cm?user_id={partner_user_id}",
+    "https://pixel.dsp.onetarget.ru/yandex/sync",
+    "https://px.adhigh.net/p/cm/yandexssp",
+    "https://rtb-eu-warsaw.intent.ai/um/y",
+    "https://rtb.dynotech.io/yndx/sync/",
+    "https://s.uuidksinc.net/match/501",
+    "https://shopnetic.com/api/rtb/dmp/pixel?partner=yandex",
+    "https://sm.rtb.mts.ru/p?ssp=yandex&id=map",
+    "https://sp.linkssp.ru/cm?key=e4fb10164a09f3d874b563de89b97a56&location=http%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Flinksspis%2F%7Buid%7D",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?dsp_id=109",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?ssp_id=19",
+    "https://ssp.al-adtech.com/api/sync/yandex",
+    "https://sync.bumlam.com/?src=yandex2",
+    "https://sync.dmp.otm-r.com/match/yandexortb",
+    "https://sync.gonet-ads.com/match/yandex?id=[buyerUid]",
+    "https://sync.upravel.com/yandex/sync",
+    "https://sync.upravel.com/yandex2/sync",
+    "https://t.adx.opera.com/pub/sync?pubid=pub9166643429696",
+    "https://tracker.smartcallback.ru/matching/yandex-direct",
+    "https://tt.ttarget.ru/rtb/ya/sync",
+    "https://x01.aidata.io/0.gif?pid=YANDEX",
+    "https://yandex-dmp-sync.rutarget.ru/sync",
+    "https://yandex-sync.rutarget.ru/sync",
+    "https://yandex.ru/an/mapuid/admaticssp/ ",
+    "https://yandex.ru/an/mapuid/adobedmp/",
+    "https://yandex.ru/an/mapuid/betweenru/",
+    "https://yandex.ru/an/mapuid/mailweb/",
+    "https://yandex.ru/an/mapuid/operacom/",
+    "https://yandex.ru/an/mapuid/operaru/",
+    "https://yandex.ru/an/mapuid/sbersellssp/",
+    "https://yandex.ru/an/mapuid/soltadspis/~uid~",
+    "https://yandex.ru/an/mapuid/viberssp/",
+    "https://yandex.ru/an/mapuid/videonowssp/"
+  ],
+  "visibilitySettings": {
+    "delay": 2000,
+    "bannerVisibilityPercent": 30
+  },
+  "direct": {
+    "ads": [
+      {
+        "bs_data": {
+          "deviceType": 5,
+          "blockId": 3948,
+          "bannerLang": "1",
+          "punyDomain": "events.yandex.ru",
+          "blockFavicon": "0",
+          "bannerFlags": "age18,mass_media",
+          "isSmartTga": false,
+          "count_links": {
+            "abuseUrl": "https://yandex.ru/an/abuse/WCiejI_z8oVX2LdzzGK0Kued9GoWurJ9ep60SWb2YA027bi9nGmEraOFafoh2bk4Z2h2mIp2YnCtNqDMDYF88cPL25CgRwWOwM4Y4eDCcGQPhD_AwBIkwtgCc8OHBoS0INJ3kw42qos1GWWx-O_GqjIZ80KjI-zUqfV_LnEpiHydGDVZBUk_7YkeqzNvBQthJ5X1dQxEQtFW8dEbKgaK8g7fWgtyelmkwWRu0EqcIH48_50EI0AUf-YpWuGDTNUfydIIn_4fPYMPTObF1m00~2",
+            "viewabilityTracking": [
+              {
+                "url": "https://yandex.ru/an/tracking/WXKejI_zOoVX2Lbo0JqG06FUT0Oi9ad0V041dGuXzY0QFOYoRq9kn9EJyWGAsqvZXfqolRX3NkexunuqtQjG1tmcGDpC8TCvEtGQlPst3VFXZnQdoL7v41xwuAN5YaqMF-mU12CzZ75OIGIYjTtAekT1x0VWcd1oqrX10aat0toLC82EKoMFnW3A9GWXWWfuR2KKCpXOV_ErqOCavwh25Y6ZYd0mO-0WxjbYsJ1kyjWtY4LuSUAcOUnhoCqaQ5vzDMEPcZ0zLWLRmotX10w0QsBDofE7xmMB0NnfS5SMmDO1hGx-eiMAJHOnw4idAdDNzjsDoWMk0Oj9BEmbF6q1KkbOKRHOs9Pm0blGVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ6v2Se6Z3aXR7YaKyKrTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDFRPFFY2BZn_sEnN43vv01zV_FgMallSf9VMv9NWO-Jkj9ZNsjVw8RlvPVqGtCyqnXCno08swhkjOsan12bgMtYb8GSlIMzybHSZdoV-hYTdOZnEWw_6MzL-F5TJfwloMrdKchA1EL-Ur8vh4DVbiXctLeDTZva38WOlCbKgbKeY4fWisZQJyH1wGe06bKgaC3lp6e80xtZI0HMwhQIwYOmyUTMTSwi8eHFgF3HnFbMexzX2tVwz8O9zrTU3zifl_0m00~2?action-id=25",
+                "time": 5000
+              },
+              {
+                "url": "https://yandex.ru/an/tracking/WXKejI_zOoVX2Lbo0JqG06FUT0Oi9ad0V041dGuXzY0QFOYoRq9kn9EJyWGAsqvZXfqolRX3NkexunuqtQjG1tmcGDpC8TCvEtGQlPst3VFXZnQdoL7v41xwuAN5YaqMF-mU12CzZ75OIGIYjTtAekT1x0VWcd1oqrX10aat0toLC82EKoMFnW3A9GWXWWfuR2KKCpXOV_ErqOCavwh25Y6ZYd0mO-0WxjbYsJ1kyjWtY4LuSUAcOUnhoCqaQ5vzDMEPcZ0zLWLRmotX10w0QsBDofE7xmMB0NnfS5SMmDO1hGx-eiMAJHOnw4idAdDNzjsDoWMk0Oj9BEmbF6q1KkbOKRHOs9Pm0blGVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ6v2Se6Z3aXR7YaKyKrTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDFRPFFY2BZn_sEnN43vv01zV_FgMallSf9VMv9NWO-Jkj9ZNsjVw8RlvPVqGtCyqnXCno08swhkjOsan12bgMtYb8GSlIMzybHSZdoV-hYTdOZnEWw_6MzL-F5TJfwloMrdKchA1EL-Ur8vh4DVbiXctLeDTZva38WOlCbKgbKeY4fWisZQJyH1wGe06bKgaC3lp6e80xtZI0HMwhQIwYOmyUTMTSwi8eHFgF3HnFbMexzX2tVwz8O9zrTU3zifl_0m00~2?action-id=26",
+                "time": 10000
+              }
+            ],
+            "sitelinks": [
+              {
+                "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+              },
+              {
+                "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+              },
+              {
+                "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+              },
+              {
+                "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+              }
+            ],
+            "tracking": "https://yandex.ru/an/tracking/WXKejI_zOoVX2Lbo0JqG06FUT0Oi9ad0V041dGuXzY0QFOYoRq9kn9EJyWGAsqvZXfqolRX3NkexunuqtQjG1tmcGDpC8TCvEtGQlPst3VFXZnQdoL7v41xwuAN5YaqMF-mU12CzZ75OIGIYjTtAekT1x0VWcd1oqrX10aat0toLC82EKoMFnW3A9GWXWWfuR2KKCpXOV_ErqOCavwh25Y6ZYd0mO-0WxjbYsJ1kyjWtY4LuSUAcOUnhoCqaQ5vzDMEPcZ0zLWLRmotX10w0QsBDofE7xmMB0NnfS5SMmDO1hGx-eiMAJHOnw4idAdDNzjsDoWMk0Oj9BEmbF6q1KkbOKRHOs9Pm0blGVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ6v2Se6Z3aXR7YaKyKrTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDFRPFFY2BZn_sEnN43vv01zV_FgMallSf9VMv9NWO-Jkj9ZNsjVw8RlvPVqGtCyqnXCno08swhkjOsan12bgMtYb8GSlIMzybHSZdoV-hYTdOZnEWw_6MzL-F5TJfwloMrdKchA1EL-Ur8vh4DVbiXctLeDTZva38WOlCbKgbKeY4fWisZQJyH1wGe06bKgaC3lp6e80xtZI0HMwhQIwYOmyUTMTSwi8eHFgF3HnFbMexzX2tVwz8O9zrTU3zifl_0m00~2",
+            "linkHead": "https://yandex.ru/an/count/WNSejI_zOoVX2LaE0KqB02EJIILG264d_n5Q4gZYGJHw46M_u_M6Ero_azLnz3exdPFrENeUZG6KIn1211Nms4eePd2mp0xVe0vUtmREShFrFMmQcLwRCjZ6grGgbKeDD8BOx33XjzK4YrJMt6QZUxui5jGtd2SfX8CP0mTn01ku6iP9m9veDUpD961Fj1gsleOSGxDzqcWzJJP3umGjJgQ80mZx0B9P0j2tO30ldQZCNTbtDoeNk2KyRG5IwLXHj5ZOVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZEufwBIkwzWOiOSnqp3Y2bfTX_4k9m19TCExeGBJBO5223lvZz3Ir6CsT_yR0sZKTLt7qcOV-AW8HJTkiLlI0q86BoAWuMJeR0vSf109JHSiA3-GBHG6j9iaHHJySYQFuO8B12uhHEsxlLFk6QOXYI92HfLcVoxKrWijKTN44nKEVrjxoG7km_k-qzs5XS8yrJM3Zt1uKM29oWC0~2",
+            "viewNotices": [
+              "https://yandex.ru/an/count/WNSejI_zOoVX2LaE0KqB02EJIILG264d_n5Q4gZYGJHw46M_u_M6Ero_azLnz3exdPFrENeUZG6KIn1211Nms4eePd2mp0xVe0vUtmREShFrFMmQcLwRCjZ6grGgbKeDD8BOx33XjzK4YrJMt6QZUxui5jGtd2SfX8CP0mTn01ku6iP9m9veDUpD961Fj1gsleOSGxDzqcWzJJP3umGjJgQ80mZx0B9P0j2tO30ldQZCNTbtDoeNk2KyRG5IwLXHj5ZOVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZEufwBIkwzWOiOSnqp3Y2bfTX_4k9m19TCExeGBJBO5223lvZz3Ir6CsT_yR0sZKTLt7qcOV-AW8HJTkiLlI0q86BoAWuMJeR0vSf109JHSiA3-GBHG6j9iaHHJySYQFuO8B12uhHEsxlLFk6QOXYI92HfLcVoxKrWijKTN44nKEVrjxoG7km_k-qzs5XS8yrJM3Zt1uKM29oWC0~2=WYSejI_zOoVX2Lb_0SqG0AGUSrtk4Ny2t8-O4eW1WxhLBf01lhs0seA1lhs0se81k068jf6zAjW1sAlLeGNW0SpUYvm1w07y0VW1th3UlW6O0eYjumgW0eYjumgm0mBe1Du8Y0NuWCK1a0McYwy2i0MBYpAu1Pk7JS05vEUW0SW5bV4eq0MAYpBm1G6e1WIf1-SQnBNcdGa3k0Vu1m6020BG28A8W872a806u0Z4rh45mEqQw0oJ2fWD_loL0OaEY13FygFC1g70W910c16gmbcX4UnHk1w5wx6O4mYe4-xmWfx0n_B56DcYozcYozwmthu1c1Urr_iik1S1m1VLrW6W6GI16l__Sydz9qSye1h4pv_4tucYqpAX7HfpAa_m6jS_g1u1i1zio1_dkwxG0gaWalMvdqbs-p-u8Ah2MOWYnVURuD71diTna2B4lbcG8iM-MP0YnhvPa2B7lbcG8iY-MP0YoRvPa2BAlbcG8gh2MP0Ygy9Pa2AimbcG8gt2MP0Yhi9PpSpCpCpCvC0Ztvw0hK7o8n3wFv73vne00ACCbkI8IGO0k2JX0S8a0J7A90CoCZNO9803u2Ji0kWa4l0aijlPuxl4yE3L0Vae0000OF9HIZ-0AG-mAO-6xii6W2hX0Uagyou5uA1g2d_uAili9u0jyTwF38Wj30xyoEIR1mBWRh-_Is78FNqkB0E-bG4apBPR62e_6xhZjFv_h8OvsJabXUGo0G00~2"
+            ],
+            "advertInfoUrl": "https://yandex.ru/ads/advertiser_info/WCiejI_z8oVX2LdzzGK0Kued9GoWurJ9ep60SWb2YA027bi9nGmEraOFafoh2bk4Z2h2mIp2YnCtNqDMDYF88cPL25CgRwWOwM4Y4eDCcGQPhD_AwBIkwtgCc8OHBoS0INJ3kw42qos1GWWx-O_GqjIZ80KjI-zUqfV_LnEpiHydGDVZBUk_7YkeqzNvBQthJ5X1dQxEQtFW8dEbKgaK8g7fWgtyelmkwWRu0EqcIH48_50EI0AUf-YpWuGDTNUfydIIn_4fPYMPTObF1m00~2",
+            "falseClick": "https://yandex.ru/an/count/WcKejI_zOoVX2Ldb0RqI00DYXGOi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtkCfc15d4h0fXIkKD5ICzJ4HYq754vEFZu-DJei5TMW5Q3UxG2j1gS7TMW5Q3ExC2j1hSbHMWrQ1khm2j1dLw1MWrg0iNeDMW3aa1MWtgyWhGQb1tf02j1dLu1MX5GE9Ln8_CnUL80LaDxifolYQyr8WW2DmMgvmkBKwJe_8XFFJ1wpqqUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3NsettoGHiHo5Ua2LuDpi33nZmHI_fVBvXQh81x3Ty0zZ05U75YTk6hQyZz19g43UJW3tHQjYRIS2UQ3LiwQcQigyXSpZYY0JiXMrafE76q6pNh3nv-5wm6C2N1dTb0MmTqEhWBxumnoKOiYKyRG5IwLXHj5ZOMjZXVKXEpcmfNFcjZ7vp1VpN0l5Yo4rTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDlT_ub8hwuWEo-FXXlrD1_E09T73zxrDAwdjfDQcnh_L7TFFFnX0oo_JI6q2ZhkiwbZRxm4T5ABgHWXIqBBrJa8AMfRSoTDRN4Ne9lTbB-hBlaYBay-J_rSHixCS9qFLuo_glnmhgT7LCM46ThivhHpI9Q_BP3DkgmHouI24IcYuelttJGHAqcoH54_n2XTjtAlqa3XanjJaZD5lb6WIGEHq4bww7dygj7memCzDqvjbmj-igj3CM3V4lL4VFN2AjZ7muX1SbSWuY~2=WVyejI_zOoVX2Lb70OqF06GSnQLLvqS2t8-O4eW1WxhLBf01lhs0seA1lhs0se81k068jf6zAjW1sAlLeGNW0SpUYvm1w07y0VW1th3UlW6O0eYjumgW0eYjumhe1Du8Y0NuWCK1a0McYwy2i0MBYpAu1Pk7JS05vEUW0SW5bV4eq0MAYpBm1G6e1WIf1-SQnBNcdGa3k0Vu1m6020BG28A8W872a806u0Z4rh45mEqQw0oJ2fWD_loL0OaEY13FygFC1g70W910c16gmbcX4UnHk1w5wx6O4mYe4-xmWfx0n_B56DcYozcYomRG5jwmthu1c1Urr_iik1S1m1VLrW6W6GI16l__Sydz9qSye1h4pv_4tucYqpAX7HfpAa_m6jS_g1u1y1u1i1zio1_dkwxG0gaWalMvdqbs-p-u8Ah2MOWYnVURuD71diTna2B4lbcG8iM-MP0YnhvPa2B7lbcG8iY-MP0YoRvPa2BAlbcG8gh2MP0Ygy9Pa2AimbcG8gt2MP0Yhi9PpSpCpCpCvF8Z4Fe_aSFd6W00emoMv8X91W2u9E41mYG1CSea0p8oDVae0000OF9HIZ-0AG-mAO-6xii6W2hX0Uagyou5uA1g2d_uAili9mpyj-JdGO49jFrPKx0hF2tmy9Or_zKBIndWIJMxTTslpbye-PVo0BC6~2",
+            "empty": "https://yandex.ru/an/resource/spacer.gif?",
+            "url": "https://yandex.ru/an/count/Wi8ejI_zOoVX2Lc70gKL06DdcGOi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5Auqo6JzLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_J7fm0NO-thFzwhA1ELyU45TJfwhnsH9Eu9f_DiAqQp86Bp9LAfLA8XAOBjjTr7SDIX_8xwG8x0UqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75NAuvKYobkBiIRUUKFupypg_TCwSIQUK6S3u1~2",
+            "count": "https://yandex.ru/an/count/WbOejI_zOoVX2Ld10KKI0BGWHSkfDN5i6VS50C4FWtjf-haWY063kjKkc06-lO3QWW6u0OYsaRqgs07OgzMX1U01pDwBd07e0Vm1Y08Bc0A8hUCAy0A6wlJM0VW2We20W83m4UW4tWY81VY0nG6G1QQBhmAm1OkBChW5cuTDm0Navw01o0MLyIZG1OgBCl05oGRpBWNWe6eAVwa7vnh4jUQT2GEu1_W70O080j08WeY0WSAGW0RW2CJMiGN0xHg02vW1amgO3VxybG693fWEyzsKW8xKceL_Y13FygFCeS20a42O4Qh2MQ4Hx56u7eNhiPWJ2AWJxl22di37yiKOu1G1w1IC0fWMaDcYomQW5f3Peii6q1RUiDw-0PWNjTVxBAWN4RWN0S0NrTO1e1a4i1c16l__Sydz9qSye1h4pv_4tucYqpAm6h6RoCVIz861r06270r4T34wJqbgIZXYLpOueHqQSofFy1hNFwWU0R0VRCWVvxkkq0Af89BrkPz9Tli_k22gmbc88iNtc-3HmPx7SP0YnBvPa2B5lbcG8iQ-MP0YnxvPa2B8lbcG8ic-MP0YohvPa2AgmbcG8gl2MP0YhC9Pa2AjmbcG8gx2MStCpCpCpEJo8n3wFv73vne00ACCbkI8IGO0g2JX0R0a0RWauG72904noYG3CZ8r-IW0001Wyb5AFu0f3x0fZuRkomQ0Ak41wIhuAili9n7yWeJRLodz9FQ8C7Kn8ogQRK0sT99TsxX7hM78JqAWS2O7MEs-1DYp9Vlke-kPkD9AoP0xl2ZjnBq1~2=WYOejI_zOoVX2Lbk0SKG0DGUIidJQ6u2t8-O4eW1WxhLBf01lhs0seA1lhs0se81k068jf6zAjW1sAlLeGNW0SpUYvm1w07y0VW1th3UlW6O0eYjumgW0eYjumgm0mBe1Du8Y0NuWCK1a0McYwy2i0MBYpAu1Pk7JS05vEUW0SW5bV4eq0MAYpBm1G6e1WIf1-SQnBNcdGa3k0Vu1m6020BG28A8W872a806u0Z4rh45mEqQw0oJ2fWD_loL0OaEY13FygFC1g70W910c16gmbcX4UnHk1w5wx6O4mYe4-xmWfx0n_B56DcYozcYomRG5jwmthu1c1Urr_iik1S1m1VLrW6W6GI16l__Sydz9qSye1h4pv_4tucYqpAX7HfpAa_m6jS_g1u1i1zio1_dkwxG0gaWalMvdqbs-p-u8Ah2MOWYnVURuD71diTna2B4lbcG8iM-MP0YnhvPa2B7lbcG8iY-MP0YoRvPa2BAlbcG8gh2MP0Ygy9Pa2AimbcG8gt2MP0Yhi9PpSpCpCpCvC0Ztvw0hK7o8n3wFv73vne00ACCbkI8IGO0k2JX0S8a0J7A90CoCZNO9803u2Ji0kWa4l0aijlPuxl4yE3L0Vae0000OF9HIZ-0AG-mAO-6xii6W2hX0Uagyou5uA1g2d_uAili9u0jyTwF38Wj30pyj-IR1uBNRd_SBXWLpXPiUD7YV_k2fGzv4ivotLYiuw-N_4jvQ5a3~2",
+            "linkTail": "=WYWejI_zOoVX2Lbr0TKG0DGUx5FmaNK2t8-O4eW1WxhLBf01lhs0seA1lhs0se81k068jf6zAjW1sAlLeGNW0SpUYvm1w07y0VW1th3UlW6O0eYjumgW0eYjumgm0mBe1Du8Y0NuWCK1a0McYwy2i0MBYpAu1Pk7JS05vEUW0SW5bV4eq0MAYpBm1G6e1WIf1-SQnBNcdGa3k0Vu1m6020BG28A8W872a806u0Z4rh45mEqQw0oJ2fWD_loL0OaEY13FygFC1g70W910c16gmbcX4UnHk1w5wx6O4mYe4-xmWfx0n_B56DcYozcYomRG5jwmthu1c1Urr_iik1S1m1VLrW6W6GI16l__Sydz9qSye1h4pv_4tucYqpAX7HfpAa_m6jS_g1u1i1zio1_dkwxG0gaWalMvdqbs-p-u8Ah2MOWYnVURuD71diTna2B4lbcG8iM-MP0YnhvPa2B7lbcG8iY-MP0YoRvPa2BAlbcG8gh2MP0Ygy9Pa2AimbcG8gt2MP0Yhi9PpSpCpCpCvC0Ztvw0hK7o8n3wFv73vne00ACCbkI8IGO0k2JX0S8a0J7A90CoCZNO9803u2Ji0kWa4l0aijlPuxl4yE3L0Vae0000OF9HIZ-0AG-mAO-6xii6W2hX0Uagyou5uA1g2d_uAili9u0jyTwF38Wj30tylkIR1mBRRd_gBXWLFXTiUD_YVmc3fHPvqizotJYjuw-NXWbfd9A2shG0~2"
+          },
+          "uniq": "635015276347927183",
+          "hidePermalinkInfo": false,
+          "vmap_request_id": "0",
+          "isOffer": false,
+          "semanticCorrespondenceType": 0,
+          "yclid": "4343484336582164479",
+          "templateId": 320,
+          "clientType": 1,
+          "bmcategoryId": "200002607",
+          "pageId": "265853",
+          "isMulticardsDisabled": true,
+          "clientTin": "7736207543",
+          "disclaimersProto": {
+            "Disclaimers": [
+              {
+                "CanBeHiddenInKebab": false,
+                "Disclaimer": "18+",
+                "Size": 0,
+                "MarkupFlags": [
+                  10025
+                ]
+              }
+            ]
+          },
+          "minDisplayNewMarketRating": "40",
+          "sitelinksType": 2,
+          "isNeuralPicture": false,
+          "permalinkId": "0",
+          "oid": "706390764",
+          "bannerWidth": 0,
+          "hitLogId": "218879671121746663",
+          "clientAlternativeTin": "",
+          "addHyperlocalAsset": false,
+          "domain": "events.yandex.ru",
+          "clientName": "ООО «ЯНДЕКС»",
+          "creativeId": "C0",
+          "bannerCategories": [
+            "200002607"
+          ],
+          "popup": false,
+          "domainId": "11299652",
+          "bidreqid": "218879671629519591",
+          "orderTags": [],
+          "order": {
+            "goal_ids": [],
+            "delivery_data": {
+              "meta": {}
+            },
+            "counter_id": 26758710
+          },
+          "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479",
+          "position": 1,
+          "impId": "11",
+          "warning": "18+",
+          "callToAction": {
+            "url": "",
+            "value": "Подробнее"
+          },
+          "adId": "72057611580608351",
+          "geoDistance": "",
+          "requestRegion": "ru",
+          "algId": "3",
+          "resource_links": {
+            "direct_data": {
+              "targetUrl": "https://yandex.ru/an/count/Wi8ejI_zOoVX2Lc70gKL06DdcGOi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5Auqo6JzLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_J7fm0NO-thFzwhA1ELyU45TJfwhnsH9Eu9f_DiAqQp86Bp9LAfLA8XAOBjjTr7SDIX_8xwG8x0UqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75NAuvKYobkBiIRUUKFupypg_TCwSIQUK6S3u1~2",
+              "textName": "https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc80fKL04Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_xF0zEWAx7MzP_FLPGfwjZmWhgT7LUEw99N9FFPjXM3UR0HUPAfL8fH4BJ1TlhkevXcLL-5a0Xb81sawG85ln3wdP84N6J62knX_v_2Y_eVUJUNdwLWUdqND5W_Qve2kL217dpFB1E_rkN6gw11LrkfkvCObZSxQgsfzSWI7xEBz0pKOcqCbqWdm00~2",
+              "assets": {
+                "button": {
+                  "href": "https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc80fKL04Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHylmJmu0ReURrd_zLX1dQwE2IkeqzLvxOWcSKq-cs5RDPW35vahbKgb40bD5solwpg6PLRvwmvc203j9aaH5ln3wdP84N6J62knX_v_2Y_eVUJUNdwLWUdqND5W_Qve2kL217dpFB1E_rkN6gw11LrkfkvCObZSxQgsfzSWI7xEBz0pKOcqCbqWdm00~2"
+                }
+              },
+              "sitelinks": {
+                "href4": "https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc70fKL03Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzxyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfHV0mwUA42xIL845ln3wdP64N5J62kn1_v_wYxeVUBUNdgLWUdqMD7W_Ave2kL017dJFB1E_LkN5gw1nLnkPkvCOb3SxOgsfzSSHdxEBz0pKOcqCbqWdm00~2",
+                "href3": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_NU702T3tUilxhiO8wNHqJLb2dg_FQ4KtYcdmsmxPgC0SkCbSgbKeX4feks5xNTGnB7SgFWsKZ2kqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75N6vcxanYKDpjYhQdrnn6Viulq3DHYRGoNI2V~2",
+                "href1": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzNyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfGVGmcs36WtIOeM_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75N6vcxanYKDpjYhQdrnn6Viulq3DHYRGoNI2V~2",
+                "href2": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzZyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfJVwwjX1BIR94KM_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyS9qYOPSMhft576zcxanZK5piYhRBQmuZlyvlq3DJYRGotGwV~2"
+              }
+            }
+          },
+          "bannerLanguage": "ru",
+          "phraseId": "97869059",
+          "sourceDomain": "maps.yandex.ru",
+          "liked": "0",
+          "productType": "direct",
+          "brandType": 0,
+          "campaignid": "706390764",
+          "backgroundColor": "",
+          "agencyClientId": "0",
+          "geoDistanceRegular": "",
+          "hidePicture": "1",
+          "isTurboBanner": false,
+          "closeCounter": "https://yandex.ru/an/count/542/5736419724711789763",
+          "hideExternalData": false,
+          "isNeuralVideo": false,
+          "eventHash": "12651176455177235280",
+          "titleUrl": "https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc70fKL03Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHztuC49qFLuo_glnmhgT7LCM46ThivhHpI9Q_BP3DkgmHouo5ofL2g5I6YwO7jTrp4iTIZ_ZMKW1z1kaXG15ln3wdP64N5J62kn1_v_wYxeVUBUNdgLWUdqMD7W_Ave2kL017dJFB1E_LkN5gw1nLnkPkvCOb3SxOgsfzSSHdxEBz0pKOcqCbqWdm00~2?q=",
+          "clientRegion": "",
+          "clientId": "94301109",
+          "isAbandonedCartBanner": false,
+          "directTitle": {
+            "url": "https://direct.yandex.ru/?partner",
+            "title": "Реклама"
+          },
+          "isGeoPinPage": false,
+          "sourceInterface": "direct",
+          "bannerHeight": 0,
+          "pathUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+          "skipPictures": "1",
+          "erid": "j1SUn8bNCyTFAvbYU",
+          "addInfo": {
+            "type": "callouts",
+            "callouts_list": [
+              "Доклады экспертов",
+              "Нетворкинг",
+              "Дискуссионные зоны"
+            ]
+          },
+          "isErir": 0,
+          "sad": "",
+          "S2SEnabled": false
+        },
+        "direct_data": {
+          "banner_proto": {
+            "GrutObject": {
+              "status": {
+                "materialized_metrika_counters": {
+                  "manual_counters": [
+                    "26758710"
+                  ]
+                },
+                "materialized_fields": {
+                  "href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                  "sitelink_set": {
+                    "sitelinks": [
+                      {
+                        "href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                        "title": "О мероприятии"
+                      },
+                      {
+                        "href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                        "title": "Спикеры"
+                      },
+                      {
+                        "href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                        "title": "Регистрация"
+                      },
+                      {
+                        "href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                        "title": "Вопросы"
+                      }
+                    ]
+                  },
+                  "button_href": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1",
+                  "language": 1
+                },
+                "moderation_status": {},
+                "target_url": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1"
+              },
+              "spec": {
+                "button": {
+                  "text": "Перейти на сайт",
+                  "action": 1
+                },
+                "phone_view": {
+                  "spec": {}
+                }
+              },
+              "meta": {
+                "direct_id": "17542680415",
+                "direct_type": 1
+              }
+            },
+            "AvatarsMetaData": {
+              "ImagesInfo": [
+                {
+                  "AvatarsBasePublicUrl": "//avatars.mds.yandex.net/get-direct/4600595/X0r5XEvyMcNbhs1mLG-1Rw/",
+                  "ParsedMdsMeta": {
+                    "AverageColor": "#EED77AFF",
+                    "ColorWizBack": "#F4D96D",
+                    "IsClipart": false,
+                    "IsPhoto": false,
+                    "Crc64": "14073068541794946643",
+                    "ColorWizButtonText": "#2F2F2F",
+                    "ColorWizButton": "#D6C064",
+                    "BackgroundColors": {
+                      "Left": "#F9DB63FF",
+                      "Bottom": "#F9DB63FF",
+                      "Top": "#F9DB63FF"
+                    },
+                    "SecondColor": "#F8F8F8",
+                    "ROrigSize": {
+                      "Y": 1080,
+                      "X": 1080
+                    },
+                    "MainColor": "#F8D860",
+                    "ImageQuality": 0,
+                    "AverageBorderColor": "#F4D96D",
+                    "Sha256": "aa7cc90ee04f5b3fc868806748068b2ca0bb8105af96279596fa98a3a27c1b77"
+                  },
+                  "ImageType": "regular",
+                  "Images": [
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 12,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 49,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 4,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 150,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 49,
+                          "H": 188,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 338,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 599,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 599,
+                          "Y": 197,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 18,
+                          "W": 449,
+                          "Y": 0,
+                          "H": 599,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 449,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x600",
+                      "Width": "600",
+                      "Height": "600",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 599,
+                        "W": 599
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 74,
+                          "H": 282,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 507,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 295,
+                          "H": 313,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 27,
+                          "W": 674,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 674,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y900",
+                      "Width": "900",
+                      "Height": "900",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 899,
+                        "W": 899
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 74,
+                          "H": 282,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 507,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 295,
+                          "H": 313,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 27,
+                          "W": 674,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 674,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x900",
+                      "Width": "900",
+                      "Height": "900",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 899,
+                        "W": 899
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 49,
+                          "H": 188,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 338,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 599,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 599,
+                          "Y": 197,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 18,
+                          "W": 449,
+                          "Y": 0,
+                          "H": 599,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 0,
+                          "H": 449,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y600",
+                      "Width": "600",
+                      "Height": "600",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 599,
+                        "W": 599
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 1079,
+                          "Y": 89,
+                          "H": 338,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 1079,
+                          "Y": 0,
+                          "H": 608,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1079,
+                          "Y": 0,
+                          "H": 1079,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1079,
+                          "Y": 354,
+                          "H": 375,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 32,
+                          "W": 809,
+                          "Y": 0,
+                          "H": 1079,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 1,
+                          "W": 1079,
+                          "Y": 0,
+                          "H": 809,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x1200",
+                      "Width": "1080",
+                      "Height": "1080",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 1079,
+                        "W": 1079
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 25,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 98,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 9,
+                          "W": 225,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 225,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 300,
+                        "W": 300
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 37,
+                          "H": 141,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 253,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 148,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 13,
+                          "W": 337,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 450,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 12,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 49,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 4,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 150,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 7,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 30,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 3,
+                          "W": 67,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 90,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 15,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 59,
+                          "H": 63,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 5,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 180,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 7,
+                          "H": 25,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 0,
+                          "H": 45,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 26,
+                          "H": 28,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 2,
+                          "W": 60,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 0,
+                          "H": 60,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x80",
+                      "Width": "80",
+                      "Height": "80",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 80,
+                        "W": 80
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 15,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 59,
+                          "H": 63,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 5,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 180,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 37,
+                          "H": 141,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 253,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 148,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 13,
+                          "W": 337,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 450,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 7,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 30,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 3,
+                          "W": 67,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 90,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 25,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 98,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 9,
+                          "W": 225,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 225,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 300,
+                        "W": 300
+                      }
+                    }
+                  ],
+                  "AvatarsImage": {
+                    "ImageName": "X0r5XEvyMcNbhs1mLG-1Rw",
+                    "ImageGroupId": "4600595",
+                    "Namespace": "direct"
+                  }
+                }
+              ]
+            },
+            "ComputedFields": {
+              "Title": "Я люблю Фронтенд 2026 — конференция Яндекса",
+              "CalloutList": [
+                {
+                  "ID": "41453143",
+                  "Text": "Доклады экспертов"
+                },
+                {
+                  "ID": "24871602",
+                  "Text": "Нетворкинг"
+                },
+                {
+                  "ID": "25007729",
+                  "Text": "Дискуссионные зоны"
+                }
+              ],
+              "TitleExtension": "Для фронтенд-комьюнити",
+              "Options": {
+                "IsPicture": true
+              },
+              "Site": "events.yandex.ru",
+              "Age": "18+",
+              "Body": "Доклады экспертов, дискуссии и нетворкинг 14.02 в Москве и онлайн. Присоединяйтесь!",
+              "ExternalData": {}
+            },
+            "Resources": {
+              "Favicon": {
+                "UpdateTime": "1769670095",
+                "OriginalHeight": "512",
+                "OriginalWidth": "512"
+              },
+              "UrlClassifiers": {},
+              "Url": {
+                "EcomFeatures": [
+                  {
+                    "OneProductProbability": 0.0017555017,
+                    "ManyProductsProbability": 0.0056118551
+                  }
+                ]
+              },
+              "MarketModel": {},
+              "AutotargetingFeatures": {},
+              "MarketData": {}
+            }
+          }
+        },
+        "pcode_data": {
+          "sitelinks": [
+            {
+              "url": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzNyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfGVGmcs36WtIOeM_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75N6vcxanYKDpjYhQdrnn6Viulq3DHYRGoNI2V~2",
+              "title": "О мероприятии",
+              "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzZyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfJVwwjX1BIR94KM_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyS9qYOPSMhft576zcxanZK5piYhRBQmuZlyvlq3DJYRGotGwV~2",
+              "title": "Спикеры",
+              "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WhyejI_zOoVX2Lc70eqL03Edc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_NU702T3tUilxhiO8wNHqJLb2dg_FQ4KtYcdmsmxPgC0SkCbSgbKeX4feks5xNTGnB7SgFWsKZ2kqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75N6vcxanYKDpjYhQdrnn6Viulq3DHYRGoNI2V~2",
+              "title": "Регистрация",
+              "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+            },
+            {
+              "url": "https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc70fKL03Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHzxyE04w7gyPVtNOmLrkZechA1EL-Ur8vh4DVbiXctLO0vSPAvKAfL293HTiBskwnYMEfHV0mwUA42xIL845ln3wdP64N5J62kn1_v_wYxeVUBUNdgLWUdqMD7W_Ave2kL017dJFB1E_LkN5gw1nLnkPkvCOb3SxOgsfzSSHdxEBz0pKOcqCbqWdm00~2",
+              "title": "Вопросы",
+              "targetUrl": "https://events.yandex.ru/events/ya-love-frontend-2026?utm_source=yandex&utm_medium=cpc&utm_campaign=yalf0226&utm_content=rsya_g1&utm_term=bnr1&yclid=4343484336582164479"
+            }
+          ],
+          "warning": "18+",
+          "body": "Доклады экспертов, дискуссии и нетворкинг 14.02 в Москве и онлайн. Присоединяйтесь!",
+          "domain": "events.yandex.ru",
+          "punyDomain": "events.yandex.ru",
+          "title": "Я люблю Фронтенд 2026 — конференция Яндекса"
+        },
+        "renderedDirectAssets": [
+          "domain",
+          "favicon",
+          "title",
+          "button"
+        ]
+      },
+      {
+        "bs_data": {
+          "deviceType": 5,
+          "blockId": 3948,
+          "bannerLang": "1",
+          "punyDomain": "lkk.setlgroup.ru",
+          "blockFavicon": "0",
+          "bannerFlags": "finance",
+          "isSmartTga": false,
+          "count_links": {
+            "abuseUrl": "https://yandex.ru/an/abuse/WCmejI_z8oVX2Ldy_GK0Kyed9GoWurJ9ep60SWb2YA027bi9nGmEraOFafoh2bk4Z2h2mUohgaH6yJLaPJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ4xhkgx7Y6aOyN82a4Gtl1igCDqIA8Ima_y8BKsz3MvCjlGEmvUz4XzBslmO0IOdA6B_9M49e1dHRsbTrxqi0JGZUkrH3bnahbGgbK8aD5smbPBAtstQAKExIL842FnF3aO2dYVfitk43JLt4V9qCiBmAOOxIGp133G0~2",
+            "viewabilityTracking": [
+              {
+                "url": "https://yandex.ru/an/tracking/WZ4ejI_zOoVX2LcC0HqH02EWUyn3D3q1ymK4T1z2x44qUX1btuJSY2SdvGaKjft633jbUd67lDHtnYMeACwnwO3F18Xz3fdEsQ7JwEsyRPWFVtJVUH3nGtZ41szKYn313xi7mKWFuwaN7LoQK1bymiE3s0_0DU7afh62199k1lXIAfLAfHAdIXwD0PHB44845V3OIYXcSB3Bcw-D7YGvLnMs21bLX8CP0mUn0u5R6yPD7li6iQ-g4Xb5mzZNa9jXAtDcDMEPcl05Nofw3NYvvUYZXbl22Hm0ryIQbISFtmiM0_ZIuAuiWAq3Mdt_mX2sCR7bWRGQ78OF1A1KAfNA6ALoGWSCMr4jGWGnw4idAdDNzjsDoWLk2IUmXRs4for0AXqhYfOlqwXiHf15pAeGfbJUK37ImqGa1fao3J9PlvNHJJnQnNTarJaAHNnJrzunwL7O634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfXxR9-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbfdBFO16NTTrB6tUuCPaI-yuUcnizDRhyG23z6IlnCUIDZz6WCa9YjX_ILW2Q4RqMrhNTIzB0Cs8NWi2BYpfinR0sfvuFMOEX1ouo5ofL2g5I6YwODDJoW_4Lt6KIgKo3lpVeC11tlIJaLjxnkhAsDqwcheuqf7_bGFPxgNQcbV5Ep2zkAGAmM1Vhld8-wXa_mS0~2?action-id=25",
+                "time": 5000
+              },
+              {
+                "url": "https://yandex.ru/an/tracking/WZ4ejI_zOoVX2LcC0HqH02EWUyn3D3q1ymK4T1z2x44qUX1btuJSY2SdvGaKjft633jbUd67lDHtnYMeACwnwO3F18Xz3fdEsQ7JwEsyRPWFVtJVUH3nGtZ41szKYn313xi7mKWFuwaN7LoQK1bymiE3s0_0DU7afh62199k1lXIAfLAfHAdIXwD0PHB44845V3OIYXcSB3Bcw-D7YGvLnMs21bLX8CP0mUn0u5R6yPD7li6iQ-g4Xb5mzZNa9jXAtDcDMEPcl05Nofw3NYvvUYZXbl22Hm0ryIQbISFtmiM0_ZIuAuiWAq3Mdt_mX2sCR7bWRGQ78OF1A1KAfNA6ALoGWSCMr4jGWGnw4idAdDNzjsDoWLk2IUmXRs4for0AXqhYfOlqwXiHf15pAeGfbJUK37ImqGa1fao3J9PlvNHJJnQnNTarJaAHNnJrzunwL7O634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfXxR9-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbfdBFO16NTTrB6tUuCPaI-yuUcnizDRhyG23z6IlnCUIDZz6WCa9YjX_ILW2Q4RqMrhNTIzB0Cs8NWi2BYpfinR0sfvuFMOEX1ouo5ofL2g5I6YwODDJoW_4Lt6KIgKo3lpVeC11tlIJaLjxnkhAsDqwcheuqf7_bGFPxgNQcbV5Ep2zkAGAmM1Vhld8-wXa_mS0~2?action-id=26",
+                "time": 10000
+              }
+            ],
+            "sitelinks": [
+              {
+                "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+              },
+              {
+                "targetUrl": "https://setlgroup.ru/tenders/items?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+              },
+              {
+                "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+              },
+              {
+                "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663#podpiska"
+              }
+            ],
+            "tracking": "https://yandex.ru/an/tracking/WZ4ejI_zOoVX2LcC0HqH02EWUyn3D3q1ymK4T1z2x44qUX1btuJSY2SdvGaKjft633jbUd67lDHtnYMeACwnwO3F18Xz3fdEsQ7JwEsyRPWFVtJVUH3nGtZ41szKYn313xi7mKWFuwaN7LoQK1bymiE3s0_0DU7afh62199k1lXIAfLAfHAdIXwD0PHB44845V3OIYXcSB3Bcw-D7YGvLnMs21bLX8CP0mUn0u5R6yPD7li6iQ-g4Xb5mzZNa9jXAtDcDMEPcl05Nofw3NYvvUYZXbl22Hm0ryIQbISFtmiM0_ZIuAuiWAq3Mdt_mX2sCR7bWRGQ78OF1A1KAfNA6ALoGWSCMr4jGWGnw4idAdDNzjsDoWLk2IUmXRs4for0AXqhYfOlqwXiHf15pAeGfbJUK37ImqGa1fao3J9PlvNHJJnQnNTarJaAHNnJrzunwL7O634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfXxR9-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbfdBFO16NTTrB6tUuCPaI-yuUcnizDRhyG23z6IlnCUIDZz6WCa9YjX_ILW2Q4RqMrhNTIzB0Cs8NWi2BYpfinR0sfvuFMOEX1ouo5ofL2g5I6YwODDJoW_4Lt6KIgKo3lpVeC11tlIJaLjxnkhAsDqwcheuqf7_bGFPxgNQcbV5Ep2zkAGAmM1Vhld8-wXa_mS0~2",
+            "linkHead": "https://yandex.ru/an/count/WNSejI_zOoVX2LaE0KqB02EJIILG264d_n5Q4gZYGJHw46M_u_M6Ero_azLnz3exdPFrENeUZG6KIn1211Nms4eePd2mp0xVe0vUtmREShFrFMmQcLwRCjZ6grGgbKeDD8BOx33XjzK4YrJMt6QZUxui5jGtd2SfX8CP0mTn01ku6iP9m9veDUpD961Fj1gsleOSGxDzqcWzJJP3umGjJgQ80mZx0B9P0j2tO30ldQZCNTbtDoeNk2KyRG5IwLXHj5ZOVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZEufwBIkwzWOiOSnqp3Y2bfTX_4k9m19TCExeGBJBO5223lvZz3Ir6CsT_yR0sZKTLt7qcOV-AW8HJTkiLlI0q86BoAWuMJeR0vSf109JHSiA3-GBHG6j9iaHHJySYQFuO8B12uhHEsxlLFk6QOXYI92HfLcVoxKrWijKTN44nKEVrjxoG7km_k-qzs5XS8yrJM3Zt1uKM29oWC0~2",
+            "viewNotices": [
+              "https://yandex.ru/an/count/WNSejI_zOoVX2LaE0KqB02EJIILG264d_n5Q4gZYGJHw46M_u_M6Ero_azLnz3exdPFrENeUZG6KIn1211Nms4eePd2mp0xVe0vUtmREShFrFMmQcLwRCjZ6grGgbKeDD8BOx33XjzK4YrJMt6QZUxui5jGtd2SfX8CP0mTn01ku6iP9m9veDUpD961Fj1gsleOSGxDzqcWzJJP3umGjJgQ80mZx0B9P0j2tO30ldQZCNTbtDoeNk2KyRG5IwLXHj5ZOVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZEufwBIkwzWOiOSnqp3Y2bfTX_4k9m19TCExeGBJBO5223lvZz3Ir6CsT_yR0sZKTLt7qcOV-AW8HJTkiLlI0q86BoAWuMJeR0vSf109JHSiA3-GBHG6j9iaHHJySYQFuO8B12uhHEsxlLFk6QOXYI92HfLcVoxKrWijKTN44nKEVrjxoG7km_k-qzs5XS8yrJM3Zt1uKM29oWC0~2=WYqejI_zOoVX2Lc30VqG01GVB87X-uC2SDcqeWw80Vp8kIMG0UJurC_xW8200fW1vFZKptku0T3RX84fs06qpvND0U01zgADoG7e0LRu0TArthu1c0AoiiaSe0AOqxKNe0C4i0C2w0I518W5-js50f05lTMI0x05kSL2k0NYhsR01UgFu0781SBzED05kCL2y0K1g0O4gGVd6iIrvfq90xW7-0S1W0W2q0Y2Ye21mf201k08pEdQmEqQw0oJ2fWD_loL0OaEcX094KVXUXIkH_K_o12Xe82GG9WHgi9PeH7iKRWUXUknc1C8g1Fky8AUmCVonHZPeilPeilIjTw-0PWNtVhfZm6u5m705zKFoCzHONkW6hUqqgBkrBtNQg4T6dCgJ_0Qrp-e7W6m7ox87-JS_yu2gI0H_s_qTj3qFxWWgi9PY2B5zvlWqS6Unt6G8iI-MP0YnRvPa2B6lbcG8iU-MP0YoBvPa2B9lbcG8ig-MP0Ygi9Pa2AhmbcG8gp2MP0YhS9Pa2AkmbdDpCpCpCpam2EolEhdFV8Z4Fe_aSFd6W00emoMv8X91W2u9E41mYG1CSea0p8oDTWaW0FW9Em2w2GIy2IoszdZkyJmuDK1-IW00020ktawFu0f3x0fZuRkomQ0Ak41wIhpBWNWe6eAV_WgWAtY180jmBsI28WjZ0GD_9MWURvmcqLGqWc7Rac3BYoGOInJv24C0QHiEAudJtCDW7f8nEcSSinKcG00~2"
+            ],
+            "advertInfoUrl": "https://yandex.ru/ads/advertiser_info/WCmejI_z8oVX2Ldy_GK0Kyed9GoWurJ9ep60SWb2YA027bi9nGmEraOFafoh2bk4Z2h2mUohgaH6yJLaPJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ4xhkgx7Y6aOyN82a4Gtl1igCDqIA8Ima_y8BKsz3MvCjlGEmvUz4XzBslmO0IOdA6B_9M49e1dHRsbTrxqi0JGZUkrH3bnahbGgbK8aD5smbPBAtstQAKExIL842FnF3aO2dYVfitk43JLt4V9qCiBmAOOxIGp133G0~2",
+            "falseClick": "https://yandex.ru/an/count/WceejI_zOoVX2Lde0UKI0EFXXCn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3LJOZo29cLGXJAc-e6EbX8XA3ZYCY7nyV7vyI3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChG2i24gyYVcGkBaSAo6fmLvRpDV4ehl5eT0uWfqltdGSHFuH7VF1w3utU0zU4avl62X98kXdWAu_60Ceb22622dXi9HGpE5WFoCJq-8SapBLsumt12HqW8zXV6v6RdGJg1Kl25yxd6wOc6y1-mpU03LnVLIKooeQjhoDq-zCWRYO1Uv84x0c78uv8m5xOHaOQRWpDTitAauVl1Oi1V6bmLnR0rW6jldzX29lOya1Q3Gx31vws0Abqh2XQB6mjxF0-92TdjXIk_5P6lxa25gp25qDkwjex9ZqA6oEcOtGFOuRvBYS0INJ3kw42qos1GWWx-O_GqjJxZJv7lb-SVxdxOK-kKlpWgzhX__eSWVlUfLKJkg-bdw94_YppYLccbrxcSW-WKTTr7KkRVU2Z8XJTkC6DoPRUSVJOsEYj39trTOHkVzuCmvUz7WymI4_sIdmiQVDZ19YSe8ZzbuGbW6P4lwLrNVUo1D2CwBKWuCAIFci1hEt9KGvSf109JHVAob_k9Z53kqbI11NymeEplv6Vn24abaOV14MhVX1KGz2QqM2eWxYCs1F4wqX1QMZZJTSPAXD7jIMrCrt4-0K350ZU-KaKFAr4eLk55nMnXIC0~2=WWCejI_zOoVX2LbA0QqF0AGSm3FTj4e2SDcqeWw80Vp8kIMG0UJurC_xW8200fW1vFZKptku0T3RX84fs06qpvND0U01zgADoG7e0LRu0TArthu1c0AoiiaSe0AOqxKNeEW4XGI81VhTXGAG1RtLaWEm1Rd5GhW5ugzcm0NgZ-01o0N2_JZG1RZ5Gl050QW61Aa7vnh4jUQT2GEu1_W70O080j08Weg0WSAGW0RW2Cpfsi3j6kWCamgO3VxybG693feG2H57uNeKhaVrFyWGeQ20a42O4Qh2MQ4Hx56u7eNhiPWJ2AWJxl22di37yiKOsQBBsQBB1j0MqhNUlW6O5ztwwOy1k1S1m1VL3yZFKM5xe1gtjDAYxjIzrsgX7HfpAa_m6jS_g1u1y1u1i1yko1_atF_E0gaW4Vzlz7RGz3-u8Ah2MOWYnVURuD71diTna2B4lbcG8iM-MP0YnhvPa2B7lbcG8iY-MP0YoRvPa2BAlbcG8gh2MP0Ygy9Pa2AimbcG8gt2MP0Yhi9PpSpCpCpCvF8Z4Fe_aSFd6W00emoMv8X91W2u9E41mYG1CSea0p8oDVae0000WBjvEZ-0AG-mAO-6xii6W2hX0Uagyou5uA1g2d_uAe2juWGB_8IWUH28RVEd9Uc4hmhKGe4dWd4g54MxVPoAppg98KHWYu14-kJC0W00~2",
+            "empty": "https://yandex.ru/an/resource/spacer.gif?",
+            "url": "https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBsloOzc04c9oWYFsNX2M0PaI_fNLTzx84q8pejI3Wmf8-Qm6ixSbH3bnahbGgbK8aD5smlQxh69WLb1y4zK8Kj9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2",
+            "count": "https://yandex.ru/an/count/WbCejI_zOoVX2Ld10IqI00GWHSkfDISdHES50C4FWtjf-haWS8W1_CYv9PW1vFZKptku0T3RX84fs06qpvND0U01zgADoG7e0LQ80WkO0hAooHpm0eRgzDO1-0A2W820WF0Hw0I518W5-js50f05lTMI0x05kSL2k0NYhsR01UgFu0781SBzED05kCL2y0N91lCk1U2WQWf_gGVd6iIrvfq90xW7-0S1W0W2q0Y2Ye21mf201k08pEdQmEqQW0kO0PCAc0t-_9K1YGwO3lFTb82Er9g5H-5w5Av7zJ_84A6WW910c16gmbcX4UnHk1w5wx6O4mYe4-xmWfx0n_B56DcYozcYomRG5jArthu1c1VT-kcF0QWN4RWN0S0NrTO1e1a4i1c16l__3yZFKM5xe1gtjDAYxjIzrsgm6h6RoCVIz861r06270r4T34wJqbgIZXYLpOueHqQSofFy1hNFwWU0R0VBiWVvDp_pWAf817_R_HsqFG_k22gmbc88iNtc-3HmPx7SP0YnBvPa2B5lbcG8iQ-MP0YnxvPa2B8lbcG8ic-MP0YohvPa2AgmbcG8gl2MP0YhC9Pa2AjmbcG8gx2MStCpCpCpEJo8n3wFv73vne00ACCbkI8IGO0g2JX0R0a0RWauG72904noYG3CZ8r-IW00020ktawFu0f3x0fZuRkomQ0Ak41wIhuAe2juWGK_0A3iq-FdyIU49Oc7aI9ubwYZuoO0HiwFo7d51n5sl2876kACmz32YKKXPsi8xt_6VS67Fua-amhRqe_uKKTF_iA~2=WYmejI_zOoVX2Lbo0VKG04GV-qLFy782SDcqeWw80Vp8kIMG0UJurC_xW8200fW1vFZKptku0T3RX84fs06qpvND0U01zgADoG7e0LRu0TArthu1c0AoiiaSe0AOqxKNe0C4i0C2w0I518W5-js50f05lTMI0x05kSL2k0NYhsR01UgFu0781SBzED05kCL2y0K1g0O4gGVd6iIrvfq90xW7-0S1W0W2q0Y2Ye21mf201k08pEdQmEqQw0oJ2fWD_loL0OaEcX094KVXUXIkH_K_o12Xe82GG9WHgi9PeH7iKRWUXUknc1C8g1Fky8AUmCVonHZPeilPeii6q1RIjTw-0PWNtVhfZm6u5m705zKFoCzHONkW6hUqqgBkrBtNQg4T6dCgJ_0Qrp-e7W6m7ox87-JS_yu2gI0H_s_qTj3qFxWWgi9PY2B5zvlWqS6Unt6G8iI-MP0YnRvPa2B6lbcG8iU-MP0YoBvPa2B9lbcG8ig-MP0Ygi9Pa2AhmbcG8gp2MP0YhS9Pa2AkmbdDpCpCpCpam2EolEhdFV8Z4Fe_aSFd6W00emoMv8X91W2u9E41mYG1CSea0p8oDTWaW0FW9Em2w2GIy2IoszdZkyJmuDK1-IW00020ktawFu0f3x0fZuRkomQ0Ak41wIhpBWNWe6eAV_WgWAtY180jmBsI28WjZ0GB_8IWUNvicmMOf9EugcuB1OOKnacxAAhvSNvMwsJGG0EZ2qWyMmuy~2",
+            "linkTail": "=WYyejI_zOoVX2Lbv0GqH04GVZZkAANa2SDcqeWw80Vp8kIMG0UJurC_xW8200fW1vFZKptku0T3RX84fs06qpvND0U01zgADoG7e0LRu0TArthu1c0AoiiaSe0AOqxKNe0C4i0C2w0I518W5-js50f05lTMI0x05kSL2k0NYhsR01UgFu0781SBzED05kCL2y0K1g0O4gGVd6iIrvfq90xW7-0S1W0W2q0Y2Ye21mf201k08pEdQmEqQw0oJ2fWD_loL0OaEcX094KVXUXIkH_K_o12Xe82GG9WHgi9PeH7iKRWUXUknc1C8g1Fky8AUmCVonHZPeilPeii6q1RIjTw-0PWNtVhfZm6u5m705zKFoCzHONkW6hUqqgBkrBtNQg4T6dCgJ_0Qrp-e7W6m7ox87-JS_yu2gI0H_s_qTj3qFxWWgi9PY2B5zvlWqS6Unt6G8iI-MP0YnRvPa2B6lbcG8iU-MP0YoBvPa2B9lbcG8ig-MP0Ygi9Pa2AhmbcG8gp2MP0YhS9Pa2AkmbdDpCpCpCpam2EolEhdFV8Z4Fe_aSFd6W00emoMv8X91W2u9E41mYG1CSea0p8oDTWaW0FW9Em2w2GIy2IoszdZkyJmuDK1-IW00020ktawFu0f3x0fZuRkomQ0Ak41wIhpBWNWe6eAV_WgWAtY180jmBsI28WjZ0GC_8kWUJvkcuMRf9EuggOB1OOmnadpAAe0SdwEwsJGN0EZ7n9x7ASSusqX~2"
+          },
+          "uniq": "635015276347927183",
+          "hidePermalinkInfo": false,
+          "vmap_request_id": "0",
+          "isOffer": false,
+          "semanticCorrespondenceType": 0,
+          "yclid": "8890477092262641663",
+          "templateId": 320,
+          "clientType": 1,
+          "bmcategoryId": "200002921",
+          "pageId": "265853",
+          "isMulticardsDisabled": true,
+          "clientTin": "7810489897",
+          "minDisplayNewMarketRating": "40",
+          "sitelinksType": 2,
+          "isNeuralPicture": false,
+          "permalinkId": "0",
+          "oid": "215135194",
+          "bannerWidth": 0,
+          "hitLogId": "218879671121746663",
+          "clientAlternativeTin": "",
+          "addHyperlocalAsset": false,
+          "domain": "lkk.setlgroup.ru",
+          "clientName": "ООО «Сэтл Строй»",
+          "creativeId": "C0",
+          "bannerCategories": [
+            "200002921"
+          ],
+          "popup": false,
+          "domainId": "24556748",
+          "bidreqid": "218879671629519591",
+          "orderTags": [],
+          "order": {
+            "goal_ids": [],
+            "delivery_data": {
+              "meta": {}
+            },
+            "counter_id": 16036378
+          },
+          "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663",
+          "position": 2,
+          "impId": "11",
+          "callToAction": {
+            "url": "",
+            "value": "Подробнее"
+          },
+          "adId": "72057610630241842",
+          "geoDistance": "",
+          "requestRegion": "ru",
+          "algId": "3",
+          "resource_links": {
+            "bs_data": {
+              "pathUrl": "https://yandex.ru/an/count/WneejI_zOoVX2LaD0sKO04Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslpOOtam0anEKCJ-Iy8IG3EYtzAwhdjP0cX6z5eGS659dxK0rlRaA0SkCbSgbKeX4feks5xNTGpC6UNdWFSu0hIR94KX_0VomDaluMtasoKi_QJKva46zb4Z6EslMD2ubc2t-5THsiZ8aSN5WIbu4IrJVb2M80RkoQ9j_kvGoaf71B7oRYJH0sif0BERYQGXATzidV0CfMTIfT7RsP9PVg7Z6GI_VXBrEccb21u-0G00~2"
+            },
+            "direct_data": {
+              "httpsPathUrl": "https://yandex.ru/an/count/WneejI_zOoVX2LaD0sKO04Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslpOWtam0anEKCJ-Iy8IG3EYtzAwhdjP0cX6z5eGS659dxK0rlRaA0SkCbSgbKeX4feks5xNTGpC6UL_H40n3TfDaY8X_0VomDaluMtasoKi_QJKva46zb4Z6EslMD2ubc2t-5THsiZ8aSN5WIbu4IrJVb2M80RkoQ9j_kvGoaf71B7oRYJH0sif0BERYQGXATzidV0CfMTIfT7RsP9PVg7Z6GI_VXBrEccb21u-0G00~2",
+              "textName": "https://yandex.ru/an/count/WneejI_zOoVX2LaD0sKO04Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslpOvtam0anEKCJ-Iy8IG3EYtzAwhdjP0cX6z5eGS659dxK0rlRaA0SkCbSgbKeX4feks5xNTGpC6UM_djdKGRj9KWGX_0VomDaluMtasoKi_QJKva46zb4Z6EslMD2ubc2t-5THsiZ8aSN5WIbu4IrJVb2M80RkoQ9j_kvGoaf71B7oRYJH0sif0BERYQGXATzidV0CfMTIfT7RsP9PVg7Z6GI_VXBrEccb21u-0G00~2",
+              "targetUrl": "https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBsloOzc04c9oWYFsNX2M0PaI_fNLTzx84q8pejI3Wmf8-Qm6ixSbH3bnahbGgbK8aD5smlQxh69WLb1y4zK8Kj9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2",
+              "sitelinks": {
+                "href4": "https://yandex.ru/an/count/WoCejI_zOoVX2LaL0wqO0CFhgSn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3fT984Zgg6XtfF7DOYuoASZXpv7X2S-aDpQKveixfRT_FAJHgvuX2dRZjn9rGA3wreRSDjUqSHaD2G4T9jL2I5ScgL2HK3o4jrTGRIKXr4fArMcHLgkiRIaDKAnBGKHAIKfAG32iIYIMa4KTBHaWoXfIiIIDeqD3Q0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslpOWmSZmEG4HUo_92m1D2FwBQthkfSbW6P4hmK15vRqMGjWRK-ESk0YSwLIgHGYeUc2xNLTny0KGFbhO3o01UqcIH4X_43A0sU_ZBUFRvUkz9DIc_aOs0MDO7I_OclRMeBTuaz5QHiZHnGN1wBWHJHC-K5NWXYu1ukszxj3AIiL4SJ6kv4y3wob_ijk8fA6f7kpTS4pb7v9bGPlPqjU-OLELn3y-adKwwIL8dZu1000~2",
+                "href2": "https://yandex.ru/an/count/Wn0ejI_zOoVX2La80nKO0FEgfin3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3gkhwXD4Ir8W4T9IKHMPM4I2GXMQj5LYKIIqWZZfQCa6GCALcJfdR0bCq8ieXP5SAKoXigHdgOYCIWuuZ8nyV7nwT4Wxkq0hGQtA4LeDNWxgm0hGPtPWLeDRWhAq2hGTrU0LeDwlGAq6fG5ov0gq4TaWAq6jJb5Q3LeEv80LeDwl0Aq8g0nAk87vcBov42iXhSbULyJJoAQpmQdGF8wT9zvq743-4H7xpU0zU4avl62X98kXdWAu_60Ceb22622dXi9HGpE5WFoCJq-8SapBLsumt12HqW8zXV6v6RdGJg1Kl25yxd6wOc6y1-mpU03LnVLIKooeQjhoDq-zCWRYO1UwBLi3UJW3tHQjXoEEA81Eo5RMIauSRGRDUiF7duNh0Om9S6TsK1R1tGwliNXh29BG-arU0mVE1f2v1AnugYnSBMmWxlGt9oPalXoczbz9ihOC4gV37afgwzOzAZi35YEaRtC6QOxt82a4Gtl1igCDqIA8Ima_y8BKszt-XpvFl5-PUx7_RaAiKFlgeT_g_F4RZlzJa2zxaN_13x-zAg2TtNqazH8d-MVeeIoJGpdvZb01frNTUnjDa7FYf2qOqRt9XiwHr7ZusDtihGMLz7wFRdpJ1ysUln08FqPA_4nv8sFyRWmGWmEK4H-oy9Im3DY7vBwxhkPGcW6T5hGS259NtM0bZRawCSkCXSgLGgXKXekc1xNTSnC6EKduK5FVwWtIGf0X_yn_70sI_XRT_R9IBzfDJcBGRs0ICO3ObOS5TBm8bhqIBL2CQoXZ15AxhI75eUBD3U1mBbhbH4a33UN_8yT2Nrt_o9I2evtQlU1SymzqkwDNXxKVBAxpjTGI3QJ-AaarQMRU0J~2",
+                "href1": "https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslouWWSZmEG4HUo_92m1D2FwBQthkfSbW6P4hmK15vRqMGjWRK-ESk0YSwLIgHGYeUc2xNLTny2ieFmVoe88j9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2",
+                "href3": "https://yandex.ru/an/count/WneejI_zOoVX2LaC0sKO03Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslouneCHO7A28lPV4fO0cX7zbjPrtSiIG3EYruA02qlwh0MmjYT7EN2HkLAfL0gHq7J1zhgkOs1MK7uk04W80DfDaY8X_0VomDaluMtZsoKg_QJKvZq6za4Z6DslMD2sbc2t-5DHsiR84SN5WIXu4GrJVj2L80RkmQBj_UvGoaf51B7nRYJF0skf_xARYAGXwTviNV0CfLzIfS7RsP9NVg7J5GI_VXBrEccb21u-0G00~2"
+              }
+            }
+          },
+          "bannerLanguage": "ru",
+          "phraseId": "78537852",
+          "sourceDomain": "maps.yandex.ru",
+          "liked": "0",
+          "productType": "direct",
+          "brandType": 0,
+          "campaignid": "215135194",
+          "backgroundColor": "",
+          "agencyClientId": "1867183",
+          "geoDistanceRegular": "",
+          "hidePicture": "1",
+          "isTurboBanner": false,
+          "closeCounter": "https://yandex.ru/an/count/542/4923413538242558843",
+          "isNeuralVideo": false,
+          "hideExternalData": false,
+          "eventHash": "2089873955748980563",
+          "titleUrl": "https://yandex.ru/an/count/WneejI_zOoVX2LaC0sKO03Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslou0mz6WCa9YjX_ILW2Q4RqMrhNTIzB0Cs8NWi2BYpfinR0sfuSvS15vagbKYb4GjC5s-kwZe5PGVc5eWPe0kqcIH4X_0VomDaluMtZsoKg_QJKvZq6za4Z6DslMD2sbc2t-5DHsiR84SN5WIXu4GrJVj2L80RkmQBj_UvGoaf51B7nRYJF0skf_xARYAGXwTviNV0CfLzIfS7RsP9NVg7J5GI_VXBrEccb21u-0G00~2?q=",
+          "clientRegion": "",
+          "clientId": "301628765",
+          "isAbandonedCartBanner": false,
+          "directTitle": {
+            "url": "https://direct.yandex.ru/?partner",
+            "title": "Реклама"
+          },
+          "isGeoPinPage": false,
+          "sourceInterface": "dc",
+          "bannerHeight": 0,
+          "pathUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+          "skipPictures": "1",
+          "erid": "j1SUmZTaqfMFMWKqJ",
+          "addInfo": {
+            "type": "callouts",
+            "callouts_list": [
+              "Примите участие в тендере",
+              "30 лет на рынке",
+              "Долгосрочное партнерство",
+              "Технологичность",
+              "Инновации",
+              "Прозрачные условия",
+              "Тендеры каждую неделю"
+            ]
+          },
+          "isErir": 0,
+          "sad": "",
+          "S2SEnabled": false
+        },
+        "direct_data": {
+          "banner_proto": {
+            "GrutObject": {
+              "status": {
+                "materialized_metrika_counters": {
+                  "manual_counters": [
+                    "16036378",
+                    "92966368"
+                  ]
+                },
+                "materialized_fields": {
+                  "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                  "sitelink_set": {
+                    "sitelinks": [
+                      {
+                        "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                        "title": "Подать заявку",
+                        "description": "Станьте участником тендера"
+                      },
+                      {
+                        "href": "https://setlgroup.ru/tenders/items?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                        "title": "Список тендеров",
+                        "description": "Актуальный список тендеров на данный момент"
+                      },
+                      {
+                        "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                        "title": "Требования к участникам",
+                        "description": "Узнайте подробнее о требованиях к участникам тендеров"
+                      },
+                      {
+                        "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2#podpiska",
+                        "title": "Подписка на график тендеров",
+                        "description": "Оформите подписку и получайте первым информацию о тендерах"
+                      },
+                      {
+                        "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2#sotrudnichestvo",
+                        "title": "Сотрудничество",
+                        "description": "Приглашаем к сотрудничеству организации разных специализаций"
+                      },
+                      {
+                        "href": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2#otzyvy",
+                        "title": "ТОП-3 застройщиков РФ",
+                        "description": "По накопленному вводу жилья с 2016 г. Данные ЕРЗ 01.03.2025"
+                      },
+                      {
+                        "href": "https://setlgroup.ru/tenders/questions?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                        "title": "Вопрос - ответ",
+                        "description": "Часто задаваемыми вопросы и ответы на них"
+                      },
+                      {
+                        "href": "https://setlgroup.ru/tenders/tender-contacts?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2",
+                        "title": "Контакты",
+                        "description": "Свяжитесь с нами для получения интересующей Вас информации"
+                      }
+                    ]
+                  },
+                  "language": 1
+                },
+                "moderation_status": {},
+                "target_url": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|{campaign_id}&utm_term={keyword}&utm_content={gbid}|{ad_id}|{phrase_id}|{source}|{device_type}|{banner_id}|{source_type}|{campaign_type}|{retargeting_id}|{adtarget_id}|{position}|{position_type}|{region_id}"
+              },
+              "spec": {
+                "phone_view": {
+                  "spec": {}
+                }
+              },
+              "meta": {
+                "direct_id": "16592313906",
+                "direct_type": 1
+              }
+            },
+            "AvatarsMetaData": {
+              "ImagesInfo": [
+                {
+                  "AvatarsBasePublicUrl": "//avatars.mds.yandex.net/get-direct/4335837/wwJldf4GFE7UM-3Nzs9esA/",
+                  "ParsedMdsMeta": {
+                    "AverageColor": "#FEFEFEFF",
+                    "ColorWizBack": "#FEFEFE",
+                    "IsClipart": false,
+                    "IsPhoto": false,
+                    "Crc64": "12848264674666268831",
+                    "ColorWizButtonText": "#C3000D",
+                    "ColorWizButton": "#F5D8DA",
+                    "BackgroundColors": {
+                      "Bottom": "#FEFEFEFF",
+                      "Left": "#FEFEFEFF",
+                      "Right": "#FEFEFEFF",
+                      "Top": "#FEFEFEFF"
+                    },
+                    "SecondColor": "#F00000",
+                    "ROrigSize": {
+                      "Y": 607,
+                      "X": 1080
+                    },
+                    "MainColor": "#F8F8F8",
+                    "ImageQuality": 0,
+                    "AverageBorderColor": "#FEFEFE",
+                    "Sha256": "a316723a938daad98c232b156e13a8b39e126f07b3d3d8799b0ef50e756382fd"
+                  },
+                  "ImageType": "wide",
+                  "Images": [
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 599,
+                          "Y": 117,
+                          "H": 188,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 2,
+                          "W": 598,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 263,
+                          "W": 336,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 598,
+                          "Y": 111,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 327,
+                          "W": 252,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 151,
+                          "W": 448,
+                          "Y": 0,
+                          "H": 337,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wx600",
+                      "Width": "600",
+                      "Height": "337",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 337,
+                        "W": 599
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 59,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 132,
+                          "W": 168,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 56,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 164,
+                          "W": 126,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 75,
+                          "W": 225,
+                          "Y": 0,
+                          "H": 169,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wx300",
+                      "Width": "300",
+                      "Height": "169",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 169,
+                        "W": 300
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 267,
+                          "Y": 52,
+                          "H": 84,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 266,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 117,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 266,
+                          "Y": 49,
+                          "H": 92,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 146,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 67,
+                          "W": 200,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wy150",
+                      "Width": "267",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 150,
+                        "W": 267
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 533,
+                          "Y": 104,
+                          "H": 167,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 532,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 234,
+                          "W": 299,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 532,
+                          "Y": 99,
+                          "H": 185,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 291,
+                          "W": 224,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 134,
+                          "W": 399,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wy300",
+                      "Width": "533",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 300,
+                        "W": 533
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 29,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 149,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 66,
+                          "W": 84,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 28,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 82,
+                          "W": 63,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 38,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 84,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wx150",
+                      "Width": "150",
+                      "Height": "84",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 84,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 1079,
+                          "Y": 211,
+                          "H": 338,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 3,
+                          "W": 1076,
+                          "Y": 0,
+                          "H": 606,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 474,
+                          "W": 605,
+                          "Y": 0,
+                          "H": 606,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1077,
+                          "Y": 200,
+                          "H": 374,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 589,
+                          "W": 454,
+                          "Y": 0,
+                          "H": 606,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 272,
+                          "W": 807,
+                          "Y": 0,
+                          "H": 606,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "wx1080",
+                      "Width": "1080",
+                      "Height": "607",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 606,
+                        "W": 1079
+                      }
+                    }
+                  ],
+                  "AvatarsImage": {
+                    "ImageName": "wwJldf4GFE7UM-3Nzs9esA",
+                    "ImageGroupId": "4335837",
+                    "Namespace": "direct"
+                  }
+                }
+              ]
+            },
+            "ComputedFields": {
+              "Title": "Тендеры от застройщика Setl Group. Стать партнёром",
+              "Options": {
+                "IsPicture": true
+              },
+              "TitleExtension": "Подать заявку!",
+              "HrefText": "Setl-Group-Тендеры",
+              "Site": "lkk.setlgroup.ru",
+              "CalloutList": [
+                {
+                  "ID": "34227074",
+                  "Text": "Примите участие в тендере"
+                },
+                {
+                  "ID": "34227075",
+                  "Text": "30 лет на рынке"
+                },
+                {
+                  "ID": "34227076",
+                  "Text": "Долгосрочное партнерство"
+                },
+                {
+                  "ID": "34227077",
+                  "Text": "Технологичность"
+                },
+                {
+                  "ID": "34227078",
+                  "Text": "Инновации"
+                },
+                {
+                  "ID": "34227079",
+                  "Text": "Прозрачные условия"
+                },
+                {
+                  "ID": "34227080",
+                  "Text": "Тендеры каждую неделю"
+                }
+              ],
+              "Body": "Регистрируйтесь на сайте для участия в тендерах и получения актуальной информации.",
+              "ExternalData": {}
+            },
+            "Resources": {
+              "Favicon": {
+                "UpdateTime": "1769607480",
+                "OriginalHeight": "180",
+                "OriginalWidth": "180"
+              },
+              "UrlClassifiers": {},
+              "Url": {
+                "EcomFeatures": [
+                  {
+                    "OneProductProbability": 0.0009986924,
+                    "ManyProductsProbability": 0.0048738304
+                  }
+                ]
+              },
+              "MarketModel": {},
+              "AutotargetingFeatures": {},
+              "MarketData": {}
+            }
+          }
+        },
+        "pcode_data": {
+          "sitelinks": [
+            {
+              "url": "https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslouWWSZmEG4HUo_92m1D2FwBQthkfSbW6P4hmK15vRqMGjWRK-ESk0YSwLIgHGYeUc2xNLTny2ieFmVoe88j9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2",
+              "title": "Подать заявку",
+              "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+            },
+            {
+              "url": "https://yandex.ru/an/count/Wn0ejI_zOoVX2La80nKO0FEgfin3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3gkhwXD4Ir8W4T9IKHMPM4I2GXMQj5LYKIIqWZZfQCa6GCALcJfdR0bCq8ieXP5SAKoXigHdgOYCIWuuZ8nyV7nwT4Wxkq0hGQtA4LeDNWxgm0hGPtPWLeDRWhAq2hGTrU0LeDwlGAq6fG5ov0gq4TaWAq6jJb5Q3LeEv80LeDwl0Aq8g0nAk87vcBov42iXhSbULyJJoAQpmQdGF8wT9zvq743-4H7xpU0zU4avl62X98kXdWAu_60Ceb22622dXi9HGpE5WFoCJq-8SapBLsumt12HqW8zXV6v6RdGJg1Kl25yxd6wOc6y1-mpU03LnVLIKooeQjhoDq-zCWRYO1UwBLi3UJW3tHQjXoEEA81Eo5RMIauSRGRDUiF7duNh0Om9S6TsK1R1tGwliNXh29BG-arU0mVE1f2v1AnugYnSBMmWxlGt9oPalXoczbz9ihOC4gV37afgwzOzAZi35YEaRtC6QOxt82a4Gtl1igCDqIA8Ima_y8BKszt-XpvFl5-PUx7_RaAiKFlgeT_g_F4RZlzJa2zxaN_13x-zAg2TtNqazH8d-MVeeIoJGpdvZb01frNTUnjDa7FYf2qOqRt9XiwHr7ZusDtihGMLz7wFRdpJ1ysUln08FqPA_4nv8sFyRWmGWmEK4H-oy9Im3DY7vBwxhkPGcW6T5hGS259NtM0bZRawCSkCXSgLGgXKXekc1xNTSnC6EKduK5FVwWtIGf0X_yn_70sI_XRT_R9IBzfDJcBGRs0ICO3ObOS5TBm8bhqIBL2CQoXZ15AxhI75eUBD3U1mBbhbH4a33UN_8yT2Nrt_o9I2evtQlU1SymzqkwDNXxKVBAxpjTGI3QJ-AaarQMRU0J~2",
+              "title": "Список тендеров",
+              "targetUrl": "https://setlgroup.ru/tenders/items?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WneejI_zOoVX2LaC0sKO03Ehfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslouneCHO7A28lPV4fO0cX7zbjPrtSiIG3EYruA02qlwh0MmjYT7EN2HkLAfL0gHq7J1zhgkOs1MK7uk04W80DfDaY8X_0VomDaluMtZsoKg_QJKvZq6za4Z6DslMD2sbc2t-5DHsiR84SN5WIXu4GrJVj2L80RkmQBj_UvGoaf51B7nRYJF0skf_xARYAGXwTviNV0CfLzIfS7RsP9NVg7J5GI_VXBrEccb21u-0G00~2",
+              "title": "Требования к участникам",
+              "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WoCejI_zOoVX2LaL0wqO0CFhgSn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3fT984Zgg6XtfF7DOYuoASZXpv7X2S-aDpQKveixfRT_FAJHgvuX2dRZjn9rGA3wreRSDjUqSHaD2G4T9jL2I5ScgL2HK3o4jrTGRIKXr4fArMcHLgkiRIaDKAnBGKHAIKfAG32iIYIMa4KTBHaWoXfIiIIDeqD3Q0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBslpOWmSZmEG4HUo_92m1D2FwBQthkfSbW6P4hmK15vRqMGjWRK-ESk0YSwLIgHGYeUc2xNLTny0KGFbhO3o01UqcIH4X_43A0sU_ZBUFRvUkz9DIc_aOs0MDO7I_OclRMeBTuaz5QHiZHnGN1wBWHJHC-K5NWXYu1ukszxj3AIiL4SJ6kv4y3wob_ijk8fA6f7kpTS4pb7v9bGPlPqjU-OLELn3y-adKwwIL8dZu1000~2",
+              "title": "Подписка на график тендеров",
+              "targetUrl": "https://lkk.setlgroup.ru/registration/?utm_medium=cpc&utm_source=yandex&utm_campaign=spbrealty-setlgroup-tenders-rsya-url-interesi-spbilo|115135194&utm_term=&utm_content=5504014056|16592313906|78537852|yandex.ru|desktop|16592313906|context|type1|78537852|78537852|0|none|2&yclid=8890477092262641663#podpiska"
+            }
+          ],
+          "body": "Регистрируйтесь на сайте для участия в тендерах и получения актуальной информации.",
+          "domain": "lkk.setlgroup.ru",
+          "punyDomain": "lkk.setlgroup.ru",
+          "title": "Тендеры от застройщика Setl Group. Стать партнёром"
+        },
+        "renderedDirectAssets": [
+          "domain",
+          "favicon",
+          "title",
+          "button"
+        ]
+      }
+    ],
+    "directTitle": {
+      "title": "Реклама",
+      "url": "https://direct.yandex.ru/?partner"
+    },
+    "ssr": {
+      "html": "<div data-container=\"outer\"><div class=\"idb2df446 vee266559\"><div class=\"ac9dad0ee b5a5b9ab u8ac32ed8\"><div data-id=\"72057611580608351\" data-ad-id=\"72057611580608351\" data-name=\"adWrapper\" lang=\"ru\" class=\"q5cbeae0a\"><div class=\"h3de99f59 g77c11616\"><div id=\"id3590031769702159839\" data-name=\"adaptiveConstructorAd\" data-theme=\"light\" class=\"pa50c7529\"><div class=\"m6ff12e22 v64d483b2\"></div><div data-backpack-size=\"145\" class=\"f2df74581 a804381f1 ic8ca15eb tb240a692 w835b451 dadc884f3 c4cbe2af4 l6a257ca4 h70336530\"><div data-block-name=\"header\" data-backpack-size=\"30\" class=\"c4cbe2af4 l6a257ca4 x22b64571\"><div class=\"p734578c4\"><div class=\"ib1621a5c h11564839\"><span data-label class=\"ie40ac864 ma5edc1b6\"><span>Реклама</span><span class=\"c8685b9b9\">•</span><span>18+</span></span></div><div class=\"ab0785f5e teee1c2f7\"><div data-close data-new-adtune=\"true\" data-sticky-adtune=\"false\" age=\"18+\" class=\"ue263462d xce2ff0dc df7ed6684 xb14ca334\"><div class=\"p83045ab9 o63cf8375 cffad39b1\"></div><div class=\"r888c9377\"><svg width=\"4\" height=\"16\" viewBox=\"0 0 4 16\" fill=\"#22242680\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"2\" cy=\"2\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"8\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"14\" r=\"1.5\"></circle></svg></div></div></div></div></div><div data-block-name=\"domain\" data-backpack-size=\"23\" class=\"c4cbe2af4 l6a257ca4 ue137d1ba\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/Wi8ejI_zOoVX2Lc70gKL06DdcGOi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5Auqo6JzLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_J7fm0NO-thFzwhA1ELyU45TJfwhnsH9Eu9f_DiAqQp86Bp9LAfLA8XAOBjjTr7SDIX_8xwG8x0UqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75NAuvKYobkBiIRUUKFupypg_TCwSIQUK6S3u1~2\" target=\"_blank\" data-asset-click=\"domain\" class=\"pd0f54e4a\"><div class=\"m34985ba2 g2a2bd2fb\"><div class=\"g61f6d3cf m1a8e7f93\"><img data-favicon src=\"https://favicon.yandex.net/favicon/events.yandex.ru?size=32&amp;stub=2\" alt class=\"a9dd1bdb4\" /></div><div class=\"if1d8f67d\"><div id=\"id7262711769702159840\" data-scroller data-autoplay data-autoplay-duration=\"800\" class=\"v3733f8c0\"><div class=\"heeeffc85 e30f904c6 x37070812\"><span class=\"a601e711f xb444ab13 tdbaf2111\">events.yandex.ru</span></div></div></div></div></a></div></div><div data-block-name=\"title\" data-backpack-size=\"50\" class=\"c4cbe2af4 l6a257ca4 u609dc690\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/Wi8ejI_zOoVX2Lc70gKL06DdcGOi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5Auqo6JzLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiH_J7fm0NO-thFzwhA1ELyU45TJfwhnsH9Eu9f_DiAqQp86Bp9LAfLA8XAOBjjTr7SDIX_8xwG8x0UqcIH4M_4FgTaOHSLCOAx47_d_gBkXzujvUUfM1wVHOqU3yhcWAvK04UTCyi4xzMvSMhe75NAuvKYobkBiIRUUKFupypg_TCwSIQUK6S3u1~2\" target=\"_blank\" data-asset-click=\"title\" class=\"pd0f54e4a\"><div data-highlight class=\"e30f904c6 d5ba7bd97\"><span class=\"a601e711f xb444ab13 o78204616\">Я люблю Фронтенд 2026 — конференция Яндекса</span></div></a></div></div><div data-block-name=\"button\" data-backpack-size=\"34\" class=\"c4cbe2af4 l6a257ca4 o1cc85f15\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/Wi0ejI_zOoVX2Lc80fKL04Fdc0Oi9ad0d40LRvY0tap225M5WFS20he92Ivm146fL1xG1VfyBdVsRBzpvmrtldx7wmrtk3PI4P2C7-gD9AJdqtaTejw8FftFkbfaLIeoGhhMrXf6GpNr1eaafI9h3MkIKf6rXfLg1qpPZ22Bc5KXJAcyeMAaXub833gEY7nyV7nyIZIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2j24YyYlYHkRWSAI2hmLrPpjU4bneH187ROfNJfSLfSbG-X8S-UBq7hWadDuqL991qCy1N7eq1b4iGGWGLyDXAA6Pmi1wGYUdn3qcOQ-t6-sG2jgCGByWIl9kTWGSC-AANT3xVC3NP0FORlW5iu8hmuiHjmzRN4Ne9DOYRIS2UQ3NipIHWJxGQjlHKJTdNa3aSSKG2zi8sCj9mOsYsQrQUF7mlM0pWIuExiW2s3cXry1TVcECI3DaIdhO0gNIiA5eiR2tiy3ua9sUs5AxyLaQ_kGB-Qu5uCUIchhrZqhFO634TetiOCyntEG58eXlU3HMORWaKGjZ9VuIMfjvlV4f5VV41MNpyiD-f87xm13gu_lSf9VMzJocfpot1myZVQJMfiQ_rHtJpp_eZkfbfZY5abfbBRm2DkgxhMDhi0nyLeUX62bBGilHEGGfQbjxAq5bVH-Wbz6OlwSk-IugGpvF_LnEpiHylmJmu0ReURrd_zLX1dQwE2IkeqzLvxOWcSKq-cs5RDPW35vahbKgb40bD5solwpg6PLRvwmvc203j9aaH5ln3wdP84N6J62knX_v_2Y_eVUJUNdwLWUdqND5W_Qve2kL217dpFB1E_rkN6gw11LrkfkvCObZSxQgsfzSWI7xEBz0pKOcqCbqWdm00~2\" target=\"_blank\" data-asset-click=\"button\" class=\"pd0f54e4a\"><button data-highlight class=\"od24f960a la1b70494\"><span>Перейти на сайт</span></button></a></div></div><div data-backpack-size=\"8\" class=\"l96f1cd9b\"></div></div></div></div></div></div><div class=\"ac9dad0ee b5a5b9ab wb36a561a\"><div data-id=\"72057610630241842\" data-ad-id=\"72057610630241842\" data-name=\"adWrapper\" lang=\"ru\" class=\"q5cbeae0a\"><div class=\"h3de99f59 g77c11616\"><div id=\"id6138441769702159840\" data-name=\"adaptiveConstructorAd\" data-theme=\"light\" class=\"pa50c7529\"><div class=\"m6ff12e22 t65ee76fc\"></div><div data-backpack-size=\"145\" class=\"f2df74581 a804381f1 ic8ca15eb tb240a692 w835b451 uaee2773d c4cbe2af4 l6a257ca4 d42bfe8fe\"><div data-block-name=\"header\" data-backpack-size=\"30\" class=\"c4cbe2af4 l6a257ca4 jf542c83f\"><div class=\"p734578c4\"><div class=\"ib1621a5c h11564839\"><span data-label class=\"ie40ac864 mfda6d7f8\"><span>Реклама</span></span></div><div class=\"ab0785f5e r469ad839\"><div data-close data-new-adtune=\"true\" data-sticky-adtune=\"false\" age class=\"ue263462d xce2ff0dc df7ed6684 vda7849fa\"><div class=\"p83045ab9 g8cfb293b cffad39b1\"></div><div class=\"r888c9377\"><svg width=\"4\" height=\"16\" viewBox=\"0 0 4 16\" fill=\"#22242680\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"2\" cy=\"2\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"8\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"14\" r=\"1.5\"></circle></svg></div></div></div></div></div><div data-block-name=\"domain\" data-backpack-size=\"23\" class=\"c4cbe2af4 l6a257ca4 t37e7eaf4\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBsloOzc04c9oWYFsNX2M0PaI_fNLTzx84q8pejI3Wmf8-Qm6ixSbH3bnahbGgbK8aD5smlQxh69WLb1y4zK8Kj9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2\" target=\"_blank\" data-asset-click=\"domain\" class=\"pd0f54e4a\"><div class=\"m34985ba2 u80dbeb35\"><div class=\"g61f6d3cf k1ba872dd\"><img data-favicon src=\"https://favicon.yandex.net/favicon/lkk.setlgroup.ru?size=32&amp;stub=2\" alt class=\"a9dd1bdb4\" /></div><div class=\"if1d8f67d\"><div id=\"id896881769702159840\" data-scroller data-autoplay data-autoplay-duration=\"800\" class=\"v3733f8c0\"><div class=\"heeeffc85 e30f904c6 fb8453c5c\"><span class=\"a601e711f xb444ab13 pae3ba4df\">lkk.setlgroup.ru</span></div></div></div></div></a></div></div><div data-block-name=\"title\" data-backpack-size=\"50\" class=\"c4cbe2af4 l6a257ca4 ab34e8b5e\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBsloOzc04c9oWYFsNX2M0PaI_fNLTzx84q8pejI3Wmf8-Qm6ixSbH3bnahbGgbK8aD5smlQxh69WLb1y4zK8Kj9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2\" target=\"_blank\" data-asset-click=\"title\" class=\"pd0f54e4a\"><div data-highlight class=\"e30f904c6 db360d3d9\"><span class=\"a601e711f xb444ab13 c4ffd9d58\">Тендеры от застройщика Setl Group. Стать партнёром</span></div></a></div></div><div data-block-name=\"button\" data-backpack-size=\"34\" class=\"c4cbe2af4 l6a257ca4 m45f405db\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WnaejI_zOoVX2LaC0rqO03Dhfyn3D3q1Sm9Ll642UZC98rGL0juB2EWcU6x8wKgbye0kqETpkRDd-vqxRxZpzJjURxZ3VUQm5XaLvN3coF64vj8RcajpH9tJsxwVKsZKpX65Ed7RYJkXK7ngGsyRQjivZ8Q4W8wIQg4aAv9LgKYe7a9Qggataf3g92HhjSYgLDStb8QeLYIWeoGafIGX6LOa4aj88uwMZ91a32bPaqRGeA7T0LCs8yWYPbK8Koflg1ZfOI8IWuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq0h0XAl8dvaBYv72iXgS5UMypNnAAxnQ7GE8ATBzvq74J-4HtpmUWzS4qvk6Yj88EbcWAyy6WCebo2422hWiPLGpE1WFI0Jq-CVaZ3Nseqt12TqW8nWVsr4RdOIg1Si2Lyuds-Occm0-mtV03PmVLMLo2WRjhwEqErFWxYP1Eo9LiFUJ0BsHAjXo-688nAm5xQHaOORGxDTi_BauNl1OW1V6joL1R1rGAllNnZ29hOya5Q3m_21for0AXqhYXOBMmixl0_9oPajXIk_bT5lhe05g_35a9kwzev9ZyB6YEaOtSEOORxB2K0ItV1kgC1qIw0Gmax-8xGqzNwZpv7l5-TVxdxOawiKF_YgTlY_FaVWljVd2DpdNl13xEzBgoPqNqi_HOdyMVefIYJJp7nYbWDer7LTnz9c7_Ye24KtRd1ZigLt73qsDdehGsTz7Q7RdpV3y6MlnmCCqfEz4XzBsloOzc04c9oWYFsNX2M0PaI_fNLTzx84q8pejI3Wmf8-Qm6ixSbH3bnahbGgbK8aD5smlQxh69WLb1y4zK8Kj9iaHI7y1_B0sI_XRUFR9IhzfDJcFGRsGICOtQzOqBQMOBVuKr7QniWHnSM1A7WH3LD-q9KW1kx1ektzxb3AIaK4iV5k9Cy3Qwd_ifk8f27ftcnTy0obNrAbmTlPabT-eTCL1Bz-4lKwQQK87Zu1~2\" target=\"_blank\" data-asset-click=\"button\" class=\"pd0f54e4a\"><button data-highlight class=\"od24f960a w4b06ec5a\"><span>Узнать больше</span></button></a></div></div><div data-backpack-size=\"8\" class=\"geda1e6d5\"></div></div></div></div></div></div></div></div>",
+      "css": ".idb2df446{display:-webkit-box;display:-ms-flexbox;display:flex;max-height:100%;max-width:100%;-webkit-box-align:stretch;-ms-flex-align:stretch;align-items:stretch;-webkit-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row;margin:0 auto}.vee266559{width: 560px; height: 145px; gap: 5px;}.ac9dad0ee{position:relative;-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-transform:translateZ(0);transform:translateZ(0);border-radius:inherit}.ac9dad0ee.b5a5b9ab{overflow:hidden}.pa50c7529{border-radius:inherit;position:relative;-webkit-box-sizing:border-box;box-sizing:border-box;width:100%;height:100%;font-family:YS Text Variable,YS Text,Arial,sans-serif}.pa50c7529 [data-highlight]{pointer-events:auto}@media (pointer:fine){.pa50c7529 [data-highlight]:hover{-webkit-filter:brightness(80%) contrast(180%);filter:brightness(80%) contrast(180%)}.pa50c7529[data-theme=dark] [data-highlight]:hover{-webkit-filter:brightness(120%) contrast(120%);filter:brightness(120%) contrast(120%)}.pa50c7529:hover [data-animated]{-webkit-animation-play-state:paused;animation-play-state:paused}}.m6ff12e22{width:100%;height:100%;-webkit-box-sizing:border-box;box-sizing:border-box;position:absolute;pointer-events:none;z-index:2;border-radius:inherit}.u8ac32ed8{width: 277px; height: 145px; border-radius: 0px;}.v64d483b2{border: 1px solid #5C60661A;}.q5cbeae0a{position:relative;display:block;width:100%;height:100%;border-radius:inherit}.tdb5c40c2{right:0;z-index:2}.tdb5c40c2,.t43f6422d{position:absolute;top:0}.t43f6422d{display:block;left:0;z-index:0;cursor:pointer}.h3de99f59,.t43f6422d{height:100%;width:100%}.h3de99f59{pointer-events:none;border-radius:inherit}.h3de99f59:hover .invisible-button-icon{opacity:.25}.g77c11616{pointer-events:auto}.dadc884f3{background-color: #ffffff; border-radius: 0px; border: 0px solid #5C60661A;}.f2df74581{cursor:pointer;display:-webkit-box;display:-ms-flexbox;display:flex;max-width:100%;position:relative;-ms-flex-negative:unset!important;flex-shrink:unset!important}.f2df74581.w835b451{overflow:hidden}.f2df74581.ic8ca15eb{height:100%}.f2df74581.tb240a692{width:100%}.f2df74581.ja5b61335{-ms-flex-negative:0!important;flex-shrink:0!important;-ms-flex-preferred-size:auto;flex-basis:auto}.f2df74581.r365fc501{-webkit-box-flex:1;-ms-flex:1 0 auto;flex:1 0 auto}.f2df74581.oed6f6a73{position:relative!important}.qd23051a7{position:absolute;width:100%;height:100%;pointer-events:auto}.a804381f1{-webkit-box-orient:vertical;-ms-flex-direction:column;flex-direction:column}.a804381f1,.q8501fa4d{-webkit-box-direction:normal}.q8501fa4d{-webkit-box-orient:horizontal;-ms-flex-direction:row;flex-direction:row}.b8b30aa04{position:absolute;bottom:.2em;right:0}.b8b30aa04.o4b052250{bottom:0}.h70336530{padding-bottom: 0px; padding-top: 0px; padding-left: 0px; padding-right: 0px;}.c4cbe2af4{-webkit-box-sizing:border-box;box-sizing:border-box;position:relative;pointer-events:none;-ms-flex-negative:0;flex-shrink:0}.c4cbe2af4.l6a257ca4{overflow:hidden}.x22b64571{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.p734578c4{width:100%;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;grid-gap:5px;gap:5px}.ib1621a5c,.p734578c4{display:-webkit-box;display:-ms-flexbox;display:flex}.ib1621a5c{-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline;-ms-flex-negative:1;flex-shrink:1;-webkit-box-pack:start;-ms-flex-pack:start;justify-content:flex-start;overflow:hidden;grid-gap:6px;gap:6px}.ib1621a5c[\\:has\\(img\\[data-brand-logo\\]\\)]{-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.ib1621a5c:has(img[data-brand-logo]){-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.maf926db1{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;max-width:100%;-ms-flex-negative:1;flex-shrink:1;overflow:hidden}.k5ba481e2{width:100%}.ie40ac864{display:-webkit-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;line-height:13px;font-size:8px;text-transform:uppercase;letter-spacing:.075em;text-decoration:none;white-space:nowrap}.ue263462d:hover{background-color:rgba(0,0,0,.2)}.jecc292d{-webkit-box-align:center;-ms-flex-align:center;align-items:center}.l93da0745,.jecc292d{display:-webkit-box;display:-ms-flexbox;display:flex}.l93da0745{-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline}.h11564839{-webkit-box-align:baseline!important;-ms-flex-align:baseline!important;align-items:baseline!important}.v83a5b09{-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.s8b3f1726{-ms-flex-negative:0!important;flex-shrink:0!important}.ab0785f5e{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center}.ma5edc1b6{color: #2E3033CC;}.teee1c2f7{height: 24px; margin-right: -6px;}.c8685b9b9{margin:0 2px}.qf6f0abef{cursor:default}.t97905c75{text-decoration:none;pointer-events:auto;color:inherit}.xce2ff0dc{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;pointer-events:auto;border-radius:50%;position:relative;cursor:pointer;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}.xce2ff0dc.ocab17c5b{border-radius:10px}.xce2ff0dc:before{content:\"\";position:absolute;top:-4px;right:calc(-4px - 4px - 0px);right:calc(-4px - 4px - var(--badge-indent, 0px))}.xce2ff0dc.t4970e92e:before{content:unset}.xce2ff0dc.vcecf93f1:before{top:50%;right:50%;-webkit-transform:translate(50%,-50%);transform:translate(50%,-50%)}.xce2ff0dc.xa94fa6cc:before{background-color:rgba(255,0,0,.4)}.xce2ff0dc .p83045ab9{height:100%;width:100%;position:absolute;top:0;left:0;border-radius:inherit;-webkit-transition:opacity .15s;transition:opacity .15s;-webkit-transition:background-color .5s ease-in-out;transition:background-color .5s ease-in-out;color:var(--secondary-color);background:var(--label-bg-color);pointer-events:none}.xce2ff0dc.t9f5f73d7 .p83045ab9{background-color:#fff;opacity:.8}.xce2ff0dc.t9f5f73d7 .r888c9377 svg{fill:#575c66}.xce2ff0dc.rfe14094f .p83045ab9,.xce2ff0dc.h713409ad .p83045ab9{background:none}.xce2ff0dc.rfe14094f:hover{background-color:#e9e9e9}.xce2ff0dc.h713409ad:hover{background-color:rgba(248,250,255,.2)}.xce2ff0dc:hover .p83045ab9{opacity:.8}.xce2ff0dc:hover .p83045ab9.n9d7bcad3{opacity:.5}.xce2ff0dc:hover .p83045ab9.cffad39b1{opacity:.9}.xce2ff0dc .r888c9377{z-index:1;pointer-events:none;-webkit-transition:fill .5s ease-in-out;transition:fill .5s ease-in-out}.xce2ff0dc .r888c9377 svg{display:block;fill:var(--tertiary-color);-webkit-transform:translate(0);transform:translate(0)}.xce2ff0dc.bfe8873e2{width:12px;height:12px}.xce2ff0dc.bfe8873e2.ocab17c5b{height:12px;width:6px}.xce2ff0dc.bfe8873e2.ocab17c5b.e74b019ed{height:6px;width:12px}.xce2ff0dc.bfe8873e2:before{width:28px;height:28px}.xce2ff0dc.kb1019ada{width:16px;height:16px}.xce2ff0dc.kb1019ada.ocab17c5b{height:16px;width:8px}.xce2ff0dc.kb1019ada.ocab17c5b.e74b019ed{height:8px;width:16px}.xce2ff0dc.kb1019ada:before{width:32px;height:32px}.xce2ff0dc.df7ed6684{width:24px;height:24px}.xce2ff0dc.df7ed6684.ocab17c5b{height:24px;width:12px}.xce2ff0dc.df7ed6684.ocab17c5b.e74b019ed{height:12px;width:24px}.xce2ff0dc.df7ed6684:before{width:42px;height:42px}.xce2ff0dc.k2e517425{width:28px;height:28px}.xce2ff0dc.k2e517425.ocab17c5b{height:28px;width:14px}.xce2ff0dc.k2e517425.ocab17c5b.e74b019ed{height:14px;width:28px}.xce2ff0dc.k2e517425:before{width:42px;height:42px}.xce2ff0dc.s23a5fd7d{width:32px;height:32px}.xce2ff0dc.s23a5fd7d.ocab17c5b{height:32px;width:16px}.xce2ff0dc.s23a5fd7d.ocab17c5b.e74b019ed{height:16px;width:32px}.xce2ff0dc.s23a5fd7d:before{width:48px;height:48px}.xb14ca334{--tertiary-color: #232426B3;}.o63cf8375{--secondary-color: #232426B3; --label-bg-color: #FFFFFF80;}.ue137d1ba{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.pd0f54e4a{cursor:pointer;pointer-events:auto;max-width:100%;color:inherit;text-decoration:inherit;font-weight:inherit;-webkit-hyphens:manual;hyphens:manual;letter-spacing:normal;line-height:inherit}.yfbb55859{font-size:0;max-width:100%}.g2a2bd2fb{font-size: 13px; line-height: 17px; gap: 7px;}.m34985ba2{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row;-ms-flex-wrap:nowrap;flex-wrap:nowrap;-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline}.m34985ba2,.heeeffc85{white-space:nowrap}.p8b2547d{-ms-flex-item-align:center;align-self:center}.p8b2547d img{width:100%;height:100%}.m1a8e7f93{width: 16px; height: 16px; min-width: 16px; background-color: #ffffff00; overflow: unset; border-radius: 0px;}.g61f6d3cf{-ms-flex-item-align:center;align-self:center}.g61f6d3cf img{width:100%;height:100%}.a9dd1bdb4{display:block;width:16px;height:16px}.o63309b7a{display:block;width:32px;height:32px}.x9a35001a{display:block;width:48px;height:48px}.qfd16ec0{display:block;width:60px;height:60px}.l43ab694e{background-color:#fff;border-radius:2px}.if1d8f67d{overflow:hidden;pointer-events:all}.v3733f8c0{overflow-x:auto;scrollbar-width:none}.v3733f8c0::-webkit-scrollbar{display:none}.hac3eae36{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),color-stop(#000),to(transparent));-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000 calc(100% - 1em),transparent);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),color-stop(#000),to(transparent));mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000 calc(100% - 1em),transparent);-webkit-mask-size:100%;mask-size:100%;-webkit-mask-position:0;mask-position:0;-webkit-transition:-webkit-mask-image .3s;transition:-webkit-mask-image .3s;transition:mask-image .3s;transition:mask-image .3s,-webkit-mask-image .3s}.hac3eae36.q4af84ea1{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,#000),color-stop(#000),to(transparent));-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 1em),transparent);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,#000),color-stop(#000),to(transparent));mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 1em),transparent)}.hac3eae36.s325fbe3a{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),to(#000));-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),to(#000));mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000)}.x37070812{font-size: 13px; line-height: 17px; --text-color: rgb(37, 39, 41);}.xb444ab13{color:inherit;color:var(--text-color,inherit);text-decoration:inherit;font-weight:inherit;-webkit-hyphens:manual;hyphens:manual;letter-spacing:normal;line-height:inherit;max-width:100%;font-family:YS Text Variable,YS Text,Arial,sans-serif}.xb444ab13 span[data-branding-keyword]{background:-webkit-gradient(linear,left top,right top,from(var(--text-color)),color-stop(50%,var(--text-color)),color-stop(60%,var(--text-color)),color-stop(75%,var(--text-color)),color-stop(90%,var(--text-color)),to(var(--text-color)));background:linear-gradient(90deg,var(--text-color),var(--text-color) 50%,var(--text-color) 60%,var(--text-color) 75%,var(--text-color) 90%,var(--text-color));background:-webkit-gradient(linear,left top,right top,from(var(--text-color)),color-stop(50%,var(--text-color)),color-stop(60%,var(--animated-text-color,var(--text-color))),color-stop(75%,var(--animated-text-color,var(--text-color))),color-stop(90%,var(--animated-text-color,var(--text-color))),to(var(--text-color)));background:linear-gradient(90deg,var(--text-color),var(--text-color) 50%,var(--animated-text-color,var(--text-color)) 60%,var(--animated-text-color,var(--text-color)) 75%,var(--animated-text-color,var(--text-color)) 90%,var(--text-color));-webkit-background-clip:text;background-clip:text;background-size:300px 100%;color:transparent;-webkit-animation:q51d26b44 6s ease-in-out calc(4s * var(--n)) infinite;animation:q51d26b44 6s ease-in-out calc(4s * var(--n)) infinite}.w240491e8{overflow:hidden;text-overflow:ellipsis;display:-webkit-box!important;-webkit-line-clamp:var(--line-clamp);-webkit-box-orient:vertical}.e30f904c6{display:-webkit-box;display:-ms-flexbox;display:flex;color:inherit;color:var(--text-color,inherit)}@-webkit-keyframes q51d26b44{0%{background-position:-300px 0}60%,to{background-position:0 0}}@keyframes q51d26b44{0%{background-position:-300px 0}60%,to{background-position:0 0}}.a601e711f{display:inline}.l4657c30e{word-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}.u609dc690{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.d5ba7bd97{font-size: 18px; line-height: 22px; font-weight: bold; --text-color: rgb(37, 39, 41);}.o1cc85f15{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px; margin: auto 0 0;}.la1b70494{color: #ffffff; background-color: rgba(25,109,255,1); height: 28px; line-height: 26px; font-size: 13px; padding-left: 8px; padding-right: 8px; gap: 6px; border-radius: 4px;}.od24f960a{cursor:pointer;display:-webkit-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;outline:none;border:none;font-family:YS Text Variable,YS Text,Arial,sans-serif}.pe43de93:before{width:480%;height:70%;left:-230%;top:-20%;opacity:0;position:absolute;will-change:left,opacity,top;-webkit-transform:rotate(-30deg);transform:rotate(-30deg);background:hsla(0,0%,100%,.12941);background:-webkit-gradient(linear,left top,right top,from(hsla(0,0%,100%,.23)),color-stop(75%,hsla(0,0%,100%,.63)),color-stop(95%,hsla(0,0%,100%,.85)),to(hsla(0,0%,100%,0)));background:linear-gradient(90deg,hsla(0,0%,100%,.23) 0,hsla(0,0%,100%,.63) 75%,hsla(0,0%,100%,.85) 95%,hsla(0,0%,100%,0));-webkit-transition-duration:.5s,.5s,.15s;transition-duration:.5s,.5s,.15s;-webkit-transition-property:left,top,opacity;transition-property:left,top,opacity;-webkit-transition-timing-function:ease;transition-timing-function:ease;content:\"\";-webkit-animation:qbdf43541 5s ease-in-out 1s infinite;animation:qbdf43541 5s ease-in-out 1s infinite}.s3fc0b45d{word-break:break-word}.ta6d1d88,.iffb88f47{width:1em;height:1em}@-webkit-keyframes qbdf43541{15%,to{left:-50%;opacity:1;top:-50%}0%{left:-230%;opacity:0;top:-20%}}@keyframes qbdf43541{15%,to{left:-50%;opacity:1;top:-50%}0%{left:-230%;opacity:0;top:-20%}}.l96f1cd9b{padding-top: 8px;}.wb36a561a{width: 277px; height: 145px; border-radius: 0px;}.t65ee76fc{border: 1px solid #5C60661A;}.uaee2773d{background-color: #ffffff; border-radius: 0px; border: 0px solid #5C60661A;}.d42bfe8fe{padding-bottom: 0px; padding-top: 0px; padding-left: 0px; padding-right: 0px;}.jf542c83f{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.mfda6d7f8{color: #2E3033CC;}.r469ad839{height: 24px; margin-right: -6px;}.vda7849fa{--tertiary-color: #232426B3;}.g8cfb293b{--secondary-color: #232426B3; --label-bg-color: #FFFFFF80;}.t37e7eaf4{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.u80dbeb35{font-size: 13px; line-height: 17px; gap: 7px;}.k1ba872dd{width: 16px; height: 16px; min-width: 16px; background-color: #ffffff00; overflow: unset; border-radius: 0px;}.fb8453c5c{font-size: 13px; line-height: 17px; --text-color: rgb(37, 39, 41);}.ab34e8b5e{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.db360d3d9{font-size: 18px; line-height: 22px; font-weight: bold; --text-color: rgb(37, 39, 41);}.m45f405db{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px; margin: auto 0 0;}.w4b06ec5a{color: #ffffff; background-color: rgba(25,109,255,1); height: 28px; line-height: 26px; font-size: 13px; padding-left: 8px; padding-right: 8px; gap: 6px; border-radius: 4px;}.geda1e6d5{padding-top: 8px;}",
+      "salt": "uuCM3OtbDd",
+      "encoding": "raw",
+      "timing": {
+        "htmlRenderTiming": 4255.851000547409,
+        "cssRenderTiming": 41.86400771141052,
+        "essenceCreateAliases": 12.720003724098206,
+        "essenceCreateMolecules": 1076.2640088796616,
+        "essenceArrangeMolecules": 74.61400330066681,
+        "essenceGetBestVariant": 1709.9020034074783
+      }
+    }
+  },
+  "rtbAuctionInfo": {
+    "bidReqId": 218879671629519580,
+    "bidReqIdStr": "218879671629519591",
+    "bsGeneratedUniqID": "9154246431769702131",
+    "dspId": 1
+  },
+  "common": {
+    "deviceType": "5",
+    "sspBidId": "",
+    "isStaff": "false",
+    "whyThisAdLandingLink": "https://adreasons.yandex-team.ru/?hitlogid=218879671121746663",
+    "sspId": "",
+    "labelsLang": "1",
+    "sdkSettings": {
+      "AutoRefreshPeriod": 0,
+      "TimeToClose": 5,
+      "MaxHeight": 0,
+      "TimeToReward": 5,
+      "MinWidth": 0,
+      "AdPodEnable": true,
+      "EndCardEnable": true,
+      "MaxWidth": 0,
+      "MinHeight": 0
+    },
+    "reloadTimeout": "30",
+    "userGroup": "17",
+    "impId": "11",
+    "labelTuneLanguage": "ru",
+    "syntheticMatch": "",
+    "bidReqIdStr": "218879671629519591",
+    "showAdTune": "",
+    "pageId": "265853",
+    "cpdPageType": "0",
+    "designId": "17019257",
+    "actualBannerCount": 2,
+    "pageLang": "0",
+    "detailedDeviceType": "16",
+    "bannerCountBeforeSelect": "0",
+    "productType": "direct",
+    "uniformat": true,
+    "shop_id": "0",
+    "userRegion": "RU",
+    "externalDSP": "0",
+    "linkHead": "https://yandex.ru/an/count/WNSejI_zOoVX2LaE0KqB02EJIILG264d_n5Q4gZYGJHw46M_u_M6Ero_azLnz3exdPFrENeUZG6KIn1211Nms4eePd2mp0xVe0vUtmREShFrFMmQcLwRCjZ6grGgbKeDD8BOx33XjzK4YrJMt6QZUxui5jGtd2SfX8CP0mTn01ku6iP9m9veDUpD961Fj1gsleOSGxDzqcWzJJP3umGjJgQ80mZx0B9P0j2tO30ldQZCNTbtDoeNk2KyRG5IwLXHj5ZOVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZEufwBIkwzWOiOSnqp3Y2bfTX_4k9m19TCExeGBJBO5223lvZz3Ir6CsT_yR0sZKTLt7qcOV-AW8HJTkiLlI0q86BoAWuMJeR0vSf109JHSiA3-GBHG6j9iaHHJySYQFuO8B12uhHEsxlLFk6QOXYI92HfLcVoxKrWijKTN44nKEVrjxoG7km_k-qzs5XS8yrJM3Zt1uKM29oWC0~2",
+    "hitlogId": "218879671121746663",
+    "stationaryConnection": "1",
+    "commonRtbVisibility": "1",
+    "isYandex": "0",
+    "stripeAnimation": "0",
+    "stripeType": "1",
+    "commonRtbVisibilityProb": "100",
+    "isYandexPage": "1",
+    "flagsMap": {
+      "YASPSTABLEVER": [
+        {
+          "value": "1.762.13663",
+          "testId": "1478067"
+        }
+      ],
+      "VAS_STABLE_VERSION": [
+        {
+          "value": "1301686",
+          "testId": "1347458"
+        }
+      ],
+      "VAS_LOG_CONTENT_DURATION_PERCENT": [
+        {
+          "value": "1",
+          "testId": "1327062"
+        }
+      ],
+      "DISABLE_DESTROY_EXTERNAL_CREATIVE_AD_USER_CLOSE_EVENT": [
+        {
+          "value": "exp",
+          "testId": "1449275"
+        },
+        {
+          "value": "exp",
+          "testId": "1449272"
+        }
+      ],
+      "VAS_RECALCULATE_REQUEST_METHOD_FOR_WRAPPER_URL": [
+        {
+          "value": "exp",
+          "testId": "1450545"
+        }
+      ],
+      "QR_BLACK_LIST_CLIENT_IDS": [
+        {
+          "value": "109238945:88772210:309062065",
+          "testId": "1471021"
+        }
+      ],
+      "PCODE_STABLE_VERSION": [
+        {
+          "value": "1303695",
+          "testId": "1477977"
+        }
+      ],
+      "NEW_KEBAB": [
+        {
+          "value": "ctl",
+          "testId": "1471791"
+        }
+      ],
+      "USE_NEW_KEBAB_SIZE": [
+        {
+          "value": "ctl",
+          "testId": "1471791"
+        }
+      ],
+      "ADD_IMAGE_GALLERY_IN_NEURO_DESIGN": [
+        {
+          "value": "ctl",
+          "testId": "1467261"
+        }
+      ],
+      "HAPPINESS_SURVEY_ICON": [
+        {
+          "value": "hand",
+          "testId": "1353317"
+        }
+      ],
+      "VAS_IGNORE_TARGET_REF_FROM_AD_CONFIG": [
+        {
+          "value": "ctl",
+          "testId": "1470063"
+        }
+      ],
+      "ADDING_ADDITIONAL_PARAMETERS_FOR_DISTRIBUTION": [
+        {
+          "value": "ctl",
+          "testId": "1473956"
+        }
+      ],
+      "USE_SEQUENTIAL_LOAD_AD_FOR_SKIP_TOKEN": [
+        {
+          "value": "ctl",
+          "testId": "1473477"
+        }
+      ],
+      "USE_BK_WIZ_COLOR_FOR_AVG_COLOR": [
+        {
+          "value": "ctl",
+          "testId": "1474010"
+        }
+      ],
+      "SUPPORT_VERTICAL_SNAP_FOR_SCROLLING": [
+        {
+          "value": "exp",
+          "testId": "1472681"
+        }
+      ]
+    },
+    "testIds": "1387854,0,67;1384006,0,90;1457616,0,54;1433082,0,0;1404022,0,49;1447467,0,6;1471934,0,68;1471791,0,49;1467261,0,3;1353317,0,57;1470063,0,15;1473956,0,92;1473477,0,24;1474010,0,84;1472681,0,11;1467594,0,86;1464979,0,49",
+    "pcodever": "1303695",
+    "activeTestIds": [
+      "1353317,0,57",
+      "1471791,0,49"
+    ]
+  },
+  "settings": {
+    "11": {
+      "urlBackgroundColor": "#196dff",
+      "height": 145,
+      "fontSize": 1,
+      "titleFontSize": 3,
+      "titleFontSizePercent": "142%",
+      "fontFamily": "",
+      "isProductPromo": false,
+      "name": "adaptive0418",
+      "ssrName": "ssr-adaptive-leaderboard",
+      "blockId": "R-I-265853-11",
+      "smallPictures": false,
+      "animationCount": null,
+      "domainFontSize": 0,
+      "linkTail": "https://yandex.ru/an/rtbcount/1Q_uNhlV0LK200000000U9nJ_Ap7-c115bUzuNCfZYlFvd8oM_8tLsSo084dJ2JKTELfrzXQFXQ6L4QWUEPpgIDRGUAbt41UBHEGQ6K4aJCPNpy5AM1WMCYuWXl2MWbdxMLqRU9aE0hcdsK4YLq5atSP6KGO6VuopW8QCPS997AMwJyGl68I-6K_yV1pAGQ6nJpJddHuiZ7yPU82MSRC2YHxcGM0v5Hca8Qvp23hDp8V_SqcmrlLLtYI6UQhgs3vks3o9xE34p_4UIoL6y5231jO_iC0umuMnWCiB1TOtdrecdVW-AUZ4ZTPmAePFjW_XBFUie3Slu1Ly2Jh_6mniE1DLfXjNrb11dMmDR1COFjyTqf3tvLPhVKps3uUsCAuW6tZx1F7BtrfRBp2k98DPje1jkGJR2oFs7XTIWoj_3spl2oImiqiViBb9xB3MBFOsGsD3OpDB4qti3FkO6SwmIx-W7tbjTzpFYxhFMxqWvsdWwDg0WVZ0exNfzbNSAoOph81HEpWOBp5WH6C2pWRc5Tmlc7Qm2bqWPFn0oVZ3qx61Ln0ZHz1mSlGiEk3GoCtZDK9Pcs8--TmWRkfe-b1OqD30-C3RiQtt74NnK8-SGk0gF__6U3W1pSZ0E6Dm5q0",
+      "renderLinkTail": "https://yandex.ru/an/rtbcount/1HxBZAlX0LK200000000U9nJ_Ap7-c115bUzuNCfZYlFvd8oM_8tLsSo084dJ2JKTELfrzXQFXQ6L4QWUEPpgIDRGUAbt41UBHEGQ6K4aJCPNpy5AM1WMCYuWXl2MWbdxMLqRU9aE0hcdsLa1efSPGJ9t6La465a-Ciu2sZ4N2QGo5cc_q3mYadWb_t4my-b61WMyqnxqk79nl2NYGja6JChaEnb5W2IKvb16kOoWwpVo7pqDviCRrLVuKbccA-kWkNlWicVp0vE_13diLHk10inR63v3mECErWO3x2mN61vzw5fte7ZduvAt6G1gsRuOFyGpdhB0dB_0bR1awppiyN0WZTPORPzPGKPrC7Mm3A1xVFTAGrzLsQrrizW-tXW2-C2jespJno_zAMnyGhZIZQOQGVOaa-miJnYutKfCRJozypoiaWADxFu2PUVo0vZpM9dDpGsC3QpDDt0phY3dUa4k_W3zfNNVi_vkAptkD4FTfuEZge978mBE5wVPb_1iM8womOGiOE3yHO7HZ0ku6nWNi7vXca3fz05JiOFd8m_E1aNS04rVWG5BqF3hWyEZTmmLYUOjI7kdyC5xgQEfWUD3GqDZ0-u6TzonrqK2_d4BG2Y_lzdW8CVt8m0vKV0Nm00",
+      "viewabilityTracking": [
+        {
+          "url": "https://yandex.ru/an/tracking/WXKejI_zOoVX2Lbo0JqG06FUT0Oi9ad0V041dGuXzY0QFOYoRq9kn9EJyWGAsqvZXfqolRX3NkexunuqtQjG1tmcGDpC8TCvEtGQlPst3VFXZnQdoL7v41xwuAN5YaqMF-mU12CzZ75OIGIYjTtAekT1x0VWcd1oqrX10aat0toLC82EKoMFnW3A9GWXWWfuR2KKCpXOV_ErqOCavwh25Y6ZYd0mO-0WxjbYsJ1kyjWtY4LuSUAcOUnhoCqaQ5vzDMEPcZ0zLWLRmotX10w0QsBDofE7xmMB0NnfS5SMmDO1hGx-eiMAJHOnw4idAdDNzjsDoWMk0Oj9BEmbF6q1KkbOKRHOs9Pm0blGVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ6v2Se6Z3aXR7YaKyKrTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDFRPFFY2BZn_sEnN43vv01zV_FgMallSf9VMv9NWO-Jkj9ZNsjVw8RlvPVqGtCyqnXCno08swhkjOsan12bgMtYb8GSlIMzybHSZdoV-hYTdOZnEWw_6MzL-F5TJfwloMrdKchA1EL-Ur8vh4DVbiXctLeDTZva38WOlCbKgbKeY4fWisZQJyH1wGe06bKgaC3lp6e80xtZI0HMwhQIwYOmyUTMTSwi8eHFgF3HnFbMexzX2tVwz8O9zrTU3zifl_0m00~2?action-id=25",
+          "time": 5000
+        },
+        {
+          "url": "https://yandex.ru/an/tracking/WXKejI_zOoVX2Lbo0JqG06FUT0Oi9ad0V041dGuXzY0QFOYoRq9kn9EJyWGAsqvZXfqolRX3NkexunuqtQjG1tmcGDpC8TCvEtGQlPst3VFXZnQdoL7v41xwuAN5YaqMF-mU12CzZ75OIGIYjTtAekT1x0VWcd1oqrX10aat0toLC82EKoMFnW3A9GWXWWfuR2KKCpXOV_ErqOCavwh25Y6ZYd0mO-0WxjbYsJ1kyjWtY4LuSUAcOUnhoCqaQ5vzDMEPcZ0zLWLRmotX10w0QsBDofE7xmMB0NnfS5SMmDO1hGx-eiMAJHOnw4idAdDNzjsDoWMk0Oj9BEmbF6q1KkbOKRHOs9Pm0blGVfb6PJE2B69MXJ2byeQAaHuc8Z78b6cGoVgjZ6v2Se6Z3aXR7YaKyKrTUyUaPx4nOZf6zp1ccEzo0f14DxmRAZ3T4YY4i9F_22rDFRPFFY2BZn_sEnN43vv01zV_FgMallSf9VMv9NWO-Jkj9ZNsjVw8RlvPVqGtCyqnXCno08swhkjOsan12bgMtYb8GSlIMzybHSZdoV-hYTdOZnEWw_6MzL-F5TJfwloMrdKchA1EL-Ur8vh4DVbiXctLeDTZva38WOlCbKgbKeY4fWisZQJyH1wGe06bKgaC3lp6e80xtZI0HMwhQIwYOmyUTMTSwi8eHFgF3HnFbMexzX2tVwz8O9zrTU3zifl_0m00~2?action-id=26",
+          "time": 10000
+        }
+      ],
+      "favicon": false,
+      "button": true,
+      "noSitelinks": false,
+      "c11n": {},
+      "imagesFirst": false,
+      "limit": 2,
+      "linksUnderline": true,
+      "callouts": false,
+      "skipCyclicAnimation": false,
+      "layout": "horizontal",
+      "paddingsDisabled": false,
+      "noBodyText": false,
+      "fullClickable": false,
+      "headerFontSize": null,
+      "imageRadius": 0,
+      "extendedTitleFontRange": false,
+      "feedbackBgColor": false,
+      "fullscreen": false,
+      "fullscreenDuration": 10,
+      "floorAd": false,
+      "rewarded": false,
+      "rewardedOverlay": false,
+      "interscroller": false,
+      "interscrollerAnimation": true,
+      "firstAdGrow": 1,
+      "carousel": false,
+      "spaceAroundCarousel": null,
+      "advLessWidthCarousel": null,
+      "pcodeSettings": {
+        "border": true,
+        "maxHeight": 145,
+        "themeIndicator": "light",
+        "interscroller": false,
+        "minHeight": 145,
+        "borderRadius": false
+      },
+      "bannerFlags": "age18,mass_media",
+      "viewNotices": [],
+      "sizes": {
+        "width": 560,
+        "minHeight": 145,
+        "maxHeight": 145
+      },
+      "feedShownFormats": "",
+      "feedRecHit": 0,
+      "adFilter": "yabs.NzIwNTc2MTA2MzAyNDE4NDIKNzIwNTc2MTE1ODA2MDgzNTE=",
+      "bannerIds": [
+        "72057610630241842",
+        "72057611580608351"
+      ]
+    }
+  }
+}

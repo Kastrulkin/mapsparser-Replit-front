@@ -1,0 +1,2291 @@
+{
+  "data": {
+    "requestId": "1769701828157418-3428469632-addrs-upper-yp-23",
+    "requestSerpId": "1769701828157418-3428469632-addrs-upper-yp-23",
+    "requestContext": "ZAAAAAgBEAAaKAoSCQAAAAAAkHZAEQAAAAAAoGZAEhIJAAAAAAAA8L8RAAAAAAAA8L8iBQABAgMEKAo4AED+//////////8BSAFqAJ0BzczMPaABAKgBAL0BO2jDF8IBBZ/9zeADggIAigIAkgIAmgIMZGVza3RvcC1tYXBz",
+    "requestQuery": "empty",
+    "requestCorrectedQuery": "empty",
+    "requestBounds": [
+      [
+        37.048427,
+        55.43644866
+      ],
+      [
+        38.175903,
+        56.04690174
+      ]
+    ],
+    "displayType": "multiple",
+    "totalResultCount": 1,
+    "requestResults": 1,
+    "items": [
+      {
+        "type": "business",
+        "requestId": "1769701828157418-3428469632-addrs-upper-yp-23",
+        "index": 0,
+        "analyticsId": "0",
+        "title": "ГКУ СПб Парк 300-летия Санкт-Петербурга",
+        "description": "Санкт-Петербург, парк имени 300-летия Санкт-Петербурга",
+        "address": "Санкт-Петербург, парк имени 300-летия Санкт-Петербурга",
+        "coordinates": [
+          30.202163,
+          59.984085
+        ],
+        "displayCoordinates": [
+          30.202163,
+          59.984085
+        ],
+        "bounds": [
+          [
+            30.188469,
+            59.979583
+          ],
+          [
+            30.20931,
+            59.985953
+          ]
+        ],
+        "uri": "ymapsbm1://org?oid=1007910559",
+        "logId": "dHlwZT1iaXpmaW5kZXI7aWQ9MTAwNzkxMDU1OQ==",
+        "id": "1007910559",
+        "displayGeometry": {
+          "type": "GeometryCollection",
+          "geometries": [
+            {
+              "type": "Polygon",
+              "coordinates": [
+                [
+                  [
+                    30.188471999999997,
+                    59.984807999999994
+                  ],
+                  [
+                    30.188504,
+                    59.984921
+                  ],
+                  [
+                    30.188688,
+                    59.985144
+                  ],
+                  [
+                    30.188934999999997,
+                    59.985279
+                  ],
+                  [
+                    30.189118999999998,
+                    59.985344999999995
+                  ],
+                  [
+                    30.192048,
+                    59.985954
+                  ],
+                  [
+                    30.192258,
+                    59.985640999999994
+                  ],
+                  [
+                    30.192937999999998,
+                    59.985375
+                  ],
+                  [
+                    30.201276,
+                    59.984306999999994
+                  ],
+                  [
+                    30.201342,
+                    59.984299
+                  ],
+                  [
+                    30.201359999999998,
+                    59.984334999999994
+                  ],
+                  [
+                    30.201593,
+                    59.984305
+                  ],
+                  [
+                    30.201576,
+                    59.984271
+                  ],
+                  [
+                    30.202717999999997,
+                    59.984122
+                  ],
+                  [
+                    30.202734999999997,
+                    59.984156
+                  ],
+                  [
+                    30.202968,
+                    59.984125999999996
+                  ],
+                  [
+                    30.202952,
+                    59.984095999999994
+                  ],
+                  [
+                    30.20931,
+                    59.98328
+                  ],
+                  [
+                    30.20799,
+                    59.980684999999994
+                  ],
+                  [
+                    30.208098999999997,
+                    59.980672
+                  ],
+                  [
+                    30.207995,
+                    59.980458999999996
+                  ],
+                  [
+                    30.207867999999998,
+                    59.980270999999995
+                  ],
+                  [
+                    30.207731,
+                    59.980160999999995
+                  ],
+                  [
+                    30.207397,
+                    59.979985
+                  ],
+                  [
+                    30.20724,
+                    59.979935
+                  ],
+                  [
+                    30.207037,
+                    59.979903
+                  ],
+                  [
+                    30.207196999999997,
+                    59.97978
+                  ],
+                  [
+                    30.207296,
+                    59.979777
+                  ],
+                  [
+                    30.20739,
+                    59.979741
+                  ],
+                  [
+                    30.207428,
+                    59.979689
+                  ],
+                  [
+                    30.207393999999997,
+                    59.979625
+                  ],
+                  [
+                    30.207342999999998,
+                    59.979600999999995
+                  ],
+                  [
+                    30.207283999999998,
+                    59.97962
+                  ],
+                  [
+                    30.20731,
+                    59.979591
+                  ],
+                  [
+                    30.207241,
+                    59.979583
+                  ],
+                  [
+                    30.207099,
+                    59.979605
+                  ],
+                  [
+                    30.207031999999998,
+                    59.979665999999995
+                  ],
+                  [
+                    30.207072,
+                    59.979743
+                  ],
+                  [
+                    30.206985,
+                    59.979811
+                  ],
+                  [
+                    30.206305999999998,
+                    59.979741999999995
+                  ],
+                  [
+                    30.205979,
+                    59.979727999999994
+                  ],
+                  [
+                    30.205392,
+                    59.979769
+                  ],
+                  [
+                    30.204905999999998,
+                    59.979844
+                  ],
+                  [
+                    30.204224,
+                    59.980017999999994
+                  ],
+                  [
+                    30.203825,
+                    59.980176
+                  ],
+                  [
+                    30.202309999999997,
+                    59.980905
+                  ],
+                  [
+                    30.201667999999998,
+                    59.981137999999994
+                  ],
+                  [
+                    30.200972999999998,
+                    59.981122
+                  ],
+                  [
+                    30.201024,
+                    59.981154999999994
+                  ],
+                  [
+                    30.200616,
+                    59.981230999999994
+                  ],
+                  [
+                    30.200215999999998,
+                    59.981266
+                  ],
+                  [
+                    30.200238,
+                    59.981221
+                  ],
+                  [
+                    30.199678,
+                    59.981403
+                  ],
+                  [
+                    30.199016999999998,
+                    59.981443
+                  ],
+                  [
+                    30.198487999999998,
+                    59.981528
+                  ],
+                  [
+                    30.19815,
+                    59.981612
+                  ],
+                  [
+                    30.196137999999998,
+                    59.982217999999996
+                  ],
+                  [
+                    30.195998,
+                    59.98222
+                  ],
+                  [
+                    30.195757999999998,
+                    59.982285
+                  ],
+                  [
+                    30.195448,
+                    59.982327999999995
+                  ],
+                  [
+                    30.193437,
+                    59.982402
+                  ],
+                  [
+                    30.190602,
+                    59.982724
+                  ],
+                  [
+                    30.189968999999998,
+                    59.982982
+                  ],
+                  [
+                    30.189301999999998,
+                    59.983532999999994
+                  ],
+                  [
+                    30.189058,
+                    59.983906
+                  ],
+                  [
+                    30.188771,
+                    59.984168
+                  ],
+                  [
+                    30.188558999999998,
+                    59.984415
+                  ],
+                  [
+                    30.188471999999997,
+                    59.984651
+                  ]
+                ]
+              ]
+            }
+          ]
+        },
+        "metro": [
+          {
+            "id": "2523478454",
+            "name": "Беговая",
+            "distance": "550 м",
+            "distanceValue": 551.539,
+            "coordinates": [
+              30.203178293,
+              59.988245792
+            ],
+            "type": "metro",
+            "color": "#3aa63a"
+          },
+          {
+            "id": "2523477374",
+            "name": "Зенит",
+            "distance": "2,1 км",
+            "distanceValue": 2104.96,
+            "coordinates": [
+              30.211924154,
+              59.972733676
+            ],
+            "type": "metro",
+            "color": "#3aa63a"
+          },
+          {
+            "id": "station__9805910",
+            "name": "Старая Деревня",
+            "distance": "3,8 км",
+            "distanceValue": 3771.56,
+            "coordinates": [
+              30.255481899,
+              59.989606853
+            ],
+            "type": "metro",
+            "color": "#8647b2"
+          }
+        ],
+        "stops": [
+          {
+            "id": "4311150688",
+            "name": "Парк 300-летия Санкт-Петербурга",
+            "distance": "151 м",
+            "distanceValue": 151.708,
+            "coordinates": [
+              30.201097858,
+              59.984997173
+            ],
+            "type": "common"
+          },
+          {
+            "id": "3276824837",
+            "name": "Приморский проспект, 147",
+            "distance": "218 м",
+            "distanceValue": 218.447,
+            "coordinates": [
+              30.20540388,
+              59.984093233
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10075926",
+            "name": "Станция метро Беговая",
+            "distance": "600 м",
+            "distanceValue": 602.951,
+            "coordinates": [
+              30.203874503,
+              59.988421177
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10078207",
+            "name": "Яхтенная улица",
+            "distance": "1,07 км",
+            "distanceValue": 1066.23,
+            "coordinates": [
+              30.215833436,
+              59.986871454
+            ],
+            "type": "common"
+          },
+          {
+            "id": "stop__10186835",
+            "name": "Школьная улица",
+            "distance": "1,11 км",
+            "distanceValue": 1111.4,
+            "coordinates": [
+              30.193604782,
+              59.990033456
+            ],
+            "type": "common"
+          }
+        ],
+        "photos": {
+          "count": 499,
+          "urlTemplate": "https://avatars.mds.yandex.net/get-altay/200322/2a0000015b16c86f676dae0b72bd9b7e2275/%s",
+          "items": [
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/200322/2a0000015b16c86f676dae0b72bd9b7e2275/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/247136/2a0000015b16c85799348b6a33c8329bbb55/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/374295/2a0000015b16c8b3f71967a61f58b77e8057/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea1f1bf3467896a4c98ba30ba/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/374295/2a0000015b16c89c9461f5903166b6fff1ef/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/247136/2a0000015b16c885cb96e99b518d9b3eac9d/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/374295/2a0000015b2ea1e99e3cde01fd38b752a79a/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea20313f3865129c4daef6953/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea1e52e9e3be0fd6cdeff484b/%s"
+            },
+            {
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/1024093/2a000001622d77b0f435c08d221368166316/%s"
+            }
+          ]
+        },
+        "entrances": [
+          {
+            "coordinates": [
+              30.20208626,
+              59.9842127
+            ],
+            "azimuth": 36.614896126651,
+            "tilt": 0
+          },
+          {
+            "coordinates": [
+              30.20142549,
+              59.98420673
+            ],
+            "azimuth": 195.068512470591,
+            "tilt": 0
+          }
+        ],
+        "routePoint": {
+          "context": "djJ8ChQKEgnEq9XsuzM-QBFoZ4eu-v1NQAoUChIJeiH0npAzPkARMu1yfPr9TUASKQoSCXq6Jf-0Mz5AERgqGPj-_U1AEgwxMDA3OTEwNTU5XzAdAACAPyALEiwKEgmDoAaA6DM-QBE4FvP3e_5NQBIMMTAwNzkxMDU1OV8xHWiw4z4g8QEwABIsChIJjGrPNHozPkARPxUe0RD-TUASDDEwMDc5MTA1NTlfMh1osOM-IPEBMAASLAoSCaxUUFH1Mz5AEZAQ5Qta_k1AEgwxMDA3OTEwNTU5XzMdaLDjPiDxATAAEioKEgmN0qV_STI-QBEleEMaFf5NQBIMMTAwNzkxMDU1OV80HQAAAAAg-gE,"
+        },
+        "panorama": {
+          "id": "1253904324_625803297_23_1526590800",
+          "direction": [
+            40.1,
+            10
+          ],
+          "point": {
+            "type": "Point",
+            "coordinates": [
+              30.2020927247,
+              59.9840432551
+            ]
+          },
+          "preview": "https://static-pano.maps.yandex.ru/v1/?panoid=1253904324_625803297_23_1526590800&size=500%2C240&azimuth=40.1&tilt=10&api_key=maps&signature=TbhrM5hdNCVw5J8IjNXmF7nkYLo9zCy3ZsrpoKF2NIc="
+        },
+        "shortTitle": "Парк 300-летия Санкт-Петербурга",
+        "fullAddress": "Санкт-Петербург, парк имени 300-летия Санкт-Петербурга",
+        "country": "Россия",
+        "status": "open",
+        "businessLinks": [],
+        "ratingData": {
+          "ratingCount": 57783,
+          "ratingValue": 4.900000095367432,
+          "reviewCount": 14987
+        },
+        "sources": [
+          {
+            "id": "afisha",
+            "name": "Яндекс.Афиша",
+            "href": "http://afisha.yandex.ru"
+          },
+          {
+            "id": "yandex",
+            "name": "Яндекс",
+            "href": "https://ya.ru/"
+          }
+        ],
+        "categories": [
+          {
+            "id": "184106346",
+            "name": "Парк культуры и отдыха",
+            "class": "park",
+            "seoname": "park",
+            "pluralName": "Парки культуры"
+          },
+          {
+            "id": "223334343586",
+            "name": "сквер",
+            "class": "park",
+            "seoname": "square",
+            "pluralName": "Скверы"
+          },
+          {
+            "id": "256037362",
+            "name": "лесопарк",
+            "class": "forest",
+            "seoname": "urban_forest",
+            "pluralName": "Лесопарки"
+          }
+        ],
+        "phones": [
+          {
+            "number": "+7 (812) 345-10-80",
+            "type": "phone",
+            "value": "+78123451080",
+            "info": "Приемная"
+          }
+        ],
+        "features": [
+          {
+            "id": "wheelchair_access",
+            "value": [
+              {
+                "id": "unavailable",
+                "name": "недоступно"
+              }
+            ],
+            "name": "доступность входа на инвалидной коляске",
+            "type": "enum",
+            "important": false
+          }
+        ],
+        "mediaOrderTemplate": "p,v,p,v,v,p,v*,p*",
+        "featureGroups": [
+          {
+            "name": "Доступность",
+            "featureIds": [
+              "elevator_wheelchair_accessible",
+              "ramp",
+              "wheelchair_access",
+              "call_button",
+              "toilet_for_disabled",
+              "parking_disabled"
+            ]
+          }
+        ],
+        "businessProperties": {
+          "has_verified_owner": false,
+          "geoproduct_poi_color": "#8DC257",
+          "is_outdoor": true,
+          "geoproduct_poi_label_color": "#488C0E"
+        },
+        "seoname": "gku_spb_park_300_letiya_sankt_peterburga",
+        "geoId": 120664,
+        "compositeAddress": {
+          "country": "Россия",
+          "locality": "Санкт-Петербург"
+        },
+        "modularCard": {
+          "showClaimOrganization": true,
+          "showTaxiButton": true,
+          "showFeedbackButton": true,
+          "showReviews": true,
+          "showAddPhotoButton": true,
+          "showCompetitors": true,
+          "showDirectBanner": true,
+          "showAdditionalAds": true,
+          "showWorkHours": true,
+          "showContacts": true,
+          "showFriendsLiked": false,
+          "showVisualPricesTab": true,
+          "showHotelEnrichment": false,
+          "promoBadgeFeature": [],
+          "showCourierButton": false,
+          "hotelReviewsStubType": 0
+        },
+        "modularPin": {
+          "subtitleHints": [
+            {
+              "text": "4.9",
+              "type": "RATING",
+              "properties": null
+            },
+            {
+              "text": "Парк культуры и отдыха",
+              "type": "SIMPLE_TEXT",
+              "properties": null
+            }
+          ],
+          "allowMultilineSubtitle": false
+        },
+        "modularSnippet": {
+          "showNeurosummary": false,
+          "showMentionedOnSite": false,
+          "showTitle": "SHORT_TITLE",
+          "showAddress": "NO_ADDRESS",
+          "showCategory": "SINGLE_CATEGORY",
+          "showRating": "FIVE_STAR_RATING",
+          "showPhoto": "GALLERY",
+          "showWorkHours": false,
+          "showVerified": false,
+          "showDistanceFromTransit": false,
+          "showBookmark": false,
+          "showEta": false,
+          "showGeoproductOffer": false,
+          "subtitleHint": [],
+          "galleryButton": [],
+          "shownGoodsNumber": 3,
+          "showDescription": false,
+          "showCollectionBadge": true,
+          "showFriendsLiked": false,
+          "showCourierButton": false,
+          "showYandexEatsOrderButton": false,
+          "infoBlock": [],
+          "serpActionButtons": [
+            1,
+            3,
+            5,
+            0
+          ],
+          "awards": [],
+          "promoBadgeFeature": [],
+          "showHotelEnrichment": false
+        },
+        "tzOffset": 10800,
+        "workingTimeText": "ежедневно, круглосуточно",
+        "workingTime": [
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ],
+          [
+            {
+              "from": {
+                "hours": 0,
+                "minutes": 0
+              },
+              "to": {
+                "hours": 0,
+                "minutes": 0
+              }
+            }
+          ]
+        ],
+        "currentWorkingStatus": {
+          "isOpenNow": true,
+          "text": "Круглосуточно",
+          "shortText": "24 ч",
+          "tag": []
+        },
+        "afishaUrl": "https://afisha.yandex.ru/saint-petersburg/other/places/park-300-letiia-sankt-peterburga",
+        "socialLinks": [
+          {
+            "type": "vkontakte",
+            "href": "https://vk.com/spbpark300",
+            "readableHref": "vk.com/spbpark300"
+          }
+        ],
+        "urls": [
+          "http://park300spb.ru/"
+        ],
+        "advert": {
+          "title": "",
+          "text": "",
+          "url": "",
+          "ordInfo": {},
+          "isBko": false,
+          "actionButtons": [
+            {
+              "type": "url",
+              "title": "Расписание и билеты",
+              "value": "https://afisha.yandex.ru/saint-petersburg/other/places/park-300-letiia-sankt-peterburga?utm_source=yandex_maps"
+            }
+          ],
+          "highlighted": false
+        },
+        "businessImages": {
+          "logo": {
+            "urlTemplate": "https://avatars.mds.yandex.net/get-altay/6363798/2a00000182343708bc0f3de5daf4171aefb1/%s",
+            "id": "55YpcOGfmIByL_WGN-7nBuCcK9YCOsSZ"
+          }
+        },
+        "references": [
+          {
+            "id": "123246335",
+            "scope": "nyak"
+          },
+          {
+            "id": "ruw1551430",
+            "scope": "ontodb"
+          },
+          {
+            "id": "55ee87ccfc81310f1b236dae",
+            "scope": "afisha"
+          }
+        ],
+        "subtitleItems": [
+          {
+            "type": "working_hours",
+            "text": "24 ч",
+            "property": [
+              {
+                "key": "is_open",
+                "value": "1"
+              },
+              {
+                "key": "short_text",
+                "value": "24 ч"
+              },
+              {
+                "key": "text",
+                "value": "Круглосуточно"
+              }
+            ]
+          },
+          {
+            "type": "rating",
+            "text": "9.8",
+            "property": [
+              {
+                "key": "value",
+                "value": "9.8"
+              },
+              {
+                "key": "value_5",
+                "value": "4.9"
+              }
+            ]
+          }
+        ],
+        "metrika": {
+          "counter": 93507626,
+          "goals": {
+            "call": "make-call",
+            "cta": "cta-button",
+            "route": "make-route",
+            "site": "site",
+            "whatsapp": "whatsapp",
+            "telegram": "telegram",
+            "viber": "viber",
+            "vkontakte": "vkontakte",
+            "youtube": "social-youtube",
+            "odnoklassniki": "social-odnoklassniki",
+            "stories": "stories-button",
+            "taxi": "call-taxi",
+            "booking": "booking",
+            "subscribe": "subscribe",
+            "send-to-phone": "send-to-phone",
+            "booking-open": "booking-open",
+            "share": "share",
+            "booking-confirmed": "booking-confirmed",
+            "booking-visited": "booking-visited",
+            "start-route": "start-route",
+            "visited-organization": "visited-organization"
+          }
+        },
+        "parentRubrics": [
+          0,
+          0
+        ],
+        "discoveries": [
+          {
+            "alias": "mesta-dlya-piknika-spb",
+            "title": "Места для пикника в Петербурге",
+            "description": "Гид по лучшим паркам Петербурга, где можно хорошо провести время в уютном пледе с хорошей компанией на свежем воздухе.",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1339925/2a0000016b55aef01c1d20a69d5ca343b090/%s",
+            "placeNumber": 15,
+            "partner": {
+              "name": "Яндекс Карты",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1532686/2a000001895000325f11e0e3ab4dba0d81b2/%s"
+            }
+          },
+          {
+            "alias": "travel-gde-ustroit-piknik-v-rossiyskih-gorodah-millionnikah",
+            "title": "Где устроить пикник в Москве, Санкт-Петербурге, Казани и других российских городах-миллионниках",
+            "description": "Лето — лучшая пора для отдыха на природе. Чтобы пообщаться с семьёй или друзьями на свежем воздухе, устроить мини-фотосессию, пожарить шашлыки, поиграть в бадминтон или настолки, не обязательно уезжать далеко от города. Расскажу, какие популярные зоны для пикника есть в Москве, Санкт-Петербурге, Казани, Нижнем Новгороде, Екатеринбурге, Новосибирске и Самаре.",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/912415/d9d57bb76b015273f7f1e54864a461df/%s",
+            "placeNumber": 15,
+            "partner": {
+              "name": "Журнал Путешествий",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1357607/2a0000019b363c20d2b4a635b5f0c8124fc2/%s"
+            }
+          },
+          {
+            "alias": "travel-marshruty-dlya-progulok-po-peterburgu-v-marte-aprele-i-mae",
+            "title": "Первые фонтаны, тюльпаны и разводные мосты: маршруты для прогулок по Петербургу в марте, апреле и мае",
+            "description": "Санкт-Петербург прекрасен в любое время года. Собрал гайд, в котором для каждого весеннего месяца наметил самые подходящие и интересные активности и составил маршрут для прогулок по городу в марте, апреле и мае.",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1674621/21c1482504604b91f5afadacd2f05eee/%s",
+            "placeNumber": 6,
+            "partner": {
+              "name": "Журнал Путешествий",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1357607/2a0000019b363c20d2b4a635b5f0c8124fc2/%s"
+            }
+          },
+          {
+            "alias": "travel-otdyh-na-finskom-zalive",
+            "title": "Отдых на Финском заливе в Ленинградской области: Замковый остров, пенаты Репина и столетний форт",
+            "description": "Отдых на берегу Финского залива — хорошая возможность насладиться красотой природы и свежим морским воздухом. Вода здесь прохладная, но это не мешает купаться местным и туристам. И пусть Роспотребнадзор не рекомендует! Вы с лёгкостью отыщете чистые пляжи, окружённые живописными соснами, старинные дачи, новомодные особняки, красивые экотропы и средневековые города с финским прошлым. Расскажу о пляжах и курортных местах Финского залива — где отдыхать и какие новые места будет интересно посетить.",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/218162/0f28dc8a4458f3d39549775be70a01d9/%s",
+            "placeNumber": 11,
+            "partner": {
+              "name": "Журнал Путешествий",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1357607/2a0000019b363c20d2b4a635b5f0c8124fc2/%s"
+            }
+          },
+          {
+            "alias": "travel-polnyy-chek-list-po-dostoprimechatelnostyam-sanktpeterburga",
+            "title": "Львы, шпили и дворцы: полный чек-лист по достопримечательностям Санкт-Петербурга",
+            "description": "Санкт-Петербург — город, о котором мы часто рассказываем в Журнале: «Топ самых красивых дворов», «Маршрут для тех, кто в городе впервые», «Парадные дворцы Петербурга» и ещё десятки материалов. В этот раз мы собрали все достопримечательности Питера в одном чек-листе — от популярных must see мест до совсем незаметных и малоизвестных. Отобрали самые крупные, добавили удобные ссылки на Яндекс Карты и разделили всё по понятным категориям. Если вы ищете, что посмотреть в городе, этот материал точно вам пригодится.",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1339925/032d2387354c65a6bf3df87364ca5838/%s",
+            "placeNumber": 129,
+            "partner": {
+              "name": "Журнал Путешествий",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1357607/2a0000019b363c20d2b4a635b5f0c8124fc2/%s"
+            }
+          },
+          {
+            "alias": "5-obschestvennykh-prostranstv-u-vody",
+            "title": "Лето у воды в Петербурге: общественные пространства с видом на Неву и каналы",
+            "description": "Для проекта «Лето в городе» рассказываем о главных летних развлечениях Петербурга. В этой подборке — петербургские общественные пространства с водой и у воды: Новая Голландия, Севкабель Порт, Парк 300-летия и другие",
+            "photoUrlTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1674621/2a000001744504f7ed08440f135b8431cd7e/%s",
+            "placeNumber": 5,
+            "partner": {
+              "name": "Яндекс Карты",
+              "iconTemplate": "https://avatars.mds.yandex.net/get-discovery-int/1532686/2a000001895000325f11e0e3ab4dba0d81b2/%s"
+            }
+          }
+        ],
+        "histogramData": {
+          "wednesday": [
+            0.0015503844207671205,
+            0.0008965281702238746,
+            0.0005626055214592859,
+            0.00037114873195727546,
+            0.0002635676927935044,
+            0.00024987130369430834,
+            0.0004134670623791506,
+            0.0008508735398932209,
+            0.0015190114953091331,
+            0.002220395386658137,
+            0.0029776184027961706,
+            0.004055477399641026,
+            0.0055223372595339885,
+            0.006913340195185251,
+            0.007902816510236148,
+            0.00878769689656797,
+            0.009537193744496204,
+            0.009952943538391885,
+            0.010136205907065318,
+            0.00983634863631668,
+            0.00862878366407089,
+            0.00688454265913053,
+            0.00504425133576376,
+            0.0031031686362054684
+          ],
+          "sunday": [
+            0.0030907599418079057,
+            0.001922177000075213,
+            0.001325330505867937,
+            0.0009104001540551116,
+            0.0006347164247507798,
+            0.00048206607102982505,
+            0.0005192921542225119,
+            0.0007817477470464235,
+            0.0013514355893646953,
+            0.0025525035565249687,
+            0.004745272038675325,
+            0.008178734365849868,
+            0.0129073249049813,
+            0.017553444451630824,
+            0.021306313596387898,
+            0.0240712282471051,
+            0.025459948451239833,
+            0.02458378926993271,
+            0.021971642036091157,
+            0.018120498372968478,
+            0.013883690146706474,
+            0.01009394610822079,
+            0.007065229638400695,
+            0.004005432901009348
+          ],
+          "friday": [
+            0.001578303983161636,
+            0.0009097563067042946,
+            0.0005654735687492885,
+            0.0003662320794601281,
+            0.00026239706124656456,
+            0.00024325723545409823,
+            0.0004114769887493528,
+            0.0008748714866054874,
+            0.0015167287637926005,
+            0.00219756807149281,
+            0.0030380815221956133,
+            0.0042286723370107745,
+            0.0058348958825669255,
+            0.00727916255360395,
+            0.008264600189817905,
+            0.009121151292713785,
+            0.009905884150204904,
+            0.010483356692310326,
+            0.01087224049220374,
+            0.010657956387536404,
+            0.009642609115298134,
+            0.008143615419441674,
+            0.006392175030487636,
+            0.004305465766490028
+          ],
+          "tuesday": [
+            0.0014351357449708937,
+            0.0008195591460125802,
+            0.0005274865750510907,
+            0.00035827178494093724,
+            0.00025812425610023416,
+            0.00023605785144041822,
+            0.0003925712892662745,
+            0.0008309728035952437,
+            0.0014706058808431708,
+            0.002114628826392122,
+            0.002844459064331764,
+            0.0039046415248178276,
+            0.005371852574174873,
+            0.006654279433847465,
+            0.007498304779191087,
+            0.008267468237107908,
+            0.008960833302360374,
+            0.00948603714589493,
+            0.009702896639965536,
+            0.00932495824503601,
+            0.008167496302999247,
+            0.006539850200134097,
+            0.004764353332890444,
+            0.00292412054110102
+          ],
+          "monday": [
+            0.0019064905373462192,
+            0.0010394037505278818,
+            0.000633838451090575,
+            0.00041018929404771905,
+            0.00030383741800823474,
+            0.00028651207111352517,
+            0.0004220712042491584,
+            0.0008627554500946602,
+            0.0015070710535303468,
+            0.0021214184893643736,
+            0.002837435275050125,
+            0.003980556980636876,
+            0.0055864878683062925,
+            0.007096953753322765,
+            0.008174285965971497,
+            0.009119453876970721,
+            0.009831490515396878,
+            0.010007494968479282,
+            0.009903718481843064,
+            0.009256534831117377,
+            0.008027605833139936,
+            0.006464227402201783,
+            0.004637105683738084,
+            0.0027836447554682392
+          ],
+          "thursday": [
+            0.001606750329752274,
+            0.0008957087281410167,
+            0.0005427633167386556,
+            0.0003561646481564456,
+            0.0002631579717520755,
+            0.00024185247759777042,
+            0.00040497998366383677,
+            0.0008425620559099479,
+            0.0014590166285284663,
+            0.002115331205320286,
+            0.0028921622998695625,
+            0.004034171905486721,
+            0.00555054947981524,
+            0.006891917637876253,
+            0.007838256180422417,
+            0.008623457290532313,
+            0.00929943847731272,
+            0.009750365749193947,
+            0.010008197347407446,
+            0.009578926759144608,
+            0.008459334747651348,
+            0.006844272933915801,
+            0.004995553063411063,
+            0.0030294773803256052
+          ],
+          "saturday": [
+            0.002562922177292733,
+            0.0016831340381900982,
+            0.001167236715453712,
+            0.0007654759685439597,
+            0.0005366760326945684,
+            0.0004582437190495994,
+            0.0005863693418621645,
+            0.0010010070357882551,
+            0.0017622687307632312,
+            0.0030078206967072184,
+            0.005009834768283728,
+            0.00798762876581194,
+            0.011962859372910238,
+            0.01586843740296562,
+            0.01920368374335191,
+            0.022093914501169022,
+            0.02404260630578242,
+            0.024166517655026004,
+            0.02280009798186048,
+            0.01974621293378118,
+            0.015941016558875892,
+            0.012719672668006846,
+            0.009728240812956784,
+            0.005824769919685896
+          ]
+        },
+        "storytellingData": {
+          "media": [
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/13206609/2a00000190587972bfebe542c8a827b77956/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/13206609/2a00000190587972bfebe542c8a827b77956/%s",
+              "dynamicContent": {
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха «ГКУ СПб Парк 300-летия Санкт-Петербурга» — это современное и динамичное пространство, расположенное на берегу Финского залива. Здесь можно наслаждаться морским бризом, наблюдать за закатами и просто любоваться водной гладью. В парке созданы все условия для комфортного отдыха.",
+                  "textType": "long"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/13419691/2a000001915c4aa72754aae408b06d6a64a0/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/13419691/2a000001915c4aa72754aae408b06d6a64a0/%s",
+              "dynamicContent": {
+                "summary": {
+                  "type": "summary",
+                  "text": "Здесь есть широкая песчаная пляжная зона, где можно загорать и играть в волейбол. Для детей оборудованы современные игровые площадки с безопасным покрытием. В парке также есть велосипедные дорожки, зоны для пикников и различные арт-объекты, которые делают его более интересным и привлекательным.",
+                  "textType": "long"
+                }
+              }
+            },
+            {
+              "type": "video",
+              "id": "vNjvunnh_X1w",
+              "videoId": "vNjvunnh_X1w",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vNjvunnh_X1w",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15430580/2a00000198dbb0001f58491c4c5c61d823e2/orig",
+              "dynamicContent": {}
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/16411237/2a0000019b7f9dc0b3a920e4f219f972ecfc/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16411237/2a0000019b7f9dc0b3a920e4f219f972ecfc/%s",
+              "dynamicContent": {
+                "aspect": {
+                  "type": "aspect",
+                  "title": "Вид",
+                  "count": 5645,
+                  "imageUrl": "https://avatars.mds.yandex.net/get-altay/6774966/2a0000018f7bdc3742c925403be7fb10b8bc/%s"
+                },
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/6527792/2a000001906530e4d7ae3a3247597f3bbfb8/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/6527792/2a000001906530e4d7ae3a3247597f3bbfb8/%s",
+              "dynamicContent": {
+                "aspect": {
+                  "type": "aspect",
+                  "title": "Прогулки",
+                  "count": 3555,
+                  "imageUrl": "https://avatars.mds.yandex.net/get-altay/760153/2a00000188ae960f9b543d610b74f8c060ec/%s"
+                },
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/15712112/2a00000198f594e3e8993bbf0b2275122980/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/15712112/2a00000198f594e3e8993bbf0b2275122980/%s",
+              "dynamicContent": {
+                "aspect": {
+                  "type": "aspect",
+                  "title": "Отдых",
+                  "count": 5678,
+                  "imageUrl": "https://avatars.mds.yandex.net/get-altay/10768923/2a0000018abc61e08fe7d108c57d510fdc82/%s"
+                },
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/11374564/2a000001922a8c6beda634ce96f695b36949/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/11374564/2a000001922a8c6beda634ce96f695b36949/%s",
+              "dynamicContent": {
+                "aspect": {
+                  "type": "aspect",
+                  "title": "Фонтаны",
+                  "count": 972,
+                  "imageUrl": "https://avatars.mds.yandex.net/get-altay/13524363/2a0000019175fa44772be03f54d6609cd258/%s"
+                },
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/16609617/2a00000199294a15ffb0af3f60a34a2efc53/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16609617/2a00000199294a15ffb0af3f60a34a2efc53/%s",
+              "dynamicContent": {
+                "aspect": {
+                  "type": "aspect",
+                  "title": "Отдых с детьми",
+                  "count": 1590,
+                  "imageUrl": "https://avatars.mds.yandex.net/get-altay/10373230/2a0000019146b5fd9d699fa59352f85f61bf/%s"
+                },
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/14782168/2a00000199f72f0c2af57e0eda0293595e30/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/14782168/2a00000199f72f0c2af57e0eda0293595e30/%s",
+              "dynamicContent": {
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/16105091/2a000001978c67f5b92d0dab72c2908b4756/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16105091/2a000001978c67f5b92d0dab72c2908b4756/%s",
+              "dynamicContent": {
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            },
+            {
+              "type": "photo",
+              "id": "https://avatars.mds.yandex.net/get-altay/16069310/2a00000199f72f24c217c3ffbcab1dbfebff/%s",
+              "urlTemplate": "https://avatars.mds.yandex.net/get-altay/16069310/2a00000199f72f24c217c3ffbcab1dbfebff/%s",
+              "dynamicContent": {
+                "summary": {
+                  "type": "summary",
+                  "text": "Парк культуры и отдыха",
+                  "textType": "rubric"
+                }
+              }
+            }
+          ],
+          "previewData": {
+            "title": "Коротко о месте",
+            "description": "Парк культуры и отдыха «ГКУ СПб Парк 300-летия Санкт-Петербурга» — это современное и динамичное пространство, расположенное на берегу Финского залива. Здесь можно наслаждаться морским бризом, наблюдать за закатами и просто любоваться водной гладью. В парке созданы все условия для комфортного отдыха.",
+            "imageTemplates": [
+              "https://avatars.mds.yandex.net/get-altay/13206609/2a00000190587972bfebe542c8a827b77956/%s",
+              "https://avatars.mds.yandex.net/get-altay/13419691/2a000001915c4aa72754aae408b06d6a64a0/%s"
+            ]
+          }
+        },
+        "topPlaces": [
+          {
+            "title": "Колонна-маяк",
+            "description": "Достопримечательность",
+            "floor": "",
+            "rating": "5.0",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/10101276/2a0000018e96f5aebe6c227749a58f2d0d9d/%s",
+            "permalink": "242337758471",
+            "category": "Достопримечательность",
+            "seoname": "kolonna_mayak"
+          },
+          {
+            "title": "Смотровая площадка",
+            "description": "Смотровая площадка",
+            "floor": "",
+            "rating": "5.0",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/15038851/2a00000195ae9c8a046e89dd6748578a3324/%s",
+            "permalink": "167959901213",
+            "category": "Смотровая площадка",
+            "seoname": "smotrovaya_ploshchadka"
+          },
+          {
+            "title": "Древо мира",
+            "description": "Жанровая скульптура",
+            "floor": "",
+            "rating": "4.9",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/4437253/2a0000017a2f969061414248773d2d983544/%s",
+            "permalink": "129147988986",
+            "category": "Жанровая скульптура",
+            "seoname": "drevo_mira"
+          },
+          {
+            "title": "Скейт-парк",
+            "description": "Скейт-парк",
+            "floor": "",
+            "rating": "4.8",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/10505037/2a000001907332c8ab7729ede24e7f5268ed/%s",
+            "permalink": "86474950239",
+            "category": "Скейт-парк",
+            "seoname": "skeyt_park"
+          },
+          {
+            "title": "Каменные статуи Дольхарбан",
+            "description": "Жанровая скульптура",
+            "floor": "",
+            "rating": "4.7",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/16914582/2a0000019808e29dab131d6322a54bbb8df0/%s",
+            "permalink": "11715394545",
+            "category": "Жанровая скульптура",
+            "seoname": "kamennyye_statui_dolkharban"
+          },
+          {
+            "title": "Памп трек",
+            "description": "Скейт-парк",
+            "floor": "",
+            "rating": "4.6",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/10285614/2a0000019073318dac0a2d06c6cd336ca6a9/%s",
+            "permalink": "44430155287",
+            "category": "Скейт-парк",
+            "seoname": "pamp_trek"
+          },
+          {
+            "title": "Семья — залог мира",
+            "description": "Жанровая скульптура",
+            "floor": "",
+            "rating": "4.4",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/10285614/2a00000190e5bd49f194adbc7a41e35be2e9/%s",
+            "permalink": "211362514313",
+            "category": "Жанровая скульптура",
+            "seoname": "semya_zalog_mira"
+          },
+          {
+            "title": "Маяк",
+            "description": "Фонтан",
+            "floor": "",
+            "rating": "4.4",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/5257938/2a00000181b9c0f9612a82569facea222f49/%s",
+            "permalink": "39306371844",
+            "category": "Фонтан",
+            "seoname": "mayak"
+          },
+          {
+            "title": "Фонтан",
+            "description": "Фонтан",
+            "floor": "",
+            "rating": "4.3",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/7883089/2a0000018f36018f2eb8f8b117f91a9e5f78/%s",
+            "permalink": "82477705259",
+            "category": "Фонтан",
+            "seoname": "fontan"
+          },
+          {
+            "title": "Скейт-парк",
+            "description": "Скейт-парк",
+            "floor": "",
+            "rating": "4.3",
+            "photoLink": "https://avatars.mds.yandex.net/get-altay/12731162/2a0000018f347b26f6ef2d425e52b405b070/%s",
+            "permalink": "63484952365",
+            "category": "Скейт-парк",
+            "seoname": "skeyt_park"
+          }
+        ],
+        "hasStories": false,
+        "aspects": [
+          {
+            "id": "3502066466",
+            "isTrusted": true,
+            "text": "Впечатления",
+            "count": 14282,
+            "positive": 5394,
+            "neutral": 8645,
+            "negative": 243,
+            "photos": []
+          },
+          {
+            "id": "3502067019",
+            "isTrusted": true,
+            "text": "Вид",
+            "count": 5386,
+            "positive": 5159,
+            "neutral": 105,
+            "negative": 122,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/15352901/2a000001944251763da24187a1ada321b687/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6195924/2a00000190c28a8072f0674ae3999b04b576/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13419691/2a000001915c4aa72754aae408b06d6a64a0/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/17843434/2a0000019a95073a460ab18a902e85a799ea/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9833544/2a000001907e46fba352b06a8327cd434dbe/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea1f1bf3467896a4c98ba30ba/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6527792/2a000001906530e4d7ae3a3247597f3bbfb8/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/7979597/2a00000190020bc0d66d4a40aba38894035d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11487452/2a00000191a2d189e785eb977601efcc643d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10373230/2a00000191aedbc35edf41f3cf1c687677ab/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502149497",
+            "isTrusted": true,
+            "text": "Прогулки",
+            "count": 3748,
+            "positive": 3433,
+            "neutral": 188,
+            "negative": 127,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10373230/2a00000191f17f9befce96c051c67874587d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6527792/2a000001906530e4d7ae3a3247597f3bbfb8/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/6375058/2a00000190bb62a7a147bc1ee3f479b26f16/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13897576/2a0000019268a8496cc3fb5876cbd488b744/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14110197/2a0000019262029d4c6da73a566fd8e69b58/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13063086/2a00000193fc21a553a4f93de4c31b5a1e59/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14079384/2a0000019083b9ad3808aca79d88793619b2/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12813249/2a00000190e49e9de973ac49c593b96f0db3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10238647/2a00000190b0bc020a4cec1e2165d3b8e12e/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11487452/2a00000191a2d189e785eb977601efcc643d/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502066486",
+            "isTrusted": true,
+            "text": "Пляж",
+            "count": 2842,
+            "positive": 1514,
+            "neutral": 626,
+            "negative": 702,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001917baed8ff0ac9e2685afd5e5fd0/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12728107/2a00000191e2c0510a89897eef0cf3fc21f3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea20313f3865129c4daef6953/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10232404/2a000001915ac8ba3e82c238caf7b982680d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14090927/2a0000019218e4944a7a5a0b89e50104c4e7/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13987456/2a000001910e5f2ebd2e2f7aea1cbad35001/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13590061/2a000001917baedb49a94808ea30caac2146/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11487452/2a000001924dfb89c3284b64ffae4ad8e7aa/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14097168/2a0000019218e4a1785ae2fc3921aeb38110/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14090927/2a0000019248ffab167257813f6cc9600995/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502075628",
+            "isTrusted": true,
+            "text": "Отдых с детьми",
+            "count": 2135,
+            "positive": 1387,
+            "neutral": 630,
+            "negative": 118,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13212679/2a0000019190aed87b9f57828e29184903dd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13419691/2a00000192588acd9252b613f95a9ea2d7e4/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13267750/2a000001908981b63364a55900aaef632b12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001918a16b5a72d0b02b7e14cd221b3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11563767/2a000001917baed1be14b27fd0b78a7c0e96/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13897576/2a0000019268a8496cc3fb5876cbd488b744/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10373230/2a00000191f17f9befce96c051c67874587d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12813249/2a00000190e49e9de973ac49c593b96f0db3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10804279/2a000001906dcf955c1038939223b958d6c2/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13590061/2a000001917baedb49a94808ea30caac2146/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502044738",
+            "isTrusted": true,
+            "text": "Отдых",
+            "count": 1796,
+            "positive": 1706,
+            "neutral": 37,
+            "negative": 53,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001917baed8ff0ac9e2685afd5e5fd0/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/12728107/2a00000191e2c0510a89897eef0cf3fc21f3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/216588/2a0000015b2ea20313f3865129c4daef6953/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10232404/2a000001915ac8ba3e82c238caf7b982680d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14090927/2a0000019218e4944a7a5a0b89e50104c4e7/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001918a16b5a72d0b02b7e14cd221b3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13987456/2a000001910e5f2ebd2e2f7aea1cbad35001/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13590061/2a000001917baedb49a94808ea30caac2146/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11487452/2a000001924dfb89c3284b64ffae4ad8e7aa/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14097168/2a0000019218e4a1785ae2fc3921aeb38110/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502149496",
+            "isTrusted": true,
+            "text": "Фонтаны",
+            "count": 1493,
+            "positive": 1022,
+            "neutral": 366,
+            "negative": 105,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10661403/2a000001900a4ec1b01898b3554d27cba89f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13467421/2a00000190eb70704ce448350595c474f510/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9829646/2a000001910e5f18b3dd50d500f65e4f4488/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10373230/2a00000190c6f284f15d46feeedd2a4dac22/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13970739/2a00000192434e96607fc10b2cc629b9d46e/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13818104/2a0000019087ccf1b4fd0785c014d32995d5/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11385005/2a000001915ae9cca1765334714249ab497f/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/988435/2a00000190020bbc6005ff05c29042277800/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14033308/2a00000190b2d4ab128759be7cd79b7b23ed/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11374564/2a000001922a8c6beda634ce96f695b36949/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502058814",
+            "isTrusted": true,
+            "text": "Активный отдых",
+            "count": 771,
+            "positive": 686,
+            "neutral": 62,
+            "negative": 23,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001918a16b5a72d0b02b7e14cd221b3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10768168/2a000001900a4ecf6fcbb90ca9b54011f848/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13212679/2a0000019190aed87b9f57828e29184903dd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13220782/2a00000191bdb08e4ee9670c85a802422b82/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13929277/2a0000019157e9941e219482331954d8a56d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13267750/2a000001908981b63364a55900aaef632b12/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13220786/2a00000190550e025e91c229226232eb4fca/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14312158/2a000001939deb415750d555bb5d67d9b238/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/8128315/2a0000019119b7ec0ce2721c35a398f78c21/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11563767/2a000001917baed1be14b27fd0b78a7c0e96/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502066509",
+            "isTrusted": true,
+            "text": "Детские площадки",
+            "count": 627,
+            "positive": 291,
+            "neutral": 181,
+            "negative": 155,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001918a16b5a72d0b02b7e14cd221b3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13212679/2a0000019190aed87b9f57828e29184903dd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13267750/2a000001908981b63364a55900aaef632b12/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502044646",
+            "isTrusted": true,
+            "text": "Парковка",
+            "count": 470,
+            "positive": 156,
+            "neutral": 200,
+            "negative": 114,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13287730/2a0000019209ffb7ee67ec3460b85ab86723/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9831576/2a000001917f20619f44fcd145f48636b753/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13930885/2a00000190e459939e4bf3e9a30e172877b7/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13419691/2a000001912889b9819bb846c28dd6356d9c/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/4379646/2a000001909dc1dd69695bc013809a66d8fc/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/14021354/2a00000194994938d625785e3c8d677c0a55/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13192844/2a00000190839c0f8a7ec94c7466d46bb4ce/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13590061/2a00000190ff564e2a8e6cc03f9230b0b33b/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13294935/2a000001926ba53e46f81ffd40521ef6a839/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/9831576/2a00000191b7b8a084b1ecbe823c9918ed22/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          },
+          {
+            "id": "3502046640",
+            "isTrusted": true,
+            "text": "Фестиваль",
+            "count": 358,
+            "positive": 276,
+            "neutral": 43,
+            "negative": 39,
+            "photos": []
+          },
+          {
+            "id": "3502043997",
+            "isTrusted": true,
+            "text": "Кафе",
+            "count": 238,
+            "positive": 13,
+            "neutral": 138,
+            "negative": 87,
+            "photos": []
+          },
+          {
+            "id": "3502058266",
+            "isTrusted": true,
+            "text": "Аттракционы",
+            "count": 196,
+            "positive": 122,
+            "neutral": 45,
+            "negative": 29,
+            "photos": [
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11410105/2a000001918a16b5a72d0b02b7e14cd221b3/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13212679/2a0000019190aed87b9f57828e29184903dd/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/13929277/2a0000019157e9941e219482331954d8a56d/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/11374564/2a000001922a8c6beda634ce96f695b36949/%",
+                "mds_namespace": "altay"
+              },
+              {
+                "link": "https://avatars.mds.yandex.net/get-altay/10804279/2a000001906e514619b1cda96180640d1961/%",
+                "mds_namespace": "altay"
+              }
+            ]
+          }
+        ],
+        "neurosummaryData": {
+          "bold": {
+            "end": 0,
+            "is_bolded": false,
+            "start": 0
+          },
+          "crop_start": 0,
+          "puid": 356366553,
+          "review_crop": "Отличный и очень красивый парк с видом на Финский залив",
+          "review_id": "Tazc0nZuoFUrsdAleME76eEp547PUm",
+          "review_text": "Отличный и очень красивый парк с видом на Финский залив"
+        },
+        "videos": {
+          "items": [
+            {
+              "id": "vNjvunnh_X1w",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vNjvunnh_X1w",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/15430580/2a00000198dbb0001f58491c4c5c61d823e2/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "vFcccQmDaXh0",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vFcccQmDaXh0",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13749859/2a0000019797a0903fc2f5baf61f1b8a3e19/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "v5Sr8-wM2h10",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v5Sr8-wM2h10",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5097949/2a000001976e45e106f9890926040b150314/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1080,
+              "width": 1920
+            },
+            {
+              "id": "vehsQlfdELks",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vehsQlfdELks",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/10268831/2a0000019706b7c510fd38f163cd58003a7e/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vzKkyqbv3sG8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vzKkyqbv3sG8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13303071/2a000001936c7e189efdf6a7c7c90da5a980/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vdaok1x7FMTQ",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vdaok1x7FMTQ",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/14331150/2a000001935a0480089f6eef5bb0465318f0/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vlRPwz4I5YC8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vlRPwz4I5YC8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4012523/2a00000192b9a66cc2c8e8f380b71794125f/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vEJBN5mxafx8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vEJBN5mxafx8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5407608/2a00000192944a65777fc7380398eda43993/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "v9QekELxP4j8",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v9QekELxP4j8",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5104700/2a000001925438eba3fe9ae606469af05bdd/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vTeVVlNkdrj4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vTeVVlNkdrj4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5104635/2a000001911c578133b2181b41df7ad58aff/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1080,
+              "width": 1920
+            },
+            {
+              "id": "vxg60iRtmEVg",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vxg60iRtmEVg",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/4447018/2a000001910dcce886a36d63b31fc78bc97d/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1080,
+              "width": 1920
+            },
+            {
+              "id": "vraG61RviRUs",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vraG61RviRUs",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5023540/2a00000190e07d247120385585c5fbdcbb4e/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "vPYP3Iqf2yhM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vPYP3Iqf2yhM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5217116/2a00000190bce27a285b4111554f1a5791ae/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vawkvGcfyRAs",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vawkvGcfyRAs",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6871497/2a0000018c887f8d76b4e9bb8af28df82739/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vlHcAMKe3o1w",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vlHcAMKe3o1w",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6871497/2a0000018c887fef2e0fc0001565f3b05aba/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            },
+            {
+              "id": "vcpxguMaOJzc",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vcpxguMaOJzc",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/5405585/2a0000018aa2d498e8cc71d496a911253d28/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "vjHm7-h94gF4",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/vjHm7-h94gF4",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13749859/2a000001984e58d208ad471478398dc165da/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 2160,
+              "width": 3840
+            },
+            {
+              "id": "viTuGVdJNDFU",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/viTuGVdJNDFU",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/13754825/2a000001981a20ef6ed5d35242ed0e251ae7/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 3840,
+              "width": 2160
+            },
+            {
+              "id": "v-0w3oUB6tHM",
+              "videoUrl": "https://frontend.vh.yandex.ru/player/v-0w3oUB6tHM",
+              "thumbnailUrl": "https://avatars.mds.yandex.net/get-vh/6360136/2a0000019114bb7ce2df3638fa6fe9cb5679/orig",
+              "tags": [
+                {
+                  "id": "hardcoded-video",
+                  "name": "Видео"
+                }
+              ],
+              "height": 1920,
+              "width": 1080
+            }
+          ]
+        },
+        "region": {
+          "id": 2,
+          "type": 6,
+          "capitalId": 0,
+          "hierarchy": [
+            225,
+            10174,
+            2
+          ],
+          "seoname": "saint-petersburg",
+          "bounds": [
+            [
+              29.647787,
+              59.631827369843656
+            ],
+            [
+              30.982207000000002,
+              60.242925369843654
+            ]
+          ],
+          "longitude": 30.314997,
+          "latitude": 59.938784,
+          "zoom": 11,
+          "names": {
+            "ablative": "",
+            "accusative": "Санкт‑Петербург",
+            "dative": "Санкт‑Петербургу",
+            "directional": "",
+            "genitive": "Санкт‑Петербурга",
+            "instrumental": "Санкт‑Петербургом",
+            "locative": "",
+            "nominative": "Санкт‑Петербург",
+            "preposition": "в",
+            "prepositional": "Санкт‑Петербурге"
+          }
+        },
+        "breadcrumbs": [
+          {
+            "name": "Карты",
+            "type": "root",
+            "url": "https://yandex.ru/maps/"
+          },
+          {
+            "name": "Санкт‑Петербург",
+            "type": "region",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/",
+            "region": {
+              "center": [
+                30.314997,
+                59.938784
+              ],
+              "zoom": 11
+            }
+          },
+          {
+            "category": {
+              "id": "184106346",
+              "name": "Парк культуры и отдыха",
+              "class": "park",
+              "seoname": "park",
+              "pluralName": "Парки культуры"
+            },
+            "name": "Парки культуры",
+            "type": "category",
+            "url": "https://yandex.ru/maps/2/saint-petersburg/category/park/184106346/"
+          }
+        ],
+        "events": []
+      }
+    ],
+    "pageCount": 1,
+    "resultsCount": 1,
+    "bounds": [
+      [
+        30.1882691,
+        59.979483
+      ],
+      [
+        30.2095099,
+        59.986053
+      ]
+    ],
+    "categories": [],
+    "filters": [
+      {
+        "id": "worktime",
+        "isTop": true,
+        "name": "открыто",
+        "type": "worktime",
+        "values": {
+          "openNow": {
+            "id": "open_now",
+            "name": "открыто",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "open24h": {
+            "id": "open_24h",
+            "name": "круглосуточно",
+            "type": "boolean",
+            "selected": false,
+            "isTop": true
+          },
+          "openInNextTwoHours": {
+            "id": "open_in_next_two_hours",
+            "name": "",
+            "selected": false,
+            "type": "boolean"
+          },
+          "openAt": {
+            "id": "open_at",
+            "name": "Открыто в указанное время",
+            "type": "datetime",
+            "from": null,
+            "to": null,
+            "minValue": "2026-01-29T00:00:00.000Z",
+            "maxValue": "2026-02-05T00:00:00.000Z"
+          }
+        }
+      },
+      {
+        "id": "payment_by_credit_card",
+        "disabled": true,
+        "name": "Оплата картой",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "car_park",
+        "disabled": true,
+        "name": "парковка",
+        "type": "boolean",
+        "selected": false
+      },
+      {
+        "id": "has_photo",
+        "name": "с фото",
+        "type": "boolean",
+        "selected": false
+      }
+    ],
+    "filterGroups": []
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "settings": {
+    "auto_goals": 0,
+    "button_goals": 0,
+    "c_recp": "1.00000",
+    "form_goals": 0,
+    "pcs": "1",
+    "webvisor": {
+      "arch_type": "html",
+      "date": "2026-01-12 21:37:22",
+      "forms": 1,
+      "recp": "0.00400",
+      "urls": "regexp:https://yandex.*/maps/.*\nregexp:https://maps.yandex.ru/.*\nregexp:https://maps.yandex.ua/.*\nregexp:https://harita.yandex.com.tr/.*\nregexp:https://l7test.yandex.ru/maps/.*\nregexp:https://l7test.yandex.ru/maps-prod/.*"
+    },
+    "sbp": {
+      "a": "aihzNjhkrqMih+U+FfQQC0j6gFW0mQ/49445dFMDQOBOWlqPfA3jEgClo3fxCzWJ",
+      "b": "jdi7dz+q0dLNxDL+YdYfUc9vAIzveDgziP1uBqvOe71xS/ef0fA0xWYoO2WpxmCD"
+    },
+    "eu": 0,
+    "hittoken": "1769720324_565c8a89ed2bed66ad7ed9c78ed003c6e0d9b13628a3a4353b3dfa81b6f685f5",
+    "wstoken": "10926.K11PMLNkVotWoTU2HEW992Rp6qA4Km97VRzcr-x4v2nYqLNTTeYDEiv-jk6l_s50EFtHvVrQw5PSx8nZOsTi04WY6jvnT9t_jrvdFXyezmaEeySbV0b1_TBxcaDngVZY9hUYt-4lw2-kUoPO4O_1YSYHREm7PbC9wv86jTmvJOc,.IJNbcxQmC551DLH1GE9reA0zLWs,",
+    "ev": 1,
+    "hidv2": "223641492493435104",
+    "ymclid": "223641492493435104"
+  },
+  "userData": {}
+}

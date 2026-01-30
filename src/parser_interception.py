@@ -48,6 +48,7 @@ class YandexMapsInterceptionParser:
             Словарь с данными в том же формате, что и parser.py
         """
         print(f"🔍 Начинаем парсинг через Network Interception: {url}")
+        print("DEBUG: VERSION 2026-01-29 REDIRECT FIX + TIMEOUTS")
         
         if not url or not url.startswith(('http://', 'https://')):
             raise ValueError(f"Некорректная ссылка: {url}")
@@ -68,7 +69,7 @@ class YandexMapsInterceptionParser:
         with sync_playwright() as p:
             try:
                 browser = p.chromium.launch(
-                    headless=True,  # ВАЖНО: headless=True для Linux сервера без X Server
+                    headless=True,
                     args=[
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
@@ -114,6 +115,27 @@ class YandexMapsInterceptionParser:
                                 try:
                                     # Пытаемся получить JSON
                                     json_data = response.json()
+                                    
+                                    # DEBUG: Save to file for inspection
+                                    try:
+                                        import os
+                                        import time
+                                        debug_dir = os.path.join(os.getcwd(), 'debug_data')
+                                        os.makedirs(debug_dir, exist_ok=True)
+                                        
+                                        # Create filename from URL path last part or timestamp
+                                        clean_url = url.split('?')[0].replace('/', '_').replace(':', '')[-50:]
+                                        timestamp = int(time.time() * 1000)
+                                        filename = f"{timestamp}_{clean_url}.json"
+                                        filepath = os.path.join(debug_dir, filename)
+                                        
+                                        with open(filepath, 'w', encoding='utf-8') as f:
+                                            json.dump(json_data, f, ensure_ascii=False, indent=2)
+                                        print(f"💾 Saved debug response: {filename}")
+                                    except Exception as e:
+                                        print(f"Failed to save debug json: {e}")
+
+                                    # Check for organization data (search or location-info)
                                     if json_data:
                                         # Сохраняем ответ
                                         self.api_responses[url] = {
@@ -139,18 +161,86 @@ class YandexMapsInterceptionParser:
                     page.goto(url, wait_until='domcontentloaded', timeout=30000)
                     
                     # Проверяем на капчу с ожиданием решения
-                    for _ in range(12):  # Ждем до 60 секунд
+                    for _ in range(24):  # Ждем до 120 секунд
                         try:
-                            page_content = page.content()
-                            if "captcha" in page_content.lower() or "робот" in page_content.lower() or "Подтвердите" in page_content:
-                                print("⚠️ Обнаружена капча! Ждем 5 секунд для ручного решения...")
-                                page.wait_for_timeout(5000)
+                            # Более точная проверка капчи
+                            title = page.title()
+                            # Проверяем заголовок, текст и наличие элементов SmartCaptcha
+                            is_captcha = (
+                                "Ой!" in title or 
+                                "Captcha" in title or 
+                                "Robot" in title or
+                                page.get_by_text("Подтвердите, что вы не робот").is_visible() or
+                                page.locator(".smart-captcha").count() > 0 or
+                                page.locator("input[name='smart-token']").count() > 0
+                            )
+                            
+                            if is_captcha:
+                                print(f"⚠️ Обнаружена капча! Ждем 15 секунд... (не трогаем страницу)")
+                                page.wait_for_timeout(15000)
                             else:
                                 break
                         except:
                             break
                 except:
                     print("⚠️ Страница не загрузилась полностью, но продолжаем...")
+                
+                # Double check if we are still stuck on Captcha
+                title = page.title()
+                if "Ой!" in title or "Captcha" in title or "Robot" in title or "Вы не робот" in title:
+                     print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
+                     if browser: browser.close()
+                     # Return special error so worker knows it's captcha
+                     return {"error": "captcha_detected"}
+                
+                # Ждем загрузки основного контента после капчи
+                # Ждем загрузки основного контента после капчи
+                try:
+                    print("⏳ Ожидание загрузки карточки организации...")
+                    # Ждем заголовок или название организации (добавил user selector)
+                    page.wait_for_selector("h1, div.business-card-title-view, div.card-title-view__title, div.orgpage-header-view__header, div.orgpage-header-view__header-wrapper > h1", timeout=15000)
+                    print("✅ Карточка загружена")
+                except:
+                    print("⚠️ Не удалось дождаться загрузки карточки. Возможно, капча не решена или бан.")
+                
+                # Проверка редиректа на главную или другую страницу
+                current_url = page.url
+                title = page.title()
+                print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+                
+                # Более строгая проверка: ищем заголовок организации
+                is_business_card = False
+                try:
+                    # Селекторы именно заголовка организации (добавил user selector)
+                    is_business_card = page.locator("h1.orgpage-header-view__header, div.business-title-view, div.card-title-view__title, div.orgpage-header-view__header-wrapper > h1").count() > 0
+                except:
+                    pass
+
+                if not is_business_card or "yandex.ru" in current_url and "/org/" not in current_url:
+                     print("⚠️ Не похоже на карточку организации! (Редирект?). Пробуем перейти по ссылке снова...")
+                     
+                     # Debug: Save bad page
+                     try:
+                         with open('debug_data/redirect_page.html', 'w', encoding='utf-8') as f:
+                             f.write(page.content())
+                         print("💾 Сохранена HTML страница редиректа в debug_data/redirect_page.html")
+                     except:
+                         pass
+
+                     page.goto(url, wait_until='domcontentloaded')
+                     try:
+                         print("⏳ Повторное ожидание заголовка организации...")
+                         page.wait_for_selector("h1.orgpage-header-view__header, div.business-title-view, div.card-title-view__title, h1[itemprop='name'], div.orgpage-header-view__header-wrapper > h1", timeout=20000)
+                         print("✅ Карточка загружена (после повторного перехода)")
+                     except:
+                         print("❌ Не удалось загрузить карточку даже после повторного перехода. Возможно бан.")
+                         try:
+                             with open('debug_data/failed_page_final.html', 'w', encoding='utf-8') as f:
+                                 f.write(page.content())
+                         except:
+                             pass
+                else:
+                    print("✅ Страница похожа на карточку организации.")
                 
                 # Вспомогательная функция для прокрутки
                 def scroll_page(times=5):
@@ -173,12 +263,38 @@ class YandexMapsInterceptionParser:
                         time.sleep(2)
                         
                         # Скроллим отзывы (очень агрессивно)
-                        print("📜 Скроллим отзывы (глубокий скролл - 30 раз)...")
-                        for i in range(30):
-                            page.mouse.wheel(0, 2000)
+                        # Скроллим отзывы (очень агрессивно)
+                        print("📜 Скроллим отзывы (глубокий скролл - загрузка всех)...")
+                        # Увеличиваем количество скроллов и добавляем "стряхивание" мыши
+                        last_height = 0
+                        stuck_count = 0
+                        
+                        for i in range(80): # Increased to 80
+                            # Random scroll amount
+                            delta = random.randint(2000, 4000)
+                            page.mouse.wheel(0, delta)
+                            page.evaluate(f"window.scrollBy(0, {delta//2})") # JS scroll helper
+                            
                             time.sleep(random.uniform(0.5, 1.2))
+                            
+                            # Small "wobble" (scroll up slightly) to trigger intersection observers
                             if i % 5 == 0:
-                                page.mouse.move(random.randint(100, 800), random.randint(100, 800))
+                                page.mouse.wheel(0, -500)
+                                time.sleep(0.5)
+                                page.mouse.wheel(0, 500)
+                            
+                            # Move mouse to trigger hover events
+                            page.mouse.move(random.randint(100, 800), random.randint(100, 800))
+                            
+                            # Пытаемся кликнуть "Показать еще" если есть
+                            try:
+                                more_btn = page.query_selector("button:has-text('Показать ещё')") or \
+                                           page.query_selector("div.reviews-view__more")
+                                if more_btn and more_btn.is_visible():
+                                    more_btn.click()
+                                    time.sleep(2)
+                            except:
+                                pass
                     else:
                         print("ℹ️ Вкладка Отзывы не найдена (селектор)")
                 except Exception as e:
@@ -229,16 +345,21 @@ class YandexMapsInterceptionParser:
                     services_tab = page.query_selector("div.tabs-select-view__title._name_price")
                     if not services_tab:
                         services_tab = page.query_selector("div.tabs-select-view__title._name_goods")
+                    if not services_tab:
+                         # User provided selector (simplified) - 2nd tab in carousel
+                         services_tab = page.query_selector("div.carousel__content > div:nth-child(2) > div")
                     
                     # Fallback на поиск по тексту
                     if not services_tab:
-                        for text in ["Цены", "Товары и услуги", "Услуги", "Товары"]:
+                        for text in ["Цены", "Товары и услуги", "Услуги", "Товары", "Меню", "Прайс"]:
                             try:
-                                found = page.get_by_text(text, exact=True)
+                                found = page.get_by_text(text, exact=False)
                                 if found.count() > 0:
-                                    services_tab = found.first
-                                    print(f"✅ Нашли таб услуг по тексту: {text}")
-                                    break
+                                    # Check visibility to avoid hidden elements
+                                    if found.first.is_visible():
+                                        services_tab = found.first
+                                        print(f"✅ Нашли таб услуг по тексту: {text}")
+                                        break
                             except:
                                 pass
 
@@ -316,23 +437,6 @@ class YandexMapsInterceptionParser:
                                     'category': cat,
                                     'items': items
                                 })
-                            # Обновляем основной список (flat)
-                            # Note: wrapper above creates nested structure, but data['products'] expects flat list?
-                            # Let's check _extract_data_from_responses (Line 384+).
-                            # It converts flat list to grouped.
-                            # So here we should probably keep flat list in data['products'] 
-                            # and let the logic loop handle it?
-                            # Wait, data['products'] IS MODIFIED by _extract_data_from_responses to be GROUPED at line 401.
-                            # So if I assign flat list here, I need to group it myself or re-run grouping.
-                            # Grouping logic logic is:
-                            # 384: if data.get('products'): ... -> data['products'] = final_products
-                            # So data['products'] is ALREADY grouped (list of categories).
-                            # If I overwrite it with flat list from HTML, the Worker will be confused?
-                            # Worker expects: MapParseResults.services -> serialized JSON.
-                            # worker.py Line 700: services = card_data.get('products', [])
-                            # worker.py _sync_services_to_db iterates services.
-                            # Does it expect flat or grouped?
-                            # Let's check worker.py
                             data['products'] = final_products 
                         else:
                              print("⚠️ HTML парсинг услуг тоже не вернул результатов")
@@ -341,7 +445,147 @@ class YandexMapsInterceptionParser:
 
                 if not data.get('title') and not data.get('overview', {}).get('title'):
                     print("⚠️ Не удалось извлечь данные через API, используем HTML парсинг как fallback")
-                    data = self._fallback_html_parsing(page, url)
+
+                    try:
+                        # 0. Попытка извлечь из мета-тегов (самый надежный способ для заголовка)
+                        meta_title = None
+                        try:
+                            # og:title
+                            og_title = page.locator("meta[property='og:title']").get_attribute("content")
+                            if og_title:
+                                meta_title = og_title.split('|')[0].strip() # "Name | City" -> "Name"
+                                print(f"✅ Нашли заголовок в og:title: {meta_title}")
+                            
+                            # title tag
+                            if not meta_title:
+                                page_title = page.title()
+                                if page_title:
+                                    meta_title = page_title.split('-')[0].strip() # "Name - Yandex Maps" -> "Name"
+                                    print(f"✅ Нашли заголовок в page title: {meta_title}")
+                        except Exception as e:
+                            print(f"⚠️ Ошибка извлечения мета-заголовка: {e}")
+
+                        # 0.1 Попытка извлечь заголовок через user selector (если мета не сработала или для надежности)
+                        if not meta_title:
+                            try:
+                                h1_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1")
+                                if h1_el:
+                                     meta_title = h1_el.inner_text().strip()
+                                     print(f"✅ Нашли заголовок через CSS селектор: {meta_title}")
+                            except Exception as e:
+                                 print(f"⚠️ Ошибка CSS селектора заголовка: {e}")
+
+                        if meta_title:
+                            if 'overview' not in data: data['overview'] = {}
+                            data['title'] = meta_title
+                            data['overview']['title'] = meta_title
+                            
+                        # Проверка верификации через user selector (если еще не найдено)
+                        if not is_verified:
+                             try:
+                                 # body > ... > h1 > span
+                                 verified_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1 > span.business-verified-badge")
+                                 if not verified_el:
+                                      verified_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1 > span")
+                                 
+                                 if verified_el:
+                                     data['is_verified'] = True
+                                     print("✅ Найдена галочка верификации (User CSS)")
+                             except:
+                                 pass
+                        
+                        # Извлечение адреса (если нет в API)
+                        if not data.get('address') and not data.get('overview', {}).get('address'):
+                             try:
+                                 # 1. Meta tag
+                                 meta_address = page.locator("meta[property='business:contact_data:street_address']").get_attribute("content")
+                                 if meta_address:
+                                     print(f"✅ Нашли адрес в meta: {meta_address}")
+                                     data['address'] = meta_address
+                                 else:
+                                     # 2. CSS Selector
+                                     address_el = page.query_selector("div.orgpage-header-view__address") or \
+                                                  page.query_selector("a.orgpage-header-view__address") or \
+                                                  page.query_selector("div.business-contacts-view__address-link")
+                                     if address_el:
+                                          addr_text = address_el.inner_text()
+                                          print(f"✅ Нашли адрес через CSS: {addr_text}")
+                                          data['address'] = addr_text
+                             except Exception as e:
+                                 print(f"⚠️ Ошибка извлечения адреса HTML: {e}")
+                             
+                    except Exception as e:
+                        print(f"⚠️ Error extracting title from meta/css: {e}")
+                    
+                    # Передаем селектор пользователя в парсер
+                    try:
+                        # Поскольку YandexMapsScraper класса нет, парсим руками
+                        
+                        # Only try to parse products if we don't have them yet
+                        if not data.get('products'):
+                            print("🛠 Parsing services via HTML with USER Selectors...")
+                            
+                            products_html = []
+                            
+                            # 0. Сначала кликаем по табу "Цены" или "Услуги" если еще не там
+                            # (В parse_yandex_card мы уже пробовали, но может не вышло)
+                            # ...
+                            
+                            # 1. Используем логику пользователя (селекторы)
+                            # Selector: body > ... > div.business-full-items-grouped-view__content
+                            
+                            groups = page.query_selector_all("div.business-full-items-grouped-view__content > div")
+                            for group in groups:
+                                # Category title?
+                                cat_title_el = group.query_selector("div.business-full-items-grouped-view__title")
+                                cat_title = cat_title_el.inner_text() if cat_title_el else "Другое"
+                                
+                                items = group.query_selector_all("div.business-full-items-grouped-view__item, div.related-product-view")
+                                if not items:
+                                    # Try user selector
+                                    items = group.query_selector_all("div.business-full-items-grouped-view__items._grid > div")
+                                
+                                for item in items:
+                                    try:
+                                        name_el = item.query_selector("div.related-product-view__title")
+                                        price_el = item.query_selector("div.related-product-view__price")
+                                        if name_el:
+                                            products_html.append({
+                                                'name': name_el.inner_text(),
+                                                'price': price_el.inner_text() if price_el else '',
+                                                'category': cat_title,
+                                                'description': '',
+                                                'photo': ''
+                                            })
+                                    except:
+                                        pass
+                            
+                            # 2. Если не вышло - пробуем функцию из старого парсера
+                            if not products_html:
+                                 print("🔄 Пробуем функцию parse_products из yandex_maps_scraper...")
+                                 try:
+                                     from yandex_maps_scraper import parse_products
+                                     products_html = parse_products(page)
+                                 except ImportError:
+                                     print("⚠️ Не удалось импортировать parse_products")
+
+                            if products_html:
+                                print(f"✅ HTML Fallback нашел {len(products_html)} услуг")
+                                current = data.get('products', [])
+                                current.extend(products_html)
+                                data['products'] = current
+                        
+                    except Exception as e:
+                        print(f"⚠️ Ошибка user-selector HTML parsing: {e}")
+                    
+                    # Пробуем еще раз получить title если нет
+                    if not data.get('title'):
+                         try:
+                             title_el = page.query_selector("h1.orgpage-header-view__header")
+                             if title_el:
+                                 data['title'] = title_el.inner_text()
+                         except:
+                             pass
                 
                 if browser:
                     browser.close()
@@ -407,7 +651,7 @@ class YandexMapsInterceptionParser:
                     data.update(org_data)
             
             # Специальная обработка для fetchGoods/Prices API
-            elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower():
+            elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower() or 'catalog' in url.lower():
                 products = self._extract_products_from_api(json_data)
                 if products:
                     print(f"✅ Извлечено {len(products)} услуг/товаров из API запроса")
@@ -433,6 +677,36 @@ class YandexMapsInterceptionParser:
                 posts = self._extract_posts(json_data)
                 if posts:
                     data['news'] = posts
+        
+        # 2. Если продукты не найдены по URL, ищем во ВСЕХ ответах (Brute Force)
+        if not data.get('products'):
+            print("⚠️ Товары не найдены по URL фильтру, ищем во всех ответах...")
+            for url, response_info in self.api_responses.items():
+                # Пропускаем уже обработанные (хотя extract_products идемпотентна, лучше не дублировать логику)
+                # Но проще просто пройтись
+                try:
+                    json_data = response_info['data']
+                    products = self._extract_products_from_api(json_data)
+                    if products:
+                        print(f"✅ Извлечено {len(products)} услуг из API (Brute Force): {url[-50:]}")
+                        current_products = data.get('products', [])
+                        current_products.extend(products)
+                        data['products'] = current_products
+                        break # Нашли - выходим, чтобы не дублировать если несколько чанков
+                except:
+                    pass
+        
+        # Deduplicate products by name and price
+        if data.get('products'):
+            unique_products = {}
+            for p in data['products']:
+                # Key: Name + Price (to distinguish "Haircut" 500 vs "Haircut" 1000)
+                # Normalize name to lower case to catch case sensitivity issues
+                key = (p.get('name', '').strip(), p.get('price', '').strip())
+                if key not in unique_products:
+                    unique_products[key] = p
+            data['products'] = list(unique_products.values())
+            print(f"✅ Уникальных услуг после дедупликации: {len(data['products'])}")
         
         # Группируем товары по категориям (для совместимости с отчетом)
         if data.get('products'):
@@ -489,10 +763,15 @@ class YandexMapsInterceptionParser:
                     data = data['result']
                 
                 # Ищем название
+                title_cand = ''
                 if 'name' in data:
-                    result['title'] = data['name']
+                    title_cand = data['name']
                 elif 'title' in data:
-                    result['title'] = data['title']
+                    title_cand = data['title']
+                
+                # Filter out generic toponyms
+                if title_cand and title_cand not in ['Санкт-Петербург', 'Россия', 'Яндекс Карты', 'Москва']:
+                    result['title'] = title_cand
                 
                 # Ищем адрес
                 if 'address' in data:
@@ -533,10 +812,20 @@ class YandexMapsInterceptionParser:
         def extract_nested(data):
             if isinstance(data, dict):
                 # Ищем название
+                title_cand = ''
                 if 'name' in data:
-                    result['title'] = data['name']
+                    title_cand = data['name']
                 elif 'title' in data:
-                    result['title'] = data['title']
+                    title_cand = data['title']
+                
+                # Filter out generic toponyms
+                if title_cand:
+                    if title_cand in ['Санкт-Петербург', 'Россия', 'Яндекс Карты', 'Москва']:
+                        # print(f"⚠️ [Parser] Ignored title '{title_cand}' (in blacklist)") 
+                        pass # Don't spam, but we skip it
+                    else:
+                        # print(f"✅ [Parser] Found title: {title_cand}")
+                        result['title'] = title_cand
                 
                 # Ищем адрес
                 if 'address' in data:
@@ -552,7 +841,21 @@ class YandexMapsInterceptionParser:
                     if isinstance(rating, (int, float)):
                         result['rating'] = str(rating)
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value', ''))
+                        result['rating'] = str(rating.get('value', rating.get('score', '')))
+                
+                # Fallback rating
+                elif 'score' in data:
+                     result['rating'] = str(data['score'])
+
+                # Ищем рейтинг внутри ratingData (часто бывает в location-info)
+                elif 'ratingData' in data:
+                    rd = data['ratingData']
+                    if isinstance(rd, dict):
+                         val = rd.get('rating') or rd.get('value') or rd.get('score')
+                         if val: result['rating'] = str(val)
+                         
+                         count = rd.get('count') or rd.get('reviewCount')
+                         if count: result['reviews_count'] = int(count)
                 
                 # Ищем количество отзывов
                 if 'reviewsCount' in data:
@@ -605,6 +908,14 @@ class YandexMapsInterceptionParser:
                          result['rating'] = str(rating.get('value', rating.get('score', rating.get('val', ''))))
                 elif 'score' in data:
                     result['rating'] = str(data['score'])
+                
+                # Support modularPin rating (Yandex Update)
+                if 'modularPin' in data and isinstance(data['modularPin'], dict):
+                    hints = data['modularPin'].get('subtitleHints', [])
+                    for hint in hints:
+                        if hint.get('type') == 'RATING':
+                             result['rating'] = str(hint.get('text', ''))
+                             break
                 
                 if 'reviewsCount' in data or 'reviews_count' in data:
                     result['reviews_count'] = int(data.get('reviewsCount') or data.get('reviews_count', 0))
@@ -972,19 +1283,31 @@ class YandexMapsInterceptionParser:
                     pass 
 
                 # Ищем список товаров
-                # Added: 'searchResult', 'results', 'data' to search path
-                for key in ['goods', 'items', 'products', 'prices', 'searchResult', 'results', 'categoryItems', 'features', 'documents']:
+                # Ищем список товаров
+                # Убрали 'features' (это свойства карты) и 'items' (слишком общее, часто это организации)
+                # 'items' оставим, но с жесткой проверкой
+                target_keys = ['goods', 'products', 'prices', 'searchResult', 'results', 'catalog', 'menu', 'services', 'items', 'categoryItems']
+                
+                for key in target_keys:
                     if key in data and isinstance(data[key], list):
-                        # LOGGING STRUCTURE
-                        if len(data[key]) > 0:
+                         if len(data[key]) > 0:
                             item0 = data[key][0]
                             if isinstance(item0, dict):
-                                 # Debug log only if it looks somewhat like a product (has name/price)
+                                 # Debug log
                                  if any(k in item0 for k in ['name', 'title', 'price', 'text']):
-                                     print(f"🔍 DEBUG PRODUCTS: Found list in '{key}', Item keys: {list(item0.keys())}")
+                                     pass # print(f"🔍 DEBUG PRODUCTS: Found list in '{key}'...")
                         
-                        for item in data[key]:
+                         for item in data[key]:
                             if isinstance(item, dict):
+                                # 1. ПРОВЕРКА: Это товар или организация/фича?
+                                # Организации обычно имеют ratingData, workingTime, geoId
+                                if any(k in item for k in ['ratingData', 'workingTime', 'geoId', 'rubricId', 'stops']):
+                                    continue
+                                
+                                # Фичи карты (features) часто имеют 'id', 'value', 'type', но не имеют price
+                                if 'type' in item and 'value' in item and 'price' not in item:
+                                    continue
+                                
                                 # Check if it's a product
                                 name = item.get('name', item.get('title', ''))
                                 
@@ -993,20 +1316,46 @@ class YandexMapsInterceptionParser:
                                     name = item.get('data', {}).get('name')
 
                                 if not name:
-                                    # Try 'text' as fallback for name if short
                                     text_val = item.get('text', '')
                                     if text_val and len(text_val) < 100: 
-                                         # Might be a category or simple item
-                                         pass
-                                    else:
+                                         name = text_val
+                                
+                                if not name:
+                                    continue
+                                
+                                # --- SEMI-STRICT PRICE CHECK ---
+                                # Relaxed Rule (2026-01-30): Allow items without price IF they are not obvious map features.
+                                # Previously we required price for 'items', 'searchResult', etc. to avoid "Toilets", "Entrances".
+                                # Now we use a blacklist and name length check.
+                                
+                                has_price = False
+                                price_val = ''
+                                
+                                price_obj = item.get('minPrice', {}) or item.get('price', {})
+                                if isinstance(price_obj, dict):
+                                     val = price_obj.get('value')
+                                     text = price_obj.get('text')
+                                     if val or text:
+                                         has_price = True
+                                         price_val = text or str(val)
+                                elif 'price' in item:
+                                     val = item['price']
+                                     if val:
+                                         has_price = True
+                                         price_val = str(val)
+                                
+                                if key in ['items', 'searchResult', 'results', 'categoryItems'] and not has_price:
+                                    # Check blacklist for common map features
+                                    junk_terms = ['вход', 'туалет', 'парковка', 'банкомат', 'оплата', 'entrance', 'toilet', 'parking', 'atm', 'wc', 'этаж']
+                                    name_lower = name.lower()
+                                    
+                                    # If name matches junk or is very short (likely not a service), skip
+                                    is_junk = any(term in name_lower for term in junk_terms)
+                                    if is_junk or len(name) < 3:
                                          continue
                                     
-                                price = item.get('price', {})
-                                price_val = ''
-                                if isinstance(price, dict):
-                                    price_val = price.get('text', '') or str(price.get('value', ''))
-                                else:
-                                    price_val = str(price)
+                                    # Otherwise, allow it (Oliver has services without prices)
+                                    pass
                                 
                                 # Категория
                                 category = ''
@@ -1015,22 +1364,23 @@ class YandexMapsInterceptionParser:
                                 else:
                                     category = str(item.get('category', ''))
                                 
-                                # Если есть description, берем его
+                                # Описание
                                 description = item.get('description', '')
                                 
+                                # Фото
                                 photo = ''
                                 if isinstance(item.get('image'), dict):
                                     photo = item.get('image').get('url', '')
-                                
-                                # Only add if it seems valid
-                                if name:
-                                    products.append({
-                                        'name': name,
-                                        'price': price_val,
-                                        'description': description,
-                                        'category': category,
-                                        'photo': photo
-                                    })
+                                elif isinstance(item.get('photos'), list) and len(item['photos']) > 0:
+                                     photo = item['photos'][0].get('urlTemplate', '')
+
+                                products.append({
+                                    'name': name,
+                                    'price': price_val,
+                                    'description': description,
+                                    'category': category,
+                                    'photo': photo
+                                })
                 
                 # Рекурсивный поиск
                 for key, value in data.items():

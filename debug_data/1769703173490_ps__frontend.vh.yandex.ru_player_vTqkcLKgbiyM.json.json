@@ -1,0 +1,459 @@
+{
+  "request_info": {
+    "cuid": "ancQTZw",
+    "lang": "ru",
+    "flags": {},
+    "player_version": "1.0-13663",
+    "slots": "",
+    "slow_connection": false,
+    "use_aab_bundle": false,
+    "with_ad_insertion": false
+  },
+  "user_data": {
+    "req_id": "1769703171081263-9034618303230795443-lzskxrai6zvgih7n-BAL"
+  },
+  "error": "",
+  "apphost-reqid": "1769703171081263-9034618303230795443-lzskxrai6zvgih7n-BAL",
+  "content": {
+    "auto_fields": {},
+    "release_date": "1761840115",
+    "streams": [
+      {
+        "thumbnail": "https://avatars.mds.yandex.net/get-vh/14919272/2a0000019a35de571ec9790ba3fb811ee066/orig",
+        "options": [],
+        "url": "https://strm.yandex.ru/vod/vh-ugc-video-converted/vod-content/10b0d57e702ac8372ce03cb432e76f16/7ba24f9f-573f-44f2-a150-f78d60c8aa9f/kaltura/desc_df5f3ed14366c1bb9d869ad489cf5a97/vTqkcLKgbiyM/ysign1=1c8b65e520046c89ab93045c63ddbc84a7c64b86644e30cf35cdc58f91b424af,abcID=1238,from=unknown,pfx,region=10000,sfx,ts=6988b603/manifest.mpd"
+      },
+      {
+        "thumbnail": "https://avatars.mds.yandex.net/get-vh/14919272/2a0000019a35de571ec9790ba3fb811ee066/orig",
+        "options": [],
+        "url": "https://strm.yandex.ru/vod/vh-ugc-video-converted/vod-content/10b0d57e702ac8372ce03cb432e76f16/7ba24f9f-573f-44f2-a150-f78d60c8aa9f/kaltura/desc_df5f3ed14366c1bb9d869ad489cf5a97/vTqkcLKgbiyM/ysign1=e7b42ae909c9c578db161a1a850664e0852612d5b39aeee4138243543d110afb,abcID=1238,from=unknown,pfx,region=10000,sfx,ts=6988b603/master.m3u8"
+      }
+    ],
+    "duration": 60,
+    "audio_source_url": "https://strm.yandex.ru/vh-ugc-video-converted/vod-content/10b0d57e702ac8372ce03cb432e76f16/7ba24f9f-573f-44f2-a150-f78d60c8aa9f/ysign1=1cf68276ed17e62401fdaba85a237e0b1089a192f735d5352ba2ad51a8d7c1fa,abcID=1558,from=unknown,pfx,sfx,ts=6988b603/audio_0_ce5f7f734faf563579e20fb1132a3b96.mp4",
+    "robots": "",
+    "dislikes": 0,
+    "channel_multiplex_number": 0,
+    "skippableFragments": [],
+    "release_date_ut": 1761840115,
+    "content_type_name": "vod-episode",
+    "stream": {
+      "trackings": {
+        "trackingEvents": []
+      },
+      "withCredentials": true
+    },
+    "views_count": 514,
+    "content_url": "s3://vh-ugc-video-converted/vod-content/10b0d57e702ac8372ce03cb432e76f16/7ba24f9f-573f-44f2-a150-f78d60c8aa9f/kaltura/desc_df5f3ed14366c1bb9d869ad489cf5a97",
+    "tag_attribute": "marketindexer-testing",
+    "thumbnail": "https://avatars.mds.yandex.net/get-vh/14919272/2a0000019a35de571ec9790ba3fb811ee066/orig",
+    "can_play_on_station": true,
+    "blacked": 0,
+    "update_time": 1761840358,
+    "embed_url": "https://frontend.vh.yandex.ru/player/vTqkcLKgbiyM?from=unknown",
+    "meta": {
+      "with_sport_prediction": false,
+      "weight": 0,
+      "with_overlay": false,
+      "with_deep_hd": false,
+      "without_timeline": false
+    },
+    "has_cachup": 1,
+    "catchup_age": 0,
+    "is_special_project": false,
+    "dvr": 0,
+    "content_id": "vTqkcLKgbiyM",
+    "max_video_size": {
+      "width": 1920,
+      "height": 1080
+    },
+    "download_episodes": 0,
+    "previews": [
+      {
+        "duration_sec": 10,
+        "url": "https://video-preview.s3.yandex.net/ugc/10b0d57e702ac8372ce03cb432e76f16/22f6cfa8-6a27-456e-aed0-61c2c0480ff6/previews/vmaf-preview-10s-360.mp4",
+        "height": 360,
+        "width": 640
+      },
+      {
+        "duration_sec": 4,
+        "url": "https://video-preview.s3.yandex.net/ugc/10b0d57e702ac8372ce03cb432e76f16/22f6cfa8-6a27-456e-aed0-61c2c0480ff6/previews/vmaf-preview-4s-480.mp4",
+        "height": 480,
+        "width": 852
+      },
+      {
+        "duration_sec": 10,
+        "url": "https://video-preview.s3.yandex.net/ugc/10b0d57e702ac8372ce03cb432e76f16/22f6cfa8-6a27-456e-aed0-61c2c0480ff6/previews/vmaf-preview-10s-720.mp4",
+        "height": 720,
+        "width": 1280
+      },
+      {
+        "duration_sec": 4,
+        "url": "https://video-preview.s3.yandex.net/ugc/10b0d57e702ac8372ce03cb432e76f16/22f6cfa8-6a27-456e-aed0-61c2c0480ff6/previews/vmaf-preview-4s-720.mp4",
+        "height": 720,
+        "width": 1280
+      }
+    ],
+    "sport_event": {},
+    "first_frame_url": "",
+    "ya_video_preview": "https://video-preview.s3.yandex.net/ugc/10b0d57e702ac8372ce03cb432e76f16/22f6cfa8-6a27-456e-aed0-61c2c0480ff6/previews/vmaf-preview-10s-720.mp4",
+    "yastation_cast_cfg": {
+      "provider_item_id": "https://frontend.vh.yandex.ru/player/vTqkcLKgbiyM",
+      "player_id": "vh"
+    },
+    "deep_hd": false,
+    "has_schedule": 1,
+    "first_frame_hash": "",
+    "adConfig": {
+      "distr_id": 0,
+      "partner_id": 0,
+      "vasUaasConfig": {
+        "expFlags": [
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "YASPSTABLEVER": "1.762.13663"
+                }
+              },
+              "TESTID": [
+                "1478067"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "VAS_STABLE_VERSION": "1301686"
+                }
+              },
+              "TESTID": [
+                "1347458"
+              ],
+              "HANDLER": "VIDEOADSSDK"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "VAS_LOG_CONTENT_DURATION_PERCENT": "1"
+                }
+              },
+              "TESTID": [
+                "1327062"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "DISABLE_DESTROY_EXTERNAL_CREATIVE_AD_USER_CLOSE_EVENT": "exp"
+                }
+              },
+              "TESTID": [
+                "1449275"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "DISABLE_DESTROY_EXTERNAL_CREATIVE_AD_USER_CLOSE_EVENT": "exp"
+                }
+              },
+              "TESTID": [
+                "1449272"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "VAS_RECALCULATE_REQUEST_METHOD_FOR_WRAPPER_URL": "exp"
+                }
+              },
+              "TESTID": [
+                "1450545"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "QR_BLACK_LIST_CLIENT_IDS": "109238945:88772210:309062065"
+                }
+              },
+              "TESTID": [
+                "1471021"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "PCODE_STABLE_VERSION": "1303695"
+                }
+              },
+              "TESTID": [
+                "1477977"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "web_player": {
+                    "web_experiment_checker_testid": "1387855"
+                  }
+                }
+              },
+              "TESTID": [
+                "1387855"
+              ],
+              "HANDLER": "VDPLTFRM"
+            },
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "PCODE": {}
+                }
+              },
+              "TESTID": [
+                "1387855"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "web_player": {
+                    "web_yasp_enable_sextant": true
+                  }
+                }
+              },
+              "TESTID": [
+                "1473776"
+              ],
+              "HANDLER": "VDPLTFRM"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "PCODE": {}
+                }
+              },
+              "TESTID": [
+                "1384006"
+              ],
+              "HANDLER": "PCODE"
+            },
+            {
+              "CONTEXT": {
+                "WEATHER": {}
+              },
+              "HANDLER": "WEATHER"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "PCODE": {}
+                }
+              },
+              "TESTID": [
+                "1457616"
+              ],
+              "HANDLER": "PCODE"
+            },
+            {
+              "CONTEXT": {
+                "WEATHER": {}
+              },
+              "HANDLER": "WEATHER"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "PCODE": {}
+                }
+              },
+              "TESTID": [
+                "1471439"
+              ],
+              "HANDLER": "PCODE"
+            },
+            {
+              "CONTEXT": {
+                "WEATHER": {}
+              },
+              "HANDLER": "WEATHER"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "MAIN": {
+                  "PCODE": {}
+                }
+              },
+              "TESTID": [
+                "1404022"
+              ],
+              "HANDLER": "PCODE"
+            },
+            {
+              "CONTEXT": {
+                "WEATHER": {}
+              },
+              "HANDLER": "WEATHER"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "YANDEXID": {
+                  "flags": [
+                    "sso-move-dzen-cookie",
+                    "sso-set-dzen-cookie"
+                  ]
+                }
+              },
+              "TESTID": [
+                "1447467"
+              ],
+              "HANDLER": "YANDEXID"
+            }
+          ],
+          [],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "USE_NEW_KEBAB_SIZE": "ctl",
+                  "NEW_KEBAB": "ctl"
+                }
+              },
+              "TESTID": [
+                "1471791"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "ADD_IMAGE_GALLERY_IN_NEURO_DESIGN": "exp"
+                }
+              },
+              "TESTID": [
+                "1467262"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "HAPPINESS_SURVEY_ICON": "hand"
+                }
+              },
+              "TESTID": [
+                "1353317"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "ADDING_ADDITIONAL_PARAMETERS_FOR_DISTRIBUTION": "exp"
+                }
+              },
+              "TESTID": [
+                "1473957"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "USE_SEQUENTIAL_LOAD_AD_FOR_SKIP_TOKEN": "exp"
+                }
+              },
+              "TESTID": [
+                "1473478"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "USE_BK_WIZ_COLOR_FOR_AVG_COLOR": "ctl"
+                }
+              },
+              "TESTID": [
+                "1474010"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [
+            {
+              "CONTEXT": {
+                "FLAGS": {
+                  "SUPPORT_VERTICAL_SNAP_FOR_SCROLLING": "ctl"
+                }
+              },
+              "TESTID": [
+                "1472676"
+              ],
+              "HANDLER": "PCODE"
+            }
+          ],
+          [],
+          [],
+          []
+        ],
+        "iCookie": "tl7sv7mIgoc02e+RAhRsHn/8s9bH34crv2U8V9XTX+Jlz6l0yRO6Upy4gLjkgZBbgMoWr4CUQfnoTKZ6zYts8TCSsyw=",
+        "testIds": "1387855,0,87;1473776,0,8;1384006,0,9;1457616,0,97;1471439,0,30;1404022,0,86;1447467,0,6;1471934,0,27;1471791,0,66;1467262,0,48;1353317,0,15;1473957,0,38;1473478,0,71;1474010,0,49;1472676,0,45;1467535,0,39;1476248,0,35;912288,0,79"
+      },
+      "vh_sid": "VH-SID-1769703171081263-9034618303230795443-lzskxrai6zvgih7n-BAL",
+      "category": 1017,
+      "useAdSession": true,
+      "video_content_id": "vTqkcLKgbiyM",
+      "video_genre_name": [],
+      "referrerDomain": "yandex.ru"
+    },
+    "has_vod": 0,
+    "likes": 0
+  }
+}

@@ -1,0 +1,562 @@
+{
+  "data": {
+    "reviews": [
+      {
+        "reviewId": "vEp6tFw15Tl2MQeEfZdX8JZ3cbAsaarM",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Наталия Л.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/61207/0m-1/{size}",
+          "professionLevel": "Знаток города 3 уровня",
+          "publicId": "zwz59qv7pqptc260u90qgcwze8",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Хорошая уютная Парикмахерская для детишек!) мультики, игрушки- все есть!) можете выбрать мультик, какой смотрит ваш ребёнок)",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2019-04-26T08:43:24.323Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "1quBFlaS_R-wVeirxqU3rBObouOxXIxss",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Елена",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/50595/0t-8/{size}",
+          "professionLevel": "Знаток города 2 уровня",
+          "publicId": "kz4617442ykyc4nwc1t38akn20",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Девушка парикмахер, опоздала на стрижку (ходила где-то по ТЦ), пришла, не поздаровалась, ребенка к себе вобще не расположила, он ее очень испугался, сразу с ножницами на него напала, сложилось впечатление, что ей все эти стрижки такая обуза! Я еле выдержала пока закончится стрижка, но  в целом как подстригли понравилась, в конце дали подарочек! Помещение крошечное, не развернуться!",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 3,
+        "updatedTime": "2018-09-23T07:02:43.416Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "-pRUZcsyKLTtsaKdv0Ho9fltOAT0K6",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Алиночка",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/63032/J5f5RnDlBZPfxvx27pn2b59Kyuc-1/{size}",
+          "professionLevel": "Знаток города 9 уровня",
+          "publicId": "tj39t8dpcecy2q06r0a02e7pj4",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Сервис очень Неприятно удивил, какая то провинция. Неожидала в Меркурий такое увидеть. И, как мне кажется, отсутствие термила огромный минус в наше время. Банкомат Альфа банка в Меркурий не работал пришлось бежать аж в Карусель. Прокололи уши, но больше ни на одну услугу точно не пойдём.",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 2,
+        "updatedTime": "2019-07-11T18:15:37.457Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "businessComment": {
+          "text": "Спасибо за отзыв.",
+          "updatedTime": "2022-11-30T04:03:50.442Z"
+        },
+        "reviewId": "qmuF5qspy5_yZFHsb-md7wDQOlem2aTx",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Annie",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/47747/0h-2/{size}",
+          "professionLevel": "Знаток города 17 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Мастера мужских стрижек и мастера для малышей, здесь по записи, и отличный мастер маникюра и педикюра !",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2022-11-28T20:22:06.661Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "p-MOFaSpbDzwy2PhQpQrlzUVzQxqL4J",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Всеволод Кириллов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/37154/0y-1/{size}",
+          "professionLevel": "Знаток города 15 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Весь процесс затянулся, хотя запись была на определенное время.",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Kayıt belli bir süreliğine olmasına rağmen tüm süreç uzadı."
+        },
+        "rating": 3,
+        "updatedTime": "2025-01-29T06:15:52.379Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "rk3No8vIp-LeS_KrI2VeDc8eK_CpoAWQ",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Татьяна Молчанова",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/62162/ZkQfpHUVNIT3U3pTDPF0K8khDI-1/{size}",
+          "professionLevel": "Знаток города 21 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "В салоне было грязно, не убирались после предыдущих клиентов.",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Kabin kirliydi, önceki müşterilerden sonra temizlenmediler."
+        },
+        "rating": 3,
+        "updatedTime": "2025-01-22T03:14:51.881Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "SU6XTk2S5c-jKjoX48sIMOkR8JsT31x",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Артем Макаров",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/64336/0f-8/{size}",
+          "professionLevel": "Знаток города 3 уровня",
+          "publicId": "h49rxk2ryjhxuynt9zzdvd3f58",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Всё отлично",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2024-08-24T12:36:29.082Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "acqPEPudNFLKyAGyi7a8Oejx8oDBF5",
+        "businessId": "203293742306",
+        "author": {
+          "name": "олеся д.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/27503/0h-8/{size}",
+          "professionLevel": "Знаток города 3 уровня",
+          "publicId": "wtz0507w2fajxmzt9x7uat9qeg",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Очень уютная атмосфера!)) Ребенку понравился большой аквариум)) А для меня главное-постригли отлично!!!))",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2019-01-10T14:44:45.200Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "8XV53qJnERY50XZWAPYz_48nHlT_Rj",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Екатерина С.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/26057/0l-2/{size}",
+          "professionLevel": "Знаток города 10 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Отличная парикмахерская для детей с мультиками, аквариумом, игрушками, креслами в виде машинок, но главное - хорошая быстрая  работа мастеров по стрижкам на любой вкус. Не нужно записываться заранее! Всегда 2 мастера, которые очень быстро работают. После стрижки всем деткам дарят маленькие подарочки. 👍🏻",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2020-03-23T14:37:16.767Z",
+        "reactions": {
+          "likes": 2,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "arzdl18M167yT2DYac8F5_S3K9lPI1",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Кристина Лужкова",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/61207/sT5qhtX4KKC3gBmNIQlM4qgDmOM-1/{size}",
+          "professionLevel": "Знаток города 9 уровня",
+          "publicId": "ewptu1cgg6np3by2w190wxzp50",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Отличное место 👍 ",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2024-11-13T17:05:31.459Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "etJqvOCPTM4weaIM97NalOPuyHUIFuUn",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Саша Мукк",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/40841/eWoOxAWsbIuxcJMXrgMvrRVeq0-1/{size}",
+          "professionLevel": "Знаток города 17 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Обещали профессиональный подход, а получили любительскую работу.",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Profesyonel bir yaklaşım sözü verdiler, ancak amatör işler aldılar."
+        },
+        "rating": 3,
+        "updatedTime": "2024-12-04T08:49:00.338Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "businessComment": {
+          "text": "Ждем вас,спасибо за отзыв.",
+          "updatedTime": "2022-11-30T04:05:15.364Z"
+        },
+        "reviewId": "5Q_WqAa-XkchCs-c5onwmorhmXi88x",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Павел Коннов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/21493/enc-86993885d155f7bde6f708e20039de03f69e0d9e9d0ff638611d6654c740cbcb/{size}",
+          "professionLevel": "Знаток города 12 уровня",
+          "publicId": "nzfw3rk8vfwq8vw9x7jmjcq3ar",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Подстригся, мне очень понравилось, мастер отличный",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2022-08-05T10:53:05.906Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "NlA7mGUsr8GINxv1xfnbtxzVQQSoD8_gv",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Никита Петрачук",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/25817/FJXQCtbTl73kvADygU6GWHf6do-1/{size}",
+          "professionLevel": "Знаток города 18 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Мастерам не хватает терпения и внимательности. ",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Ustaların sabrı ve dikkati yoktur. "
+        },
+        "rating": 3,
+        "updatedTime": "2025-01-07T04:58:12.302Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "wTfu593BSByI2NeVKMnMSJD56meAtA",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Vladimir Karachyov",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/39249/enc-95eb228c52ad4b8e16b8c375445f98240de4f158f914949e9bb7b009c2f27e7a/{size}",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "0d35th8dk0xk5nnphbuf972pyw",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Приятное место! Ходим туда всей семьёй. Знаю свое дело!",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2023-04-19T17:23:11.419Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "dLTim21MZZn-8K9B4VnB6QAGVoT0Or",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Яна Тислицкая",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/24700/enc-b2cc64c6efbfa60b45a363de184645ae/{size}",
+          "professionLevel": "Знаток города 6 уровня",
+          "publicId": "7p3x2qx4zza8tqwea52rkkueuw",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Очень любят деток и стригут с душой всех юных клиентов! ",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2018-11-20T20:57:13.017Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "businessComment": {
+          "text": "Спасибо нам приятно",
+          "updatedTime": "2022-08-09T07:42:46.065Z"
+        },
+        "reviewId": "nUgziSUuhLNYiwucYf92KUFMgJDnD9vZ",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Анна БВ",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 5 уровня",
+          "publicId": "7zbggb4wctv982fcva2zr77xj4",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Хожу сюда к мастеру маникюра и педикюра Анжелике Рубан, у неё золотые руки 💐🙂❤️",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2022-06-25T20:49:47.172Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "H0ILcBQTg4gtefhefwaFb1-mszWkxXZ",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Валентин Бурлак",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 15 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Рекомендую всем, кто ищет хороший салон красоты!",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 4,
+        "updatedTime": "2024-08-01T05:19:28.541Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "BIdT657uVG1-kzO2yP9FYyaHG3QAWp",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Александра",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/50595/Gril7Uj5gvPMjjWBgXISdQseSEQ-1/{size}",
+          "professionLevel": "Знаток города 4 уровня",
+          "publicId": "nn3zy2xu3fk3krbj7h8k86rp84",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Лете здесь замечательно подстригли",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2021-05-01T17:09:47.198Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "fTxhqihzHSpIbMeLOeKfT0S8T9dwddV",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Петр Афанасьев",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/27503/0r-4/{size}",
+          "professionLevel": "Знаток города 12 уровня",
+          "publicId": "c5nm1dcm4mk3qyyj3801qg57pc",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Подходит для детей",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 4,
+        "updatedTime": "2023-07-11T12:05:28.482Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "mV6ki7Qcmeq4Ab5Um5Fs-x880OShDJKx",
+        "businessId": "203293742306",
+        "author": {
+          "name": "Олеся Б.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/30955/Ajfx6JpCxHrIZojKeXMffP494ss-1/{size}",
+          "professionLevel": "Знаток города 8 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "И сын, и сама там стрижёмся. Все нравится!",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2018-08-17T06:12:07.418Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      }
+    ],
+    "params": {
+      "offset": 50,
+      "limit": 50,
+      "count": 70,
+      "loadedReviewsCount": 70,
+      "page": 2,
+      "totalPages": 2,
+      "reviewsRemained": 0
+    },
+    "tags": [],
+    "aspects": [
+      {
+        "text": "Обслуживание",
+        "count": 47,
+        "positive": 39,
+        "negative": 7
+      },
+      {
+        "text": "Мастера",
+        "count": 46,
+        "positive": 40,
+        "negative": 6
+      },
+      {
+        "text": "Персонал",
+        "count": 42,
+        "positive": 33,
+        "negative": 4
+      },
+      {
+        "text": "Стрижка",
+        "count": 33,
+        "positive": 29,
+        "negative": 3
+      }
+    ]
+  }
+}
