@@ -397,3 +397,19 @@ Resolve `column "optimized_description" of relation "userservices" does not exis
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (ReviewExchangeDistribution)
+
+### Current Task
+Resolve `column "review_confirmed" of relation "reviewexchangedistribution" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing columns in `ReviewExchangeDistribution` from SQLite dump: `review_confirmed`, `confirmed_at`.
+- Added them to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed

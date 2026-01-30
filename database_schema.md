@@ -114,13 +114,14 @@ Cached results of map parsing.
 - `competitors` (TEXT)
 
 ### PricelistOptimizations
-### PricelistOptimizations
 - `id` (TEXT, PK)
 - `user_id` (TEXT, FK -> Users.id)
 - `original_file_path` (TEXT)
 - `optimized_data` (TEXT, JSON)
-- `services_count` (INTEGER)
-- `expires_at` (TIMESTAMP)
+- `receiver_participant_id` (TEXT)
+- `sent_at` (TIMESTAMP)
+- `review_confirmed` (BOOLEAN)
+- `confirmed_at` (TIMESTAMP)
 - `business_id` (TEXT, FK -> Businesses.id)
 - `original_text`, `optimized_text`
 

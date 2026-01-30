@@ -342,6 +342,8 @@ CREATE TABLE ReviewExchangeDistribution (
     sender_participant_id TEXT NOT NULL REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
     receiver_participant_id TEXT NOT NULL REFERENCES ReviewExchangeParticipants(id) ON DELETE CASCADE,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    review_confirmed BOOLEAN DEFAULT FALSE, -- Missing from initial schema
+    confirmed_at TIMESTAMP, -- Missing from initial schema
     UNIQUE(sender_participant_id, receiver_participant_id)
 );
 
