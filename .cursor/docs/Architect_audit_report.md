@@ -381,3 +381,19 @@ Resolve missing `competitors` column in `MapParseResults`. Matches SQLite dump.
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Schema Drift (UserServices)
+
+### Current Task
+Resolve `column "optimized_description" of relation "userservices" does not exist` error during migration.
+
+### Architecture Decision
+- Identified missing columns in `UserServices` from SQLite dump: `optimized_description`, `is_active`.
+- Added them to `src/schema_postgres.sql`.
+
+### Files to Modify
+- `src/schema_postgres.sql` - added missing columns.
+- `database_schema.md` - updated documentation.
+
+### Status
+- [x] Completed

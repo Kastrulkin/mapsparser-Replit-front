@@ -282,7 +282,9 @@ CREATE TABLE UserServices (
     keywords TEXT,
     price TEXT,
     optimized_name TEXT,
+    optimized_description TEXT, -- Missing from initial schema
     chatgpt_context TEXT,
+    is_active BOOLEAN DEFAULT TRUE, -- Missing from initial schema
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

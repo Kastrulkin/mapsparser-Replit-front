@@ -69,7 +69,9 @@ Services offered by a business.
 - `price` (TEXT)
 - `description`, `keywords`
 - `optimized_name` (TEXT): AI-optimized name for SEO.
+- `optimized_description` (TEXT)
 - `chatgpt_context` (TEXT): Context for AI generation.
+- `is_active` (BOOLEAN)
 
 ### Masters
 Employees or specialists working at a business.
