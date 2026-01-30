@@ -102,6 +102,12 @@ Cached results of map parsing.
 - `products` (TEXT): JSON string of parsed products/services.
 - `is_verified` (BOOLEAN)
 
+### PricelistOptimizations
+- `id` (TEXT, PK)
+- `user_id` (TEXT, FK -> Users.id)
+- `business_id` (TEXT, FK -> Businesses.id)
+- `original_text`, `optimized_text`
+
 ### External Data Tables
 Captured data from external platforms (Yandex, Google, 2GIS).
 - **ExternalBusinessReviews**: Reviews text, rating, author, response status.

@@ -452,6 +452,7 @@ CREATE TABLE BusinessOptimizationWizard (
 DROP TABLE IF EXISTS PricelistOptimizations CASCADE;
 CREATE TABLE PricelistOptimizations (
     id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES Users(id) ON DELETE SET NULL,
     business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
     original_text TEXT,
     optimized_text TEXT,
