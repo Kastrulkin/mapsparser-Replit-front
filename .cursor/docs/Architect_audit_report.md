@@ -461,3 +461,17 @@ Resolve `column "account_id" of relation "externalbusinessstats" does not exist`
 
 ### Status
 - [x] Completed
+
+## 2026-01-31 - Fix Migration Script (Empty Strings)
+
+### Current Task
+Resolve `invalid input syntax for type double precision: ""` error during migration of `BusinessMetricsHistory`.
+
+### Architecture Decision
+- Modified `migrate_to_postgres.py` to explicitly convert empty strings (`''`) to `None` before inserting into PostgreSQL. SQLite allowed empty strings in numeric columns, but Postgres enforces strict typing.
+
+### Files to Modify
+- `scripts/migrate_to_postgres.py` - added empty string handling.
+
+### Status
+- [x] Completed

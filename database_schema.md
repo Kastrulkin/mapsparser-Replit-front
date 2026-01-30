@@ -142,7 +142,7 @@ Captured data from external platforms (Yandex, Google, 2GIS).
 - **ProxyServers**: Rotation pool for parsers.
 - **BusinessMapLinks**: Links to business on different maps.
 - **WordstatKeywords**: cached SEO keywords.
-- **BusinessMetricsHistory**: Snapshots of business metrics over time.
+- **BusinessMetricsHistory**: Snapshots of business metrics over time (`rating`, `reviews_count`, `unanswered_reviews_count`, `source`, etc).
 - **TelegramBindTokens**: Tokens for linking Telegram accounts.
 - **ReviewExchange* **: Tables for cross-promotion review system.
 - **AIPrompts**: System prompts for AI generation features.

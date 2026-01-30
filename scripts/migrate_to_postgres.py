@@ -146,9 +146,16 @@ def migrate():
                 val = row_dict[col]
                 # Cast boolean
                 if col in bool_cols:
-                    values.append(bool(val) if val is not None else None)
+                    if isinstance(val, str) and val == '':
+                        values.append(None)
+                    else:
+                        values.append(bool(val) if val is not None else None)
                 else:
-                    values.append(val)
+                    # Convert empty strings to None (crucial for INTEGER/FLOAT columns like rating)
+                    if isinstance(val, str) and val == '':
+                        values.append(None)
+                    else:
+                        values.append(val)
             clean_rows.append(tuple(values))
             
         # Bulk Insert
