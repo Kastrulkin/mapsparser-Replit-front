@@ -8,6 +8,8 @@ interface Business {
   industry?: string;
   owner_email?: string;
   owner_name?: string;
+  network_id?: string;
+  created_at?: string;
 }
 
 interface BusinessSwitcherProps {
@@ -26,12 +28,61 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
-  useEffect(() => {
-    if (businesses.length > 0) {
-      const current = businesses.find(b => b.id === currentBusinessId) || businesses[0];
-      setSelectedBusiness(current);
+  // Фильтруем точки сети - показываем только основные аккаунты
+  // Фильтруем точки сети - показываем независимые точки ИЛИ "главную" точку сети (самую старую)
+  const mainBusinesses = React.useMemo(() => {
+    const independent = [];
+    const networks: { [key: string]: Business[] } = {};
+
+    // Группируем
+    for (const b of businesses) {
+      if (!b.network_id) {
+        independent.push(b);
+      } else {
+        if (!networks[b.network_id]) {
+          networks[b.network_id] = [];
+        }
+        networks[b.network_id].push(b);
+      }
     }
-  }, [businesses, currentBusinessId]);
+
+    // Выбираем "главные" точки из сетей (сортировка по дате создания, если есть, или просто первый)
+    const networkHeads = Object.values(networks).map((group: any[]) => {
+      // Сортируем по created_at (по возрастанию - старые первые), если поля нет, оставляем как есть
+      // Предполагаем, что created_at приходит строкой ISO
+      return group.sort((a, b) => {
+        if (a.created_at && b.created_at) {
+          return a.created_at.localeCompare(b.created_at);
+        }
+        return 0;
+      })[0];
+    });
+
+    return [...independent, ...networkHeads];
+  }, [businesses]);
+
+  useEffect(() => {
+    if (mainBusinesses.length > 0) {
+      // 1. Пытаемся найти бизнес в списке отображаемых (для независимых или главных точек)
+      let current = mainBusinesses.find(b => b.id === currentBusinessId);
+
+      // 2. Если не нашли (значит это дочерняя точка), ищем её родителя/главную точку
+      if (!current && currentBusinessId) {
+        const childBusiness = businesses.find(b => b.id === currentBusinessId);
+        if (childBusiness?.network_id) {
+          current = mainBusinesses.find(b => b.network_id === childBusiness.network_id);
+        }
+      }
+
+      // 3. Если всё равно не нашли, не меняем (или ставим первый, но лучше оставить как есть во избежание скачков)
+      // Но если selectedBusiness еще нет, ставим первый
+      if (current) {
+        setSelectedBusiness(current);
+      } else if (!selectedBusiness) {
+        setSelectedBusiness(mainBusinesses[0]);
+      }
+    }
+  }, [mainBusinesses, currentBusinessId, businesses]);
 
   const handleBusinessSelect = (business: Business) => {
     setSelectedBusiness(business);
@@ -39,7 +90,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     setIsOpen(false);
   };
 
-  const hasBusinesses = businesses.length > 0;
+  const hasBusinesses = mainBusinesses.length > 0;
 
   return (
     <div className="relative">
@@ -63,13 +114,12 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
-          {hasBusinesses && businesses.map((business) => (
+          {hasBusinesses && mainBusinesses.map((business) => (
             <button
               key={business.id}
               onClick={() => handleBusinessSelect(business)}
-              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                selectedBusiness?.id === business.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${selectedBusiness?.id === business.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                }`}
             >
               <div className="flex items-start space-x-3">
                 <Building2 className="w-4 h-4 text-gray-600 mt-0.5" />

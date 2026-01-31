@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { useApiData } from '../hooks/useApiData';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { YandexBusinessReport } from './YandexBusinessReport';
+import { CheckCircle2 } from 'lucide-react';
 
 interface MapParseItem {
   id: string;
@@ -12,6 +15,14 @@ interface MapParseItem {
   newsCount: number;
   photosCount: number;
   reportPath: string | null;
+  isVerified?: boolean;
+  phone?: string;
+  website?: string;
+  messengers?: string;
+  workingHours?: string;
+  servicesCount?: number;
+  profileCompleteness?: number;
+  competitors?: string;
   createdAt: string;
 }
 
@@ -20,7 +31,9 @@ interface MapParseTableProps {
 }
 
 const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
+  const { t } = useLanguage();
   const [viewHtml, setViewHtml] = useState<string | null>(null);
+  const [viewData, setViewData] = useState<MapParseItem | null>(null);
 
   const { data, loading, error } = useApiData<MapParseItem[]>(
     businessId ? `${window.location.origin}/api/business/${businessId}/map-parses` : null,
@@ -30,35 +43,23 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
   );
   const items = data || [];
 
-  const viewReport = async (id: string) => {
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/map-report/${id}`, {
-        headers: { Authorization: `Bearer ${token || ''}` }
-      });
-      if (!res.ok) {
-        setError('Отчет недоступен');
-        return;
-      }
-      const html = await res.text();
-      setViewHtml(html);
-    } catch (e) {
-      setError('Ошибка при загрузке отчета');
-    }
+  const viewReport = async (item: MapParseItem) => {
+    // Show new report component with structured data
+    setViewData(item);
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900">Парсинг карт</h3>
-        <div className="text-sm text-gray-500">История парсинга</div>
+        <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.parsing.history.title}</h3>
+        <div className="text-sm text-gray-500">{t.dashboard.parsing.history.subtitle}</div>
       </div>
 
-      {loading && <div className="text-gray-500 text-sm">Загружаем...</div>}
+      {loading && <div className="text-gray-500 text-sm">{t.common.loading}</div>}
       {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
 
       {!loading && !error && items.length === 0 && (
-        <div className="text-sm text-gray-500">Нет данных парсинга для этого бизнеса</div>
+        <div className="text-sm text-gray-500">{t.dashboard.parsing.history.noData}</div>
       )}
 
       {!loading && !error && items.length > 0 && (
@@ -67,15 +68,16 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
             <thead className="bg-gray-50 text-gray-700">
               <tr>
                 <th className="px-3 py-2 border-b text-left">№</th>
-                <th className="px-3 py-2 border-b text-left">Дата</th>
-                <th className="px-3 py-2 border-b text-left">URL</th>
-                <th className="px-3 py-2 border-b text-left">Тип</th>
-                <th className="px-3 py-2 border-b text-right">Рейтинг</th>
-                <th className="px-3 py-2 border-b text-right">Отзывы</th>
-                <th className="px-3 py-2 border-b text-right">Без ответа</th>
-                <th className="px-3 py-2 border-b text-right">Новости</th>
-                <th className="px-3 py-2 border-b text-right">Фото</th>
-                <th className="px-3 py-2 border-b text-right">Отчет</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.date}</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.url}</th>
+                <th className="px-3 py-2 border-b text-left">{t.dashboard.parsing.history.columns.type}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.rating}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.reviews}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.unanswered}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.news}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.photos}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.services || "Services"}</th>
+                <th className="px-3 py-2 border-b text-right">{t.dashboard.parsing.history.columns.report}</th>
               </tr>
             </thead>
             <tbody>
@@ -86,9 +88,14 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                     {new Date(item.createdAt).toLocaleDateString('ru-RU')}
                   </td>
                   <td className="px-3 py-2 border-b max-w-xs truncate">
-                    <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                      {item.url}
-                    </a>
+                    <div className="flex items-center gap-1">
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline truncate">
+                        {item.url}
+                      </a>
+                      {item.isVerified && (
+                        <CheckCircle2 className="h-4 w-4 text-blue-500 fill-blue-100 flex-shrink-0" />
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 border-b capitalize">{item.mapType || '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.rating || '—'}</td>
@@ -102,13 +109,14 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
                   </td>
                   <td className="px-3 py-2 border-b text-right">{item.newsCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">{item.photosCount ?? '—'}</td>
+                  <td className="px-3 py-2 border-b text-right">{item.servicesCount ?? '—'}</td>
                   <td className="px-3 py-2 border-b text-right">
                     {item.reportPath ? (
-                      <Button size="sm" variant="outline" onClick={() => viewReport(item.id)}>
-                        Посмотреть
+                      <Button size="sm" variant="outline" onClick={() => viewReport(item)}>
+                        {t.dashboard.parsing.history.viewReport}
                       </Button>
                     ) : (
-                      <span className="text-gray-400">нет отчета</span>
+                      <span className="text-gray-400">{t.dashboard.parsing.history.noReport}</span>
                     )}
                   </td>
                 </tr>
@@ -118,17 +126,17 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
         </div>
       )}
 
-      {viewHtml && (
+      {viewData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto relative">
-            <div className="flex justify-between items-center border-b px-4 py-2">
-              <h4 className="font-semibold text-gray-900">Отчет</h4>
-              <Button size="sm" variant="outline" onClick={() => setViewHtml(null)}>
-                Закрыть
+            <div className="flex justify-between items-center border-b px-4 py-3 sticky top-0 bg-white z-10">
+              <h4 className="font-semibold text-gray-900">Отчёт по Яндекс.Картам</h4>
+              <Button size="sm" variant="outline" onClick={() => setViewData(null)}>
+                {t.dashboard.parsing.history.close}
               </Button>
             </div>
-            <div className="p-4">
-              <div dangerouslySetInnerHTML={{ __html: viewHtml }} />
+            <div className="p-6">
+              <YandexBusinessReport data={viewData} businessId={businessId || undefined} />
             </div>
           </div>
         </div>

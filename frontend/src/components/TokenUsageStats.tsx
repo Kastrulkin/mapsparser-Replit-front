@@ -59,7 +59,7 @@ export const TokenUsageStats: React.FC = () => {
         return;
       }
 
-      const response = await fetch('/api/admin/token-usage', {
+      const response = await fetch(`/api/admin/token-usage?_t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

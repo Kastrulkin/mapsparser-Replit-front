@@ -25,7 +25,7 @@ const About = () => {
     // Если уже авторизован — ведём в личный кабинет на страницу подписки
     navigate(`/dashboard/settings?payment=required&tier=${tierId}&source=pricing`);
   };
-  
+
   useEffect(() => {
     const scrollToPricing = () => {
       if (window.location.hash === "#pricing") {
@@ -37,46 +37,46 @@ const About = () => {
         }
       }
     };
-    
+
     // Прокручиваем при монтировании
     scrollToPricing();
-    
+
     // Прокручиваем при изменении хеша
     const handleHashChange = () => {
       scrollToPricing();
     };
-    
+
     window.addEventListener('hashchange', handleHashChange);
-    
+
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
   }, [location.hash]);
-  
+
   return (
     <div className="min-h-screen bg-background">
-      
+
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-8">
             {t.about.heroTitle}
           </h1>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
+          <p className="text-2xl text-gray-600 max-w-4xl mx-auto mb-8 leading-relaxed">
             {t.about.heroSubtitle}
           </p>
         </div>
       </section>
 
       {/* Problem Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
-        <div className="max-w-4xl mx-auto">
-          <div className="space-y-6 text-lg text-muted-foreground">
-            <p>
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <div className="space-y-8 text-lg text-gray-600 leading-relaxed">
+            <p className="text-xl">
               {t.about.problemText}
             </p>
-            <div className="text-center py-6">
-              <div className="text-2xl font-bold text-primary">
+            <div className="text-center py-8">
+              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent">
                 {t.about.problemHighlight}
               </div>
             </div>
@@ -101,7 +101,7 @@ const About = () => {
           <p className="text-xl text-muted-foreground mb-8">
             {t.about.targetText}
           </p>
-          
+
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             <div className="text-center">
               <div className="text-3xl mb-2">💇‍♀️</div>
@@ -124,12 +124,12 @@ const About = () => {
       </section>
 
       {/* Results Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl p-12">
-            <h2 className="text-3xl font-bold text-foreground mb-6">{t.about.resultsTitle}</h2>
-            <div className="text-5xl font-bold text-primary mb-4">{t.about.resultsPercent}</div>
-            <p className="text-xl text-foreground">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-amber-50">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="bg-white rounded-3xl p-16 shadow-2xl shadow-orange-500/10 border-2 border-orange-200">
+            <h2 className="text-4xl font-bold text-gray-900 mb-8">{t.about.resultsTitle}</h2>
+            <div className="text-7xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-6">{t.about.resultsPercent}</div>
+            <p className="text-2xl text-gray-700 leading-relaxed">
               {t.about.resultsText}
             </p>
           </div>
@@ -140,7 +140,7 @@ const About = () => {
       <section className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-3xl font-bold text-foreground mb-12 text-center">{t.about.howTitle}</h2>
-          
+
           <div className="mb-12">
             <h3 className="text-2xl font-semibold text-foreground mb-6 text-center">
               {t.about.howSubtitle}
@@ -149,35 +149,35 @@ const About = () => {
 
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Option 1 */}
-            <Card className="p-8">
+            <Card className="group p-10 bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                    <span className="text-primary font-bold">1</span>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xl">1</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">{t.about.option1Title}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option1Title}</h3>
                 </div>
-                <div className="space-y-3 text-muted-foreground mb-6">
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point1}</span>
+                <div className="space-y-4 text-gray-600 mb-8">
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point1}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point2}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point2}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point3}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point3}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option1Point4}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option1Point4}</span>
                   </div>
                 </div>
                 <Button
                   size="lg"
-                  className="mt-2 text-lg px-8 py-3"
+                  className="mt-2 text-lg px-10 py-6 btn-iridescent"
                   onClick={() => {
                     window.location.href = '/#hero-form';
                   }}
@@ -188,36 +188,36 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="p-8 border-primary">
+            <Card className="group p-10 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                    <span className="text-primary-foreground font-bold">2</span>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xl">2</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">{t.about.option2Title}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">{t.about.option2Title}</h3>
                 </div>
-                <div className="space-y-3 text-muted-foreground mb-6">
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point1}</span>
+                <div className="space-y-4 text-gray-700 mb-8">
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point1}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point2}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point2}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point3}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point3}</span>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary">•</span>
-                    <span>{t.about.option2Point4}</span>
+                  <div className="flex items-start gap-3">
+                    <span className="text-orange-500 text-xl">•</span>
+                    <span className="text-base">{t.about.option2Point4}</span>
                   </div>
                 </div>
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-2"
+                  className="text-lg px-10 py-6 btn-iridescent mt-2"
                   onClick={() => {
                     navigate('/contact');
                   }}
@@ -231,19 +231,20 @@ const About = () => {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-16 px-4 sm:px-6 lg:px-8">
+      <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-orange-50/30">
         <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">{t.about.pricingTitle}</h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">{t.about.pricingTitle}</h2>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-12">{t.about.pricingSubtitle}</p>
 
           <div className="grid lg:grid-cols-4 gap-8 mb-8 items-stretch">
             {/* Starter */}
-            <Card className="p-8 flex flex-col h-full">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
-                <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Начальный" : "Starter"}
+                <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
+                  {t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "400 рублей в месяц" : "$5 / month"}
+                  {t.about.pricingStarterPrice}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingStarterPoint1}</div>
@@ -254,7 +255,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("starter")}
                 >
                   {t.about.pricingStarterButton}
@@ -263,24 +264,29 @@ const About = () => {
             </Card>
 
             {/* Option 0 - 5000 рублей в месяц */}
-            <Card className="p-8 flex flex-col h-full">
-            <CardContent className="p-0 flex flex-col flex-1">
+            <Card className="group p-8 flex flex-col h-full bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-400 hover:border-orange-500 hover:shadow-2xl hover:shadow-orange-500/20 transition-all duration-300 rounded-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-gradient-to-br from-orange-500 to-amber-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">POPULAR</div>
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Профессиональный" : "Professional"}
+                  {isRu ? "Профессиональный" : t.about.pricingOption0Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "5000 рублей в месяц" : "$55 / month"}
+                  {isRu ? "5000 рублей в месяц" : t.about.pricingOption0Price}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption0Point1}</div>
                   <div>- {t.about.pricingOption0Point2}</div>
                   <div>- {t.about.pricingOption0Point3}</div>
                   <div>- {t.about.pricingOption0Point4}</div>
+                  <div>- {t.about.pricingOption0Point5}</div>
+                  <div>- {t.about.pricingOption0Point6}</div>
+                  <div>- {t.about.pricingOption0Point7}</div>
+                  <div>- {t.about.pricingOption0Point8}</div>
                 </div>
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("professional")}
                 >
                   {t.about.pricingOption0Button}
@@ -289,13 +295,13 @@ const About = () => {
             </Card>
 
             {/* Option 1 */}
-            <Card className="p-8 flex flex-col h-full">
-            <CardContent className="p-0 flex flex-col flex-1">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Консьерж" : "Concierge"}
+                  {isRu ? "Консьерж" : t.about.pricingOption1Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "25000 рублей в месяц" : "$310 / month"}
+                  {isRu ? "25000 рублей в месяц" : t.about.pricingOption1Price}
                 </div>
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
                   <div>- {t.about.pricingOption1Point1}</div>
@@ -307,7 +313,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => handleSubscribeLanding("concierge")}
                 >
                   {t.about.pricingOption1Button}
@@ -316,8 +322,8 @@ const About = () => {
             </Card>
 
             {/* Option 2 */}
-            <Card className="p-8 flex flex-col h-full border-primary">
-            <CardContent className="p-0 flex flex-col flex-1">
+            <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
+              <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
                   {isRu ? "Особый" : "Elite"}
                 </div>
@@ -327,7 +333,6 @@ const About = () => {
                   <div>- {t.about.pricingOption2Point2}</div>
                   <div>- {t.about.pricingOption2Point3}</div>
                   <div>- {t.about.pricingOption2Point4}</div>
-                  <div>- {t.about.pricingOption2Point5}</div>
                 </div>
                 <div className="text-sm text-muted-foreground italic mt-4">
                   {t.about.pricingOption2Note}
@@ -335,7 +340,7 @@ const About = () => {
                 <Button
                   variant="default"
                   size="lg"
-                  className="text-lg px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white border-none mt-auto w-full"
+                  className="text-lg px-8 py-3 btn-iridescent mt-auto w-full"
                   onClick={() => navigate("/contact")}
                 >
                   {t.about.contactUs}
@@ -344,14 +349,7 @@ const About = () => {
             </Card>
           </div>
 
-          {/* Специальное предложение под условиями тарифов (на всю ширину блока тарифов) */}
-          <div className="mt-6">
-            <p className="text-sm text-blue-800 bg-blue-50 rounded-lg p-4">
-              💡 <strong>Специальное предложение:</strong> Первый месяц полного доступа (как в тарифе
-              &nbsp;«Профессиональный») всего за $5! После первого месяца функции вернутся к базовому тарифу,
-              если вы не перейдёте на тариф $65.
-            </p>
-          </div>
+
         </div>
       </section>
 
@@ -365,7 +363,7 @@ const About = () => {
             {t.about.finalText}
           </p>
           <div className="flex justify-center">
-            <Button size="lg" className="text-lg px-8 py-3"
+            <Button size="lg" className="text-lg px-8 py-3 btn-iridescent"
               onClick={() => navigate('/contact')}
             >
               {t.about.contactUs}

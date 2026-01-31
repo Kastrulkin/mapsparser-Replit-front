@@ -30,59 +30,41 @@ export const DashboardLayout = () => {
           localStorage.removeItem('admin_selected_business_id');
         }
 
-        // Загружаем бизнесы для суперадмина, владельцев сетей и обычных пользователей
-        // API сам определит, какие бизнесы показывать
-        try {
-          const response = await fetch('/api/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            console.log('📊 Загружены данные пользователя:', { 
-              is_superadmin: data.user?.is_superadmin, 
-              businesses_count: data.businesses?.length || 0 
-            });
-            // API возвращает businesses для всех типов пользователей:
-            // - суперадмин: все бизнесы
-            // - владелец сети: только бизнесы из своих сетей
-            // - обычный: только свои бизнесы
-            if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
-              console.log('✅ Бизнесы загружены:', data.businesses.length);
-              setBusinesses(data.businesses);
-              
-              // Приоритет: бизнес из админской страницы > сохраненный > первый
-              let businessToSelect;
-              if (adminSelectedBusinessId) {
-                businessToSelect = data.businesses.find((b: any) => b.id === adminSelectedBusinessId);
-                if (businessToSelect) {
-                  console.log('✅ Выбран бизнес из админской страницы:', businessToSelect.id, businessToSelect.name);
-                }
-              }
-              
-              if (!businessToSelect) {
-                const savedBusinessId = localStorage.getItem('selectedBusinessId');
-                businessToSelect = savedBusinessId
-                  ? data.businesses.find((b: any) => b.id === savedBusinessId) || data.businesses[0]
-                  : data.businesses[0];
-              }
+        // Используем данные, полученные из newAuth.getCurrentUser(), вместо повторного запроса
+        const businessesData = currentUser.businesses || [];
 
-              console.log('✅ Выбран бизнес:', businessToSelect.id, businessToSelect.name);
-              setCurrentBusinessId(businessToSelect.id);
-              setCurrentBusiness(businessToSelect);
-              localStorage.setItem('selectedBusinessId', businessToSelect.id);
-            } else {
-              console.warn('⚠️ Бизнесы не загружены или список пуст:', data.businesses);
-              setBusinesses([]);
-              // Если бизнесов нет, не устанавливаем currentBusinessId
-              // Пользователь сможет сохранить данные в ClientInfo, указав название бизнеса
+        console.log('📊 Загружены данные пользователя:', {
+          is_superadmin: currentUser.is_superadmin,
+          businesses_count: businessesData.length
+        });
+
+        if (businessesData.length > 0) {
+          console.log('✅ Бизнесы загружены:', businessesData.length);
+          setBusinesses(businessesData);
+
+          // Приоритет: бизнес из админской страницы > сохраненный > первый
+          let businessToSelect;
+          if (adminSelectedBusinessId) {
+            businessToSelect = businessesData.find((b: any) => b.id === adminSelectedBusinessId);
+            if (businessToSelect) {
+              console.log('✅ Выбран бизнес из админской страницы:', businessToSelect.id, businessToSelect.name);
             }
-          } else {
-            console.error('❌ Ошибка загрузки /api/auth/me:', response.status);
           }
-        } catch (error) {
-          console.error('Ошибка загрузки бизнесов:', error);
+
+          if (!businessToSelect) {
+            const savedBusinessId = localStorage.getItem('selectedBusinessId');
+            businessToSelect = savedBusinessId
+              ? businessesData.find((b: any) => b.id === savedBusinessId) || businessesData[0]
+              : businessesData[0];
+          }
+
+          console.log('✅ Выбран бизнес:', businessToSelect.id, businessToSelect.name);
+          setCurrentBusinessId(businessToSelect.id);
+          setCurrentBusiness(businessToSelect);
+          localStorage.setItem('selectedBusinessId', businessToSelect.id);
+        } else {
+          console.warn('⚠️ Бизнесы не загружены или список пуст');
+          setBusinesses([]);
         }
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
@@ -104,11 +86,11 @@ export const DashboardLayout = () => {
   };
 
   const updateBusiness = (businessId: string, updates: Partial<any>) => {
-    const updatedBusinesses = businesses.map(b => 
+    const updatedBusinesses = businesses.map(b =>
       b.id === businessId ? { ...b, ...updates } : b
     );
     setBusinesses(updatedBusinesses);
-    
+
     // Обновляем текущий бизнес, если он был изменен
     if (currentBusinessId === businessId) {
       const updatedBusiness = updatedBusinesses.find(b => b.id === businessId);
@@ -120,21 +102,15 @@ export const DashboardLayout = () => {
 
   const reloadBusinesses = async () => {
     try {
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
-          setBusinesses(data.businesses);
-          // Обновляем текущий бизнес, если он был изменен
-          if (currentBusinessId) {
-            const updatedBusiness = data.businesses.find((b: any) => b.id === currentBusinessId);
-            if (updatedBusiness) {
-              setCurrentBusiness(updatedBusiness);
-            }
+      const data = await newAuth.makeRequest('/auth/me');
+
+      if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
+        setBusinesses(data.businesses);
+        // Обновляем текущий бизнес, если он был изменен
+        if (currentBusinessId) {
+          const updatedBusiness = data.businesses.find((b: any) => b.id === currentBusinessId);
+          if (updatedBusiness) {
+            setCurrentBusiness(updatedBusiness);
           }
         }
       }
@@ -161,16 +137,17 @@ export const DashboardLayout = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardSidebar isMobile={false} />
-      <div className="md:pl-64 flex flex-col min-h-screen">
+      <div className="md:pl-72 flex flex-col min-h-screen transition-all duration-300">
         <DashboardHeader
           businesses={businesses}
           currentBusinessId={currentBusinessId}
+          currentBusiness={currentBusiness}
           onBusinessChange={handleBusinessChange}
           isSuperadmin={user.is_superadmin}
           user={user}
         />
         <main className="flex-1 p-6">
-          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses }} />
+          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
         </main>
       </div>
       {/* Mobile sidebar overlay */}

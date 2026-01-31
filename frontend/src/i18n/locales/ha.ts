@@ -1,7 +1,18 @@
 export const ha = {
   // Page title
   pageTitle: "BeautyBot.pro - Tallata gida ga kasuwanci na gida",
-  
+
+  common: {
+    success: "Nasara",
+    error: "Kuskure",
+    save: "Ajiye",
+    cancel: "Soke",
+    loading: "Ana lodawa...",
+    back: "Back",
+    next: "Next",
+    select: "Select"
+  },
+
   header: {
     whatWeDo: "Me muke yi?",
     whoWeAre: "Su waye mu?",
@@ -217,5 +228,924 @@ export const ha = {
     send: "Aika saƙo",
     success: "Na gode! An aika saƙonku. Za mu tuntuɓe ku nan ba da jimawa ba.",
     error: "An kasa aikawa da saƙo"
-  }
+  },
+
+  // Dashboard
+  dashboard: {
+    sidebar: {
+      profile: "Bayanan martaba & Kasuwanci",
+      card: "Gudanar da Taswira",
+      progress: "Ci gaba",
+      bookings: "Yi rajista",
+      chats: "Tattaunawa",
+      finance: "Kudi",
+      aiChatPromotion: "Tallan Hirar AI",
+      settings: "Saituna",
+      network: "Gudanar da hanyar sadarwa"
+    },
+    subscription: {
+      currentSubscription: "Biyan Kuɗi na Yanzu",
+      manage: "Sarrafa biyan kuɗin ku da tsari",
+      plan: "Tsari",
+      status: "Matsayi",
+      trialUntil: "Gwaji har sai",
+      subscriptionUntil: "Biyan kuɗi har sai",
+      noSubscription: "Ba ku da biyan kuɗi mai aiki. Zaɓi tsari a ƙasa.",
+      availablePlans: "Shirye-shiryen da ke Akwai",
+      choosePlan: "Zaɓi tsarin da ya dace don kasuwancin ku",
+      perMonth: "/wata",
+      fromReferrals: " na biyan kuɗi daga abokan ciniki da aka tura",
+      after3Months: "Akwai bayan watanni 3 na biyan kuɗi ko ta shawarwari",
+      contactUs: "Tuntuɓe mu",
+      currentPlan: "Tsari na Yanzu",
+      update: "Sabuntawa",
+      processing: "Ana sarrafawa...",
+      select: "Zaɓi",
+      starterFeature1: "Abokan ciniki ba tare da tallace-tallace daga taswira da ChatGPT ba",
+      starterFeature2: "Rubutun kafofin watsa labarun",
+      starterFeature3: "Cikakke ga waɗanda ke neman sabbin tashoshi don samun abokan ciniki",
+      profFeature1: "Yi aiki akan katin, za mu jagorance ku kowane mataki",
+      profFeature2: "Inganta tsarin bisa mafi kyawun ayyuka",
+      profFeature3: "Ƙirƙirar labarai",
+      profFeature4: "Ƙirƙirar amsoshi ga bita",
+      conciergeFeature1: "Katin kamfani akan Google ko taswirorin gida",
+      conciergeFeature2: "Sadarwar abokin ciniki",
+      conciergeFeature3: "Upselling da Cross-selling",
+      conciergeFeature4: "Inganta tsarin kasuwanci",
+      conciergeFeature5: "Manaja na musamman",
+      eliteFeature1: "Samun abokan ciniki akan layi",
+      eliteFeature2: "Sadarwar abokin ciniki",
+      eliteFeature3: "Samun abokan ciniki ba tare da layi ba",
+      eliteFeature4: "Inganta tsarin kasuwanci",
+      eliteFeature5: "Manaja na musamman"
+    },
+    settings: {
+      title: "Saituna",
+      subtitle: "Sarrafa saitunan asusu da haɗe-haɗe",
+      messengers: "Gadar Masinja",
+      integrations: "Haɗe-haɗen Waje",
+      aiAgents: "Saitunan Wakilin AI",
+      network: "Gudanar da Cibiyar",
+      telegram: {
+        title: "Haɗin Bot na Telegram",
+        description: "Haɗa bot na Telegram don sarrafa asusunka",
+        connected: "✅ An haɗa bot na Telegram cikin nasara!",
+        instruction: "Don haɗa bot na Telegram:",
+        step1: "Danna maballin da ke ƙasa don samar da lambar haɗi",
+        step2: "Bude Telegram kuma nemo bot ɗinmu",
+        step3: "Aika umarni zuwa bot:",
+        step4: "Anyi! Bot ɗin zai haɗu da asusunka",
+        generateToken: "Samar da lambar haɗi",
+        generating: "Ana samarwa...",
+        tokenExpires: "⏰ Lambar za ta ƙare nan da:",
+        bindCode: "Lambar haɗi:",
+        directLink: "Ko amfani da hanyar kai tsaye:",
+        instructionTitle: "📱 Umarni:",
+        manualStep1: "Bude Telegram",
+        manualStep2: "Nemo bot",
+        manualStep3: "Aika umarni:",
+        manualStep4: "Ko bi hanyar haɗi",
+        generateNew: "Samar da sabuwar lamba",
+        featuresTitle: "Abubuwan bot:",
+        feature1: "💰 Ƙara ma'amaloli (hoto ko rubutu)",
+        feature2: "📊 Inganta SEO",
+        feature3: "⚙️ Gyara bayanan kamfani",
+        feature4: "📈 Duba ƙididdiga (nan ba da jimawa ba)",
+        successToken: "An ƙirƙiri lamba!",
+        errorToken: "Kuskure wajen ƙirƙira",
+        selectBusiness: "Zaɓi kasuwanci tukunna"
+      },
+      external: {
+        title: "Haɗe-haɗen Waje",
+        description: "Haɗa Google Business Profile don aiki tare da bita.",
+        googleTitle: "Google Business Profile",
+        googleDesc: "Sarrafa bita, labarai, da ƙididdiga.",
+        connectGoogle: "Haɗa Google",
+        selectBusiness: "Zaɓi kasuwanci",
+        connectedAccounts: "Asusun da aka haɗa",
+        noIntegrations: "Babu haɗe-haɗe.",
+        sync: "Aiki tare:",
+        error: "Kuskure:",
+        active: "Aiki",
+        disabled: "Kashe",
+        disconnect: "Cire haɗi",
+        successAuth: "Google Business ya haɗu cikin nasara",
+        errorAuth: "Kuskuren haɗi",
+        successDisconnect: "An cire haɗin"
+      },
+      ai: {
+        title: "Gudanar da Wakilin AI",
+        subtitle: "Saita mataimaka na atomatik",
+        active: "Aiki",
+        agentSettings: "Saitunan Wakili",
+        tone: "Sautin Murya",
+        language: "Harshen Wakili",
+        selectAgent: "Zaɓi Wakili",
+        defaultAgent: "Yi amfani da na asali",
+        variables: "Sauye-sauyen Wakili",
+        save: "Ajiye Saituna",
+        saving: "Ana ajiyewa...",
+        saved: "An ajiye saitunan",
+        tones: {
+          professional: "Na kwararru",
+          friendly: "Na abokantaka",
+          casual: "Na yau da kullum",
+          formal: "Na al'ada"
+        },
+        types: {
+          booking: "Wakilin Yin Ajiyar Wuri",
+          bookingDesc: "Yin ajiyar sabis ta atomatik",
+          marketing: "Wakilin Talla",
+          marketingDesc: "Aika tallace-tallace"
+        },
+        status: {
+          active: "Aiki",
+          disabled: "Kashe"
+        }
+      },
+      whatsapp: {
+        title: "WhatsApp Business API",
+        description: "Shigar da bayanan WABA",
+        subtitle: "Idan kana da asusun WABA naka, shigar da shi a nan.",
+        phoneIdLabel: "Phone ID",
+        phoneIdHelp: "Lambar ID na WhatsApp Business",
+        accessTokenLabel: "Access Token",
+        accessTokenPlaceholder: "Shigar da Access Token",
+        accessTokenHelp: "Token don shiga API",
+        showToken: "Nuna",
+        hideToken: "Ɓoye",
+        saveCredentials: "Ajiye",
+        saving: "Ana ajiyewa...",
+        successSave: "An ajiye bayanai",
+        errorSave: "Kuskure wajen ajiye",
+        selectBusiness: "Zaɓi kasuwanci tukunna",
+        alert: "Yana ba da damar aika sako ta wakilin AI.",
+        phoneIdPlaceholder: "Shigar da Phone ID",
+        saveButton: "Ajiye"
+      },
+      telegram2: {
+        title: "Telegram Bot Token",
+        description: "Shigar da token na bot ɗinka",
+        subtitle: "Idan kana da naka bot, shigar da token a nan.",
+        tokenLabel: "Bot Token",
+        tokenPlaceholder: "Shigar da bot token",
+        tokenHelp: "Samu daga @BotFather",
+        saveToken: "Ajiye",
+        saving: "Ana ajiyewa...",
+        successSave: "An ajiye token",
+        errorSave: "Kuskure wajen ajiye",
+        selectBusiness: "Zaɓi kasuwanci tukunna",
+        alert: "Yana ba da damar aika sako ta wakilin AI.",
+        errorEmpty: "Shigar da token",
+        saveButton: "Ajiye"
+      }
+    },
+    network: {
+      title: "Gudanar da Cibiyar",
+      subtitle: "Sarrafa hanyar sadarwar kasuwancin ku",
+      type: "Nau'in Cibiya",
+      singlePoint: "Wuri Daya",
+      network: "Cibiya",
+      businessAdded: "An ƙara kasuwanci zuwa cibiya",
+      singlePointMessage: "Wannan kasuwancin wuri ɗaya ne",
+      select: {
+        label: "Zaɓi cibiya"
+      },
+      create: {
+        title: "Ƙirƙiri Cibiya",
+        name: "Sunan Cibiya",
+        namePlaceholder: "Shigar da sunan cibiya",
+        description: "Bayanin",
+        descriptionPlaceholder: "Shigar da bayani",
+        creating: "Ana ƙirƙira...",
+        submit: "Ƙirƙiri Cibiya",
+        emptyName: "Ana buƙatar suna",
+        success: "An ƙirƙiri cibiya",
+        error: "Kuskure wajen ƙirƙira"
+      },
+      points: {
+        title: "Wuraren Cibiya",
+        add: "Ƙara Wuri",
+        point: "Wuri",
+        name: "Suna",
+        namePlaceholder: "Sunan wuri",
+        address: "Adireshi",
+        addressPlaceholder: "Adireshin wuri",
+        mapLink: "Adireshin Harta",
+        mapLinkPlaceholder: "Adireshin zuwa taswira",
+        saving: "Ana ajiyewa...",
+        save: "Ajiye Wuri",
+        selectNetwork: "Zaɓi Cibiya",
+        empty: "Babu wurare",
+        success: "An ajiye wuri",
+        error: "Kuskure wajen ajiye"
+      },
+      period: {
+        week: "Mako",
+        month: "Wata",
+        quarter: "Kwata",
+        year: "Shekara"
+      },
+      totalRevenue: "Jimlar Kuɗin Shiga",
+      totalOrders: "Jimlar Umarni",
+      locationsCount: "Wuraren Cibiya",
+      revenueByService: "💼 Kuɗin Shiga ta Sabis",
+      revenueByMaster: "👤 Kuɗin Shiga ta Ma'aikata",
+      revenueByLocation: "🏢 Kuɗin Shiga ta Wuri",
+      ratings: "⭐ Kimantawa",
+      badReviews: "⚠️ Mummuna Bita",
+      noBadReviews: "Babu mummuna bita",
+      noData: "Babu bayanai",
+      reviews: "bita",
+      last30Days: "Kwanaki 30",
+      errorLoading: "Kuskure wajen loda",
+      tryAgain: "Gwada kuma"
+    },
+    parsing: {
+      refresh: "Sabunta Bayanai",
+      stats: {
+        total: "Jimlar Ayyuka",
+        pending: "Yana jira",
+        processing: "Ana sarrafawa",
+        stuck: "Ya makale",
+        stuckWarning: "ayyuka sun dade fiye da awa 1",
+        stuckDesc: "Ayyuka sun makale a yanayin sarrafawa na tsawon lokaci"
+      },
+      table: {
+        title: "Ayyukan Bincike",
+        loading: "Ana loda ayyuka...",
+        noTasks: "Babu ayyukan bincike",
+        id: "ID",
+        business: "Kasuwanci",
+        type: "Nau'i",
+        source: "Source",
+        status: "Matsayi",
+        url: "URL",
+        created: "An ƙirƙiri",
+        error: "Kuskure",
+        actions: "Ayyuka"
+      },
+      filters: {
+        title: "Masu tacewa",
+        status: "Matsayi",
+        statusAll: "Duk Matsayi",
+        type: "Nau'i",
+        typeAll: "Duk Nau'ikan",
+        source: "Source",
+        sourceAll: "Duk Sources"
+      },
+      actions: {
+        restartConfirm: "Sake fara wannan aiki?",
+        successRestart: "An sake fara aiki",
+        deleteConfirm: "Goge wannan aiki?",
+        successDelete: "An goge aiki",
+        switchToSyncConfirm: "Canza zuwa Yanayin Aiki tare?",
+        successSwitch: "An canza zuwa Yanayin Aiki tare",
+        restart: "Sake farawa",
+        switchToSync: "Canza zuwa Sync",
+        delete: "Goge"
+      },
+      status: {
+        pending: "Yana jira",
+        processing: "Ana sarrafawa",
+        done: "Anyi",
+        error: "Kuskure",
+        captcha: "Captcha"
+      },
+      type: {
+        parse_card: "Binciken Kati",
+        sync_yandex_business: "Yandex Sync",
+        parse_cabinet_fallback: "Cabinet Fallback"
+      },
+      source: {
+        yandex_maps: "Yandex Maps",
+        yandex_business: "Yandex Business",
+        google_business: "Google Business",
+        "2gis": "2GIS"
+      },
+      history: {
+        title: "Tarihin Bincike",
+        subtitle: "Tarihin ayyukan bincike don wannan kasuwancin",
+        noData: "Babu tarihi",
+        viewReport: "Duba Rahoto",
+        noReport: "Babu Rahoto",
+        close: "Rufe",
+        columns: {
+          date: "Kwanan wata",
+          url: "URL",
+          type: "Nau'i",
+          rating: "Kimantawa",
+          reviews: "Bita",
+          unanswered: "Ba a amsa ba",
+          news: "Labarai",
+          photos: "Hotuna",
+          report: "Rahoto"
+        }
+      }
+    },
+    profile: {
+      title: "Profile & Business",
+      subtitle: "Manage personal data and business information",
+      completion: "Profile Completion",
+      userProfile: "Profile",
+      owner: "(business owner)",
+      edit: "Edit",
+      notEditable: "Editing not available (not your business)",
+      email: "Email",
+      name: "Name",
+      phone: "Phone",
+      save: "Save",
+      cancel: "Cancel",
+      noBusinessSelected: "No business selected",
+      selectBusinessToSave: "To save map links, you must select a business from the dropdown in the top right corner.",
+      availableBusinesses: "Available businesses: ",
+      chooseOne: "Choose one to continue.",
+      businessInfo: "Business Information",
+      sendCredentials: "Send credentials",
+      sending: "Sending...",
+      businessName: "Business Name",
+      businessType: "Business Type",
+      selectType: "Select type",
+      address: "Address",
+      workingHours: "Working Hours",
+      workingHoursPlaceholder: "daily 9:00-21:00",
+      mapLinks: "Map Links",
+      addLink: "Add Link",
+      pasteLink: "Paste map link",
+      saveSuccess: "Business info saved",
+      profileUpdated: "Profile updated",
+      errorSave: "Error saving information",
+      businessTypes: {
+        beauty_salon: "Beauty Salon",
+        barbershop: "Barbershop",
+        spa: "SPA/Wellness",
+        nail_studio: "Nail Studio",
+        cosmetology: "Cosmetology",
+        massage: "Massage",
+        brows_lashes: "Brows & Lashes",
+        makeup: "Makeup",
+        tanning: "Tanning",
+        other: "Other"
+      },
+      workSchedule: {
+        weekdays: "Weekdays",
+        daily: "Daily",
+        roundClock: "24/7",
+        weekends: "Weekends",
+        break: "Break"
+      }
+    },
+    card: {
+      title: "Maps Management",
+      subtitle: "Manage services and optimize business card",
+      optimizationWizard: "Map Optimization Wizard",
+      parsingNote: "We receive data weekly to track progress and provide optimization tips. Map data will be saved here, and statistics on ",
+      progressTab: "Progress tab",
+      rating: "Rating",
+      reviews: "reviews",
+      services: "Services",
+      servicesSubtitle: "Current service breakdown on maps. Data is added automatically if parser is connected.",
+      addService: "Add New Service",
+      category: "Category",
+      serviceName: "Name *",
+      description: "Description",
+      keywords: "Keywords",
+      price: "Price",
+      add: "Add",
+      cancel: "Cancel",
+      deleteConfirm: "Are you sure you want to delete this service?",
+      optimizeAll: "Optimize All",
+      table: {
+        category: "Category",
+        name: "Name",
+        description: "Description",
+        price: "Price",
+        actions: "Actions"
+      },
+      seo: {
+        proposal: "SEO Proposal",
+        accept: "Accept",
+        reject: "Reject",
+        title: "Setup service descriptions for maps business card",
+        desc1: "🔎 Maps and local SEO are one of the most effective sales channels.",
+        desc2: "Correct service names and descriptions improve search visibility, card clicks, and ranking.",
+        desc3: "Upload a price list — AI will return concise SEO formulations in strict format considering query frequency, your wording, and location.",
+        desc4: "Copy the text and add it to your organization card on maps."
+      },
+      placeholders: {
+        category: "Example: Haircuts",
+        name: "Example: Womens Haircut",
+        desc: "Short service description",
+        keywords: "haircut, styling, coloring",
+        price: "Example: $30"
+      },
+      newsGenerator: {
+        title: "Mai Hada Labarai",
+        subtitle: "Ƙirƙiri labarai don katin kasuwancin ku",
+        examplesLabel: "Misalan labarai (har zuwa 5)",
+        examplesPlaceholder: "Misali: Sabon sabis — tausa ga masu ciki",
+        addExample: "Ƙara",
+        deleteExample: "Goge",
+        generateFromService: "Samar daga sabis",
+        selectService: "Zaɓi sabis",
+        generateFromTransaction: "Samar daga aikin da aka gama",
+        transactionPlaceholder: "Bayanin ma'amala",
+        generate: "Samar da labari",
+        generating: "Ana samarwa...",
+        result: "Sakamako:",
+        copy: "Kwafi",
+        copied: "An kwafa",
+        errorAddExample: "Kuskure wajen ƙara",
+        errorDeleteExample: "Kuskure wajen goge",
+        errorGenerate: "Kuskure wajen samarwa",
+        selectTransaction: "Zaɓi ma'amala",
+        loadingTransactions: "Ana loda ma'amaloli...",
+        noTransactions: "Babu ma'amaloli.",
+        rawInfoLabel: "Bayanai marasa tsari (na zaɓi)",
+        newsLanguage: "Harshen labari",
+        newsLanguageHelp: "Harshen da za a samar da labari. Na asali — harshen dubawa",
+        yourNews: "Labaran ku",
+        noNews: "Babu labarai tukuna",
+        deleteConfirm: "Goge wannan labari?",
+        edit: "Gyara",
+        delete: "Goge",
+        published: "An buga:",
+        source: "Source:",
+        yandexBusiness: "Yandex.Business"
+      }
+    },
+    bookings: {
+      title: "Bookings",
+      subtitle: "Manage client bookings",
+      refresh: "Refresh",
+      list: "Booking List",
+      total: "Total:",
+      empty: "No bookings",
+      table: {
+        client: "Client",
+        service: "Service",
+        dateTime: "Date & Time",
+        source: "Source",
+        status: "Status",
+        actions: "Actions"
+      },
+      status: {
+        all: "All",
+        pending: "Pending",
+        confirmed: "Confirmed",
+        cancelled: "Cancelled",
+        completed: "Completed",
+        pendingFilter: "Pending Confirmation"
+      },
+      actions: {
+        confirm: "Confirm",
+        cancel: "Cancel",
+        complete: "Complete"
+      },
+      messages: {
+        error: "Error",
+        loadError: "Failed to load bookings",
+        updateSuccess: "Booking status updated",
+        updateError: "Failed to update status"
+      }
+    },
+    chats: {
+      title: "All Chats",
+      sandbox: "Sandbox",
+      search: "Search...",
+      roles: {
+        agent: "Agent",
+        client: "Client",
+        operator: "Operator"
+      },
+      input: {
+        placeholder: "Type a message...",
+        send: "Send"
+      },
+      controls: {
+        pause: "Pause",
+        resume: "Resume"
+      }
+    },
+    aiChatPromotion: {
+      title: "AI Chat Promotion",
+      subtitle: "Step-by-step guide to get your business into ChatGPT and other AI assistants",
+      whyImportant: {
+        title: "Why is this important?",
+        description: "ChatGPT and other AI assistants are becoming the primary way to find information. To get your business in ChatGPT answers, you need to optimize your site correctly. Four key steps will help your business be found through AI chats."
+      },
+      steps: {
+        step1: {
+          title: "Add site to Bing Webmaster",
+          description: "Bing Webmaster helps ChatGPT find your site on the internet"
+        },
+        step2: {
+          title: "Implement Schema.org markup",
+          description: "Structured data helps ChatGPT better understand your content"
+        },
+        step3: {
+          title: "Add FAQ section",
+          description: "ChatGPT loves sites with answers to frequently asked questions"
+        },
+        step4: {
+          title: "Cite studies",
+          description: "ChatGPT prefers sites that look like encyclopedias with sources"
+        }
+      },
+      actions: {
+        copy: "Copy",
+        copied: "Copied",
+        todo: "What to do:",
+        links: "Useful links:",
+        code: "Code example:"
+      },
+      progress: {
+        title: "Progress",
+        completed: "Steps completed:",
+        from: "of",
+        success: "Great! You have completed all steps. Now your site is optimized for AI chat search."
+      }
+    },
+    finance: {
+      title: "Kudi",
+      subtitle: "Sarrafa ma'aunin kuɗi da ma'amaloli",
+      addTransaction: "Ƙara Ma'amala",
+      hideForm: "Ɓoye Fom",
+      successAdded: "An ƙara ma'amala cikin nasara!",
+      metrics: {
+        title: "Ma'aunin Kuɗi",
+        month: "Wata",
+        totalRevenue: "Jimlar Kuɗin Shiga",
+        totalOrders: "Umarni",
+        avgCheck: "Matsakaicin Ceki",
+        compareToPrevious: "idan aka kwatanta da lokacin baya",
+        newClients: "Sabbin Abokan Ciniki",
+        returningClients: "Abokan Ciniki da suka dawo",
+        clientRetention: "Riƙe Abokan Ciniki",
+        crmNote: "Wannan zai nuna idan an haɗa da CRM.",
+        revenueByService: "💼 Kuɗin Shiga ta Sabis",
+        revenueByMaster: "👤 Kuɗin Shiga ta Ma'aikata",
+        noServiceData: "Babu bayanan sabis",
+        noMasterData: "Babu bayanan ma'aikata",
+        period: "Lokaci:"
+      },
+      roi: {
+        title: "Lissafin ROI",
+        edit: "Gyara",
+        investment: "Zuba Jari",
+        returns: "Roba",
+        periodStart: "Fara lokaci",
+        periodEnd: "Ƙarshen lokaci",
+        saving: "Ana ajiyewa...",
+        save: "Ajiye",
+        cancel: "Soke",
+        invested: "An zuba",
+        received: "An karɓa",
+        period: "Lokaci",
+        profit: "Riba:",
+        notCalculated: "Ba a lissafta ROI ba",
+        addData: "Ƙara bayanai",
+        calculate: "Lissafta ROI",
+        loadError: "Kuskure wajen loda",
+        saveError: "Kuskure wajen ajiye",
+        status: {
+          excellent: "ROI Mai Kyau!",
+          good: "ROI Mai Kyau",
+          notBad: "ROI Ba Laifi",
+          positive: "ROI Mai Kyau",
+          negative: "ROI Mara Kyau"
+        }
+      },
+      transactions: {
+        title: "Jerin Ma'amaloli",
+        shownLimit: "Nuna 100 na ƙarshe",
+        loading: "Ana lodawa...",
+        empty: "Babu ma'amaloli",
+        loadError: "Kuskure wajen loda",
+        date: "Kwanan wata",
+        name: "Suna",
+        price: "Farashi",
+        qty: "Yawa",
+        cost: "Kudin",
+        actions: "Ayyuka",
+        servicesPlaceholder: "Sabis (rabu da waƙabi)",
+        edit: "Gyara",
+        delete: "Goge",
+        deleteConfirm: "Goge wannan ma'amala?"
+      }
+    },
+    progress: {
+      title: "Ci gaba",
+      subtitle: "Bincika ci gaban ku da nasarori",
+      businessMetrics: "Ma'aunin Kasuwanci",
+      charts: {
+        title: "Ma'aunin Kasuwanci",
+        subtitle: "Tarihin canje-canje",
+        addManual: "Ƙara da hannu",
+        addFirst: "Ƙara Na Farko",
+        noData: "Babu bayanai",
+        currentValue: "Ƙimar Yanzu",
+        deleteConfirm: "Goge wannan shigarwa?",
+        date: "Kwanan wata",
+        source: "Source",
+        parsing: "Parsing",
+        manual: "Manual",
+        metrics: {
+          rating: "Kimantawa",
+          reviews: "Bita",
+          photos: "Hotuna",
+          news: "Labarai"
+        },
+        addModal: {
+          title: "Ƙara ma'auni da hannu",
+          date: "Kwanan wata",
+          rating: "Kimantawa (1-5)",
+          reviews: "Yawan bita",
+          photos: "Yawan hotuna",
+          news: "Yawan labarai",
+          cancel: "Soke",
+          save: "Ajiye"
+        }
+      },
+      growthPlan: {
+        title: "Hanyar ku zuwa Nasara",
+        subtitle: "Kammala duk matakan girma!",
+        stage: "Mataki",
+        active: "Aiki",
+        unlock: "Buɗe",
+        unlocking: "Ana buɗewa...",
+        target: "Manufa:",
+        tasks: "Ayyuka",
+        progress: "Ci gaban Mataki",
+        almostDone: "🔥 Kusan gama! Kuna kashi {percent}%!",
+        goodJob: "💪 Aiki mai kyau! Ci gaba!",
+        goodStart: "🚀 Kyakykyawan farawa!",
+        completed: "✅ Mataki ya kammala! Barka!",
+        noStages: "Babu matakan girma",
+        contactAdmin: "Tuntuɓi mai gudanarwa"
+      },
+      recommendations: "Shawarwari",
+      wizard: {
+        button: "Mataimakin Inganta Kasuwanci",
+        title: "Mataimakin Inganta Kasuwanci",
+        intro: "Wasu lambobi don yin shirin aiki.",
+        experience: "Shekaru a kasuwanci",
+        clients: "Abokan ciniki na yau da kullun",
+        clientsPlaceholder: "misali: 150",
+        crm: "CRM",
+        crmPlaceholder: "misali: Salesforce",
+        location: "Wuri",
+        avgCheck: "Matsakaicin Ceki",
+        avgCheckPlaceholder: "50",
+        revenue: "Kudin shiga na wata",
+        revenuePlaceholder: "5000",
+        save: "Ajiye",
+        saving: "Ana ajiyewa...",
+        submit: "Samar da Shirin",
+        errors: {
+          noBusiness: "Ba a zaɓi kasuwanci ba",
+          save: "Kuskure wajen ajiye: ",
+          unknown: "Kuskure da ba a sani ba"
+        },
+        options: {
+          experience: {
+            zeroToSix: "Wata 0-6",
+            sixToTwelve: "Wata 6-12",
+            oneToThree: "Shekara 1-3",
+            threePlus: "Shekara 3+"
+          },
+          location: {
+            home: "Gida",
+            mall: "Kasuwa",
+            yard: "Fili",
+            highway: "Babban hanya",
+            center: "Tsakiyar birni",
+            suburbs: "Yankin waje",
+            metro: "usa kusa da Metro"
+          }
+        }
+      }
+    }
+  },
+
+  growthStages: {
+    1: {
+      title: "Foundation",
+      description: "Creating basic profiles on geo-services and collecting first reviews for local visibility",
+      goal: "Get first 10 reviews with 4.5+ rating, ensure 100% profile completion",
+      expectedResult: "20% increase in views, first 20 clicks from maps per week",
+      duration: "1-2 weeks",
+      tasks: [
+        "Fill map profiles to 100%: address, phone, photos, services, pricing",
+        "Add identical information to other available regional maps",
+        "Upload minimum 7 professional photos: facade, interior, master's work",
+        "Ask 10 loyal clients to leave reviews via QR code or link",
+        "Add links to social media, website, online booking widget",
+      ]
+    },
+    2: {
+      title: "Visibility Optimization",
+      description: "Optimizing geo-listings, launching booking widgets, managing reviews",
+      goal: "Reach Top-3 local search, get 20+ map clicks",
+      expectedResult: "+40% visibility growth, first inquiries via booking widget",
+      duration: "1-2 weeks",
+      tasks: [
+        "Add PRICE LIST to maps with descriptions and prices",
+        "Connect ONLINE BOOKING widget (built-in or external)",
+        "Set up AUTO-COLLECTION of reviews: SMS/Telegram after service with review request",
+      ]
+    },
+    3: {
+      title: "Process Automation",
+      description: "Implementing CRM and basic client communication automation",
+      goal: "Centralize client database, automate booking and reminders",
+      expectedResult: "20% reduction in no-shows, improved client database management",
+      duration: "2-3 weeks",
+      tasks: [
+        "Implement CRM system (e.g., Yclients, EasyWeek, or spreadsheet database)",
+        "Fill database: clients, appointments, services, masters",
+      ]
+    },
+    4: {
+      title: "Communication Automation and Bots",
+      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
+      expectedResult: "Staff time savings, increased client loyalty",
+      duration: "1-2 weeks",
+      tasks: [
+        "Set up CHATBOTS on Telegram/WhatsApp: auto-responses, booking, service menu",
+        "Connect CAMPAIGNS in CRM: reminders day before visit, promotion invitations",
+        "Integrate with CRM for history tracking",
+      ]
+    },
+    5: {
+      title: "Monetization Optimization",
+      description: "Service analysis, price list revision, identifying margin points",
+      goal: "Increase average check by 15-25%, margin on key services by 10-15%",
+      expectedResult: "Profitability growth, increased average check",
+      duration: "2-3 weeks",
+      tasks: [
+        "Conduct ABC analysis of pricing: top-5 services by revenue, top-5 by margin",
+        "Review PRICES on inefficient services: increase by 10-15% OR remove",
+        "Package services: 'Manicure+Pedicure combo', 'Cut+Color', 'SPA day'",
+        "Create high-margin PROMOTIONS: 'Bring a friend - 30% off second service'",
+        "Optimize master working hours: redistribute workload, reduce downtime",
+      ]
+    },
+    6: {
+      title: "Upsell and Cross-sell Services",
+      description: "Creating additional sales matrix for each service, staff training",
+      goal: "Raise AVERAGE CHECK by 20-30% through additional services",
+      expectedResult: "Every second client takes additional service, 15-20% revenue growth",
+      duration: "1-2 weeks",
+      tasks: [
+        "Create ADDITIONAL SALES MATRIX: manicure → pedicure, haircut → mask/styling, cosmetology → care procedure",
+        "Train staff on SALES SCRIPT: 'Would you like to add...?', 'Clients often take this together...'",
+        "Create TIERED PRICING: basic manicure 1000₽, + design 300₽, + strengthening 500₽",
+        "Introduce combo-service PROMOTIONS: 'Manicure + pedicure = -15%', 'Cut + color = -20%'",
+        "Motivate masters: % of upsells",
+      ]
+    },
+    7: {
+      title: "Local Partnerships and Cold Outreach",
+      description: "Building mutually beneficial partnership network through cold emails and meetings",
+      goal: "Get 3-5 partners with mutual traffic (wedding agencies, photographers, yoga studios, fitness)",
+      expectedResult: "10-15 new clients per month through partners, service exchange, co-promotion",
+      duration: "3-4 weeks",
+      tasks: [
+        "Identify potential partners in area: wedding agencies, makeup artists, fitness clubs, children's studios, spas",
+        "Prepare PARTNERSHIP OFFER: mutual 10-15% discounts, joint promotions, social media ad exchange",
+        "Write cold email: short, personalized, with specific offer and contacts",
+        "Meet IN PERSON with 5-10 local entrepreneurs, exchange cards, establish long-term relationships",
+        "Launch JOINT PROMOTION: 'Fitness membership = manicure discount', 'After cosmetology — photo session discount'",
+      ]
+    },
+    8: {
+      title: "Creative Flyers and Street Marketing",
+      description: "Creating creative flyers with salon story and mass distribution in target locations",
+      goal: "Reach 5000-10000 people within 1-3 km radius, attract 20-30 new clients",
+      expectedResult: "New clients from nearby residential complexes, brand awareness in area",
+      duration: "2-3 weeks",
+      tasks: [
+        "Create CREATIVE flyers: not template, but salon story, master photos, unique offer (first haircut -50%)",
+        "Print 5000-10000 flyers (price ~$50 for 10k flyers)",
+        "Distribution in TARGET LOCATIONS: nearby residential complexes, business centers, fitness clubs, shopping centers",
+        "Hire PROMOTERS for weekend distribution at metro/park (2-3 people = ~$100/day)",
+        "Track conversion: ask new clients 'How did you hear about us?'",
+      ]
+    },
+    9: {
+      title: "Product Add-on Sales and FMCG",
+      description: "Starting cosmetic product sales, creating additional income",
+      goal: "Generate additional 10-20% revenue from main income through products",
+      expectedResult: "Additional margin, improved client experience",
+      duration: "2-3 weeks",
+      tasks: [
+        "Determine TOP-5 products for sale: professional shampoos, masks, creams, polish, tools (files, brushes)",
+        "Find SUPPLIER with low prices (wholesale): Beauty Market, cosmetic distributors, manufacturers",
+        "Buy starter batch (~$500-750): 20-30 top product names with 50-70% margin",
+        "Display products VISUALLY: showcase at entrance, at admin desk, at master mirrors",
+        "Train staff to sell: 'After procedure recommend this cream for home care', 10% discount when buying 2+ products",
+      ]
+    },
+    10: {
+      title: "Social Media and Content Marketing",
+      description: "Creating organic traffic and community through regular content",
+      goal: "Get 500-1000 followers, regular organic inquiries from Instagram/VK/Telegram",
+      expectedResult: "Stable client flow from social media, brand awareness",
+      duration: "4-8 weeks",
+      tasks: [
+        "Choose MAIN PLATFORM: Instagram (visual) OR VK (local traffic) OR Telegram channel (automation)",
+        "Create CONTENT PLAN for month: 3-4 posts per week (master's work, behind scenes, reviews, promotions, educational content)",
+        "Shoot STORIES every day: processes, masters, happy clients, daily promotions",
+        "Launch TARGETED advertising: budget $8-12/day, geo-target 3-5 km radius, audience — women 25-45 years",
+        "Engage with followers: answer comments, conduct polls, contests, giveaways (prize = free service)",
+      ]
+    },
+    11: {
+      title: "Reputation and Review Management",
+      description: "Automating review collection, reputation management, bot integration",
+      goal: "Increase review count by 50-100%, maintain 4.5+ rating",
+      expectedResult: "Rating growth, improved map positions, attracting clients through social proof",
+      duration: "2-3 weeks",
+      tasks: [
+        "Set up AUTOMATIC REVIEW COLLECTION via CRM: after each visit send SMS/Telegram with request to leave review on maps",
+        "Motivate clients: 5-10% discount on next visit for review with photo",
+        "Create QR CODE for quick transition to review page on Yandex.Maps/Google",
+        "Integrate with bots: bot tracks new reviews and notifies admin for quick response",
+        "Respond to ALL reviews within 24 hours (improves map visibility by 20-30%)",
+      ]
+    },
+    12: {
+      title: "Loyalty Program and Retention",
+      description: "Creating client retention system, referral discounts, regular client program",
+      goal: "60%+ client repeat visit, +40% average lifetime value",
+      expectedResult: "Stable income from regular clients, 30% revenue growth",
+      duration: "2-3 weeks",
+      tasks: [
+        "Develop loyalty program: 'Every 10th visit - 30% discount' OR 'Points system: 1₽ = 1 point, 100 points = 500₽'",
+        "Create REFERRAL program: 'Bring a friend - get 20% discount + friend gets 30% on first visit'",
+        "Automate REMINDERS in CRM: send SMS/Telegram week before next scheduled visit",
+        "Create VIP program for top-30% clients: birthday gifts, first access to new services, closed parties",
+        "Integrate everything in CRM with tracking: who's active, who hasn't come for 2+ months, who to 'wake up'",
+      ]
+    },
+    13: {
+      title: "Email and SMS Marketing",
+      description: "Launching targeted campaigns, audience segmentation, automated scenarios",
+      goal: "25-30% open rate, 5-10% click rate, generate additional income through campaigns",
+      expectedResult: "New clients from campaigns, repeat visits, additional services",
+      duration: "2-3 weeks",
+      tasks: [
+        "Collect list of emails and phone numbers of all clients (consent to campaigns at first booking)",
+        "Segment audience into 4 groups: New, Regular (3-10 visits), VIP (10+), Inactive (3+ months)",
+        "Create 5 AUTOMATED SCENARIOS: welcome, thank you after visit, reminder, referral, inactive return",
+        "Plan WEEKLY campaigns: Mon - week offer, Wed - educational content, Fri - weekend bonus",
+        "A/B testing: different headlines, send times, offers - track best and scale",
+      ]
+    },
+    14: {
+      title: "Corporate and Group Services",
+      description: "Offering services to companies, organizing corporate events, team building events",
+      goal: "Get 2-3 regular corporate clients, guaranteed monthly income",
+      expectedResult: "Corporate contracts, group bookings, stable income",
+      duration: "3-4 weeks",
+      tasks: [
+        "Identify candidate companies in area: IT, marketing, insurance, banks (50+ employees, 70%+ women)",
+        "Develop corporate OFFER: 20-25% service discount, monthly spa package for group 10+, weekend corporate event",
+        "Write letters to HR managers with corporate benefit proposal",
+        "Organize PILOT 'Company Beauty Day': on-site service OR group visit with gifts",
+        "Sign contracts with 2-3 companies: minimum 50 procedures/month, invoices with 30-day payment terms",
+      ]
+    },
+    15: {
+      title: "SEO and Local Content Blog",
+      description: "Creating blog, search engine optimization, local SEO to attract organic traffic",
+      goal: "Organic traffic from Google, ranking for key queries, authority",
+      expectedResult: "10-20 visits/month from search, traffic growing month over month",
+      duration: "4-8 weeks",
+      tasks: [
+        "Conduct SEO keyword research: 'manicure [district]', 'hair coloring [city]', 'best cosmetologist near me', 'beauty salon near me'",
+        "Optimize on website: add keywords to H1 headings, service descriptions, meta descriptions, URLs",
+        "Create BLOG section with useful articles: hair care, manicure trends, cosmetology preparation, hair color selection",
+        "Publish 2-3 articles/month minimum 1000-1500 words each (with images, structure, links)",
+        "Get 3-5 backlinks: ask partners to mention you, write to local business resources",
+      ]
+    },
+    16: {
+      title: "Continuous Improvement, Analysis and Optimization",
+      description: "Regular analysis of all metrics, A/B testing, optimizing weak points",
+      goal: "+10-15% monthly revenue growth, continuous process improvement",
+      expectedResult: "Stable growth of all metrics, loss minimization, profit maximization",
+      duration: "Ongoing",
+      tasks: [
+        "Set up WEEKLY REPORTS: traffic, new clients, revenue, no-show, average check, margin, master workload",
+        "Conduct MONTHLY meetings with team: what worked? What didn't work? What ideas to test?",
+        "MONTHLY test 1 NEW IDEA: new service, new marketing channel, new offer, new partner",
+        "QUARTERLY review STRATEGY: competitor analysis, new trends, goal correction, stage planning",
+        "INVEST in development: minimum 10% of additional income goes to marketing, training, expansion",
+      ]
+    },
+  },
+
 };

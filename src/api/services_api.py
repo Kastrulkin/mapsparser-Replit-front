@@ -104,7 +104,7 @@ def get_services():
         has_optimized_name = 'optimized_name' in columns
         
         # Формируем SELECT с учетом наличия полей
-        select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+        select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
         if has_optimized_desc:
             select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
         if has_optimized_name:
@@ -280,24 +280,21 @@ def update_service(service_id):
                 service_id
             ))
         else:
-        cursor.execute("""
-            UPDATE UserServices 
-            SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-            WHERE id = ?
-        """, (
-            data.get('category', ''),
-            data.get('name', ''),
-            data.get('description', ''),
+            cursor.execute("""
+                UPDATE UserServices 
+                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
+                WHERE id = ?
+            """, (
+                data.get('category', ''),
+                data.get('name', ''),
+                data.get('description', ''),
                 keywords_str,
-            data.get('price', 0),
-            service_id
-        ))
+                data.get('price', 0),
+                service_id
+            ))
         
         db.conn.commit()
         db.close()
-        
-        return jsonify({"success": True})
-    
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}")
         import traceback

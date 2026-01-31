@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, Bot, User as UserIcon, Send, Pause, Play, X, FlaskConical } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Conversation {
   id: string;
@@ -42,10 +43,11 @@ export const ChatsPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [sandboxMessages, setSandboxMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [sandboxMessages, setSandboxMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -185,16 +187,16 @@ export const ChatsPage: React.FC = () => {
         setNewMessage('');
         await loadMessages();
         toast({
-          title: 'Успешно',
-          description: 'Сообщение отправлено',
+          title: t.success,
+          description: t.dashboard.chats.messages.sent,
         });
       } else {
         throw new Error('Ошибка отправки сообщения');
       }
     } catch (error: any) {
       toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось отправить сообщение',
+        title: t.error,
+        description: error.message || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
     } finally {
@@ -225,14 +227,14 @@ export const ChatsPage: React.FC = () => {
           await loadMessages();
         }
         toast({
-          title: 'Успешно',
-          description: pause ? 'Агент остановлен' : 'Агент возобновлен',
+          title: t.success,
+          description: pause ? t.dashboard.chats.messages.agentPaused : t.dashboard.chats.messages.agentResumed,
         });
       }
     } catch (error: any) {
       toast({
-        title: 'Ошибка',
-        description: 'Не удалось изменить статус агента',
+        title: t.error,
+        description: t.dashboard.chats.messages.statusError,
         variant: 'destructive',
       });
     }
@@ -241,27 +243,27 @@ export const ChatsPage: React.FC = () => {
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const isSandbox = selectedConversationId === 'sandbox';
-  
+
   const handleSandboxSend = async () => {
     if (!sandboxInput.trim() || !selectedAgentId || sandboxLoading) return;
-    
+
     try {
       setSandboxLoading(true);
       const token = await newAuth.getToken();
       if (!token) return;
-      
+
       // Добавляем сообщение пользователя в историю
       const userMessage = { role: 'user' as const, content: sandboxInput };
       const updatedHistory = [...sandboxMessages, userMessage];
       setSandboxMessages(updatedHistory);
       setSandboxInput('');
-      
+
       // Формируем историю для отправки
       const conversationHistory = updatedHistory.slice(0, -1).map(msg => ({
         role: msg.role === 'user' ? 'client' : 'agent',
         content: msg.content
       }));
-      
+
       const response = await fetch(
         `/api/business/${currentBusinessId}/ai-agents/${selectedAgentId}/test`,
         {
@@ -276,23 +278,23 @@ export const ChatsPage: React.FC = () => {
           }),
         }
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
           // Добавляем ответ агента в историю
           setSandboxMessages([...updatedHistory, { role: 'assistant', content: data.response }]);
         } else {
-          throw new Error(data.error || 'Ошибка получения ответа');
+          throw new Error(data.error || t.dashboard.chats.messages.error);
         }
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка отправки сообщения');
+        throw new Error(errorData.error || t.dashboard.chats.messages.error);
       }
     } catch (error: any) {
       toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось отправить сообщение',
+        title: t.error,
+        description: error.message || t.dashboard.chats.messages.error,
         variant: 'destructive',
       });
       // Удаляем последнее сообщение пользователя при ошибке
@@ -314,7 +316,7 @@ export const ChatsPage: React.FC = () => {
     <div className="h-full flex gap-4">
       {/* Левая панель: Агенты */}
       <div className="w-64 bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Агенты</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.chats.agents.title}</h2>
         <div className="space-y-2">
           {agents.map((agent) => (
             <button
@@ -323,18 +325,17 @@ export const ChatsPage: React.FC = () => {
                 setSelectedAgentId(agent.id);
                 setSelectedConversationId(null);
               }}
-              className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                selectedAgentId === agent.id
+              className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedAgentId === agent.id
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
                   : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4" />
                 <div className="flex-1">
                   <div className="font-medium">{agent.name}</div>
                   <div className="text-xs text-gray-500">
-                    {agent.type === 'marketing' ? 'Маркетинг' : 'Запись'}
+                    {agent.type === 'marketing' ? t.dashboard.chats.agents.marketing : t.dashboard.chats.agents.booking}
                   </div>
                 </div>
               </div>
@@ -347,7 +348,7 @@ export const ChatsPage: React.FC = () => {
       <div className="w-80 bg-white rounded-lg border border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedAgent ? `Чаты: ${selectedAgent.name}` : 'Чаты'}
+            {selectedAgent ? `${t.dashboard.chats.list.title}: ${selectedAgent.name}` : t.dashboard.chats.list.title}
           </h2>
         </div>
         <ScrollArea className="flex-1">
@@ -359,36 +360,34 @@ export const ChatsPage: React.FC = () => {
                   setSelectedConversationId('sandbox');
                   setSandboxMessages([]);
                 }}
-                className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${
-                  isSandbox
+                className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${isSandbox
                     ? 'bg-blue-50 border-blue-200'
                     : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <FlaskConical className="w-4 h-4 text-purple-500" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900">Песочница</div>
-                    <div className="text-xs text-gray-500">Тестирование агента</div>
+                    <div className="font-medium text-gray-900">{t.dashboard.chats.sandbox.title}</div>
+                    <div className="text-xs text-gray-500">{t.dashboard.chats.sandbox.subtitle}</div>
                   </div>
                 </div>
               </button>
             )}
-            
+
             {conversations.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
-                Нет активных чатов
+                {t.dashboard.chats.list.empty}
               </div>
             ) : (
               conversations.map((conv) => (
                 <button
                   key={conv.id}
                   onClick={() => setSelectedConversationId(conv.id)}
-                  className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${
-                    selectedConversationId === conv.id
+                  className={`w-full text-left p-3 rounded-lg border mb-2 transition-colors ${selectedConversationId === conv.id
                       ? 'bg-blue-50 border-blue-200'
                       : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -417,9 +416,9 @@ export const ChatsPage: React.FC = () => {
             <div className="p-4 border-b border-gray-200 flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-purple-500" />
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Песочница</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.dashboard.chats.sandbox.title}</h3>
                 <div className="text-sm text-gray-500">
-                  Тестирование агента: {selectedAgent?.name || 'Не выбран'}
+                  {t.dashboard.chats.sandbox.subtitle}: {selectedAgent?.name || t.dashboard.chats.sandbox.noAgent}
                 </div>
               </div>
             </div>
@@ -428,22 +427,20 @@ export const ChatsPage: React.FC = () => {
               <div className="space-y-4">
                 {sandboxMessages.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
-                    Начните диалог с агентом. Отправьте первое сообщение.
+                    {t.dashboard.chats.sandbox.empty}
                   </div>
                 ) : (
                   sandboxMessages.map((msg, idx) => (
                     <div
                       key={idx}
-                      className={`flex ${
-                        msg.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'
+                        }`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg p-3 ${
-                          msg.role === 'user'
+                        className={`max-w-[70%] rounded-lg p-3 ${msg.role === 'user'
                             ? 'bg-blue-100 text-blue-900'
                             : 'bg-green-100 text-green-900'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           {msg.role === 'user' ? (
@@ -452,7 +449,7 @@ export const ChatsPage: React.FC = () => {
                             <Bot className="w-4 h-4" />
                           )}
                           <span className="text-xs font-medium">
-                            {msg.role === 'user' ? 'Вы' : 'Агент'}
+                            {msg.role === 'user' ? t.dashboard.chats.sandbox.user : t.dashboard.chats.sandbox.agent}
                           </span>
                         </div>
                         <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
@@ -465,7 +462,7 @@ export const ChatsPage: React.FC = () => {
                     <div className="bg-gray-100 rounded-lg p-3">
                       <div className="flex items-center gap-2">
                         <Bot className="w-4 h-4" />
-                        <span className="text-xs font-medium">Агент печатает...</span>
+                        <span className="text-xs font-medium">{t.dashboard.chats.sandbox.agentTyping}</span>
                       </div>
                     </div>
                   </div>
@@ -485,7 +482,7 @@ export const ChatsPage: React.FC = () => {
                       handleSandboxSend();
                     }
                   }}
-                  placeholder="Введите сообщение для тестирования..."
+                  placeholder={t.dashboard.chats.sandbox.placeholder}
                   disabled={sandboxLoading || !selectedAgentId}
                 />
                 <Button
@@ -497,7 +494,7 @@ export const ChatsPage: React.FC = () => {
               </div>
               {!selectedAgentId && (
                 <div className="text-xs text-orange-600 mt-2">
-                  ⚠️ Выберите агента для тестирования
+                  {t.dashboard.chats.sandbox.noAgent}
                 </div>
               )}
             </div>
@@ -521,7 +518,7 @@ export const ChatsPage: React.FC = () => {
                     onClick={() => handleToggleAgent(selectedConversation.id, false)}
                   >
                     <Play className="w-4 h-4 mr-2" />
-                    Возобновить агента
+                    {t.dashboard.chats.controls.resume}
                   </Button>
                 ) : (
                   <Button
@@ -530,7 +527,7 @@ export const ChatsPage: React.FC = () => {
                     onClick={() => handleToggleAgent(selectedConversation.id, true)}
                   >
                     <Pause className="w-4 h-4 mr-2" />
-                    Остановить агента
+                    {t.dashboard.chats.controls.pause}
                   </Button>
                 )}
               </div>
@@ -541,18 +538,16 @@ export const ChatsPage: React.FC = () => {
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${
-                      msg.sender === 'client' ? 'justify-start' : 'justify-end'
-                    }`}
+                    className={`flex ${msg.sender === 'client' ? 'justify-start' : 'justify-end'
+                      }`}
                   >
                     <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        msg.sender === 'client'
+                      className={`max-w-[70%] rounded-lg p-3 ${msg.sender === 'client'
                           ? 'bg-gray-100 text-gray-900'
                           : msg.sender === 'operator'
-                          ? 'bg-blue-100 text-blue-900'
-                          : 'bg-green-100 text-green-900'
-                      }`}
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'bg-green-100 text-green-900'
+                        }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         {msg.sender === 'client' ? (
@@ -564,10 +559,10 @@ export const ChatsPage: React.FC = () => {
                         )}
                         <span className="text-xs font-medium">
                           {msg.sender === 'client'
-                            ? 'Клиент'
+                            ? t.dashboard.chats.roles.client
                             : msg.sender === 'operator'
-                            ? 'Оператор'
-                            : 'Агент'}
+                              ? t.dashboard.chats.roles.operator
+                              : t.dashboard.chats.roles.agent}
                         </span>
                       </div>
                       <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
@@ -592,7 +587,7 @@ export const ChatsPage: React.FC = () => {
                       handleSendMessage();
                     }
                   }}
-                  placeholder="Введите сообщение..."
+                  placeholder={t.dashboard.chats.input.placeholder}
                   disabled={sending || selectedConversation.is_agent_paused !== 1}
                 />
                 <Button
@@ -604,14 +599,14 @@ export const ChatsPage: React.FC = () => {
               </div>
               {selectedConversation.is_agent_paused === 1 && (
                 <div className="text-xs text-orange-600 mt-2">
-                  ⚠️ Агент остановлен. Вы можете отправлять сообщения от своего имени.
+                  {t.dashboard.chats.input.agentPaused}
                 </div>
               )}
             </div>
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
-            {selectedAgentId ? 'Выберите чат или песочницу для просмотра' : 'Выберите агента'}
+            {selectedAgentId ? t.dashboard.chats.messages.selectChat : t.dashboard.chats.messages.selectAgent}
           </div>
         )}
       </div>

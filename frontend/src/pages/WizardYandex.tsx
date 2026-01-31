@@ -41,7 +41,7 @@ const WizardYandex = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Частота обновления фото</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Еженедельно','Ежемесячно','Раз в квартал','Редко','Не знаю'].map(x => (
+                  {['Еженедельно', 'Ежемесячно', 'Раз в квартал', 'Редко', 'Не знаю'].map(x => (
                     <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>
                   ))}
                 </div>
@@ -49,10 +49,10 @@ const WizardYandex = () => {
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Новости (наличие/частота)</label>
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {['Да','Нет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
+                  {['Да', 'Нет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {['Еженедельно','Ежемесячно','Реже','По событию'].map(x => (
+                  {['Еженедельно', 'Ежемесячно', 'Реже', 'По событию'].map(x => (
                     <span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>
                   ))}
                 </div>
@@ -81,7 +81,7 @@ const WizardYandex = () => {
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки (до 5)</label>
                 <div className="space-y-2">
-                  {[1,2,3,4,5].map(i => (
+                  {[1, 2, 3, 4, 5].map(i => (
                     <input key={i} className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Например: Стрижка, которая держит форму и не требует укладки" />
                   ))}
                 </div>
@@ -98,7 +98,7 @@ const WizardYandex = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Как давно работаете</label>
                 <div className="flex flex-wrap gap-2">
-                  {['0–6 мес','6–12 мес','1–3 года','3+ лет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
+                  {['0–6 мес', '6–12 мес', '1–3 года', '3+ лет'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
                 </div>
               </div>
               <div>
@@ -112,7 +112,7 @@ const WizardYandex = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Расположение</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Дом','ТЦ','Двор','Магистраль','Центр','Спальник','Около метро'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
+                  {['Дом', 'ТЦ', 'Двор', 'Магистраль', 'Центр', 'Спальник', 'Около метро'].map(x => (<span key={x} className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm">{x}</span>))}
                 </div>
               </div>
               <div>
@@ -132,11 +132,11 @@ const WizardYandex = () => {
         )}
 
         <div className="mt-6 flex justify-between">
-          <Button variant="outline" onClick={prev} disabled={step===1}>Назад</Button>
+          <Button variant="outline" onClick={prev} disabled={step === 1}>Назад</Button>
           {step < 3 ? (
-            <Button onClick={next}>Продолжить</Button>
+            <Button className="btn-iridescent" onClick={next}>Продолжить</Button>
           ) : (
-            <Button onClick={() => (window.location.href = "/sprint")}>Сформировать план</Button>
+            <Button className="btn-iridescent" onClick={() => (window.location.href = "/sprint")}>Сформировать план</Button>
           )}
         </div>
       </div>

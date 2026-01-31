@@ -80,8 +80,81 @@ def init_database_schema():
             if 'subscription_status' not in columns:
                 cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_status TEXT DEFAULT 'active'")
                 print("✅ Добавлена колонка subscription_status")
+            
+            # Добавляем колонки для ChatGPT API и AI агентов
+            if 'city' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN city TEXT")
+                print("✅ Добавлена колонка city")
+            
+            if 'country' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN country TEXT")
+                print("✅ Добавлена колонка country")
+            
+            if 'timezone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN timezone TEXT DEFAULT 'UTC'")
+                print("✅ Добавлена колонка timezone")
+            
+            if 'latitude' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN latitude REAL")
+                print("✅ Добавлена колонка latitude")
+            
+            if 'longitude' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN longitude REAL")
+                print("✅ Добавлена колонка longitude")
+            
+            if 'working_hours_json' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN working_hours_json TEXT")
+                print("✅ Добавлена колонка working_hours_json")
+            
+            # WhatsApp Business API
+            if 'waba_phone_id' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN waba_phone_id TEXT")
+                print("✅ Добавлена колонка waba_phone_id")
+            
+            if 'waba_access_token' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN waba_access_token TEXT")
+                print("✅ Добавлена колонка waba_access_token")
+            
+            if 'whatsapp_phone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN whatsapp_phone TEXT")
+                print("✅ Добавлена колонка whatsapp_phone")
+            
+            if 'whatsapp_verified' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN whatsapp_verified INTEGER DEFAULT 0")
+                print("✅ Добавлена колонка whatsapp_verified")
+            
+            # Telegram
+            if 'telegram_bot_token' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN telegram_bot_token TEXT")
+                print("✅ Добавлена колонка telegram_bot_token")
+            
+            # AI Agent settings
+            if 'ai_agent_enabled' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_enabled INTEGER DEFAULT 0")
+                print("✅ Добавлена колонка ai_agent_enabled")
+            
+            if 'ai_agent_type' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_type TEXT")
+                print("✅ Добавлена колонка ai_agent_type")
+            
+            if 'ai_agent_id' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_id TEXT")
+                print("✅ Добавлена колонка ai_agent_id")
+            
+            if 'ai_agent_tone' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_tone TEXT")
+                print("✅ Добавлена колонка ai_agent_tone")
+            
+            if 'ai_agent_restrictions' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_restrictions TEXT")
+                print("✅ Добавлена колонка ai_agent_restrictions")
+            
+            if 'ai_agent_language' not in columns:
+                cursor.execute("ALTER TABLE Businesses ADD COLUMN ai_agent_language TEXT DEFAULT 'en'")
+                print("✅ Добавлена колонка ai_agent_language")
+                
         except Exception as e:
-            print(f"⚠️ Ошибка при добавлении колонок subscription: {e}")
+            print(f"⚠️ Ошибка при добавлении колонок: {e}")
         
         # UserSessions - сессии пользователей
         cursor.execute("""
@@ -191,9 +264,13 @@ def init_database_schema():
                 unanswered_reviews_count INTEGER DEFAULT 0,
                 news_count INTEGER DEFAULT 0,
                 photos_count INTEGER DEFAULT 0,
+                services_count INTEGER DEFAULT 0,
                 report_path TEXT,
                 analysis_json TEXT,
+                products TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                title TEXT,
+                address TEXT,
                 FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
             )
         """)
@@ -286,6 +363,24 @@ def init_database_schema():
         """)
         print("✅ Таблица UserServices создана/проверена")
         
+        # UserNews - сгенерированные новости
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_news_user_id ON UserNews(user_id)")
+        print("✅ Таблица UserNews создана/проверена")
+        
         # ===== СЕТИ И МАСТЕРА =====
         
         # Networks - сети бизнесов
@@ -368,8 +463,155 @@ def init_database_schema():
         """)
         print("✅ Таблица ReviewExchangeDistribution создана/проверена")
         
+        # ExternalBusinessReviews - отзывы из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessReviews (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                external_review_id TEXT,
+                rating INTEGER,
+                author_name TEXT,
+                text TEXT,
+                published_at TIMESTAMP,
+                response_text TEXT,
+                response_at TIMESTAMP,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessReviews создана/проверена")
+
+        # ExternalBusinessPosts - посты из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessPosts (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                account_id TEXT,
+                source TEXT NOT NULL,
+                external_post_id TEXT,
+                title TEXT,
+                text TEXT,
+                published_at TIMESTAMP,
+                image_url TEXT,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessPosts создана/проверена")
+
+        # ExternalBusinessPhotos - фото из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessPhotos (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                account_id TEXT,
+                source TEXT NOT NULL,
+                external_photo_id TEXT,
+                url TEXT NOT NULL,
+                thumbnail_url TEXT,
+                uploaded_at TIMESTAMP,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+            )
+        """)
+        print("✅ Таблица ExternalBusinessPhotos создана/проверена")
+
+        # ExternalBusinessStats - статистика из внешних источников
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExternalBusinessStats (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                date TEXT NOT NULL,
+                views_total INTEGER,
+                clicks_total INTEGER,
+                actions_total INTEGER,
+                rating REAL,
+                reviews_total INTEGER,
+                unanswered_reviews_count INTEGER,
+                raw_payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE,
+                UNIQUE(business_id, source, date)
+            )
+        """)
+        print("✅ Таблица ExternalBusinessStats создана/проверена")
+        
+        # Миграция для ExternalBusinessStats: проверка наличия поля unanswered_reviews_count
+        try:
+            cursor.execute("PRAGMA table_info(ExternalBusinessStats)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'unanswered_reviews_count' not in columns:
+                cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN unanswered_reviews_count INTEGER")
+                print("✅ Добавлено поле unanswered_reviews_count в ExternalBusinessStats")
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки ExternalBusinessStats: {e}")
+        
+        # Индексы для внешних таблиц
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_reviews_business_id ON ExternalBusinessReviews(business_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_reviews_source ON ExternalBusinessReviews(source)")
+        
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_business_id ON ExternalBusinessStats(business_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_source ON ExternalBusinessStats(source)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ext_stats_date ON ExternalBusinessStats(date)")
+        print("✅ Индексы для внешних таблиц созданы/проверены")
+        
+        # WordstatKeywords - популярные запросы (SEO)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS WordstatKeywords (
+                id TEXT PRIMARY KEY,
+                keyword TEXT UNIQUE NOT NULL,
+                views INTEGER DEFAULT 0,
+                category TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_views ON WordstatKeywords(views DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_category ON WordstatKeywords(category)")
+        print("✅ Таблица WordstatKeywords создана/проверена")
+        
         # ===== ОПТИМИЗАЦИЯ =====
         
+        # BusinessOptimizationWizard - данные мастера оптимизации
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS BusinessMetricsHistory (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                metric_date DATE NOT NULL,
+                rating FLOAT,
+                reviews_count INTEGER,
+                photos_count INTEGER,
+                news_count INTEGER,
+                unanswered_reviews_count INTEGER,
+                source TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES Businesses(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_metrics_history_business_date 
+            ON BusinessMetricsHistory(business_id, metric_date DESC)
+        """)
+        print("✅ Таблица BusinessMetricsHistory создана/проверена")
+
+        # Миграция для BusinessMetricsHistory: проверка наличия поля unanswered_reviews_count
+        try:
+            cursor.execute("PRAGMA table_info(BusinessMetricsHistory)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'unanswered_reviews_count' not in columns:
+                cursor.execute("ALTER TABLE BusinessMetricsHistory ADD COLUMN unanswered_reviews_count INTEGER")
+                print("✅ Добавлено поле unanswered_reviews_count в BusinessMetricsHistory")
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки BusinessMetricsHistory: {e}")
+
         # BusinessOptimizationWizard - данные мастера оптимизации
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
@@ -528,6 +770,49 @@ Write all generated text in {language_name}.
         
         print("✅ Дефолтные промпты инициализированы")
         
+        # AIAgents - ИИ агенты
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AIAgents (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                description TEXT,
+                personality TEXT,
+                states_json TEXT,
+                workflow TEXT,
+                task TEXT,
+                identity TEXT,
+                speech_style TEXT,
+                restrictions_json TEXT,
+                variables_json TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Таблица AIAgents создана/проверена")
+
+        # Инициализация дефолтных агентов
+        default_agents = [
+            {
+                'id': 'booking_agent_default',
+                'name': 'Booking Agent',
+                'type': 'booking',
+                'description': 'Агент для записи клиентов',
+                'personality': 'Вежливый, пунктуальный администратор. Твоя задача - записать клиента на услугу.',
+                'is_active': 1
+            }
+        ]
+        
+        for agent in default_agents:
+            cursor.execute("""
+                INSERT OR IGNORE INTO AIAgents (id, name, type, description, personality, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (agent['id'], agent['name'], agent['type'], agent['description'], agent['personality'], agent['is_active']))
+            
+        print("✅ Дефолтные AI агенты инициализированы")
+
         # BusinessTypes - типы бизнеса (редактируемые)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessTypes (

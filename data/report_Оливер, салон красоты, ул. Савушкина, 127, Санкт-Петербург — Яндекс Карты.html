@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO-отчёт: Оливер, салон красоты, ул. Савушкина, 127, Санкт-Петербург — Яндекс Карты</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #374151;
+            background: #f9fafb;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .space-y-8 > * + * {
+            margin-top: 2rem;
+        }
+        
+        .space-y-4 > * + * {
+            margin-top: 1rem;
+        }
+        
+        .space-y-6 > * + * {
+            margin-top: 1.5rem;
+        }
+        
+        .space-y-2 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-3xl {
+            font-size: 1.875rem;
+            line-height: 2.25rem;
+        }
+        
+        .text-2xl {
+            font-size: 1.5rem;
+            line-height: 2rem;
+        }
+        
+        .text-lg {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+        }
+        
+        .text-sm {
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        
+        .font-bold {
+            font-weight: 700;
+        }
+        
+        .font-semibold {
+            font-weight: 600;
+        }
+        
+        .font-medium {
+            font-weight: 500;
+        }
+        
+        .text-primary {
+            color: #3b82f6;
+        }
+        
+        .text-success {
+            color: #10b981;
+        }
+        
+        .text-warning {
+            color: #f59e0b;
+        }
+        
+        .text-destructive {
+            color: #ef4444;
+        }
+        
+        .text-muted {
+            color: #6b7280;
+        }
+        
+        .bg-white {
+            background-color: #ffffff;
+        }
+        
+        .bg-success {
+            background-color: #10b981;
+        }
+        
+        .bg-warning {
+            background-color: #f59e0b;
+        }
+        
+        .bg-destructive {
+            background-color: #ef4444;
+        }
+        
+        .bg-muted {
+            background-color: #f3f4f6;
+        }
+        
+        .text-white {
+            color: #ffffff;
+        }
+        
+        .rounded-lg {
+            border-radius: 0.5rem;
+        }
+        
+        .rounded {
+            border-radius: 0.25rem;
+        }
+        
+        .shadow-sm {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        .p-6 {
+            padding: 1.5rem;
+        }
+        
+        .p-4 {
+            padding: 1rem;
+        }
+        
+        .p-2 {
+            padding: 0.5rem;
+        }
+        
+        .pb-3 {
+            padding-bottom: 0.75rem;
+        }
+        
+        .px-4 {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .py-2 {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        
+        .mb-3 {
+            margin-bottom: 0.75rem;
+        }
+        
+        .mb-4 {
+            margin-bottom: 1rem;
+        }
+        
+        .mt-1 {
+            margin-top: 0.25rem;
+        }
+        
+        .mt-4 {
+            margin-top: 1rem;
+        }
+        
+        .flex {
+            display: flex;
+        }
+        
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .items-start {
+            align-items: flex-start;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .gap-4 {
+            gap: 1rem;
+        }
+        
+        .w-4 {
+            width: 1rem;
+        }
+        
+        .h-4 {
+            height: 1rem;
+        }
+        
+        .w-5 {
+            width: 1.25rem;
+        }
+        
+        .h-5 {
+            height: 1.25rem;
+        }
+        
+        .w-2 {
+            width: 0.5rem;
+        }
+        
+        .h-2 {
+            height: 0.5rem;
+        }
+        
+        .max-w-2xl {
+            max-width: 42rem;
+        }
+        
+        .mx-auto {
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 1.5rem 1.5rem 0.75rem 1.5rem;
+        }
+        
+        .card-content {
+            padding: 0 1.5rem 1.5rem 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .card-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: 9999px;
+            border: 1px solid #d1d5db;
+        }
+        
+        .badge-primary {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .badge-secondary {
+            background-color: #f3f4f6;
+            color: #374151;
+            border-color: #d1d5db;
+        }
+        
+        .badge-success {
+            background-color: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        
+        .badge-warning {
+            background-color: #f59e0b;
+            color: white;
+            border-color: #f59e0b;
+        }
+        
+        .badge-destructive {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        
+        .table td.review-text,
+        .table td.org-reply {
+            max-width: 300px;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            overflow-wrap: break-word;
+        }
+        
+        .table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .table tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        .grid {
+            display: grid;
+        }
+        
+        .grid-cols-1 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+        
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        
+        .grid-cols-6 {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        
+        .aspect-square {
+            aspect-ratio: 1 / 1;
+        }
+        
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .max-w-xs {
+            max-width: 20rem;
+        }
+        
+        .separator {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 1.5rem 0;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fbbf24;
+        }
+        
+        .list-none {
+            list-style: none;
+        }
+        
+        .list-disc {
+            list-style: disc;
+        }
+        
+        .list-inside {
+            list-style-position: inside;
+        }
+        
+        @media (min-width: 768px) {
+            .md\\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            
+            .md\\:grid-cols-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .lg\\:grid-cols-6 {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container space-y-8">
+        <!-- Header -->
+        <div class="text-center space-y-4">
+            <h1 class="text-3xl font-bold text-primary">SEO-анализ страницы Яндекс.Карт</h1>
+            <div class="card max-w-2xl mx-auto">
+                <div class="card-header">
+                    <h2 class="card-title flex items-center gap-2">
+                        📈 Оливер, салон красоты, ул. Савушкина, 127, Санкт-Петербург — Яндекс Карты
+                    </h2>
+                    <p class="card-description flex items-center gap-2">
+                        🌐 Нет сайта
+                    </p>
+                </div>
+                <div class="card-content">
+                    <div class="flex items-center justify-center gap-4">
+                        <span class="badge badge-destructive text-lg px-4 py-2">
+                            Оценка SEO: 53 / 100
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Рекомендации -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    ⚠️ Рекомендации по улучшению
+                </h2>
+            </div>
+            <div class="card-content">
+                
+                <div class="alert alert-warning mb-4">
+                    <h3 class="font-semibold mb-2">🤖 ИИ-анализ:</h3>
+                    <p>Умеренное количество отзывов. Отсутствие сайта снижает видимость в поиске. Отсутствие телефона затрудняет связь. Указанный адрес помогает клиентам найти вас. Отсутствие информации о часах работы может отпугнуть клиентов. Отсутствие фотографий снижает привлекательность карточки. </p>
+                </div>
+                
+                <ul class="space-y-2">
+                    
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">Создайте официальный сайт для повышения видимости</span>
+                    </li>
+                    
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">Добавьте контактный телефон для связи с клиентами</span>
+                    </li>
+                    
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">Укажите часы работы для удобства клиентов</span>
+                    </li>
+                    
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">Добавьте качественные фотографии ваших услуг</span>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        
+
+        <!-- Обзор -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Обзор</h2>
+            </div>
+            <div class="card-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            ⭐ <span class="font-medium">Рейтинг:</span>
+                            <span></span>
+                            
+                            <span class="text-muted">(20 отзывов)</span>
+                            
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📍 <span class="font-medium">Адрес:</span>
+                            <span class="text-sm">Санкт-Петербург</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📞 <span class="font-medium">Телефон:</span>
+                            <span></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            🌐 <span class="font-medium">Сайт:</span>
+                            <span class="text-sm"></span>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            🕒 <span class="font-medium">Часы работы:</span>
+                            <span class="text-sm"></span>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+        <!-- Рубрики -->
+        
+
+        <!-- Категории товаров и услуг -->
+        
+
+        <!-- Товары и услуги -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Товары и услуги</h2>
+            </div>
+            <div class="card-content space-y-6">
+                
+                <div>
+                    <h4 class="font-semibold text-lg mb-3">Другое</h4>
+                    
+                    
+                    <p class="text-muted">Нет товаров в категории</p>
+                    
+                    
+                </div>
+                
+            </div>
+        </div>
+        
+
+        <!-- Новости -->
+        
+
+        <!-- Фото -->
+        
+
+        <!-- Отзывы -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    💬 Отзывы
+                </h2>
+                <p class="card-description">
+                    Средняя оценка: — | 
+                    Количество отзывов: 0
+                </p>
+            </div>
+            <div class="card-content">
+                <div class="alert alert-warning mb-4">
+                    <p class="text-sm">
+                        ⚠️ Внимание: В отчёте отображаются не все отзывы. Яндекс ограничивает количество отзывов, 
+                        доступных для автоматического сбора через интерфейс.
+                    </p>
+                </div>
+                
+                
+                <p class="mb-4 text-sm text-muted">
+                    Всего спарсилось отзывов: 20
+                </p>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Автор</th>
+                            <th>Дата</th>
+                            <th>Оценка</th>
+                            <th>Текст</th>
+                            <th>Ответ организации</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>1</td>
+                            <td class="font-medium">Наталия Л.</td>
+                            <td>2019-04-26T08:43:24.323+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Хорошая уютная Парикмахерская для детишек!) мультики, игрушки- все есть!) можете выбрать мультик, какой смотрит ваш ребёнок)
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>2</td>
+                            <td class="font-medium">Елена</td>
+                            <td>2018-09-23T07:02:43.416+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Девушка парикмахер, опоздала на стрижку (ходила где-то по ТЦ), пришла, не поздаровалась, ребенка к себе вобще не расположила, он ее очень испугался, сразу с ножницами на него напала, сложилось впечатление, что ей все эти стрижки такая обуза! Я еле выдержала пока закончится стрижка, но  в целом как подстригли понравилась, в конце дали подарочек! Помещение крошечное, не развернуться!
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>3</td>
+                            <td class="font-medium">Алиночка</td>
+                            <td>2019-07-11T18:15:37.457+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Сервис очень Неприятно удивил, какая то провинция. Неожидала в Меркурий такое увидеть. И, как мне кажется, отсутствие термила огромный минус в наше время. Банкомат Альфа банка в Меркурий не работал пришлось бежать аж в Карусель. Прокололи уши, но больше ни на одну услугу точно не пойдём.
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>4</td>
+                            <td class="font-medium">Annie</td>
+                            <td>2022-11-28T20:22:06.661+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Мастера мужских стрижек и мастера для малышей, здесь по записи, и отличный мастер маникюра и педикюра !
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>5</td>
+                            <td class="font-medium">Всеволод Кириллов</td>
+                            <td>2025-01-29T06:15:52.379+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Весь процесс затянулся, хотя запись была на определенное время.
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>6</td>
+                            <td class="font-medium">Татьяна Молчанова</td>
+                            <td>2025-01-22T03:14:51.881+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                В салоне было грязно, не убирались после предыдущих клиентов.
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>7</td>
+                            <td class="font-medium">Артем Макаров</td>
+                            <td>2024-08-24T12:36:29.082+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Всё отлично
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>8</td>
+                            <td class="font-medium">олеся д.</td>
+                            <td>2019-01-10T14:44:45.200+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Очень уютная атмосфера!)) Ребенку понравился большой аквариум)) А для меня главное-постригли отлично!!!))
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>9</td>
+                            <td class="font-medium">Екатерина С.</td>
+                            <td>2020-03-23T14:37:16.767+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Отличная парикмахерская для детей с мультиками, аквариумом, игрушками, креслами в виде машинок, но главное - хорошая быстрая  работа мастеров по стрижкам на любой вкус. Не нужно записываться заранее! Всегда 2 мастера, которые очень быстро работают. После стрижки всем деткам дарят маленькие подарочки. 👍🏻
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>10</td>
+                            <td class="font-medium">Кристина Лужкова</td>
+                            <td>2024-11-13T17:05:31.459+00:00</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Отличное место 👍 
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+                
+                <p class="text-center text-muted mt-4">
+                    Показаны первые 10 отзывов из 20
+                </p>
+                
+                
+            </div>
+        </div>
+        
+
+        <!-- Особенности -->
+        
+
+        <!-- Анализ конкурента -->
+        
+    </div>
+</body>
+</html> 

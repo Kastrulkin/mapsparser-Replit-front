@@ -5,25 +5,27 @@ import FinancialMetrics from '@/components/FinancialMetrics';
 import ROICalculator from '@/components/ROICalculator';
 import TransactionForm from '@/components/TransactionForm';
 import TransactionTable from '@/components/TransactionTable';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 export const FinancePage = () => {
   const { user, currentBusinessId } = useOutletContext<any>();
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { t } = useLanguage();
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Финансы</h1>
-          <p className="text-gray-600 mt-1">Управляйте финансовыми показателями и транзакциями</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.finance.title}</h1>
+          <p className="text-gray-600 mt-1">{t.dashboard.finance.subtitle}</p>
         </div>
-        <Button 
+        <Button
           onClick={() => setShowTransactionForm(!showTransactionForm)}
           className="bg-green-600 hover:bg-green-700"
         >
-          {showTransactionForm ? 'Скрыть форму' : '+ Добавить транзакцию'}
+          {showTransactionForm ? t.dashboard.finance.hideForm : `+ ${t.dashboard.finance.addTransaction}`}
         </Button>
       </div>
 
@@ -34,10 +36,10 @@ export const FinancePage = () => {
       )}
 
       {showTransactionForm && (
-        <TransactionForm 
+        <TransactionForm
           onSuccess={() => {
             setShowTransactionForm(false);
-            setSuccess('Транзакция добавлена успешно!');
+            setSuccess(t.dashboard.finance.successAdded);
             setTimeout(() => setSuccess(null), 3000);
             setRefreshKey((k) => k + 1);
           }}
@@ -48,11 +50,11 @@ export const FinancePage = () => {
       <FinancialMetrics currentBusinessId={currentBusinessId} />
       <ROICalculator />
       <div className="flex justify-end mb-2">
-        <Button 
+        <Button
           onClick={() => setShowTransactionForm(true)}
           className="bg-green-600 hover:bg-green-700"
         >
-          + Добавить транзакцию
+          {`+ ${t.dashboard.finance.addTransaction}`}
         </Button>
       </div>
       <TransactionTable currentBusinessId={currentBusinessId} refreshKey={refreshKey} />

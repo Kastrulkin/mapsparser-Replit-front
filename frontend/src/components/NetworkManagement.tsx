@@ -6,6 +6,8 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Plus, Trash2, Building2, MapPin, Link as LinkIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { NetworkXMLImport } from './NetworkXMLImport';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Network {
   id: string;
@@ -21,6 +23,7 @@ interface BusinessLocation {
 }
 
 export const NetworkManagement: React.FC = () => {
+  const { t } = useLanguage();
   const { toast } = useToast();
   const { currentBusinessId, currentBusiness } = useOutletContext<any>();
   const [isNetwork, setIsNetwork] = useState<boolean>(false);
@@ -33,6 +36,14 @@ export const NetworkManagement: React.FC = () => {
   ]);
   const [loading, setLoading] = useState(false);
   const [creatingNetwork, setCreatingNetwork] = useState(false);
+
+  // Определяем, является ли текущий бизнес частью сети
+  useEffect(() => {
+    if (currentBusiness && currentBusiness.network_id) {
+      setIsNetwork(true);
+      setSelectedNetworkId(currentBusiness.network_id);
+    }
+  }, [currentBusiness]);
 
   useEffect(() => {
     loadNetworks();
@@ -59,8 +70,8 @@ export const NetworkManagement: React.FC = () => {
   const handleCreateNetwork = async () => {
     if (!networkName.trim()) {
       toast({
-        title: 'Ошибка',
-        description: 'Введите название сети',
+        title: t.common.error,
+        description: t.dashboard.network.create.emptyName,
         variant: 'destructive'
       });
       return;
@@ -106,14 +117,14 @@ export const NetworkManagement: React.FC = () => {
       if (data.success) {
         const newNetworkId = data.network_id;
         toast({
-          title: 'Успешно',
-          description: 'Сеть создана'
+          title: t.common.success,
+          description: t.dashboard.network.create.success
         });
         setNetworkName('');
         setNetworkDescription('');
         await loadNetworks();
         setSelectedNetworkId(newNetworkId);
-        
+
         // Автоматически добавляем текущий бизнес в сеть, если он есть
         if (currentBusinessId && currentBusiness) {
           try {
@@ -127,11 +138,11 @@ export const NetworkManagement: React.FC = () => {
                 business_id: currentBusinessId
               })
             });
-            
+
             if (addResponse.ok) {
               toast({
-                title: 'Успешно',
-                description: `Бизнес "${currentBusiness.name}" добавлен в сеть`
+                title: t.common.success,
+                description: `${t.dashboard.network.businessAdded}: "${currentBusiness.name}"`
               });
               // Перезагружаем страницу для обновления списка бизнесов
               setTimeout(() => window.location.reload(), 1000);
@@ -141,13 +152,13 @@ export const NetworkManagement: React.FC = () => {
           }
         }
       } else {
-        throw new Error(data.error || 'Ошибка создания сети');
+        throw new Error(data.error || t.dashboard.network.create.error);
       }
     } catch (error: any) {
       console.error('Ошибка создания сети:', error);
       toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось создать сеть',
+        title: t.common.error,
+        description: error.message || t.dashboard.network.create.error,
         variant: 'destructive'
       });
     } finally {
@@ -174,8 +185,8 @@ export const NetworkManagement: React.FC = () => {
   const handleSaveLocations = async () => {
     if (!selectedNetworkId) {
       toast({
-        title: 'Ошибка',
-        description: 'Выберите или создайте сеть',
+        title: t.common.error,
+        description: t.dashboard.network.points.selectNetwork,
         variant: 'destructive'
       });
       return;
@@ -184,8 +195,8 @@ export const NetworkManagement: React.FC = () => {
     const validLocations = locations.filter(loc => loc.name.trim());
     if (validLocations.length === 0) {
       toast({
-        title: 'Ошибка',
-        description: 'Добавьте хотя бы одну точку с названием',
+        title: t.common.error,
+        description: t.dashboard.network.points.empty,
         variant: 'destructive'
       });
       return;
@@ -194,7 +205,7 @@ export const NetworkManagement: React.FC = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      
+
       for (const location of validLocations) {
         const response = await fetch(`/api/networks/${selectedNetworkId}/businesses`, {
           method: 'POST',
@@ -211,24 +222,24 @@ export const NetworkManagement: React.FC = () => {
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Ошибка добавления точки');
+          throw new Error(error.error || t.dashboard.network.points.error);
         }
       }
 
       toast({
-        title: 'Успешно',
-        description: `Добавлено точек: ${validLocations.length}`
+        title: t.common.success,
+        description: `${t.dashboard.network.points.success}: ${validLocations.length}`
       });
-      
+
       // Очищаем форму
       setLocations([{ name: '', address: '', yandex_url: '' }]);
-      
+
       // Перезагружаем страницу для обновления списка бизнесов
       window.location.reload();
     } catch (error: any) {
       toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось добавить точки',
+        title: t.common.error,
+        description: error.message || t.dashboard.network.points.error,
         variant: 'destructive'
       });
     } finally {
@@ -239,21 +250,21 @@ export const NetworkManagement: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Управление сетью</CardTitle>
+        <CardTitle>{t.dashboard.network.title}</CardTitle>
         <CardDescription>
-          Выберите тип организации: одна точка или сеть с несколькими точками
+          {t.dashboard.network.subtitle}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Выбор типа */}
         <div className="space-y-4">
-          <Label>Тип организации</Label>
+          <Label>{t.dashboard.network.type}</Label>
           <div className="flex gap-4">
             <Button
               variant={!isNetwork ? 'default' : 'outline'}
               onClick={() => setIsNetwork(false)}
             >
-              Одна точка
+              {t.dashboard.network.singlePoint}
             </Button>
             <Button
               variant={isNetwork ? 'default' : 'outline'}
@@ -273,11 +284,11 @@ export const NetworkManagement: React.FC = () => {
                         business_id: currentBusinessId
                       })
                     });
-                    
+
                     if (response.ok) {
                       toast({
-                        title: 'Успешно',
-                        description: `Бизнес добавлен в сеть`
+                        title: t.common.success,
+                        description: t.dashboard.network.businessAdded
                       });
                       setTimeout(() => window.location.reload(), 1000);
                     }
@@ -287,7 +298,7 @@ export const NetworkManagement: React.FC = () => {
                 }
               }}
             >
-              Сеть
+              {t.dashboard.network.network}
             </Button>
           </div>
         </div>
@@ -296,31 +307,31 @@ export const NetworkManagement: React.FC = () => {
         {isNetwork && (
           <div className="space-y-4 border-t pt-4">
             <div>
-              <Label>Создать новую сеть</Label>
+              <Label>{t.dashboard.network.create.title}</Label>
               <div className="space-y-3 mt-2">
                 <div>
-                  <Label htmlFor="network-name">Название сети *</Label>
+                  <Label htmlFor="network-name">{t.dashboard.network.create.name}</Label>
                   <Input
                     id="network-name"
                     value={networkName}
                     onChange={(e) => setNetworkName(e.target.value)}
-                    placeholder="Например: Сеть салонов красоты"
+                    placeholder={t.dashboard.network.create.namePlaceholder}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="network-description">Описание (необязательно)</Label>
+                  <Label htmlFor="network-description">{t.dashboard.network.create.description}</Label>
                   <Input
                     id="network-description"
                     value={networkDescription}
                     onChange={(e) => setNetworkDescription(e.target.value)}
-                    placeholder="Краткое описание сети"
+                    placeholder={t.dashboard.network.create.descriptionPlaceholder}
                   />
                 </div>
                 <Button
                   onClick={handleCreateNetwork}
                   disabled={creatingNetwork || !networkName.trim()}
                 >
-                  {creatingNetwork ? 'Создание...' : 'Создать сеть'}
+                  {creatingNetwork ? t.dashboard.network.create.creating : t.dashboard.network.create.submit}
                 </Button>
               </div>
             </div>
@@ -328,7 +339,7 @@ export const NetworkManagement: React.FC = () => {
             {/* Выбор существующей сети */}
             {networks.length > 0 && (
               <div>
-                <Label>Или выберите существующую сеть</Label>
+                <Label>{t.dashboard.network.select.label}</Label>
                 <select
                   className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md"
                   value={selectedNetworkId}
@@ -343,25 +354,41 @@ export const NetworkManagement: React.FC = () => {
               </div>
             )}
 
+            {/* XML Import для сети */}
+            {selectedNetworkId && (
+              <div className="border-t pt-4">
+                <NetworkXMLImport
+                  networkId={selectedNetworkId}
+                  onImportComplete={() => {
+                    toast({
+                      title: t.common.success,
+                      description: t.dashboard.network.points.success
+                    });
+                    setTimeout(() => window.location.reload(), 1000);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Добавление точек сети */}
             {(selectedNetworkId || networks.length > 0) && (
               <div className="space-y-4 border-t pt-4">
                 <div className="flex items-center justify-between">
-                  <Label>Точки сети</Label>
+                  <Label>{t.dashboard.network.points.title}</Label>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleAddLocation}
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Добавить точку
+                    {t.dashboard.network.points.add}
                   </Button>
                 </div>
 
                 {locations.map((location, index) => (
                   <Card key={index} className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="font-medium">Точка {index + 1}</h4>
+                      <h4 className="font-medium">{t.dashboard.network.points.point} {index + 1}</h4>
                       {locations.length > 1 && (
                         <Button
                           variant="ghost"
@@ -376,38 +403,38 @@ export const NetworkManagement: React.FC = () => {
                       <div>
                         <Label htmlFor={`location-name-${index}`}>
                           <Building2 className="w-4 h-4 inline mr-1" />
-                          Название точки *
+                          {t.dashboard.network.points.name}
                         </Label>
                         <Input
                           id={`location-name-${index}`}
                           value={location.name}
                           onChange={(e) => handleLocationChange(index, 'name', e.target.value)}
-                          placeholder="Например: Салон на Невском"
+                          placeholder={t.dashboard.network.points.namePlaceholder}
                         />
                       </div>
                       <div>
                         <Label htmlFor={`location-address-${index}`}>
                           <MapPin className="w-4 h-4 inline mr-1" />
-                          Адрес
+                          {t.dashboard.network.points.address}
                         </Label>
                         <Input
                           id={`location-address-${index}`}
                           value={location.address}
                           onChange={(e) => handleLocationChange(index, 'address', e.target.value)}
-                          placeholder="Например: г. Санкт-Петербург, Невский пр., 1"
+                          placeholder={t.dashboard.network.points.addressPlaceholder}
                         />
                       </div>
                       <div>
                         <Label htmlFor={`location-yandex-${index}`}>
                           <LinkIcon className="w-4 h-4 inline mr-1" />
-                          Ссылка на карты
+                          {t.dashboard.network.points.mapLink}
                         </Label>
                         <Input
                           id={`location-yandex-${index}`}
                           type="url"
                           value={location.yandex_url}
                           onChange={(e) => handleLocationChange(index, 'yandex_url', e.target.value)}
-                          placeholder="https://yandex.ru/maps/org/..."
+                          placeholder={t.dashboard.network.points.mapLinkPlaceholder}
                         />
                       </div>
                     </div>
@@ -419,7 +446,7 @@ export const NetworkManagement: React.FC = () => {
                   disabled={loading || !selectedNetworkId}
                   className="w-full"
                 >
-                  {loading ? 'Сохранение...' : 'Сохранить точки'}
+                  {loading ? t.dashboard.network.points.saving : t.dashboard.network.points.save}
                 </Button>
               </div>
             )}
@@ -428,7 +455,7 @@ export const NetworkManagement: React.FC = () => {
 
         {!isNetwork && (
           <div className="text-sm text-gray-500 border-t pt-4">
-            Вы работаете с одной точкой. Для управления несколькими точками выберите "Сеть".
+            {t.dashboard.network.singlePointMessage}
           </div>
         )}
       </CardContent>

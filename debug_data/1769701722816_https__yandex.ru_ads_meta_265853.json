@@ -1,0 +1,2950 @@
+{
+  "matchUrls": [
+    " https://px.arcspire.io/yndx?id=9d4cd41a-f59d-4815-8a89-9d30806f5389",
+    "https://a.adspector.io/sync?ssp=69",
+    "https://acint.net/rmatch/?dp=151&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fsapeis%2F%24%7BUSER_ID%7D",
+    "https://ads.betweendigital.com/match?bidder_id=43554&callback_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbetweendigitalis%2F%24%7BUSER_ID%7D",
+    "https://bs.serving-sys.ru/Serving/adServer.bs?cn=sync&c=2&pli=1088653317&rtu=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fyaadserving%2F",
+    "https://cm.a.mts.ru/cm/tech?flowId=0ff25d7e-e56b-471c-8825-9c24c8b56cdc",
+    "https://cm.tns-counter.ru/yacm",
+    "https://cmr.bidderstack.com/yandex/cm?user_id=",
+    "https://cr-frontend.weborama-tech.ru/cr?key=yandex&url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fdmpweborama%2F{WEBO_CID}",
+    "https://dm.hybrid.ai/match?id=182",
+    "https://dm.hybrid.ai/yandexdmp-match",
+    "https://dmg.digitaltarget.ru/1/119/i/i?i=1769701722",
+    "https://dsp.mpartner.digital/dmp/syncsspdmp?sspid=4",
+    "https://euw-ice.360yield.com/server_match?partner_id=N&r=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fazerionis%2F{PUB_USER_ID}",
+    "https://events.myweb3id.io/cookie-sync/yandex?userId={DSP_UID}",
+    "https://exchange.buzzoola.com/cookiesync/redirect/yandex?redirect_url=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fbuzzooladspis%2F%24%7BUUID%7D",
+    "https://eye.targetads.io/sync/yandex/",
+    "https://kimberlite.io/rtb/sync/yandex",
+    "https://kimberlite.io/rtb/sync/yandex_direct",
+    "https://match.new-programmatic.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://match.targetrtb.com/userbind?src=yandex&pbf=1&gi=1",
+    "https://mitdmp.whiteboxdigital.ru/pixel?id=a&source=yandex&redirect=false&href=https%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Fqbitis%2F%7Bmiid%7D",
+    "https://nr.bidderstack.com/yandex/cm?user_id={partner_user_id}",
+    "https://pixel.dsp.onetarget.ru/yandex/sync",
+    "https://px.adhigh.net/p/cm/yandexssp",
+    "https://rtb-eu-warsaw.intent.ai/um/y",
+    "https://rtb.dynotech.io/yndx/sync/",
+    "https://s.uuidksinc.net/match/501",
+    "https://shopnetic.com/api/rtb/dmp/pixel?partner=yandex",
+    "https://sm.rtb.mts.ru/p?ssp=yandex&id=map",
+    "https://sp.linkssp.ru/cm?key=e4fb10164a09f3d874b563de89b97a56&location=http%3A%2F%2Fyandex.ru%2Fan%2Fmapuid%2Flinksspis%2F%7Buid%7D",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?dsp_id=109",
+    "https://ssp.adriver.ru/cgi-bin/sync.cgi?ssp_id=19",
+    "https://ssp.al-adtech.com/api/sync/yandex",
+    "https://sync.bumlam.com/?src=yandex2",
+    "https://sync.dmp.otm-r.com/match/yandexortb",
+    "https://sync.gonet-ads.com/match/yandex?id=[buyerUid]",
+    "https://sync.upravel.com/yandex/sync",
+    "https://sync.upravel.com/yandex2/sync",
+    "https://t.adx.opera.com/pub/sync?pubid=pub9166643429696",
+    "https://tracker.smartcallback.ru/matching/yandex-direct",
+    "https://tt.ttarget.ru/rtb/ya/sync",
+    "https://x01.aidata.io/0.gif?pid=YANDEX",
+    "https://yandex-dmp-sync.rutarget.ru/sync",
+    "https://yandex-sync.rutarget.ru/sync",
+    "https://yandex.ru/an/mapuid/admaticssp/ ",
+    "https://yandex.ru/an/mapuid/adobedmp/",
+    "https://yandex.ru/an/mapuid/betweenru/",
+    "https://yandex.ru/an/mapuid/mailweb/",
+    "https://yandex.ru/an/mapuid/operacom/",
+    "https://yandex.ru/an/mapuid/operaru/",
+    "https://yandex.ru/an/mapuid/sbersellssp/",
+    "https://yandex.ru/an/mapuid/soltadspis/~uid~",
+    "https://yandex.ru/an/mapuid/viberssp/",
+    "https://yandex.ru/an/mapuid/videonowssp/"
+  ],
+  "visibilitySettings": {
+    "delay": 2000,
+    "bannerVisibilityPercent": 30
+  },
+  "direct": {
+    "ads": [
+      {
+        "bs_data": {
+          "deviceType": 5,
+          "blockId": 3948,
+          "bannerLang": "1",
+          "punyDomain": "direct.yandex.ru",
+          "blockFavicon": "0",
+          "bannerFlags": "",
+          "isSmartTga": false,
+          "actionButton": "https://yandex.ru/an/count/WpGejI_zOoVX2La_0pKP03DjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezzdWSZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhtij8c1Qu2HOJ0YFSk0YSwLIgHGYWMa3s-kwZe5fGlbhT5YW0bBWXW817_o_UWDNX4UJ-CyOAnGNMCIt5VUrIrm06SeA39SHXYeB3d2T7e8wy83-Twp8FeVgWkz3AKVhdkADJQZul02FS5gbAOAmChvRRUcXWwbTGQO9UjLGSfBDKIGuCGM6yhF-qifGWNm2~2",
+          "count_links": {
+            "abuseUrl": "https://yandex.ru/an/abuse/WDeejI_zOoVX2La306K606FBAoKCeEDKoQCng5QXeWk6U6mPGZCuM1izI7AkAcmHCge81xFNNZbnyJNac25QohGNpCfc1DczfnmWfP8349W34Ip085DM8vDTridejAxhUeoOXX4l9q33BkWSW62wBTAsw0esSCEWgKVt0AHt6igNVvTN2-l720o-wLF-Mq8Psez1lwLrNJ-NeVqOz5glHGHC2vm4YmdXKGvSPAvKAfL2931jOFkbyej9pTW1fC0D1G87_BqUT4B-ayJ1Jkz3pLtqF9qCOQ1FXy3z3m00~2",
+            "viewabilityTracking": [
+              {
+                "url": "https://yandex.ru/an/tracking/Wa0ejI_zOoVX2LcL0PKH06EXVtWMhGJC5n3GVOYm1z7eGPHz4t8ZdfoK9r3OTXepx9JztWvvgU-CJJJ9IiAe0zvn9a3Sp27JEJjq6hsTjmtpuO_kcpAx-n2UyC5BzssdYdpOFGX6UXZxkyQfjZgwfpAP1x4VW6lYoRbG1WGHpm1V9GoWurJ9ep6eLg6Y2uPuR1b2CpZOvStNHW-IdAiAMuICAiB1Z863c2Vik67SvB5l47ljbHCN3MDVGsuc8MAMh1bl4AdrgX7Br8Izb21PFBq6F5DMjrR3ZT7rNQ_HIpY10-2QMBFovE5xmM80NnhScGMmTK3NUejW2DkOw6BboSFt0Yi1A9LAfLB9T6121mnRTDzsgWW6VUcaf8tDJUmzlC35isXPs5iu6GEBHIegDlaoZSfc1DczfnmWfP8349W34Ip085DM8vDTride3cIuceaWLm0H2aLe2jkcZhrZqhFO634TetiOSxCDvhkS00sxe7C0WkcsIDkYAzZ03OEc7jOdD-3D-s6_1ItB1o_hfeRyB_tbvUjxwIylNvzB6vAN_7r6y4_BryOytZdvsPZ7EoTCivTYbWDer7LTnz9c6HfCzm2aTxe78BtrUzWcN4_-NLujh1yZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhyVCWP035vahbKgb40bC6zYq3-MdyP3mK2gLoWxykGuc8kyYJ2EtPWajkiB1u-wSJLqOIKZwM9ZQF6p56T3rOZ4K5EdJE1FGl1_duNy0~2?action-id=25",
+                "time": 5000
+              },
+              {
+                "url": "https://yandex.ru/an/tracking/Wa0ejI_zOoVX2LcL0PKH06EXVtWMhGJC5n3GVOYm1z7eGPHz4t8ZdfoK9r3OTXepx9JztWvvgU-CJJJ9IiAe0zvn9a3Sp27JEJjq6hsTjmtpuO_kcpAx-n2UyC5BzssdYdpOFGX6UXZxkyQfjZgwfpAP1x4VW6lYoRbG1WGHpm1V9GoWurJ9ep6eLg6Y2uPuR1b2CpZOvStNHW-IdAiAMuICAiB1Z863c2Vik67SvB5l47ljbHCN3MDVGsuc8MAMh1bl4AdrgX7Br8Izb21PFBq6F5DMjrR3ZT7rNQ_HIpY10-2QMBFovE5xmM80NnhScGMmTK3NUejW2DkOw6BboSFt0Yi1A9LAfLB9T6121mnRTDzsgWW6VUcaf8tDJUmzlC35isXPs5iu6GEBHIegDlaoZSfc1DczfnmWfP8349W34Ip085DM8vDTride3cIuceaWLm0H2aLe2jkcZhrZqhFO634TetiOSxCDvhkS00sxe7C0WkcsIDkYAzZ03OEc7jOdD-3D-s6_1ItB1o_hfeRyB_tbvUjxwIylNvzB6vAN_7r6y4_BryOytZdvsPZ7EoTCivTYbWDer7LTnz9c6HfCzm2aTxe78BtrUzWcN4_-NLujh1yZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhyVCWP035vahbKgb40bC6zYq3-MdyP3mK2gLoWxykGuc8kyYJ2EtPWajkiB1u-wSJLqOIKZwM9ZQF6p56T3rOZ4K5EdJE1FGl1_duNy0~2?action-id=26",
+                "time": 10000
+              }
+            ],
+            "sitelinks": [
+              {
+                "targetUrl": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+              },
+              {
+                "targetUrl": "https://yandex.ru/adv/edu/direct-start?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+              },
+              {
+                "targetUrl": "https://yandex.ru/adv/solutions/cases?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+              },
+              {
+                "targetUrl": "https://yandex.ru/adv/contact/freelancers/?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+              }
+            ],
+            "tracking": "https://yandex.ru/an/tracking/Wa0ejI_zOoVX2LcL0PKH06EXVtWMhGJC5n3GVOYm1z7eGPHz4t8ZdfoK9r3OTXepx9JztWvvgU-CJJJ9IiAe0zvn9a3Sp27JEJjq6hsTjmtpuO_kcpAx-n2UyC5BzssdYdpOFGX6UXZxkyQfjZgwfpAP1x4VW6lYoRbG1WGHpm1V9GoWurJ9ep6eLg6Y2uPuR1b2CpZOvStNHW-IdAiAMuICAiB1Z863c2Vik67SvB5l47ljbHCN3MDVGsuc8MAMh1bl4AdrgX7Br8Izb21PFBq6F5DMjrR3ZT7rNQ_HIpY10-2QMBFovE5xmM80NnhScGMmTK3NUejW2DkOw6BboSFt0Yi1A9LAfLB9T6121mnRTDzsgWW6VUcaf8tDJUmzlC35isXPs5iu6GEBHIegDlaoZSfc1DczfnmWfP8349W34Ip085DM8vDTride3cIuceaWLm0H2aLe2jkcZhrZqhFO634TetiOSxCDvhkS00sxe7C0WkcsIDkYAzZ03OEc7jOdD-3D-s6_1ItB1o_hfeRyB_tbvUjxwIylNvzB6vAN_7r6y4_BryOytZdvsPZ7EoTCivTYbWDer7LTnz9c6HfCzm2aTxe78BtrUzWcN4_-NLujh1yZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhyVCWP035vahbKgb40bC6zYq3-MdyP3mK2gLoWxykGuc8kyYJ2EtPWajkiB1u-wSJLqOIKZwM9ZQF6p56T3rOZ4K5EdJE1FGl1_duNy0~2",
+            "linkHead": "https://yandex.ru/an/count/WNWejI_zOoVX2LaE0LKB0ECIIItIjkWADd33884g7aIZ1r7sErvlkCFrEraTHw-pqpbPdwENC82EKoMFng1QXOek6EAnPGZDu62P7Rv17Ro-3PpbPkjxs3GolJPbi8rNgLGgbHf8VB7POQDxlYmMr3US9oc4Wna31t406xWQnad0dcWrxCqaO4-q6hQ-XioasJvfj9uccw5nWXOdKyG1X7q0sIm1w5imc9TEIjhOtCJUmmlS5ax6m6AHYefDB6o_JAEo6K5sxoa7IAda00JcG0GBCCYKrSXabtKokgUWqxgkOsF47iPCmuWhQ7KTnhkS00sxe7C0WkcsIDkYAzZ03OEc7hEv-zyOGAEkwpgMDZCF3uFSqOrRx9RqW931YmXeE0fqDWSkKeW4fWqiAByLnn9CG0hSK20M_78cZ-622mJE3F8VPJsFHFanJED4qVmq8MJKvix_NzkQZoLgfNwYJb1fgoavmDr-DtTwMc6XmA6wPjsn75vqG2AK~2",
+            "viewNotices": [
+              "https://yandex.ru/an/count/WNWejI_zOoVX2LaE0LKB0ECIIItIjkWADd33884g7aIZ1r7sErvlkCFrEraTHw-pqpbPdwENC82EKoMFng1QXOek6EAnPGZDu62P7Rv17Ro-3PpbPkjxs3GolJPbi8rNgLGgbHf8VB7POQDxlYmMr3US9oc4Wna31t406xWQnad0dcWrxCqaO4-q6hQ-XioasJvfj9uccw5nWXOdKyG1X7q0sIm1w5imc9TEIjhOtCJUmmlS5ax6m6AHYefDB6o_JAEo6K5sxoa7IAda00JcG0GBCCYKrSXabtKokgUWqxgkOsF47iPCmuWhQ7KTnhkS00sxe7C0WkcsIDkYAzZ03OEc7hEv-zyOGAEkwpgMDZCF3uFSqOrRx9RqW931YmXeE0fqDWSkKeW4fWqiAByLnn9CG0hSK20M_78cZ-622mJE3F8VPJsFHFanJED4qVmq8MJKvix_NzkQZoLgfNwYJb1fgoavmDr-DtTwMc6XmA6wPjsn75vqG2AK~2=WZ8ejI_zOoVX2Lbo0IKH0ECWWCofEbkXYZ1BhUDPj18mjqZReYlOm0s31AfummJqPX96h202tWi8w2Oe26e1GQbK7j35Do4tuib9UGA5RQSnmqxPx-sGb_hEs1lkV9ND2B9xJpb0IYK783078bY0GSVHH9Ei98mwO0tkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq3hcP9WwLiic-iXLq1MWpkpdAy30KpveT881ipfqdrJPdSVmXC-UBq7headvq8P44Gy0tn5SE5B2JQDy_c6YMcp-y0c6y1-mzThhvouqDKb0NkYrR0tau0zqMhOqbCrvGqYjLuruXXTt_KQdSCHHoHWBsmZ8msNIRDTi_BauNl1OW1V6joP1R1rGDTwYs08c-XYvSd3zm8h0Kp0i1KpH4kPzeBPmWwlnJBFREaV5SetLy0Kp3I5hQUWmqme-wnY3BcfO--Oz2msHap7w1x6l9m03RkWSm22wJARNFyRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzyx8_YdvMjZ7k-S_AoNOfRffLU61jCz0EcTxW58RtqT8LsTDzDGlkpti4sudloxl5fOFqPWy4sVyjyIoj1-3FejhUlwkGpjnw3N_YzR_dOed_LUzrf4mBJ0IR2O41xHI3C0K2qA2VoF807WlDsAmck1en7He3JcSkYkKGcwCWH-_Ppof3Ud~2"
+            ],
+            "advertInfoUrl": "https://yandex.ru/ads/advertiser_info/WDeejI_zOoVX2La306K606FBAoKCeEDKoQCng5QXeWk6U6mPGZCuM1izI7AkAcmHCge81xFNNZbnyJNac25QohGNpCfc1DczfnmWfP8349W34Ip085DM8vDTridejAxhUeoOXX4l9q33BkWSW62wBTAsw0esSCEWgKVt0AHt6igNVvTN2-l720o-wLF-Mq8Psez1lwLrNJ-NeVqOz5glHGHC2vm4YmdXKGvSPAvKAfL2931jOFkbyej9pTW1fC0D1G87_BqUT4B-ayJ1Jkz3pLtqF9qCOQ1FXy3z3m00~2",
+            "falseClick": "https://yandex.ru/an/count/WcmejI_zOoVX2LdM0VKI02CZYNWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXAfiHPFUUSe2KIWv0O0v4i023ZgC6Tsa5Q3MuGoj0gy7TMG5Q3UxC2j1gS5TMW5Q3khq2j1hKwHMWrQ0kN81MWpea1MWrgCihGAj1tP42j1hKuHMWzKn9iFGjbitra2iWgy6TMSxNWG2c_51f10FcTEc-AREx3-497xpUGwFtm3Nnv5me0uA8Pu2lF1g3QXKgkc28nvOXD8E33MfqyngFuPvKkV56SE5B2JQDy_c6gSa6iD_m3M03rskldBXisFewGhew3U9c4h0dMWrxCmdO4ws6xGQHMgyQSOokxtgDpk688nAm5xQHaORBfDckMNdoyBrWCO0l3UxC0jWwe6kzHJ24JNInykJXUu6Lc25QohGNp2sSZ8758XKLcrZOMjZXjLZc6fdiiav6lxa2fc2cAMmz1HrcGjbd5MF8JHrxnwHdiJ5YEaRtCERb16ZO1Pq344otHTeMNS46RXWqzNuZ_UK5o1StuCtxORy5BSi7B-kcXlml_UNbwtjd1F-qV6tCuvsJd_LIp3Azz0RGgEkwZgNDpCF387TqemmDfdi0qZlT0v3UKg2plewGhiwRQIXVzdlO9bnF_brUBQmV8p3ufa_vRmbbQ3y6_PRMTVrSXlPZq6l_bor_EvJFUgzxBI9WMk0aM4m8ZtBW8eL8ODeWKFczt5mS0AJ03GK24Fn8u9mYNuQr1B5Wza4u2gKJWgQokDFUcivHXjvwHpPGAHpLWVR0HTaq4l_oQUMDw0nUrF7ptW00~2=WWmejI_zOoVX2Lav0VKF0EDUU7WMhGJCBTAsw0esSCCWWIhUC06zcOGHAuY0zm82kWaAWbf0K2gL1tJnXZjVPJE2xDvJ3f1IoG48p8485c3GSTJWBgq0hGPtQ0LeDRWxAq2hmPrP0LeDxieAq6fGjrU0LeCwlGAq6jI52z1gK8Ua0Aq6TNa5Q3MeErA0LeCwl0AqdYa9bhx5ihaUSWLaDRWpo_aw4C2K7ogDOC2SBjqtPNRt8JpXWzTxQFGUk2QUd0jbG13n3F0LmOKl9TWqpkSR9gRDxWERR03x3L-llNBYic7hwmZfwZI8cqd0dcWrxCqaO4-q6hRqL4rvWqYjLuquHjTtlKRdSCGH2TWBsyX8msNIRDUiF7duNh0Om9S6TsO1R1tGjTuY6C8ckbXvyl2zm4e04p1inGpHKgQzOBQmmsknp3DR-aU5yiqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wp2RN_qRwomkGBsx0c_V3VWjQbWzUraqD-L_woylNzyu8_cdvsfZ7EoS_wwMOPHaQJFS0f7Uw1o2zzNM4T7NUJ4Fvij_3Dk5wyk_oQc7z6871DttAVqieG_inwBUqhkldChGVWrxxlspvsw5yrdlTQn41qm8dmM92U4HFqmwPv0W6_7uW0UohtOeHzvGOQRNj3j42ZSa1Rtp-Fm00~2",
+            "empty": "https://yandex.ru/an/resource/spacer.gif?",
+            "url": "https://yandex.ru/an/count/WpCejI_zOoVX2La-0oqP02CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezf3qPWy4sVyjyIoj1-3FejhUlwkGpjnw3N_YzR_dOed_LUzrf4mBJ0IR2O41xbm4NcIgLIAKG2qmQsrtKT0xC1vHVXjS0II84R2WGV_Bzw-rQ4HvFupnGh50zOnBSLzxLBNFyOoWOCbn65AWl-Rvt-WJhmGFvtfCW-X-Y2xpCfHykUuerDflXy08zmMgKeWh3olLjjwA63gHr1fWbvrL1gaiqH93WnvNNoi_xIob21V080~2",
+            "count": "https://yandex.ru/an/count/WbOejI_zOoVX2Lcp0KKI0FGWAtahOWAvbIy50BDQWNjf-haWSDxJbCl0cQAtcG680OQWqlNz1PW1t9Ujgd-u0Oo0jjmfs062cR2S1U01gDM2oW7e0OO2Y08Ac0BKaGBm0iAVuk84-0A2W820WF0Hw0IB0OW5ryBq2905yzBQ3R05eVkX0hW5iuo-0y05yQtr0SW5nh0-q0MT-w42y0N91bMrMay2cgvIgGTY680FepK90_W70O080j08WeY0WSA2W0RW2Eg80UW91u0A0PWA0lWAmEqQW0k-0uWB5FYKa0693fWErUhg-gJ0fjTI-0-GglEp2EjHk1w5w_a_o131i920G9WHgy9PeH7iKRWUXUknc1C4g1Fky8AUmCVonHY0582WW808q1IUaFfQc1QGsQBB1g0MaDcYomRG5hwzthu1c1VtX9EG0QWN4RWN0S0NrO4Q__zhCN_z3qcm6kdPkTZOdhNmOu8S3MbdCJfiKMvfPM5NDZYX7Jfj9GlV_za_g1u1i1y9o1_2gupE0gaWrC3mvr_b4K2u8Al2MOWYkv6ygkpExyk10P0YnBvPa2B5lbcG8iQ-MP0YnxvPa2B8lbcG8ic-MP0YohvPa2AgmbcG8gl2MP0YhC9Pa2AjmbcG8gx2MV8Z451nMy1Y6000OY25oeX91W2e9E41i2G1k2JX0Vae0000OFFQ2Z-0AG-mATg2xii6W2hX0Uag-2gPyJGG_1ZWF1vVXfrui63cGJWAfVE1fhAmqzwQpL66t7f7D50f3DM1ji15MPVt5wMLDwGRyAAEdni6~2=WZCejI_zOoVX2LbX0IqH06CXWiofEbkXYZ1BhUDPj18mjqZReYlOm0s31AfummJqPX96h202tWi8w2Oe26e1GQbK7j35Do4tuib9UGA5RQSnmqxPx-sGb_hEs1lkV9ND2B9xJpb0IYK783078bY0GSVHH9Ei98mwO0tkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq3hcP9WwLiic-iXLq1MWpkpdAy30KpveT881ipfqdrJPdSVmXC-UBq7headvq8P44Gy0tn5SE5B2JQDy_c6YMcp-y0c6y1-mzThhvouRDZwEaAwEWtYPXAm9reDUpC9s1EjXYqzLLFU85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRS8Xh29BbQUF7mli1B010nRCKEqb6alc2tiy5eiyyoM_b6XV7C5JC5CKzXw2ZhCXBBFAiQGcphsZadFOcF4T8pkOSpB2T2m2pe789Wkiydrlv7-yWBaYnlmvlsmtuAMvOENTLD3_fV-ylBrlJE2Vrg-DkRnpidFUYbccLvwPMWmtGEGtkaUWFJMrn7IrNap3UNBVW_RXEl9lykhXVLZ10RVz2d_BQ4CxSUWtzAwhf_Bq7uCUkt_ikLlX_9PxtMlHGHC2vm4YmdX4KrrOQC21G46_7uW0U2htOf1zvGORBNjFj42lU41Rtp-Fm00~2",
+            "linkTail": "=WZOejI_zOoVX2Lbe0KKH06CXWiofEbkXYZ1BhUDPj18mjqZReYlOm0s31AfummJqPX96h202tWi8w2Oe26e1GQbK7j35Do4tuib9UGA5RQSnmqxPx-sGb_hEs1lkV9ND2B9xJpb0IYK783078bY0GSVHH9Ei98mwO0tkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq3hcP9WwLiic-iXLq1MWpkpdAy30KpveT881ipfqdrJPdSVmXC-UBq7headvq8P44Gy0tn5SE5B2JQDy_c6YMcp-y0c6y1-mzThhvouRDZwEaAwEWtYPXAm9reDUpC9s1EjXYqzLLFU85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRS8Xh29BbQUF7mli1B010nRCKEqb6alc2tiy5eiyyoM_b6XV7C5JC5CKzXw2ZhCXBBFAiQGcphsZadFOcF4T8pkOSpB2T2m2pe789Wkiydrlv7-yWBaYnlmvlsmtuAMvOENTLD3_fV-ylBrlJE2Vrg-DkRnpidFUYbccLvwPMWmtGEGtkaUWFJMrn7IrNap3UNBVW_RXEl9lykhXVLZ10RVz2d_BQ4CxSUWtzAwhf_Bq7uCUkt_ikLlX_9PxtMlHGHC2vm4YmdX4JrZqbn22G47_8KW0U2otOgnzvGOSxNjhj42NHa2V_-SCeutfm00~2"
+          },
+          "uniq": "7422986624556622895",
+          "hidePermalinkInfo": false,
+          "vmap_request_id": "0",
+          "isOffer": false,
+          "callUrl": "https://yandex.ru/an/count/WeGejI_zOoVX2Ldh0RKJ0CFaZdWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXAfiHPFUUSe2KIWv0O0v4i023ZkCE3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmC1JFcXqWW6pEdIVLDcTn_24pvulGUkYIVdGXaGH3m3VENH65IhKD45Gpos3A4P76nGevlNU0ptfCgDDu8BNqgmQPpFDqnDDe3zXcy06xXUU-N4PSFMrn7IrMaGDvE0FT5gs9j9m9veDMmtYDHwrOXzpJP6rtUzHkTmn149s0lRo4Z3PT9irwmyUVXUi1Z0bmPtPW5i7T2rtY8OmYQwM7doyBt0IimGBMNQ2-OMJiR0Of6AYaqiR2tiy5eiSurCTbadezzS0LCmqnIsde8ECw7iiuenvAQElMFIizWOCHsZUnXpimtckvm03RkWSm22wRP8sw8hsC0DWwRURwI_l03vuWQyUJ_ijw1b-U1btTIG_wM_l7nzB_tbvUjpQKFoah_F2Fvf-TgOnpidFnlpUEU4QVPIp39pwGsWKTTr7KkRcOU7GUxeHXaQJFS0f7Uw1o2zfK1dVHqXNPqtqr2-xFUmJRYU_BkyMbW_5k7120o-wLF-Mq8Psez1lwLrNJ-NeVqOzDh_PSlV3kMptkjUYmYO5ZW95XF2enouI24Ic3Qmeln7H0PGWHIueK0G_4ZW-FbSI6rYHSa45F71LReY41Ng6vyQUbE3-aEmUK3Yg4c1eOEw3tgT_DwdbIBfC7ZHUufx0m00~2",
+          "yclid": "5264705212151234559",
+          "templateId": 410,
+          "clientType": 1,
+          "bmcategoryId": "200003423",
+          "pageId": "265853",
+          "isMulticardsDisabled": true,
+          "clientTin": "7736207543",
+          "minDisplayNewMarketRating": "40",
+          "sitelinksType": 2,
+          "isNeuralPicture": false,
+          "permalinkId": "1128163976",
+          "oid": "700843585",
+          "bannerWidth": 0,
+          "hitLogId": "218765031360174178",
+          "clientAlternativeTin": "",
+          "addHyperlocalAsset": false,
+          "domain": "direct.yandex.ru",
+          "clientName": "ООО «ЯНДЕКС»",
+          "creativeId": "C0",
+          "bannerCategories": [
+            "200003423"
+          ],
+          "popup": false,
+          "domainId": "17514",
+          "bidreqid": "218765031749458018",
+          "orderTags": [],
+          "order": {
+            "goal_ids": [],
+            "delivery_data": {
+              "meta": {}
+            },
+            "counter_id": 34
+          },
+          "targetUrl": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0|&yclid=5264705212151234559",
+          "position": 1,
+          "region": "",
+          "impId": "10",
+          "geoDistance": "",
+          "callToAction": {
+            "url": "",
+            "value": "Подробнее"
+          },
+          "requestRegion": "ru",
+          "adId": "72057611127989742",
+          "phraseId": "205599838214",
+          "vcardUrl": "https://yandex.ru/an/count/WpSejI_zOoVX2Lb10qqP0CCjiNWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIFsDTiONT_r6ft34KSaO2zi8oCDbqcpNRFovE5xmM80NnhScGMmTK3NUhjOUVBmlS1Ap10jPTeBvXPEni1YaOgAJIniBUpmMYnpZKnsMIUZtrm1Kp3J5BQUWWupeUopYZ7afewzOzAps1Wn7QDx6FDo0ZJiWiu12ARR8csBhc03DmoQUimcbzdS_M-alxm0-U86l7a_xBUWPVdWPTtKaF-blxnyVI_zvUNhSsb3yfA_pmZ-QVdQcCSx9pyRytZdX6dsKimoS-aDe57NTHrBcvc7Xq7kw4OP6apt0AHtkWSWlQL0PtqT8LsTDzDGlkpti4sudloxl5fOFxRWmGWClkbJ_bj26TgFGR-bTLq_bw7z6FJQ_sNBtmxbizxhNei8c1Ou2HOJmgCSkCXSgLGgXKXWsi3skgvZOFOeFry0F4eW1Mue41xyrteJLuH7a_ZF82iK9rZ4jnNtjKjS0XdA4WoN4OWg2ovmdLw2El00_tUyo3w7xeBlOob7Av_YZKsi-3m1ZtnQfIk2i49zjrBGGpTJ6O9Cy-PLizGacscLaE34NrfPd8TF~2",
+          "algId": "3",
+          "resource_links": {
+            "bs_data": {
+              "pathUrl": "https://yandex.ru/an/count/WpCejI_zOoVX2La_0oqP03CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMreyzbWSZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhtij8c1Qu2HOJ0YFSk0YSwLIgHGYWMa3s-kwZe5fGlcVNvX8G0hSK20V_Bzw0rU4HvFupnWh51TOnBSLzxLBN00PoWeCbn66AWiES9qUWZhmWFvthCW-X-g2xqCfH-kUuerDgFYy08zmMgKfWh0olbjjwQ63gLr1fWbwrL1oairH93Wn1ORoi_xIob21V080~2"
+            },
+            "direct_data": {
+              "httpsPathUrl": "https://yandex.ru/an/count/WpCejI_zOoVX2La_0oqP03CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMreyzc0SZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhtij8c1Qu2HOJ0YFSk0YSwLIgHGYWMa3s-kwZe5fGld7_50C0IbmGu4V_Bzw0rU4HvFupnWh51TOnBSLzxLBN00PoWeCbn66AWiES9qUWZhmWFvthCW-X-g2xqCfH-kUuerDgFYy08zmMgKfWh0olbjjwQ63gLr1fWbwrL1oairH93Wn1ORoi_xIob21V080~2",
+              "targetUrl": "https://yandex.ru/an/count/WpCejI_zOoVX2La-0oqP02CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezf3qPWy4sVyjyIoj1-3FejhUlwkGpjnw3N_YzR_dOed_LUzrf4mBJ0IR2O41xbm4NcIgLIAKG2qmQsrtKT0xC1vHVXjS0II84R2WGV_Bzw-rQ4HvFupnGh50zOnBSLzxLBNFyOoWOCbn65AWl-Rvt-WJhmGFvtfCW-X-Y2xpCfHykUuerDflXy08zmMgKeWh3olLjjwA63gHr1fWbvrL1gaiqH93WnvNNoi_xIob21V080~2",
+              "promoExtension": {
+                "href": "https://yandex.ru/an/count/WoGejI_zOoVX2Laj0xKO08Eih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZd8udT0V2Yg8u4K54rJGmW8DVbwaeE07WnOsh4Mrq-c4ah1MZOACY8oGZaWe1LcHXAeab8Ai8HY1Ty2KpGYoUqyvG4eb1o0m1o9OW477SOS6Tsa5Q3MuGoj0gy7TMG5Q3UxC2j1gS5TMW5Q3khq2j1hKwHMWrQ0kN81MWpea1MWrgCihGAj1tP42j1hKuHMWzKn9iFGjbitra2iWgy6TMSxNWG2c_51f10FcTEc-AREx3-497xpU0zV4atEX30WYdW6-ycWCgbMew88X7bk6q0mEDgZHpMiyXdjIvSORmOKl9TWqpkSRfYORm7x3Du0DNA-zSkAoOUlh2EdgD8YRIS2UQ3NipIHWJxGQjXj4Qhrgn36wlkirEeSZZaZ0NjX6HXekasQxPkN9m_U2nG2-DBWp2s3hWAxrTh7ovE5xWPMO8LhAj1VCBPoCWSKY5HMRMDXQsE6rMEOQcUooJaQ_kGAcOAOfR3q57MP2sMSLOyXD7Nl7f6UnCM8wHlSmvkK4QDW5dGCGJBT5sXPTmGPk63JrVYFzvGN85pVWpVjXlmKjomSlwwQ6_2_zvUNhU-alBr-VInkIb_nzHl1FozV6FDuv-TcOnpidJBENOfQPIsy0ZRgkwrZQp3my3797DyhGOBe78BtJFG3fBGKww-i8wUgycORoPR-7RSBrvD_brSBwCVFEWn4OVDEd_BU4ChGVWtvBwxf-BaFxCUYr_ykMlntAPxtNlHOHC2rm4YmcX4SvS96vKgbK2f70j87jTLt7mAoLtwPRU0LIu8O20HxyBtg3MFn77FeJj0h3uHLnQSLzxH2dJ6wxNNW1de0MzUrcSA0c7ZV-ysv1oeXI1lmUvIrDgCYoW4DmkafJ1A4olljjwK63aRg2J0Xw9Q7a98DH93Xx2WpbP_xIIg-1V080~2"
+              },
+              "sitelinks": {
+                "href4": "https://yandex.ru/an/count/WoSejI_zOoVX2Lao0yqO06Cih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQ11LHXwnMf2i94ZMgrBmTC6KpWkpUKmwGKia12Co121PWq77SeS5TMW5Q3UxG2j1gS7TMW5Q3ExC2j1hSbHMWrQ1khm2j1dLw1MWrg0iNeDMW3aa1MWtgyWhGQb1tf02j1dLu1MWzKn8iVOjbSpta2iXgS6UMytKWW2a_L1h1W3bTkc_AxEv3UC87h_V0DV7aN2W3WeXdWAyy6eDg5IgwO8Z7bY4qWuCDQdJp6e_XdbIvyKPmuKi9Detp-OQfoGQmt_0DO0FNQw-Sk6pO-Zf2kZeDucOIi2TQ3Nip2TWJhORj1f5QhnfnZAxlUetEuOWZ4h0Njf6HXikasQvPUVBmlM0nW2yDxim2s3gWQxrTh3nv-5vW9MQ8bZBj1NCB9sDWiKX5nIOMjXPsU2sMkKOckwoJqM-kW2cOQGfRJq67cL3sMSKOSbF7tZ7fMMoCc8xHFOnvEG4QTa7d00JJRP6sHLUmWHi6JRtVI7zv0VB53NZpVjXlGSlomSkwgI7_Itzv-VfU-ilBr-VIXkGbVvyH_DFojJ6FTqv-DkRnpWdJxAMOPURI6q2ZhkiwbZOp3m-3tD6DCZIOxW58xtGFG7fBWSxwEaAwEc-ceNpPxs6RS3tvTtcri7uCmuCH67pJf_otX3Aq7uD-I-kwVYv3-p7ejV_BbhyTocUzrxqM4J0jS18i9eH7EN2HkLAfL0gHmBI1xNLTny1yAZ_M74mRa08t50WV_5vwerQ4Hv7up-Wg5BTNnBSLzxLBNFGOojeBbn5wAWjERvsUW3fuu1yl3Iduqze2fZOftQ2zuu5Cfd1yW8rmLAKeWcRbUwVQqBE3gnr1pWbvsL1gKimH93XYoklaV_sbbQ4O-0G0~2",
+                "href2": "https://yandex.ru/an/count/WoeejI_zOoVX2Lak0-KO0DFihNWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQA25HbP9gfI0hab2Ln5BLIg96bNgt0wPiHf3TUye1KYev084v4C4233gEEpIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2jPqg2fM-nRAw7N05P3UxCShuE133bXqeZ632dI_TDcTrz24_uuFKUk2QUd0jbG13n3F2LHsDGhK955mpns3A4Pd2mGOrkNkCnt9CgDzu8BdmfmQPnFjymDTa0zXk-0MpWUksL4vSDMrz7I5UdGTnC0lP4gs5l9W5xejMmtI1IwrKZZj7rNQ_HEHnnH0BsmZOoqd2PDDirAqyUlXSi1l2bmPrP05i7TAstYvKd3zyBhCGCqLAclM1kuMGCB1QfgDZ4mjR23g_5CjV8P9TrClhD5J05CqrXwodeC1FAFgiOGsxgs3icFOkD4TCnkeSnBoT0moxe781WkYtIjkWADd33eAdt6-alBq2-k05ltW_xBMXPFdXPDpNaV-alBr_VItzv-VfSsf2yvEypWdzQlZRcySx9pyOytZbXchqKiynSUWDer7LTnz9cvk5Xa3kwKOO6qpq0wPtk0KXlAT1PNqT8L-VDD9Gl-pri4wud_owl5jQFVJmOWS4tVSf_IoX3-p7ejxIkw-Soj1-3Nlk_RFdReNpMUzrh4G7J0YV1Oa9ub0CNcIkLIgKG2KmRs5xNTGpC4SgV1SQ854Y16me47lm-UeDMX4UF-C_OAXINLyIt5VUrIrpm6ChA2vSHTYeB3c-T7e0wy03rxxK5zT6asCzUoA-TJ65p049mj4fH14tbU-VRq5E3apg2d0XvAQ7Kf80H93ZsbDV9__obbLuP-0G0~2",
+                "href1": "https://yandex.ru/an/count/Wp8ejI_zOoVX2Laz0oKP01FjhdWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQX21KH3qYejAeaQnAILIYf2fLASYA95Jrsm5JDYF8xZtb02cL783078XW0GOTnnqQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV1mAOyaEb4GoOqwNxfipkFeGdVF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHjl11U-b63JE9zlc9fi0FiDtm0sSBtsoedBXgsl8wIhqo1k9W5xejMmDvE0FT5gs6uGgVMg4SVe-gxNw1oEE281Us4R6McuJ9hjcfKd3zyB5WFuqk3EB82j0xhMsyNAauVl1LPYXcWfqrumjt0o1XQBL5HiOc5hOOVNOfbhPBBBEXdzvWgOWfcciFKKT9W9PPzLZ24tTUmTavx5neZf6Dt3c9SJe64NT0v0CDqMQLjq1HkuOT3K-utqbnSWNzo0D--7_HQqB1-yh9iQyh_qbvUlxwM_l7nzBcr8NlBt6S4_BLyRytZdv6TZ7k-SCCrUYbbcBhq1DEgwhcDfC_FmCCWTtIX3W-aUWFHEzm2ajnJehAyZfAlpPXhAb_qUjWdNat-NLmlhnmruC0A3R_gK_vPGXlPZq6zfNTVFPMW_1htsVzdojqFvhFUwro82fWLEWiM4y2W7BZ9NAfLA8HAODh2zhkiOc2MKdqeIApmW1Mue41_yjdhxLeH7a_ZF52iK3rZ4jnNtjKjS_nZA1WoN4OKg2_vldVw1El10_dUao3w7w8BlCob7ovxYZKsc-7m0Zt1QfIY2iFAzMsteeOEf7K6c2NdLK6gIpH4aE37bTVAp_jBAK85y0W00~2",
+                "href3": "https://yandex.ru/an/count/WoKejI_zOoVX2Laj0xqO08Eih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQ9563I2GL6GafBGqP9P6eKQM2APiHPFUUSe2KIWv0O0v4i023ZkCE3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmC1JFcXqWW6pEdIVLDcTn_24pvulGUkYIVdGXaGH3m3VENH65IhKD45Gpos3A4P76nGevlNU0ptfCgDDu8BNqgmQPpFDqnDDe3zXcy06xXUU-N4PSFMrn7IrMaGDvE0FT5gs9j9m9veDMmtYDHwrOXZT7tNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5Tw-rYvSd3zm8hCKEqb6alc5iu6GEBHIegDh6mjR33Qx7CDJBPPPsCVdC5JC5CKzXw2ZhCXBBFAiQGcphsZadFOcF4T8pkOSpB2T2m2pe789XkYxGjke8Dt31ewlr6-iiBa2zkm9ltmtuBMfOFNjPD3VbV-ilBr_VINrw-FfSs92_v-upWdvQlZNcyS_ApCOztJfXcByKiCvVU01frNTUnj9bvU1ZaZcwKeS5q3q1wfti0qbiATDRN4TBLUJCDvSj-3zk4wyc_owk5zMCL7ep0u9i-vRybbA7z6FHRMjVrSndQZq6l_L-s_ErGFkkzxhM8W6c1as0n8JpAWOlCbKgbKeW4fWrih-iw1cQj_04qAV02AN13WHxyDdfxLeJ7ZlZFr2eKZrV4jnNtjKjSxnZAnWkN4NKg2_vkdVv_El30zE_QWdfN3By5ziBwnMGAcmCGWgDLYY9eAjyxtuQU6fpK4UH4o4i9fIO5Z231iQUyJlxdBwtqoi0d~2"
+              },
+              "textName": "https://yandex.ru/an/count/WpGejI_zOoVX2La_0pKP03DjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezzdWSZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhtij8c1Qu2HOJ0YFSk0YSwLIgHGYWMa3s-kwZe5fGlbhT5YW0bBWXW817_o_UWDNX4UJ-CyOAnGNMCIt5VUrIrm06SeA39SHXYeB3d2T7e8wy83-Twp8FeVgWkz3AKVhdkADJQZul02FS5gbAOAmChvRRUcXWwbTGQO9UjLGSfBDKIGuCGM6yhF-qifGWNm2~2"
+            }
+          },
+          "bannerLanguage": "ru",
+          "sourceDomain": "maps.yandex.ru",
+          "liked": "0",
+          "productType": "direct",
+          "brandType": 0,
+          "agencyClientId": "0",
+          "campaignid": "700843585",
+          "backgroundColor": "",
+          "geoDistanceRegular": "",
+          "hidePicture": "1",
+          "isTurboBanner": false,
+          "sourceInterface": "dc",
+          "isNeuralVideo": false,
+          "hideExternalData": false,
+          "clientId": "302301815",
+          "eventHash": "12047589837925109878",
+          "titleUrl": "https://yandex.ru/an/count/WpGejI_zOoVX2La-0pKP02DjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMreyxy6041j_qAVyjeGpjnw3VqhgkdylGVWnwxV-ovM-7ybdlTQz514mBd0IB2U5H3bnahbGgbK8aC6rWUrtNCJ0RK7uMH0we0LBWXW817_o_UljMX4UJ-CyKAnGFMCIt5VUrIrp_6Ce639SHXIeB_c-T_e4wy43-TwJ8FeVeWkypAKVBdkADJQRuV02FS5gbA8AmyhrRRUYXWwaTGQO9UTLGQfBD4IGuCULryhF-qifGWNm2~2?q=",
+          "clientRegion": "",
+          "directTitle": {
+            "url": "https://direct.yandex.ru/?partner",
+            "title": "Реклама"
+          },
+          "isAbandonedCartBanner": false,
+          "closeCounter": "https://yandex.ru/an/count/542/5527962272576738543",
+          "isGeoPinPage": false,
+          "bannerHeight": 0,
+          "pathUrl": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0|",
+          "erid": "j1SUnKoCQw1WpP68x",
+          "skipPictures": "1",
+          "isErir": 0,
+          "addInfo": {
+            "type": "callouts",
+            "callouts_list": [
+              "Защита от фрода",
+              "Стратегии",
+              "Полная статистика",
+              "Удобный интерфейс"
+            ]
+          },
+          "sad": "",
+          "semanticCorrespondenceType": 0,
+          "S2SEnabled": false
+        },
+        "direct_data": {
+          "banner_proto": {
+            "GrutObject": {
+              "status": {
+                "materialized_metrika_counters": {
+                  "manual_counters": [
+                    "34",
+                    "191494"
+                  ]
+                },
+                "materialized_fields": {
+                  "active_permalink_id": "1128163976",
+                  "href": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0|",
+                  "sitelink_set": {
+                    "sitelinks": [
+                      {
+                        "href": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0",
+                        "title": "Умная реклама",
+                        "description": "Технологии Яндекс Директа найдут ваших целевых клиентов"
+                      },
+                      {
+                        "href": "https://yandex.ru/adv/edu/direct-start?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0",
+                        "title": "Обучение Директу",
+                        "description": "Узнайте, как сделать рекламу эффективной. Подробнее на сайте"
+                      },
+                      {
+                        "href": "https://yandex.ru/adv/solutions/cases?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0",
+                        "title": "Кейсы",
+                        "description": "Решение интересных задач бизнеса с помощью Яндекс Директа"
+                      },
+                      {
+                        "href": "https://yandex.ru/adv/contact/freelancers/?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0",
+                        "title": "Специалисты",
+                        "description": "Специалисты по настройке рекламных кампаний в Яндекс Директе"
+                      },
+                      {
+                        "href": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0",
+                        "title": "Промокод 5 000 ₽ на первую РК",
+                        "description": "Пополните счёт и Яндекс добавит средств на первую кампанию"
+                      }
+                    ]
+                  },
+                  "active_permalink_assign_type": 2,
+                  "language": 1
+                },
+                "moderation_status": {},
+                "target_url": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term={keyword}&utm_content=search|ph|{phrase_id}|ret|{retargeting_id}|cid|{campaign_id}|gid|{gbid}|aid|{ad_id}|adp|{addphrases}|pos|{position_type}{position}|src|{source_type}_{source}|dvc|{device_type}|cr|{creative_id}|ad|{coef_goal_context_id}|"
+              },
+              "spec": {
+                "phone_view": {
+                  "spec": {}
+                }
+              },
+              "meta": {
+                "direct_id": "17090061806",
+                "direct_type": 1
+              }
+            },
+            "AvatarsMetaData": {
+              "ImagesInfo": [
+                {
+                  "AvatarsBasePublicUrl": "//avatars.mds.yandex.net/get-direct/5720520/1VsDBtQx9BeAI7sBb4Et1w/",
+                  "ParsedMdsMeta": {
+                    "AverageColor": "#2C56CAFF",
+                    "ColorWizBack": "#2A50B9",
+                    "IsClipart": false,
+                    "IsPhoto": false,
+                    "Crc64": "12912344610194193301",
+                    "ColorWizButtonText": "#EAF4EC",
+                    "ColorWizButton": "#6481C8",
+                    "BackgroundColors": {
+                      "Top": "#1A212CFF",
+                      "Bottom": "#3267FEFF"
+                    },
+                    "SecondColor": "#2850C0",
+                    "ROrigSize": {
+                      "Y": 1200,
+                      "X": 1200
+                    },
+                    "MainColor": "#3068F8",
+                    "ImageQuality": 0,
+                    "AverageBorderColor": "#2A50B9",
+                    "Sha256": "fc5429a0b7eb02c0b0fb5d921ab522375df3359e8c6d47c2b8e648b695553562"
+                  },
+                  "ImageType": "regular",
+                  "Images": [
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 65,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 30,
+                          "H": 85,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 49,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 19,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 23,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 141,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 262,
+                          "H": 188,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 600,
+                          "Y": 122,
+                          "H": 338,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 197,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 77,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 91,
+                          "H": 450,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x600",
+                      "Width": "600",
+                      "Height": "600",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 565,
+                        "W": 600
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 392,
+                          "H": 281,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 182,
+                          "H": 507,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 296,
+                          "H": 312,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 115,
+                          "W": 674,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 137,
+                          "H": 674,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y900",
+                      "Width": "900",
+                      "Height": "900",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 847,
+                        "W": 899
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 392,
+                          "H": 281,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 899,
+                          "Y": 182,
+                          "H": 507,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 296,
+                          "H": 312,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 115,
+                          "W": 674,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 137,
+                          "H": 674,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x900",
+                      "Width": "900",
+                      "Height": "900",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 847,
+                        "W": 899
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 262,
+                          "H": 188,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 600,
+                          "Y": 122,
+                          "H": 338,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 197,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 77,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 91,
+                          "H": 450,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y600",
+                      "Width": "600",
+                      "Height": "600",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 565,
+                        "W": 600
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 523,
+                          "H": 375,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 1,
+                          "W": 1199,
+                          "Y": 243,
+                          "H": 676,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 0,
+                          "H": 1199,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 394,
+                          "H": 416,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 153,
+                          "W": 899,
+                          "Y": 0,
+                          "H": 1199,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 182,
+                          "H": 899,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x1200",
+                      "Width": "1200",
+                      "Height": "1200",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 1129,
+                        "W": 1199
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 131,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 61,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 99,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 38,
+                          "W": 225,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 46,
+                          "H": 225,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 282,
+                        "W": 300
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 196,
+                          "H": 141,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 91,
+                          "H": 254,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 148,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 57,
+                          "W": 337,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 68,
+                          "H": 337,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 423,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 65,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 30,
+                          "H": 85,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 49,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 19,
+                          "W": 112,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 23,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 141,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 39,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 18,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 30,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 11,
+                          "W": 67,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 14,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 85,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 78,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 36,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 59,
+                          "H": 62,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 23,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 27,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 169,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 35,
+                          "H": 25,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 16,
+                          "H": 45,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 26,
+                          "H": 28,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 10,
+                          "W": 60,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 12,
+                          "H": 60,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x80",
+                      "Width": "80",
+                      "Height": "80",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 75,
+                        "W": 80
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 78,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 36,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 59,
+                          "H": 62,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 23,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 27,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 169,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 196,
+                          "H": 141,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 91,
+                          "H": 254,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 148,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 57,
+                          "W": 337,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 68,
+                          "H": 337,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 423,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 39,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 18,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 30,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 11,
+                          "W": 67,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 14,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 85,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 131,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 61,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 99,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 38,
+                          "W": 225,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 46,
+                          "H": 225,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 282,
+                        "W": 300
+                      }
+                    }
+                  ],
+                  "AvatarsImage": {
+                    "ImageName": "1VsDBtQx9BeAI7sBb4Et1w",
+                    "ImageGroupId": "5720520",
+                    "Namespace": "direct"
+                  }
+                }
+              ]
+            },
+            "ComputedFields": {
+              "PromoExtension": {
+                "PromoExtensionID": "1104541",
+                "Period": {},
+                "Type": 4,
+                "Href": "https://yandex.ru/project/direct/promocode/5000-new?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_NET_Ydirect_PROMOTION_5000&utm_term=---autotargeting&utm_content=yandex.ru|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0|",
+                "Description": "Бонус 5 000 ₽ на первое продвижение в подарок!"
+              },
+              "Options": {
+                "IsPicture": true
+              },
+              "Site": "direct.yandex.ru",
+              "Body": "Пополните счет на 10 000 ₽ и Яндекс добавит еще 5 000 ₽. Оставьте заявку на сайте!",
+              "ExternalData": {},
+              "Title": "Промокод на 5 000 ₽ для новых клиентов от Яндекс Директа",
+              "HrefText": "Яндекс-Директ",
+              "Permalink": {
+                "status": {
+                  "metrika_snippet": "{\"metrika\":{\"counter\":\"59203261\",\"goals\":{\"call\":\"make-call\",\"route\":\"make-route\",\"cta\":\"cta-button\",\"site\":\"site\",\"social\":[{\"type\":\"whatsapp\",\"goal\":\"whatsapp\"},{\"type\":\"telegram\",\"goal\":\"telegram\"},{\"type\":\"viber\",\"goal\":\"viber\"},{\"type\":\"vkontakte\",\"goal\":\"vkontakte\"},{\"type\":\"youtube\",\"goal\":\"social-youtube\"},{\"type\":\"odnoklassniki\",\"goal\":\"social-odnoklassniki\"}],\"custom_goals\":[{\"type\":\"stories\",\"goal\":\"stories-button\"},{\"type\":\"taxi\",\"goal\":\"call-taxi\"},{\"type\":\"booking\",\"goal\":\"booking\"},{\"type\":\"subscribe\",\"goal\":\"subscribe\"},{\"type\":\"send-to-phone\",\"goal\":\"send-to-phone\"},{\"type\":\"booking-open\",\"goal\":\"booking-open\"},{\"type\":\"share\",\"goal\":\"share\"},{\"type\":\"booking-confirmed\",\"goal\":\"booking-confirmed\"},{\"type\":\"booking-visited\",\"goal\":\"booking-visited\"},{\"type\":\"start-route\",\"goal\":\"start-route\"},{\"type\":\"visited-organization\",\"goal\":\"visited-organization\"}]}}}",
+                  "reviews_count": "717",
+                  "emails": [
+                    "ksugavrilenko@yandex-team.ru"
+                  ],
+                  "detailed_names": [
+                    {
+                      "type": 1,
+                      "value": {
+                        "locale": "EN",
+                        "value": "Yandex Direct"
+                      }
+                    },
+                    {
+                      "type": 1,
+                      "value": {
+                        "locale": "RU",
+                        "value": "Яндекс Директ"
+                      }
+                    },
+                    {
+                      "type": 2,
+                      "value": {
+                        "locale": "EN",
+                        "value": "Yandex Direct"
+                      }
+                    },
+                    {
+                      "type": 2,
+                      "value": {
+                        "locale": "RU",
+                        "value": "Яндекс Директ"
+                      }
+                    },
+                    {
+                      "type": 5,
+                      "value": {
+                        "locale": "RU",
+                        "value": "Рекламная сеть Яндекса"
+                      }
+                    },
+                    {
+                      "type": 5,
+                      "value": {
+                        "locale": "RU",
+                        "value": "Яндекс"
+                      }
+                    },
+                    {
+                      "type": 5,
+                      "value": {
+                        "locale": "RU",
+                        "value": "Яндекс Вебмастерская"
+                      }
+                    }
+                  ],
+                  "work_intervals": [
+                    {
+                      "day": 7,
+                      "time_minutes_begin": 600,
+                      "time_minutes_end": 1140
+                    }
+                  ],
+                  "address": {
+                    "bounding_box": {
+                      "upper_corner": {
+                        "latitude": "55736290",
+                        "longitude": "37591198"
+                      },
+                      "lower_corner": {
+                        "latitude": "55731658",
+                        "longitude": "37582987"
+                      }
+                    },
+                    "position": {
+                      "latitude": "55734062",
+                      "longitude": "37588694"
+                    },
+                    "geo_id": "213",
+                    "main_address": {
+                      "trimmed_address": {
+                        "locale": "RU",
+                        "value": "Москва, улица Льва Толстого, 16"
+                      },
+                      "street": "улица Льва Толстого",
+                      "house": "16",
+                      "full_address": {
+                        "locale": "RU",
+                        "value": "Москва, улица Льва Толстого, 16"
+                      },
+                      "locality": "Москва"
+                    }
+                  },
+                  "nearest_stations": [
+                    {
+                      "names": [
+                        {
+                          "locale": "ru",
+                          "value": "Парк культуры"
+                        },
+                        {
+                          "locale": "tr",
+                          "value": "Парк культуры"
+                        },
+                        {
+                          "locale": "uk",
+                          "value": "Парк культуры"
+                        }
+                      ],
+                      "id": "station__9858874"
+                    }
+                  ],
+                  "ogrn": "1027700229193",
+                  "rating": 8.2,
+                  "names": [
+                    {
+                      "locale": "EN",
+                      "value": "Yandex Direct"
+                    },
+                    {
+                      "locale": "RU",
+                      "value": "Яндекс Директ"
+                    },
+                    {
+                      "locale": "EN",
+                      "value": "Yandex Direct"
+                    },
+                    {
+                      "locale": "RU",
+                      "value": "Яндекс Директ"
+                    },
+                    {
+                      "locale": "RU",
+                      "value": "Рекламная сеть Яндекса"
+                    },
+                    {
+                      "locale": "RU",
+                      "value": "Яндекс"
+                    },
+                    {
+                      "locale": "RU",
+                      "value": "Яндекс Вебмастерская"
+                    }
+                  ],
+                  "publishing_status": 1,
+                  "phones": [
+                    {
+                      "country_code": 7,
+                      "subscriber_number": "2342480",
+                      "city_code": 800
+                    },
+                    {
+                      "country_code": 7,
+                      "subscriber_number": "5247171",
+                      "city_code": 843
+                    }
+                  ],
+                  "urls": [
+                    {
+                      "is_hidden": true,
+                      "value": "http://direct.yandex.ru/"
+                    },
+                    {
+                      "type": 3,
+                      "is_legal": true,
+                      "value": "https://www.facebook.com/yandex"
+                    },
+                    {
+                      "type": 1,
+                      "is_legal": true,
+                      "value": "https://yandex.ru/"
+                    },
+                    {
+                      "type": 7,
+                      "is_hidden": true,
+                      "value": "https://2gis.ru/moscow/firm/70000001067848263"
+                    }
+                  ]
+                },
+                "meta": {
+                  "permalink_type": 3,
+                  "id": "1128163976"
+                }
+              },
+              "CalloutList": [
+                {
+                  "ID": "34643476",
+                  "Text": "Защита от фрода"
+                },
+                {
+                  "ID": "34643477",
+                  "Text": "Стратегии"
+                },
+                {
+                  "ID": "34643478",
+                  "Text": "Полная статистика"
+                },
+                {
+                  "ID": "34643479",
+                  "Text": "Удобный интерфейс"
+                }
+              ]
+            },
+            "Resources": {
+              "Favicon": {
+                "UpdateTime": "1769634927",
+                "OriginalHeight": "120",
+                "OriginalWidth": "120"
+              },
+              "UrlClassifiers": {},
+              "Url": {
+                "EcomFeatures": [
+                  {
+                    "OneProductProbability": 0.0014724893,
+                    "ManyProductsProbability": 0.0064943368
+                  }
+                ]
+              },
+              "MarketModel": {},
+              "AutotargetingFeatures": {},
+              "MarketData": {}
+            }
+          }
+        },
+        "pcode_data": {
+          "promoExtension": {
+            "promocodeDescription": "Бонус 5 000 ₽ на первое продвижение в подарок!",
+            "description": "Бонус 5 000 ₽ на первое продвижение в подарок!",
+            "type": 3,
+            "clickUrl": "https://yandex.ru/an/count/WoGejI_zOoVX2Laj0xKO08Eih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZd8udT0V2Yg8u4K54rJGmW8DVbwaeE07WnOsh4Mrq-c4ah1MZOACY8oGZaWe1LcHXAeab8Ai8HY1Ty2KpGYoUqyvG4eb1o0m1o9OW477SOS6Tsa5Q3MuGoj0gy7TMG5Q3UxC2j1gS5TMW5Q3khq2j1hKwHMWrQ0kN81MWpea1MWrgCihGAj1tP42j1hKuHMWzKn9iFGjbitra2iWgy6TMSxNWG2c_51f10FcTEc-AREx3-497xpU0zV4atEX30WYdW6-ycWCgbMew88X7bk6q0mEDgZHpMiyXdjIvSORmOKl9TWqpkSRfYORm7x3Du0DNA-zSkAoOUlh2EdgD8YRIS2UQ3NipIHWJxGQjXj4Qhrgn36wlkirEeSZZaZ0NjX6HXekasQxPkN9m_U2nG2-DBWp2s3hWAxrTh7ovE5xWPMO8LhAj1VCBPoCWSKY5HMRMDXQsE6rMEOQcUooJaQ_kGAcOAOfR3q57MP2sMSLOyXD7Nl7f6UnCM8wHlSmvkK4QDW5dGCGJBT5sXPTmGPk63JrVYFzvGN85pVWpVjXlmKjomSlwwQ6_2_zvUNhU-alBr-VInkIb_nzHl1FozV6FDuv-TcOnpidJBENOfQPIsy0ZRgkwrZQp3my3797DyhGOBe78BtJFG3fBGKww-i8wUgycORoPR-7RSBrvD_brSBwCVFEWn4OVDEd_BU4ChGVWtvBwxf-BaFxCUYr_ykMlntAPxtNlHOHC2rm4YmcX4SvS96vKgbK2f70j87jTLt7mAoLtwPRU0LIu8O20HxyBtg3MFn77FeJj0h3uHLnQSLzxH2dJ6wxNNW1de0MzUrcSA0c7ZV-ysv1oeXI1lmUvIrDgCYoW4DmkafJ1A4olljjwK63aRg2J0Xw9Q7a98DH93Xx2WpbP_xIIg-1V080~2"
+          },
+          "ratings": {
+            "maps_rating_float": "4.1",
+            "maps_reviews_count": "717",
+            "maps_reviews_link": "https://yandex.ru/maps/org/1128163976/reviews/"
+          },
+          "sitelinks": [
+            {
+              "url": "https://yandex.ru/an/count/Wp8ejI_zOoVX2Laz0oKP01FjhdWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQX21KH3qYejAeaQnAILIYf2fLASYA95Jrsm5JDYF8xZtb02cL783078XW0GOTnnqQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV1mAOyaEb4GoOqwNxfipkFeGdVF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHjl11U-b63JE9zlc9fi0FiDtm0sSBtsoedBXgsl8wIhqo1k9W5xejMmDvE0FT5gs6uGgVMg4SVe-gxNw1oEE281Us4R6McuJ9hjcfKd3zyB5WFuqk3EB82j0xhMsyNAauVl1LPYXcWfqrumjt0o1XQBL5HiOc5hOOVNOfbhPBBBEXdzvWgOWfcciFKKT9W9PPzLZ24tTUmTavx5neZf6Dt3c9SJe64NT0v0CDqMQLjq1HkuOT3K-utqbnSWNzo0D--7_HQqB1-yh9iQyh_qbvUlxwM_l7nzBcr8NlBt6S4_BLyRytZdv6TZ7k-SCCrUYbbcBhq1DEgwhcDfC_FmCCWTtIX3W-aUWFHEzm2ajnJehAyZfAlpPXhAb_qUjWdNat-NLmlhnmruC0A3R_gK_vPGXlPZq6zfNTVFPMW_1htsVzdojqFvhFUwro82fWLEWiM4y2W7BZ9NAfLA8HAODh2zhkiOc2MKdqeIApmW1Mue41_yjdhxLeH7a_ZF52iK3rZ4jnNtjKjS_nZA1WoN4OKg2_vldVw1El10_dUao3w7w8BlCob7ovxYZKsc-7m0Zt1QfIY2iFAzMsteeOEf7K6c2NdLK6gIpH4aE37bTVAp_jBAK85y0W00~2",
+              "title": "Умная реклама",
+              "targetUrl": "https://direct.yandex.ru/ads/products/master-kampanij?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WoeejI_zOoVX2Lak0-KO0DFihNWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQA25HbP9gfI0hab2Ln5BLIg96bNgt0wPiHf3TUye1KYev084v4C4233gEEpIuIoj0gy4TMW5Q3UxE2j1gS6TMW5Q3kx82j1hKxHMWrQ1Ehm2j1dNX0hGQr24fGAj1NLu1MWtgZXIWrQ0Ehm2jPqg2fM-nRAw7N05P3UxCShuE133bXqeZ632dI_TDcTrz24_uuFKUk2QUd0jbG13n3F2LHsDGhK955mpns3A4Pd2mGOrkNkCnt9CgDzu8BdmfmQPnFjymDTa0zXk-0MpWUksL4vSDMrz7I5UdGTnC0lP4gs5l9W5xejMmtI1IwrKZZj7rNQ_HEHnnH0BsmZOoqd2PDDirAqyUlXSi1l2bmPrP05i7TAstYvKd3zyBhCGCqLAclM1kuMGCB1QfgDZ4mjR23g_5CjV8P9TrClhD5J05CqrXwodeC1FAFgiOGsxgs3icFOkD4TCnkeSnBoT0moxe781WkYtIjkWADd33eAdt6-alBq2-k05ltW_xBMXPFdXPDpNaV-alBr_VItzv-VfSsf2yvEypWdzQlZRcySx9pyOytZbXchqKiynSUWDer7LTnz9cvk5Xa3kwKOO6qpq0wPtk0KXlAT1PNqT8L-VDD9Gl-pri4wud_owl5jQFVJmOWS4tVSf_IoX3-p7ejxIkw-Soj1-3Nlk_RFdReNpMUzrh4G7J0YV1Oa9ub0CNcIkLIgKG2KmRs5xNTGpC4SgV1SQ854Y16me47lm-UeDMX4UF-C_OAXINLyIt5VUrIrpm6ChA2vSHTYeB3c-T7e0wy03rxxK5zT6asCzUoA-TJ65p049mj4fH14tbU-VRq5E3apg2d0XvAQ7Kf80H93ZsbDV9__obbLuP-0G0~2",
+              "title": "Обучение Директу",
+              "targetUrl": "https://yandex.ru/adv/edu/direct-start?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WoKejI_zOoVX2Laj0xqO08Eih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQ9563I2GL6GafBGqP9P6eKQM2APiHPFUUSe2KIWv0O0v4i023ZkCE3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmC1JFcXqWW6pEdIVLDcTn_24pvulGUkYIVdGXaGH3m3VENH65IhKD45Gpos3A4P76nGevlNU0ptfCgDDu8BNqgmQPpFDqnDDe3zXcy06xXUU-N4PSFMrn7IrMaGDvE0FT5gs9j9m9veDMmtYDHwrOXZT7tNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5Tw-rYvSd3zm8hCKEqb6alc5iu6GEBHIegDh6mjR33Qx7CDJBPPPsCVdC5JC5CKzXw2ZhCXBBFAiQGcphsZadFOcF4T8pkOSpB2T2m2pe789XkYxGjke8Dt31ewlr6-iiBa2zkm9ltmtuBMfOFNjPD3VbV-ilBr_VINrw-FfSs92_v-upWdvQlZNcyS_ApCOztJfXcByKiCvVU01frNTUnj9bvU1ZaZcwKeS5q3q1wfti0qbiATDRN4TBLUJCDvSj-3zk4wyc_owk5zMCL7ep0u9i-vRybbA7z6FHRMjVrSndQZq6l_L-s_ErGFkkzxhM8W6c1as0n8JpAWOlCbKgbKeW4fWrih-iw1cQj_04qAV02AN13WHxyDdfxLeJ7ZlZFr2eKZrV4jnNtjKjSxnZAnWkN4NKg2_vkdVv_El30zE_QWdfN3By5ziBwnMGAcmCGWgDLYY9eAjyxtuQU6fpK4UH4o4i9fIO5Z231iQUyJlxdBwtqoi0d~2",
+              "title": "Кейсы",
+              "targetUrl": "https://yandex.ru/adv/solutions/cases?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WoSejI_zOoVX2Lao0yqO06Cih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXEdDKgJcSEP22VeAGagBEt8uwdLEdrCvH5QBcg0h9o07DeJUUEvtI75MX82KhKWxSVkPtFfr2eSvdZXb7pX_d_JCqHFsf2WsT-34g-W5QWk1dXGKfVYZG08K6FozIKF3p8aMB7mnQ11LHXwnMf2i94ZMgrBmTC6KpWkpUKmwGKia12Co121PWq77SeS5TMW5Q3UxG2j1gS7TMW5Q3ExC2j1hSbHMWrQ1khm2j1dLw1MWrg0iNeDMW3aa1MWtgyWhGQb1tf02j1dLu1MWzKn8iVOjbSpta2iXgS6UMytKWW2a_L1h1W3bTkc_AxEv3UC87h_V0DV7aN2W3WeXdWAyy6eDg5IgwO8Z7bY4qWuCDQdJp6e_XdbIvyKPmuKi9Detp-OQfoGQmt_0DO0FNQw-Sk6pO-Zf2kZeDucOIi2TQ3Nip2TWJhORj1f5QhnfnZAxlUetEuOWZ4h0Njf6HXikasQvPUVBmlM0nW2yDxim2s3gWQxrTh3nv-5vW9MQ8bZBj1NCB9sDWiKX5nIOMjXPsU2sMkKOckwoJqM-kW2cOQGfRJq67cL3sMSKOSbF7tZ7fMMoCc8xHFOnvEG4QTa7d00JJRP6sHLUmWHi6JRtVI7zv0VB53NZpVjXlGSlomSkwgI7_Itzv-VfU-ilBr-VIXkGbVvyH_DFojJ6FTqv-DkRnpWdJxAMOPURI6q2ZhkiwbZOp3m-3tD6DCZIOxW58xtGFG7fBWSxwEaAwEc-ceNpPxs6RS3tvTtcri7uCmuCH67pJf_otX3Aq7uD-I-kwVYv3-p7ejV_BbhyTocUzrxqM4J0jS18i9eH7EN2HkLAfL0gHmBI1xNLTny1yAZ_M74mRa08t50WV_5vwerQ4Hv7up-Wg5BTNnBSLzxLBNFGOojeBbn5wAWjERvsUW3fuu1yl3Iduqze2fZOftQ2zuu5Cfd1yW8rmLAKeWcRbUwVQqBE3gnr1pWbvsL1gKimH93XYoklaV_sbbQ4O-0G0~2",
+              "title": "Специалисты",
+              "targetUrl": "https://yandex.ru/adv/contact/freelancers/?utm_source=yandex_rsya&utm_medium=cpc&utm_campaign=RU_RET_NET_Ydirect_DYN_EPK_Hub_no_Clid_all_30_05&utm_term=---autotargeting&utm_content=search|ph|205599838214|ret|205599838214|cid|700843585|gid|5599838214|aid|17090061806|adp|no|pos|none0|src|context_yandex.ru|dvc|desktop|cr|0|ad|0&yclid=5264705212151234559"
+            }
+          ],
+          "sprav_data": {
+            "address": "Москва, улица Льва Толстого, 16",
+            "address_house": "16",
+            "address_locality": "Москва",
+            "address_street": "улица Льва Толстого",
+            "nearest_station": "Парк культуры",
+            "urls": "[{\"Type\":3,\"Value\":\"https://www.facebook.com/yandex\",\"Legality\":0},{\"Type\":1,\"Value\":\"https://yandex.ru/\",\"Legality\":0}]",
+            "work_intervals": "[{\"day\":7,\"time_minutes_begin\":600,\"time_minutes_end\":1140}]"
+          },
+          "body": "Пополните счет на 10 000 ₽ и Яндекс добавит еще 5 000 ₽. Оставьте заявку на сайте!",
+          "domain": "direct.yandex.ru",
+          "punyDomain": "direct.yandex.ru",
+          "title": "Промокод на 5 000 ₽ для новых клиентов от Яндекс Директа"
+        },
+        "renderedDirectAssets": [
+          "domain",
+          "favicon",
+          "title",
+          "promo"
+        ]
+      },
+      {
+        "bs_data": {
+          "deviceType": 5,
+          "blockId": 3948,
+          "bannerLang": "1",
+          "punyDomain": "gitverse.ru",
+          "blockFavicon": "0",
+          "bannerFlags": "age16",
+          "isSmartTga": false,
+          "count_links": {
+            "abuseUrl": "https://yandex.ru/an/abuse/WCuejI_z8oVX2Ldz3GO0auee9GoWurJ9ep6eLg6Y2uPuR1b2CpXO6pr8SgugR14ogWW7Cmu5p6x3TWEJho4hcn5azvvoW9HA3a1W3aIm08DCMOrCTbadezEwhkinOXf6l9m03RkWSm22wRP8sw8hsC0DWwOU3bna8BtJYBxyTxKVadwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_DWOlCbKgbKeW4fWrivHVbNrOzU08fS4E12Fot7f04F4_HBxky3tNt8bQl7CUdCbcIYGkjGW00~2",
+            "viewabilityTracking": [
+              {
+                "url": "https://yandex.ru/an/tracking/WYeejI_zOoVX2Lc80UKG00CWUin3D3q1SmK4T1z2x4E4FOX63wBicv0RyUIaF872jjEOOQViztR8Itrdx80MBNsx3lXCWDZdaA7JwEsyRPWFV_IIn2lR3-40FdXfyOyaanzs3uAH7iPUAxBGEyJCJC_CWzWFm3Nnv5me0uA8Pu2l4WRGSQhaqHXKgr3H1KCyjWoX6HmiVVErqOCavwh25Y6ZYd0mO-0WTc1GoOPnayU-GOn30RFJCFOrv6QIA3ssr8mz8TDNhKOiKnEUyUiAr6l0owSaRZLSfgvdTLtNQ_GIJk00k2RMh3nv-5wm6C2N1dTc0MmTqBNU8hJuHv993FhIIKaRcvlOUtY1My89R65luMGCB1QfgDZaopGgcn5azvvoW9HA3a1W3aIm08DCMOrCTbadevjGDFAXuO0kN2WKeIbicphsZacFmiQ8wHZTmvXXlii9qB0BEWSWc6wBj2swWWtSC6ZgONroqNRymykrj-y7Wu17zhyD52hvtWOAbNmkYpmaVwUzF9dxMW-PAFcp7Z9HacdsOMQPkTm3QDHrNSVIPXaQZ0CN6KZlE72HWVJM-rLHZFBalwlzaFJZ1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhFTwp1m8EN2HkLAfL0gHmBI1JMUL_mS14qPGAfNA3lpOe010tlI5aLkNGWi_uQ2eEsEcBiXQ8zqaIsqxW3dNKVOY9oKHh4-HDQ9wFn7G_m00~2?action-id=25",
+                "time": 5000
+              },
+              {
+                "url": "https://yandex.ru/an/tracking/WYeejI_zOoVX2Lc80UKG00CWUin3D3q1SmK4T1z2x4E4FOX63wBicv0RyUIaF872jjEOOQViztR8Itrdx80MBNsx3lXCWDZdaA7JwEsyRPWFV_IIn2lR3-40FdXfyOyaanzs3uAH7iPUAxBGEyJCJC_CWzWFm3Nnv5me0uA8Pu2l4WRGSQhaqHXKgr3H1KCyjWoX6HmiVVErqOCavwh25Y6ZYd0mO-0WTc1GoOPnayU-GOn30RFJCFOrv6QIA3ssr8mz8TDNhKOiKnEUyUiAr6l0owSaRZLSfgvdTLtNQ_GIJk00k2RMh3nv-5wm6C2N1dTc0MmTqBNU8hJuHv993FhIIKaRcvlOUtY1My89R65luMGCB1QfgDZaopGgcn5azvvoW9HA3a1W3aIm08DCMOrCTbadevjGDFAXuO0kN2WKeIbicphsZacFmiQ8wHZTmvXXlii9qB0BEWSWc6wBj2swWWtSC6ZgONroqNRymykrj-y7Wu17zhyD52hvtWOAbNmkYpmaVwUzF9dxMW-PAFcp7Z9HacdsOMQPkTm3QDHrNSVIPXaQZ0CN6KZlE72HWVJM-rLHZFBalwlzaFJZ1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhFTwp1m8EN2HkLAfL0gHmBI1JMUL_mS14qPGAfNA3lpOe010tlI5aLkNGWi_uQ2eEsEcBiXQ8zqaIsqxW3dNKVOY9oKHh4-HDQ9wFn7G_m00~2?action-id=26",
+                "time": 10000
+              }
+            ],
+            "sitelinks": [
+              {
+                "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+              },
+              {
+                "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+              },
+              {
+                "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+              },
+              {
+                "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+              }
+            ],
+            "tracking": "https://yandex.ru/an/tracking/WYeejI_zOoVX2Lc80UKG00CWUin3D3q1SmK4T1z2x4E4FOX63wBicv0RyUIaF872jjEOOQViztR8Itrdx80MBNsx3lXCWDZdaA7JwEsyRPWFV_IIn2lR3-40FdXfyOyaanzs3uAH7iPUAxBGEyJCJC_CWzWFm3Nnv5me0uA8Pu2l4WRGSQhaqHXKgr3H1KCyjWoX6HmiVVErqOCavwh25Y6ZYd0mO-0WTc1GoOPnayU-GOn30RFJCFOrv6QIA3ssr8mz8TDNhKOiKnEUyUiAr6l0owSaRZLSfgvdTLtNQ_GIJk00k2RMh3nv-5wm6C2N1dTc0MmTqBNU8hJuHv993FhIIKaRcvlOUtY1My89R65luMGCB1QfgDZaopGgcn5azvvoW9HA3a1W3aIm08DCMOrCTbadevjGDFAXuO0kN2WKeIbicphsZacFmiQ8wHZTmvXXlii9qB0BEWSWc6wBj2swWWtSC6ZgONroqNRymykrj-y7Wu17zhyD52hvtWOAbNmkYpmaVwUzF9dxMW-PAFcp7Z9HacdsOMQPkTm3QDHrNSVIPXaQZ0CN6KZlE72HWVJM-rLHZFBalwlzaFJZ1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhFTwp1m8EN2HkLAfL0gHmBI1JMUL_mS14qPGAfNA3lpOe010tlI5aLkNGWi_uQ2eEsEcBiXQ8zqaIsqxW3dNKVOY9oKHh4-HDQ9wFn7G_m00~2",
+            "linkHead": "https://yandex.ru/an/count/WNWejI_zOoVX2LaE0LKB0ECIIItIjkWADd33884g7aIZ1r7sErvlkCFrEraTHw-pqpbPdwENC82EKoMFng1QXOek6EAnPGZDu62P7Rv17Ro-3PpbPkjxs3GolJPbi8rNgLGgbHf8VB7POQDxlYmMr3US9oc4Wna31t406xWQnad0dcWrxCqaO4-q6hQ-XioasJvfj9uccw5nWXOdKyG1X7q0sIm1w5imc9TEIjhOtCJUmmlS5ax6m6AHYefDB6o_JAEo6K5sxoa7IAda00JcG0GBCCYKrSXabtKokgUWqxgkOsF47iPCmuWhQ7KTnhkS00sxe7C0WkcsIDkYAzZ03OEc7hEv-zyOGAEkwpgMDZCF3uFSqOrRx9RqW931YmXeE0fqDWSkKeW4fWqiAByLnn9CG0hSK20M_78cZ-622mJE3F8VPJsFHFanJED4qVmq8MJKvix_NzkQZoLgfNwYJb1fgoavmDr-DtTwMc6XmA6wPjsn75vqG2AK~2",
+            "viewNotices": [
+              "https://yandex.ru/an/count/WNWejI_zOoVX2LaE0LKB0ECIIItIjkWADd33884g7aIZ1r7sErvlkCFrEraTHw-pqpbPdwENC82EKoMFng1QXOek6EAnPGZDu62P7Rv17Ro-3PpbPkjxs3GolJPbi8rNgLGgbHf8VB7POQDxlYmMr3US9oc4Wna31t406xWQnad0dcWrxCqaO4-q6hQ-XioasJvfj9uccw5nWXOdKyG1X7q0sIm1w5imc9TEIjhOtCJUmmlS5ax6m6AHYefDB6o_JAEo6K5sxoa7IAda00JcG0GBCCYKrSXabtKokgUWqxgkOsF47iPCmuWhQ7KTnhkS00sxe7C0WkcsIDkYAzZ03OEc7hEv-zyOGAEkwpgMDZCF3uFSqOrRx9RqW931YmXeE0fqDWSkKeW4fWqiAByLnn9CG0hSK20M_78cZ-622mJE3F8VPJsFHFanJED4qVmq8MJKvix_NzkQZoLgfNwYJb1fgoavmDr-DtTwMc6XmA6wPjsn75vqG2AK~2=Wa4ejI_zOoVX2LcP0PqH0ADXWhxMCgVgR8KgmYorpZn4qnCmjqZReYlOm0s31Ahu1BZUC06zcOGHAuY0jm82kWaS988WA9NA0xhGF8LznIMHk-DYm9RcAUph2qM51Sm0hMz2RiIJa_842jjEOuQTij_R8I_rdJ7q-LpkxDb-vyuRxdoLpGYoUqyvG4eb1o0m1o9OW477qG4jMlfs7J0Y7nyV7vyI3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmah7mOpqB5oSxhqaiGhsm_X03vulGUkYIVdGXaGH3m3V9qmSIDP5DHa0zXl-E9GmEmM3vE0FT5gs9j9m9veDMpfgPgo9sJwgjM8cRgUrNLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRU8XHrUYsMUsT8_AfHlhe0fc6aAMqz1XvbGjj3rnIo6tDInTqnw53P6JCVe7iOCyrrEW8PTq3a0mNIPJQx_ZGqKydrnqNRymykrj-y7Wu17zhyD52hvNjhBaxclzP29aZ_hmymolVGobxiC3SQ1YmoaTnouo41ww-i85m-zcKRqPUzNHJ7Aa_-kzaFIZnCWMzHhz5_FH8LA5zXlQLrdOg92fGlijN-I2mtFxBEUrhehiQA02_oFe7aqRvkbAEaalOkGQAI6owd2LZpmsDHfJ4_53REcEEMtP1S1~2"
+            ],
+            "advertInfoUrl": "https://yandex.ru/ads/advertiser_info/WCuejI_z8oVX2Ldz3GO0auee9GoWurJ9ep6eLg6Y2uPuR1b2CpXO6pr8SgugR14ogWW7Cmu5p6x3TWEJho4hcn5azvvoW9HA3a1W3aIm08DCMOrCTbadezEwhkinOXf6l9m03RkWSm22wRP8sw8hsC0DWwOU3bna8BtJYBxyTxKVadwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_DWOlCbKgbKeW4fWrivHVbNrOzU08fS4E12Fot7f04F4_HBxky3tNt8bQl7CUdCbcIYGkjGW00~2",
+            "falseClick": "https://yandex.ru/an/count/WeKejI_zOoVX2Ldz0RqJ0ADaZhxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuIgR4MJtddA0b4eEG60EHB00WuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq3hcP9WwLiic-iXLq1MWpkpdAy9Any6Cz2nSdEwz9B4AziFuG0-UBs7Hk-1Q-B9kL06117F05zvD0RLAbHqmH2FBKDe1WSRrEZcDHx3FQbouprXuaQoAEXylc5giW7iDtm3sC35eO3PRTZwEiB5GmtYPXAm9reDUpC9s1EjXYqXqrUjHipKzQokwtgDpk688nAm5xQHaORBfDckMNdoyBrWCO0l3UxC0jWwe6kzHLeu6GEBHIegDh6mjR33Qx7CDJBPPPsCVdC5JC5CKzXw2ZhCXBA5hYzcCUIcZhrZqgEmCM8wHlSmPfZlSW8qx8BE0GYcso9jYwvW0pSCcdg_iO52lYyksev_UBdszlrW4F38_hU1GYNVItjvClUr7Z9HycTzc5ccbrxcSW-WKTTr7KkRcOU7GUxeHXaQZ0CN6KZlE72HWVIM0ftrTOIBXzvC8_gozwkY6EN9VrVx8Ud72P0jwZNwhsUYGgKBxBUqhZCnKQ7I1VRQFyc5XcVsMPy35ob40jC6NvH_1w-A3P02DnG84VmRYTjFAlqajWGnTUr0O6uLJWYYmlB3g4AN8xCyonxD1iXuz8mMg6uyICKlisUAH2jnZ3ZXHH6s-0e0~2=WXmejI_zOoVX2LbW0NKG0AFVUhxMCW_Hz0JCBTAsw0esSCCWWIe-0QutJ41l9c742YBWhO20RW87YI08IgNoW2uqJs5VSKdaxhWOiALv2llwGb5X0JD02tq-bpjxjj-vyuOxNsKpWkpUKmwGKia12Co121PWq754vEFZu-DJei5TMW5Q3UxG2j1gS7TMW5Q3ExC2j1hSbHMWrQ1khm2j1dLw1MWrg0iNeDMW3aa1MWtgyWhGQb1tf02j1dLu1MWzKn8iVOjbSpta2iXgS6UMypLXvSDW1ZfMRawNNf9uPViX7C07h_VGw3rmJJmv5yg08E8PuEk4YHl9eg0c6y1-mnU70cQtOUlh21SFDOYRIS2UQ3NipIHWJxGQjlHKJTaJCdtLQiHCNS_gkgxNw1oEE281Us4R6McuJ9hjcfKd3zyB5WFuqk3EB82j0xhMMyJ23g_5CiziwHyLoZTNm1JCD8Mjfw33J2XRwFfY5aDkwjWx9ZqA6oEcOtGFOuRvBYT0moxe781Wkimcr__61WhvlhXeE_xXvThRzuD1m2FxtmOAbNmlxUN9tDTwo4J9d_LXPfcvt6LeC0vSP22zuy151j9RNqUuUEZDDA8lUxygYb6U_7Ur7v9-d03PebwZ_tecAbIwm7vBwpeJ4nKgNM2l_PDSQ7Xcd_Kq26irFi0B2Fopv9jthxPPY9YaGufcDR3NgW6AGM15ybJw_r9UDwS0~2",
+            "empty": "https://yandex.ru/an/resource/spacer.gif?",
+            "url": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVqnwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_zarneU6QVzJbmaRbIgLGAaS2qWUrrNSV0J5D-4I0pU05Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+            "count": "https://yandex.ru/an/count/WcCejI_zOoVX2LdM0QqI05CYXhxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuIgR4MJtddA0b4eEG60EHB00WuuZ8XyV7n-V4WtkqWhGQd27Le1MWxkp0hGQt9aLeDNWhgm0hGPrUmLeDQZJAq2hGLsu0Aq6TKWAq6fGbrU0LeEw8mLeDQZ3Aq3hcP9WwLiic-iXLq1MWpkpdAy9Any6Cz2nSdEwz9B4AziFuG0-UBq7headvq8P44Gy0tpbqHXKgr3H1KCyjWoX6HniKAERrtWCzwJAZVU4YHl9eg3p-OQfoGQmt_0DO0CNXm9cjs7hwmWN3pM8cqd0dcWrxCqaO4-q6hQ4J5-r6Z5JrxEwhkirEeSZZaZ0NjX6HXekasQxPkN9m_U2nG2-DBWp2s3hWAxr5cdXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyB-tboTpNUiX4oP_rOMOvW4PTrtKiRMOU7WQvenjnu283wIq5EaiZ-hBtgw8OvSb_L_iXwSS9a2tgDVglPw92fGlijt-I2mtFxBCvS952931j4AZyJqnRb40At50W4VnRYBFVZf_44msMHXu4HglmFT0g3BwDAciUcS4jzaGpG8QXPdG-nKOttl_acQUYbOZLfF2YQX8F1G00~2=Wa8ejI_zOoVX2Lc80QKH02DYXBxMCgVgR8KgmYorpZn4qnCmjqZReYlOm0s31Ahu1BZUC06zcOGHAuY0jm82kWaS988WA9NA0xhGF8LznIMHk-DYm9RcAUph2qM51Sm0hMz2RiIJa_842jjEOuQTij_R8I_rdJ7q-LpkxDb-vyuRxdoLpGYoUqyvG4eb1o0m1o9OW477qG4jMlfs7J0Y7nyV7vyI3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmah7mOpqB5oSxhqaiGhsm_X03vulGUkYIVdGXaGH3m3V9qmSIDP5DHa0zXl-E9GmEmsR7qTuUAX1d4p2TWJhOQzcGJiYLR3bfwgANj2fgzQZPYfwrbTr_KQdSCHHoHWBsmZ8msNIRDTi_BauNl1OW1V6joP1R1rGDTwYrZOuRLOvfaj_QD2-UOAc8APfh3r57IO2MKBNL_COiXD7Nl7f4TXOyHqZEvXp33VvGHes0MT0n1Cbzda-j_OG27V5nTjnp-yN7lxVZ08U6J_sq2Xak-blJoP-reFcIZvipxCBDDBBtEvoz1W7BZ8G7h7WOiCfBU-Zd3nq9jfH5_sVbKKeppvxse_9Fqu0R95lKR_zKnKg7I1_PRMTIOcAbIwm5xx9xdGyCm-w-ci0ZuVK108_7wWUVHgcuMWIJgac5O3VgqQk1W4RZ1FfVylvNLp2W00~2",
+            "linkTail": "=WaKejI_zOoVX2LcF0RqH02DYXBxMCgVgR8KgmYorpZn4qnCmjqZReYlOm0s31Ahu1BZUC06zcOGHAuY0jm82kWaS988WA9NA0xhGF8LznIMHk-DYm9RcAUph2qM51Sm0hMz2RiIJa_842jjEOuQTij_R8I_rdJ7q-LpkxDb-vyuRxdoLpGYoUqyvG4eb1o0m1o9OW477qG4jMlfs7J0Y7nyV7vyI3UxI2j1gS8TMW5Q3kxC2j1hScHMWrU2kh02j1dLx1MWrgDChGAj1NRW0hGPrI0hGQb2NLu1MWxeZ1MWrgCChGEkPac3fMooRwo5NG5Q3ExEShmah7mOpqB5oSxhqaiGhsm_X03vulGUkYIVdGXaGH3m3V9qmSIDP5DHa0zXl-E9GmEmsR7qTuUAX1d4p2TWJhOQzcGJiYLR3bfwgANj2fgzQZPYfwrbTr_KQdSCHHoHWBsmZ8msNIRDTi_BauNl1OW1V6joP1R1rGDTwYrZOuRLOvfaj_QD2-UOAc8APfh3r57IO2MKBNL_COiXD7Nl7f4TXOyHqZEvXp33VvGHes0MT0n1Cbzda-j_OG27V5nTjnp-yN7lxVZ08U6J_sq2Xak-blJoP-reFcIZvipxCBDDBBtEvoz1W7BZ8G7h7WOiCfBU-Zd3nq9jfH5_sVbKKeppvxse_9Fqu0R95lKR_zKnKg7I1_PRMTIOcAbIwm5xx9xdGyCm-w-cgvecY3G49_8MWURHicuNOIJga25S3XQqQy1W4RanFfGspGd5A2iak0W00~2"
+          },
+          "uniq": "7422986624556622895",
+          "hidePermalinkInfo": false,
+          "vmap_request_id": "0",
+          "isOffer": false,
+          "semanticCorrespondenceType": 0,
+          "yclid": "4845621395560071167",
+          "templateId": 320,
+          "clientType": 1,
+          "bmcategoryId": "200006449",
+          "pageId": "265853",
+          "isMulticardsDisabled": true,
+          "clientTin": "7707083893",
+          "disclaimersProto": {
+            "Disclaimers": [
+              {
+                "CanBeHiddenInKebab": false,
+                "Disclaimer": "16+",
+                "Size": 0,
+                "MarkupFlags": [
+                  10024
+                ]
+              }
+            ]
+          },
+          "minDisplayNewMarketRating": "40",
+          "sitelinksType": 2,
+          "isNeuralPicture": false,
+          "permalinkId": "0",
+          "oid": "705029630",
+          "bannerWidth": 0,
+          "hitLogId": "218765031360174178",
+          "clientAlternativeTin": "",
+          "addHyperlocalAsset": false,
+          "domain": "gitverse.ru",
+          "clientName": "ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО \"СБЕРБАНК РОССИИ\"",
+          "creativeId": "C0",
+          "bannerCategories": [
+            "200006449"
+          ],
+          "popup": false,
+          "domainId": "29834923",
+          "bidreqid": "218765031749458018",
+          "orderTags": [],
+          "order": {
+            "goal_ids": [],
+            "delivery_data": {
+              "meta": {}
+            },
+            "counter_id": 96010437
+          },
+          "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167",
+          "position": 2,
+          "impId": "10",
+          "warning": "16+",
+          "adId": "72057611460863776",
+          "geoDistance": "",
+          "callToAction": {
+            "url": "",
+            "value": "Подробнее"
+          },
+          "algId": "3",
+          "resource_links": {
+            "direct_data": {
+              "textName": "https://yandex.ru/an/count/WruejI_zOoVX2Lcl0uKQ0FFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGV-pmFJe1iKQ_HVpqJ5IfTOB-bTPs9YGgLBh3N_aakD3opp_eSkCXSgLGgXKXWsi3skgvZOAefVnSt7oqW1Mue42RyYF2RweFN5j7iVt4Wst7o_yOoy8r1L14H9gBbc1qPymJQbOx_Sjmd_Ey_Q7xC0pzrV5QKpxne1dovez_wNhSVHxO6OU7DybYhbBNFH8eF0_03KrHu8aWAy-zzXJm09a0Ey7p688FIQ_H1rV58AR_udYcWIYl7CBG8~2",
+              "targetUrl": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVqnwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_zarneU6QVzJbmaRbIgLGAaS2qWUrrNSV0J5D-4I0pU05Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+              "sitelinks": {
+                "href4": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVU_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhosyGS6W2am0q50YRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+                "href2": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVO_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhorpQs8W1Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+                "href1": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVL_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhofzWHWWyW1Mue42RyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+                "href3": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVrtXm0cIBUet-wvceKEa2-osjwqnCLAXqWRtsJtAXuPbzrkV0HUPAfL8fH0BJ1hRNTHq3CqtvWw8IK0HIu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2"
+              }
+            }
+          },
+          "bannerLanguage": "ru",
+          "requestRegion": "ru",
+          "sourceDomain": "maps.yandex.ru",
+          "phraseId": "205678928504",
+          "liked": "0",
+          "productType": "direct",
+          "campaignid": "705029630",
+          "backgroundColor": "",
+          "brandType": 0,
+          "agencyClientId": "103862639",
+          "geoDistanceRegular": "",
+          "hidePicture": "1",
+          "isTurboBanner": false,
+          "directTitle": {
+            "url": "https://direct.yandex.ru/?partner",
+            "title": "Реклама"
+          },
+          "hideExternalData": false,
+          "eventHash": "12026324300643651912",
+          "titleUrl": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVT-312P0jwZNwhsUYGgKBxBUqhZCnKQ7I1VRQFyc5XcVsMPy35vahbKgb40bC6zXUrtKCp3Jb5pznJG2am0q50YRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2?q=",
+          "clientRegion": "",
+          "isNeuralVideo": false,
+          "isAbandonedCartBanner": false,
+          "clientId": "110547263",
+          "isGeoPinPage": false,
+          "closeCounter": "https://yandex.ru/an/count/542/5736419724711789763",
+          "sourceInterface": "uac",
+          "bannerHeight": 0,
+          "skipPictures": "1",
+          "pathUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+          "erid": "j1SUmLDrS4mrsUxyW",
+          "isErir": 0,
+          "sad": "",
+          "S2SEnabled": false
+        },
+        "direct_data": {
+          "banner_proto": {
+            "GrutObject": {
+              "status": {
+                "materialized_metrika_counters": {
+                  "manual_counters": [
+                    "96010437"
+                  ]
+                },
+                "materialized_fields": {
+                  "href": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+                  "sitelink_set": {
+                    "sitelinks": [
+                      {
+                        "href": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+                        "title": "AI-ассистент",
+                        "description": "Для разработчика, основан на больших языковых моделях"
+                      },
+                      {
+                        "href": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+                        "title": "IDE",
+                        "description": "Интеграция с популярными IDE"
+                      },
+                      {
+                        "href": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+                        "title": "Платформа GitVerse",
+                        "description": "GigaCode распространяется через платформу GitVerse"
+                      },
+                      {
+                        "href": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting",
+                        "title": "Подключить",
+                        "description": "Попробовать бесплатно"
+                      }
+                    ]
+                  },
+                  "language": 1
+                },
+                "moderation_status": {},
+                "target_url": "https://gitverse.ru/features/gigacode/"
+              },
+              "spec": {
+                "phone_view": {
+                  "spec": {}
+                }
+              },
+              "meta": {
+                "direct_type": 1,
+                "direct_id": "17422935840",
+                "flags": "1024"
+              }
+            },
+            "AvatarsMetaData": {
+              "ImagesInfo": [
+                {
+                  "AvatarsBasePublicUrl": "//avatars.mds.yandex.net/get-direct/5161143/tl8nvqwYcy64HOueOaft3w/",
+                  "ParsedMdsMeta": {
+                    "AverageColor": "#4B1C78FF",
+                    "ColorWizBack": "#2C1757",
+                    "IsClipart": false,
+                    "IsPhoto": true,
+                    "Crc64": "6049070776935593798",
+                    "ColorWizButtonText": "#CCCCCC",
+                    "ColorWizButton": "#5C4D7A",
+                    "BackgroundColors": {},
+                    "SecondColor": "#000000",
+                    "ROrigSize": {
+                      "Y": 1201,
+                      "X": 1200
+                    },
+                    "MainColor": "#201050",
+                    "ImageQuality": 0,
+                    "AverageBorderColor": "#2C1757",
+                    "Sha256": "31321aaecc3f0bf154ac481eb3806e3d73331354fd8448bc2d7cfec9e6a83cdd"
+                  },
+                  "ImageType": "regular",
+                  "Images": [
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 82,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 30,
+                          "H": 84,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 1,
+                          "H": 149,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 77,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 20,
+                          "W": 113,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 21,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 150,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 327,
+                          "H": 187,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 119,
+                          "H": 337,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 3,
+                          "H": 598,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 309,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 80,
+                          "W": 452,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 83,
+                          "H": 449,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x600",
+                      "Width": "600",
+                      "Height": "601",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 600,
+                        "W": 600
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 897,
+                          "Y": 489,
+                          "H": 280,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 898,
+                          "Y": 178,
+                          "H": 505,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 898,
+                          "Y": 4,
+                          "H": 895,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 897,
+                          "Y": 462,
+                          "H": 311,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 119,
+                          "W": 676,
+                          "Y": 0,
+                          "H": 899,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 898,
+                          "Y": 124,
+                          "H": 672,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y900",
+                      "Width": "899",
+                      "Height": "900",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 899,
+                        "W": 898
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 2,
+                          "W": 898,
+                          "Y": 490,
+                          "H": 281,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 179,
+                          "H": 506,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 4,
+                          "H": 896,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 2,
+                          "W": 898,
+                          "Y": 463,
+                          "H": 311,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 119,
+                          "W": 677,
+                          "Y": 0,
+                          "H": 900,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 899,
+                          "Y": 125,
+                          "H": 673,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x900",
+                      "Width": "900",
+                      "Height": "901",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 900,
+                        "W": 899
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 327,
+                          "H": 187,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 119,
+                          "H": 337,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 3,
+                          "H": 598,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 599,
+                          "Y": 309,
+                          "H": 208,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 80,
+                          "W": 452,
+                          "Y": 0,
+                          "H": 600,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 600,
+                          "Y": 83,
+                          "H": 449,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y600",
+                      "Width": "600",
+                      "Height": "600",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 600,
+                        "W": 600
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 2,
+                          "W": 1197,
+                          "Y": 653,
+                          "H": 374,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 238,
+                          "H": 674,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 5,
+                          "H": 1195,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 2,
+                          "W": 1197,
+                          "Y": 617,
+                          "H": 415,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 159,
+                          "W": 903,
+                          "Y": 0,
+                          "H": 1200,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 1199,
+                          "Y": 166,
+                          "H": 897,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x1200",
+                      "Width": "1200",
+                      "Height": "1201",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 1200,
+                        "W": 1199
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 299,
+                          "Y": 163,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 60,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 1,
+                          "H": 299,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 299,
+                          "Y": 154,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 40,
+                          "W": 226,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 42,
+                          "H": 224,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 300,
+                        "W": 300
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 449,
+                          "Y": 245,
+                          "H": 140,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 89,
+                          "H": 253,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 2,
+                          "H": 448,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 449,
+                          "Y": 231,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 60,
+                          "W": 339,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 62,
+                          "H": 336,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 450,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 82,
+                          "H": 47,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 30,
+                          "H": 84,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 1,
+                          "H": 149,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 77,
+                          "H": 52,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 20,
+                          "W": 113,
+                          "Y": 0,
+                          "H": 150,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 150,
+                          "Y": 21,
+                          "H": 112,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y150",
+                      "Width": "150",
+                      "Height": "150",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 150,
+                        "W": 150
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 49,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 18,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 46,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 12,
+                          "W": 68,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 12,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 90,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 98,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 36,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 1,
+                          "H": 179,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 93,
+                          "H": 62,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 24,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 25,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 180,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 44,
+                          "H": 25,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 16,
+                          "H": 45,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 41,
+                          "H": 28,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 11,
+                          "W": 60,
+                          "Y": 0,
+                          "H": 80,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 80,
+                          "Y": 11,
+                          "H": 60,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x80",
+                      "Width": "80",
+                      "Height": "80",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 80,
+                        "W": 80
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 98,
+                          "H": 56,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 36,
+                          "H": 101,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 1,
+                          "H": 179,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 93,
+                          "H": 62,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 24,
+                          "W": 135,
+                          "Y": 0,
+                          "H": 180,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 180,
+                          "Y": 25,
+                          "H": 135,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y180",
+                      "Width": "180",
+                      "Height": "180",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 180,
+                        "W": 180
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 449,
+                          "Y": 245,
+                          "H": 140,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 89,
+                          "H": 253,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 2,
+                          "H": 448,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 449,
+                          "Y": 231,
+                          "H": 156,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 60,
+                          "W": 339,
+                          "Y": 0,
+                          "H": 450,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 450,
+                          "Y": 62,
+                          "H": 336,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "y450",
+                      "Width": "450",
+                      "Height": "450",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 450,
+                        "W": 450
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 49,
+                          "H": 28,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 18,
+                          "H": 51,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 46,
+                          "H": 31,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 12,
+                          "W": 68,
+                          "Y": 0,
+                          "H": 90,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 90,
+                          "Y": 12,
+                          "H": 67,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x90",
+                      "Width": "90",
+                      "Height": "90",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 90,
+                        "W": 90
+                      }
+                    },
+                    {
+                      "SmartCenters": [
+                        {
+                          "X": 1,
+                          "W": 299,
+                          "Y": 163,
+                          "H": 94,
+                          "Ratio": "16:5"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 60,
+                          "H": 169,
+                          "Ratio": "16:9"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 1,
+                          "H": 299,
+                          "Ratio": "1:1"
+                        },
+                        {
+                          "X": 1,
+                          "W": 299,
+                          "Y": 154,
+                          "H": 104,
+                          "Ratio": "26:9"
+                        },
+                        {
+                          "X": 40,
+                          "W": 226,
+                          "Y": 0,
+                          "H": 300,
+                          "Ratio": "3:4"
+                        },
+                        {
+                          "X": 0,
+                          "W": 300,
+                          "Y": 42,
+                          "H": 224,
+                          "Ratio": "4:3"
+                        }
+                      ],
+                      "Format": "x300",
+                      "Width": "300",
+                      "Height": "300",
+                      "SmartCenter": {
+                        "Y": 0,
+                        "X": 0,
+                        "H": 300,
+                        "W": 300
+                      }
+                    }
+                  ],
+                  "AvatarsImage": {
+                    "ImageName": "tl8nvqwYcy64HOueOaft3w",
+                    "ImageGroupId": "5161143",
+                    "Namespace": "direct"
+                  }
+                }
+              ]
+            },
+            "ComputedFields": {
+              "Title": "GigaCode — AI-ассистент для программистов любых уровней",
+              "Options": {
+                "IsPicture": true
+              },
+              "Site": "gitverse.ru",
+              "Age": "16+",
+              "Body": "Удобные подсказки, поддерживает более 35 языков, интеграция с популярными IDE",
+              "ExternalData": {}
+            },
+            "Resources": {
+              "Favicon": {
+                "UpdateTime": "1769653803",
+                "OriginalHeight": "180",
+                "OriginalWidth": "180"
+              },
+              "UrlClassifiers": {},
+              "Url": {
+                "EcomFeatures": [
+                  {
+                    "OneProductProbability": 0.0012102587,
+                    "ManyProductsProbability": 0.004235127
+                  }
+                ]
+              },
+              "MarketModel": {},
+              "AutotargetingFeatures": {},
+              "MarketData": {}
+            }
+          }
+        },
+        "pcode_data": {
+          "sitelinks": [
+            {
+              "url": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVL_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhofzWHWWyW1Mue42RyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+              "title": "AI-ассистент",
+              "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVO_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhorpQs8W1Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+              "title": "IDE",
+              "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVrtXm0cIBUet-wvceKEa2-osjwqnCLAXqWRtsJtAXuPbzrkV0HUPAfL8fH0BJ1hRNTHq3CqtvWw8IK0HIu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+              "title": "Платформа GitVerse",
+              "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+            },
+            {
+              "url": "https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVU_3W1CWMzHhzrpDHeT85zbjQrvcOg53f0dljd-H2mpFxhC-1YyoLIgLIY0Ic3Molwpe6PfhosyGS6W2am0q50YRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2",
+              "title": "Подключить",
+              "targetUrl": "https://gitverse.ru/features/gigacode/?utm_source=yandex&utm_medium=cpc&utm_campaign=sm_gigacode_person_perform_frk_rk1746360gr47590_context_master_rus_all|705029630&utm_content=cid|705029630|gid|5678928504|ad|17422935840_17422935840|ph_id|205678928504|rtg_id|205678928504|src|yandex.ru_context|geo|%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3_2|&utm_term=---autotargeting&ybaip=1&yclid=4845621395560071167"
+            }
+          ],
+          "warning": "16+",
+          "body": "Удобные подсказки, поддерживает более 35 языков, интеграция с популярными IDE",
+          "domain": "gitverse.ru",
+          "punyDomain": "gitverse.ru",
+          "title": "GigaCode — AI-ассистент для программистов любых уровней"
+        },
+        "renderedDirectAssets": [
+          "domain",
+          "favicon",
+          "title",
+          "button"
+        ]
+      }
+    ],
+    "directTitle": {
+      "title": "Реклама",
+      "url": "https://direct.yandex.ru/?partner"
+    },
+    "ssr": {
+      "html": "<div data-container=\"outer\"><div class=\"idb2df446 ad8d85071\"><div class=\"ac9dad0ee b5a5b9ab keb9f7130\"><div data-id=\"72057611127989742\" data-ad-id=\"72057611127989742\" data-name=\"adWrapper\" lang=\"ru\" class=\"q5cbeae0a\"><div class=\"h3de99f59 g77c11616\"><div id=\"id1302091769701722585\" data-name=\"adaptiveConstructorAd\" data-theme=\"light\" class=\"pa50c7529\"><div class=\"m6ff12e22 ia90bff3\"></div><div data-backpack-size=\"140\" class=\"f2df74581 a804381f1 ic8ca15eb tb240a692 w835b451 x86e6bfb2 c4cbe2af4 l6a257ca4 ebe62b57d\"><div data-block-name=\"header\" data-backpack-size=\"30\" class=\"c4cbe2af4 l6a257ca4 od129d63c\"><div class=\"p734578c4\"><div class=\"ib1621a5c h11564839\"><span data-label class=\"ie40ac864 haa90235d\"><span>Реклама</span></span></div><div class=\"ab0785f5e u96ebe45c\"><div data-close data-new-adtune=\"true\" data-sticky-adtune=\"false\" age class=\"ue263462d xce2ff0dc df7ed6684 fd03254df\"><div class=\"p83045ab9 i250432de cffad39b1\"></div><div class=\"r888c9377\"><svg width=\"4\" height=\"16\" viewBox=\"0 0 4 16\" fill=\"#22242680\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"2\" cy=\"2\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"8\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"14\" r=\"1.5\"></circle></svg></div></div></div></div></div><div data-block-name=\"domain\" data-backpack-size=\"22\" class=\"c4cbe2af4 l6a257ca4 e42488459\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WpCejI_zOoVX2La-0oqP02CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezf3qPWy4sVyjyIoj1-3FejhUlwkGpjnw3N_YzR_dOed_LUzrf4mBJ0IR2O41xbm4NcIgLIAKG2qmQsrtKT0xC1vHVXjS0II84R2WGV_Bzw-rQ4HvFupnGh50zOnBSLzxLBNFyOoWOCbn65AWl-Rvt-WJhmGFvtfCW-X-Y2xpCfHykUuerDflXy08zmMgKeWh3olLjjwA63gHr1fWbvrL1gaiqH93WnvNNoi_xIob21V080~2\" target=\"_blank\" data-asset-click=\"domain\" class=\"pd0f54e4a\"><div class=\"m34985ba2 r2ea44558\"><div class=\"g61f6d3cf c67eab5db\"><img data-favicon src=\"https://favicon.yandex.net/favicon/direct.yandex.ru?size=32&amp;stub=2\" alt class=\"a9dd1bdb4\" /></div><div class=\"if1d8f67d\"><div id=\"id1266491769701722586\" data-scroller data-autoplay data-autoplay-duration=\"800\" class=\"v3733f8c0\"><div class=\"heeeffc85 e30f904c6 bbcbc93da\"><span class=\"a601e711f xb444ab13 j7baa1f55\">direct.yandex.ru</span></div></div></div></div></a></div></div><div data-block-name=\"title\" data-backpack-size=\"46\" class=\"c4cbe2af4 l6a257ca4 w6805e054\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WpCejI_zOoVX2La-0oqP02CjhtWMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZfm_pljdQ8ZwKnKQEl5ZLFG3j0J1pmeBKlnGe04A3NvUfA3WvqMA5ZyOj0X1g8XwH4IbKIDPbPAeH4bLgbAG5Kce-hS3fcn6aDrxoW5IAZa0WJaGmG8CEeuxDBXBAq2hmHrQ0LeDxiuAq6fmPrQ0LeExiWAq6jJj5Q3Le4wl0Aq6TU42j1hK8Ib0gq5TNW5Q3UgE5A3Le0wl0ArdIeAbRx5iheTS0LaDxinolWu4CEM7IYCOCATBzqsPtNq8J_ZWzHwu9fwS2sL04F4Cy9L7Or2jGaKN3F7OCeHcSB11ZMvUup7SaoettWWkV2d1fd4-tp0rsG3s6xu1RE1wxPKJbmrRNqT8LwT1t4m2zaIhOMyc0NkYrR3T85BhLIEEqVLThz4v77540lR2DZBIS9aqspKhJnw-5om6yAN1dLa0MmTqhRUBbISFtmkin0pHKgQzO6xXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4ye-gnX3RkhOEoOzYuqHqp6wXp4l9q33BkWSW62wBTAsw0esSCEWgVSRwIylGBwu0M_U3_ijQ5a-U5atDUH_wIylNzzBVtdv-bpQaBpaxpE2Vrg-DkRnpidFnZpUEM6QlHIpp5nw0sZKTLt7qcRcuM6GExfHXWRJFG3fdUu1I6yfq5bVHqXNvyqqb2_xFMmJhYV_BgyMrezf3qPWy4sVyjyIoj1-3FejhUlwkGpjnw3N_YzR_dOed_LUzrf4mBJ0IR2O41xbm4NcIgLIAKG2qmQsrtKT0xC1vHVXjS0II84R2WGV_Bzw-rQ4HvFupnGh50zOnBSLzxLBNFyOoWOCbn65AWl-Rvt-WJhmGFvtfCW-X-Y2xpCfHykUuerDflXy08zmMgKeWh3olLjjwA63gHr1fWbvrL1gaiqH93WnvNNoi_xIob21V080~2\" target=\"_blank\" data-asset-click=\"title\" class=\"pd0f54e4a\"><div data-highlight class=\"e30f904c6 r5f6a2f7c\"><span class=\"a601e711f xb444ab13 y2379573d\">Промокод на 5 000 ₽ для новых клиентов от Яндекс Директа</span></div></a></div></div><div data-block-name=\"promo\" data-backpack-size=\"34\" class=\"c4cbe2af4 l6a257ca4 pcf4aa0fe\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WoGejI_zOoVX2Laj0xKO08Eih7WMhGJC2LJnXWdepIICM444l1SGq4rG4DG2WbAfFA2BDzpv-XslDzpXvd3cg59pE7CW1Vq48IL5dRaTTJgdJgcTeof4pL4Laf43caDlF7SwfJcgGa5ALgGSkFtCxtmwXKATpnmpZd8udT0V2Yg8u4K54rJGmW8DVbwaeE07WnOsh4Mrq-c4ah1MZOACY8oGZaWe1LcHXAeab8Ai8HY1Ty2KpGYoUqyvG4eb1o0m1o9OW477SOS6Tsa5Q3MuGoj0gy7TMG5Q3UxC2j1gS5TMW5Q3khq2j1hKwHMWrQ0kN81MWpea1MWrgCihGAj1tP42j1hKuHMWzKn9iFGjbitra2iWgy6TMSxNWG2c_51f10FcTEc-AREx3-497xpU0zV4atEX30WYdW6-ycWCgbMew88X7bk6q0mEDgZHpMiyXdjIvSORmOKl9TWqpkSRfYORm7x3Du0DNA-zSkAoOUlh2EdgD8YRIS2UQ3NipIHWJxGQjXj4Qhrgn36wlkirEeSZZaZ0NjX6HXekasQxPkN9m_U2nG2-DBWp2s3hWAxrTh7ovE5xWPMO8LhAj1VCBPoCWSKY5HMRMDXQsE6rMEOQcUooJaQ_kGAcOAOfR3q57MP2sMSLOyXD7Nl7f6UnCM8wHlSmvkK4QDW5dGCGJBT5sXPTmGPk63JrVYFzvGN85pVWpVjXlmKjomSlwwQ6_2_zvUNhU-alBr-VInkIb_nzHl1FozV6FDuv-TcOnpidJBENOfQPIsy0ZRgkwrZQp3my3797DyhGOBe78BtJFG3fBGKww-i8wUgycORoPR-7RSBrvD_brSBwCVFEWn4OVDEd_BU4ChGVWtvBwxf-BaFxCUYr_ykMlntAPxtNlHOHC2rm4YmcX4SvS96vKgbK2f70j87jTLt7mAoLtwPRU0LIu8O20HxyBtg3MFn77FeJj0h3uHLnQSLzxH2dJ6wxNNW1de0MzUrcSA0c7ZV-ysv1oeXI1lmUvIrDgCYoW4DmkafJ1A4olljjwK63aRg2J0Xw9Q7a98DH93Xx2WpbP_xIIg-1V080~2\" target=\"_blank\" data-asset-click=\"promo\" class=\"pd0f54e4a\"><div data-highlight class=\"pef471cc0 cfce8a7bf\"><div class=\"kf316efc4\"><div class=\"p6775f69a e30f904c6 rbb31b839\"><span class=\"a601e711f xb444ab13 m670301fa\">Бонус 5 000 ₽ на первое продвижение в подарок!</span></div></div></div></a></div></div><div data-backpack-size=\"8\" class=\"y94a108bb\"></div></div></div></div></div></div><div class=\"ac9dad0ee b5a5b9ab t30842b74\"><div data-id=\"72057611460863776\" data-ad-id=\"72057611460863776\" data-name=\"adWrapper\" lang=\"ru\" class=\"q5cbeae0a\"><div class=\"h3de99f59 g77c11616\"><div id=\"id293361769701722587\" data-name=\"adaptiveConstructorAd\" data-theme=\"light\" class=\"pa50c7529\"><div class=\"m6ff12e22 wf4935335\"></div><div data-backpack-size=\"138\" class=\"f2df74581 a804381f1 ic8ca15eb tb240a692 w835b451 le66a8b1f c4cbe2af4 l6a257ca4 p52a20b1e\"><div data-block-name=\"header\" data-backpack-size=\"30\" class=\"c4cbe2af4 l6a257ca4 i147c2d1d\"><div class=\"p734578c4\"><div class=\"ib1621a5c h11564839\"><span data-label class=\"ie40ac864 te929ca1c\"><span>Реклама</span><span class=\"c8685b9b9\">•</span><span>16+</span></span></div><div class=\"ab0785f5e i7e22ec1b\"><div data-close data-new-adtune=\"true\" data-sticky-adtune=\"false\" age=\"16+\" class=\"ue263462d xce2ff0dc df7ed6684 iea5a6c1a\"><div class=\"p83045ab9 bac348e19 cffad39b1\"></div><div class=\"r888c9377\"><svg width=\"4\" height=\"16\" viewBox=\"0 0 4 16\" fill=\"#22242680\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"2\" cy=\"2\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"8\" r=\"1.5\"></circle><circle cx=\"2\" cy=\"14\" r=\"1.5\"></circle></svg></div></div></div></div></div><div data-block-name=\"domain\" data-backpack-size=\"22\" class=\"c4cbe2af4 l6a257ca4 q80e22b18\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVqnwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_zarneU6QVzJbmaRbIgLGAaS2qWUrrNSV0J5D-4I0pU05Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2\" target=\"_blank\" data-asset-click=\"domain\" class=\"pd0f54e4a\"><div class=\"m34985ba2 nb7848717\"><div class=\"g61f6d3cf r23bc0716\"><img data-favicon src=\"https://favicon.yandex.net/favicon/gitverse.ru?size=32&amp;stub=2\" alt class=\"a9dd1bdb4\" /></div><div class=\"if1d8f67d\"><div id=\"id8296851769701722587\" data-scroller data-autoplay data-autoplay-duration=\"550\" class=\"v3733f8c0\"><div class=\"heeeffc85 e30f904c6 v9b44973e\"><span class=\"a601e711f xb444ab13 j5f53bfff\">gitverse.ru</span></div></div></div></div></a></div></div><div data-block-name=\"title\" data-backpack-size=\"44\" class=\"c4cbe2af4 l6a257ca4 s1394793c\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVqnwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_zarneU6QVzJbmaRbIgLGAaS2qWUrrNSV0J5D-4I0pU05Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2\" target=\"_blank\" data-asset-click=\"title\" class=\"pd0f54e4a\"><div data-highlight class=\"e30f904c6 l413280fd\"><span class=\"a601e711f xb444ab13 s32fcf83a\">GigaCode — AI-ассистент для программистов любых уровней</span></div></a></div></div><div data-block-name=\"button\" data-backpack-size=\"34\" class=\"c4cbe2af4 l6a257ca4 cf70c20fb\"><div class=\"yfbb55859\"><a href=\"https://yandex.ru/an/count/WruejI_zOoVX2Lck0uKQ0EFkjBxMCW_Hz0JC2LJn2N2zOG9wCmaZLX01RmK4T1CuI0H1K2gL1tIXUGhxYaiYTyV5W2tDKzZN5ueA2vW1MkZpkTpPi_tEdJVS-VeThpVSuUPu_jot3QsVEGWR1OWUfqyE8wkC73c2a99aA24vdpcgGZypZdByEF4SUa-VJrngvwXIS-1EQFwSvj8eD4TLI4QEgb1GTFfqGftI74D3r9-a9QGV9AjI4fN8EOLASIGPpkWTnQKs3QGVegIgKH1LXf0C4aaabf16M9EGh3MKX6G0sG5JDYF8xZtb02cL783078XW0GOTHqG-FZu-FYKQtAKLeDNW3gq0hGPtPmLeDRWpAq2hmLrP0LeDwlOAq6fGfrU0LeEwS05Q3UgG5A3Le2wl0Aq6TKSAq6fGXrU0rZCbmTAtM3RNGww0h0PtPZbV4rO-36QWO-NcTEabYLUs7y81VF1w3rmJJyw5CY28U0RuogCng5QXeWk6U6mPGZCusA16Dw_n6Ev9bHll2HCtaaL1v_CDKvCDOB_X6y06BWu5p6x3rjSHBXvg43UJW3tHQjYRIS2UQ3Li2Pc-QZLYfgvdTLtNQtGEHnoHWBsmZOmqN2RDTitAauVl1Oi1V6bmPnR0rW5TwstXP0mi5gcesCJ2ri8EhyKoryXabtKo-iqLC0KpJM7hAUWm4yeMkhwOnP2RElQEIO_2neZf6Dt3c66-omdGi0iw1o2ORekqBRg23TmmQEhznWOA-RwuQ3l-uUNQs_U3GS0Z-zy62fLyRmE5IZwNHHwIlzDUdinzhOTCbFnP3vaeoJJxCBFCN7gPops0HbtNTInjPXuU1hcZ6sLeC0vSP22zuy151j9R2dJMrn4k7depZUZBtg-AOfGd_rtjXwGVqnwS0DcYNgF_UYOgLBh0ValhEXCJ5IfTOA_zarneU6QVzJbmaRbIgLGAaS2qWUrrNSV0J5D-4I0pU05Iu8O20IRyYF2RwOFN4j7iVt4Wkt7oxyOoq8r1L0qH9g3bc1qPyGJQbOx_Sjmd_Ey_Q7xA0pznV5PKpxpe1Novez_wthOVHxG6OTdDyZYhbBNF98g7_z_0E2eq4IY5-8U-Cbu2yny3-3rZa3tfDVAWwdWZb5zypnHGfPLZ65e4~2\" target=\"_blank\" data-asset-click=\"button\" class=\"pd0f54e4a\"><button data-highlight class=\"od24f960a lab4cda38\"><span>Узнать больше</span></button></a></div></div><div data-backpack-size=\"8\" class=\"ed8eae1f9\"></div></div></div></div></div></div></div></div>",
+      "css": ".idb2df446{display:-webkit-box;display:-ms-flexbox;display:flex;max-height:100%;max-width:100%;-webkit-box-align:stretch;-ms-flex-align:stretch;align-items:stretch;-webkit-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row;margin:0 auto}.ad8d85071{width: 560px; height: 145px; gap: 5px;}.ac9dad0ee{position:relative;-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-transform:translateZ(0);transform:translateZ(0);border-radius:inherit}.ac9dad0ee.b5a5b9ab{overflow:hidden}.pa50c7529{border-radius:inherit;position:relative;-webkit-box-sizing:border-box;box-sizing:border-box;width:100%;height:100%;font-family:YS Text Variable,YS Text,Arial,sans-serif}.pa50c7529 [data-highlight]{pointer-events:auto}@media (pointer:fine){.pa50c7529 [data-highlight]:hover{-webkit-filter:brightness(80%) contrast(180%);filter:brightness(80%) contrast(180%)}.pa50c7529[data-theme=dark] [data-highlight]:hover{-webkit-filter:brightness(120%) contrast(120%);filter:brightness(120%) contrast(120%)}.pa50c7529:hover [data-animated]{-webkit-animation-play-state:paused;animation-play-state:paused}}.m6ff12e22{width:100%;height:100%;-webkit-box-sizing:border-box;box-sizing:border-box;position:absolute;pointer-events:none;z-index:2;border-radius:inherit}.keb9f7130{width: 277px; height: 145px; border-radius: 0px;}.ia90bff3{border: 1px solid #5C60661A;}.q5cbeae0a{position:relative;display:block;width:100%;height:100%;border-radius:inherit}.tdb5c40c2{right:0;z-index:2}.tdb5c40c2,.t43f6422d{position:absolute;top:0}.t43f6422d{display:block;left:0;z-index:0;cursor:pointer}.h3de99f59,.t43f6422d{height:100%;width:100%}.h3de99f59{pointer-events:none;border-radius:inherit}.h3de99f59:hover .invisible-button-icon{opacity:.25}.g77c11616{pointer-events:auto}.x86e6bfb2{background-color: #ffffff; border-radius: 0px; border: 0px solid #5C60661A;}.f2df74581{cursor:pointer;display:-webkit-box;display:-ms-flexbox;display:flex;max-width:100%;position:relative;-ms-flex-negative:unset!important;flex-shrink:unset!important}.f2df74581.w835b451{overflow:hidden}.f2df74581.ic8ca15eb{height:100%}.f2df74581.tb240a692{width:100%}.f2df74581.ja5b61335{-ms-flex-negative:0!important;flex-shrink:0!important;-ms-flex-preferred-size:auto;flex-basis:auto}.f2df74581.r365fc501{-webkit-box-flex:1;-ms-flex:1 0 auto;flex:1 0 auto}.f2df74581.oed6f6a73{position:relative!important}.qd23051a7{position:absolute;width:100%;height:100%;pointer-events:auto}.a804381f1{-webkit-box-orient:vertical;-ms-flex-direction:column;flex-direction:column}.a804381f1,.q8501fa4d{-webkit-box-direction:normal}.q8501fa4d{-webkit-box-orient:horizontal;-ms-flex-direction:row;flex-direction:row}.b8b30aa04{position:absolute;bottom:.2em;right:0}.b8b30aa04.o4b052250{bottom:0}.ebe62b57d{padding-bottom: 0px; padding-top: 0px; padding-left: 0px; padding-right: 0px;}.c4cbe2af4{-webkit-box-sizing:border-box;box-sizing:border-box;position:relative;pointer-events:none;-ms-flex-negative:0;flex-shrink:0}.c4cbe2af4.l6a257ca4{overflow:hidden}.od129d63c{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.p734578c4{width:100%;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;grid-gap:5px;gap:5px}.ib1621a5c,.p734578c4{display:-webkit-box;display:-ms-flexbox;display:flex}.ib1621a5c{-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline;-ms-flex-negative:1;flex-shrink:1;-webkit-box-pack:start;-ms-flex-pack:start;justify-content:flex-start;overflow:hidden;grid-gap:6px;gap:6px}.ib1621a5c[\\:has\\(img\\[data-brand-logo\\]\\)]{-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.ib1621a5c:has(img[data-brand-logo]){-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.maf926db1{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;max-width:100%;-ms-flex-negative:1;flex-shrink:1;overflow:hidden}.k5ba481e2{width:100%}.ie40ac864{display:-webkit-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;line-height:13px;font-size:8px;text-transform:uppercase;letter-spacing:.075em;text-decoration:none;white-space:nowrap}.ue263462d:hover{background-color:rgba(0,0,0,.2)}.jecc292d{-webkit-box-align:center;-ms-flex-align:center;align-items:center}.l93da0745,.jecc292d{display:-webkit-box;display:-ms-flexbox;display:flex}.l93da0745{-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline}.h11564839{-webkit-box-align:baseline!important;-ms-flex-align:baseline!important;align-items:baseline!important}.v83a5b09{-webkit-box-align:center!important;-ms-flex-align:center!important;align-items:center!important}.s8b3f1726{-ms-flex-negative:0!important;flex-shrink:0!important}.ab0785f5e{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center}.haa90235d{color: #2E3033CC;}.u96ebe45c{height: 24px; margin-right: -6px;}.c8685b9b9{margin:0 2px}.qf6f0abef{cursor:default}.t97905c75{text-decoration:none;pointer-events:auto;color:inherit}.xce2ff0dc{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;pointer-events:auto;border-radius:50%;position:relative;cursor:pointer;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}.xce2ff0dc.ocab17c5b{border-radius:10px}.xce2ff0dc:before{content:\"\";position:absolute;top:-4px;right:calc(-4px - 4px - 0px);right:calc(-4px - 4px - var(--badge-indent, 0px))}.xce2ff0dc.t4970e92e:before{content:unset}.xce2ff0dc.vcecf93f1:before{top:50%;right:50%;-webkit-transform:translate(50%,-50%);transform:translate(50%,-50%)}.xce2ff0dc.xa94fa6cc:before{background-color:rgba(255,0,0,.4)}.xce2ff0dc .p83045ab9{height:100%;width:100%;position:absolute;top:0;left:0;border-radius:inherit;-webkit-transition:opacity .15s;transition:opacity .15s;-webkit-transition:background-color .5s ease-in-out;transition:background-color .5s ease-in-out;color:var(--secondary-color);background:var(--label-bg-color);pointer-events:none}.xce2ff0dc.t9f5f73d7 .p83045ab9{background-color:#fff;opacity:.8}.xce2ff0dc.t9f5f73d7 .r888c9377 svg{fill:#575c66}.xce2ff0dc.rfe14094f .p83045ab9,.xce2ff0dc.h713409ad .p83045ab9{background:none}.xce2ff0dc.rfe14094f:hover{background-color:#e9e9e9}.xce2ff0dc.h713409ad:hover{background-color:rgba(248,250,255,.2)}.xce2ff0dc:hover .p83045ab9{opacity:.8}.xce2ff0dc:hover .p83045ab9.n9d7bcad3{opacity:.5}.xce2ff0dc:hover .p83045ab9.cffad39b1{opacity:.9}.xce2ff0dc .r888c9377{z-index:1;pointer-events:none;-webkit-transition:fill .5s ease-in-out;transition:fill .5s ease-in-out}.xce2ff0dc .r888c9377 svg{display:block;fill:var(--tertiary-color);-webkit-transform:translate(0);transform:translate(0)}.xce2ff0dc.bfe8873e2{width:12px;height:12px}.xce2ff0dc.bfe8873e2.ocab17c5b{height:12px;width:6px}.xce2ff0dc.bfe8873e2.ocab17c5b.e74b019ed{height:6px;width:12px}.xce2ff0dc.bfe8873e2:before{width:28px;height:28px}.xce2ff0dc.kb1019ada{width:16px;height:16px}.xce2ff0dc.kb1019ada.ocab17c5b{height:16px;width:8px}.xce2ff0dc.kb1019ada.ocab17c5b.e74b019ed{height:8px;width:16px}.xce2ff0dc.kb1019ada:before{width:32px;height:32px}.xce2ff0dc.df7ed6684{width:24px;height:24px}.xce2ff0dc.df7ed6684.ocab17c5b{height:24px;width:12px}.xce2ff0dc.df7ed6684.ocab17c5b.e74b019ed{height:12px;width:24px}.xce2ff0dc.df7ed6684:before{width:42px;height:42px}.xce2ff0dc.k2e517425{width:28px;height:28px}.xce2ff0dc.k2e517425.ocab17c5b{height:28px;width:14px}.xce2ff0dc.k2e517425.ocab17c5b.e74b019ed{height:14px;width:28px}.xce2ff0dc.k2e517425:before{width:42px;height:42px}.xce2ff0dc.s23a5fd7d{width:32px;height:32px}.xce2ff0dc.s23a5fd7d.ocab17c5b{height:32px;width:16px}.xce2ff0dc.s23a5fd7d.ocab17c5b.e74b019ed{height:16px;width:32px}.xce2ff0dc.s23a5fd7d:before{width:48px;height:48px}.fd03254df{--tertiary-color: #232426B3;}.i250432de{--secondary-color: #232426B3; --label-bg-color: #FFFFFF80;}.e42488459{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.pd0f54e4a{cursor:pointer;pointer-events:auto;max-width:100%;color:inherit;text-decoration:inherit;font-weight:inherit;-webkit-hyphens:manual;hyphens:manual;letter-spacing:normal;line-height:inherit}.yfbb55859{font-size:0;max-width:100%}.r2ea44558{font-size: 12px; line-height: 14px; gap: 6px;}.m34985ba2{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row;-ms-flex-wrap:nowrap;flex-wrap:nowrap;-webkit-box-align:baseline;-ms-flex-align:baseline;align-items:baseline}.m34985ba2,.heeeffc85{white-space:nowrap}.p8b2547d{-ms-flex-item-align:center;align-self:center}.p8b2547d img{width:100%;height:100%}.c67eab5db{width: 16px; height: 16px; min-width: 16px; background-color: #ffffff00; overflow: unset; border-radius: 0px;}.g61f6d3cf{-ms-flex-item-align:center;align-self:center}.g61f6d3cf img{width:100%;height:100%}.a9dd1bdb4{display:block;width:16px;height:16px}.o63309b7a{display:block;width:32px;height:32px}.x9a35001a{display:block;width:48px;height:48px}.qfd16ec0{display:block;width:60px;height:60px}.l43ab694e{background-color:#fff;border-radius:2px}.if1d8f67d{overflow:hidden;pointer-events:all}.v3733f8c0{overflow-x:auto;scrollbar-width:none}.v3733f8c0::-webkit-scrollbar{display:none}.hac3eae36{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),color-stop(#000),to(transparent));-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000 calc(100% - 1em),transparent);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),color-stop(#000),to(transparent));mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000 calc(100% - 1em),transparent);-webkit-mask-size:100%;mask-size:100%;-webkit-mask-position:0;mask-position:0;-webkit-transition:-webkit-mask-image .3s;transition:-webkit-mask-image .3s;transition:mask-image .3s;transition:mask-image .3s,-webkit-mask-image .3s}.hac3eae36.q4af84ea1{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,#000),color-stop(#000),to(transparent));-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 1em),transparent);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,#000),color-stop(#000),to(transparent));mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 1em),transparent)}.hac3eae36.s325fbe3a{-webkit-mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),to(#000));-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000);mask-image:-webkit-gradient(linear,left top,right top,color-stop(0,transparent),color-stop(1em,#000),to(#000));mask-image:linear-gradient(90deg,transparent 0,#000 1em,#000)}.bbcbc93da{font-size: 12px; line-height: 14px; --text-color: rgb(37, 39, 41);}.xb444ab13{color:inherit;color:var(--text-color,inherit);text-decoration:inherit;font-weight:inherit;-webkit-hyphens:manual;hyphens:manual;letter-spacing:normal;line-height:inherit;max-width:100%;font-family:YS Text Variable,YS Text,Arial,sans-serif}.xb444ab13 span[data-branding-keyword]{background:-webkit-gradient(linear,left top,right top,from(var(--text-color)),color-stop(50%,var(--text-color)),color-stop(60%,var(--text-color)),color-stop(75%,var(--text-color)),color-stop(90%,var(--text-color)),to(var(--text-color)));background:linear-gradient(90deg,var(--text-color),var(--text-color) 50%,var(--text-color) 60%,var(--text-color) 75%,var(--text-color) 90%,var(--text-color));background:-webkit-gradient(linear,left top,right top,from(var(--text-color)),color-stop(50%,var(--text-color)),color-stop(60%,var(--animated-text-color,var(--text-color))),color-stop(75%,var(--animated-text-color,var(--text-color))),color-stop(90%,var(--animated-text-color,var(--text-color))),to(var(--text-color)));background:linear-gradient(90deg,var(--text-color),var(--text-color) 50%,var(--animated-text-color,var(--text-color)) 60%,var(--animated-text-color,var(--text-color)) 75%,var(--animated-text-color,var(--text-color)) 90%,var(--text-color));-webkit-background-clip:text;background-clip:text;background-size:300px 100%;color:transparent;-webkit-animation:q51d26b44 6s ease-in-out calc(4s * var(--n)) infinite;animation:q51d26b44 6s ease-in-out calc(4s * var(--n)) infinite}.w240491e8{overflow:hidden;text-overflow:ellipsis;display:-webkit-box!important;-webkit-line-clamp:var(--line-clamp);-webkit-box-orient:vertical}.e30f904c6{display:-webkit-box;display:-ms-flexbox;display:flex;color:inherit;color:var(--text-color,inherit)}@-webkit-keyframes q51d26b44{0%{background-position:-300px 0}60%,to{background-position:0 0}}@keyframes q51d26b44{0%{background-position:-300px 0}60%,to{background-position:0 0}}.a601e711f{display:inline}.l4657c30e{word-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}.w6805e054{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.r5f6a2f7c{font-size: 15px; line-height: 20px; font-weight: bold; --text-color: rgb(37, 39, 41);}.pcf4aa0fe{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.cfce8a7bf{font-size: 12px; line-height: 14px; gap: 6px;}.kf7229078{width: 14px; min-width: 14px;}.pef471cc0{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-orient:horizontal;-webkit-box-direction:normal;-ms-flex-direction:row;flex-direction:row;-ms-flex-wrap:nowrap;flex-wrap:nowrap}.p6775f69a{display:inline;margin-right:3px}.p6775f69a.u4e003950{display:block;white-space:nowrap}.pef471cc0.gc833e4fc .u4e003950 span,.pef471cc0.gc833e4fc .kf316efc4{background-image:linear-gradient(75deg,#e85677,#c166fb)}.pef471cc0 .u4e003950 span,.pef471cc0 .kf316efc4{-webkit-background-clip:text;background-clip:text;background-image:linear-gradient(75deg,#d92b99,#4d2ee5);-webkit-text-fill-color:transparent}.iafb2044c svg{display:block}.x379d7540{white-space:nowrap}.rbb31b839{font-size: 12px; line-height: 14px; --text-color: rgb(37, 39, 41);}.y94a108bb{padding-top: 8px;}.t30842b74{width: 277px; height: 145px; border-radius: 0px;}.wf4935335{border: 1px solid #5C60661A;}.le66a8b1f{background-color: #ffffff; border-radius: 0px; border: 0px solid #5C60661A;}.p52a20b1e{padding-bottom: 0px; padding-top: 0px; padding-left: 0px; padding-right: 0px;}.i147c2d1d{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.te929ca1c{color: #2E3033CC;}.i7e22ec1b{height: 24px; margin-right: -6px;}.iea5a6c1a{--tertiary-color: #232426B3;}.bac348e19{--secondary-color: #232426B3; --label-bg-color: #FFFFFF80;}.q80e22b18{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.nb7848717{font-size: 12px; line-height: 14px; gap: 6px;}.r23bc0716{width: 16px; height: 16px; min-width: 16px; background-color: #ffffff00; overflow: unset; border-radius: 0px;}.v9b44973e{font-size: 12px; line-height: 14px; --text-color: rgb(37, 39, 41);}.s1394793c{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px;}.l413280fd{font-size: 14px; line-height: 19px; font-weight: bold; --text-color: rgb(37, 39, 41);}.cf70c20fb{padding-bottom: 0px; padding-top: 6px; padding-left: 8px; padding-right: 8px; margin: auto 0 0;}.lab4cda38{color: #ffffff; background-color: rgba(25,109,255,1); height: 28px; line-height: 26px; font-size: 13px; padding-left: 8px; padding-right: 8px; gap: 6px; border-radius: 4px;}.od24f960a{cursor:pointer;display:-webkit-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;outline:none;border:none;font-family:YS Text Variable,YS Text,Arial,sans-serif}.pe43de93:before{width:480%;height:70%;left:-230%;top:-20%;opacity:0;position:absolute;will-change:left,opacity,top;-webkit-transform:rotate(-30deg);transform:rotate(-30deg);background:hsla(0,0%,100%,.12941);background:-webkit-gradient(linear,left top,right top,from(hsla(0,0%,100%,.23)),color-stop(75%,hsla(0,0%,100%,.63)),color-stop(95%,hsla(0,0%,100%,.85)),to(hsla(0,0%,100%,0)));background:linear-gradient(90deg,hsla(0,0%,100%,.23) 0,hsla(0,0%,100%,.63) 75%,hsla(0,0%,100%,.85) 95%,hsla(0,0%,100%,0));-webkit-transition-duration:.5s,.5s,.15s;transition-duration:.5s,.5s,.15s;-webkit-transition-property:left,top,opacity;transition-property:left,top,opacity;-webkit-transition-timing-function:ease;transition-timing-function:ease;content:\"\";-webkit-animation:qbdf43541 5s ease-in-out 1s infinite;animation:qbdf43541 5s ease-in-out 1s infinite}.s3fc0b45d{word-break:break-word}.ta6d1d88,.iffb88f47{width:1em;height:1em}@-webkit-keyframes qbdf43541{15%,to{left:-50%;opacity:1;top:-50%}0%{left:-230%;opacity:0;top:-20%}}@keyframes qbdf43541{15%,to{left:-50%;opacity:1;top:-50%}0%{left:-230%;opacity:0;top:-20%}}.ed8eae1f9{padding-top: 8px;}",
+      "salt": "uuCM3OtbDd",
+      "encoding": "raw",
+      "timing": {
+        "htmlRenderTiming": 8748.311996459961,
+        "cssRenderTiming": 84.59898829460144,
+        "essenceCreateAliases": 15.349999070167542,
+        "essenceCreateMolecules": 2589.6299928426743,
+        "essenceArrangeMolecules": 235.0980043411255,
+        "essenceGetBestVariant": 3175.824999809265
+      }
+    }
+  },
+  "rtbAuctionInfo": {
+    "bidReqId": 218765031749458020,
+    "bidReqIdStr": "218765031749458018",
+    "bsGeneratedUniqID": "5957868691769701717",
+    "dspId": 1
+  },
+  "common": {
+    "deviceType": "5",
+    "sspBidId": "",
+    "isStaff": "false",
+    "whyThisAdLandingLink": "https://adreasons.yandex-team.ru/?hitlogid=218765031360174178",
+    "sspId": "",
+    "labelsLang": "1",
+    "sdkSettings": {
+      "AutoRefreshPeriod": 0,
+      "TimeToClose": 5,
+      "MaxHeight": 0,
+      "TimeToReward": 5,
+      "MinWidth": 0,
+      "AdPodEnable": true,
+      "EndCardEnable": true,
+      "MaxWidth": 0,
+      "MinHeight": 0
+    },
+    "reloadTimeout": "30",
+    "userGroup": "73",
+    "impId": "10",
+    "labelTuneLanguage": "ru",
+    "syntheticMatch": "",
+    "bidReqIdStr": "218765031749458018",
+    "showAdTune": "",
+    "pageId": "265853",
+    "cpdPageType": "0",
+    "designId": "17019248",
+    "actualBannerCount": 2,
+    "pageLang": "0",
+    "detailedDeviceType": "16",
+    "bannerCountBeforeSelect": "0",
+    "productType": "direct",
+    "uniformat": true,
+    "shop_id": "0",
+    "userRegion": "RU",
+    "externalDSP": "0",
+    "linkHead": "https://yandex.ru/an/count/WNWejI_zOoVX2LaE0LKB0ECIIItIjkWADd33884g7aIZ1r7sErvlkCFrEraTHw-pqpbPdwENC82EKoMFng1QXOek6EAnPGZDu62P7Rv17Ro-3PpbPkjxs3GolJPbi8rNgLGgbHf8VB7POQDxlYmMr3US9oc4Wna31t406xWQnad0dcWrxCqaO4-q6hQ-XioasJvfj9uccw5nWXOdKyG1X7q0sIm1w5imc9TEIjhOtCJUmmlS5ax6m6AHYefDB6o_JAEo6K5sxoa7IAda00JcG0GBCCYKrSXabtKokgUWqxgkOsF47iPCmuWhQ7KTnhkS00sxe7C0WkcsIDkYAzZ03OEc7hEv-zyOGAEkwpgMDZCF3uFSqOrRx9RqW931YmXeE0fqDWSkKeW4fWqiAByLnn9CG0hSK20M_78cZ-622mJE3F8VPJsFHFanJED4qVmq8MJKvix_NzkQZoLgfNwYJb1fgoavmDr-DtTwMc6XmA6wPjsn75vqG2AK~2",
+    "hitlogId": "218765031360174178",
+    "stationaryConnection": "1",
+    "commonRtbVisibility": "1",
+    "isYandex": "0",
+    "stripeAnimation": "0",
+    "stripeType": "1",
+    "commonRtbVisibilityProb": "100",
+    "isYandexPage": "1",
+    "flagsMap": {
+      "YASPSTABLEVER": [
+        {
+          "value": "1.762.13663",
+          "testId": "1478067"
+        }
+      ],
+      "VAS_STABLE_VERSION": [
+        {
+          "value": "1301686",
+          "testId": "1347458"
+        }
+      ],
+      "VAS_LOG_CONTENT_DURATION_PERCENT": [
+        {
+          "value": "1",
+          "testId": "1327062"
+        }
+      ],
+      "DISABLE_DESTROY_EXTERNAL_CREATIVE_AD_USER_CLOSE_EVENT": [
+        {
+          "value": "exp",
+          "testId": "1449275"
+        },
+        {
+          "value": "exp",
+          "testId": "1449272"
+        }
+      ],
+      "VAS_RECALCULATE_REQUEST_METHOD_FOR_WRAPPER_URL": [
+        {
+          "value": "exp",
+          "testId": "1450545"
+        }
+      ],
+      "QR_BLACK_LIST_CLIENT_IDS": [
+        {
+          "value": "109238945:88772210:309062065",
+          "testId": "1471021"
+        }
+      ],
+      "PCODE_STABLE_VERSION": [
+        {
+          "value": "1303695",
+          "testId": "1477977"
+        }
+      ],
+      "SENAEV_1": [
+        {
+          "value": "control",
+          "testId": "918196"
+        }
+      ],
+      "NEW_KEBAB": [
+        {
+          "value": "ctl",
+          "testId": "1471791"
+        }
+      ],
+      "USE_NEW_KEBAB_SIZE": [
+        {
+          "value": "ctl",
+          "testId": "1471791"
+        }
+      ],
+      "ADD_IMAGE_GALLERY_IN_NEURO_DESIGN": [
+        {
+          "value": "exp",
+          "testId": "1467262"
+        }
+      ],
+      "HAPPINESS_SURVEY_ICON": [
+        {
+          "value": "hand",
+          "testId": "1353317"
+        }
+      ],
+      "ADDING_ADDITIONAL_PARAMETERS_FOR_DISTRIBUTION": [
+        {
+          "value": "ctl",
+          "testId": "1473956"
+        }
+      ],
+      "USE_SEQUENTIAL_LOAD_AD_FOR_SKIP_TOKEN": [
+        {
+          "value": "ctl",
+          "testId": "1473477"
+        }
+      ],
+      "USE_BK_WIZ_COLOR_FOR_AVG_COLOR": [
+        {
+          "value": "exp",
+          "testId": "1474011"
+        }
+      ],
+      "VAS_NO_YASP_VIDEO_IN_TGA": [
+        {
+          "value": "exp",
+          "testId": "1477248"
+        }
+      ],
+      "USE_NATIVE_ATTACH_SHADOW_FOR_TGA": [
+        {
+          "value": "ctl",
+          "testId": "1478176"
+        }
+      ]
+    },
+    "testIds": "918196,0,67;1387854,0,73;1473776,0,4;1384009,0,73;1457615,0,98;1404017,0,31;1447467,0,28;1471934,0,57;1471791,0,36;1467262,0,0;1353317,0,8;1473956,0,45;1473477,0,5;1474011,0,72;1477248,0,84;1478176,0,91;1467536,0,98;1467594,0,92;912280,0,85",
+    "pcodever": "1303695",
+    "activeTestIds": [
+      "1471791,0,36"
+    ]
+  },
+  "settings": {
+    "10": {
+      "urlBackgroundColor": "#196dff",
+      "height": 145,
+      "fontSize": 1,
+      "titleFontSize": 3,
+      "titleFontSizePercent": "142%",
+      "fontFamily": "",
+      "isProductPromo": false,
+      "name": "adaptive0418",
+      "ssrName": "ssr-adaptive-leaderboard",
+      "blockId": "R-I-265853-10",
+      "smallPictures": false,
+      "animationCount": null,
+      "domainFontSize": 0,
+      "linkTail": "https://yandex.ru/an/rtbcount/1SZ7HE_Y0Li200000000U9nJ3DqQvSyqQrsGOPB45hN5ffpCbb6DrPaCGE094mbDqgxKZgtbOs58PGIAPoP9DF23n4kvWBnQ9Y3HoWWYPp8--Cu01WiPspeWh9Lmrbv6fPzy34V1_BEC88EkWicxZ0mYZ0n_6MS1ZPZB118vo_GV25un2GGKHXz8ac1WI59eFTNXoSRmbmbaOoipAv3iPHO0abEPGHhcCeEityYycyF_QDc-wOqdcM6-kWgMlmicVp8xEF53dCTIi14inB21vJyCCEvWOJp0mdI1vTs7fda7ZdywAd6J1UBo3_OFuQotB23tBs0LFCdwLryCB7Y1jM51GmF7JLQOfLzPGUPri3MmJ62x-khLhoK7bbqFci7syS0MnWLiBs_kl75ZtjOFoIlPO6OUO4i-mSRoY8qtCztGAYSmBpCrCTpCuYTSVY8xZ3MBdTtGsC3OpD9q0plZ3dQc4-pY3zXNNlizv-EotkD6FzXvEZYg9d0mBk1uy9vv1KVRHAOD86871-Cj3ep0NC3PmBo2ynJZ1awX2voC7pWPVt0oBk02Qlm82cI60m8F7HgvOQnEC8lXppk72znD3KqF6XiQ6XWVS3E-vOwxA1RoYLi0HFt_pm07FxWP0G_8lMe0",
+      "renderLinkTail": "https://yandex.ru/an/rtbcount/1UCb1cFb0Li200000000U9nJ3DqQvSyqQrsGOPB45hN5ffpCbb6DrPaCGE094mbDqgxKZgtbOs58PGIAPoP9DF23n4kvWBnQ9Y3HoWWYPp8--Cu01WiPspeWh9Lmrbv6fPzy34V1_BECp42HgumWu-uoCeWmClnbd0KqOYuJIEGiqtyWUCKa450OVI19We4XIQ7rL8Sd6yDV9f2DhSoiGBANMG18JcK6QPZB3B9-8_Dk3l-ZPVkcDvvaXldgAbZ-BfZyoUpWn0zn7al1Hh0GmmQM_p30k8E5yG0BqmMMTn-QvXqu_kcen4qMYCi_s3-4izwoWDo_W5Nm9EjVVJ6mu0NMXWKD3HmtMM6MVcK5cTV1ri0oWUtggrU_bXnOTZre1jl70riO5x2zlBdpnervMpyahsI3cNc0BVa46yiZDjxCT4EhdC2ypDJ4S3EBdt3vYUmmrYnsTaDZ0sCpIzCDx8mxs9bEi8i_O5zvxVUSZyjwZnlzOEVfuAYQmC6uWEF1U-OL76qJcJQ0Y1qSZBSuC09p0MS3ymhEKumRE8KkS39-u6JymScuW0keyICea1aE23nqQEI6iJh1B8O_xnmkS3SrD3reR6XeO7p0pVYME-wYMCWdRW4GzVy_0npyu6O401EElMm0",
+      "viewabilityTracking": [
+        {
+          "url": "https://yandex.ru/an/tracking/Wa0ejI_zOoVX2LcL0PKH06EXVtWMhGJC5n3GVOYm1z7eGPHz4t8ZdfoK9r3OTXepx9JztWvvgU-CJJJ9IiAe0zvn9a3Sp27JEJjq6hsTjmtpuO_kcpAx-n2UyC5BzssdYdpOFGX6UXZxkyQfjZgwfpAP1x4VW6lYoRbG1WGHpm1V9GoWurJ9ep6eLg6Y2uPuR1b2CpZOvStNHW-IdAiAMuICAiB1Z863c2Vik67SvB5l47ljbHCN3MDVGsuc8MAMh1bl4AdrgX7Br8Izb21PFBq6F5DMjrR3ZT7rNQ_HIpY10-2QMBFovE5xmM80NnhScGMmTK3NUejW2DkOw6BboSFt0Yi1A9LAfLB9T6121mnRTDzsgWW6VUcaf8tDJUmzlC35isXPs5iu6GEBHIegDlaoZSfc1DczfnmWfP8349W34Ip085DM8vDTride3cIuceaWLm0H2aLe2jkcZhrZqhFO634TetiOSxCDvhkS00sxe7C0WkcsIDkYAzZ03OEc7jOdD-3D-s6_1ItB1o_hfeRyB_tbvUjxwIylNvzB6vAN_7r6y4_BryOytZdvsPZ7EoTCivTYbWDer7LTnz9c6HfCzm2aTxe78BtrUzWcN4_-NLujh1yZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhyVCWP035vahbKgb40bC6zYq3-MdyP3mK2gLoWxykGuc8kyYJ2EtPWajkiB1u-wSJLqOIKZwM9ZQF6p56T3rOZ4K5EdJE1FGl1_duNy0~2?action-id=25",
+          "time": 5000
+        },
+        {
+          "url": "https://yandex.ru/an/tracking/Wa0ejI_zOoVX2LcL0PKH06EXVtWMhGJC5n3GVOYm1z7eGPHz4t8ZdfoK9r3OTXepx9JztWvvgU-CJJJ9IiAe0zvn9a3Sp27JEJjq6hsTjmtpuO_kcpAx-n2UyC5BzssdYdpOFGX6UXZxkyQfjZgwfpAP1x4VW6lYoRbG1WGHpm1V9GoWurJ9ep6eLg6Y2uPuR1b2CpZOvStNHW-IdAiAMuICAiB1Z863c2Vik67SvB5l47ljbHCN3MDVGsuc8MAMh1bl4AdrgX7Br8Izb21PFBq6F5DMjrR3ZT7rNQ_HIpY10-2QMBFovE5xmM80NnhScGMmTK3NUejW2DkOw6BboSFt0Yi1A9LAfLB9T6121mnRTDzsgWW6VUcaf8tDJUmzlC35isXPs5iu6GEBHIegDlaoZSfc1DczfnmWfP8349W34Ip085DM8vDTride3cIuceaWLm0H2aLe2jkcZhrZqhFO634TetiOSxCDvhkS00sxe7C0WkcsIDkYAzZ03OEc7jOdD-3D-s6_1ItB1o_hfeRyB_tbvUjxwIylNvzB6vAN_7r6y4_BryOytZdvsPZ7EoTCivTYbWDer7LTnz9c6HfCzm2aTxe78BtrUzWcN4_-NLujh1yZCFYcJ_bl2MLeFmRzbjPr_Lo6zcFGQ_-NBNyxbCzwhyVCWP035vahbKgb40bC6zYq3-MdyP3mK2gLoWxykGuc8kyYJ2EtPWajkiB1u-wSJLqOIKZwM9ZQF6p56T3rOZ4K5EdJE1FGl1_duNy0~2?action-id=26",
+          "time": 10000
+        }
+      ],
+      "favicon": false,
+      "button": true,
+      "noSitelinks": false,
+      "c11n": {},
+      "imagesFirst": false,
+      "limit": 2,
+      "linksUnderline": true,
+      "callouts": false,
+      "skipCyclicAnimation": false,
+      "layout": "horizontal",
+      "paddingsDisabled": false,
+      "noBodyText": false,
+      "fullClickable": false,
+      "headerFontSize": null,
+      "imageRadius": 0,
+      "extendedTitleFontRange": false,
+      "feedbackBgColor": false,
+      "fullscreen": false,
+      "fullscreenDuration": 10,
+      "floorAd": false,
+      "rewarded": false,
+      "rewardedOverlay": false,
+      "interscroller": false,
+      "interscrollerAnimation": true,
+      "firstAdGrow": 1,
+      "carousel": false,
+      "spaceAroundCarousel": null,
+      "advLessWidthCarousel": null,
+      "pcodeSettings": {
+        "border": true,
+        "maxHeight": 145,
+        "themeIndicator": "light",
+        "minHeight": 145,
+        "borderRadius": false
+      },
+      "bannerFlags": "",
+      "viewNotices": [],
+      "sizes": {
+        "width": 560,
+        "minHeight": 145,
+        "maxHeight": 145
+      },
+      "feedShownFormats": "",
+      "feedRecHit": 0,
+      "adFilter": "yabs.NzIwNTc2MTExMjc5ODk3NDIKNzIwNTc2MTE0NjA4NjM3NzY=",
+      "bannerIds": [
+        "72057611127989742",
+        "72057611460863776"
+      ]
+    }
+  }
+}

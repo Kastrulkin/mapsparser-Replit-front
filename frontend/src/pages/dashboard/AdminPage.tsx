@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -14,6 +14,7 @@ import { GrowthPlanEditor } from '../../components/GrowthPlanEditor';
 import { PromptsManagement } from '../../components/PromptsManagement';
 import { ProxyManagement } from '../../components/ProxyManagement';
 import { ParsingManagement } from '../../components/ParsingManagement';
+import { ProspectingManagement } from '../../components/ProspectingManagement';
 
 interface Business {
   id: string;
@@ -100,7 +101,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -128,7 +129,7 @@ export const AdminPage: React.FC = () => {
     message: '',
     confirmText: '',
     cancelText: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -175,45 +176,14 @@ export const AdminPage: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const token = await newAuth.getToken();
-      if (!token) {
-        toast({
-          title: 'Ошибка',
-          description: 'Требуется авторизация',
-          variant: 'destructive',
-        });
-        // Не перенаправляем на /login, если уже в контексте DashboardLayout
-        // Просто показываем ошибку
-        return;
-      }
+      const data = await newAuth.makeRequest('/admin/users-with-businesses');
 
-      const response = await fetch('/api/admin/users-with-businesses', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          toast({
-            title: 'Ошибка доступа',
-            description: 'Недостаточно прав для просмотра этой страницы',
-            variant: 'destructive',
-          });
-          navigate('/dashboard');
-          return;
-        }
-        throw new Error('Ошибка загрузки данных');
-      }
-
-      const data = await response.json();
       if (data.success) {
         // Логируем для отладки
         let totalBlocked = 0;
         data.users?.forEach((user: any) => {
           const blockedDirect = user.direct_businesses?.filter((b: any) => b.is_active === 0).length || 0;
-          const blockedNetwork = user.networks?.reduce((sum: number, n: any) => 
+          const blockedNetwork = user.networks?.reduce((sum: number, n: any) =>
             sum + (n.businesses?.filter((b: any) => b.is_active === 0).length || 0), 0) || 0;
           totalBlocked += blockedDirect + blockedNetwork;
         });
@@ -221,8 +191,17 @@ export const AdminPage: React.FC = () => {
         console.log('🔍 DEBUG AdminPage: Данные пользователей:', data.users);
         setUsers(data.users || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Ошибка загрузки пользователей:', error);
+      if (error.message && (error.message.includes('401') || error.message.includes('403'))) {
+        toast({
+          title: 'Ошибка доступа',
+          description: 'Недостаточно прав для просмотра этой страницы',
+          variant: 'destructive',
+        });
+        navigate('/dashboard');
+        return;
+      }
       toast({
         title: 'Ошибка',
         description: 'Не удалось загрузить данные',
@@ -259,27 +238,17 @@ export const AdminPage: React.FC = () => {
       variant: 'delete',
       onConfirm: async () => {
         try {
-          const token = await newAuth.getToken();
           console.log(`🔍 DELETE запрос для бизнеса: ID=${businessId}, name=${businessName}`);
-          const response = await fetch(`/api/superadmin/businesses/${businessId}`, {
+          const data = await newAuth.makeRequest(`/superadmin/businesses/${businessId}`, {
             method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
           });
-          
-          console.log(`🔍 DELETE ответ: status=${response.status}, ok=${response.ok}`);
 
-          if (response.ok) {
+          if (data.success) {
             toast({
               title: 'Успешно',
               description: 'Бизнес удалён',
             });
             loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка удаления');
           }
         } catch (error: any) {
           toast({
@@ -288,7 +257,7 @@ export const AdminPage: React.FC = () => {
             variant: 'destructive',
           });
         } finally {
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
@@ -306,25 +275,17 @@ export const AdminPage: React.FC = () => {
       variant: 'block',
       onConfirm: async () => {
         try {
-          const token = await newAuth.getToken();
-          const response = await fetch(`/api/admin/businesses/${businessId}/block`, {
+          const data = await newAuth.makeRequest(`/admin/businesses/${businessId}/block`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
             body: JSON.stringify({ is_blocked: isBlocked }),
           });
 
-          if (response.ok) {
+          if (data.success) {
             toast({
               title: 'Успешно',
               description: isBlocked ? 'Бизнес заблокирован' : 'Бизнес разблокирован',
             });
             loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка блокировки');
           }
         } catch (error: any) {
           toast({
@@ -333,7 +294,7 @@ export const AdminPage: React.FC = () => {
             variant: 'destructive',
           });
         } finally {
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
@@ -351,25 +312,17 @@ export const AdminPage: React.FC = () => {
       variant: 'block',
       onConfirm: async () => {
         try {
-          const token = await newAuth.getToken();
-          const endpoint = isPaused ? `/api/superadmin/users/${userId}/pause` : `/api/superadmin/users/${userId}/unpause`;
-          const response = await fetch(endpoint, {
+          const endpoint = isPaused ? `/superadmin/users/${userId}/pause` : `/superadmin/users/${userId}/unpause`;
+          const data = await newAuth.makeRequest(endpoint, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
           });
 
-          if (response.ok) {
+          if (data.success) {
             toast({
               title: 'Успешно',
               description: isPaused ? 'Пользователь приостановлен' : 'Пользователь возобновлен',
             });
             loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка изменения статуса пользователя');
           }
         } catch (error: any) {
           toast({
@@ -378,7 +331,7 @@ export const AdminPage: React.FC = () => {
             variant: 'destructive',
           });
         } finally {
-          setConfirmDialog({ ...confirmDialog, isOpen: false });
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
@@ -395,26 +348,18 @@ export const AdminPage: React.FC = () => {
       onConfirm: async () => {
         // Закрываем диалог сразу после подтверждения
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        
+
         try {
-          const token = await newAuth.getToken();
-          const response = await fetch(`/api/superadmin/users/${userId}`, {
+          const data = await newAuth.makeRequest(`/superadmin/users/${userId}`, {
             method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
           });
 
-          if (response.ok) {
+          if (data.success) {
             toast({
               title: 'Успешно',
               description: 'Пользователь удалён',
             });
             loadUsers();
-          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ошибка удаления пользователя');
           }
         } catch (error: any) {
           toast({
@@ -429,25 +374,17 @@ export const AdminPage: React.FC = () => {
 
   const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
     try {
-      const token = await newAuth.getToken();
-      const response = await fetch(`/api/admin/businesses/${businessId}/promo`, {
+      const data = await newAuth.makeRequest(`/admin/businesses/${businessId}/promo`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ is_promo: !isPromo }),
       });
 
-      if (response.ok) {
+      if (data.success) {
         toast({
           title: 'Успешно',
           description: !isPromo ? 'Промо тариф установлен' : 'Промо тариф отключен',
         });
         loadUsers();
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка установки промо тарифа');
       }
     } catch (error: any) {
       toast({
@@ -484,6 +421,7 @@ export const AdminPage: React.FC = () => {
     { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
     { id: 'proxies' as const, label: 'Прокси', icon: Network },
     { id: 'parsing' as const, label: 'Парсинг', icon: MapPin },
+    { id: 'prospecting' as const, label: 'Поиск клиентов', icon: Search },
   ];
 
   return (
@@ -527,241 +465,243 @@ export const AdminPage: React.FC = () => {
           </div>
         </div>
 
-      {activeTab === 'agents' ? (
-        <AIAgentsManagement />
-      ) : activeTab === 'tokens' ? (
-        <TokenUsageStats />
-      ) : activeTab === 'growth' ? (
-        <GrowthPlanEditor />
-      ) : activeTab === 'prompts' ? (
-        <PromptsManagement />
-      ) : activeTab === 'proxies' ? (
-        <ProxyManagement />
-      ) : activeTab === 'parsing' ? (
-        <ParsingManagement />
-      ) : (
-        <>
-          {/* Action Bar */}
-          <div className="mb-6 flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+        {activeTab === 'agents' ? (
+          <AIAgentsManagement />
+        ) : activeTab === 'tokens' ? (
+          <TokenUsageStats />
+        ) : activeTab === 'growth' ? (
+          <GrowthPlanEditor />
+        ) : activeTab === 'prompts' ? (
+          <PromptsManagement />
+        ) : activeTab === 'proxies' ? (
+          <ProxyManagement />
+        ) : activeTab === 'parsing' ? (
+          <ParsingManagement />
+        ) : activeTab === 'prospecting' ? (
+          <ProspectingManagement />
+        ) : (
+          <>
+            {/* Action Bar */}
+            <div className="mb-6 flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+              </div>
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                className="shadow-md hover:shadow-lg transition-shadow duration-200"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Создать аккаунт
+              </Button>
             </div>
-            <Button 
-              onClick={() => setShowCreateModal(true)} 
-              className="shadow-md hover:shadow-lg transition-shadow duration-200"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Создать аккаунт
-            </Button>
-          </div>
 
-          {/* Modern Card-based Layout */}
-          <div className="space-y-6">
-            {users.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-16">
-                  <div className="p-4 rounded-full bg-muted mb-4">
-                    <User className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
-                  <Button 
-                    onClick={() => setShowCreateModal(true)} 
-                    variant="outline" 
-                    className="mt-4"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Создать первого пользователя
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              users.map((user) => {
-                const allBusinesses: Array<{ id: string; name: string; type: 'direct' | 'network'; networkId?: string; networkName?: string; business: Business }> = [];
-                
-                // Добавляем прямые бизнесы (включая заблокированные)
-                const directBusinesses = user.direct_businesses || [];
-                console.log(`🔍 DEBUG Frontend: Пользователь ${user.email}, прямых бизнесов: ${directBusinesses.length}`);
-                directBusinesses.forEach(business => {
-                  console.log(`  - Бизнес: ${business.name}, is_active: ${business.is_active}, type: ${typeof business.is_active}`);
-                  allBusinesses.push({
-                    id: business.id,
-                    name: business.name,
-                    type: 'direct',
-                    business
-                  });
-                });
-                
-                // Добавляем сети (каждая сеть - одна строка, бизнесы внутри раскрываются)
-                user.networks.forEach(network => {
-                  const networkBusinesses = network.businesses || [];
-                  console.log(`🔍 DEBUG Frontend: Сеть ${network.name}, бизнесов: ${networkBusinesses.length}`);
-                  // Добавляем сеть как отдельный элемент (показываем первый бизнес или название сети)
-                  if (networkBusinesses.length > 0) {
+            {/* Modern Card-based Layout */}
+            <div className="space-y-6">
+              {users.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <div className="p-4 rounded-full bg-muted mb-4">
+                      <User className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
+                    <Button
+                      onClick={() => setShowCreateModal(true)}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Создать первого пользователя
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                users.map((user) => {
+                  const allBusinesses: Array<{ id: string; name: string; type: 'direct' | 'network'; networkId?: string; networkName?: string; business: Business }> = [];
+
+                  // Добавляем прямые бизнесы (включая заблокированные)
+                  const directBusinesses = user.direct_businesses || [];
+                  console.log(`🔍 DEBUG Frontend: Пользователь ${user.email}, прямых бизнесов: ${directBusinesses.length}`);
+                  directBusinesses.forEach(business => {
+                    console.log(`  - Бизнес: ${business.name}, is_active: ${business.is_active}, type: ${typeof business.is_active}`);
                     allBusinesses.push({
-                      id: network.id,
-                      name: network.name,
-                      type: 'network',
-                      networkId: network.id,
-                      networkName: network.name,
-                      business: networkBusinesses[0] // Используем первый бизнес для отображения в строке
+                      id: business.id,
+                      name: business.name,
+                      type: 'direct',
+                      business
                     });
-                  }
-                });
+                  });
 
-                return (
-                  <Card 
-                    key={user.id} 
-                    className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm"
-                  >
-                    <CardHeader className="pb-4 border-b border-border/50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-primary/10">
-                            <User className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className={`text-lg font-semibold ${user.is_active === 0 ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                                {user.name || user.email}
-                              </h3>
-                              {user.is_superadmin && (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
-                                  Админ
-                                </span>
-                              )}
-                              {user.is_active === 0 && (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
-                                  Приостановлен
-                                </span>
-                              )}
+                  // Добавляем сети (каждая сеть - одна строка, бизнесы внутри раскрываются)
+                  user.networks.forEach(network => {
+                    const networkBusinesses = network.businesses || [];
+                    console.log(`🔍 DEBUG Frontend: Сеть ${network.name}, бизнесов: ${networkBusinesses.length}`);
+                    // Добавляем сеть как отдельный элемент (показываем первый бизнес или название сети)
+                    if (networkBusinesses.length > 0) {
+                      allBusinesses.push({
+                        id: network.id,
+                        name: network.name,
+                        type: 'network',
+                        networkId: network.id,
+                        networkName: network.name,
+                        business: networkBusinesses[0] // Используем первый бизнес для отображения в строке
+                      });
+                    }
+                  });
+
+                  return (
+                    <Card
+                      key={user.id}
+                      className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm"
+                    >
+                      <CardHeader className="pb-4 border-b border-border/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-primary/10">
+                              <User className="w-5 h-5 text-primary" />
                             </div>
-                            <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-xs text-muted-foreground">
-                            {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
-                          </div>
-                          <div className="flex items-center gap-1 opacity-100">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePauseUser(user.id, user.email, user.is_active !== 0);
-                              }}
-                              title={user.is_active === 0 ? "Возобновить пользователя" : "Приостановить пользователя"}
-                            >
-                              {user.is_active === 0 ? (
-                                <User className="h-4 w-4" />
-                              ) : (
-                                <Ban className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteUser(user.id, user.email);
-                              }}
-                              title="Удалить пользователя"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="space-y-4">
-                        {allBusinesses.map((item, index) => (
-                          <div 
-                            key={`${item.id}-${index}`}
-                            className="group relative"
-                          >
-                            {item.type === 'network' ? (
-                              <div className="space-y-3">
-                                <div 
-                                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                                  onClick={() => toggleNetwork(item.networkId!)}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-primary/10">
-                                      <Network className="w-4 h-4 text-primary" />
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold text-foreground">{item.networkName}</h4>
-                                      <p className="text-xs text-muted-foreground">
-                                        {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    {expandedNetworks.has(item.networkId!) ? (
-                                      <ChevronDown className="h-4 w-4" />
-                                    ) : (
-                                      <ChevronRight className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </div>
-                                {expandedNetworks.has(item.networkId!) && (
-                                  <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
-                                    {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
-                                      <BusinessCard
-                                        key={business.id}
-                                        business={business}
-                                        onSettingsClick={() => setSettingsModal({
-                                          isOpen: true,
-                                          businessId: business.id,
-                                          businessName: business.name,
-                                        })}
-                                        onPromoClick={() => {
-                                          const isPromo = business.subscription_tier === 'promo';
-                                          handlePromo(business.id, business.name, isPromo);
-                                        }}
-                                        onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
-                                        onDeleteClick={() => handleDelete(business.id, business.name)}
-                                        onClick={() => handleBusinessClick(business.id)}
-                                      />
-                                    ))}
-                                  </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className={`text-lg font-semibold ${user.is_active === 0 ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                  {user.name || user.email}
+                                </h3>
+                                {user.is_superadmin && (
+                                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
+                                    Админ
+                                  </span>
+                                )}
+                                {user.is_active === 0 && (
+                                  <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
+                                    Приостановлен
+                                  </span>
                                 )}
                               </div>
-                            ) : (
-                              <BusinessCard
-                                business={item.business}
-                                onSettingsClick={() => setSettingsModal({
-                                  isOpen: true,
-                                  businessId: item.business.id,
-                                  businessName: item.name,
-                                })}
-                                onPromoClick={() => {
-                                  const isPromo = item.business.subscription_tier === 'promo';
-                                  handlePromo(item.business.id, item.name, isPromo);
-                                }}
-                                onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
-                                onDeleteClick={() => handleDelete(item.business.id, item.name)}
-                                onClick={() => handleBusinessClick(item.business.id)}
-                              />
-                            )}
+                              <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </>
-      )}
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs text-muted-foreground">
+                              {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
+                            </div>
+                            <div className="flex items-center gap-1 opacity-100">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePauseUser(user.id, user.email, user.is_active !== 0);
+                                }}
+                                title={user.is_active === 0 ? "Возобновить пользователя" : "Приостановить пользователя"}
+                              >
+                                {user.is_active === 0 ? (
+                                  <User className="h-4 w-4" />
+                                ) : (
+                                  <Ban className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteUser(user.id, user.email);
+                                }}
+                                title="Удалить пользователя"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          {allBusinesses.map((item, index) => (
+                            <div
+                              key={`${item.id}-${index}`}
+                              className="group relative"
+                            >
+                              {item.type === 'network' ? (
+                                <div className="space-y-3">
+                                  <div
+                                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                    onClick={() => toggleNetwork(item.networkId!)}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 rounded-lg bg-primary/10">
+                                        <Network className="w-4 h-4 text-primary" />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-semibold text-foreground">{item.networkName}</h4>
+                                        <p className="text-xs text-muted-foreground">
+                                          {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      {expandedNetworks.has(item.networkId!) ? (
+                                        <ChevronDown className="h-4 w-4" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                  {expandedNetworks.has(item.networkId!) && (
+                                    <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
+                                      {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
+                                        <BusinessCard
+                                          key={business.id}
+                                          business={business}
+                                          onSettingsClick={() => setSettingsModal({
+                                            isOpen: true,
+                                            businessId: business.id,
+                                            businessName: business.name,
+                                          })}
+                                          onPromoClick={() => {
+                                            const isPromo = business.subscription_tier === 'promo';
+                                            handlePromo(business.id, business.name, isPromo);
+                                          }}
+                                          onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
+                                          onDeleteClick={() => handleDelete(business.id, business.name)}
+                                          onClick={() => handleBusinessClick(business.id)}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <BusinessCard
+                                  business={item.business}
+                                  onSettingsClick={() => setSettingsModal({
+                                    isOpen: true,
+                                    businessId: item.business.id,
+                                    businessName: item.name,
+                                  })}
+                                  onPromoClick={() => {
+                                    const isPromo = item.business.subscription_tier === 'promo';
+                                    handlePromo(item.business.id, item.name, isPromo);
+                                  }}
+                                  onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
+                                  onDeleteClick={() => handleDelete(item.business.id, item.name)}
+                                  onClick={() => handleBusinessClick(item.business.id)}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <CreateBusinessModal
@@ -838,7 +778,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
   const isPromo = business.subscription_tier === 'promo';
 
   return (
-    <div 
+    <div
       className="group relative p-4 rounded-lg border border-border/50 bg-card hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer"
       onClick={onClick}
     >
@@ -869,7 +809,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
             </div>
           )}
         </div>
-        <div 
+        <div
           className="flex items-center gap-1.5"
           onClick={(e) => e.stopPropagation()}
         >

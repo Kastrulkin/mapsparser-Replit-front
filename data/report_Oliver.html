@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO-отчёт: Oliver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #374151;
+            background: #f9fafb;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .space-y-8 > * + * {
+            margin-top: 2rem;
+        }
+        
+        .space-y-4 > * + * {
+            margin-top: 1rem;
+        }
+        
+        .space-y-6 > * + * {
+            margin-top: 1.5rem;
+        }
+        
+        .space-y-2 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-3xl {
+            font-size: 1.875rem;
+            line-height: 2.25rem;
+        }
+        
+        .text-2xl {
+            font-size: 1.5rem;
+            line-height: 2rem;
+        }
+        
+        .text-lg {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+        }
+        
+        .text-sm {
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        
+        .font-bold {
+            font-weight: 700;
+        }
+        
+        .font-semibold {
+            font-weight: 600;
+        }
+        
+        .font-medium {
+            font-weight: 500;
+        }
+        
+        .text-primary {
+            color: #3b82f6;
+        }
+        
+        .text-success {
+            color: #10b981;
+        }
+        
+        .text-warning {
+            color: #f59e0b;
+        }
+        
+        .text-destructive {
+            color: #ef4444;
+        }
+        
+        .text-muted {
+            color: #6b7280;
+        }
+        
+        .bg-white {
+            background-color: #ffffff;
+        }
+        
+        .bg-success {
+            background-color: #10b981;
+        }
+        
+        .bg-warning {
+            background-color: #f59e0b;
+        }
+        
+        .bg-destructive {
+            background-color: #ef4444;
+        }
+        
+        .bg-muted {
+            background-color: #f3f4f6;
+        }
+        
+        .text-white {
+            color: #ffffff;
+        }
+        
+        .rounded-lg {
+            border-radius: 0.5rem;
+        }
+        
+        .rounded {
+            border-radius: 0.25rem;
+        }
+        
+        .shadow-sm {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        .p-6 {
+            padding: 1.5rem;
+        }
+        
+        .p-4 {
+            padding: 1rem;
+        }
+        
+        .p-2 {
+            padding: 0.5rem;
+        }
+        
+        .pb-3 {
+            padding-bottom: 0.75rem;
+        }
+        
+        .px-4 {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .py-2 {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        
+        .mb-3 {
+            margin-bottom: 0.75rem;
+        }
+        
+        .mb-4 {
+            margin-bottom: 1rem;
+        }
+        
+        .mt-1 {
+            margin-top: 0.25rem;
+        }
+        
+        .mt-4 {
+            margin-top: 1rem;
+        }
+        
+        .flex {
+            display: flex;
+        }
+        
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .items-start {
+            align-items: flex-start;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .gap-4 {
+            gap: 1rem;
+        }
+        
+        .w-4 {
+            width: 1rem;
+        }
+        
+        .h-4 {
+            height: 1rem;
+        }
+        
+        .w-5 {
+            width: 1.25rem;
+        }
+        
+        .h-5 {
+            height: 1.25rem;
+        }
+        
+        .w-2 {
+            width: 0.5rem;
+        }
+        
+        .h-2 {
+            height: 0.5rem;
+        }
+        
+        .max-w-2xl {
+            max-width: 42rem;
+        }
+        
+        .mx-auto {
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 1.5rem 1.5rem 0.75rem 1.5rem;
+        }
+        
+        .card-content {
+            padding: 0 1.5rem 1.5rem 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .card-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: 9999px;
+            border: 1px solid #d1d5db;
+        }
+        
+        .badge-primary {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .badge-secondary {
+            background-color: #f3f4f6;
+            color: #374151;
+            border-color: #d1d5db;
+        }
+        
+        .badge-success {
+            background-color: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+        
+        .badge-warning {
+            background-color: #f59e0b;
+            color: white;
+            border-color: #f59e0b;
+        }
+        
+        .badge-destructive {
+            background-color: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        
+        .table td.review-text,
+        .table td.org-reply {
+            max-width: 300px;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            overflow-wrap: break-word;
+        }
+        
+        .table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .table tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        .grid {
+            display: grid;
+        }
+        
+        .grid-cols-1 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+        
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        
+        .grid-cols-6 {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        
+        .aspect-square {
+            aspect-ratio: 1 / 1;
+        }
+        
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .max-w-xs {
+            max-width: 20rem;
+        }
+        
+        .separator {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 1.5rem 0;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fbbf24;
+        }
+        
+        .list-none {
+            list-style: none;
+        }
+        
+        .list-disc {
+            list-style: disc;
+        }
+        
+        .list-inside {
+            list-style-position: inside;
+        }
+        
+        @media (min-width: 768px) {
+            .md\\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            
+            .md\\:grid-cols-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .lg\\:grid-cols-6 {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container space-y-8">
+        <!-- Header -->
+        <div class="text-center space-y-4">
+            <h1 class="text-3xl font-bold text-primary">SEO-анализ страницы Яндекс.Карт</h1>
+            <div class="card max-w-2xl mx-auto">
+                <div class="card-header">
+                    <h2 class="card-title flex items-center gap-2">
+                        📈 Oliver
+                    </h2>
+                    <p class="card-description flex items-center gap-2">
+                        🌐 https://oliver-ulitsa-savushkina.clients.site/
+                    </p>
+                </div>
+                <div class="card-content">
+                    <div class="flex items-center justify-center gap-4">
+                        <span class="badge badge-success text-lg px-4 py-2">
+                            Оценка SEO: 100 / 100
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Рекомендации -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    ⚠️ Рекомендации по улучшению
+                </h2>
+            </div>
+            <div class="card-content">
+                
+                <div class="alert alert-warning mb-4">
+                    <h3 class="font-semibold mb-2">🤖 ИИ-анализ:</h3>
+                    <p>Отличный рейтинг показывает высокое качество услуг. Умеренное количество отзывов. Наличие сайта улучшает SEO. Контактный телефон облегчает связь с клиентами. Указанный адрес помогает клиентам найти вас. Отсутствие информации о часах работы может отпугнуть клиентов. Фотографии помогают клиентам лучше понять ваши услуги. </p>
+                </div>
+                
+                <ul class="space-y-2">
+                    
+                    <li class="flex items-start gap-2">
+                        <div class="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                        <span class="text-sm">Укажите часы работы для удобства клиентов</span>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        
+
+        <!-- Обзор -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Обзор</h2>
+            </div>
+            <div class="card-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            ⭐ <span class="font-medium">Рейтинг:</span>
+                            <span>5.0</span>
+                            
+                            <span class="text-muted">(69 отзывов)</span>
+                            
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📍 <span class="font-medium">Адрес:</span>
+                            <span class="text-sm">Saint Petersburg, Savushkina Street, 127</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            📞 <span class="font-medium">Телефон:</span>
+                            <span>+7 (962) 684-69-80</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            🌐 <span class="font-medium">Сайт:</span>
+                            <span class="text-sm">https://oliver-ulitsa-savushkina.clients.site/</span>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            🕒 <span class="font-medium">Часы работы:</span>
+                            <span class="text-sm"></span>
+                        </div>
+                        
+                        <div>
+                            <span class="font-medium">Описание:</span>
+                            <p class="text-sm text-muted mt-1">Комплексный маникюр с покрытием гель-лаком или классическим лаком. Включает коррекцию формы, обработку кутикулы, нанесение базы, двух слоёв цвета и закрепителя. Длится 60–90 минут, стойкий эффект до 3 недель.</p>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+        <!-- Рубрики -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Рубрики</h2>
+            </div>
+            <div class="card-content">
+                <div class="flex flex-wrap gap-2">
+                    
+                    <span class="badge badge-secondary">Beauty salon</span>
+                    
+                    <span class="badge badge-secondary">Nail salon</span>
+                    
+                    <span class="badge badge-secondary">Hairdresser</span>
+                    
+                </div>
+            </div>
+        </div>
+        
+
+        <!-- Категории товаров и услуг -->
+        
+
+        <!-- Товары и услуги -->
+        
+
+        <!-- Новости -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Новости</h2>
+            </div>
+            <div class="card-content">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Текст</th>
+                            <th>Фото</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>DECEMBER 15, 2025, 16:49</td>
+                            <td class="text-sm">Наши мастера делают все возможное, чтобы поход к нам в Семейную парикмахерскую Оливер оставил у детей только приятные мысли и воспоминания, поэтому мы работают так быстро, на сколько это возможно, но при этом чтобы не страдало качественно, зная, как отвлечь или заинтересовать юного клиента, чтобы он не заплакал в кресле и не отвлекался от процесса. 💁🏼‍♂</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">1</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>DECEMBER 8, 2025, 17:55</td>
+                            <td class="text-sm">✨ Магия новогодних ароматов в ваших руках! ✨
+
+Студия «Оливер» приглашает вас на уютный мастер-класс по созданию волшебных новогодних свечей.
+
+🎄 Что вас ждет:
+• Создание своей уникальной свечи с нуля.
+• Богатая палитра праздничных ароматов от «Магия Флора».
+• Уютная атмосфера и море вдохновения.
+
+📍 Где: Санкт-Петербург, ул. Савушкина, 127.
+🗓 Когда: 27 декабря в 15:00.
+
+Подарите себе момент творчества и частичку новогоднего чуда! Количество мест ограничено.</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">1</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>DECEMBER 2, 2025, 06:56</td>
+                            <td class="text-sm">Стрижка Сэссун является настоящей иконой парикмахерского искусства конца 20 века.
+Автор этой легендарной стрижки – один из самых талантливейших законодателей модных трендов того времени – британский парикмахер Vidal Sassoon.
+Подойдёт девочкам с прямой шевелюрой, обязательно густой и без намека на слишком тонкий волос💁🏼‍♀
+
+Ждем вас в гости!</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">1</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>NOVEMBER 12, 2025, 12:23</td>
+                            <td class="text-sm">Привет! 👋 Салон красоты «Оливер» скучает по тебе! Мы открыли двери в наш уютный уголок красоты, где тебя ждет полная перезагрузка.
+
+Хочешь сменить образ, чтобы все ахнули? Или просто расслабиться за чашечкой кофе, пока мастер творит магию? Мы умеем и то, и другое!
+
+Что тебя ждет:
+✂️ Крутые стрижки и смелые окрашивания
+💅 Идеальный маникюр и педикюр
+💆‍♀️ Расслабляющие и омолаживающие процедуры
+💄 Макияж, от которого не отвести глаз
+
+А по этому промокоду мы дарим тебе подарок!
+Просто покажи этот пост администратору и получи скидку 15% на первое посещение!
+
+Ждем в гости!</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">2</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>OCTOBER 30, 2025, 15:06</td>
+                            <td class="text-sm">Семейная акция: стрижки для всей семьи со скидкой 20%
+
+Приходите всей семьёй — и получите скидку 20% на все стрижки!
+
+Например:
+Детская стрижка — 640₽ вместо 800₽
+Женская стрижка (короткие волосы) — 960₽ вместо 1200₽
+Мужская стрижка — 640₽ вместо 800₽
+
+Вы сможете выбрать нужные услуги сами! Удобно, выгодно, комфортно! Наши мастера найдут подход к каждому члену семьи.
+
+Акция действует по выходным — суббота и воскресенье.
+
+При записи скажите, пожалуйста, что вы по семейной акции.</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">3</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>OCTOBER 8, 2025, 15:18</td>
+                            <td class="text-sm">Пора обновить образ?
+
+Короткие женские стрижки — это легкость в укладке и современный стиль каждый день. В семейной парикмахерской “Оливер” создаем каре, боб, пикси с учетом формы лица и типа волос.
+
+Наши мастера подберут идеальную короткую стрижку, которая подчеркнет вашу индивидуальность и будет удобна в уходе.
+
+Записывайтесь!</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">2</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>OCTOBER 6, 2025, 14:42</td>
+                            <td class="text-sm">Хотите, чтобы стрижка для ребёнка стала праздником?
+
+В семейной парикмахерской “Оливер” детские стрижки проходят в игровой форме! Кресло-машинка, мультики и терпеливые мастера, которые умеют найти подход к каждому малышу.
+
+✅ Модельные стрижки для мальчиков всех возрастов
+✅ Классические и современные варианты 
+✅ Безопасные инструменты 
+✅ Никаких слёз и капризов — только позитив!
+
+Семейная парикмахерская “Оливер” — это место, где детские стрижки делают с пониманием детской психологии. Записывайтесь и приводите юных модников к нам!
+
+📞 Звоните или приходите — работаем для всей семьи!</td>
+                            <td>
+                                
+                                <div class="flex items-center gap-1">
+                                    📷 <span class="text-sm">1</span>
+                                </div>
+                                
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+
+        <!-- Фото -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    📷 Фото
+                </h2>
+                <p class="card-description">Всего фото: 86</p>
+            </div>
+            <div class="card-content">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                    <div class="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        📷
+                    </div>
+                    
+                </div>
+                
+                <p class="text-center text-muted mt-4">
+                    И ещё 74 фото...
+                </p>
+                
+            </div>
+        </div>
+        
+
+        <!-- Отзывы -->
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title flex items-center gap-2">
+                    💬 Отзывы
+                </h2>
+                <p class="card-description">
+                    Средняя оценка: — | 
+                    Количество отзывов: 0
+                </p>
+            </div>
+            <div class="card-content">
+                <div class="alert alert-warning mb-4">
+                    <p class="text-sm">
+                        ⚠️ Внимание: В отчёте отображаются не все отзывы. Яндекс ограничивает количество отзывов, 
+                        доступных для автоматического сбора через интерфейс.
+                    </p>
+                </div>
+                
+                
+                <p class="mb-4 text-sm text-muted">
+                    Всего спарсилось отзывов: 965
+                </p>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Автор</th>
+                            <th>Дата</th>
+                            <th>Оценка</th>
+                            <th>Текст</th>
+                            <th>Ответ организации</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>1</td>
+                            <td class="font-medium">татьяна демидова</td>
+                            <td>January 12</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ 5
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Благодаря рекомендации, попала к мастеру Яне на японский массаж Кобидо! 
+Это не просто услуга, это инвестиция в свое здоровье! Обязательно буду рекомендовать вас всем знакомым и вернусь снова для поддержания…More
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>2</td>
+                            <td class="font-medium">татьяна демидова</td>
+                            <td>January 12</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ 5
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                Благодаря рекомендации, попала к мастеру Яне на японский массаж Кобидо! 
+Это не просто услуга, это инвестиция в свое здоровье! Обязательно буду рекомендовать вас всем знакомым и вернусь снова для поддержания…More
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>3</td>
+                            <td class="font-medium">татьяна демидова</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>4</td>
+                            <td class="font-medium">—</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>5</td>
+                            <td class="font-medium">татьяна демидова</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>6</td>
+                            <td class="font-medium">—</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>7</td>
+                            <td class="font-medium">—</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>8</td>
+                            <td class="font-medium">—</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ —
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>9</td>
+                            <td class="font-medium">—</td>
+                            <td>January 12</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ 5
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td>10</td>
+                            <td class="font-medium">—</td>
+                            <td>—</td>
+                            <td>
+                                <div class="flex items-center gap-1">
+                                    ⭐ 5
+                                </div>
+                            </td>
+                            <td class="text-sm review-text">
+                                —
+                            </td>
+                            <td class="text-sm org-reply">
+                                —
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+                
+                <p class="text-center text-muted mt-4">
+                    Показаны первые 10 отзывов из 965
+                </p>
+                
+                
+            </div>
+        </div>
+        
+
+        <!-- Особенности -->
+        
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Особенности</h2>
+            </div>
+            <div class="card-content space-y-6">
+                <!-- Булевые особенности -->
+                
+                <div>
+                    <h4 class="font-semibold mb-3">Булевые особенности (галочки):</h4>
+                    <div class="flex flex-wrap gap-2">
+                        
+                        <span class="badge badge-primary">
+                            Manicure (особая)
+                        </span>
+                        
+                        <span class="badge badge-primary">
+                            Parking (особая)
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Pedicure
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Possible with a dog
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Gift certificate
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Preliminary registration
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Bike parking
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Online appointments
+                        </span>
+                        
+                        <span class="badge badge-secondary">
+                            Privilege haircut
+                        </span>
+                        
+                    </div>
+                </div>
+                
+
+                <!-- Ценностные особенности -->
+                
+                <div>
+                    <h4 class="font-semibold mb-3">Ценностные особенности (категории услуг):</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        
+                        <div class="flex justify-between items-center p-2 bg-muted rounded">
+                            <span class="font-medium">Price for women's haircut:</span>
+                            <span>1400–2800 ₽</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-2 bg-muted rounded">
+                            <span class="font-medium">Price for men's haircut:</span>
+                            <span>800–1800 ₽</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-2 bg-muted rounded">
+                            <span class="font-medium">Cosmetology services:</span>
+                            <span>eyebrow correction, eyelashes/eyebrow coloring, facial massage</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-2 bg-muted rounded">
+                            <span class="font-medium">Hairdressing services:</span>
+                            <span>for child</span>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+
+                <!-- Цены -->
+                
+                <div>
+                    <h4 class="font-semibold mb-3">Цены:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        
+                        <div class="flex justify-between items-center p-2 bg-success/10 rounded">
+                            <span class="font-medium">Price for women's haircut:</span>
+                            <span class="text-success font-semibold">1400–2800 ₽</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-2 bg-success/10 rounded">
+                            <span class="font-medium">Price for men's haircut:</span>
+                            <span class="text-success font-semibold">800–1800 ₽</span>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+
+                <!-- Категории -->
+                
+                <div>
+                    <h4 class="font-semibold mb-3">Категории (из блока «Особенности»):</h4>
+                    <div class="flex flex-wrap gap-2">
+                        
+                        <span class="badge badge-secondary">Beauty salon</span>
+                        
+                        <span class="badge badge-secondary">Nail salon</span>
+                        
+                        <span class="badge badge-secondary">Hairdresser</span>
+                        
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+
+        <!-- Анализ конкурента -->
+        
+    </div>
+</body>
+</html> 

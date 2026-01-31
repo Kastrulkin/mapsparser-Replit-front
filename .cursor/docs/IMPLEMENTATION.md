@@ -464,3 +464,207 @@
 - [ ] Требуется проверка сортировки на фронтенде
 
 ---
+
+### 2025-01-31 - Phase 3.5 Production Readiness Check
+
+**План из PHASE_3_5_PRODUCTION_CHECKLIST.md:**
+- Проверить constraints в БД
+- Проверить orphaned records
+- Исправить rollback в route handlers
+- Протестировать готовность к production rollout
+
+**Реализовано:**
+
+**Проверка constraints:**
+- Создан скрипт `scripts/check_phase_3_5_ready.py` для автоматической проверки
+- Проверка UNIQUE constraint для `ExternalBusinessReviews` - отсутствовал
+- Создана миграция `src/migrations/add_unique_constraint_external_reviews.py`:
+  - Создание уникального индекса `idx_ext_reviews_unique` на `(business_id, source, external_review_id)`
+  - Удаление дубликатов перед созданием индекса
+  - Автоматический бэкап через `safe_migrate()`
+- Миграция применена успешно
+- Проверка FOREIGN KEY для `UserServices`:
+  - FK на `business_id` - отсутствовал, добавлен
+  - FK на `user_id` - отсутствовал, добавлен (критично для Step 2)
+- Создана миграция `src/migrations/add_fk_user_services_user_id.py`:
+  - Пересоздание таблицы `UserServices` с обоими FK
+  - Удаление orphaned records перед пересозданием
+  - Восстановление индексов
+- Миграция применена успешно
+
+**Проверка orphaned records:**
+- Проверка `UserServices`: 0 записей с `business_id = NULL`, 0 orphaned записей
+- Проверка `ExternalBusinessReviews`: 0 записей с `business_id = NULL`, 0 orphaned записей
+- Все проверки пройдены
+
+**Исправление rollback в route handlers:**
+- Обновлен `src/main.py` (функция `get_external_reviews()`, строки 1618-1620):
+  - Добавлен `db.conn.rollback()` в except блок
+  - Добавлен rollback для ранних возвратов (404, 403)
+  - Улучшена обработка ошибок с логированием и traceback
+
+**Файлы изменены:**
+- `scripts/check_phase_3_5_ready.py` - создан (скрипт проверки готовности с оценкой по этапам)
+- `src/migrations/add_unique_constraint_external_reviews.py` - создан (миграция для UNIQUE constraint)
+- `src/migrations/add_fk_user_services_user_id.py` - создан (миграция для FK на user_id и business_id)
+- `src/main.py` (строки 1618-1620) - исправлен rollback в route handler
+- `.cursor/docs/PHASE_3_5_PRODUCTION_CHECKLIST.md` - обновлен (отмечены выполненные задачи)
+- `.cursor/docs/PHASE_3_5_FINAL_REPORT.md` - создан (итоговый отчет)
+
+**Ожидаемый эффект:**
+- UNIQUE constraint предотвращает дубликаты отзывов
+- FOREIGN KEY на user_id предотвращает создание услуг с несуществующим user_id (критично для Step 2)
+- FOREIGN KEY на business_id предотвращает создание услуг с несуществующим business_id
+- Rollback обеспечивает безопасность при ошибках
+- Все проверки пройдены, готово к staged rollout (все этапы)
+
+**Оценка готовности по этапам:**
+- ✅ **Step 1 (USE_REVIEW_REPOSITORY)**: Готово (только чтение, безопасно)
+- ✅ **Step 2 (USE_SERVICE_REPOSITORY)**: Готово (FK на user_id добавлен, безопасно для записи)
+- ✅ **Step 3 (USE_BUSINESS_REPOSITORY)**: Готово
+
+**Статус:**
+- [x] Все проверки пройдены
+- [x] Готово к staged rollout (все этапы)
+- [ ] Требуется настройка мониторинга на сервере (опционально)
+- [ ] Требуется создание rollback скрипта для быстрого отключения флагов (опционально)
+
+**Рекомендации:**
+1. Начать с Этапа 1: `USE_REVIEW_REPOSITORY=true` (только чтение, безопасно)
+2. Мониторить логи первые 30 минут
+3. При отсутствии ошибок - продолжить с Этапом 2 через 24 часа (теперь безопасно, FK добавлен)
+4. Этап 3 - через неделю после Этапа 2
+
+---
+
+### 2025-01-31 - Приоритет 1: Quality Score + Source Priority Pipeline
+
+**План из PARSER_EFFICIENCY_IMPROVEMENTS.md:**
+- Добавить Quality Score для отслеживания качества данных
+- Реализовать Source Priority Pipeline (без merge по имени)
+- Защита от Data Drift (перезапись хороших данных плохими)
+
+**Реализовано:**
+
+**1. Миграция БД:**
+- Создан файл `src/migrations/add_quality_score_fields.py`:
+  - Добавлены поля `data_source`, `quality_score`, `raw_snapshot` в `ExternalBusinessReviews`
+  - Добавлены поля `data_source`, `quality_score`, `parse_metadata` в `MapParseResults`
+  - Созданы индексы для быстрого поиска "плохих" данных (`quality_score < 50`)
+  - Обновлены существующие записи: `quality_score = 100`, `data_source = 'legacy'`
+- Миграция применена успешно:
+  - Обновлено 72 записей в ExternalBusinessReviews
+  - Обновлено 23 записей в MapParseResults
+
+**2. Обновление ReviewRepository:**
+- Обновлен `src/repositories/review_repository.py`:
+  - Добавлены новые колонки в `REVIEW_COLUMNS`: `data_source`, `quality_score`, `raw_snapshot`
+  - Добавлен метод `get_by_external_id()` для проверки существующих записей
+  - Обновлен метод `upsert()` с защитой от перезаписи:
+    - Правило 1: Обновляем если новый `quality_score` выше существующего
+    - Правило 2: Обновляем если тот же источник и данные свежее (старше 1 часа)
+    - Правило 3: Не обновляем если существующий `quality_score` выше нового
+  - `raw_snapshot` хранится только для плохих данных (`quality_score < 50`), ограничение размера до 1000 символов
+  - Добавлено логирование для отладки
+
+**3. ParseResult класс:**
+- Создан файл `src/parsers/parse_result.py`:
+  - Класс `ParseResult` для хранения результата парсинга с метаданными
+  - Метод `merge()` для объединения результатов (дополняет только пустые поля, не перезаписывает)
+  - Метод `to_dict()` для преобразования в словарь с метаданными
+
+**4. Source Priority Pipeline в парсере:**
+- Обновлен `src/parser_interception.py`:
+  - Добавлен импорт `ParseResult`
+  - Переработан метод `parse_yandex_card()` для Source Priority Pipeline:
+    1. API Interception (quality: 100) - основной источник
+    2. HTML Fallback (quality: 70) - только если API не вернул данных (None, не пустой список)
+    3. Meta tags (quality: 40) - только если API и HTML не сработали
+  - Добавлен метод `_parse_meta_tags()` для парсинга из meta тегов
+  - **Критическое исправление:** Если API вернул данные (даже пустой список) - используем только API. HTML используется только если API полностью не сработал (вернул None).
+  - Специальная обработка для услуг: Source Priority без merge по имени
+  - Добавлены метаданные `_parse_metadata` с информацией об источниках и quality score
+
+**Файлы изменены:**
+- `src/migrations/add_quality_score_fields.py` - создан (миграция БД)
+- `src/repositories/review_repository.py` - обновлен (защита от перезаписи)
+- `src/parsers/parse_result.py` - создан (класс ParseResult)
+- `src/parser_interception.py` - обновлен (Source Priority Pipeline)
+
+**Ожидаемый эффект:**
+- Quality Score позволяет отслеживать надежность данных
+- Защита от Data Drift: хорошие данные не перезаписываются плохими
+- Source Priority предотвращает смешивание устаревших HTML-данных с актуальными API-данными
+- Экономия места: `raw_snapshot` хранится только для плохих данных
+- Обновление старых данных: проверка `updated_at` позволяет обновлять старые данные новыми
+
+**Статус:**
+- [x] Миграция БД выполнена
+- [x] ReviewRepository обновлен
+- [x] ParseResult класс создан
+- [x] Source Priority Pipeline реализован
+- [ ] Требуется тестирование на реальных данных
+
+**Следующие шаги:**
+1. Протестировать на реальных данных
+2. Приоритет 2: Circuit Breaker (защита от бана API)
+3. Приоритет 3: Data Validation Gates
+
+---
+
+### 2025-01-31 - Переключение задачи парсинга на синхронизацию с Яндекс.Бизнес
+
+**План:**
+- Добавить возможность переключения задачи парсинга на синхронизацию через API Яндекс.Бизнес
+- Унифицировать статусы задач (использовать 'completed' вместо 'done')
+- Добавить защиту от "тихих" ошибок при обновлении задач
+
+**Реализовано:**
+
+**1. Backend API эндпоинт:**
+- Создан эндпоинт `POST /api/admin/parsing/tasks/<task_id>/switch-to-sync` в `src/main.py`:
+  - Проверка авторизации и прав суперадмина
+  - Проверка наличия `business_id` у задачи
+  - Проверка, что задача еще не является синхронизацией (`task_type != 'sync_yandex_business'`)
+  - Поиск активного аккаунта Яндекс.Бизнес для бизнеса
+  - Обновление задачи: `task_type = 'sync_yandex_business'`, `account_id`, `source = 'yandex_business'`, `status = 'pending'`
+  - Проверка `cursor.rowcount` для защиты от "тихих" ошибок
+  - Очистка `error_message` и `retry_after` при переключении
+
+**2. Frontend компонент:**
+- Обновлен `frontend/src/components/ParsingManagement.tsx`:
+  - Добавлена функция `handleSwitchToSync` с подтверждением действия
+  - Добавлена кнопка с иконкой `ArrowLeftRight` (синяя) для переключения
+  - Кнопка показывается только для задач парсинга (не `sync_yandex_business`)
+  - Кнопка показывается только если у задачи есть `business_id`
+  - Интернационализация через `useLanguage`
+  - Toast-уведомления об успехе/ошибке
+
+**3. Унификация статусов:**
+- Исправлено несоответствие статусов в `src/worker.py`:
+  - Заменено `'done'` на `'completed'` в функциях:
+    - `process_queue()` (строка 432) - для успешного парсинга
+    - `_process_sync_yandex_business_task()` (строка 1424) - для синхронизации Яндекс.Бизнес
+    - `_process_sync_2gis_task()` (строка 1727) - для синхронизации 2ГИС
+  - Теперь везде используется единый статус `'completed'` для завершенных задач
+  - Frontend корректно отображает статус `'completed'`
+
+**Файлы изменены:**
+- `src/main.py` - добавлен эндпоинт `switch_task_to_sync` с проверкой `rowcount`
+- `src/worker.py` - унифицированы статусы (`'done'` → `'completed'`)
+- `frontend/src/components/ParsingManagement.tsx` - добавлена функция и кнопка переключения
+
+**Ожидаемый эффект:**
+- Администраторы могут быстро переключать задачи парсинга на синхронизацию через API
+- Единый статус `'completed'` для всех завершенных задач (улучшает читаемость UI)
+- Защита от "тихих" ошибок при обновлении задач (проверка `rowcount`)
+- Улучшенный UX: кнопка переключения видна только когда это возможно
+
+**Статус:**
+- [x] Backend API эндпоинт реализован
+- [x] Frontend компонент обновлен
+- [x] Статусы унифицированы
+- [x] Проверка `rowcount` добавлена
+- [x] Готово к использованию
+
+---

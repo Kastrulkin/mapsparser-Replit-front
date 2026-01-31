@@ -112,10 +112,9 @@ class YandexSyncService:
             if not yandex_org_id and yandex_url:
                 yandex_org_id = self.adapter.parse_org_id_from_url(yandex_url)
                 if yandex_org_id:
-                    cursor.execute(
-                        "UPDATE Businesses SET yandex_org_id = ? WHERE id = ?",
-                        (yandex_org_id, business_id),
-                    )
+                    from repositories.business_repository import BusinessRepository
+                    repo = BusinessRepository(db)
+                    repo.update_yandex_fields(business_id, yandex_org_id, yandex_url)
 
             if not yandex_org_id:
                 print(f"[YandexSync] Для бизнеса {name} ({business_id}) не задан yandex_org_id")

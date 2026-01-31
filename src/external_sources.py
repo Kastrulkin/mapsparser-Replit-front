@@ -62,6 +62,7 @@ class ExternalStatsPoint:
     actions_total: Optional[int] = None
     rating: Optional[float] = None
     reviews_total: Optional[int] = None
+    unanswered_reviews_count: Optional[int] = None
     raw_payload: Optional[Dict[str, Any]] = None
 
 

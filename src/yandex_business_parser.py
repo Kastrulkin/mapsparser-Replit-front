@@ -381,8 +381,8 @@ class YandexBusinessParser:
                         last_sync_dt = None
                     
                     if last_sync_dt and oldest_review_date < last_sync_dt:
-                        print(f"✅ Все новые отзывы загружены (найдены отзывы старше {last_sync_date})")
-                        break
+                        print(f"✅ Все новые отзывы загружены (найдены отзывы старше {last_sync_date}) - ПРОДОЛЖАЕМ для проверки ответов")
+                        # break  # DISABLE BREAK to check for new replies on old reviews
             
             # Проверяем условия остановки пагинации
             # Если на странице меньше лимита, это последняя страница
@@ -412,7 +412,17 @@ class YandexBusinessParser:
         
         # Парсим отзывы
         for idx, review_data in enumerate(reviews_list):
-            review_id = review_data.get("id") or f"{business_id}_review_{idx}"
+            import hashlib
+            # Generate stable ID if external ID is missing
+            author_data = review_data.get("author") or review_data.get("user") or {}
+            author_name_trace = author_data.get("name") if isinstance(author_data, dict) else str(author_data)
+            text_trace = review_data.get("text") or review_data.get("snippet") or ""
+            date_trace = review_data.get("published_at") or review_data.get("date") or ""
+            
+            stable_id_str = f"{author_name_trace}_{date_trace}_{text_trace[:30]}"
+            stable_hash = hashlib.md5(stable_id_str.encode()).hexdigest()
+            
+            review_id = review_data.get("id") or f"{business_id}_review_{stable_hash}"
             
             # Логируем raw данные для первых 2 отзывов (для отладки)
             if idx < 2:
@@ -427,7 +437,10 @@ class YandexBusinessParser:
             
             try:
                 # Пробуем разные варианты полей с датой
+                # ВАЖНО: Яндекс теперь использует updatedTime!
                 published_at_str = (
+                    review_data.get("updatedTime") or  # NEW: Яндекс API 2026
+                    review_data.get("createdTime") or  # Alternative NEW
                     review_data.get("published_at") or
                     review_data.get("publishedAt") or
                     review_data.get("date") or
@@ -457,17 +470,47 @@ class YandexBusinessParser:
                 has_response = False
                 
                 # Проверяем различные варианты структуры ответа
-                # В реальном API ответ находится в поле "owner_comment"
+                # ВАЖНО: Яндекс теперь использует businessComment вместо owner_comment!
                 response_data = (
-                    review_data.get("owner_comment") or  # Основное поле в реальном API
-                    review_data.get("response") or 
-                    review_data.get("reply") or 
-                    review_data.get("organization_response") or
-                    review_data.get("company_response") or
-                    review_data.get("owner_response") or
-                    review_data.get("answer") or
-                    review_data.get("answers")  # Может быть массив
+                    review_data.get("businessComment") or  # NEW: Яндекс API 2026
+                    review_data.get("owner_comment")
                 )
+                
+                # Логируем структуру для отладки (первые 3 отзыва)
+                if idx < 3:
+                    print(f"   🔍 DEBUG response data для отзыва #{idx + 1}:", flush=True)
+                    print(f"      businessComment: {review_data.get('businessComment')}", flush=True)
+                    print(f"      Тип: {type(response_data)}", flush=True)
+                    print(f"      Значение: {str(response_data)[:200] if response_data else 'None'}", flush=True)
+                
+                # ВАЖНО: проверяем, что owner_comment не null и не пустой объект
+                if response_data is None:
+                    # Нет ответа - это нормально
+                    response_data = None
+                elif isinstance(response_data, dict):
+                    # Проверяем, что это не пустой объект {}
+                    if not response_data or len(response_data) == 0:
+                        if idx < 3:
+                            print(f"      ⚠️ owner_comment - пустой объект {{}}", flush=True)
+                        response_data = None
+                elif isinstance(response_data, str):
+                    # Проверяем, что строка не пустая
+                    if not response_data.strip():
+                        if idx < 3:
+                            print(f"      ⚠️ owner_comment - пустая строка", flush=True)
+                        response_data = None
+                
+                # Если owner_comment не найден, пробуем альтернативные поля
+                if not response_data:
+                    response_data = (
+                        review_data.get("response") or 
+                        review_data.get("reply") or 
+                        review_data.get("organization_response") or
+                        review_data.get("company_response") or
+                        review_data.get("owner_response") or
+                        review_data.get("answer") or
+                        review_data.get("answers")  # Может быть массив
+                    )
                 
                 # Если answers - массив, берём первый элемент
                 if isinstance(response_data, list) and len(response_data) > 0:
@@ -495,6 +538,8 @@ class YandexBusinessParser:
                     
                     if response_text and response_text.strip():
                         has_response = True
+                        if idx < 3:
+                            print(f"      ✅ Найден ответ (длина: {len(response_text)})", flush=True)
                         if response_at_str:
                             try:
                                 # Если это timestamp в миллисекундах (как в owner_comment)
@@ -507,6 +552,9 @@ class YandexBusinessParser:
                                     response_at = datetime.fromisoformat(response_at_str.replace("Z", "+00:00"))
                             except:
                                 pass
+                    else:
+                        if idx < 3 and response_text is not None:
+                            print(f"      ⚠️ response_text пустой или только пробелы: '{response_text}'", flush=True)
                 
                 # Парсим рейтинг (может быть в разных форматах)
                 rating = review_data.get("rating") or review_data.get("score") or review_data.get("stars")
@@ -843,6 +891,21 @@ class YandexBusinessParser:
                     # Округляем до 1 знака после запятой
                     info["rating"] = round(avg_rating, 1)
                     print(f"   📊 Вычислен средний рейтинг из {len(ratings)} отзывов: {info['rating']}")
+        
+        # Если рейтинг всё ещё не найден, пробуем получить из статистики
+        if not info["rating"]:
+            try:
+                stats = self.fetch_stats(account_row)
+                if stats and len(stats) > 0:
+                    # Ищем последнюю статистику с рейтингом
+                    stats.sort(key=lambda x: x.date, reverse=True)
+                    for stat in stats:
+                        if stat.rating and stat.rating > 0:
+                            info["rating"] = stat.rating
+                            print(f"   📊 Рейтинг получен из статистики: {info['rating']}")
+                            break
+            except Exception as e:
+                print(f"⚠️ Ошибка получения рейтинга из статистики: {e}")
         
         # Получаем количество новостей и фото из реальных методов
         if info["news_count"] == 0:
@@ -1354,8 +1417,13 @@ class YandexBusinessParser:
                                 
                                 # Если есть хотя бы текст или заголовок - это пост
                                 if text or title:
+                                    # Generates stable ID
+                                    import hashlib
+                                    id_str = f"{title or ''}_{date_str or ''}_{text[:20] if text else ''}"
+                                    post_hash = hashlib.md5(id_str.encode()).hexdigest()
+                                    
                                     html_posts.append({
-                                        "id": f"html_post_{idx}",
+                                        "id": f"html_post_{post_hash}",
                                         "title": title,
                                         "text": text,
                                         "published_at": published_at.isoformat() if published_at else None,
@@ -2368,3 +2436,86 @@ class YandexBusinessParser:
         ]
 
 
+    def fetch_products(self, account_row: dict) -> List[Dict[str, Any]]:
+        """
+        Получить товары/услуги из кабинета Яндекс.Бизнес.
+        
+        Args:
+            account_row: Строка из ExternalBusinessAccounts
+        
+        Returns:
+            Список словарей с данными о товарах/услугах (категории и товары)
+        """
+        business_id = account_row["business_id"]
+        external_id = account_row.get("external_id")
+        
+        if not external_id:
+            return []
+            
+        print(f"🔍 Пробуем получить товары/услуги для {business_id}...")
+        
+        # Endpoints для товаров/услуг (Goods / Price Lists)
+        possible_urls = [
+            f"https://yandex.ru/sprav/api/{external_id}/goods",
+            f"https://yandex.ru/sprav/api/{external_id}/price-lists",
+            f"https://yandex.ru/sprav/api/company/{external_id}/goods",
+            f"https://business.yandex.ru/api/organizations/{external_id}/goods",
+        ]
+        
+        data = None
+        for url in possible_urls:
+            # Имитация
+            delay = random.uniform(1.0, 3.0)
+            time.sleep(delay)
+            
+            result = self._make_request(url)
+            if result:
+                data = result
+                print(f"✅ Успешно получены данные товаров с {url}")
+                break
+                
+        if not data:
+            print(f"⚠️ Не удалось получить товары через API endpoints.")
+            return []
+            
+        # Парсим ответ
+        # Ожидаемая структура: {"categories": [...]} или список категорий
+        categories = []
+        
+        if isinstance(data, list):
+            categories = data
+        elif isinstance(data, dict):
+            categories = data.get("categories") or data.get("groups") or data.get("goods") or []
+            
+        parsed_products = []
+        
+        for category in categories:
+            cat_name = category.get("name", "Разное")
+            items = category.get("items") or category.get("goods") or []
+            
+            parsed_items = []
+            for item in items:
+                # Извлекаем цену
+                price = item.get("price")
+                if isinstance(price, dict):
+                    price_val = price.get("value")
+                    currency = price.get("currency", "RUB")
+                    price_str = f"{price_val} {currency}" if price_val else ""
+                else:
+                    price_str = str(price) if price else ""
+                
+                parsed_items.append({
+                    "name": item.get("name") or item.get("title") or item.get("text") or "",
+                    "description": item.get("description") or item.get("text") or item.get("details") or item.get("content") or "",
+                    "price": price_str,
+                    "photo_url": item.get("photos", [{}])[0].get("url") if item.get("photos") else None
+                })
+                
+            if parsed_items:
+                parsed_products.append({
+                    "category": cat_name,
+                    "items": parsed_items
+                })
+                
+        print(f"✅ Получено {len(parsed_products)} категорий товаров")
+        return parsed_products

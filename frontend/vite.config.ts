@@ -5,20 +5,15 @@ import path from "path"; // ← обязательно добавьте этот
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true,
+    host: '0.0.0.0',
     port: 3000,
-    allowedHosts: [
-      "localhost",
-      "127.0.0.1",
-      "6463ac8a-2c20-46f2-bae0-11bc92991339-00-1uzunkaw6b2ub.riker.replit.dev",
-    ],
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
-      }
-    }
+      },
+    },
   },
   resolve: {
     alias: {

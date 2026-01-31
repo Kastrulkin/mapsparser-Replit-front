@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiEndpoint } from '../config/api';
 import { ChevronDown, Building2, Network } from 'lucide-react';
 
 interface NetworkLocation {
@@ -39,11 +40,11 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
 
   const loadNetworkLocations = async () => {
     if (!networkId) return;
-    
+
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:8000/api/networks/${networkId}/locations`, {
+      const response = await fetch(getApiEndpoint(`/api/networks/${networkId}/locations`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -105,9 +106,8 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
             <button
               key={location.id}
               onClick={() => handleLocationSelect(location)}
-              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                selectedLocation?.id === location.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${selectedLocation?.id === location.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                }`}
             >
               <div className="flex items-start space-x-3">
                 <Building2 className="w-4 h-4 text-gray-600 mt-0.5" />

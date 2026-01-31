@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ interface TelegramBotCredentialsProps {
 }
 
 export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCredentialsProps) => {
+  const { t } = useLanguage();
   const [botToken, setBotToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,8 +29,8 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
   const handleSave = async () => {
     if (!businessId) {
       toast({
-        title: 'Ошибка',
-        description: 'Бизнес не выбран',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.selectBusiness,
         variant: 'destructive',
       });
       return;
@@ -36,8 +38,8 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
     if (!botToken) {
       toast({
-        title: 'Ошибка',
-        description: 'Введите токен бота',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.errorEmpty,
         variant: 'destructive',
       });
       return;
@@ -62,20 +64,20 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
       if (response.ok) {
         toast({
-          title: 'Успешно',
-          description: 'Токен Telegram бота сохранён',
+          title: t.common.success,
+          description: t.dashboard.settings.telegram2.successSave,
         });
       } else {
         toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось сохранить токен',
+          title: t.common.error,
+          description: data.error || t.dashboard.settings.telegram2.errorSave,
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
-        title: 'Ошибка',
-        description: 'Ошибка при сохранении токена',
+        title: t.common.error,
+        description: t.dashboard.settings.telegram2.errorSave,
         variant: 'destructive',
       });
     } finally {
@@ -88,27 +90,27 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bot className="h-5 w-5" />
-          Токен Telegram бота
+          {t.dashboard.settings.telegram2.title}
         </CardTitle>
         <CardDescription>
-          Укажите токен вашего Telegram бота для отправки сообщений клиентам
+          {t.dashboard.settings.telegram2.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <AlertDescription>
-            Если у вас есть собственный Telegram бот, укажите здесь его токен.
-            Это позволит отправлять сообщения клиентам через ИИ агента со своего бота.
+            {t.dashboard.settings.telegram2.subtitle}
+            {t.dashboard.settings.telegram2.alert}
           </AlertDescription>
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="telegram-bot-token">Токен бота</Label>
+          <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
           <div className="relative">
             <Input
               id="telegram-bot-token"
               type={showToken ? 'text' : 'password'}
-              placeholder="Введите токен бота"
+              placeholder={t.dashboard.settings.telegram2.tokenPlaceholder}
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
               disabled={saving}
@@ -124,7 +126,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Токен можно получить у @BotFather в Telegram
+            {t.dashboard.settings.telegram2.tokenHelp}
           </p>
         </div>
 
@@ -136,10 +138,10 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Сохранение...
+              {t.dashboard.settings.telegram2.saving}
             </>
           ) : (
-            'Сохранить токен'
+            t.dashboard.settings.telegram2.saveButton
           )}
         </Button>
       </CardContent>

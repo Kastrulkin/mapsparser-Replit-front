@@ -7,10 +7,75 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
+
+try:
+    from src.query_adapter import QueryAdapter
+except ImportError:
+    from query_adapter import QueryAdapter
+import os
+
+class DBCursorWrapper:
+    """Wrapper around database cursor to intercept and adapt queries"""
+    def __init__(self, cursor, db_type='sqlite'):
+        self.cursor = cursor
+        self.db_type = db_type
+        
+    def execute(self, query, params=()):
+        if self.db_type == 'postgres':
+            try:
+                query = QueryAdapter.adapt_query(query, params)
+                params = QueryAdapter.adapt_params(params)
+            except Exception as e:
+                import logging
+                logging.getLogger('db_adapter').error(f"Adapter Error: {e}")
+                raise
+        return self.cursor.execute(query, params)
+        
+    def executemany(self, query, params_list):
+        if self.db_type == 'postgres':
+            # executemany is trickier. We adapt the query once.
+            if params_list:
+                first_params = params_list[0]
+                query = QueryAdapter.adapt_query(query, first_params)
+                # Then adapt all params
+                params_list = [QueryAdapter.adapt_params(p) for p in params_list]
+        return self.cursor.executemany(query, params_list)
+        
+    def fetchone(self):
+        return self.cursor.fetchone()
+        
+    def fetchall(self):
+        return self.cursor.fetchall()
+        
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
+
+class DBConnectionWrapper:
+    """Wrapper around database connection"""
+    def __init__(self, conn):
+        self.conn = conn
+        self.db_type = os.getenv('DB_TYPE', 'sqlite')
+        
+    def cursor(self):
+        return DBCursorWrapper(self.conn.cursor(), self.db_type)
+        
+    def commit(self):
+        return self.conn.commit()
+        
+    def rollback(self):
+        return self.conn.rollback()
+        
+    def close(self):
+        return self.conn.close()
+        
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
 def get_db_connection():
     """Получить соединение с SQLite базой данных"""
     from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+    conn = _get_db_connection()
+    return DBConnectionWrapper(conn)
 
 class DatabaseManager:
     """Менеджер для работы с базой данных"""
@@ -724,6 +789,52 @@ class DatabaseManager:
                 'direct_businesses': orphan_businesses,
                 'networks': []
             })
+            
+        # Находим сети без владельцев (orphan networks)
+        cursor.execute("""
+            SELECT n.*
+            FROM Networks n
+            LEFT JOIN Users u ON n.owner_id = u.id
+            WHERE u.id IS NULL
+            ORDER BY n.created_at DESC
+        """)
+        orphan_networks = [dict(row) for row in cursor.fetchall()]
+        
+        if orphan_networks:
+            # Для каждой сиротливой сети собираем её бизнесы
+            networks_with_businesses = []
+            for network in orphan_networks:
+                network_id = network['id']
+                # Ищем бизнесы этой сети (используем уже полученные all_network_businesses)
+                # Это эффективнее чем делать новый запрос
+                network_businesses = businesses_by_network.get(network_id, [])
+                networks_with_businesses.append({
+                    **network,
+                    'businesses': network_businesses
+                })
+            
+            # Если уже есть группа "Без владельца", добавляем туда
+            found_orphan_group = False
+            for user_group in result:
+                if user_group['id'] is None and user_group['email'] == '[Без владельца]':
+                    user_group['networks'].extend(networks_with_businesses)
+                    found_orphan_group = True
+                    break
+            
+            # Если группы нет, создаем её
+            if not found_orphan_group:
+                result.append({
+                    'id': None,
+                    'email': '[Без владельца]',
+                    'name': '[Сети без владельца]',
+                    'phone': None,
+                    'created_at': None,
+                    'is_active': None,
+                    'is_verified': None,
+                    'is_superadmin': False,
+                    'direct_businesses': [],
+                    'networks': networks_with_businesses
+                })
         
         return result
     
@@ -732,7 +843,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT id, name, description, industry, business_type, address, working_hours, 
-                   phone, email, website, owner_id, is_active, 
+                   phone, email, website, owner_id, network_id, is_active, 
                    created_at, updated_at
             FROM Businesses WHERE id = ?
         """, (business_id,))
@@ -945,6 +1056,62 @@ class DatabaseManager:
             reports.append(report)
         
         return reports
+
+    # ===== PROSPECTING LEADS =====
+
+    def get_all_leads(self) -> List[Dict[str, Any]]:
+        """Получить все лиды"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM ProspectingLeads ORDER BY created_at DESC")
+        return [dict(zip([d[0] for d in cursor.description], row)) for row in cursor.fetchall()]
+
+    def save_lead(self, lead_data: Dict[str, Any]) -> str:
+        """Сохранить лид (если уже есть google_id - обновить)"""
+        cursor = self.conn.cursor()
+        
+        # Проверяем дубликат по google_id
+        google_id = lead_data.get('google_id')
+        if google_id:
+            cursor.execute("SELECT id FROM ProspectingLeads WHERE google_id = ?", (google_id,))
+            existing = cursor.fetchone()
+            if existing:
+                return existing[0]
+
+        lead_id = str(uuid.uuid4())
+        fields = ['id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count', 
+                  'source_url', 'google_id', 'category', 'location', 'status']
+        
+        values = [lead_id]
+        for f in fields[1:]:
+            values.append(lead_data.get(f))
+            
+        placeholders = ', '.join(['?' for _ in values])
+        
+        cursor.execute(f"""
+            INSERT INTO ProspectingLeads ({', '.join(fields)}, created_at, updated_at)
+            VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, values)
+        
+        self.conn.commit()
+        return lead_id
+
+    def update_lead_status(self, lead_id: str, status: str) -> bool:
+        """Обновить статус лида"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE ProspectingLeads 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (status, lead_id))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def delete_lead(self, lead_id: str) -> bool:
+        """Удалить лид"""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM ProspectingLeads WHERE id = ?", (lead_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
 
 def main():
     """Основная функция для тестирования"""

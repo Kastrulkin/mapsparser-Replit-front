@@ -46,10 +46,20 @@ interface LanguageProviderProps {
 export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('language');
-    if (saved && (saved === 'ru' || saved === 'en' || saved === 'fr' || saved === 'es' || saved === 'el' || saved === 'de' || saved === 'th' || saved === 'ar' || saved === 'ha')) {
+    const supportedLanguages = ['ru', 'en', 'fr', 'es', 'el', 'de', 'th', 'ar', 'ha'];
+
+    if (saved && supportedLanguages.includes(saved)) {
       return saved as Language;
     }
-    return 'ru';
+
+    if (typeof navigator !== 'undefined' && navigator.language) {
+      const browserLang = navigator.language.split('-')[0];
+      if (supportedLanguages.includes(browserLang)) {
+        return browserLang as Language;
+      }
+    }
+
+    return 'en';
   });
 
   useEffect(() => {

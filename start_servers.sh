@@ -1,7 +1,7 @@
 #!/bin/bash
 # Скрипт для запуска Flask и фронтенда
 
-cd "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре"
+cd "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/mapsparser-Replit-front"
 
 echo "🚀 Запуск серверов..."
 

@@ -1,37 +1,53 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import ReviewReplyAssistant from '@/components/ReviewReplyAssistant';
-import NewsGenerator from '@/components/NewsGenerator';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
+import { useLanguage } from '@/i18n/LanguageContext';
+import {
+  Wand2,
+  Network,
+  Star,
+  MessageSquare,
+  TrendingUp,
+  Plus,
+  Search,
+  Filter,
+  Trash2,
+  Edit3,
+  AlertCircle,
+  CheckCircle2,
+  MapPin,
+  Sparkles,
+  LayoutGrid,
+  List,
+  Newspaper,
+  Trophy
+} from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
+import NewsGenerator from "@/components/NewsGenerator";
+import SEOKeywordsTab from "@/components/SEOKeywordsTab";
+import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
   const { user, currentBusinessId, currentBusiness } = context || {};
-  
+  const { t, language } = useLanguage();
+
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
+  const [lastParseDate, setLastParseDate] = useState<string | null>(null);
+  const [competitors, setCompetitors] = useState<any[]>([]);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  
+
   // Состояния для услуг
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [servicesCurrentPage, setServicesCurrentPage] = useState(1);
-  const servicesItemsPerPage = 10;
+  const servicesItemsPerPage = 1000;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
-  const [editingForm, setEditingForm] = useState({
-    category: '',
-    name: '',
-    description: '',
-    keywords: '',
-    price: ''
-  });
   const [newService, setNewService] = useState({
     category: '',
     name: '',
@@ -40,40 +56,17 @@ export const CardOverviewPage = () => {
     price: ''
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
-  
-  // Обновить форму при выборе услуги для редактирования
-  useEffect(() => {
-    if (!editingService) return;
-    
-    const service = userServices.find(s => s.id === editingService);
-    if (!service) return;
-    
-    setEditingForm({
-      category: service.category || '',
-      name: service.name || '',
-      description: service.description || '',
-      keywords: Array.isArray(service.keywords) ? service.keywords.join(', ') : (service.keywords || ''),
-      price: service.price || ''
-    });
-  }, [editingService, userServices]);
-  
-  // Состояния для отзывов
-  const [externalReviews, setExternalReviews] = useState<any[]>([]);
-  const [loadingReviews, setLoadingReviews] = useState(false);
-  
-  // Состояния для новостей
-  const [externalPosts, setExternalPosts] = useState<any[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(false);
-  
+
   // Состояния для парсера
   const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued'>('idle');
-  
+
   // Общие состояния
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardStep, setWizardStep] = useState<2>(2);
-  // Настройки для мастера оптимизации
+  const [isNetworkMaster, setIsNetworkMaster] = useState(false);
+
+  // Wizard settings
   const [wizardTone, setWizardTone] = useState<'friendly' | 'professional' | 'premium' | 'youth' | 'business'>('professional');
   const [wizardRegion, setWizardRegion] = useState('');
   const [wizardLength, setWizardLength] = useState(150);
@@ -92,6 +85,17 @@ export const CardOverviewPage = () => {
       if (data.success) {
         setRating(data.rating);
         setReviewsTotal(data.reviews_total || 0);
+        setLastParseDate(data.last_parse_date || null);
+        try {
+          if (data.competitors) {
+            setCompetitors(typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors);
+          } else {
+            setCompetitors([]);
+          }
+        } catch (e) {
+          console.error("Error parsing competitors:", e);
+          setCompetitors([]);
+        }
       }
     } catch (e) {
       console.error('Ошибка загрузки сводки:', e);
@@ -100,14 +104,16 @@ export const CardOverviewPage = () => {
     }
   };
 
+  // Состояния для вкладки новостей
+  const [externalPosts, setExternalPosts] = useState<any[]>([]);
+
   // Загрузка услуг
   const loadUserServices = async () => {
     if (!currentBusinessId) {
       setUserServices([]);
       return;
     }
-    
-    console.log('🔍 DEBUG loadUserServices: Загружаем услуги для business_id:', currentBusinessId);
+
     setLoadingServices(true);
     try {
       const token = localStorage.getItem('auth_token');
@@ -117,88 +123,23 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
-        // Находим обновленную услугу по ID для отладки
-        const updatedService = data.services?.find((s: any) => s.id === '3772931e-9796-475b-b439-ee1cc07b1dc9');
-        
-        // Детальный лог для отладки
-        if (updatedService) {
-          console.log('🔍 DEBUG loadUserServices: ДЕТАЛЬНЫЙ ЛОГ updatedService', {
-            id: updatedService.id,
-            name: updatedService.name,
-            optimized_name: updatedService.optimized_name,
-            optimized_name_type: typeof updatedService.optimized_name,
-            optimized_name_length: updatedService.optimized_name?.length,
-            has_optimized_name: !!updatedService.optimized_name,
-            description: updatedService.description,
-            optimized_description: updatedService.optimized_description,
-            optimized_description_type: typeof updatedService.optimized_description,
-            optimized_description_length: updatedService.optimized_description?.length,
-            has_optimized_description: !!updatedService.optimized_description,
-            allKeys: Object.keys(updatedService),
-            fullService: updatedService // Полный объект для проверки
-          });
-        } else {
-          console.log('❌ DEBUG loadUserServices: Услуга 3772931e-9796-475b-b439-ee1cc07b1dc9 не найдена в списке');
+        // Объединяем пользовательские и внешние услуги
+        const services = [...(data.services || [])];
+        if (data.external_services) {
+          // Маркируем или просто добавляем. Можно добавить поле isExternal, если нужно
+          services.push(...data.external_services);
         }
-        
-        console.log('✅ DEBUG loadUserServices: Услуги загружены', {
-          count: data.services?.length,
-          firstService: data.services?.[0],
-          firstServiceOptimized: data.services?.[0] ? {
-            id: data.services[0].id,
-            name: data.services[0].name,
-            optimized_name: data.services[0].optimized_name,
-            has_optimized_name: !!data.services[0].optimized_name,
-            description: data.services[0].description,
-            optimized_description: data.services[0].optimized_description,
-            has_optimized_description: !!data.services[0].optimized_description
-          } : null,
-          updatedService: updatedService ? {
-            id: updatedService.id,
-            name: updatedService.name,
-            optimized_name: updatedService.optimized_name,
-            has_optimized_name: !!updatedService.optimized_name,
-            description: updatedService.description,
-            optimized_description: updatedService.optimized_description,
-            has_optimized_description: !!updatedService.optimized_description,
-            allKeys: Object.keys(updatedService)
-          } : 'Услуга не найдена'
-        });
-        setUserServices(data.services || []);
-      } else {
-        console.error('❌ DEBUG loadUserServices: Ошибка загрузки услуг', data.error);
+        setUserServices(services);
       }
     } catch (e) {
-      console.error('❌ Ошибка загрузки услуг:', e);
+      console.error('Ошибка загрузки услуг:', e);
     } finally {
       setLoadingServices(false);
     }
   };
 
-  // Загрузка отзывов из парсера
-  const loadExternalReviews = async () => {
-    if (!currentBusinessId) return;
-    setLoadingReviews(true);
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/reviews`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setExternalReviews(data.reviews || []);
-      }
-    } catch (e) {
-      console.error('Ошибка загрузки отзывов:', e);
-    } finally {
-      setLoadingReviews(false);
-    }
-  };
-
-  // Загрузка новостей из парсера
   const loadExternalPosts = async () => {
     if (!currentBusinessId) return;
-    setLoadingPosts(true);
     try {
       const token = localStorage.getItem('auth_token');
       const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/posts`, {
@@ -209,94 +150,92 @@ export const CardOverviewPage = () => {
         setExternalPosts(data.posts || []);
       }
     } catch (e) {
-      console.error('Ошибка загрузки новостей:', e);
-    } finally {
-      setLoadingPosts(false);
+      console.error('Ошибка загрузки постов:', e);
     }
+  };
+
+  // Map Sources Switcher Logic
+  const [mapSources, setMapSources] = useState<string[]>([]);
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+
+  const loadMapSources = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/client-info?business_id=${currentBusinessId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      const sources = new Set<string>();
+      if (data.mapLinks && Array.isArray(data.mapLinks)) {
+        data.mapLinks.forEach((link: any) => {
+          const url = link.url || '';
+          if (url.includes('yandex')) sources.add('yandex');
+          else if (url.includes('2gis')) sources.add('2gis');
+          else if (url.includes('google')) sources.add('google');
+        });
+      }
+
+      // Also check if we have data from sources that are not in mapLinks (legacy support)
+      if (externalPosts.length > 0) externalPosts.forEach(p => { if (p.source) sources.add(p.source.toLowerCase()); });
+      // We can't check reviews easily here without fetching them, but rely on mapLinks is safer for "configured" maps.
+
+      setMapSources(Array.from(sources));
+    } catch (e) { console.error('Error loading map sources', e); }
   };
 
   useEffect(() => {
     if (currentBusinessId && context) {
       loadSummary();
       loadUserServices();
-      loadExternalReviews();
       loadExternalPosts();
+      loadMapSources();
+      checkIfNetworkMaster();
     }
   }, [currentBusinessId, context]);
-  
+
+  const checkIfNetworkMaster = async () => {
+    if (!currentBusinessId) {
+      setIsNetworkMaster(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setIsNetworkMaster(data.is_network || false);
+      }
+    } catch (error) {
+      console.error('Ошибка проверки сети:', error);
+      setIsNetworkMaster(false);
+    }
+  };
+
   // Если контекст не загружен, показываем загрузку
   if (!context) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка...</p>
+          <p className="mt-4 text-gray-600">{t.dashboard.subscription.processing}</p>
         </div>
       </div>
     );
   }
 
-  // Запуск парсера
-  const handleRunParser = async () => {
-    if (!currentBusinessId) {
-      setError('Сначала выберите бизнес');
-      return;
-    }
-    
-    setParseStatus('processing');
-    setError(null);
-    setSuccess(null);
-    try {
-      const token = localStorage.getItem('auth_token');
-      console.log('🚀 Запуск парсера для бизнеса:', currentBusinessId);
-      const response = await fetch(`${window.location.origin}/api/admin/yandex/sync/business/${currentBusinessId}`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('📡 Ответ сервера:', response.status, response.statusText);
-      
-      let data;
-      try {
-        data = await response.json();
-        console.log('📦 Данные ответа:', data);
-      } catch (jsonError) {
-        const text = await response.text();
-        console.error('❌ Ошибка парсинга JSON:', text);
-        setParseStatus('error');
-        setError(`Ошибка сервера (${response.status}): ${text.substring(0, 200)}`);
-        return;
-      }
-      
-      if (response.ok && data.success) {
-        setParseStatus('done');
-        setSuccess(data.message || 'Парсер запущен успешно');
-        // Перезагружаем данные
-        setTimeout(() => {
-          loadSummary();
-          loadExternalReviews();
-          loadExternalPosts();
-        }, 2000);
-      } else {
-        setParseStatus('error');
-        const errorMsg = data.error || data.message || 'Ошибка запуска парсера';
-        console.error('❌ Ошибка парсера:', errorMsg);
-        setError(errorMsg);
-      }
-    } catch (e: any) {
-      console.error('❌ Исключение при запуске парсера:', e);
-      setParseStatus('error');
-      setError('Ошибка запуска парсера: ' + (e.message || String(e)));
-    }
-  };
-
   // Добавление услуги
   const addService = async () => {
     if (!newService.name.trim()) {
-      setError('Название услуги обязательно');
+      setError(t.dashboard.card.serviceName + ' required');
       return;
     }
 
@@ -323,12 +262,12 @@ export const CardOverviewPage = () => {
         setNewService({ category: '', name: '', description: '', keywords: '', price: '' });
         setShowAddService(false);
         await loadUserServices();
-        setSuccess('Услуга добавлена');
+        setSuccess(t.common.success || "Success");
       } else {
-        setError(data.error || 'Ошибка добавления услуги');
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError('Ошибка добавления услуги: ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     }
   };
 
@@ -336,7 +275,7 @@ export const CardOverviewPage = () => {
   const optimizeService = async (serviceId: string) => {
     const service = userServices.find(s => s.id === serviceId);
     if (!service) return;
-    
+
     setOptimizingServiceId(serviceId);
     setError(null);
     try {
@@ -352,24 +291,16 @@ export const CardOverviewPage = () => {
           business_id: currentBusinessId
         })
       });
-      
+
       const data = await response.json();
-      console.log('🔍 DEBUG optimizeService: Ответ от API', {
-        success: data.success,
-        result: data.result,
-        services: data.result?.services,
-        firstService: data.result?.services?.[0]
-      });
-      
+
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
-        console.log('🔍 DEBUG optimizeService: Оптимизированная услуга', optimized);
-        
-        // ВАЖНО: Сохраняем оригинальное описание и название, оптимизированные - отдельно
-        // Исправляем keywords - убираем вложенные массивы и строки
+
+        // Исправляем keywords
         let fixedKeywords = [];
         if (Array.isArray(service.keywords)) {
-          fixedKeywords = service.keywords.map(k => {
+          fixedKeywords = service.keywords.map((k: any) => {
             if (typeof k === 'string') {
               try {
                 const parsed = JSON.parse(k);
@@ -381,50 +312,31 @@ export const CardOverviewPage = () => {
             return Array.isArray(k) ? k : [k];
           }).flat();
         } else if (service.keywords) {
-          try {
-            const parsed = JSON.parse(service.keywords);
-            fixedKeywords = Array.isArray(parsed) ? parsed : [service.keywords];
-          } catch {
-            fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
-          }
+          fixedKeywords = typeof service.keywords === 'string' ? [service.keywords] : [];
         }
-        
+
         const updateData = {
-          category: service.category || '', // Сохраняем все оригинальные поля
-          name: service.name || '', // Оригинальное название не меняем
-          optimized_name: optimized.optimized_name || optimized.optimizedName || '', // SEO название сохраняем отдельно
-          description: service.description || '', // Оригинальное описание НЕ меняем - это ключевой момент!
-          optimized_description: optimized.seo_description || optimized.seoDescription || '', // SEO описание сохраняем отдельно
-          keywords: fixedKeywords, // Исправленные ключевые слова
-          price: service.price || '' // Оригинальная цена
+          category: service.category || '',
+          name: service.name || '',
+          optimized_name: optimized.optimized_name || optimized.optimizedName || '',
+          description: service.description || '',
+          optimized_description: optimized.seo_description || optimized.seoDescription || '',
+          keywords: fixedKeywords,
+          price: service.price || ''
         };
-        
-        console.log('🔍 DEBUG optimizeService: Обновляем услугу', {
-          serviceId,
-          originalName: service.name,
-          optimizedName: optimized.optimized_name || optimized.optimizedName,
-          originalDescription: service.description,
-          optimizedDescription: optimized.seo_description || optimized.seoDescription,
-          optimizedObject: optimized, // Полный объект для отладки
-          updateData
-        });
-        
-        // Обновляем услугу - сохраняем оптимизированное описание отдельно, оригинальное НЕ меняем
+
         try {
           await updateService(serviceId, updateData);
-          setSuccess('Услуга оптимизирована. Оптимизированное описание сохранено отдельно.');
-          // Перезагружаем услуги, чтобы показать обновленные данные
+          setSuccess(t.common.success || "Success");
           await loadUserServices();
         } catch (updateError: any) {
-          console.error('❌ Ошибка обновления услуги:', updateError);
-          setError('Ошибка сохранения оптимизированного описания: ' + (updateError.message || 'Неизвестная ошибка'));
-          throw updateError; // Пробрасываем дальше, чтобы finally сработал
+          setError(t.common.error || "Error");
         }
       } else {
-        setError(data.error || 'Ошибка оптимизации');
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError('Ошибка оптимизации: ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     } finally {
       setOptimizingServiceId(null);
     }
@@ -432,34 +344,34 @@ export const CardOverviewPage = () => {
 
   // Обновление услуги
   const updateService = async (serviceId: string, updatedData: any) => {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatedData)
-      });
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedData)
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-      const data = await response.json();
-      if (data.success) {
-        setEditingService(null);
-        await loadUserServices();
-        setSuccess('Услуга обновлена');
-      } else {
-      throw new Error(data.error || 'Ошибка обновления услуги');
+    const data = await response.json();
+    if (data.success) {
+      setEditingService(null);
+      await loadUserServices();
+      setSuccess(t.common.success || "Success");
+    } else {
+      throw new Error(data.error || t.common.error || "Error");
     }
   };
 
   // Удаление услуги
   const deleteService = async (serviceId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить эту услугу?')) return;
+    if (!confirm(t.dashboard.card.deleteConfirm)) return;
 
     try {
       const token = localStorage.getItem('auth_token');
@@ -471,624 +383,625 @@ export const CardOverviewPage = () => {
       const data = await response.json();
       if (data.success) {
         await loadUserServices();
-        setSuccess('Услуга удалена');
+        setSuccess(t.common.success || "Success");
       } else {
-        setError(data.error || 'Ошибка удаления услуги');
+        setError(data.error || t.common.error || "Error");
       }
     } catch (e: any) {
-      setError('Ошибка удаления услуги: ' + e.message);
+      setError((t.common.error || "Error") + ': ' + e.message);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Работа с картами</h1>
-          <p className="text-gray-600 mt-1">Управляйте услугами и оптимизируйте карточку организации</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowWizard(true)}>Мастер оптимизации карт</Button>
-        </div>
-      </div>
-
-      {/* Пояснение о парсинге */}
-      <p className="text-xs text-gray-500 text-right">
-        Раз в неделю мы будем получать данные, чтобы отслеживать прогресс и давать советы по оптимизации. Данные с карт будут сохраняться тут, а статистика на{' '}
-        <a href="/dashboard/progress" className="text-blue-600 underline" target="_blank" rel="noreferrer">
-          вкладке Прогресс
-        </a>.
-      </p>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-          {success}
-        </div>
-      )}
-
-      {/* Блок с рейтингом и количеством отзывов */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center gap-4">
-          {loadingSummary ? (
-            <div className="text-gray-500">Загрузка...</div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold text-gray-900">
-                  {rating !== null ? rating.toFixed(1) : '—'}
-                </span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <span
-                      key={star}
-                      className={`text-2xl ${
-                        rating !== null && star <= Math.floor(rating)
-                          ? 'text-yellow-400'
-                          : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                          ? 'text-yellow-400'
-                          : 'text-gray-300'
-                      }`}
-                    >
-                      ★
-                    </span>
-                  ))}
-                </div>
+    <div className="space-y-6 max-w-7xl mx-auto pb-10">
+      {/* Blur Overlay for Network Master Accounts */}
+      {isNetworkMaster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-md">
+          <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 max-w-md mx-4 text-center")}>
+            <div className="mb-6 flex justify-center">
+              <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center shadow-inner">
+                <Network className="w-10 h-10 text-orange-600" />
               </div>
-              <div className="text-gray-600">
-                <span className="font-medium">{reviewsTotal}</span> отзывов
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Услуги */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Услуги</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Текущий вид формулировок услуг на картах. Если есть подключение к парсеру, данные добавляются автоматически.
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              {t.dashboard.card.networkNotice?.title || "Сетевой аккаунт"}
+            </h3>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              {t.dashboard.card.networkNotice?.message ||
+                "Перейдите на страницу точки, чтобы работать с карточкой точки на картах"}
             </p>
+            <Button
+              onClick={() => window.location.href = '/dashboard/profile'}
+              className="w-full h-12 text-lg shadow-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
+            >
+              {t.dashboard.card.networkNotice?.action || "Выбрать точку"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <LayoutGrid className="w-6 h-6 text-orange-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title} (Updated)</h1>
+            </div>
+            <p className="text-gray-600 text-lg">{t.dashboard.card.subtitle}</p>
+          </div>
+          <div className="flex gap-3">
+            {/* Progress Status Badge */}
+            <a href="/dashboard/progress" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium hover:bg-indigo-100 transition-colors">
+              <TrendingUp className="w-4 h-4" />
+              <span>{t.dashboard.card.progressTab}</span>
+            </a>
+            <Button
+              onClick={() => setShowWizard(true)}
+              className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-orange-700 transition-all"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {t.dashboard.card.optimizationWizard}
+            </Button>
           </div>
         </div>
 
-        {/* Форма добавления услуги */}
-        {showAddService && (
-          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Добавить новую услугу</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Категория</label>
-                <input 
-                  type="text" 
-                  value={newService.category}
-                  onChange={(e) => setNewService({...newService, category: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: Стрижки"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
-                <input 
-                  type="text" 
-                  value={newService.name}
-                  onChange={(e) => setNewService({...newService, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: Женская стрижка"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
-                <textarea 
-                  value={newService.description}
-                  onChange={(e) => setNewService({...newService, description: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows={3}
-                  placeholder="Краткое описание услуги"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ключевые слова</label>
-                <input
-                  type="text"
-                  value={newService.keywords}
-                  onChange={(e) => setNewService({...newService, keywords: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="стрижка, укладка, окрашивание"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Цена</label>
-                <input
-                  type="text"
-                  value={newService.price}
-                  onChange={(e) => setNewService({...newService, price: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Например: 2000 руб"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={addService}>Добавить</Button>
-              <Button onClick={() => setShowAddService(false)} variant="outline">Отмена</Button>
-            </div>
+        {error && (
+          <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{error}</p>
           </div>
         )}
 
-        {/* Функционал оптимизатора услуг (только загрузка файла) */}
-        <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Настройте описания услуг для карточки компании на картах</h2>
-            <p className="text-sm text-gray-600">🔎 Карты и локальное SEO — это один из самых эффективных каналов продаж.</p>
-            <p className="text-sm text-gray-600 mt-2">Правильные названия и описания услуг повышают видимость в поиске, клики на карточку и позиции в выдаче.</p>
-            <p className="text-sm text-gray-600 mt-2">Загрузите прайс‑лист — ИИ вернёт краткие SEO‑формулировки в строгом формате с учётом частотности запросов, ваших формулировок и вашего местоположения.</p>
-            <p className="text-sm text-gray-600 mt-2">Скопируйте текст и добавьте его в карточку вашей организации на картах.</p>
+        {success && (
+          <div className="bg-emerald-50/80 backdrop-blur-sm border border-emerald-200 text-emerald-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <p>{success}</p>
           </div>
-          <div className="flex gap-2 items-center">
-            <Button onClick={() => setShowAddService(true)}>+ Добавить услугу</Button>
-          <ServiceOptimizer 
-            businessName={currentBusiness?.name} 
-            businessId={currentBusinessId}
-            tone={wizardTone}
-            region={wizardRegion}
-            descriptionLength={wizardLength}
-            instructions={wizardInstructions}
-              hideTextInput={true}
-          />
-            {userServices.length > 0 && (
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  // Оптимизировать все услуги
-                  userServices.forEach(s => optimizeService(s.id));
-                }}
-              >
-                Оптимизировать все
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
 
-        {/* Список услуг */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Описание</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loadingServices ? (
-                <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>Загрузка услуг...</td>
-                </tr>
-              ) : userServices.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={5}>Данные появятся после добавления услуг</td>
-                </tr>
-              ) : (
-                userServices
-                  .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
-                  .map((service, index) => (
-                  <tr key={service.id || index}>
-                    <td className="px-4 py-3 text-sm text-gray-900">{service.category}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      <div className="space-y-3">
-                        {service.name && (
-                          <div className="text-gray-900">{service.name}</div>
-                        )}
-                        {service.optimized_name && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
-                            <div className="text-gray-800 leading-relaxed">{service.optimized_name}</div>
-                            <div className="flex gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.optimized_name,
-                                    optimized_name: '',
-                                    description: service.description,
-                                    optimized_description: service.optimized_description,
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное название принято');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                              >
-                                Принять
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    optimized_name: '',
-                                    description: service.description,
-                                    optimized_description: service.optimized_description,
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное название отклонено');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                              >
-                                Отклонить
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        {!service.name && !service.optimized_name && (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      <div className="space-y-3">
-                        {service.description && (
-                          <div className="text-gray-700 leading-relaxed">{service.description}</div>
-                        )}
-                        {service.optimized_description && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3 space-y-2">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Предложение SEO</div>
-                            <div className="text-gray-800 leading-relaxed">{service.optimized_description}</div>
-                            <div className="flex gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    description: service.optimized_description,
-                                    optimized_description: '',
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное описание принято');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 hover:bg-gray-100"
-                              >
-                                Принять
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  await updateService(service.id, {
-                                    category: service.category,
-                                    name: service.name,
-                                    description: service.description,
-                                    optimized_description: '',
-                                    keywords: service.keywords,
-                                    price: service.price
-                                  });
-                                  setSuccess('Оптимизированное описание отклонено');
-                                  await loadUserServices();
-                                }}
-                                className="text-xs h-7 border-gray-300 text-gray-600 hover:bg-gray-100"
-                              >
-                                Отклонить
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        {!service.description && !service.optimized_description && (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => optimizeService(service.id)}
-                          disabled={optimizingServiceId === service.id}
-                        >
-                          {optimizingServiceId === service.id ? 'Оптимизация...' : 'Оптимизировать'}
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => setEditingService(service.id)}
-                        >
-                          Редактировать
-                        </Button>
-                        <Button 
-                          size="sm"
-                          variant="outline" 
-                          onClick={() => deleteService(service.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Удалить
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+        {/* Map Source Switcher */}
+        {mapSources.length > 0 && (
+          <div className="flex gap-2 mb-6 p-1 bg-gray-100/80 rounded-xl w-fit">
+            <button
+              onClick={() => setSelectedSource('all')}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                selectedSource === 'all'
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
               )}
-            </tbody>
-          </table>
-          
-          {/* Пагинация для услуг */}
-          {userServices.length > servicesItemsPerPage && (
-            <div className="flex items-center justify-between mt-4 px-4">
-              <div className="text-sm text-gray-600">
-                Показано {((servicesCurrentPage - 1) * servicesItemsPerPage) + 1}-{Math.min(servicesCurrentPage * servicesItemsPerPage, userServices.length)} из {userServices.length}
+            >
+              Все карты
+            </button>
+            {mapSources.map(source => (
+              <button
+                key={source}
+                onClick={() => setSelectedSource(source)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize",
+                  selectedSource === source
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                )}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <Tabs defaultValue="services" className="space-y-8">
+          <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start [&::-webkit-scrollbar]:hidden">
+            <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <List className="w-4 h-4" />
+              {t.dashboard.card.tabServices || "Services"}
+            </TabsTrigger>
+            <TabsTrigger value="reviews" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <MessageSquare className="w-4 h-4" />
+              {t.dashboard.card.tabReviews || "Reviews"}
+            </TabsTrigger>
+            <TabsTrigger value="news" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <Newspaper className="w-4 h-4" />
+              {t.dashboard.card.tabNews || "News"}
+            </TabsTrigger>
+            <TabsTrigger value="keywords" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <TrendingUp className="w-4 h-4" />
+              SEO (Wordstat)
+            </TabsTrigger>
+            <TabsTrigger value="competitors" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
+              <Trophy className="w-4 h-4" />
+              Конкуренты
+            </TabsTrigger>
+          </TabsList>
+
+
+          <TabsContent value="competitors" className="space-y-6">
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8")}>
+              <div className="flex items-center gap-2 mb-6">
+                <Trophy className="w-6 h-6 text-amber-500" />
+                <h2 className="text-2xl font-bold text-gray-900">Конкуренты</h2>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setServicesCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={servicesCurrentPage === 1}
-                >
-                  Назад
-                </Button>
-                <span className="px-3 py-1 text-sm text-gray-700">
-                  Страница {servicesCurrentPage} из {Math.ceil(userServices.length / servicesItemsPerPage)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setServicesCurrentPage(prev => Math.min(Math.ceil(userServices.length / servicesItemsPerPage), prev + 1))}
-                  disabled={servicesCurrentPage >= Math.ceil(userServices.length / servicesItemsPerPage)}
-                >
-                  Вперед
-                </Button>
+              {competitors.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {competitors.map((comp: any, idx: number) => (
+                    <div key={idx} className="bg-white/50 border border-gray-100 p-4 rounded-xl hover:shadow-md transition-all">
+                      <div className="font-semibold text-lg text-gray-900 mb-1">{comp.name || "Без названия"}</div>
+                      <div className="text-sm text-gray-500 mb-3">{comp.category}</div>
+                      <div className="flex items-center gap-4 text-sm">
+                        {comp.rating && (
+                          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+                            <Star className="w-3 h-3 fill-amber-600" />
+                            <span className="font-medium">{comp.rating}</span>
+                          </div>
+                        )}
+                        {comp.reviews && (
+                          <div className="text-gray-500">
+                            {comp.reviews}
+                          </div>
+                        )}
+                      </div>
+                      {comp.url && (
+                        <a href={comp.url} target="_blank" rel="noreferrer" className="mt-4 block text-center py-2 w-full bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium">
+                          Посмотреть на карте
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Trophy className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p>Конкуренты не найдены. Попробуйте обновить данные парсинга.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="services" className="space-y-6">
+            {/* Rating Summary Card */}
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 relative overflow-hidden")}>
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Star className="w-48 h-48" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-6">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    {t.dashboard.card.rating || "Rating Overview"}
+                  </h3>
+                  {lastParseDate && (
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{t.dashboard.card.lastUpdate}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                          day: 'numeric',
+                          month: 'long',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-8">
+                  {loadingSummary ? (
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                      {t.dashboard.subscription.processing}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-700">
+                            {rating != null ? Number(rating).toFixed(1) : '—'}
+                          </span>
+                          <span className="text-gray-400 font-medium">/ 5.0</span>
+                        </div>
+                      </div>
+
+                      <div className="h-12 w-px bg-gray-200" />
+
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={cn(
+                                "w-6 h-6",
+                                rating !== null && star <= Math.floor(rating)
+                                  ? "text-amber-400 fill-amber-400"
+                                  : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
+                                    ? "text-amber-400 fill-amber-400" // Half star logic could be better but simplified
+                                    : "text-gray-200 fill-gray-100"
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <div className="text-gray-500 font-medium ml-1">
+                          {reviewsTotal} {t.dashboard.card.reviews}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Отзывы */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Отзывы</h2>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <ReviewReplyAssistant businessName={currentBusiness?.name} />
-        </div>
-      </div>
-
-      {/* Новости */}
-      <div className="bg-white rounded-lg border-2 border-primary p-6 shadow-lg" style={{
-        boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.3), 0 2px 4px -1px rgba(251, 146, 60, 0.2)'
-      }}>
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Новости</h2>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <NewsGenerator 
-            services={(userServices||[]).map(s=>({ id: s.id, name: s.name }))} 
-            businessId={currentBusinessId}
-            externalPosts={externalPosts}
-          />
-        </div>
-      </div>
-
-      {/* Модальное окно мастера оптимизации */}
-      {showWizard && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={() => setShowWizard(false)}>
-          <div className="bg-white/95 backdrop-blur-md rounded-lg max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden shadow-2xl border-2 border-gray-300" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-gray-900">Мастер оптимизации карт</h2>
+            {/* Services Section */}
+            <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8")}>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{t.dashboard.card.services}</h2>
+                  <p className="text-gray-500 mt-1">
+                    {t.dashboard.card.servicesSubtitle}
+                  </p>
+                </div>
+                {!showAddService && (
+                  <Button onClick={() => setShowAddService(true)} className="bg-primary text-white shadow-md hover:shadow-lg">
+                    <Plus className="w-4 h-4 mr-2" />
+                    {t.dashboard.card.addService}
+                  </Button>
+                )}
               </div>
-              <Button onClick={() => setShowWizard(false)} variant="outline" size="sm">✕</Button>
-            </div>
-            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)] bg-gradient-to-br from-white to-gray-50/50">
-              {/* Шаг 2 */}
-              {wizardStep === 2 && (
-                <div className="space-y-4">
-                  <p className="text-gray-600 mb-4">Опишите, как вы хотите звучать и чего избегать. Это задаст тон для всех текстов.</p>
-                  
-                  {/* Тон */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Тон</label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { key: 'friendly', label: 'Дружелюбный' },
-                        { key: 'professional', label: 'Профессиональный' },
-                        { key: 'premium', label: 'Премиум' },
-                        { key: 'youth', label: 'Молодёжный' },
-                        { key: 'business', label: 'Деловой' }
-                      ].map(tone => (
-                        <button 
-                          key={tone.key} 
-                          type="button"
-                          onClick={() => setWizardTone(tone.key as any)}
-                          className={`text-xs px-3 py-1 rounded-full border ${
-                            wizardTone === tone.key 
-                              ? 'bg-blue-600 text-white border-blue-600' 
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          {tone.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Примеры формулировок для выбранного тона появятся автоматически в подсказках.</p>
-                  </div>
 
-                  {/* Регион и длина описания */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Регион (для локального SEO)</label>
-                      <input 
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder="Санкт‑Петербург, м. Чернышевская"
-                        value={wizardRegion}
-                        onChange={(e) => setWizardRegion(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Длина описания (символов)</label>
-                      <input 
-                        type="number"
-                        min={80}
-                        max={200}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        value={wizardLength}
-                        onChange={(e) => setWizardLength(Number(e.target.value) || 150)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Дополнительные инструкции */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Дополнительные инструкции (необязательно)</label>
-                    <textarea 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      rows={3}
-                      placeholder="Например: только безаммиачные красители; подчеркнуть опыт мастеров; указать гарантию; избегать эмодзи."
-                      value={wizardInstructions}
-                      onChange={(e) => setWizardInstructions(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Формулировки ответов на отзывы */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Понравившиеся формулировки ответов на отзывы (до 5)</label>
+              {/* Add Service Form */}
+              {showAddService && (
+                <div className="mb-8 bg-gray-50/50 border border-gray-200 rounded-xl p-6 shadow-inner">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-primary" />
+                    {t.dashboard.card.addService}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      {[1,2,3,4,5].map(i => (
-                        <input 
-                          key={i} 
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md" 
-                          placeholder="Например: Спасибо за отзыв! Нам важно ваше мнение" 
-                        />
-                      ))}
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.category}</label>
+                      <input
+                        type="text"
+                        value={newService.category}
+                        onChange={(e) => setNewService({ ...newService, category: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                        placeholder={t.dashboard.card.placeholders.category}
+                      />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Эти формулировки будут использоваться при генерации ответов на отзывы.</p>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.serviceName}</label>
+                      <input
+                        type="text"
+                        value={newService.name}
+                        onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                        placeholder={t.dashboard.card.placeholders.name}
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.description}</label>
+                      <textarea
+                        value={newService.description}
+                        onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[100px]"
+                        placeholder={t.dashboard.card.placeholders.desc}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.keywords}</label>
+                      <input
+                        type="text"
+                        value={newService.keywords}
+                        onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                        placeholder={t.dashboard.card.placeholders.keywords}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.price}</label>
+                      <input
+                        type="text"
+                        value={newService.price}
+                        onChange={(e) => setNewService({ ...newService, price: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                        placeholder={t.dashboard.card.placeholders.price}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end mt-8">
+                    <Button onClick={() => setShowAddService(false)} variant="outline" className="border-gray-200 text-gray-600 hover:bg-gray-100">
+                      {t.dashboard.card.cancel}
+                    </Button>
+                    <Button onClick={addService} className="bg-primary text-white">
+                      {t.dashboard.card.add}
+                    </Button>
                   </div>
                 </div>
               )}
-              <div className="mt-6 flex justify-end pt-4 border-t border-gray-200">
-                <Button onClick={() => setShowWizard(false)}>Готово</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Модальное окно редактирования услуги */}
-      <Dialog open={!!editingService} onOpenChange={(open) => !open && setEditingService(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Редактирование услуги</DialogTitle>
-            <DialogDescription>
-              Измените данные услуги. Нажмите "Сохранить" для применения изменений.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="edit-category">Категория</Label>
-              <Input
-                id="edit-category"
-                value={editingForm.category}
-                onChange={(e) => setEditingForm({ ...editingForm, category: e.target.value })}
-                placeholder="Например: hair, nails, spa"
-              />
+              {/* Service Optimizer Wizard Block */}
+              {!showAddService && (
+                <div className="mb-8 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-5 h-5 text-indigo-600" />
+                      <h3 className="font-semibold text-indigo-900">{t.dashboard.card.seo.title}</h3>
+                    </div>
+                    <p className="text-indigo-700/80 text-sm leading-relaxed max-w-2xl">
+                      {t.dashboard.card.seo.desc1} {t.dashboard.card.seo.desc2}
+                    </p>
+                  </div>
+                  <div className="flex gap-3 shrink-0">
+                    <ServiceOptimizer
+                      businessName={currentBusiness?.name}
+                      businessId={currentBusinessId}
+                      tone={wizardTone}
+                      region={wizardRegion}
+                      descriptionLength={wizardLength}
+                      instructions={wizardInstructions}
+                      hideTextInput={true}
+                    />
+                    {userServices.length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          userServices.forEach(s => optimizeService(s.id));
+                        }}
+                        className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      >
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        {t.dashboard.card.optimizeAll}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Services List */}
+              <div className="overflow-hidden rounded-xl border border-gray-100">
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-50/50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
+                        {t.dashboard.card.table.category}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">
+                        {t.dashboard.card.table.name}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">
+                        {t.dashboard.card.table.description}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
+                        {t.dashboard.card.table.price}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
+                        {t.common?.updated || "Updated"}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
+                        {t.dashboard.card.table.actions}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {loadingServices ? (
+                      <tr>
+                        <td className="px-6 py-8 text-center" colSpan={6}>
+                          <div className="flex justify-center items-center gap-2 text-gray-500">
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                            <span>{t.dashboard.subscription.processing}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : userServices.length === 0 ? (
+                      <tr>
+                        <td className="px-6 py-12 text-center text-gray-500" colSpan={5}>
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="p-3 bg-gray-50 rounded-full">
+                              <Search className="w-8 h-8 text-gray-300" />
+                            </div>
+                            <p>{t.dashboard.network.noData}</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      userServices
+                        .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
+                        .map((service, index) => (
+                          <tr key={service.id || index} className="group hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap align-top">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {service.category}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900 align-top max-w-[250px]">
+                              <div className="space-y-3">
+                                {service.name && (
+                                  <div className="font-semibold">{service.name}</div>
+                                )}
+                                {service.optimized_name && (
+                                  <div className="mt-2 bg-indigo-50/80 border border-indigo-100 rounded-lg p-3 space-y-2 relative animate-in fade-in">
+                                    <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3" />
+                                      {t.dashboard.card.seo.proposal}
+                                    </div>
+                                    <div className="text-gray-800 leading-snug text-sm">{service.optimized_name}</div>
+                                    <div className="flex gap-2 pt-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={async () => {
+                                          await updateService(service.id, {
+                                            category: service.category,
+                                            name: service.optimized_name,
+                                            optimized_name: '',
+                                            description: service.description,
+                                            optimized_description: service.optimized_description,
+                                            keywords: service.keywords,
+                                            price: service.price
+                                          });
+                                          setSuccess(t.common.success || "Accepted");
+                                          await loadUserServices();
+                                        }}
+                                        className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                                      >
+                                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                                        {t.dashboard.card.seo.accept}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={async () => {
+                                          await updateService(service.id, {
+                                            category: service.category,
+                                            name: service.name,
+                                            optimized_name: '',
+                                            description: service.description,
+                                            optimized_description: service.optimized_description,
+                                            keywords: service.keywords,
+                                            price: service.price
+                                          });
+                                          setSuccess(t.common.success || "Rejected");
+                                          await loadUserServices();
+                                        }}
+                                        className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                      >
+                                        {t.dashboard.card.seo.reject}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                                {!service.name && !service.optimized_name && (
+                                  <span className="text-gray-300 italic">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 align-top max-w-[350px]">
+                              <div className="space-y-3">
+                                {service.description && (
+                                  <div className="leading-relaxed">{service.description}</div>
+                                )}
+                                {service.optimized_description && (
+                                  <div className="mt-2 bg-indigo-50/80 border border-indigo-100 rounded-lg p-3 space-y-2 relative animate-in fade-in">
+                                    <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3" />
+                                      {t.dashboard.card.seo.proposal}
+                                    </div>
+                                    <div className="text-gray-800 leading-relaxed text-sm">{service.optimized_description}</div>
+                                    <div className="flex gap-2 pt-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={async () => {
+                                          await updateService(service.id, {
+                                            category: service.category,
+                                            name: service.name,
+                                            description: service.optimized_description,
+                                            optimized_description: '',
+                                            keywords: service.keywords,
+                                            price: service.price
+                                          });
+                                          setSuccess(t.common.success || "Accepted");
+                                          await loadUserServices();
+                                        }}
+                                        className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                                      >
+                                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                                        {t.dashboard.card.seo.accept}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={async () => {
+                                          await updateService(service.id, {
+                                            category: service.category,
+                                            name: service.name,
+                                            description: service.description,
+                                            optimized_description: '',
+                                            keywords: service.keywords,
+                                            price: service.price
+                                          });
+                                          setSuccess(t.common.success || "Rejected");
+                                          await loadUserServices();
+                                        }}
+                                        className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                      >
+                                        {t.dashboard.card.seo.reject}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                                {!service.description && !service.optimized_description && (
+                                  <span className="text-gray-300 italic">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">
+                              {service.price ? `${(Number(service.price) / 100).toLocaleString('ru-RU')} ₽` : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap align-top">
+                              {service.updated_at ? new Date(service.updated_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : '—'}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm text-gray-500 align-top">
+                              <div className="flex gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => optimizeService(service.id)}
+                                  disabled={optimizingServiceId === service.id}
+                                  className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                  title={t.dashboard.card.optimize}
+                                >
+                                  {optimizingServiceId === service.id ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                                  ) : (
+                                    <Wand2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteService(service.id)}
+                                  className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination controls could go here */}
+
             </div>
-            <div>
-              <Label htmlFor="edit-name">Название *</Label>
-              <Input
-                id="edit-name"
-                value={editingForm.name}
-                onChange={(e) => setEditingForm({ ...editingForm, name: e.target.value })}
-                placeholder="Название услуги"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-description">Описание</Label>
-              <Textarea
-                id="edit-description"
-                value={editingForm.description}
-                onChange={(e) => setEditingForm({ ...editingForm, description: e.target.value })}
-                placeholder="Описание услуги"
-                rows={4}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-keywords">Ключевые слова (через запятую)</Label>
-              <Input
-                id="edit-keywords"
-                value={editingForm.keywords}
-                onChange={(e) => setEditingForm({ ...editingForm, keywords: e.target.value })}
-                placeholder="Например: окрашивание, стрижка, укладка"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-price">Цена</Label>
-              <Input
-                id="edit-price"
-                type="number"
-                value={editingForm.price}
-                onChange={(e) => setEditingForm({ ...editingForm, price: e.target.value })}
-                placeholder="Цена в рублях"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingService(null)}>
-              Отмена
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!editingForm.name.trim()) {
-                  setError('Название услуги обязательно');
-                  return;
-                }
-                try {
-                  const service = userServices.find(s => s.id === editingService);
-                  if (!service) {
-                    setError('Услуга не найдена');
-                    return;
-                  }
-                  await updateService(editingService!, {
-                    category: editingForm.category,
-                    name: editingForm.name,
-                    description: editingForm.description,
-                    keywords: editingForm.keywords.split(',').map(k => k.trim()).filter(k => k),
-                    price: editingForm.price,
-                    optimized_name: service.optimized_name || '',
-                    optimized_description: service.optimized_description || ''
-                  });
-                  setEditingService(null);
-                } catch (e: any) {
-                  setError('Ошибка обновления услуги: ' + e.message);
-                }
-              }}
-            >
-              Сохранить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </TabsContent>
+
+          <TabsContent value="reviews">
+            <ReviewReplyAssistant
+              businessName={currentBusiness?.name}
+              selectedSource={selectedSource}
+            />
+          </TabsContent>
+
+          <TabsContent value="news">
+            <NewsGenerator
+              services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
+              businessId={currentBusinessId}
+              externalPosts={externalPosts.filter(p => selectedSource === 'all' || (p.source && p.source.toLowerCase().includes(selectedSource)))}
+            />
+          </TabsContent>
+
+          <TabsContent value="keywords">
+            <SEOKeywordsTab />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

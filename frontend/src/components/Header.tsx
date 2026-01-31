@@ -5,7 +5,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
 import { useLanguage } from "../i18n/LanguageContext";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import logo from "../assets/images/logo.png"; // Импортируем логотип
+import logo from "@/assets/images/logo.png"; // Импортируем логотип
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -13,13 +13,13 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  
+
   // ЛК отключён: всегда скрываем элементы аутентификации
   // Скрываем Header на странице Dashboard (там свой хедер)
   useEffect(() => {
     setIsAuth(false);
   }, []);
-  
+
   useEffect(() => {
     if (window.location.hash === "#agents") {
       const el = document.getElementById("agents");
@@ -28,11 +28,18 @@ const Header = () => {
       }
     }
   }, []);
-  
-  // Не показываем Header на страницах кабинета (/dashboard...)
-  if (location.pathname.startsWith('/dashboard')) {
-    return null;
-  }
+
+  // Handle scroll effect
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -50,22 +57,32 @@ const Header = () => {
     { name: t.header.prices, href: '/about#pricing' },
   ];
 
+  // Не показываем Header на страницах кабинета (/dashboard...)
+  if (location.pathname.startsWith('/dashboard')) {
+    return null;
+  }
+
   return (
-    <header className="bg-card border-b border-border">
+    <header
+      className={`sticky top-0 z-50 transition-all duration-300 ${isScrolled
+        ? "bg-background/80 backdrop-blur-md border-b border-border shadow-sm"
+        : "bg-transparent border-transparent"
+        }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
-                <img 
-                  src={logo} 
-                  alt="BeautyBot Logo" 
+                <img
+                  src={logo}
+                  alt="BeautyBot Logo"
                   className="h-12 w-auto"
                 />
               </Link>
             </div>
           </div>
-          
+
           <nav className="hidden md:flex items-center space-x-14">
             {navigation.map((item) => (
               item.href === '/#agents' ? (
@@ -120,11 +137,11 @@ const Header = () => {
                 className="flex items-center gap-2"
               >
                 <LogIn className="w-4 h-4" />
-                <span>Вход</span>
+                <span>{t.header.login}</span>
               </Button>
             </Link>
             <Link to={{ pathname: "/", hash: "#hero-form" }}>
-              <Button>{t.header.tryFree}</Button>
+              <Button className="btn-iridescent">{t.header.tryFree}</Button>
             </Link>
           </div>
 
@@ -140,7 +157,7 @@ const Header = () => {
         </div>
 
         {isMenuOpen && (
-          <div className="md:hidden">
+          <div className="md:hidden bg-background border-b border-border absolute left-0 right-0 shadow-lg">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
                 item.href === '/#agents' ? (
@@ -180,12 +197,13 @@ const Header = () => {
                     key={item.name}
                     href={item.href}
                     className="block px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     {item.name}
                   </a>
                 )
               ))}
-              <div className="pt-4 space-y-2">
+              <div className="pt-4 space-y-2 pb-4">
                 <div className="px-3 py-2">
                   <LanguageSwitcher />
                 </div>
@@ -196,11 +214,11 @@ const Header = () => {
                     className="w-full justify-start"
                   >
                     <LogIn className="w-4 h-4 mr-2" />
-                    Вход
+                    {t.header.login}
                   </Button>
                 </Link>
                 <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
-                  <Button className="w-full justify-start mx-3">{t.header.tryFree}</Button>
+                  <Button className="w-full justify-start mx-3 btn-iridescent">{t.header.tryFree}</Button>
                 </Link>
               </div>
             </div>

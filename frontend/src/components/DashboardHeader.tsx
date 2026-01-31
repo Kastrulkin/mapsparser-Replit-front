@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { newAuth } from '../lib/auth_new';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { BusinessSwitcher } from './BusinessSwitcher';
-import { LogOut, LogIn, Settings } from 'lucide-react';
+import { NetworkLocationsSwitcher } from './NetworkLocationsSwitcher';
+import { LogOut, LogIn, Settings, Bell, Search, UserCircle } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { DESIGN_TOKENS } from '../lib/design-tokens';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +27,7 @@ interface DashboardHeaderProps {
   onBusinessChange?: (businessId: string) => void;
   isSuperadmin?: boolean;
   user?: any;
+  currentBusiness?: any;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -32,6 +36,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onBusinessChange,
   isSuperadmin = false,
   user: userProp,
+  currentBusiness,
 }) => {
   const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
@@ -73,37 +78,69 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-      <div className="flex items-center justify-end px-4 py-3">
-              <div className="flex items-center gap-3">
-                 {/* Показываем переключатель бизнесов для суперадмина всегда (даже если бизнесов нет), для остальных - если больше 1 */}
-                 {(isSuperadmin || businesses.length > 1) && (
-                   <BusinessSwitcher
-                     businesses={businesses}
-                     currentBusinessId={currentBusinessId || undefined}
-                     onBusinessChange={onBusinessChange || (() => {})}
-                     isSuperadmin={isSuperadmin || false}
-                   />
-                 )}
+    <header className={cn(
+      "sticky top-0 z-30 px-6 py-4 transition-all duration-300",
+      "bg-white/70 backdrop-blur-xl border-b border-white/20 supports-[backdrop-filter]:bg-white/60"
+    )}>
+      <div className="flex items-center justify-between gap-4">
+        {/* Left Side: Context Switchers */}
+        <div className="flex items-center gap-3 flex-1">
+          {isSuperadmin && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
+              <span className="px-2 py-1 text-[10px] font-bold text-indigo-500 uppercase tracking-wider bg-indigo-50 rounded-md border border-indigo-100">
+                SuperAdmin
+              </span>
+              {currentBusiness?.network_id && (
+                <span className="hidden lg:inline-flex text-[10px] font-mono text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                  NetID: {currentBusiness.network_id.substring(0, 8)}...
+                </span>
+              )}
+              <BusinessSwitcher
+                businesses={businesses}
+                currentBusinessId={currentBusinessId || undefined}
+                onBusinessChange={onBusinessChange || (() => { })}
+                isSuperadmin={isSuperadmin}
+              />
+            </div>
+          )}
 
-                 {/* Пункт меню "Базич" для суперадмина demyanovap@yandex.ru */}
-                 {currentUser?.email === 'demyanovap@yandex.ru' && (
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={() => navigate('/dashboard/bazich')}
-                     className="flex items-center gap-2"
-                   >
-                     <Settings className="w-4 h-4" />
-                     <span className="hidden sm:inline">Базич</span>
-                   </Button>
-                 )}
+          {currentBusiness?.network_id && onBusinessChange && (
+            <NetworkLocationsSwitcher
+              currentBusinessId={currentBusinessId || undefined}
+              onLocationChange={onBusinessChange}
+            />
+          )}
+
+          {/* Fallback Title if no switchers active */}
+          {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
+            <h1 className="text-lg font-semibold text-gray-800 hidden md:block">
+              {currentBusiness.name}
+            </h1>
+          )}
+        </div>
+
+        {/* Right Side: Actions & Profile */}
+        <div className="flex items-center gap-3">
+          {/* Quick Actions for Demianov */}
+          {currentUser?.email === 'demyanovap@yandex.ru' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/dashboard/bazich')}
+              className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+              title="Bazich Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </Button>
+          )}
+
+          <div className="h-6 w-px bg-gray-200/60 hidden sm:block"></div>
 
           <LanguageSwitcher />
 
           <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
-            <SelectTrigger className="w-12">
-              <span className="text-base font-medium">
+            <SelectTrigger className="w-14 h-9 bg-transparent border-0 hover:bg-gray-100/50 focus:ring-0">
+              <span className="text-base font-medium text-gray-700">
                 {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
               </span>
             </SelectTrigger>
@@ -114,24 +151,35 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </SelectContent>
           </Select>
 
-          {isAuthenticated ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Выйти</span>
-            </Button>
+          <div className="h-6 w-px bg-gray-200/60 hidden sm:block"></div>
+
+          {isAuthenticated && currentUser ? (
+            <div className="flex items-center gap-3 pl-2">
+              <Link to="/dashboard/profile" className="flex items-center gap-2 group">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 p-[2px] shadow-sm group-hover:shadow-md transition-all">
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+                    <UserCircle className="w-5 h-5 text-gray-600" />
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-gray-700 hidden lg:block group-hover:text-blue-600 transition-colors">
+                  {currentUser.email?.split('@')[0]}
+                </span>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+              </Button>
+            </div>
           ) : (
             <Button
-              variant="outline"
-              size="sm"
               onClick={handleLoginClick}
-              className="flex items-center gap-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all rounded-xl"
             >
-              <LogIn className="w-4 h-4" />
+              <LogIn className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Вход</span>
             </Button>
           )}
@@ -139,14 +187,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
 
       <AlertDialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass-panel">
           <AlertDialogHeader>
             <AlertDialogTitle>Доступ к системе</AlertDialogTitle>
             <AlertDialogDescription>
               Для получения доступа к системе обратитесь к нам по электронной почте:
               <br />
-              <a 
-                href="mailto:info@beautybot.pro" 
+              <a
+                href="mailto:info@beautybot.pro"
                 className="text-blue-600 hover:text-blue-800 underline font-medium"
               >
                 info@beautybot.pro

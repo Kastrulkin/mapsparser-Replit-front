@@ -23,10 +23,10 @@ def get_parser():
         except ImportError as e:
             print(f"⚠️ Не удалось импортировать interception парсер: {e}")
             print("🔄 Переключаемся на legacy парсер...")
-            from parser import parse_yandex_card
+            from yandex_maps_scraper import parse_yandex_card
             return parse_yandex_card
     else:
-        from parser import parse_yandex_card
+        from yandex_maps_scraper import parse_yandex_card
         print("✅ Используется Legacy парсер (HTML парсинг)")
         return parse_yandex_card
 

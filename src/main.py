@@ -1,5 +1,5 @@
 """
-main.py — Веб-сервер для SEO-анализатора Яндекс.Карт
+main.py - Веб-сервер для SEO-анализатора Яндекс.Карт
 """
 import os
 import sys
@@ -19,17 +19,21 @@ from flask_cors import CORS
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
-    RATE_LIMITER_AVAILABLE = True
+    # Временно отключаем rate limiting для решения пробемы с 429
+    RATE_LIMITER_AVAILABLE = False
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
     print('⚠️ flask-limiter не установлен. Rate limiting отключен. Установите: pip install flask-limiter')
-from parser import parse_yandex_card
+from yandex_maps_scraper import parse_yandex_card
 from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
+from db_helpers import get_db, close_db
+from config import USE_BUSINESS_REPOSITORY, USE_SERVICE_REPOSITORY, USE_REVIEW_REPOSITORY
+from core.helpers import get_business_owner_id
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
@@ -39,6 +43,14 @@ from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 from api.services_api import services_bp
+from api.growth_api import growth_bp
+from api.admin_growth_api import admin_growth_bp
+from api.progress_api import progress_bp
+from api.stage_progress_api import stage_progress_bp
+from api.metrics_history_api import metrics_history_bp
+from api.networks_api import networks_bp
+from api.network_health_api import network_health_bp
+from api.admin_prospecting import admin_prospecting_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -65,7 +77,7 @@ except ImportError as e:
 # Автоматическая загрузка переменных окружения из .env / .env.test
 try:
     from dotenv import load_dotenv
-    # Если FLASK_ENV=test|testing — используем .env.test, иначе обычный .env
+    # Если FLASK_ENV=test|testing - используем .env.test, иначе обычный .env
     env_file = ".env.test" if os.getenv("FLASK_ENV", "").lower() in ("test", "testing") else ".env"
     load_dotenv(env_file)
 except ImportError:
@@ -77,19 +89,21 @@ app = Flask(__name__)
 # В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-CORS(app, supports_credentials=True, origins=allowed_origins)
+# For local debugging, allow all origins temporarily if needed, or ensure user's IP is here.
+CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"])
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:
     limiter = Limiter(
         app=app,
         key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
+        default_limits=["10000 per day", "1000 per hour"],
         storage_uri="memory://"  # Для продакшена лучше использовать Redis
     )
-    print("✅ Rate limiting включен")
+    print("✅ Rate limiting включен (с расширенными лимитами)")
 else:
     limiter = None
+    print("⚠️ Rate limiting ОТКЛЮЧЕН (для отладки доступа)")
 
 # Декоратор для применения rate limiting (если доступен)
 def rate_limit_if_available(limit_str):
@@ -110,8 +124,26 @@ app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
 app.register_blueprint(services_bp)
+app.register_blueprint(growth_bp)
+app.register_blueprint(admin_growth_bp)
+app.register_blueprint(progress_bp)
+app.register_blueprint(stage_progress_bp)
+app.register_blueprint(metrics_history_bp)
+app.register_blueprint(networks_bp)
+app.register_blueprint(network_health_bp)
+app.register_blueprint(admin_prospecting_bp)
+
+try:
+    from api.wordstat_api import wordstat_bp
+    app.register_blueprint(wordstat_bp)
+except ImportError as e:
+    print(f"⚠️ Could not import wordstat_bp: {e}")
+
 if google_business_bp:
     app.register_blueprint(google_business_bp)
+
+# Register database cleanup on app teardown (Phase 3.5)
+app.teardown_appcontext(close_db)
 
 # Путь к собранному фронтенду (SPA)
 FRONTEND_DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
@@ -206,6 +238,35 @@ def save_card_to_db(card: dict) -> None:
     card_id = card.get('id') or str(uuid.uuid4())
     overview = card.get('overview') or {}
 
+    # === АВТОМАТИЧЕСКИЙ АНАЛИЗ ПРИ СОХРАНЕНИИ ===
+    try:
+        from services.analytics_service import calculate_profile_completeness, generate_seo_recommendations
+        
+        # Подготовка данных для анализа
+        analysis_data = {
+            'phone': (overview or {}).get('phone'),
+            'website': (overview or {}).get('site'),
+            'schedule': (overview or {}).get('working_hours') or card.get('hours') or card.get('hours_full'),
+            'photos_count': card.get('photos_count') or len(card.get('photos', [])),
+            'services_count': card.get('services_count') or len(card.get('products', [])),
+            'description': (overview or {}).get('description'),
+            'messengers': card.get('messengers'),
+            'is_verified': card.get('is_verified')
+        }
+        
+        # Расчет баллов
+        seo_score = calculate_profile_completeness(analysis_data)
+        recommendations = generate_seo_recommendations(analysis_data)
+        
+        # Обновляем объект card перед сохранением
+        card['seo_score'] = seo_score
+        card['recommendations'] = json.dumps(recommendations, ensure_ascii=False)
+        print(f"📊 [save_card_to_db] Auto-Analysis: Score {seo_score}%")
+        
+    except Exception as e:
+        print(f"⚠️ Warning: Auto-analysis failed in save_card_to_db: {e}")
+    # ============================================
+
     cur.execute(
         """
         INSERT OR REPLACE INTO Cards (
@@ -286,7 +347,7 @@ def _detect_country_code() -> str:
 
 @app.route('/')
 def index():
-    """Главная страница — раздаём собранный SPA"""
+    """Главная страница - раздаём собранный SPA"""
     try:
         return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
     except Exception as e:
@@ -297,6 +358,13 @@ def index():
 def serve_assets(filename):
     """Раздача ассетов Vite/SPA"""
     return send_from_directory(os.path.join(FRONTEND_DIST_DIR, 'assets'), filename)
+
+@app.route('/yandex_f5eb229fc5e67c03.html')
+def serve_yandex_verification():
+    """Yandex Webmaster verification"""
+    # Explicitly define root directory to avoid traversal issues
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    return send_from_directory(root_dir, 'yandex_f5eb229fc5e67c03.html')
 
 @app.route('/api/geo/payment-provider', methods=['GET'])
 def get_payment_provider():
@@ -619,7 +687,11 @@ def restart_parsing_task(task_id):
             db.close()
             return jsonify({"error": "Задача не найдена"}), 404
         
-        current_status = task[1] if isinstance(task, tuple) else task.get('status')
+        if isinstance(task, dict):
+            current_status = task.get('status')
+        else:
+             # tuple or sqlite3.Row
+            current_status = task[1]
         
         # Перезапускаем задачу (сбрасываем статус на pending)
         cursor.execute("""
@@ -746,7 +818,11 @@ def switch_task_to_sync(task_id):
                 "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
             }), 400
         
-        account_id = account_row[0] if isinstance(account_row, tuple) else account_row.get('id')
+        if isinstance(account_row, dict):
+            account_id = account_row.get('id')
+        else:
+            # tuple or sqlite3.Row (supports index access)
+            account_id = account_row[0]
         
         # Обновляем задачу на синхронизацию
         cursor.execute("""
@@ -760,6 +836,14 @@ def switch_task_to_sync(task_id):
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (account_id, task_id))
+        
+        # Проверяем, что обновление прошло успешно
+        if cursor.rowcount == 0:
+            db.close()
+            return jsonify({
+                "success": False,
+                "error": "Задача не обновлена. Возможно, задача уже была удалена или изменена."
+            }), 400
         
         db.conn.commit()
         db.close()
@@ -1473,6 +1557,8 @@ def get_external_reviews(business_id):
     """
     Получить все спарсенные отзывы из внешних источников (Яндекс.Бизнес, Google Business, 2ГИС)
     для конкретного бизнеса.
+    
+    Phase 3.5: Uses ReviewRepository when USE_REVIEW_REPOSITORY=true
     """
     try:
         # Авторизация: владелец бизнеса или суперадмин
@@ -1485,68 +1571,129 @@ def get_external_reviews(business_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        # Phase 3.5: Use repository if feature flag enabled
+        if USE_REVIEW_REPOSITORY:
+            from repositories.review_repository import ReviewRepository
+            
+            db = get_db()
+            try:
+                cursor = db.conn.cursor()
+                
+                # Проверяем, что пользователь владелец бизнеса или суперадмин
+                owner_id = get_business_owner_id(cursor, business_id)
+                if not owner_id:
+                    db.conn.rollback()
+                    return jsonify({"error": "Бизнес не найден"}), 404
+                
+                # Check superadmin using DatabaseManager method
+                db_manager = DatabaseManager()
+                if owner_id != user_data["user_id"] and not db_manager.is_superadmin(user_data["user_id"]):
+                    db_manager.close()
+                    db.conn.rollback()
+                    return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+                db_manager.close()
+                
+                # Use repository (SELECT operations - no commit needed)
+                repo = ReviewRepository(db.conn)
+                reviews_data = repo.get_by_business_id(business_id)
+                stats = repo.get_statistics(business_id)
+                
+                # Format response to match legacy format
+                reviews = []
+                for r in reviews_data:
+                    reviews.append({
+                        "id": r.get("id"),
+                        "source": r.get("source"),
+                        "external_review_id": r.get("external_review_id"),
+                        "rating": r.get("rating"),
+                        "author_name": r.get("author_name") or "Анонимный пользователь",
+                        "text": r.get("text") or "",
+                        "response_text": r.get("response_text"),
+                        "response_at": r.get("response_at"),
+                        "published_at": r.get("published_at"),
+                        "created_at": r.get("created_at"),
+                        "has_response": bool(r.get("response_text")),
+                    })
+                
+                # No commit needed for SELECT operations
+                return jsonify({
+                    "success": True,
+                    "reviews": reviews,
+                    "total": stats.get("total", len(reviews)),
+                    "with_response": stats.get("with_response", 0),
+                    "without_response": stats.get("without_response", 0),
+                })
+            except Exception as repo_error:
+                # Rollback on error (even for SELECT, it's safe)
+                db.conn.rollback()
+                print(f"❌ Ошибка в get_external_reviews (repository): {repo_error}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": str(repo_error)}), 500
+        else:
+            # Legacy code path
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
 
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
+            # Проверяем, что пользователь владелец бизнеса или суперадмин
+            owner_id = get_business_owner_id(cursor, business_id)
+            if not owner_id:
+                db.close()
+                return jsonify({"error": "Бизнес не найден"}), 404
+
+            if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+                db.close()
+                return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+            # Проверяем, существует ли таблица ExternalBusinessReviews
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='ExternalBusinessReviews'
+            """)
+            table_exists = cursor.fetchone()
+            
+            if not table_exists:
+                # Таблица не существует - возвращаем пустой список
+                db.close()
+                return jsonify({"success": True, "reviews": []})
+
+            # Получаем все отзывы для этого бизнеса, отсортированные по дате публикации (новые сначала)
+            cursor.execute(
+                """
+                SELECT id, source, external_review_id, rating, author_name, text,
+                       response_text, response_at, published_at, created_at
+                FROM ExternalBusinessReviews
+                WHERE business_id = ?
+                ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
+                """,
+                (business_id,),
+            )
+            rows = cursor.fetchall()
             db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+            reviews = []
+            for r in rows:
+                reviews.append({
+                    "id": r[0],
+                    "source": r[1],
+                    "external_review_id": r[2],
+                    "rating": r[3],
+                    "author_name": r[4] or "Анонимный пользователь",
+                    "text": r[5] or "",
+                    "response_text": r[6],
+                    "response_at": r[7],
+                    "published_at": r[8],
+                    "created_at": r[9],
+                    "has_response": bool(r[6]),  # Есть ли ответ организации
+                })
 
-        # Проверяем, существует ли таблица ExternalBusinessReviews
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ExternalBusinessReviews'
-        """)
-        table_exists = cursor.fetchone()
-        
-        if not table_exists:
-            # Таблица не существует - возвращаем пустой список
-            db.close()
-            return jsonify({"success": True, "reviews": []})
-
-        # Получаем все отзывы для этого бизнеса, отсортированные по дате публикации (новые сначала)
-        cursor.execute(
-            """
-            SELECT id, source, external_review_id, rating, author_name, text,
-                   response_text, response_at, published_at, created_at
-            FROM ExternalBusinessReviews
-            WHERE business_id = ?
-            ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
-            """,
-            (business_id,),
-        )
-        rows = cursor.fetchall()
-        db.close()
-
-        reviews = []
-        for r in rows:
-            reviews.append({
-                "id": r[0],
-                "source": r[1],
-                "external_review_id": r[2],
-                "rating": r[3],
-                "author_name": r[4] or "Анонимный пользователь",
-                "text": r[5] or "",
-                "response_text": r[6],
-                "response_at": r[7],
-                "published_at": r[8],
-                "created_at": r[9],
-                "has_response": bool(r[6]),  # Есть ли ответ организации
+            return jsonify({
+                "success": True,
+                "reviews": reviews,
+                "total": len(reviews),
+                "with_response": sum(1 for r in reviews if r["has_response"]),
+                "without_response": sum(1 for r in reviews if not r["has_response"]),
             })
-
-        return jsonify({
-            "success": True,
-            "reviews": reviews,
-            "total": len(reviews),
-            "with_response": sum(1 for r in reviews if r["has_response"]),
-            "without_response": sum(1 for r in reviews if not r["has_response"]),
-        })
 
     except Exception as e:
         print(f"❌ Ошибка получения внешних отзывов: {e}")
@@ -1627,6 +1774,20 @@ def get_external_summary(business_id):
             (business_id,),
         )
         reviews_row = cursor.fetchone()
+
+        # Получаем дату последнего парсинга
+        cursor.execute(
+            """
+            SELECT created_at, competitors
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        parse_row = cursor.fetchone()
+        last_parse_date = parse_row[0] if parse_row else None
         
         db.close()
 
@@ -1642,6 +1803,8 @@ def get_external_summary(business_id):
             "reviews_with_response": reviews_with_response,
             "reviews_without_response": reviews_without_response,
             "last_sync_date": stats_row[2] if stats_row else None,
+            "last_parse_date": last_parse_date,
+            "competitors": parse_row[1] if parse_row and len(parse_row) > 1 else None
         })
 
     except Exception as e:
@@ -1737,6 +1900,61 @@ def get_external_posts(business_id):
         print(f"❌ Ошибка получения внешних постов: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/business/<business_id>/services", methods=["GET"])
+def get_business_services(business_id):
+    """
+    Получить список услуг бизнеса
+    """
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+            
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверка доступа
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+            
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Получение услуг
+        cursor.execute("""
+            SELECT id, category, name, description, price, created_at
+            FROM UserServices
+            WHERE business_id = ?
+            ORDER BY category, name
+        """, (business_id,))
+        
+        services = []
+        for row in cursor.fetchall():
+            services.append({
+                "id": row[0],
+                "category": row[1] or "Без категории",
+                "name": row[2],
+                "description": row[3],
+                "price": row[4],
+                "created_at": row[5]
+            })
+
+        db.close()
+        return jsonify({"success": True, "services": services})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения услуг: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== SUPERADMIN USER MANAGEMENT ====================
@@ -1918,8 +2136,14 @@ def spa_fallback(path):
         # Если файл существует в dist, отдаем его напрямую
         return send_from_directory(FRONTEND_DIST_DIR, path)
 
-    # Иначе — SPA индекс
-    return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+    # Иначе - SPA индекс
+    response = send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+    # Для index.html отключаем кэширование, чтобы всегда получать свежую версию приложения
+    if response:
+         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+         response.headers["Pragma"] = "no-cache"
+         response.headers["Expires"] = "0"
+    return response
 
 # Временные заглушки для тихой работы фронтенда
 @app.route('/api/users/reports', methods=['GET'])
@@ -2286,7 +2510,7 @@ def services_optimize():
                 user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
                 user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
                 user_prompt = user_prompt.replace('{length}', str(length or 150))
-                user_prompt = user_prompt.replace('{instructions}', str(instructions or '—'))
+                user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
                 user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
                 user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
                 user_prompt = user_prompt.replace('{content}', str(content[:4000]))
@@ -2296,7 +2520,7 @@ def services_optimize():
                 
             except FileNotFoundError:
                 # Fallback на старый промпт
-                default_prompt_template = """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                default_prompt_template = """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -2337,7 +2561,7 @@ def services_optimize():
                     .replace('{tone}', str(tone or 'профессиональный'))
                     .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
-                    .replace('{instructions}', str(instructions or '—'))
+                    .replace('{instructions}', str(instructions or '-'))
                     .replace('{frequent_queries}', str(frequent_queries))
                     .replace('{content}', str(content[:4000]))
                 )
@@ -2676,8 +2900,8 @@ def news_generate():
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt = """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+        default_prompt = """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
 Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
@@ -2768,6 +2992,7 @@ Write all generated text in {language_name}.
         else:
             # Если строка, пробуем распарсить как JSON
             generated_text = result
+            parsed_result = None
             try:
                 # Ищем JSON объект в строке
                 start_idx = result.find('{')
@@ -2775,15 +3000,37 @@ Write all generated text in {language_name}.
                 if start_idx != -1 and end_idx != 0:
                     json_str = result[start_idx:end_idx]
                     parsed_result = json.loads(json_str)
-                if isinstance(parsed_result, dict):
-                        # Проверяем наличие ошибки
-                    if 'error' in parsed_result:
-                        db.close()
-                        return jsonify({"error": parsed_result['error']}), 500
-                    generated_text = parsed_result.get('news') or parsed_result.get('text') or result
             except json.JSONDecodeError:
-                # Если не JSON, используем строку как есть
-                pass
+                # Если не JSON (например, кавычки внутри), пробуем регулярку/ручной парсинг
+                try:
+                    import re
+                    # Ищем pattern: "news": "..."
+                    # Используем non-greedy match для содержимого, но так как внутри могут быть кавычки,
+                    # это сложно. Попробуем взять все между первыми и последними кавычками значения.
+                    match = re.search(r'"news"\s*:\s*"(.*)"\s*\}', result, re.DOTALL)
+                    if match:
+                        generated_text = match.group(1)
+                        # Экранированные кавычки возвращаем обратно, если они были правильно экранированы
+                        # Но скорее всего проблема в неэкранированных.
+                        # В простом случае просто вернем то что нашли.
+                        parsed_result = {"news": generated_text}
+                except Exception:
+                    pass
+
+            if isinstance(parsed_result, dict):
+                # Проверяем наличие ошибки
+                if 'error' in parsed_result:
+                    db.close()
+                    return jsonify({"error": parsed_result['error']}), 500
+                
+                # Используем явную проверку ключей, чтобы пустая строка не вызывала фолбэк
+                if 'news' in parsed_result:
+                    generated_text = parsed_result['news']
+                elif 'text' in parsed_result:
+                    generated_text = parsed_result['text']
+                else:
+                    # Если ключей нет, но это словарь - странно, но оставим result или json dump
+                    pass
         
         # Проверяем, что generated_text не пустой
         if not generated_text or not generated_text.strip():
@@ -3171,7 +3418,7 @@ def reviews_reply():
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt_template = """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+        default_prompt_template = """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
@@ -3379,7 +3626,11 @@ def review_replies_update():
 # ==================== СЕРВИС: УПРАВЛЕНИЕ УСЛУГАМИ ====================
 @app.route('/api/services/add', methods=['POST', 'OPTIONS'])
 def add_service():
-    """Добавление услуги в список пользователя."""
+    """
+    Добавление услуги в список пользователя.
+    
+    Phase 3.5: Uses ServiceRepository when USE_SERVICE_REPOSITORY=true
+    """
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -3406,29 +3657,90 @@ def add_service():
         if not name:
             return jsonify({"error": "Название услуги обязательно"}), 400
 
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
         user_id = user_data['user_id']
         service_id = str(uuid.uuid4())
 
-        # Проверяем, есть ли поле business_id в таблице UserServices
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        if 'business_id' in columns and business_id:
-            cursor.execute("""
-                INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
+        # Phase 3.5: Use repository if feature flag enabled
+        if USE_SERVICE_REPOSITORY:
+            from repositories.service_repository import ServiceRepository
+            from repositories.exceptions import DuplicateRecordError, OrphanRecordError
+            
+            db = get_db()
+            try:
+                cursor = db.conn.cursor()
+                
+                # Проверяем доступ к бизнесу (если business_id указан)
+                if business_id:
+                    owner_id = get_business_owner_id(cursor, business_id)
+                    if not owner_id:
+                        db.conn.rollback()
+                        return jsonify({"error": "Бизнес не найден"}), 404
+                    
+                    # Check superadmin using DatabaseManager method
+                    db_manager = DatabaseManager()
+                    if owner_id != user_id and not db_manager.is_superadmin(user_id):
+                        db_manager.close()
+                        db.conn.rollback()
+                        return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+                    db_manager.close()
+                
+                # Prepare service data for repository
+                service_data = {
+                    'id': service_id,
+                    'user_id': user_id,
+                    'name': name,
+                    'category': category,
+                    'description': description,
+                    'keywords': json.dumps(keywords) if isinstance(keywords, list) else (keywords if isinstance(keywords, str) else '[]'),
+                    'price': price,
+                    'is_active': 1
+                }
+                
+                if business_id:
+                    service_data['business_id'] = business_id
+                
+                # Use repository
+                repo = ServiceRepository(db.conn)
+                created_id = repo.create(service_data)
+                
+                # Commit transaction
+                db.conn.commit()
+                
+                return jsonify({"success": True, "message": "Услуга добавлена", "id": created_id})
+                
+            except (DuplicateRecordError, OrphanRecordError) as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка добавления услуги (repository constraint): {repo_error}")
+                return jsonify({"error": str(repo_error)}), 400
+            except Exception as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка добавления услуги (repository): {repo_error}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": str(repo_error)}), 500
         else:
-            cursor.execute("""
-                INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
+            # Legacy code path
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
 
-        db.conn.commit()
-        db.close()
-        return jsonify({"success": True, "message": "Услуга добавлена"})
+            # Проверяем, есть ли поле business_id в таблице UserServices
+            cursor.execute("PRAGMA table_info(UserServices)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'business_id' in columns and business_id:
+                cursor.execute("""
+                    INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
+            else:
+                cursor.execute("""
+                    INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
+
+            db.conn.commit()
+            db.close()
+            return jsonify({"success": True, "message": "Услуга добавлена"})
 
     except Exception as e:
         print(f"❌ Ошибка добавления услуги: {e}")
@@ -3468,19 +3780,79 @@ def get_services():
                     has_optimized_desc = 'optimized_description' in columns
                     has_optimized_name = 'optimized_name' in columns
                     
-                    # Формируем SELECT с учетом наличия полей
-                    select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
+    # Формируем SELECT с учетом наличия полей
+                    select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
                     if has_optimized_desc:
                         select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
                     if has_optimized_name:
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
                     select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
-                    print(f"🔍 DEBUG get_services: SQL запрос = {select_sql}", flush=True)
-                    print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
-                    print(f"🔍 DEBUG get_services: has_optimized_name = {has_optimized_name}, has_optimized_desc = {has_optimized_desc}", flush=True)
-                    
                     cursor.execute(select_sql, (business_id,))
+                    
+                    user_services = []
+                    rows = cursor.fetchall()
+                    for r in rows:
+                        srv = {
+                            "id": r[0], "category": r[1], "name": r[2], 
+                            "description": r[3], "keywords": r[4], 
+                            "price": r[5], "created_at": r[6],
+                            "updated_at": r[7].replace(" ", "T") if r[7] else None
+                        }
+                         # Если есть оптимизированные поля, добавляем их
+                        idx_offset = 0
+                        if has_optimized_desc:
+                             srv["optimized_description"] = r[8]
+                             idx_offset += 1
+                        if has_optimized_name:
+                             srv["optimized_name"] = r[8 + idx_offset]
+                        
+                        user_services.append(srv)
+
+                    # Получаем внешние услуги
+                    external_services = []
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ExternalBusinessServices'")
+                    if cursor.fetchone():
+                        # Проверяем колонки ExternalBusinessServices
+                        cursor.execute("PRAGMA table_info(ExternalBusinessServices)")
+                        ext_cols = [col[1] for col in cursor.fetchall()]
+                        ext_has_updated_at = 'updated_at' in ext_cols
+                        
+                        query_cols = "id, name, price, description, category, created_at"
+                        if ext_has_updated_at:
+                            query_cols += ", updated_at"
+                            
+                        cursor.execute(f"""
+                            SELECT {query_cols}
+                            FROM ExternalBusinessServices
+                            WHERE business_id = ?
+                        """, (business_id,))
+                        
+                        for r in cursor.fetchall():
+                            srv_obj = {
+                                "id": r[0],
+                                "name": r[1],
+                                "price": r[2],
+                                "description": r[3],
+                                "category": r[4],
+                                "created_at": r[5],
+                                "is_external": True
+                            }
+                            if ext_has_updated_at:
+                                val = r[6]
+                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
+                            else:
+                                val = r[5] # Fallback to created_at
+                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
+                                
+                            external_services.append(srv_obj)
+
+                    db.close()
+                    return jsonify({
+                        "success": True, 
+                        "services": user_services,
+                        "external_services": external_services
+                    })
                 else:
                     db.close()
                     return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
@@ -3581,7 +3953,11 @@ def get_services():
 
 @app.route('/api/services/update/<string:service_id>', methods=['PUT', 'OPTIONS'])
 def update_service(service_id):
-    """Обновление существующей услуги пользователя."""
+    """
+    Обновление существующей услуги пользователя.
+    
+    Phase 3.5: Uses ServiceRepository when USE_SERVICE_REPOSITORY=true
+    """
     try:
         print(f"🔍 Начало обновления услуги: {service_id}", flush=True)
         if request.method == 'OPTIONS':
@@ -3604,7 +3980,8 @@ def update_service(service_id):
         category = data.get('category', '')
         name = data.get('name', '')
         description = data.get('description', '')
-        optimized_description = data.get('optimized_description', '')  # Новое поле для SEO описания
+        optimized_description = data.get('optimized_description', '')
+        optimized_name = data.get('optimized_name', '')
         keywords = data.get('keywords', [])
         price = data.get('price', '')
         user_id = user_data['user_id']
@@ -3624,23 +4001,86 @@ def update_service(service_id):
         if not name:
             return jsonify({"error": "Название услуги обязательно"}), 400
 
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        
-        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
-        has_optimized_description = 'optimized_description' in columns
-        has_optimized_name = 'optimized_name' in columns
-        
-        optimized_name = data.get('optimized_name', '')
-        
-        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
-        print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
-        print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
-        print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
-        
-        try:
+        # Phase 3.5: Use repository if feature flag enabled
+        if USE_SERVICE_REPOSITORY:
+            from repositories.service_repository import ServiceRepository
+            from repositories.exceptions import RecordNotFoundError, OrphanRecordError
+            
+            db = get_db()
+            try:
+                cursor = db.conn.cursor()
+                
+                # Проверяем, что услуга существует и принадлежит пользователю
+                repo = ServiceRepository(db.conn)
+                existing_service = repo.get_by_id(service_id)
+                
+                if not existing_service:
+                    db.conn.rollback()
+                    return jsonify({"error": "Услуга не найдена"}), 404
+                
+                # Проверяем права доступа (владелец услуги или суперадмин)
+                if existing_service.get('user_id') != user_id:
+                    db_manager = DatabaseManager()
+                    if not db_manager.is_superadmin(user_id):
+                        db_manager.close()
+                        db.conn.rollback()
+                        return jsonify({"error": "Нет прав для редактирования этой услуги"}), 403
+                    db_manager.close()
+                
+                # Prepare update data
+                update_data = {
+                    'name': name,
+                    'category': category,
+                    'description': description,
+                    'keywords': keywords_str,
+                    'price': price,
+                }
+                
+                # Add optimized fields if provided
+                if optimized_name:
+                    update_data['optimized_name'] = optimized_name
+                if optimized_description:
+                    update_data['optimized_description'] = optimized_description
+                
+                # Update service
+                updated = repo.update(service_id, update_data)
+                
+                if not updated:
+                    db.conn.rollback()
+                    return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
+                
+                # Commit transaction
+                db.conn.commit()
+                
+                print(f"✅ DEBUG update_service: UPDATE выполнен через репозиторий", flush=True)
+                return jsonify({"success": True, "message": "Услуга обновлена"})
+                
+            except (RecordNotFoundError, OrphanRecordError) as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка обновления услуги (repository constraint): {repo_error}", flush=True)
+                return jsonify({"error": str(repo_error)}), 400
+            except Exception as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка обновления услуги (repository): {repo_error}", flush=True)
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": str(repo_error)}), 500
+        else:
+            # Legacy code path
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            
+            # Проверяем, есть ли поля optimized_description и optimized_name в таблице
+            cursor.execute("PRAGMA table_info(UserServices)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_optimized_description = 'optimized_description' in columns
+            has_optimized_name = 'optimized_name' in columns
+            
+            print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
+            print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
+            print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
+            print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
+            
             if has_optimized_description and has_optimized_name:
                 print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
                 cursor.execute("""
@@ -3649,50 +4089,22 @@ def update_service(service_id):
                     WHERE id = ? AND user_id = ?
                 """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
                 print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
-                
-                # Проверяем, что данные сохранились
-                cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
-                check_row = cursor.fetchone()
-                if check_row:
-                    print(f"✅ DEBUG update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
-                else:
-                    print(f"❌ DEBUG update_service: Услуга не найдена после UPDATE!", flush=True)
-            elif has_optimized_description:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_description", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, description, optimized_description, keywords_str, price, service_id, user_id))
-            elif has_optimized_name:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_name", flush=True)
-                cursor.execute("""
-                    UPDATE UserServices SET
-                    category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND user_id = ?
-                """, (category, name, optimized_name, description, keywords_str, price, service_id, user_id))
+
             else:
-                print(f"🔍 DEBUG update_service: Обновление без optimized полей (обратная совместимость)", flush=True)
-                # Если полей нет - обновляем без них (для обратной совместимости)
+                print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
                 cursor.execute("""
                     UPDATE UserServices SET
                     category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND user_id = ?
                 """, (category, name, description, keywords_str, price, service_id, user_id))
-        except Exception as sql_err:
-            print(f"❌ Ошибка SQL запроса: {sql_err}", flush=True)
-            import traceback
-            traceback.print_exc()
-            db.close()
-            raise
 
-        if cursor.rowcount == 0:
-            db.close()
-            return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
+            if cursor.rowcount == 0:
+                db.close()
+                return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
 
-        db.conn.commit()
-        db.close()
-        return jsonify({"success": True, "message": "Услуга обновлена"})
+            db.conn.commit()
+            db.close()
+            return jsonify({"success": True, "message": "Услуга обновлена"})
 
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}", flush=True)
@@ -3702,7 +4114,11 @@ def update_service(service_id):
 
 @app.route('/api/services/delete/<string:service_id>', methods=['DELETE', 'OPTIONS'])
 def delete_service(service_id):
-    """Удаление услуги пользователя."""
+    """
+    Удаление услуги пользователя (soft delete: is_active = 0).
+    
+    Phase 3.5: Uses ServiceRepository when USE_SERVICE_REPOSITORY=true
+    """
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -3717,17 +4133,67 @@ def delete_service(service_id):
 
         user_id = user_data['user_id']
 
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM UserServices WHERE id = ? AND user_id = ?", (service_id, user_id))
+        # Phase 3.5: Use repository if feature flag enabled
+        if USE_SERVICE_REPOSITORY:
+            from repositories.service_repository import ServiceRepository
+            from repositories.exceptions import RecordNotFoundError
+            
+            db = get_db()
+            try:
+                cursor = db.conn.cursor()
+                
+                # Проверяем, что услуга существует и принадлежит пользователю
+                repo = ServiceRepository(db.conn)
+                existing_service = repo.get_by_id(service_id)
+                
+                if not existing_service:
+                    db.conn.rollback()
+                    return jsonify({"error": "Услуга не найдена"}), 404
+                
+                # Проверяем права доступа (владелец услуги или суперадмин)
+                if existing_service.get('user_id') != user_id:
+                    db_manager = DatabaseManager()
+                    if not db_manager.is_superadmin(user_id):
+                        db_manager.close()
+                        db.conn.rollback()
+                        return jsonify({"error": "Нет прав для удаления этой услуги"}), 403
+                    db_manager.close()
+                
+                # Delete service (soft delete: is_active = 0)
+                deleted = repo.delete(service_id)
+                
+                if not deleted:
+                    db.conn.rollback()
+                    return jsonify({"error": "Услуга не найдена или нет прав для удаления"}), 404
+                
+                # Commit transaction
+                db.conn.commit()
+                
+                return jsonify({"success": True, "message": "Услуга удалена"})
+                
+            except RecordNotFoundError as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка удаления услуги (repository): {repo_error}")
+                return jsonify({"error": str(repo_error)}), 404
+            except Exception as repo_error:
+                db.conn.rollback()
+                print(f"❌ Ошибка удаления услуги (repository): {repo_error}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": str(repo_error)}), 500
+        else:
+            # Legacy code path
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            cursor.execute("DELETE FROM UserServices WHERE id = ? AND user_id = ?", (service_id, user_id))
 
-        if cursor.rowcount == 0:
+            if cursor.rowcount == 0:
+                db.close()
+                return jsonify({"error": "Услуга не найдена или нет прав для удаления"}), 404
+
+            db.conn.commit()
             db.close()
-            return jsonify({"error": "Услуга не найдена или нет прав для удаления"}), 404
-
-        db.conn.commit()
-        db.close()
-        return jsonify({"success": True, "message": "Услуга удалена"})
+            return jsonify({"success": True, "message": "Услуга удалена"})
 
     except Exception as e:
         print(f"❌ Ошибка удаления услуги: {e}")
@@ -4005,7 +4471,38 @@ def client_info():
                         
                         # Получаем данные владельца бизнеса для отображения
                         owner_data = None
-                        if owner_id:
+                        
+                        # Сначала проверяем BusinessProfiles (где сохраняются обновления)
+                        cursor.execute("""
+                            CREATE TABLE IF NOT EXISTS BusinessProfiles (
+                                id TEXT PRIMARY KEY,
+                                business_id TEXT NOT NULL,
+                                contact_name TEXT,
+                                contact_phone TEXT,
+                                contact_email TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
+                            )
+                        """)
+                        
+                        cursor.execute("""
+                            SELECT contact_name, contact_phone, contact_email
+                            FROM BusinessProfiles
+                            WHERE business_id = ?
+                        """, (current_business_id,))
+                        profile_row = cursor.fetchone()
+                        
+                        if profile_row and (profile_row[0] or profile_row[1] or profile_row[2]):
+                             owner_data = {
+                                'id': owner_id, # Оставляем ID реального владельца
+                                'name': profile_row[0] or "",
+                                'phone': profile_row[1] or "",
+                                'email': profile_row[2] or ""
+                            }
+                        
+                        # Если в профиле нет данных, берем из таблицы Users
+                        if not owner_data and owner_id:
                             cursor.execute("""
                                 SELECT id, email, name, phone
                                 FROM Users
@@ -4626,48 +5123,76 @@ def get_map_parses(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        # Проверяем наличие колонки unanswered_reviews_count
+        # Проверяем какие колонки существуют
         cursor.execute("PRAGMA table_info(MapParseResults)")
         columns = [row[1] for row in cursor.fetchall()]
+        
         has_unanswered_col = 'unanswered_reviews_count' in columns
+        has_profile_fields = 'profile_completeness' in columns
+        has_competitors = 'competitors' in columns
+        
+        # Формируем SELECT с учётом существующих колонок
+        base_fields = "id, url, map_type, rating, reviews_count"
         
         if has_unanswered_col:
-            cursor.execute("""
-                SELECT id, url, map_type, rating, reviews_count, unanswered_reviews_count, news_count, photos_count, report_path, created_at
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY datetime(created_at) DESC
-            """, (business_id,))
+            select_fields = f"{base_fields}, unanswered_reviews_count, news_count, photos_count, report_path"
         else:
-            cursor.execute("""
-                SELECT id, url, map_type, rating, reviews_count, 0 as unanswered_reviews_count, news_count, photos_count, report_path, created_at
-                FROM MapParseResults
-                WHERE business_id = ?
-                ORDER BY datetime(created_at) DESC
-            """, (business_id,))
+            select_fields = f"{base_fields}, 0 as unanswered_reviews_count, news_count, photos_count, report_path"
+        
+        if has_profile_fields:
+            select_fields += ", is_verified, phone, website, messengers, working_hours, services_count, profile_completeness"
+        
+        if has_competitors:
+            select_fields += ", competitors"
+            
+        select_fields += ", created_at"
+        
+        cursor.execute(f"""
+            SELECT {select_fields}
+            FROM MapParseResults
+            WHERE business_id = ?
+            ORDER BY datetime(created_at) DESC
+        """, (business_id,))
         
         rows = cursor.fetchall()
         db.close()
 
         items = []
         for r in rows:
-            items.append({
-                "id": r[0],
-                "url": r[1],
-                "mapType": r[2],
-                "rating": r[3],
-                "reviewsCount": r[4],
-                "unansweredReviewsCount": r[5] if has_unanswered_col else 0,
-                "newsCount": r[6] if has_unanswered_col else r[5],
-                "photosCount": r[7] if has_unanswered_col else r[6],
-                "reportPath": r[8] if has_unanswered_col else r[7],
-                "createdAt": r[9] if has_unanswered_col else r[8]
-            })
+            idx = 0
+            item = {
+                "id": r[idx], "url": r[idx+1], "mapType": r[idx+2],
+                "rating": r[idx+3], "reviewsCount": r[idx+4],
+                "unansweredReviewsCount": r[idx+5],
+                "newsCount": r[idx+6], "photosCount": r[idx+7],
+                "reportPath": r[idx+8]
+            }
+            idx = 9
+            
+            # Добавляем новые поля если они есть
+            if has_profile_fields:
+                item["isVerified"] = bool(r[idx]) if r[idx] is not None else False
+                item["phone"] = r[idx+1]
+                item["website"] = r[idx+2]
+                item["messengers"] = r[idx+3]
+                item["workingHours"] = r[idx+4]
+                item["servicesCount"] = r[idx+5] if r[idx+5] is not None else 0
+                item["profileCompleteness"] = r[idx+6] if r[idx+6] is not None else 0
+                idx += 7
+            
+            if has_competitors:
+                item["competitors"] = r[idx]
+                idx += 1
+            
+            item["createdAt"] = r[idx]
+            items.append(item)
 
         return jsonify({"success": True, "items": items})
 
     except Exception as e:
         print(f"❌ Ошибка получения результатов парсинга: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -5580,12 +6105,11 @@ def get_transactions():
         cursor = db.conn.cursor()
         
         # Строим запрос с явными полями (без SELECT *)
-        # Используем COALESCE(transaction_date, date) для совместимости со старой схемой
         query = """
             SELECT 
                 id,
                 business_id,
-                COALESCE(transaction_date, date) AS tx_date,
+                transaction_date,
                 amount,
                 client_type,
                 services,
@@ -5603,14 +6127,14 @@ def get_transactions():
             params.append(current_business_id)
         
         if start_date:
-            query += " AND COALESCE(transaction_date, date) >= ?"
+            query += " AND transaction_date >= ?"
             params.append(start_date)
         
         if end_date:
-            query += " AND COALESCE(transaction_date, date) <= ?"
+            query += " AND transaction_date <= ?"
             params.append(end_date)
         
-        query += " ORDER BY tx_date DESC, created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -5737,8 +6261,11 @@ def get_financial_metrics():
         metrics = cursor.fetchone()
         
         # Вычисляем retention rate
-        total_clients = metrics[3] + metrics[4]  # new + returning
-        retention_rate = (metrics[4] / total_clients * 100) if total_clients > 0 else 0
+        # Вычисляем retention rate
+        new_clients = metrics[3] or 0
+        returning_clients = metrics[4] or 0
+        total_clients = new_clients + returning_clients
+        retention_rate = (returning_clients / total_clients * 100) if total_clients > 0 else 0
         
         # Получаем данные за предыдущий период для сравнения
         from datetime import datetime, timedelta
@@ -6302,41 +6829,58 @@ def admin_sync_business_yandex(business_id):
         """, (business_id,))
         account_row = cursor.fetchone()
         
-        print(f"🔍 Результат поиска аккаунта: {account_row}")
-        
-        db.close()
+        account_id = None
+        if account_row:
+             account_id = account_row[0]
+             print(f"✅ Найден аккаунт: {account_id}")
+        else:
+             print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
 
-        if not account_row:
-            print(f"❌ Не найден активный аккаунт Яндекс.Бизнес для бизнеса {business_id}")
+        # Ищем ссылку на карты (NEW)
+        print(f"🔍 Поиск ссылки на карты для бизнеса {business_id}...")
+        cursor.execute("SELECT url FROM BusinessMapLinks WHERE business_id = ? AND map_type = 'yandex' LIMIT 1", (business_id,))
+        map_link_row = cursor.fetchone()
+        map_url = map_link_row[0] if map_link_row else None
+        
+        if not account_id and not map_url:
+            print(f"❌ Не найден ни аккаунт Яндекс.Бизнес, ни ссылка на карты для бизнеса {business_id}")
+            db.close()
             return jsonify({
                 "success": False,
-                "error": "Не найден активный аккаунт Яндекс.Бизнес",
-                "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
+                "error": "Не найден источник данных",
+                "message": "Для запуска парсинга добавьте ссылку на Яндекс.Карты или подключите аккаунт Яндекс.Бизнес"
             }), 400
+            
+        # Определяем тип задачи
+        task_id = str(uuid.uuid4())
+        user_id = user_data["user_id"]
+        
+        if map_url:
+            task_type = 'parse_card'
+            source = 'yandex_maps'  # Worker ожидает это для parse_card? В worker.py source используется для fallback.
+            target_url = map_url
+            print(f"✅ Найдена ссылка на карты: {map_url}. Запуск парсинга (с фоллбеком на синхронизацию).")
+            message = "Запущен парсинг карт"
+        else:
+            task_type = 'sync_yandex_business'
+            source = 'yandex_business'
+            target_url = ''
+            print(f"⚠️ Ссылка на карты не найдена, но есть аккаунт. Запуск прямой синхронизации.")
+            message = "Запущена синхронизация (без парсинга)"
 
-        account_id, auth_data_encrypted, external_id = account_row
-        print(f"✅ Найден аккаунт: {account_id}, external_id: {external_id}")
-        
-        print(f"🔄 Добавление задачи синхронизации в очередь для бизнеса {business_id}, аккаунт {account_id}")
-        
-        sync_id = str(uuid.uuid4())
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
+        print(f"🔄 Добавление задачи {task_type} в очередь для бизнеса {business_id}")
         
         try:
-            # Получаем user_id из авторизованного пользователя
-            user_id = user_data["user_id"]
-            
             cursor.execute("""
                 INSERT INTO ParseQueue (
                     id, business_id, account_id, task_type, source, 
                     status, user_id, url, created_at, updated_at
                 )
-                VALUES (?, ?, ?, 'sync_yandex_business', 'yandex_business', 
-                        'pending', ?, '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            """, (sync_id, business_id, account_id, user_id))
+                VALUES (?, ?, ?, ?, ?, 
+                        'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
             db.conn.commit()
-            print(f"✅ Задача синхронизации добавлена в очередь: {sync_id}")
+            print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
         except Exception as e:
             db.close()
             print(f"❌ Ошибка при добавлении задачи в очередь: {e}")
@@ -6349,8 +6893,9 @@ def admin_sync_business_yandex(business_id):
         
         return jsonify({
             "success": True,
-            "message": "Синхронизация запущена, обработка в фоне",
-            "sync_id": sync_id
+            "message": message,
+            "sync_id": task_id,
+            "task_type": task_type
         })
     
     except Exception as e:
@@ -7704,7 +8249,7 @@ def get_prompts():
         if not rows:
             default_prompts = [
                 ('service_optimization', 
-                 """Ты — SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                 """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
@@ -7736,7 +8281,7 @@ def get_prompts():
 {content}""",
                  'Промпт для оптимизации услуг и прайс-листа'),
                 ('review_reply',
-                 """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+                 """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
 Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
@@ -7745,8 +8290,8 @@ Write the reply in {language_name}.
 Отзыв клиента: {review_text[:1000]}""",
                  'Промпт для генерации ответов на отзывы'),
                 ('news_generation',
-                 """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
+                 """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
 Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
@@ -8070,6 +8615,225 @@ def update_or_delete_business_type(type_id):
         
     except Exception as e:
         print(f"❌ Ошибка обновления/удаления типа бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/progress', methods=['GET'])
+def get_business_progress():
+    """Получить прогресс развития бизнеса"""
+    try:
+        # Проверка авторизации
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+            
+        business_id = request.args.get('business_id')
+        if not business_id:
+             return jsonify({"error": "Не указан business_id"}), 400
+             
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверка доступа
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+            
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+            
+        # 1. Определяем тип бизнеса
+        cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
+        row = cursor.fetchone()
+        business_type_key = row[0] if row else 'other'
+        
+        # Находим ID типа бизнеса
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        bt_row = cursor.fetchone()
+        
+        if not bt_row:
+             # Fallback
+             cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
+             bt_row = cursor.fetchone()
+             
+        business_type_id = bt_row[0] if bt_row else None
+        
+        if not business_type_id:
+            # Если даже 'other' нет
+            db.close()
+            return jsonify({"stages": [], "current_step": 1})
+            
+        # 2. Получаем текущий прогресс (шаг визарда)
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        wiz_row = cursor.fetchone()
+        current_step = wiz_row[0] if wiz_row else 1
+        
+        # 3. Получаем этапы
+        cursor.execute("""
+            SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
+            FROM GrowthStages
+            WHERE business_type_id = ?
+            ORDER BY stage_number
+        """, (business_type_id,))
+        stages_rows = cursor.fetchall()
+        
+        stages = []
+        for stage_row in stages_rows:
+            stage_id = stage_row[0]
+            stage_number = stage_row[1]
+            
+            # Получаем задачи
+            cursor.execute("""
+                SELECT id, task_number, task_text
+                FROM GrowthTasks
+                WHERE stage_id = ?
+                ORDER BY task_number
+            """, (stage_id,))
+            tasks_rows = cursor.fetchall()
+            
+            # Определяем статус этапа
+            is_completed = stage_number < current_step
+            is_current = stage_number == current_step
+            
+            tasks = []
+            for t in tasks_rows:
+                tasks.append({
+                    'id': t[0], 
+                    'number': t[1], 
+                    'text': t[2],
+                    'is_completed': is_completed # Пока считаем все задачи выполненными если этап пройден
+                })
+            
+            stages.append({
+                'id': stage_id,
+                'stage_number': stage_number,
+                'title': stage_row[2],
+                'description': stage_row[3],
+                'goal': stage_row[4],
+                'expected_result': stage_row[5],
+                'duration': stage_row[6],
+                'is_permanent': bool(stage_row[7]),
+                'status': 'completed' if is_completed else ('current' if is_current else 'locked'),
+                'tasks': tasks
+            })
+            
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "current_step": current_step,
+            "stages": stages
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка api/progress: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/business/<string:business_id>/stages', methods=['GET'])
+def get_business_stages(business_id):
+    """Получить этапы роста для конкретного бизнеса (для ProgressTracker)"""
+    try:
+        # Проверка авторизации
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+            
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        
+        # Проверка доступа
+        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
+        business = cursor.fetchone()
+        
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+            
+        owner_id, business_type_key = business[0], business[1]
+        
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+            
+        # Находим ID типа бизнеса
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        bt_row = cursor.fetchone()
+        
+        if not bt_row:
+            cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
+            bt_row = cursor.fetchone()
+             
+        business_type_id = bt_row[0] if bt_row else None
+        
+        if not business_type_id:
+            db.close()
+            return jsonify({"stages": []})
+            
+        # Получаем текущий шаг визарда
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        wiz_row = cursor.fetchone()
+        current_step = wiz_row[0] if wiz_row else 1
+        
+        # Получаем этапы
+        cursor.execute("""
+            SELECT id, stage_number, title, description, goal, expected_result, duration
+            FROM GrowthStages
+            WHERE business_type_id = ?
+            ORDER BY stage_number
+        """, (business_type_id,))
+        stages_rows = cursor.fetchall()
+        
+        stages = []
+        for stage_row in stages_rows:
+            stage_number = stage_row[1]
+            
+            # Определяем статус
+            if stage_number < current_step:
+                status = 'completed'
+            elif stage_number == current_step:
+                status = 'active'
+            else:
+                status = 'pending'
+            
+            stages.append({
+                'id': stage_row[0],
+                'stage_number': stage_number,
+                'stage_name': stage_row[2],
+                'stage_description': stage_row[3],
+                'status': status,
+                'progress_percentage': 100 if status == 'completed' else (50 if status == 'active' else 0),
+                'target_revenue': 0,  # TODO: Можно добавить из финансовых данных
+                'target_clients': 0,
+                'target_roi': 0,
+                'current_revenue': 0,
+                'current_clients': 0,
+                'current_roi': 0,
+                'started_at': None,
+                'completed_at': None
+            })
+            
+        db.close()
+        
+        return jsonify({
+            "success": True,
+            "stages": stages
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка /api/business/{business_id}/stages: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -8637,30 +9401,24 @@ def get_network_locations(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        user_id = user_data['user_id']
+        # ! FIX: Получаем только точки ТОЙ ЖЕ сети, к которой принадлежит бизнес
+        network_id = business.get('network_id')
+        print(f"🔍 API DEBUG: Business {business_id} ({business.get('name')}) -> Network {network_id}")
         
-        # Проверяем, является ли пользователь владельцем сети
-        # Получаем все сети пользователя
-        user_networks = db.get_user_networks(user_id)
-        
-        if not user_networks or len(user_networks) == 0:
+        if not network_id:
+            print("🔍 API DEBUG: No network_id, returning []")
             db.close()
-            # Если у пользователя нет сетей, возвращаем пустой список
             return jsonify({"success": True, "is_network": False, "locations": []})
-        
-        # Получаем все точки всех сетей пользователя
-        all_locations = []
-        for network in user_networks:
-            network_id = network['id']
-            locations = db.get_businesses_by_network(network_id)
-            all_locations.extend(locations)
+            
+        locations = db.get_businesses_by_network(network_id)
+        print(f"🔍 API DEBUG: Found {len(locations)} locations for network {network_id}")
         
         db.close()
         
         return jsonify({
             "success": True,
-            "is_network": len(user_networks) > 0,
-            "locations": all_locations
+            "is_network": (business_id == network_id),
+            "locations": locations
         })
         
     except Exception as e:
@@ -8688,19 +9446,7 @@ def business_optimization_wizard(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Создаем таблицу если её нет
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS BusinessOptimizationWizard (
-                id TEXT PRIMARY KEY,
-                business_id TEXT NOT NULL,
-                step INTEGER DEFAULT 1,
-                data TEXT,
-                completed INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (business_id) REFERENCES Businesses (id) ON DELETE CASCADE
-            )
-        """)
+
         
         # Проверяем доступ к бизнесу
         owner_id = get_business_owner_id(cursor, business_id)
@@ -9107,14 +9853,9 @@ def update_business_yandex_link(business_id):
         adapter = YandexAdapter()
         org_id = adapter.parse_org_id_from_url(yandex_url)
 
-        cursor.execute(
-            """
-            UPDATE Businesses
-            SET yandex_url = ?, yandex_org_id = ?
-            WHERE id = ?
-            """,
-            (yandex_url, org_id, business_id),
-        )
+        from repositories.business_repository import BusinessRepository
+        repo = BusinessRepository(db)
+        repo.update_yandex_fields(business_id, org_id, yandex_url)
 
         db.conn.commit()
         db.close()
@@ -9199,41 +9940,6 @@ def update_business_profile(business_id):
         print(f"❌ Ошибка обновления профиля бизнеса: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/business/<business_id>/services', methods=['GET'])
-def get_business_services(business_id):
-    """Получить услуги конкретного бизнеса"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
-        db = DatabaseManager()
-        
-        # Проверяем доступ к бизнесу
-        business = db.get_business_by_id(business_id)
-        if not business:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        
-        # Проверяем права доступа
-        if not db.is_superadmin(user_data['user_id']) and business['owner_id'] != user_data['user_id']:
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-        
-        services = db.get_services_by_business(business_id)
-        db.close()
-        
-        return jsonify({"success": True, "services": services})
-        
-    except Exception as e:
-        print(f"❌ Ошибка получения услуг бизнеса: {e}")
-        return jsonify({"error": str(e)}), 500
 
 def send_email(to_email, subject, body, from_name="BeautyBot"):
     """Универсальная функция для отправки email"""

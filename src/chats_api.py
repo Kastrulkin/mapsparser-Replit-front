@@ -46,36 +46,71 @@ def get_business_ai_agents(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Получаем агента бизнеса
+        # Получаем конфигурацию агентов (новый формат)
         cursor.execute("""
-            SELECT ai_agent_id, ai_agent_type 
+            SELECT ai_agents_config 
             FROM Businesses 
             WHERE id = ?
         """, (business_id,))
-        business_agent = cursor.fetchone()
+        business_data = cursor.fetchone()
         
         agents = []
-        if business_agent and business_agent[0]:
-            # Получаем информацию об агенте
-            cursor.execute("""
-                SELECT id, name, type, description
-                FROM AIAgents
-                WHERE id = ?
-            """, (business_agent[0],))
-            agent = cursor.fetchone()
-            
-            if agent:
-                agents.append({
-                    'id': agent[0],
-                    'name': agent[1],
-                    'type': agent[2],
-                    'description': agent[3]
-                })
+        
+        # Пытаемся загрузить из нового формата
+        if business_data and business_data[0]:
+            try:
+                agents_config = json.loads(business_data[0])
+                
+                # Для каждого включенного агента получаем его данные
+                for agent_key, config in agents_config.items():
+                    if config.get('enabled'):
+                        # Определяем тип агента из ключа (booking_agent -> booking)
+                        agent_type = agent_key.replace('_agent', '')
+                        
+                        # Если указан конкретный agent_id, загружаем его
+                        if config.get('agent_id'):
+                            cursor.execute("""
+                                SELECT id, name, type, description
+                                FROM AIAgents
+                                WHERE id = ?
+                            """, (config['agent_id'],))
+                            agent = cursor.fetchone()
+                            
+                            if agent:
+                                agents.append({
+                                    'id': agent[0],
+                                    'name': agent[1],
+                                    'type': agent[2],
+                                    'description': agent[3]
+                                })
+                        else:
+                            # Используем дефолтного агента для типа
+                            cursor.execute("""
+                                SELECT id, name, type, description
+                                FROM AIAgents
+                                WHERE type = ? AND is_active = 1
+                                ORDER BY id
+                                LIMIT 1
+                            """, (agent_type,))
+                            agent = cursor.fetchone()
+                            
+                            if agent:
+                                agents.append({
+                                    'id': agent[0],
+                                    'name': agent[1],
+                                    'type': agent[2],
+                                    'description': agent[3]
+                                })
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"⚠️ Ошибка парсинга ai_agents_config: {e}")
         
         db.close()
         return jsonify({"success": True, "agents": agents})
         
     except Exception as e:
+        print(f"❌ Ошибка получения агентов: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @chats_bp.route('/api/business/<business_id>/conversations', methods=['GET'])

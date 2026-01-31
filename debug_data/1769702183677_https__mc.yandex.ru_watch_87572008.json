@@ -1,0 +1,26 @@
+{
+  "settings": {
+    "auto_goals": 0,
+    "button_goals": 0,
+    "c_recp": "1.00000",
+    "form_goals": 0,
+    "pcs": "0",
+    "webvisor": {
+      "arch_type": "none",
+      "date": "2025-10-25 15:51:22",
+      "forms": 1,
+      "recp": "1.00000"
+    },
+    "sbp": {
+      "a": "jGKnP6SxnGXe89PRHPHu7I0R0Uf+hWgdY59EWvY9DSarEjRCjSdrtTE5vnrCyP49",
+      "b": "DA0A1cTuvLjo6dA7nxYLUokg5awqLtZgh1rmM/vm0r9UcxWnirMc67HPPJbuvYYi"
+    },
+    "eu": 0,
+    "hittoken": "1769702183_80acf5bb21cd8b04d3e18543cbec2d6b68028f5ef7a97c99abe0e8276f9a6ade",
+    "cf": 1,
+    "wstoken": "10926.PjF7S7HbZksxqQFtSFulAiadnfdWCwCxRvWrewF3x6S70AMGATmsUzRSyqugS0A2MR_kE-AdEs3aZsbs6ml-feamc7zvR5rKIVyhtx1Ibh4aTYi8BiCawLx-bRg-9imuClQ9uHYv_hu4aQ1vP8hvGC8EXJxfgg1rj7IUFmbhagvTrvoodC0gGD1sfsOfkRAq9_YIB9K7P25xZXK1AVnevqn8c0Z0xAquZmlh6QOVWnmDUiynMjpH7Ghy1r8yHJ_N7ATxOMp1qV1Q3vctelbT4JzNmy8AAxNdZ53zM03019c,.e2ceOiC8MpaX46-2_Ezaly11rgU,",
+    "hidv2": "218885886862688515",
+    "ymclid": "218885886862688515"
+  },
+  "userData": {}
+}

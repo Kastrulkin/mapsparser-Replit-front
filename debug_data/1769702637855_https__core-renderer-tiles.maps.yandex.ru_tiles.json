@@ -1,0 +1,83 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            4782,
+            2387,
+            13
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 1
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "indoor_covered": false,
+          "selection_id": 67567214315080,
+          "source_id": 1583085674,
+          "tags": [
+            "poi",
+            "major_landmark"
+          ],
+          "name": "Лахта центр",
+          "HotspotMetaData": {
+            "id": 1583085674,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      155.99414062398137,
+                      -16.47968749899883
+                    ],
+                    [
+                      211.99414062398137,
+                      -16.47968749899883
+                    ],
+                    [
+                      211.99414062398137,
+                      39.52031250105938
+                    ],
+                    [
+                      155.99414062398137,
+                      39.52031250105938
+                    ],
+                    [
+                      155.99414062398137,
+                      -16.47968749899883
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://org?oid=71693345624"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.98711498029435,
+            30.178069062530838
+          ]
+        }
+      }
+    ]
+  }
+}

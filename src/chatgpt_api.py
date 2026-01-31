@@ -249,6 +249,11 @@ def update_business_profile():
             update_fields.append('ai_agent_language = ?')
             update_values.append(data['ai_agent_language'])
         
+        # Multi-agent configuration (new format)
+        if 'ai_agents_config' in data:
+            update_fields.append('ai_agents_config = ?')
+            update_values.append(data['ai_agents_config'])
+        
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
         update_values.append(business_id)
         

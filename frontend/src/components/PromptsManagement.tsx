@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
 import { Save, Loader2 } from 'lucide-react';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface Prompt {
   type: string;
@@ -14,22 +15,25 @@ interface Prompt {
   updated_by?: string;
 }
 
-const PROMPT_TYPES = {
-  service_optimization: {
-    label: 'Оптимизация услуг',
-    description: 'Промпт для оптимизации услуг и прайс-листа'
-  },
-  review_reply: {
-    label: 'Ответы на отзывы',
-    description: 'Промпт для генерации ответов на отзывы'
-  },
-  news_generation: {
-    label: 'Генерация новостей',
-    description: 'Промпт для генерации новостей'
-  }
-};
+
 
 export const PromptsManagement: React.FC = () => {
+  const { t } = useLanguage();
+
+  const PROMPT_TYPES = {
+    service_optimization: {
+      label: 'Оптимизация услуг',
+      description: 'Промпт для оптимизации услуг и прайс-листа'
+    },
+    review_reply: {
+      label: t.dashboard.card.reviewReply.title,
+      description: 'Промпт для генерации ответов на отзывы'
+    },
+    news_generation: {
+      label: 'Генерация новостей',
+      description: 'Промпт для генерации новостей'
+    }
+  };
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -46,9 +50,9 @@ export const PromptsManagement: React.FC = () => {
       const data = await newAuth.makeRequest('/admin/prompts', {
         method: 'GET'
       });
-      
+
       setPrompts(data.prompts || []);
-      
+
       // Инициализируем editedPrompts
       const initial: Record<string, { text: string; description: string }> = {};
       data.prompts?.forEach((p: Prompt) => {
@@ -71,7 +75,7 @@ export const PromptsManagement: React.FC = () => {
     try {
       setSaving(promptType);
       const edited = editedPrompts[promptType];
-      
+
       if (!edited) {
         throw new Error('Нет изменений для сохранения');
       }
@@ -134,7 +138,7 @@ export const PromptsManagement: React.FC = () => {
         const prompt = prompts.find(p => p.type === type);
         const edited = editedPrompts[type];
         const hasChanges = prompt && edited && (
-          prompt.text !== edited.text || 
+          prompt.text !== edited.text ||
           (prompt.description || '') !== edited.description
         );
 

@@ -1,0 +1,25 @@
+{
+  "settings": {
+    "auto_goals": 0,
+    "button_goals": 0,
+    "c_recp": "1.00000",
+    "form_goals": 0,
+    "pcs": "1",
+    "webvisor": {
+      "arch_type": "none",
+      "date": "2026-01-21 23:38:42",
+      "forms": 1,
+      "recp": "0.00040"
+    },
+    "sbp": {
+      "a": "r1H2ov1mN9B+miyLeEgmvaGJ833fGuq73sXSNUjV4W8ZALPA4SdiNzvVDkx27N5R",
+      "b": "Ja5aRDcF3opI8u9Ck1kPhUUzrGiH/NMFvyrbUqv+bArRu03KlAupTbsOaOjntC9J"
+    },
+    "eu": 0,
+    "hittoken": "1769703046_e5d3ba0dc9eac3af59c83de74fb5fa40a91dc1c6242f7cc2a0dda68cc6c93eab",
+    "wstoken": "10926._7f99ZVpn58r-zZM1cwYuAsuEmvd8KIAYfqLCPRi3OPmqbdN4jfF146zKBA4FEDcn3oV12zDw647ZGkIRY8Qvw,,.IGiyMWcWdWFqrPjrjvnKrCZ2Evc,",
+    "hidv2": "219112029157064941",
+    "ymclid": "219112029157064941"
+  },
+  "userData": {}
+}

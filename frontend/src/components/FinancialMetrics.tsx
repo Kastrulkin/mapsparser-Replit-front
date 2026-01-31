@@ -2,6 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { useLanguage } from '@/i18n/LanguageContext';
+import {
+  DollarSign,
+  Package,
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+  Users,
+  Repeat,
+  Heart,
+  TrendingUp,
+  PieChart as PieChartIcon,
+  Wallet
+} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { DESIGN_TOKENS } from '../lib/design-tokens';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface FinancialMetricsProps {
   onRefresh?: () => void;
@@ -38,9 +56,10 @@ interface BreakdownData {
   by_masters: Array<{ name: string; value: number }>;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#a855f7'];
 
 const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentBusinessId }) => {
+  const { t } = useLanguage();
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +71,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
 
@@ -60,7 +79,7 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
       const token = localStorage.getItem('auth_token');
       const baseUrl = window.location.origin;
       const businessParam = currentBusinessId ? `&business_id=${currentBusinessId}` : '';
-      
+
       // Загружаем метрики
       const metricsResponse = await fetch(`${baseUrl}/api/finance/metrics?period=${selectedPeriod}${businessParam}`, {
         headers: {
@@ -113,236 +132,300 @@ const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ onRefresh, currentB
     }).format(amount);
   };
 
-  const formatPercentage = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+  const formatPercentage = (value: number | string | null | undefined) => {
+    if (value == null) return '0%';
+    const num = Number(value);
+    if (isNaN(num)) return '0%';
+    return `${num >= 0 ? '+' : ''}${num.toFixed(1)}%`;
   };
 
-  const getGrowthColor = (value: number) => {
-    if (value > 0) return 'text-green-600';
-    if (value < 0) return 'text-red-600';
-    return 'text-gray-600';
+  const getGrowthColor = (value: number | null | undefined) => {
+    if (value == null) return 'text-gray-400';
+    if (value > 0) return 'text-emerald-500';
+    if (value < 0) return 'text-rose-500';
+    return 'text-gray-400';
   };
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
-            ))}
+      <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
+        <CardContent className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200/50 rounded w-1/3 mb-6"></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-32 bg-gray-200/50 rounded-xl"></div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="text-center">
-          <div className="text-red-600 mb-4">❌ {error}</div>
-          <Button onClick={() => loadMetrics()} variant="outline">
+      <Card className="border-red-100 bg-red-50/50">
+        <CardContent className="p-6 text-center">
+          <div className="text-red-500 mb-4 flex items-center justify-center gap-2">
+            <div className="p-2 bg-red-100 rounded-full">
+              <ArrowDownRight className="w-5 h-5" />
+            </div>
+            {error}
+          </div>
+          <Button onClick={() => loadMetrics()} variant="outline" className="bg-white hover:bg-red-50">
             Попробовать снова
           </Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (!metrics) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="text-center text-gray-500">
+      <Card>
+        <CardContent className="p-8 text-center text-gray-500">
           <p>Нет данных для отображения</p>
-          <Button onClick={() => loadMetrics()} variant="outline" className="mt-2">
+          <Button onClick={() => loadMetrics()} variant="outline" className="mt-4">
             Обновить
           </Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">📊 Финансовые метрики</h3>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/20">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-blue-500/10 rounded-xl text-blue-600">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">{t.dashboard.finance.metrics.title}</h3>
+            <p className="text-sm text-gray-500">
+              {t.dashboard.finance.metrics.period} {metrics.period.start_date} — {metrics.period.end_date}
+            </p>
+          </div>
+        </div>
         <div className="flex gap-2">
           <Select value={period} onValueChange={handlePeriodChange}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-32 bg-white/80 border-gray-200">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="week">Неделя</SelectItem>
-              <SelectItem value="month">Месяц</SelectItem>
-              <SelectItem value="quarter">Квартал</SelectItem>
-              <SelectItem value="year">Год</SelectItem>
+              <SelectItem value="month">{t.dashboard.finance.metrics.month}</SelectItem>
+              <SelectItem value="quarter">{t.dashboard.network.period.quarter}</SelectItem>
+              <SelectItem value="year">{t.dashboard.network.period.year}</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => loadMetrics()} variant="outline" size="sm">
-            🔄
+          <Button onClick={() => loadMetrics()} variant="outline" size="icon" className="bg-white/80">
+            <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600 font-medium">Общая выручка</p>
-              <p className="text-2xl font-bold text-blue-900">
-                {formatCurrency(metrics.metrics.total_revenue)}
-              </p>
-              <p className={`text-sm ${getGrowthColor(metrics.growth.revenue_growth)}`}>
-                {formatPercentage(metrics.growth.revenue_growth)} к прошлому периоду
-              </p>
+      {/* Main Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Revenue */}
+        <div className={cn(
+          "relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1",
+          "bg-white/60 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-md",
+          "group"
+        )}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-blue-500/10 transition-colors" />
+
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div className="p-3 bg-blue-100/50 rounded-xl text-blue-600">
+              <DollarSign className="w-6 h-6" />
             </div>
-            <div className="text-3xl">💰</div>
+            <div className={cn("flex items-center gap-1 text-sm font-medium px-2 py-1 rounded-lg bg-white/50", getGrowthColor(metrics.growth.revenue_growth))}>
+              {metrics.growth.revenue_growth > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+              {formatPercentage(metrics.growth.revenue_growth)}
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            <p className="text-sm text-gray-500 font-medium mb-1">{t.dashboard.finance.metrics.totalRevenue}</p>
+            <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {formatCurrency(metrics.metrics.total_revenue)}
+            </h3>
           </div>
         </div>
 
-        <div className="bg-green-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 font-medium">Заказов</p>
-              <p className="text-2xl font-bold text-green-900">
-                {metrics.metrics.total_orders}
-              </p>
-              <p className={`text-sm ${getGrowthColor(metrics.growth.orders_growth)}`}>
-                {formatPercentage(metrics.growth.orders_growth)} к прошлому периоду
-              </p>
+        {/* Orders */}
+        <div className={cn(
+          "relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1",
+          "bg-white/60 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-md",
+          "group"
+        )}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors" />
+
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div className="p-3 bg-emerald-100/50 rounded-xl text-emerald-600">
+              <Package className="w-6 h-6" />
             </div>
-            <div className="text-3xl">📦</div>
+            <div className={cn("flex items-center gap-1 text-sm font-medium px-2 py-1 rounded-lg bg-white/50", getGrowthColor(metrics.growth.orders_growth))}>
+              {metrics.growth.orders_growth > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+              {formatPercentage(metrics.growth.orders_growth)}
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            <p className="text-sm text-gray-500 font-medium mb-1">{t.dashboard.finance.metrics.totalOrders}</p>
+            <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {metrics.metrics.total_orders}
+            </h3>
           </div>
         </div>
 
-        <div className="bg-purple-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-purple-600 font-medium">Средний чек</p>
-              <p className="text-2xl font-bold text-purple-900">
-                {formatCurrency(metrics.metrics.average_check)}
-              </p>
+        {/* Avg Check */}
+        <div className={cn(
+          "relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1",
+          "bg-white/60 backdrop-blur-xl border border-white/40 shadow-sm hover:shadow-md",
+          "group"
+        )}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl -mr-16 -mt-16 group-hover:bg-purple-500/10 transition-colors" />
+
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div className="p-3 bg-purple-100/50 rounded-xl text-purple-600">
+              <CreditCard className="w-6 h-6" />
             </div>
-            <div className="text-3xl">💳</div>
           </div>
-        </div>
-      </div>
 
-      <div className="text-xs text-gray-500 mb-2">
-        Эти показатели будут отображаться корректно при подключении к CRM.
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-60 pointer-events-none">
-        <div className="bg-orange-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-orange-600 font-medium">Новых клиентов</p>
-              <p className="text-xl font-bold text-orange-900">
-                {metrics.metrics.new_clients}
-              </p>
-            </div>
-            <div className="text-2xl">🆕</div>
-          </div>
-        </div>
-
-        <div className="bg-indigo-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-indigo-600 font-medium">Повторных клиентов</p>
-              <p className="text-xl font-bold text-indigo-900">
-                {metrics.metrics.returning_clients}
-              </p>
-            </div>
-            <div className="text-2xl">🔄</div>
-          </div>
-        </div>
-
-        <div className="bg-pink-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-pink-600 font-medium">Удержание клиентов</p>
-              <p className="text-xl font-bold text-pink-900">
-                {metrics.metrics.retention_rate.toFixed(1)}%
-              </p>
-            </div>
-            <div className="text-2xl">❤️</div>
+          <div className="relative z-10">
+            <p className="text-sm text-gray-500 font-medium mb-1">{t.dashboard.finance.metrics.avgCheck}</p>
+            <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {formatCurrency(metrics.metrics.average_check)}
+            </h3>
           </div>
         </div>
       </div>
 
-      {/* Круговые диаграммы */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        {/* Диаграмма по услугам */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
-            💼 Доход по услугам
-          </h4>
-          {breakdown && breakdown.by_services.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={breakdown.by_services}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {breakdown.by_services.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => `${formatCurrency(value)}`} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-center text-gray-500 py-8">
-              Нет данных по услугам
-            </div>
-          )}
+      <div className="text-xs text-center text-gray-400 font-medium tracking-wide">
+        {t.dashboard.finance.metrics.crmNote}
+      </div>
+
+      {/* Secondary Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="flex items-center gap-4 p-4 rounded-xl bg-orange-50/50 border border-orange-100/50 hover:bg-orange-50 transition-colors">
+          <div className="p-3 bg-white rounded-lg shadow-sm text-orange-500">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">{t.dashboard.finance.metrics.newClients}</p>
+            <p className="text-lg font-bold text-gray-900">{metrics.metrics.new_clients}</p>
+          </div>
         </div>
 
-        {/* Диаграмма по мастерам */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-4 text-center">
-            👤 Доход по мастерам
-          </h4>
-          {breakdown && breakdown.by_masters.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={breakdown.by_masters}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {breakdown.by_masters.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => `${formatCurrency(value)}`} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-center text-gray-500 py-8">
-              Нет данных по мастерам
-            </div>
-          )}
+        <div className="flex items-center gap-4 p-4 rounded-xl bg-indigo-50/50 border border-indigo-100/50 hover:bg-indigo-50 transition-colors">
+          <div className="p-3 bg-white rounded-lg shadow-sm text-indigo-500">
+            <Repeat className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">{t.dashboard.finance.metrics.returningClients}</p>
+            <p className="text-lg font-bold text-gray-900">{metrics.metrics.returning_clients}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 p-4 rounded-xl bg-pink-50/50 border border-pink-100/50 hover:bg-pink-50 transition-colors">
+          <div className="p-3 bg-white rounded-lg shadow-sm text-pink-500">
+            <Heart className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">{t.dashboard.finance.metrics.clientRetention}</p>
+            <p className="text-lg font-bold text-gray-900">{formatPercentage(metrics.metrics.retention_rate)}</p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 text-sm text-gray-500 text-center">
-        Период: {metrics.period.start_date} — {metrics.period.end_date}
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Services Chart */}
+        <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold text-gray-700 flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4 text-gray-400" />
+              {t.dashboard.finance.metrics.revenueByService}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {breakdown && breakdown.by_services.length > 0 ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={breakdown.by_services}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {breakdown.by_services.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      formatter={(value: number) => `${formatCurrency(value)}`}
+                    />
+                    <Legend iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl">
+                {t.dashboard.finance.metrics.noServiceData}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Masters Chart */}
+        <Card className="border-0 shadow-sm bg-white/60 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold text-gray-700 flex items-center gap-2">
+              <Users className="w-4 h-4 text-gray-400" />
+              {t.dashboard.finance.metrics.revenueByMaster}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {breakdown && breakdown.by_masters.length > 0 ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={breakdown.by_masters}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {breakdown.by_masters.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      formatter={(value: number) => `${formatCurrency(value)}`}
+                    />
+                    <Legend iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl">
+                {t.dashboard.finance.metrics.noMasterData}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

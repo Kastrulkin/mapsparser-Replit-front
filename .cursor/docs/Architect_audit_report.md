@@ -1415,3 +1415,407 @@ def row_to_dict(row, columns=None):
 - [ ] Completed
 
 **Подробная задача:** см. `TASK_FIX_REVIEWS_SORTING_AND_DATES.md`
+
+---
+
+### 2025-01-06 - Анализ миграции на PostgreSQL
+
+#### Current Task
+Анализ изменений в проекте после миграции с SQLite на PostgreSQL.
+
+#### Architecture Decision
+
+**Цель:** Проанализировать все изменения, связанные с миграцией на PostgreSQL, и определить необходимые обновления.
+
+**Подход:**
+- Проверка всех файлов, связанных с БД
+- Выявление мест, требующих обновления
+- Создание документации с рекомендациями
+
+**Результаты анализа:**
+
+**✅ Что уже сделано:**
+- Добавлен `psycopg2-binary` в `requirements.txt`
+- Создан `src/schema_postgres.sql` - полная схема PostgreSQL
+- Создан `src/query_adapter.py` - адаптер для конвертации SQLite → PostgreSQL
+- Обновлен `src/database_manager.py` - добавлена поддержка PostgreSQL через wrappers
+- Создан `scripts/migrate_to_postgres.py` - скрипт миграции данных
+- Создан `postgres_migration_guide.md` - руководство по миграции
+
+**⚠️ Что нужно исправить:**
+- `src/safe_db_utils.py` - не поддерживает PostgreSQL (критично)
+- `src/init_database_schema.py` - использует SQLite-специфичные команды
+- Все миграции - используют `PRAGMA table_info` вместо универсального подхода
+- Бэкапы - требуют `pg_dump` для PostgreSQL
+
+#### Files to Modify
+
+**Критичные:**
+- `src/safe_db_utils.py` - добавить поддержку PostgreSQL во все функции
+  - `get_db_connection()` - проверка `DB_TYPE` и подключение к PostgreSQL
+  - `backup_database()` - использование `pg_dump` для PostgreSQL
+  - `safe_migrate()` - поддержка PostgreSQL транзакций
+  - `restore_from_backup()` - использование `pg_restore` для PostgreSQL
+
+**Важные:**
+- `src/init_database_schema.py` - проверка типа БД и использование соответствующей схемы
+- Все миграции - замена `PRAGMA table_info` на универсальную функцию
+
+#### Trade-offs & Decisions
+
+**Совместимость:**
+- Сохранена поддержка SQLite для разработки
+- PostgreSQL для продакшена
+- Переключение через переменную окружения `DB_TYPE`
+
+**Типы данных:**
+- SQLite: `INTEGER` для boolean, строки для timestamp
+- PostgreSQL: `BOOLEAN` для boolean, нативные типы для timestamp
+- Решение: `QueryAdapter.adapt_params()` обрабатывает конвертацию
+
+**Бэкапы:**
+- SQLite: простое копирование файла
+- PostgreSQL: требуется `pg_dump` и `pg_restore`
+- Решение: условная логика в `backup_database()`
+
+#### Dependencies
+
+**Новые зависимости:**
+- `psycopg2-binary` - уже добавлен в `requirements.txt`
+
+**Переменные окружения:**
+- `DB_TYPE` - тип БД (`sqlite` или `postgres`)
+- `DATABASE_URL` - строка подключения для PostgreSQL (формат: `postgresql://user:password@host:port/database`)
+
+#### Status
+- [x] Approved for Implementation
+- [x] Analysis Completed
+- [ ] Implementation In Progress
+- [ ] Completed
+
+**Подробный анализ:** см. `.cursor/docs/POSTGRES_MIGRATION_ANALYSIS.md`
+
+---
+
+### 2025-01-06 - Phase 3.5: Repository Pattern Implementation
+
+#### Current Task
+Рефакторинг `main.py` (~10,000 строк) с выносом SQL в Repository Pattern согласно контексту от КИми.
+
+**Цель:** Вынести raw SQL из `main.py` в Repository Pattern без перехода на ORM.
+
+#### Architecture Decision
+
+**Философия:** "Data Integrity First, Code Second"
+- Сначала чистим данные и накладываем constraints
+- Потом пишем код репозиториев
+
+**Подход:**
+- Repository Pattern для изоляции SQL логики
+- Feature flags для постепенного перехода
+- Golden Master Testing для проверки совместимости
+- БЕЗ использования ORM (SQLAlchemy)
+
+**Жесткие ограничения:**
+1. **SQL Синтаксис:** Запрещено `SELECT * EXCLUDING` (нет такого синтаксиса)
+   - Обязательно: explicit column lists
+   - Альтернатива: VIEW `businesses_clean` без legacy колонок
+2. **Порядок операций:**
+   - Backup (`pg_dump` + `CREATE TABLE ..._backup`)
+   - Data Cleanup (удалить orphaned records)
+   - Constraints (FK с `ON DELETE RESTRICT`, Unique с `CONCURRENTLY`)
+3. **Архитектура Repository:**
+   - No Commit в Repository (commit на уровне route handler)
+   - Connection через Flask `g.db` (не создавать новые подключения)
+   - Обработка ошибок (конвертация `IntegrityError` в typed exceptions)
+   - Игнорировать legacy колонки `chatgpt_*`
+4. **Feature Flags:** Per-domain (`USE_BUSINESS_REPOSITORY`, `USE_SERVICE_REPOSITORY`)
+5. **Golden Master Testing:** Capture/Compare JSON ответов API
+
+#### Files to Modify
+
+**Существующие (требуют исправления):**
+- `src/repositories/business_repository.py`:
+  - ❌ Использует `SELECT *` → заменить на explicit columns
+  - ❌ Делает `commit()` → убрать commit
+  - ❌ Не использует `g.db` → использовать Flask global
+
+**Новые файлы:**
+- `src/repositories/base.py` - Base class с логированием SQL
+- `src/repositories/service_repository.py` - Repository для услуг
+- `src/repositories/review_repository.py` - Repository для отзывов
+- `src/config.py` - Feature flags `USE_*_REPOSITORY`
+- `tests/fixtures/golden/` - Golden master JSON файлы
+- `tests/test_golden_master.py` - Сравнение legacy vs new
+
+**Обновления:**
+- `src/main.py` - Постепенная замена raw SQL на репозитории
+- Flask routes - Использование `g.db` вместо прямых подключений
+
+#### Trade-offs & Decisions
+
+**Почему Repository Pattern, а не ORM:**
+- Меньше магии, больше контроля
+- Проще отладка SQL
+- Постепенный переход без big bang
+
+**Почему explicit columns, а не `SELECT *`:**
+- Избежать legacy колонок (`chatgpt_*`)
+- Явный контроль над данными
+- Совместимость с VIEW для "чистых" данных
+
+**Почему no commit в Repository:**
+- Unit of Work pattern
+- Транзакции на уровне бизнес-логики
+- Проще тестирование
+
+**Почему `g.db` вместо новых подключений:**
+- Избежать утечек пула подключений
+- Единое подключение на запрос
+- Проще управление транзакциями
+
+#### Dependencies
+
+**Нет новых зависимостей** - только рефакторинг существующего кода
+
+**Переменные окружения:**
+- `USE_BUSINESS_REPOSITORY` - feature flag (опционально)
+- `USE_SERVICE_REPOSITORY` - feature flag (опционально)
+- `USE_REVIEW_REPOSITORY` - feature flag (опционально)
+
+#### Status
+- [x] Approved for Implementation
+- [ ] In Progress
+- [ ] Completed
+
+**Подробный контекст:** см. `.cursor/docs/PHASE_3_5_CONTEXT.md`
+
+**Текущее состояние:**
+- ✅ Начальная реализация Repository Pattern существует
+- ⚠️ Требует исправления (SELECT *, commit, g.db)
+- ⚠️ Нет feature flags
+- ⚠️ Нет Golden Master Testing
+
+---
+
+### 2026-02-01 - Phase 3.5: Repository Pattern Implementation (Часть 1)
+
+#### Current Task
+Реализация Phase 3.5: создание репозиториев и интеграция в main.py.
+
+#### Architecture Decision
+
+**Выполнено:**
+1. Создана базовая инфраструктура репозиториев:
+   - `BaseRepository` с логированием SQL и обработкой ошибок через `e.pgcode`
+   - Типизированные исключения (DuplicateRecordError, OrphanRecordError)
+   - Feature flags для постепенного перехода
+2. Созданы репозитории:
+   - `BusinessRepository` - исправлен (убраны SELECT *, commit())
+   - `ServiceRepository` - новый, Phase 3.5 compliant
+   - `ReviewRepository` - новый, Phase 3.5 compliant
+3. Интеграция в main.py:
+   - Зарегистрирован `close_db` в `app.teardown_appcontext()`
+   - Добавлен пример использования в route `get_external_reviews`
+   - Сохранен legacy код для обратной совместимости
+
+**Файлы созданы:**
+- `src/repositories/base.py` - Base class
+- `src/repositories/exceptions.py` - Custom exceptions
+- `src/repositories/service_repository.py` - Service repository
+- `src/repositories/review_repository.py` - Review repository
+- `src/config.py` - Feature flags
+- `src/db_helpers.py` - Flask g.db helpers
+- `tests/test_golden_master.py` - Golden Master Testing
+- `tests/fixtures/golden/` - Golden master fixtures directory
+
+**Файлы обновлены:**
+- `src/repositories/business_repository.py` - исправлен согласно Phase 3.5
+- `src/repositories/__init__.py` - добавлены новые репозитории
+- `src/main.py` - добавлена интеграция с feature flags
+
+#### Trade-offs & Decisions
+
+**Почему g.db через DatabaseManager:**
+- Сохранена совместимость с существующим кодом
+- DatabaseManager уже имеет wrappers для PostgreSQL
+- Легко переключиться на прямое использование connection
+
+**Почему commit в route handler:**
+- Unit of Work pattern
+- Транзакции на уровне бизнес-логики
+- Проще тестирование и отладка
+
+**Почему feature flags per-domain:**
+- Постепенный переход без big bang
+- Можно тестировать каждый репозиторий отдельно
+- Легко откатить при проблемах
+
+#### Dependencies
+
+**Нет новых зависимостей** - только рефакторинг существующего кода
+
+**Переменные окружения:**
+- `USE_BUSINESS_REPOSITORY` - feature flag (опционально, по умолчанию false)
+- `USE_SERVICE_REPOSITORY` - feature flag (опционально, по умолчанию false)
+- `USE_REVIEW_REPOSITORY` - feature flag (опционально, по умолчанию false)
+
+#### Status
+- [x] Approved for Implementation
+- [x] In Progress
+- [x] Partially Completed (базовая инфраструктура и 3 репозитория готовы)
+- [ ] Fully Completed (требует тестирования и расширения на другие routes)
+
+**Подробный прогресс:** см. `.cursor/docs/PHASE_3_5_PROGRESS.md`
+
+---
+
+### 2026-02-01 - Phase 3.5 Step 1: USE_REVIEW_REPOSITORY - ЗАВЕРШЕНО ✅
+
+#### Current Task
+Запуск Step 1 staged rollout: включение `USE_REVIEW_REPOSITORY=true` для read-only операций с отзывами.
+
+#### Architecture Decision
+
+**Выполнено:**
+1. ✅ Создан скрипт автоматического создания тестовых токенов (`scripts/create_test_token.py`)
+2. ✅ Обновлен тестовый скрипт (`scripts/test_phase35_step1.sh`) для автоматического создания токенов
+3. ✅ Протестирован endpoint `/api/business/<id>/external/reviews` с `USE_REVIEW_REPOSITORY=true`
+4. ✅ Подтверждена работа репозитория в production-режиме (read-only)
+
+**Результаты тестирования:**
+- ✅ HTTP Code: 200
+- ✅ Данные получены через `ReviewRepository`
+- ✅ Всего отзывов: 72 (32 с ответами, 40 без ответов)
+- ✅ Сортировка работает корректно (новые сверху)
+- ✅ Ошибок в ответе нет
+- ✅ Авторизация работает
+
+#### Files to Modify
+- `scripts/create_test_token.py` - создан для автоматического создания тестовых токенов
+- `scripts/test_phase35_step1.sh` - обновлен для автоматического создания токенов
+- `.cursor/docs/PHASE_3_5_STEP1_GUIDE.md` - добавлены результаты тестирования
+
+#### Trade-offs & Decisions
+
+**Почему автоматическое создание токенов:**
+- Упрощает тестирование (не нужно вручную логиниться)
+- Можно использовать в CI/CD
+- Токены создаются для первого пользователя из БД
+
+**Почему read-only для Step 1:**
+- Минимальный риск (нет изменений в БД)
+- Можно безопасно тестировать в production
+- Легко откатить при проблемах
+
+#### Dependencies
+
+**Нет новых зависимостей** - только скрипты для тестирования
+
+**Переменные окружения:**
+- `USE_REVIEW_REPOSITORY=true` - включен для Step 1 (read-only)
+- `USE_SERVICE_REPOSITORY=false` - ожидает Step 2
+- `USE_BUSINESS_REPOSITORY=false` - ожидает Step 3
+
+#### Status
+- [x] Approved for Implementation
+- [x] In Progress
+- [x] **Completed** ✅
+
+**Следующие шаги:**
+- Мониторинг (15-30 минут) на предмет ошибок
+- После успешного мониторинга - переход к Step 2 через 24 часа
+
+**Подробности:** см. `.cursor/docs/PHASE_3_5_STEP1_GUIDE.md`
+
+---
+
+### 2026-02-01 - Phase 3.5 Step 2: USE_SERVICE_REPOSITORY - Интеграция выполнена ✅
+
+#### Current Task
+Интеграция ServiceRepository в main.py endpoints для Step 2: создание, обновление и удаление услуг через репозиторий.
+
+#### Architecture Decision
+
+**Выполнено:**
+1. ✅ Интегрирован ServiceRepository в три endpoint'а:
+   - `/api/services/add` (POST) - использует `ServiceRepository.create()`
+   - `/api/services/update/<id>` (PUT) - использует `ServiceRepository.update()`
+   - `/api/services/delete/<id>` (DELETE) - использует `ServiceRepository.delete()`
+2. ✅ Исправлен `ServiceRepository.create()` - `CURRENT_TIMESTAMP` используется как SQL выражение, а не параметр
+3. ✅ `business_id` сделан опциональным в репозитории (для совместимости с legacy кодом)
+4. ✅ Добавлена обработка ошибок через типизированные исключения (`DuplicateRecordError`, `OrphanRecordError`)
+5. ✅ Добавлен rollback в except блоках для всех трех endpoints
+6. ✅ Commit выполняется на уровне route handler после успешной операции
+
+**Паттерн интеграции (аналогично Step 1):**
+```python
+if USE_SERVICE_REPOSITORY:
+    from repositories.service_repository import ServiceRepository
+    db = get_db()
+    try:
+        # Проверка доступа
+        # Использование репозитория
+        repo = ServiceRepository(db.conn)
+        result = repo.create/update/delete(...)
+        db.conn.commit()
+        return jsonify(...)
+    except (DuplicateRecordError, OrphanRecordError) as e:
+        db.conn.rollback()
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        db.conn.rollback()
+        return jsonify({"error": str(e)}), 500
+else:
+    # Legacy code path
+    ...
+```
+
+#### Files to Modify
+- `src/main.py` - добавлена интеграция ServiceRepository в три endpoints (строки 3657-3695, 3998-4006, 4130-4138)
+- `src/repositories/service_repository.py` - исправлен `CURRENT_TIMESTAMP` в `create()`, `business_id` сделан опциональным
+- `.cursor/docs/PHASE_3_5_STEP2_GUIDE.md` - создано полное руководство по Step 2
+- `scripts/start_phase35_step2.sh` - скрипт для настройки .env
+- `scripts/test_phase35_step2.sh` - скрипт для автоматического тестирования
+
+#### Trade-offs & Decisions
+
+**Почему business_id опциональный:**
+- Legacy код поддерживает создание услуг без business_id
+- Для обратной совместимости
+- FK constraint в PostgreSQL все равно обеспечит целостность данных
+
+**Почему CURRENT_TIMESTAMP как SQL выражение:**
+- Работает и в SQLite, и в PostgreSQL
+- Не требует передачи параметра
+- Соответствует паттерну из других репозиториев
+
+**Почему commit в route handler:**
+- Unit of Work pattern
+- Транзакции на уровне бизнес-логики
+- Проще тестирование и отладка
+- Rollback при ошибках гарантирован
+
+#### Dependencies
+
+**Нет новых зависимостей** - только рефакторинг существующего кода
+
+**Переменные окружения:**
+- `USE_SERVICE_REPOSITORY=true` - feature flag для Step 2 (запись в БД)
+- `USE_REVIEW_REPOSITORY=true` - должен быть включен (Step 1)
+- `USE_BUSINESS_REPOSITORY=false` - ожидает Step 3
+
+#### Status
+- [x] Approved for Implementation
+- [x] In Progress
+- [x] **Integration Completed** ✅
+
+**Следующие шаги:**
+- Дождаться 24 часов после завершения Step 1
+- Проверить FK constraints в PostgreSQL
+- Проверить orphaned records
+- Запустить Step 2 через `./scripts/start_phase35_step2.sh`
+
+**⚠️ ВАЖНО:** Step 2 включает запись в БД (INSERT/UPDATE/DELETE) - это более рискованно, чем Step 1 (read-only). Обязательно проверить все предварительные условия перед запуском.
+
+**Подробности:** см. `.cursor/docs/PHASE_3_5_STEP2_GUIDE.md`
