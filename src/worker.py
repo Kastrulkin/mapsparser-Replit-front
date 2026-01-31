@@ -1421,7 +1421,7 @@ def _process_sync_yandex_business_task(queue_dict):
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE ParseQueue 
-                SET status = 'done', 
+                SET status = 'completed', 
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (queue_dict["id"],))
