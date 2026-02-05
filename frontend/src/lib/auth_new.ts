@@ -80,14 +80,19 @@ export class NewAuth {
       }
 
       if (!response.ok) {
-        throw new Error(data.error || `Ошибка запроса (${response.status})`);
+        // Приоритет: message > error > дефолтное сообщение
+        const errorMessage = data.message || data.error || `Ошибка запроса (${response.status})`;
+        throw new Error(errorMessage);
       }
 
       return data;
     } catch (error) {
-      // Если это уже наша ошибка, пробрасываем дальше
-      if (error instanceof Error && error.message.includes('Ошибка')) {
+      // Если это уже наша ошибка (с message из ответа), пробрасываем дальше
+      if (error instanceof Error) {
+        // Если ошибка содержит сообщение от сервера, используем его
+        if (error.message && !error.message.includes('Ошибка соединения')) {
         throw error;
+        }
       }
       // Иначе это сетевая ошибка или другая проблема
       console.error('Ошибка запроса:', error);

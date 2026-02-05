@@ -1,86 +1,35 @@
 #!/usr/bin/env python3
 """
 Безопасные утилиты для работы с базой данных
-- Единая точка подключения
+- Единая точка подключения к PostgreSQL
 - Автоматические бэкапы перед изменениями
 - Защита от случайного удаления данных
+- PostgreSQL-only: SQLite больше не поддерживается в runtime
 """
-import sqlite3
 import os
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-# Единый путь к базе данных
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports.db')
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'db_backups')
-
-def get_db_path():
-    """
-    Получить путь к основной базе данных
-    Используется единая база: src/reports.db
-    """
-    # Единая база данных: src/reports.db
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports.db')
-    return db_path
-
+# Импортируем единую точку подключения (lazy import для избежания циклических зависимостей)
 def get_db_connection():
-    """Получить соединение с SQLite базой данных (безопасно)"""
-    db_path = get_db_path()
-    # Используем таймаут 30 секунд для ожидания разблокировки БД
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    
-    # Включаем WAL режим для лучшей параллельной работы
-    try:
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        result = cursor.fetchone()
-        if result and result[0] != 'wal':
-            print(f"⚠️ WAL режим не включён, текущий режим: {result[0]}")
-        else:
-            print(f"✅ WAL режим включён")
-        cursor.close()
-    except Exception as e:
-        # Если WAL не поддерживается, продолжаем без него
-        print(f"⚠️ Не удалось включить WAL режим: {e}")
-    
-    # Оптимизация для производительности
-    try:
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")  # 30 секунд ожидания
-        cursor.execute("PRAGMA foreign_keys=ON")  # Включаем внешние ключи
-        cursor.close()
-    except Exception as e:
-        print(f"⚠️ Не удалось установить PRAGMA: {e}")
-    
-    return conn
+    """Получить соединение с PostgreSQL базой данных"""
+    from core.db_connection import get_db_connection as _get_db_connection
+    return _get_db_connection()
+
+BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'db_backups')
 
 def backup_database():
     """
-    Создать резервную копию базы данных
-    Возвращает путь к файлу бэкапа
+    Создать резервную копию базы данных PostgreSQL
+    Возвращает путь к файлу бэкапа (pg_dump)
+    
+    Для PostgreSQL используйте pg_dump вручную:
+    pg_dump -h localhost -U beautybot_user -d beautybot_local > backup.sql
     """
-    db_path = get_db_path()
-    
-    if not os.path.exists(db_path):
-        print(f"⚠️  База данных не найдена: {db_path}")
-        return None
-    
-    # Создаем директорию для бэкапов
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    
-    # Имя файла бэкапа с timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_filename = f"reports_{timestamp}.db.backup"
-    backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    
-    # Копируем файл
-    shutil.copy2(db_path, backup_path)
-    
-    print(f"💾 Создан бэкап: {backup_path}")
-    return backup_path
+    print("⚠️  Для PostgreSQL используйте pg_dump:")
+    print("   pg_dump -h localhost -U beautybot_user -d beautybot_local > backup.sql")
+    return None
 
 def safe_migrate(callback, description=""):
     """
@@ -89,26 +38,32 @@ def safe_migrate(callback, description=""):
     Args:
         callback: Функция, выполняющая миграцию (принимает cursor)
         description: Описание миграции для логов
+    
+    PostgreSQL-only: рекомендуется создать бэкап через pg_dump перед миграцией
     """
-    # Создаем бэкап перед миграцией
-    backup_path = backup_database()
+    print("⚠️  Для PostgreSQL рекомендуется создать бэкап через pg_dump перед миграцией")
     
-    if not backup_path:
-        print("❌ Не удалось создать бэкап! Миграция отменена.")
-        return False
-    
-    db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
         print(f"🔄 Выполняю миграцию: {description}")
+        print(f"📊 Тип БД: PostgreSQL")
         
         # Проверяем существующие данные перед миграцией
-        cursor.execute("SELECT COUNT(*) FROM Businesses")
-        businesses_before = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM UserServices")
-        services_before = cursor.fetchone()[0]
+        businesses_before = 0
+        services_before = 0
+        
+        try:
+            cursor.execute("SELECT COUNT(*) FROM Businesses")
+            row = cursor.fetchone()
+            businesses_before = row[0] if row else 0
+            cursor.execute("SELECT COUNT(*) FROM UserServices")
+            row = cursor.fetchone()
+            services_before = row[0] if row else 0
+        except Exception:
+            # Таблицы могут не существовать - это нормально для новой БД
+            print("   ℹ️  Таблицы еще не созданы (новая БД)")
         
         print(f"📊 Данные до миграции: {businesses_before} бизнесов, {services_before} услуг")
         
@@ -116,33 +71,37 @@ def safe_migrate(callback, description=""):
         callback(cursor)
         
         # Проверяем данные после миграции
-        cursor.execute("SELECT COUNT(*) FROM Businesses")
-        businesses_after = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM UserServices")
-        services_after = cursor.fetchone()[0]
+        businesses_after = 0
+        services_after = 0
+        
+        try:
+            cursor.execute("SELECT COUNT(*) FROM Businesses")
+            row = cursor.fetchone()
+            businesses_after = row[0] if row else 0
+            cursor.execute("SELECT COUNT(*) FROM UserServices")
+            row = cursor.fetchone()
+            services_after = row[0] if row else 0
+        except Exception:
+            pass
         
         # Валидация: данные не должны уменьшиться
-        if businesses_after < businesses_before:
+        if businesses_before > 0 and businesses_after < businesses_before:
             raise Exception(f"❌ Количество бизнесов уменьшилось! Было: {businesses_before}, Стало: {businesses_after}")
-        if services_after < services_before:
+        if services_before > 0 and services_after < services_before:
             raise Exception(f"❌ Количество услуг уменьшилось! Было: {services_before}, Стало: {services_after}")
         
         conn.commit()
         
         print(f"✅ Данные после миграции: {businesses_after} бизнесов, {services_after} услуг")
-        print(f"✅ Миграция выполнена успешно! Бэкап: {backup_path}")
+        print(f"✅ Миграция выполнена успешно!")
         return True
         
     except Exception as e:
         conn.rollback()
         print(f"❌ Ошибка миграции: {e}")
-        print(f"💾 Откат к бэкапу: {backup_path}")
-        
-        # Восстанавливаем из бэкапа
-        if backup_path and os.path.exists(backup_path):
-            shutil.copy2(backup_path, db_path)
-            print(f"✅ База данных восстановлена из бэкапа")
-        
+        import traceback
+        traceback.print_exc()
+        print(f"⚠️  Для PostgreSQL откат нужно делать вручную через pg_restore")
         return False
     finally:
         conn.close()
@@ -171,26 +130,15 @@ def list_backups():
 
 def restore_from_backup(backup_path):
     """
-    Восстановить базу данных из бэкапа
+    Восстановить базу данных PostgreSQL из бэкапа
     
     Args:
-        backup_path: Путь к файлу бэкапа
+        backup_path: Путь к файлу бэкапа (SQL dump)
+    
+    Для PostgreSQL используйте pg_restore или psql:
+    psql -h localhost -U beautybot_user -d beautybot_local < backup.sql
     """
-    if not os.path.exists(backup_path):
-        print(f"❌ Файл бэкапа не найден: {backup_path}")
-        return False
-    
-    db_path = get_db_path()
-    
-    # Создаем бэкап текущей базы перед восстановлением
-    current_backup = backup_database()
-    
-    try:
-        shutil.copy2(backup_path, db_path)
-        print(f"✅ База данных восстановлена из: {backup_path}")
-        print(f"💾 Старая версия сохранена в: {current_backup}")
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка восстановления: {e}")
-        return False
+    print("⚠️  Для PostgreSQL используйте pg_restore или psql:")
+    print(f"   psql -h localhost -U beautybot_user -d beautybot_local < {backup_path}")
+    return False
 

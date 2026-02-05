@@ -233,6 +233,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       const savedCookies = hasNewCookies ? formData.auth_data.trim() : null;
 
       // Если cookies пустые, но аккаунт уже существует - не отправляем auth_data (чтобы не перезаписать существующие)
+      // Cookies теперь необязательны - можно создавать аккаунт без cookies для парсинга через открытые эндпоинты
       let authDataJson = undefined;
       if (hasNewCookies) {
         // Формируем JSON для auth_data (cookies или токен)
@@ -240,17 +241,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           cookies: savedCookies,
           headers: {},
         });
-      } else if (!account) {
-        // Если аккаунта нет и cookies пустые - ошибка
-        toast({
-          title: 'Ошибка',
-          description: 'Cookies обязательны для нового аккаунта',
-          variant: 'destructive',
-        });
-        setSaving(false);
-        return;
       }
-      // Если аккаунт есть и cookies пустые - просто обновляем другие поля, не трогая cookies
+      // Если cookies пустые - просто создаем/обновляем аккаунт без auth_data
 
       await newAuth.makeRequest(`/business/${businessId}/external-accounts`, {
         method: 'POST',
@@ -344,7 +336,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               />
             </div>
             <div>
-              <Label htmlFor="yandex-auth-data">Cookies (обязательно) *</Label>
+              <Label htmlFor="yandex-auth-data">Cookies (опционально)</Label>
               {yandexAccount && yandexAccount.last_sync_at && (() => {
                 const lastSync = new Date(yandexAccount.last_sync_at);
                 const daysSinceSync = Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
@@ -388,9 +380,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 }}
                 placeholder={yandexAccount && yandexAccount.last_sync_at
                   ? "Вставьте новые cookies для обновления (или оставьте пустым, чтобы не менять)"
-                  : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"}
+                  : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...) (опционально)"}
                 rows={6}
-                required={!yandexAccount || !yandexAccount.last_sync_at}
               />
               <div className="mt-2">
                 <button
@@ -446,7 +437,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               </Button>
               <Button
                 onClick={() => saveAccount('yandex_business', yandexForm)}
-                disabled={saving || testingCookies || (!yandexAccount && !yandexForm.auth_data)}
+                disabled={saving || testingCookies}
               >
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
               </Button>
@@ -501,9 +492,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                     }
                   }
                 }}
-                placeholder="Вставьте cookies из браузера или токен сессии 2ГИС"
+                placeholder="Вставьте cookies из браузера или токен сессии 2ГИС (опционально)"
                 rows={4}
-                required
               />
               <p className="text-xs text-gray-500 mt-1">
                 Скопируйте cookies из браузера после входа в личный кабинет 2ГИС
@@ -523,7 +513,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             <div className="flex gap-2 items-center">
               <Button
                 onClick={() => saveAccount('2gis', twoGisForm)}
-                disabled={saving || !twoGisForm.auth_data}
+                disabled={saving}
               >
                 {saving ? 'Сохранение...' : twoGisAccount ? 'Обновить' : 'Сохранить'}
               </Button>

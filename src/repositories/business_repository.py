@@ -61,7 +61,7 @@ class BusinessRepository(BaseRepository):
             Business dict or None if not found
         """
         cursor = self._get_cursor()
-        query = f"SELECT {BUSINESS_COLUMNS_STR} FROM Businesses WHERE id = ?"
+        query = f"SELECT {BUSINESS_COLUMNS_STR} FROM businesses WHERE id = %s"
         self._execute(cursor, query, (business_id,))
         row = cursor.fetchone()
         
@@ -88,8 +88,8 @@ class BusinessRepository(BaseRepository):
         cursor = self._get_cursor()
         query = f"""
             SELECT {BUSINESS_COLUMNS_STR}
-            FROM Businesses 
-            WHERE owner_id = ? AND is_active = 1
+            FROM businesses 
+            WHERE owner_id = %s AND is_active = TRUE
             ORDER BY created_at DESC
         """
         self._execute(cursor, query, (owner_id,))
@@ -172,9 +172,9 @@ class BusinessRepository(BaseRepository):
         """
         cursor = self._get_cursor()
         query = """
-            UPDATE Businesses 
-            SET yandex_org_id = ?, yandex_url = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            UPDATE businesses 
+            SET yandex_org_id = %s, yandex_url = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """
         self._execute(cursor, query, (yandex_org_id, yandex_url, business_id))
         

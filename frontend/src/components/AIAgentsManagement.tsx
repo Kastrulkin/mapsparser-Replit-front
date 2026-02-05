@@ -384,7 +384,7 @@ export const AIAgentsManagement = () => {
     const newWorkflow = currentWorkflow.filter((_, i) => i !== index);
 
     // Если удалили стейт с init_state, переназначаем первый стейт как начальный
-    if (!newWorkflow.some((s) => s.init_state) && newWorkflow.length > 0) {
+    if (!Array.isArray(newWorkflow) || (newWorkflow.length > 0 && !newWorkflow.some((s) => s.init_state))) {
       newWorkflow[0].init_state = true;
     }
 

@@ -436,7 +436,9 @@ export const ParsingManagement: React.FC = () => {
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
                           {(task.status === 'error' || task.status === 'captcha' ||
-                            (task.status === 'processing' && stats?.stuck_tasks.some(st => st.id === task.id))) && (
+                            (task.status === 'processing' &&
+                              Array.isArray(stats?.stuck_tasks) &&
+                              stats!.stuck_tasks.some(st => st.id === task.id))) && (
                               <Button
                                 size="sm"
                                 variant="outline"

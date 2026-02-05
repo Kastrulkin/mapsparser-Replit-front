@@ -1,81 +1,19 @@
 #!/usr/bin/env python3
 """
-Менеджер базы данных для управления всеми 4 таблицами
+Менеджер базы данных для управления всеми таблицами
+PostgreSQL-only: SQLite больше не поддерживается в runtime
 """
-import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
-
-try:
-    from src.query_adapter import QueryAdapter
-except ImportError:
-    from query_adapter import QueryAdapter
-import os
-
-class DBCursorWrapper:
-    """Wrapper around database cursor to intercept and adapt queries"""
-    def __init__(self, cursor, db_type='sqlite'):
-        self.cursor = cursor
-        self.db_type = db_type
-        
-    def execute(self, query, params=()):
-        if self.db_type == 'postgres':
-            try:
-                query = QueryAdapter.adapt_query(query, params)
-                params = QueryAdapter.adapt_params(params)
-            except Exception as e:
-                import logging
-                logging.getLogger('db_adapter').error(f"Adapter Error: {e}")
-                raise
-        return self.cursor.execute(query, params)
-        
-    def executemany(self, query, params_list):
-        if self.db_type == 'postgres':
-            # executemany is trickier. We adapt the query once.
-            if params_list:
-                first_params = params_list[0]
-                query = QueryAdapter.adapt_query(query, first_params)
-                # Then adapt all params
-                params_list = [QueryAdapter.adapt_params(p) for p in params_list]
-        return self.cursor.executemany(query, params_list)
-        
-    def fetchone(self):
-        return self.cursor.fetchone()
-        
-    def fetchall(self):
-        return self.cursor.fetchall()
-        
-    def __getattr__(self, name):
-        return getattr(self.cursor, name)
-
-class DBConnectionWrapper:
-    """Wrapper around database connection"""
-    def __init__(self, conn):
-        self.conn = conn
-        self.db_type = os.getenv('DB_TYPE', 'sqlite')
-        
-    def cursor(self):
-        return DBCursorWrapper(self.conn.cursor(), self.db_type)
-        
-    def commit(self):
-        return self.conn.commit()
-        
-    def rollback(self):
-        return self.conn.rollback()
-        
-    def close(self):
-        return self.conn.close()
-        
-    def __getattr__(self, name):
-        return getattr(self.conn, name)
+# PostgreSQL-only: QueryAdapter и DB_TYPE больше не нужны
+# Все запросы должны использовать %s плейсхолдеры напрямую
 
 def get_db_connection():
-    """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    conn = _get_db_connection()
-    return DBConnectionWrapper(conn)
+    """Получить соединение с PostgreSQL базой данных"""
+    from core.db_connection import get_db_connection as _get_db_connection
+    return _get_db_connection()
 
 class DatabaseManager:
     """Менеджер для работы с базой данных"""
@@ -114,7 +52,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
-            FROM Users 
+            FROM users 
             ORDER BY created_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -122,14 +60,14 @@ class DatabaseManager:
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Получить пользователя по ID"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Получить пользователя по email"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Users WHERE email = ?", (email,))
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         row = cursor.fetchone()
         return dict(row) if row else None
     
@@ -138,8 +76,8 @@ class DatabaseManager:
         user_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Users (id, email, password_hash, name, phone, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, email, password_hash, name, phone, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (user_id, email, password_hash, name, phone, datetime.now().isoformat()))
         self.conn.commit()
         return user_id
@@ -152,8 +90,8 @@ class DatabaseManager:
         session_token = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Sessions (token, user_id, created_at, expires_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO usersessions (token, user_id, created_at, expires_at)
+            VALUES (%s, %s, %s, %s)
         """, (session_token, user_id, datetime.now().isoformat(), 
               (datetime.now() + timedelta(days=30)).isoformat()))
         self.conn.commit()
@@ -164,9 +102,9 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT u.*, s.created_at as session_created_at
-            FROM Users u
-            JOIN Sessions s ON u.id = s.user_id
-            WHERE s.token = ? AND s.expires_at > ?
+            FROM users u
+            JOIN usersessions s ON u.id = s.user_id
+            WHERE s.token = %s AND s.expires_at > %s
         """, (token, datetime.now().isoformat()))
         
         result = cursor.fetchone()
@@ -175,7 +113,7 @@ class DatabaseManager:
     def delete_session(self, token: str) -> bool:
         """Удалить сессию"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM Sessions WHERE token = ?", (token,))
+        cursor.execute("DELETE FROM usersessions WHERE token = %s", (token,))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -188,14 +126,14 @@ class DatabaseManager:
         
         for field, value in kwargs.items():
             if field in allowed_fields and value is not None:
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 values.append(value)
         
         if not update_fields:
             return True
         
         values.extend([datetime.now().isoformat(), user_id])
-        query = f"UPDATE Users SET {', '.join(update_fields)}, updated_at = ? WHERE id = ?"
+        query = f"UPDATE users SET {', '.join(update_fields)}, updated_at = %s WHERE id = %s"
         
         cursor.execute(query, values)
         self.conn.commit()
@@ -204,7 +142,7 @@ class DatabaseManager:
     def delete_user(self, user_id: str) -> bool:
         """Удалить пользователя (каскадное удаление)"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -215,8 +153,8 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT i.*, u.email as invited_by_email, u.name as invited_by_name
-            FROM Invites i
-            JOIN Users u ON i.invited_by = u.id
+            FROM invites i
+            JOIN users u ON i.invited_by = u.id
             ORDER BY i.created_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -224,7 +162,7 @@ class DatabaseManager:
     def get_invite_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Получить приглашение по токену"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Invites WHERE token = ?", (token,))
+        cursor.execute("SELECT * FROM invites WHERE token = %s", (token,))
         row = cursor.fetchone()
         return dict(row) if row else None
     
@@ -236,8 +174,8 @@ class DatabaseManager:
         
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Invites (id, email, invited_by, token, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO invites (id, email, invited_by, token, expires_at, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (invite_id, email, invited_by, token, expires_at.isoformat(), datetime.now().isoformat()))
         self.conn.commit()
         return token
@@ -245,14 +183,14 @@ class DatabaseManager:
     def update_invite_status(self, invite_id: str, status: str) -> bool:
         """Обновить статус приглашения"""
         cursor = self.conn.cursor()
-        cursor.execute("UPDATE Invites SET status = ? WHERE id = ?", (status, invite_id))
+        cursor.execute("UPDATE invites SET status = %s WHERE id = %s", (status, invite_id))
         self.conn.commit()
         return cursor.rowcount > 0
     
     def delete_invite(self, invite_id: str) -> bool:
         """Удалить приглашение"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM Invites WHERE id = ?", (invite_id,))
+        cursor.execute("DELETE FROM invites WHERE id = %s", (invite_id,))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -263,8 +201,8 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT q.*, u.email as user_email, u.name as user_name
-            FROM ParseQueue q
-            JOIN Users u ON q.user_id = u.id
+            FROM parsequeue q
+            JOIN users u ON q.user_id = u.id
             ORDER BY q.created_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -273,8 +211,8 @@ class DatabaseManager:
         """Получить очередь пользователя"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM ParseQueue 
-            WHERE user_id = ? 
+            SELECT * FROM parsequeue 
+            WHERE user_id = %s 
             ORDER BY created_at DESC
         """, (user_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -284,8 +222,8 @@ class DatabaseManager:
         queue_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO ParseQueue (id, url, user_id, status, created_at)
-            VALUES (?, ?, ?, 'pending', ?)
+            INSERT INTO parsequeue (id, url, user_id, status, created_at)
+            VALUES (%s, %s, %s, 'pending', %s)
         """, (queue_id, url, user_id, datetime.now().isoformat()))
         self.conn.commit()
         return queue_id
@@ -293,14 +231,14 @@ class DatabaseManager:
     def update_queue_status(self, queue_id: str, status: str) -> bool:
         """Обновить статус элемента очереди"""
         cursor = self.conn.cursor()
-        cursor.execute("UPDATE ParseQueue SET status = ? WHERE id = ?", (status, queue_id))
+        cursor.execute("UPDATE parsequeue SET status = %s WHERE id = %s", (status, queue_id))
         self.conn.commit()
         return cursor.rowcount > 0
     
     def delete_queue_item(self, queue_id: str) -> bool:
         """Удалить элемент очереди"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_id,))
+        cursor.execute("DELETE FROM parsequeue WHERE id = %s", (queue_id,))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -308,7 +246,7 @@ class DatabaseManager:
         """Получить ожидающие элементы очереди"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM ParseQueue 
+            SELECT * FROM parsequeue 
             WHERE status = 'pending' 
             ORDER BY created_at ASC
         """)
@@ -321,8 +259,8 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT c.*, u.email as user_email, u.name as user_name
-            FROM Cards c
-            JOIN Users u ON c.user_id = u.id
+            FROM cards c
+            JOIN users u ON c.user_id = u.id
             ORDER BY c.created_at DESC
         """)
         return [dict(row) for row in cursor.fetchall()]
@@ -331,8 +269,8 @@ class DatabaseManager:
         """Получить карточки пользователя"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM Cards 
-            WHERE user_id = ? 
+            SELECT * FROM cards 
+            WHERE user_id = %s 
             ORDER BY created_at DESC
         """, (user_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -340,7 +278,7 @@ class DatabaseManager:
     def get_card_by_id(self, card_id: str) -> Optional[Dict[str, Any]]:
         """Получить карточку по ID"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (card_id,))
+        cursor.execute("SELECT * FROM cards WHERE id = %s", (card_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
     
@@ -366,10 +304,10 @@ class DatabaseManager:
         values.append(datetime.now().isoformat())
         field_names.append('created_at')
         
-        placeholders = ', '.join(['?' for _ in values])
+        placeholders = ', '.join(['%s' for _ in values])
         field_list = ', '.join(field_names)
         
-        cursor.execute(f"INSERT INTO Cards ({field_list}) VALUES ({placeholders})", values)
+        cursor.execute(f"INSERT INTO cards ({field_list}) VALUES ({placeholders})", values)
         self.conn.commit()
         return card_id
     
@@ -386,14 +324,14 @@ class DatabaseManager:
         
         for field, value in kwargs.items():
             if field in allowed_fields and value is not None:
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 values.append(value)
         
         if not update_fields:
             return True
         
         values.append(card_id)
-        query = f"UPDATE Cards SET {', '.join(update_fields)} WHERE id = ?"
+        query = f"UPDATE cards SET {', '.join(update_fields)} WHERE id = %s"
         
         cursor.execute(query, values)
         self.conn.commit()
@@ -402,7 +340,7 @@ class DatabaseManager:
     def delete_card(self, card_id: str) -> bool:
         """Удалить карточку"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM Cards WHERE id = ?", (card_id,))
+        cursor.execute("DELETE FROM cards WHERE id = %s", (card_id,))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -415,35 +353,35 @@ class DatabaseManager:
         stats = {}
         
         # Количество пользователей
-        cursor.execute("SELECT COUNT(*) as count FROM Users")
+        cursor.execute("SELECT COUNT(*) as count FROM users")
         stats['users_count'] = cursor.fetchone()['count']
         
         # Количество активных пользователей
-        cursor.execute("SELECT COUNT(*) as count FROM Users WHERE is_active = 1")
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE")
         stats['active_users_count'] = cursor.fetchone()['count']
         
         # Количество приглашений
-        cursor.execute("SELECT COUNT(*) as count FROM Invites")
+        cursor.execute("SELECT COUNT(*) as count FROM invites")
         stats['invites_count'] = cursor.fetchone()['count']
         
         # Количество ожидающих приглашений
-        cursor.execute("SELECT COUNT(*) as count FROM Invites WHERE status = 'pending'")
+        cursor.execute("SELECT COUNT(*) as count FROM invites WHERE status = 'pending'")
         stats['pending_invites_count'] = cursor.fetchone()['count']
         
         # Количество элементов в очереди
-        cursor.execute("SELECT COUNT(*) as count FROM ParseQueue")
+        cursor.execute("SELECT COUNT(*) as count FROM parsequeue")
         stats['queue_items_count'] = cursor.fetchone()['count']
         
         # Количество ожидающих в очереди
-        cursor.execute("SELECT COUNT(*) as count FROM ParseQueue WHERE status = 'pending'")
+        cursor.execute("SELECT COUNT(*) as count FROM parsequeue WHERE status = 'pending'")
         stats['pending_queue_count'] = cursor.fetchone()['count']
         
         # Количество готовых отчётов
-        cursor.execute("SELECT COUNT(*) as count FROM Cards")
+        cursor.execute("SELECT COUNT(*) as count FROM cards")
         stats['cards_count'] = cursor.fetchone()['count']
         
         # Количество отчётов с файлами
-        cursor.execute("SELECT COUNT(*) as count FROM Cards WHERE report_path IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) as count FROM cards WHERE report_path IS NOT NULL")
         stats['completed_reports_count'] = cursor.fetchone()['count']
         
         return stats
@@ -453,19 +391,15 @@ class DatabaseManager:
     def is_superadmin(self, user_id: str) -> bool:
         """Проверить, является ли пользователь суперадмином"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT is_superadmin FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT is_superadmin FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         if not row:
             return False
 
-        # Безопасная обработка sqlite3.Row или tuple
+        # RealDictCursor возвращает dict-like объект
         try:
-            if hasattr(row, "keys"):
-                # sqlite3.Row
-                if "is_superadmin" in row.keys():
-                    return bool(row["is_superadmin"])
-                # Если по какой‑то причине колонки нет — считаем, что не суперадмин
-                return False
+            if isinstance(row, dict):
+                return bool(row.get("is_superadmin", False))
             else:
                 # tuple/list — берём первый столбец
                 return bool(row[0]) if len(row) > 0 else False
@@ -479,9 +413,9 @@ class DatabaseManager:
         """Установить статус суперадмина для пользователя"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE Users 
-            SET is_superadmin = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
+            UPDATE users 
+            SET is_superadmin = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
         """, (is_superadmin, user_id))
         self.conn.commit()
     
@@ -498,9 +432,14 @@ class DatabaseManager:
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         try:
-            # Проверяем, есть ли новые поля в таблице
-            cursor.execute("PRAGMA table_info(Businesses)")
-            columns = [col[1] for col in cursor.fetchall()]
+            # Получаем список колонок из information_schema (PostgreSQL)
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = 'businesses'
+                ORDER BY ordinal_position
+            """)
+            columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
             
             # Формируем список полей и значений динамически
             base_fields = ['id', 'name', 'description', 'industry', 'business_type', 'address', 'working_hours', 
@@ -520,10 +459,10 @@ class DatabaseManager:
                 base_values.append(moderation_status)
             
             fields_str = ', '.join(base_fields)
-            placeholders = ', '.join(['?' for _ in base_fields])
+            placeholders = ', '.join(['%s' for _ in base_fields])
             
             cursor.execute(f"""
-                INSERT INTO Businesses ({fields_str})
+                INSERT INTO businesses ({fields_str})
                 VALUES ({placeholders})
             """, base_values)
             # НЕ коммитим здесь - вызывающий код должен сделать commit
@@ -538,30 +477,21 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT b.*, u.email as owner_email, u.name as owner_name
-            FROM Businesses b
-            LEFT JOIN Users u ON b.owner_id = u.id
-            WHERE b.is_active = 1 OR b.is_active IS NULL
+            FROM businesses b
+            LEFT JOIN users u ON b.owner_id = u.id
+            WHERE b.is_active = TRUE OR b.is_active IS NULL
             ORDER BY b.created_at DESC
         """)
         rows = cursor.fetchall()
-        # Преобразуем sqlite3.Row в словари
-        result = []
-        for row in rows:
-            if hasattr(row, 'keys'):
-                # Это sqlite3.Row
-                result.append({key: row[key] for key in row.keys()})
-            else:
-                # Это tuple - преобразуем в dict по описанию колонок
-                columns = [desc[0] for desc in cursor.description]
-                result.append(dict(zip(columns, row)))
-        return result
+        # RealDictCursor возвращает dict-like объекты
+        return [dict(row) for row in rows]
     
     def get_businesses_by_owner(self, owner_id: str) -> List[Dict[str, Any]]:
         """Получить бизнесы конкретного владельца (только прямые, без сетей)"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM Businesses 
-            WHERE owner_id = ? AND is_active = 1
+            SELECT * FROM businesses 
+            WHERE owner_id = %s AND is_active = TRUE
             ORDER BY created_at DESC
         """, (owner_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -572,8 +502,8 @@ class DatabaseManager:
         
         # Получаем бизнесы, которые напрямую принадлежат пользователю
         cursor.execute("""
-            SELECT * FROM Businesses 
-            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
+            SELECT * FROM businesses 
+            WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL)
             ORDER BY created_at DESC
         """, (owner_id,))
         direct_businesses = [dict(row) for row in cursor.fetchall()]
@@ -581,9 +511,9 @@ class DatabaseManager:
         # Получаем бизнесы из сетей, которыми владеет пользователь
         cursor.execute("""
             SELECT b.* 
-            FROM Businesses b
-            INNER JOIN Networks n ON b.network_id = n.id
-            WHERE n.owner_id = ? AND (b.is_active = 1 OR b.is_active IS NULL)
+            FROM businesses b
+            INNER JOIN networks n ON b.network_id = n.id
+            WHERE n.owner_id = %s AND (b.is_active = TRUE OR b.is_active IS NULL)
             ORDER BY b.created_at DESC
         """, (owner_id,))
         network_businesses = [dict(row) for row in cursor.fetchall()]
@@ -599,18 +529,33 @@ class DatabaseManager:
         """Проверить, является ли пользователь владельцем хотя бы одной сети"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT COUNT(*) FROM Networks WHERE owner_id = ?
+            SELECT COUNT(*) FROM networks WHERE owner_id = %s
         """, (user_id,))
-        count = cursor.fetchone()[0]
-        return count > 0
+        row = cursor.fetchone()
+        if not row:
+            return False
+        
+        # RealDictCursor возвращает dict-like объект, обычный курсор — tuple
+        try:
+            if isinstance(row, dict):
+                count_value = row.get("count")
+            else:
+                # tuple/list — берем первый столбец
+                count_value = row[0] if len(row) > 0 else 0
+            return bool(count_value and int(count_value) > 0)
+        except Exception as e:
+            print(f"❌ Ошибка проверки is_network_owner: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def create_network(self, name: str, owner_id: str, description: str = None) -> str:
         """Создать новую сеть"""
         network_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO Networks (id, name, owner_id, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO networks (id, name, owner_id, description, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (network_id, name, owner_id, description, datetime.now().isoformat(), datetime.now().isoformat()))
         self.conn.commit()
         return network_id
@@ -619,8 +564,8 @@ class DatabaseManager:
         """Получить все сети пользователя"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM Networks 
-            WHERE owner_id = ? 
+            SELECT * FROM networks 
+            WHERE owner_id = %s 
             ORDER BY created_at DESC
         """, (owner_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -629,9 +574,9 @@ class DatabaseManager:
         """Добавить бизнес в сеть"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE Businesses 
-            SET network_id = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            UPDATE businesses 
+            SET network_id = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (network_id, business_id))
         self.conn.commit()
         return cursor.rowcount > 0
@@ -640,9 +585,9 @@ class DatabaseManager:
         """Удалить бизнес из сети"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE Businesses 
+            UPDATE businesses 
             SET network_id = NULL, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         self.conn.commit()
         return cursor.rowcount > 0
@@ -651,8 +596,8 @@ class DatabaseManager:
         """Получить все бизнесы (точки) сети - включая заблокированные"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM Businesses 
-            WHERE network_id = ?
+            SELECT * FROM businesses 
+            WHERE network_id = %s
             ORDER BY created_at DESC
         """, (network_id,))
         return [dict(row) for row in cursor.fetchall()]
@@ -667,14 +612,14 @@ class DatabaseManager:
         # Получаем всех пользователей одним запросом
         cursor.execute("""
             SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
-            FROM Users 
+            FROM users 
             ORDER BY created_at DESC
         """)
         users = cursor.fetchall()
         
         # Получаем все прямые бизнесы одним запросом (не в сети)
         cursor.execute("""
-            SELECT * FROM Businesses 
+            SELECT * FROM businesses 
             WHERE network_id IS NULL
             ORDER BY owner_id, created_at DESC
         """)
@@ -682,14 +627,14 @@ class DatabaseManager:
         
         # Получаем все сети одним запросом
         cursor.execute("""
-            SELECT * FROM Networks 
+            SELECT * FROM networks 
             ORDER BY owner_id, created_at DESC
         """)
         all_networks = cursor.fetchall()
         
         # Получаем все бизнесы в сетях одним запросом
         cursor.execute("""
-            SELECT * FROM Businesses 
+            SELECT * FROM businesses 
             WHERE network_id IS NOT NULL
             ORDER BY network_id, created_at DESC
         """)
@@ -728,10 +673,10 @@ class DatabaseManager:
         # Формируем результат
         result = []
         for user_row in users:
-            user_id = user_row['id'] if hasattr(user_row, 'keys') else user_row[0]
+            user_id = user_row.get('id') if isinstance(user_row, dict) else user_row[0]
             
             # Преобразуем пользователя в словарь
-            if hasattr(user_row, 'keys'):
+            if isinstance(user_row, dict):
                 user_dict = {key: user_row[key] for key in user_row.keys()}
             else:
                 columns = [desc[0] for desc in cursor.description]
@@ -766,8 +711,8 @@ class DatabaseManager:
         # Находим бизнесы без владельцев (orphan businesses) - включая заблокированные
         cursor.execute("""
             SELECT b.*
-            FROM Businesses b
-            LEFT JOIN Users u ON b.owner_id = u.id
+            FROM businesses b
+            LEFT JOIN users u ON b.owner_id = u.id
             WHERE b.network_id IS NULL
             AND b.owner_id IS NOT NULL
             AND u.id IS NULL
@@ -793,8 +738,8 @@ class DatabaseManager:
         # Находим сети без владельцев (orphan networks)
         cursor.execute("""
             SELECT n.*
-            FROM Networks n
-            LEFT JOIN Users u ON n.owner_id = u.id
+            FROM networks n
+            LEFT JOIN users u ON n.owner_id = u.id
             WHERE u.id IS NULL
             ORDER BY n.created_at DESC
         """)
@@ -845,7 +790,7 @@ class DatabaseManager:
             SELECT id, name, description, industry, business_type, address, working_hours, 
                    phone, email, website, owner_id, network_id, is_active, 
                    created_at, updated_at
-            FROM Businesses WHERE id = ?
+            FROM businesses WHERE id = %s
         """, (business_id,))
         row = cursor.fetchone()
         if not row:
@@ -861,22 +806,22 @@ class DatabaseManager:
         params = []
         
         if name is not None:
-            updates.append("name = ?")
+            updates.append("name = %s")
             params.append(name)
         if description is not None:
-            updates.append("description = ?")
+            updates.append("description = %s")
             params.append(description)
         if industry is not None:
-            updates.append("industry = ?")
+            updates.append("industry = %s")
             params.append(industry)
         
         if updates:
             updates.append("updated_at = CURRENT_TIMESTAMP")
             params.append(business_id)
             cursor.execute(f"""
-                UPDATE Businesses 
+                UPDATE businesses 
                 SET {', '.join(updates)}
-                WHERE id = ?
+                WHERE id = %s
             """, params)
             self.conn.commit()
     
@@ -885,7 +830,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         
         # Проверяем, существует ли бизнес
-        cursor.execute("SELECT id, name FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT id, name FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         if not business:
             print(f"❌ Бизнес с ID {business_id} не найден")
@@ -894,23 +839,23 @@ class DatabaseManager:
         print(f"🔍 Удаление бизнеса: ID={business_id}, name={business[1] if business else 'N/A'}")
         
         # Удаляем связанные данные
-        cursor.execute("DELETE FROM UserServices WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM userservices WHERE business_id = %s", (business_id,))
         deleted_services = cursor.rowcount
-        cursor.execute("DELETE FROM FinancialTransactions WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM financialtransactions WHERE business_id = %s", (business_id,))
         deleted_transactions = cursor.rowcount
-        cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
         deleted_links = cursor.rowcount
-        cursor.execute("DELETE FROM MapParseResults WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM mapparseresults WHERE business_id = %s", (business_id,))
         deleted_results = cursor.rowcount
-        cursor.execute("DELETE FROM ParseQueue WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM parsequeue WHERE business_id = %s", (business_id,))
         deleted_queue = cursor.rowcount
-        cursor.execute("DELETE FROM TelegramBindTokens WHERE business_id = ?", (business_id,))
+        cursor.execute("DELETE FROM telegrambindtokens WHERE business_id = %s", (business_id,))
         deleted_tokens = cursor.rowcount
         
         print(f"🔍 Удалено связанных данных: services={deleted_services}, transactions={deleted_transactions}, links={deleted_links}, results={deleted_results}, queue={deleted_queue}, tokens={deleted_tokens}")
         
         # Удаляем сам бизнес
-        cursor.execute("DELETE FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("DELETE FROM businesses WHERE id = %s", (business_id,))
         deleted_count = cursor.rowcount
         self.conn.commit()
         
@@ -922,9 +867,9 @@ class DatabaseManager:
         """Заблокировать/разблокировать бизнес"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE Businesses 
-            SET is_active = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
+            UPDATE businesses 
+            SET is_active = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
         """, (0 if is_blocked else 1, business_id))
         self.conn.commit()
         return cursor.rowcount > 0
@@ -934,28 +879,34 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         
         # Проверяем, есть ли поле business_id в таблице UserServices
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Получаем список колонок из information_schema (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+            ORDER BY ordinal_position
+        """)
+        columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
         
         if 'business_id' in columns:
             # Используем business_id для фильтрации
             cursor.execute("""
                 SELECT id, name, description, category, keywords, price, created_at, updated_at
-                FROM UserServices 
-                WHERE business_id = ? AND is_active = 1
+                FROM userservices 
+                WHERE business_id = %s AND is_active = TRUE
                 ORDER BY created_at DESC
             """, (business_id,))
         else:
             # Fallback: получаем owner_id бизнеса и выбираем услуги по user_id
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
             row = cursor.fetchone()
             owner_id = row[0] if row else None
             if not owner_id:
                 return []
             cursor.execute("""
                 SELECT id, name, description, category, keywords, price, created_at, updated_at
-                FROM UserServices 
-                WHERE user_id = ? AND is_active = 1
+                FROM userservices 
+                WHERE user_id = %s AND is_active = TRUE
                 ORDER BY created_at DESC
             """, (owner_id,))
         
@@ -989,7 +940,7 @@ class DatabaseManager:
         cursor.execute("""
             SELECT id, amount, description, transaction_type, date, created_at
             FROM FinancialTransactions 
-            WHERE business_id = ? 
+            WHERE business_id = %s 
             ORDER BY date DESC
         """, (business_id,))
         
@@ -1003,7 +954,7 @@ class DatabaseManager:
         cursor.execute("""
             SELECT id, metric_name, metric_value, period, created_at
             FROM FinancialMetrics 
-            WHERE business_id = ? 
+            WHERE business_id = %s 
             ORDER BY created_at DESC
         """, (business_id,))
         
@@ -1044,8 +995,8 @@ class DatabaseManager:
         
         cursor.execute("""
             SELECT id, title, report_path, seo_score, ai_analysis, created_at, updated_at
-            FROM Cards 
-            WHERE business_id = ? 
+            FROM cards 
+            WHERE business_id = %s 
             ORDER BY created_at DESC
         """, (business_id,))
         
@@ -1072,7 +1023,7 @@ class DatabaseManager:
         # Проверяем дубликат по google_id
         google_id = lead_data.get('google_id')
         if google_id:
-            cursor.execute("SELECT id FROM ProspectingLeads WHERE google_id = ?", (google_id,))
+            cursor.execute("SELECT id FROM prospectingleads WHERE google_id = %s", (google_id,))
             existing = cursor.fetchone()
             if existing:
                 return existing[0]
@@ -1085,10 +1036,10 @@ class DatabaseManager:
         for f in fields[1:]:
             values.append(lead_data.get(f))
             
-        placeholders = ', '.join(['?' for _ in values])
+        placeholders = ', '.join(['%s' for _ in values])
         
         cursor.execute(f"""
-            INSERT INTO ProspectingLeads ({', '.join(fields)}, created_at, updated_at)
+            INSERT INTO prospectingleads ({', '.join(fields)}, created_at, updated_at)
             VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, values)
         
@@ -1099,9 +1050,9 @@ class DatabaseManager:
         """Обновить статус лида"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE ProspectingLeads 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
+            UPDATE prospectingleads 
+            SET status = %s, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = %s
         """, (status, lead_id))
         self.conn.commit()
         return cursor.rowcount > 0
@@ -1109,7 +1060,7 @@ class DatabaseManager:
     def delete_lead(self, lead_id: str) -> bool:
         """Удалить лид"""
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM ProspectingLeads WHERE id = ?", (lead_id,))
+        cursor.execute("DELETE FROM prospectingleads WHERE id = %s", (lead_id,))
         self.conn.commit()
         return cursor.rowcount > 0
 

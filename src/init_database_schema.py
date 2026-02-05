@@ -1,25 +1,49 @@
 #!/usr/bin/env python3
 """
 Единая функция инициализации схемы базы данных
-Создаёт все необходимые таблицы при первом запуске
+PostgreSQL-only: SQLite больше не поддерживается
+Для PostgreSQL схема применяется через schema_postgres.sql
 """
-from safe_db_utils import get_db_connection, get_db_path
+from safe_db_utils import get_db_connection
 import os
 
+def _get_table_columns(cursor, table_name):
+    """
+    Получить список колонок таблицы (PostgreSQL-only)
+    
+    Returns:
+        list: Список имен колонок
+    """
+    query = """
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = %s
+        ORDER BY ordinal_position
+    """
+    params = (table_name.lower(),)
+    
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [row['column_name'] if isinstance(row, dict) else row[0] for row in rows]
+    except Exception as e:
+        print(f"⚠️ [DEBUG] Ошибка получения колонок для {table_name}: {e}")
+        return []
+
 def init_database_schema():
-    """Инициализировать все таблицы базы данных"""
-    db_path = get_db_path()
+    """
+    Инициализировать все таблицы базы данных (PostgreSQL-only)
     
-    # Проверяем, существует ли база данных
-    db_exists = os.path.exists(db_path)
-    
+    Для PostgreSQL схема уже применена через schema_postgres.sql.
+    Эта функция только проверяет наличие таблиц и добавляет недостающие колонки.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        print("🔄 Инициализация схемы базы данных...")
-        print(f"📁 База данных: {db_path}")
-        print(f"📊 База {'существует' if db_exists else 'создаётся'}")
+        print("🔄 Проверка схемы базы данных PostgreSQL...")
+        print("ℹ️  Для PostgreSQL схема уже применена через schema_postgres.sql")
+        print("📊 Проверяем наличие таблиц и добавляем недостающие колонки...")
         print()
         
         # ===== ОСНОВНЫЕ ТАБЛИЦЫ =====
@@ -70,8 +94,7 @@ def init_database_schema():
         
         # Добавляем колонки subscription_tier и subscription_status, если их нет (для существующих БД)
         try:
-            cursor.execute("PRAGMA table_info(Businesses)")
-            columns = [row[1] for row in cursor.fetchall()]
+            columns = _get_table_columns(cursor, 'Businesses')
             
             if 'subscription_tier' not in columns:
                 cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_tier TEXT DEFAULT 'trial'")
@@ -194,8 +217,7 @@ def init_database_schema():
         
         # Проверяем и добавляем недостающие поля для обратной совместимости
         try:
-            cursor.execute("PRAGMA table_info(ParseQueue)")
-            columns = [row[1] for row in cursor.fetchall()]
+            columns = _get_table_columns(cursor, 'ParseQueue')
             
             fields_to_add = [
                 ("task_type", "TEXT DEFAULT 'parse_card'"),
@@ -463,6 +485,56 @@ def init_database_schema():
         """)
         print("✅ Таблица ReviewExchangeDistribution создана/проверена")
         
+        # External Business Accounts - внешние кабинеты бизнеса
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS external_business_accounts (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                business_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                auth_data TEXT,
+                external_id TEXT,
+                display_name TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                last_sync_at TIMESTAMP,
+                last_error TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                CONSTRAINT uq_business_provider UNIQUE (business_id, provider)
+            )
+        """)
+        # Добавляем foreign key отдельно, если таблица Businesses существует
+        try:
+            cursor.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint 
+                        WHERE conname = 'external_business_accounts_business_id_fkey'
+                    ) THEN
+                        ALTER TABLE external_business_accounts
+                        ADD CONSTRAINT external_business_accounts_business_id_fkey
+                        FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE;
+                    END IF;
+                END $$;
+            """)
+        except Exception as e:
+            print(f"⚠️ Не удалось добавить foreign key для external_business_accounts: {e}")
+        
+        # Создаем индексы
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_external_business_accounts_business_id 
+            ON external_business_accounts(business_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_external_business_accounts_provider 
+            ON external_business_accounts(provider)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_external_business_accounts_external_id 
+            ON external_business_accounts(external_id)
+        """)
+        print("✅ Таблица external_business_accounts создана/проверена")
+
         # ExternalBusinessReviews - отзывы из внешних источников
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ExternalBusinessReviews (
@@ -547,8 +619,7 @@ def init_database_schema():
         
         # Миграция для ExternalBusinessStats: проверка наличия поля unanswered_reviews_count
         try:
-            cursor.execute("PRAGMA table_info(ExternalBusinessStats)")
-            columns = [row[1] for row in cursor.fetchall()]
+            columns = _get_table_columns(cursor, 'ExternalBusinessStats')
             if 'unanswered_reviews_count' not in columns:
                 cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN unanswered_reviews_count INTEGER")
                 print("✅ Добавлено поле unanswered_reviews_count в ExternalBusinessStats")
@@ -604,8 +675,7 @@ def init_database_schema():
 
         # Миграция для BusinessMetricsHistory: проверка наличия поля unanswered_reviews_count
         try:
-            cursor.execute("PRAGMA table_info(BusinessMetricsHistory)")
-            columns = [row[1] for row in cursor.fetchall()]
+            columns = _get_table_columns(cursor, 'BusinessMetricsHistory')
             if 'unanswered_reviews_count' not in columns:
                 cursor.execute("ALTER TABLE BusinessMetricsHistory ADD COLUMN unanswered_reviews_count INTEGER")
                 print("✅ Добавлено поле unanswered_reviews_count в BusinessMetricsHistory")
@@ -666,8 +736,7 @@ def init_database_schema():
         
         # Индексы для FinancialTransactions (проверяем наличие колонок)
         try:
-            cursor.execute("PRAGMA table_info(FinancialTransactions)")
-            ft_columns = [row[1] for row in cursor.fetchall()]
+            ft_columns = _get_table_columns(cursor, 'FinancialTransactions')
             if 'business_id' in ft_columns:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_financial_transactions_business_id ON FinancialTransactions(business_id)")
             if 'transaction_date' in ft_columns:
@@ -677,8 +746,7 @@ def init_database_schema():
         
         # Индексы для UserServices (проверяем наличие колонок)
         try:
-            cursor.execute("PRAGMA table_info(UserServices)")
-            us_columns = [row[1] for row in cursor.fetchall()]
+            us_columns = _get_table_columns(cursor, 'UserServices')
             if 'business_id' in us_columns:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_services_business_id ON UserServices(business_id)")
         except Exception as e:
@@ -764,8 +832,9 @@ Write all generated text in {language_name}.
         
         for prompt_type, prompt_text, description in default_prompts:
             cursor.execute("""
-                INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO AIPrompts (id, prompt_type, prompt_text, description)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (prompt_type) DO NOTHING
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
         
         print("✅ Дефолтные промпты инициализированы")
@@ -801,14 +870,15 @@ Write all generated text in {language_name}.
                 'type': 'booking',
                 'description': 'Агент для записи клиентов',
                 'personality': 'Вежливый, пунктуальный администратор. Твоя задача - записать клиента на услугу.',
-                'is_active': 1
+                'is_active': True  # PostgreSQL boolean: True/False вместо 1/0
             }
         ]
         
         for agent in default_agents:
             cursor.execute("""
-                INSERT OR IGNORE INTO AIAgents (id, name, type, description, personality, is_active)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO AIAgents (id, name, type, description, personality, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING
             """, (agent['id'], agent['name'], agent['type'], agent['description'], agent['personality'], agent['is_active']))
             
         print("✅ Дефолтные AI агенты инициализированы")
@@ -878,8 +948,9 @@ Write all generated text in {language_name}.
         
         for type_key, label, description in default_business_types:
             cursor.execute("""
-                INSERT OR IGNORE INTO BusinessTypes (id, type_key, label, description)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO BusinessTypes (id, type_key, label, description)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (type_key) DO NOTHING
             """, (f"bt_{type_key}", type_key, label, description))
         
         print("✅ Дефолтные типы бизнеса инициализированы")
@@ -897,7 +968,11 @@ Write all generated text in {language_name}.
         print(f"❌ Ошибка инициализации схемы: {e}")
         import traceback
         traceback.print_exc()
-        conn.rollback()
+        try:
+            conn.rollback()
+            print("✅ Rollback выполнен в init_database_schema")
+        except Exception as rollback_error:
+            print(f"⚠️ Ошибка при rollback: {rollback_error}")
         return False
     finally:
         conn.close()

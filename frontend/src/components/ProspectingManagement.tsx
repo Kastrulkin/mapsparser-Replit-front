@@ -178,7 +178,7 @@ export const ProspectingManagement: React.FC = () => {
                                     <TableBody>
                                         {results.map((r, i) => {
                                             // Check if already saved
-                                            const isSaved = savedLeads.some(sl => sl.google_id === r.google_id);
+                                            const isSaved = Array.isArray(savedLeads) && savedLeads.some(sl => sl.google_id === r.google_id);
                                             const key = r.google_id || r.name;
 
                                             return (

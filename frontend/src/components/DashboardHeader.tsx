@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { newAuth } from '../lib/auth_new';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -40,21 +40,27 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 }) => {
   const { currency, setCurrency } = useCurrency();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // Проверяем, находимся ли мы на странице админки
+  const isOnAdminPage = location.pathname === '/dashboard/bazich' || location.pathname === '/bazich';
 
   useEffect(() => {
     const checkAuth = async () => {
       if (userProp) {
         setIsAuthenticated(true);
         setCurrentUser(userProp);
+        console.log('🔍 DashboardHeader: userProp.is_superadmin =', userProp?.is_superadmin);
         return;
       }
       try {
         const user = await newAuth.getCurrentUser();
         setIsAuthenticated(!!user);
         setCurrentUser(user);
+        console.log('🔍 DashboardHeader: currentUser.is_superadmin =', user?.is_superadmin);
       } catch (error) {
         setIsAuthenticated(false);
         setCurrentUser(null);
@@ -121,17 +127,21 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Right Side: Actions & Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Actions for Demianov */}
-          {currentUser?.email === 'demyanovap@yandex.ru' && (
+          {/* Quick Actions for Superadmin */}
+          {(isSuperadmin || currentUser?.is_superadmin) && (
+            <Link to="/dashboard/bazich">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/dashboard/bazich')}
-              className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
-              title="Bazich Settings"
+                className={cn(
+                  "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors",
+                  isOnAdminPage && "text-indigo-600 bg-indigo-50"
+                )}
+                title={isOnAdminPage ? "Вы находитесь в админ-панели" : "Открыть админ-панель"}
             >
               <Settings className="w-5 h-5" />
             </Button>
+            </Link>
           )}
 
           <div className="h-6 w-px bg-gray-200/60 hidden sm:block"></div>

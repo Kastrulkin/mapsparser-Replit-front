@@ -18,15 +18,63 @@ def migrate():
     
     def apply_migration(cursor):
         # Определяем тип БД (SQLite или PostgreSQL)
-        cursor.execute("SELECT sqlite_version()")
-        is_sqlite = cursor.fetchone() is not None
+        # Проверяем через попытку выполнить SQLite-специфичную команду
+        is_sqlite = False
+        try:
+            cursor.execute("SELECT sqlite_version()")
+            cursor.fetchone()
+            is_sqlite = True
+        except Exception:
+            # Если команда не сработала - это PostgreSQL
+            is_sqlite = False
+        
+        # Альтернативный способ: проверка через DB_TYPE env
+        db_type = os.getenv('DB_TYPE', 'sqlite').lower()
+        if db_type in ('postgres', 'postgresql'):
+            is_sqlite = False
         
         # 1. ExternalBusinessReviews
         print("📋 Добавление полей Quality Score в ExternalBusinessReviews...")
         
-        # Проверяем существующие колонки
-        cursor.execute("PRAGMA table_info(ExternalBusinessReviews)")
-        existing_columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем существование таблицы и колонок
+        existing_columns = []
+        table_exists = False
+        
+        try:
+            if is_sqlite:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ExternalBusinessReviews'")
+                table_exists = cursor.fetchone() is not None
+                if table_exists:
+                    cursor.execute("PRAGMA table_info(ExternalBusinessReviews)")
+                    existing_columns = [row[1] for row in cursor.fetchall()]
+            else:
+                # PostgreSQL - проверяем существование таблицы
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' AND table_name = 'externalbusinessreviews'
+                    )
+                """)
+                result = cursor.fetchone()
+                table_exists = result[0] if isinstance(result, dict) else result[0] if result else False
+                
+                if table_exists:
+                    cursor.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_schema = 'public' AND table_name = 'externalbusinessreviews'
+                    """)
+                    rows = cursor.fetchall()
+                    existing_columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in rows]
+        except Exception as e:
+            # Ошибка при проверке - считаем что таблицы нет
+            print(f"   ℹ️  Таблица ExternalBusinessReviews еще не создана или ошибка проверки: {e}")
+            table_exists = False
+            existing_columns = []
+        
+        if not table_exists:
+            print("   ⚠️  Таблица ExternalBusinessReviews не существует - пропускаем миграцию (схема будет применена через schema_postgres.sql)")
+            return
         
         if 'data_source' not in existing_columns:
             cursor.execute("ALTER TABLE ExternalBusinessReviews ADD COLUMN data_source VARCHAR(20) DEFAULT 'unknown'")
@@ -41,7 +89,7 @@ def migrate():
             print("   ✅ Колонка quality_score уже существует")
         
         if 'raw_snapshot' not in existing_columns:
-            # Для SQLite используем TEXT, для PostgreSQL - JSONB (определяется в миграции)
+            # Для SQLite используем TEXT, для PostgreSQL - JSONB
             if is_sqlite:
                 cursor.execute("ALTER TABLE ExternalBusinessReviews ADD COLUMN raw_snapshot TEXT")
             else:
@@ -54,8 +102,44 @@ def migrate():
         # 2. MapParseResults
         print("\n📋 Добавление полей Quality Score в MapParseResults...")
         
-        cursor.execute("PRAGMA table_info(MapParseResults)")
-        existing_columns = [row[1] for row in cursor.fetchall()]
+        existing_columns = []
+        table_exists = False
+        
+        try:
+            if is_sqlite:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='MapParseResults'")
+                table_exists = cursor.fetchone() is not None
+                if table_exists:
+                    cursor.execute("PRAGMA table_info(MapParseResults)")
+                    existing_columns = [row[1] for row in cursor.fetchall()]
+            else:
+                # PostgreSQL - проверяем существование таблицы
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_schema = 'public' AND table_name = 'mapparseresults'
+                    )
+                """)
+                result = cursor.fetchone()
+                table_exists = result[0] if isinstance(result, dict) else result[0] if result else False
+                
+                if table_exists:
+                    cursor.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_schema = 'public' AND table_name = 'mapparseresults'
+                    """)
+                    rows = cursor.fetchall()
+                    existing_columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in rows]
+        except Exception as e:
+            # Ошибка при проверке - считаем что таблицы нет
+            print(f"   ℹ️  Таблица MapParseResults еще не создана или ошибка проверки: {e}")
+            table_exists = False
+            existing_columns = []
+        
+        if not table_exists:
+            print("   ⚠️  Таблица MapParseResults не существует - пропускаем миграцию (схема будет применена через schema_postgres.sql)")
+            return
         
         if 'data_source' not in existing_columns:
             cursor.execute("ALTER TABLE MapParseResults ADD COLUMN data_source VARCHAR(20) DEFAULT 'unknown'")

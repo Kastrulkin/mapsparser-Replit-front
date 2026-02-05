@@ -287,12 +287,19 @@ class ReviewRepository(BaseRepository):
                 # Проверяем, что новые данные свежее (в пределах 1 часа)
                 try:
                     if isinstance(existing_updated, str):
+                        # Парсим строку с учетом timezone
                         existing_dt = datetime.fromisoformat(existing_updated.replace('Z', '+00:00'))
                     else:
                         existing_dt = existing_updated
                     
+                    # PostgreSQL возвращает timezone-aware datetime, SQLite - naive
+                    # Приводим к naive для единообразия
+                    if existing_dt.tzinfo is not None:
+                        existing_dt = existing_dt.replace(tzinfo=None)
+                    
                     # Если данные старше 1 часа - обновляем
-                    if datetime.now() - existing_dt.replace(tzinfo=None) > timedelta(hours=1):
+                    now = datetime.now()
+                    if now - existing_dt > timedelta(hours=1):
                         # Обновляем - продолжаем
                         pass
                     else:

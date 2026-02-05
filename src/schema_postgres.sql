@@ -351,6 +351,27 @@ CREATE TABLE IF NOT EXISTS business_sources (
 -- Индекс для быстрого поиска по внешнему ID
 CREATE INDEX IF NOT EXISTS idx_business_sources_external_id ON business_sources(external_id);
 
+-- External Business Accounts (внешние кабинеты бизнеса)
+CREATE TABLE IF NOT EXISTS external_business_accounts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL, -- 'yandex_business', 'google_business', '2gis'
+    auth_data TEXT, -- зашифрованные cookies/token
+    external_id TEXT,
+    display_name TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_sync_at TIMESTAMP,
+    last_error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_business_provider UNIQUE (business_id, provider)
+);
+
+-- Индексы для быстрого поиска
+CREATE INDEX IF NOT EXISTS idx_external_business_accounts_business_id ON external_business_accounts(business_id);
+CREATE INDEX IF NOT EXISTS idx_external_business_accounts_provider ON external_business_accounts(provider);
+CREATE INDEX IF NOT EXISTS idx_external_business_accounts_external_id ON external_business_accounts(external_id);
+
 -- ReviewExchangeDistribution
 DROP TABLE IF EXISTS ReviewExchangeDistribution CASCADE;
 CREATE TABLE ReviewExchangeDistribution (
@@ -547,3 +568,85 @@ CREATE TABLE Invites (
 );
 CREATE INDEX IF NOT EXISTS idx_invites_email ON Invites(email);
 CREATE INDEX IF NOT EXISTS idx_invites_token ON Invites(token);
+
+-- UserExamples
+DROP TABLE IF EXISTS UserExamples CASCADE;
+CREATE TABLE UserExamples (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
+    example_type TEXT NOT NULL,
+    example_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_user_examples_user_type ON UserExamples(user_id, example_type);
+
+-- BusinessTypes - типы бизнеса (редактируемые)
+DROP TABLE IF EXISTS BusinessTypes CASCADE;
+CREATE TABLE BusinessTypes (
+    id TEXT PRIMARY KEY,
+    type_key TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- GrowthStages - этапы роста для типов бизнеса
+DROP TABLE IF EXISTS GrowthStages CASCADE;
+CREATE TABLE GrowthStages (
+    id TEXT PRIMARY KEY,
+    business_type_id TEXT NOT NULL REFERENCES BusinessTypes(id) ON DELETE CASCADE,
+    stage_number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    goal TEXT,
+    expected_result TEXT,
+    duration TEXT,
+    is_permanent INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(business_type_id, stage_number)
+);
+
+-- GrowthTasks - задачи для этапов
+DROP TABLE IF EXISTS GrowthTasks CASCADE;
+CREATE TABLE GrowthTasks (
+    id TEXT PRIMARY KEY,
+    stage_id TEXT NOT NULL REFERENCES GrowthStages(id) ON DELETE CASCADE,
+    task_number INTEGER NOT NULL,
+    task_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(stage_id, task_number)
+);
+
+-- BusinessProfiles - профили бизнеса (контактная информация)
+DROP TABLE IF EXISTS BusinessProfiles CASCADE;
+CREATE TABLE BusinessProfiles (
+    id TEXT PRIMARY KEY,
+    business_id TEXT NOT NULL REFERENCES Businesses(id) ON DELETE CASCADE,
+    contact_name TEXT,
+    contact_phone TEXT,
+    contact_email TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_business_profiles_business_id ON BusinessProfiles(business_id);
+
+-- ClientInfo - информация о клиенте/бизнесе (для парсинга)
+DROP TABLE IF EXISTS ClientInfo CASCADE;
+CREATE TABLE ClientInfo (
+    user_id TEXT NOT NULL,
+    business_id TEXT NOT NULL,
+    business_name TEXT,
+    business_type TEXT,
+    address TEXT,
+    working_hours TEXT,
+    description TEXT,
+    services TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, business_id)
+);
+CREATE INDEX IF NOT EXISTS idx_clientinfo_user_id ON ClientInfo(user_id);
+CREATE INDEX IF NOT EXISTS idx_clientinfo_business_id ON ClientInfo(business_id);

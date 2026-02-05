@@ -10,3 +10,4 @@ anthropic
 google-generativeai
 apify-client
 cryptography
+python-dateutil

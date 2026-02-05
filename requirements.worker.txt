@@ -1,0 +1,2 @@
+-r requirements.web.txt
+playwright  # после установки пакета запусти: python3 -m playwright install chromium

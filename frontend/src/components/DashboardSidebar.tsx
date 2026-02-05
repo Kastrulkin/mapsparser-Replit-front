@@ -9,11 +9,13 @@ import {
   MessageSquare,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  Shield
 } from 'lucide-react';
 import { Button } from './ui/button';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { newAuth } from '../lib/auth_new';
 import logo from '../assets/images/logo.png';
 import { cn } from '../lib/utils';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
@@ -30,6 +32,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const location = useLocation();
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+
+  useEffect(() => {
+    const checkSuperadmin = async () => {
+      const user = await newAuth.getCurrentUser();
+      setIsSuperadmin(user?.is_superadmin || false);
+    };
+    checkSuperadmin();
+  }, []);
 
   const menuItems = [
     {
@@ -91,6 +102,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const isActive = (path: string) => {
     if (path === '/dashboard/progress') {
       return location.pathname === '/dashboard' || location.pathname === path;
+    }
+    if (path === '/dashboard/bazich') {
+      return location.pathname === '/dashboard/bazich' || location.pathname === '/bazich';
     }
     return location.pathname === path;
   };

@@ -1,0 +1,10 @@
+flask
+gunicorn
+python-dotenv
+psycopg2-binary
+requests
+cryptography
+beautifulsoup4
+flask-cors
+flask-limiter
+python-dateutil

@@ -135,7 +135,7 @@ export const AdminPage: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Проверяем доступ только для demyanovap@yandex.ru
+    // Проверяем доступ только для суперадмина
     const checkAccess = async () => {
       try {
         const currentUser = await newAuth.getCurrentUser();
@@ -149,10 +149,11 @@ export const AdminPage: React.FC = () => {
           navigate('/login');
           return;
         }
-        if (currentUser.email !== 'demyanovap@yandex.ru') {
+        // Проверяем is_superadmin вместо хардкода email
+        if (!currentUser.is_superadmin) {
           toast({
             title: 'Доступ запрещён',
-            description: 'Эта страница доступна только для demyanovap@yandex.ru',
+            description: 'Эта страница доступна только для суперадминистратора',
             variant: 'destructive',
           });
           navigate('/dashboard');

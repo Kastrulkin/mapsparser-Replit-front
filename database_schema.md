@@ -148,6 +148,12 @@ Captured data from external platforms (Yandex, Google, 2GIS).
 - **AIPrompts**: System prompts for AI generation features.
 - **AIAgents**: Configuration for AI agents.
 - **Invites**: User invitation system.
+- **UserExamples**: User-provided examples for AI generation (`example_type`: 'service', 'news', 'review').
+- **BusinessTypes**: Editable business types (`type_key`, `label`, `description`, `is_active`).
+- **GrowthStages**: Growth stages for business types (`business_type_id`, `stage_number`, `title`, `goal`, `expected_result`, `duration`, `is_permanent`).
+- **GrowthTasks**: Tasks for growth stages (`stage_id`, `task_number`, `task_text`).
+- **BusinessProfiles**: Business contact profiles (`business_id`, `contact_name`, `contact_phone`, `contact_email`).
+- **ClientInfo**: Client/business information for parsing (`user_id`, `business_id`, `business_name`, `business_type`, `address`, `working_hours`, `description`, `services`). Composite primary key: `(user_id, business_id)`.
 
 ## Relationships
 - **Users** 1:N **Businesses** (via `owner_id`)

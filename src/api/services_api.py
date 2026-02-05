@@ -116,7 +116,7 @@ def get_services():
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM userservices WHERE business_id = %s ORDER BY created_at DESC"
                     cursor.execute(select_sql, (business_id,))
                 else:
                     db.close()
@@ -126,7 +126,7 @@ def get_services():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика: получаем все услуги пользователя
-            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            select_sql = f"SELECT {', '.join(select_fields)} FROM userservices WHERE user_id = %s ORDER BY created_at DESC"
             cursor.execute(select_sql, (user_id,))
         
         services_rows = cursor.fetchall()
@@ -189,7 +189,7 @@ def update_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id, business_id FROM userservices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -229,9 +229,9 @@ def update_service(service_id):
         if has_optimized_description and has_optimized_name:
             print(f"🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices 
+                SET category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -245,7 +245,7 @@ def update_service(service_id):
             print(f"✅ DEBUG services_api.update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
             
             # Проверяем, что данные сохранились
-            cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
+            cursor.execute("SELECT optimized_name, optimized_description FROM userservices WHERE id = %s", (service_id,))
             check_row = cursor.fetchone()
             if check_row:
                 print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
@@ -253,9 +253,9 @@ def update_service(service_id):
                 print(f"❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
         elif has_optimized_description:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices 
+                SET category = %s, name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -267,9 +267,9 @@ def update_service(service_id):
             ))
         elif has_optimized_name:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices 
+                SET category = %s, name = %s, optimized_name = %s, description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -281,9 +281,9 @@ def update_service(service_id):
             ))
         else:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices 
+                SET category = %s, name = %s, description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -321,7 +321,7 @@ def delete_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id FROM userservices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -333,7 +333,7 @@ def delete_service(service_id):
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Удаляем услугу
-        cursor.execute("DELETE FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("DELETE FROM userservices WHERE id = %s", (service_id,))
         db.conn.commit()
         db.close()
         

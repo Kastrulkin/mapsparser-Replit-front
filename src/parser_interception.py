@@ -39,282 +39,471 @@ class YandexMapsInterceptionParser:
         return match.group(1) if match else None
     
     def parse_yandex_card(self, url: str) -> Dict[str, Any]:
-        """
-        Парсит публичную страницу Яндекс.Карт через Network Interception.
-        
-        Args:
-            url: URL карточки бизнеса (например, https://yandex.ru/maps/org/123456/)
-            
-        Returns:
-            Словарь с данными в том же формате, что и parser.py
-        """
-        print(f"🔍 Начинаем парсинг через Network Interception: {url}")
-        print("DEBUG: VERSION 2026-01-29 REDIRECT FIX + TIMEOUTS")
-        
-        if not url or not url.startswith(('http://', 'https://')):
-            raise ValueError(f"Некорректная ссылка: {url}")
-        
-        self.org_id = self.extract_org_id(url)
-        if not self.org_id:
-            raise ValueError(f"Не удалось извлечь org_id из URL: {url}")
-        
-        print(f"📋 Извлечен org_id: {self.org_id}")
-        
-        # Cookies для имитации браузера
-        from parser_config_cookies import get_yandex_cookies
-        cookies = get_yandex_cookies()
-        
-        print(f"🍪 Используем {len(cookies)} cookies")
-        
-        browser = None
-        with sync_playwright() as p:
-            try:
-                browser = p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-images',  # Не загружаем картинки для скорости
-                        '--disable-blink-features=AutomationControlled'
-                    ]
-                )
-                
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    viewport={'width': 1920, 'height': 1080},
-                    device_scale_factor=1,
-                )
-                
-                context.add_cookies(cookies)
-                
-                # Скрываем webdriver
-                context.add_init_script("""
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined,
-                    });
-                    delete navigator.__proto__.webdriver;
-                """)
-                
-                page = context.new_page()
-                
-                # Очищаем предыдущие ответы
-                self.api_responses = {}
-                
-                # Перехватываем все ответы
-                def handle_response(response):
-                    """Обработчик для перехвата сетевых запросов"""
-                    try:
-                        url = response.url
-                        
-                        # Ищем API запросы Яндекс.Карт
-                        if 'yandex.ru' in url or 'yandex.net' in url:
-                            # Проверяем, это JSON ответ?
-                            content_type = response.headers.get('content-type', '')
-                            if 'application/json' in content_type or 'json' in url.lower() or 'ajax=1' in url:
-                                try:
-                                    # Пытаемся получить JSON
-                                    json_data = response.json()
-                                    
-                                    # DEBUG: Save to file for inspection
-                                    try:
-                                        import os
-                                        import time
-                                        debug_dir = os.path.join(os.getcwd(), 'debug_data')
-                                        os.makedirs(debug_dir, exist_ok=True)
-                                        
-                                        # Create filename from URL path last part or timestamp
-                                        clean_url = url.split('?')[0].replace('/', '_').replace(':', '')[-50:]
-                                        timestamp = int(time.time() * 1000)
-                                        filename = f"{timestamp}_{clean_url}.json"
-                                        filepath = os.path.join(debug_dir, filename)
-                                        
-                                        with open(filepath, 'w', encoding='utf-8') as f:
-                                            json.dump(json_data, f, ensure_ascii=False, indent=2)
-                                        print(f"💾 Saved debug response: {filename}")
-                                    except Exception as e:
-                                        print(f"Failed to save debug json: {e}")
+            """
+            Парсит публичную страницу Яндекс.Карт через Network Interception.
 
-                                    # Check for organization data (search or location-info)
-                                    if json_data:
-                                        # Сохраняем ответ
-                                        self.api_responses[url] = {
-                                            'data': json_data,
-                                            'status': response.status,
-                                            'headers': dict(response.headers)
-                                        }
-                                        # Показываем только важные запросы
-                                        if any(keyword in url for keyword in ['org', 'organization', 'business', 'company', 'reviews', 'feedback', 'location-info']):
-                                            print(f"✅ Перехвачен важный API запрос: {url[:100]}...")
-                                except:
-                                    # Не JSON, пропускаем
-                                    pass
-                    except Exception as e:
-                        # print(f"⚠️ Ошибка при перехвате ответа: {e}")
-                        pass
-                
-                page.on("response", handle_response)
-                
-                # Загружаем страницу
-                print("🌐 Загружаем страницу и перехватываем API запросы...")
-                try:
-                    page.goto(url, wait_until='domcontentloaded', timeout=30000)
-                    
-                    # Проверяем на капчу с ожиданием решения
-                    for _ in range(24):  # Ждем до 120 секунд
+            Args:
+                url: URL карточки бизнеса (например, https://yandex.ru/maps/org/123456/)
+
+            Returns:
+                Словарь с данными в том же формате, что и parser.py
+            """
+            print(f"🔍 Начинаем парсинг через Network Interception: {url}")
+            print("DEBUG: BASE RESTORED VERSION (без A–G)")
+
+            if not url or not url.startswith(("http://", "https://")):
+                raise ValueError(f"Некорректная ссылка: {url}")
+
+            self.org_id = self.extract_org_id(url)
+            if not self.org_id:
+                raise ValueError(f"Не удалось извлечь org_id из URL: {url}")
+
+            print(f"📋 Извлечен org_id: {self.org_id}")
+
+            # Cookies для имитации браузера
+            from parser_config_cookies import get_yandex_cookies
+
+            cookies = get_yandex_cookies()
+            print(f"🍪 Используем {len(cookies)} cookies")
+
+            browser = None
+            with sync_playwright() as p:
+                    browser = p.chromium.launch(
+                        headless=True,
+                        args=[
+                            "--no-sandbox",
+                            "--disable-setuid-sandbox",
+                            "--disable-dev-shm-usage",
+                            "--disable-gpu",
+                            "--disable-images",  # Не загружаем картинки для скорости
+                            "--disable-blink-features=AutomationControlled",
+                            "--disable-web-security",
+                            "--disable-features=IsolateOrigins,site-per-process",
+                        ],
+                    )
+
+                    context = browser.new_context(
+                        user_agent=(
+                            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"
+                        ),
+                        viewport={"width": 1920, "height": 1080},
+                        device_scale_factor=1,
+                    )
+
+                    context.add_cookies(cookies)
+
+                    # Скрываем webdriver и усиливаем антидетект
+                    context.add_init_script(
+                        """
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined,
+                        });
+                        delete navigator.__proto__.webdriver;
+                        Object.defineProperty(navigator, 'plugins', {
+                            get: () => [1, 2, 3, 4, 5],
+                        });
+                        window.chrome = { runtime: {} };
+                        Object.defineProperty(navigator, 'languages', {
+                            get: () => ['ru-RU', 'ru'],
+                        });
+                    """
+                    )
+
+                    page = context.new_page()
+
+                    # Очищаем предыдущие ответы
+                    self.api_responses = {}
+
+                    # Перехватываем все запросы/ответы
+                    def handle_request(request):
+                        """Легкий перехват запросов (для отладки orgcard/net-трафика)"""
                         try:
-                            # Более точная проверка капчи
-                            title = page.title()
-                            # Проверяем заголовок, текст и наличие элементов SmartCaptcha
-                            is_captcha = (
-                                "Ой!" in title or 
-                                "Captcha" in title or 
-                                "Robot" in title or
-                                page.get_by_text("Подтвердите, что вы не робот").is_visible() or
-                                page.locator(".smart-captcha").count() > 0 or
-                                page.locator("input[name='smart-token']").count() > 0
-                            )
-                            
-                            if is_captcha:
-                                print(f"⚠️ Обнаружена капча! Ждем 15 секунд... (не трогаем страницу)")
-                                page.wait_for_timeout(15000)
-                            else:
+                            url_req = request.url
+                            if "yandex.ru" in url_req and ("/org/" in url_req or "orgcard" in url_req):
+                                # Не спамим лог, только важные org/orgcard запросы
+                                print(f"🔎 REQUEST org/orgcard: {url_req[:120]}...")
+                        except Exception:
+                            pass
+
+                    def handle_response(response):
+                        """Обработчик для перехвата сетевых запросов"""
+                        try:
+                            url_resp = response.url
+                            # Лёгкое логирование всех ответов (в т.ч. location-info)
+                            try:
+                                print(f"📥 Response: {url_resp} status={response.status}")
+                            except Exception:
+                                pass
+
+                            # Ищем API запросы Яндекс.Карт
+                            if "yandex.ru" in url_resp or "yandex.net" in url_resp:
+                                # Проверяем, это JSON ответ?
+                                content_type = response.headers.get("content-type", "")
+                                if (
+                                    "application/json" in content_type
+                                    or "json" in url_resp.lower()
+                                    or "ajax=1" in url_resp
+                                ):
+                                    try:
+                                        # Пытаемся получить JSON
+                                        json_data = response.json()
+
+                                        # Сохраняем ответ
+                                        self.api_responses[url_resp] = {
+                                            "data": json_data,
+                                            "status": response.status,
+                                            "headers": dict(response.headers),
+                                        }
+
+                                        # Показываем только важные запросы
+                                        if any(
+                                            kw in url_resp
+                                            for kw in [
+                                                "org",
+                                                "organization",
+                                                "business",
+                                                "company",
+                                                "reviews",
+                                                "feedback",
+                                                "location-info",
+                                            ]
+                                        ):
+                                            print(
+                                                f"✅ Перехвачен важный API запрос: {url_resp[:100]}..."
+                                            )
+                                    except Exception:
+                                        # Не JSON, пропускаем
+                                        pass
+                        except Exception:
+                            # print(f"⚠️ Ошибка при перехвате ответа: {e}")
+                            pass
+
+                    # ВАЖНО: листенеры вешаем ДО goto, чтобы не пропустить ранние org/orgcard запросы
+                    page.on("request", handle_request)
+                    page.on("response", handle_response)
+
+                    # Загружаем страницу
+                    print("🌐 Загружаем страницу и перехватываем API запросы...")
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+
+                        # Проверяем на капчу, даём время на ручное решение
+                        for _ in range(24):  # до 120 секунд
+                            try:
+                                title = page.title()
+                                is_captcha = (
+                                    "Ой!" in title
+                                    or "Captcha" in title
+                                    or "Robot" in title
+                                    or page.get_by_text(
+                                        "Подтвердите, что вы не робот"
+                                    ).is_visible()
+                                    or page.locator(".smart-captcha").count() > 0
+                                    or page.locator("input[name='smart-token']").count() > 0
+                                )
+                                if is_captcha:
+                                    print(
+                                        "⚠️ Обнаружена капча! Ждем 15 секунд... (не трогаем страницу)"
+                                    )
+                                    page.wait_for_timeout(15000)
+                                else:
+                                    break
+                            except Exception:
                                 break
-                        except:
-                            break
-                except:
-                    print("⚠️ Страница не загрузилась полностью, но продолжаем...")
-                
-                # Double check if we are still stuck on Captcha
-                title = page.title()
-                if "Ой!" in title or "Captcha" in title or "Robot" in title or "Вы не робот" in title:
-                     print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
-                     if browser: browser.close()
-                     # Return special error so worker knows it's captcha
-                     return {"error": "captcha_detected"}
-                
-                # Ждем загрузки основного контента после капчи
-                # Ждем загрузки основного контента после капчи
-                try:
-                    print("⏳ Ожидание загрузки карточки организации...")
-                    # Ждем заголовок или название организации (добавил user selector)
-                    page.wait_for_selector("h1, div.business-card-title-view, div.card-title-view__title, div.orgpage-header-view__header, div.orgpage-header-view__header-wrapper > h1", timeout=15000)
-                    print("✅ Карточка загружена")
-                except:
-                    print("⚠️ Не удалось дождаться загрузки карточки. Возможно, капча не решена или бан.")
-                
-                # Проверка редиректа на главную или другую страницу
-                current_url = page.url
-                title = page.title()
-                print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
-                
-                # Более строгая проверка: ищем заголовок организации
-                is_business_card = False
-                try:
-                    # Селекторы именно заголовка организации (добавил user selector)
-                    is_business_card = page.locator("h1.orgpage-header-view__header, div.business-title-view, div.card-title-view__title, div.orgpage-header-view__header-wrapper > h1").count() > 0
-                except:
-                    pass
+                    except Exception:
+                        print("⚠️ Страница не загрузилась полностью, но продолжаем...")
 
-                if not is_business_card or "yandex.ru" in current_url and "/org/" not in current_url:
-                     print("⚠️ Не похоже на карточку организации! (Редирект?). Пробуем перейти по ссылке снова...")
-                     
-                     # Debug: Save bad page
-                     try:
-                         with open('debug_data/redirect_page.html', 'w', encoding='utf-8') as f:
-                             f.write(page.content())
-                         print("💾 Сохранена HTML страница редиректа в debug_data/redirect_page.html")
-                     except:
-                         pass
+                    # === B. Явное ожидание org/orgcard ответа с проверкой OID ===
+                    expected_oid = self.org_id
 
-                     page.goto(url, wait_until='domcontentloaded')
-                     try:
-                         print("⏳ Повторное ожидание заголовка организации...")
-                         page.wait_for_selector("h1.orgpage-header-view__header, div.business-title-view, div.card-title-view__title, h1[itemprop='name'], div.orgpage-header-view__header-wrapper > h1", timeout=20000)
-                         print("✅ Карточка загружена (после повторного перехода)")
-                     except:
-                         print("❌ Не удалось загрузить карточку даже после повторного перехода. Возможно бан.")
-                         try:
-                             with open('debug_data/failed_page_final.html', 'w', encoding='utf-8') as f:
-                                 f.write(page.content())
-                         except:
-                             pass
-                else:
-                    print("✅ Страница похожа на карточку организации.")
-                
-                # Вспомогательная функция для прокрутки
-                def scroll_page(times=5):
-                    for _ in range(times):
-                        page.mouse.wheel(0, 1000)
-                        time.sleep(random.uniform(0.5, 1.0))
-                
-                extra_photos_count = 0
+                    def _orgcard_predicate(response) -> bool:
+                        try:
+                            url_resp = response.url
+                            if "yandex.ru" not in url_resp:
+                                return False
+                            if response.status != 200:
+                                return False
 
-                # 1. Скроллим основную страницу
-                print("📜 Скроллим основную страницу...")
-                scroll_page(3)
-                
-                # 2. Кликаем и скроллим Отзывы (Reviews)
-                try:
-                    reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews")
+                            # Основной сигнал: location-info API с нужным oid
+                            if "location-info" in url_resp:
+                                try:
+                                    json_data = response.json()
+                                    if isinstance(json_data, dict):
+                                        org_block = json_data.get("organization") or {}
+                                        oid_value = (
+                                            org_block.get("id")
+                                            or org_block.get("oid")
+                                            or json_data.get("oid")
+                                            or json_data.get("id")
+                                        )
+                                        if expected_oid and oid_value and str(oid_value) == str(
+                                            expected_oid
+                                        ):
+                                            return True
+                                except Exception:
+                                    return False
+                                # Если это location-info, но oid не совпал — не считаем успехом
+                                return False
+
+                            # Дополнительный сигнал: любые org/orgcard JSON'ы
+                            if "/org/" not in url_resp and "orgcard" not in url_resp:
+                                return False
+
+                            content_type = response.headers.get("content-type", "")
+                            if (
+                                "application/json" not in content_type
+                                and "json" not in url_resp.lower()
+                            ):
+                                return False
+
+                            # Пытаемся вытащить oid для валидации из общих org/orgcard ответов
+                            json_data = response.json()
+                            oid_value = None
+                            if isinstance(json_data, dict):
+                                org_block = (
+                                    json_data.get("organization")
+                                    or json_data.get("org")
+                                    or {}
+                                )
+                                oid_value = (
+                                    org_block.get("oid")
+                                    or org_block.get("id")
+                                    or json_data.get("oid")
+                                    or json_data.get("id")
+                                )
+
+                            if expected_oid and oid_value and str(oid_value) != str(expected_oid):
+                                # Это orgcard, но не наша — не считаем успехом
+                                return False
+
+                            return True
+                        except Exception:
+                            return False
+
+                    # Сначала проверяем уже перехваченные ответы (location-info мог прийти ДО ожидания)
+                    orgcard_found = False
+                    for url_resp, response_info in self.api_responses.items():
+                        if "location-info" in url_resp:
+                            try:
+                                json_data = response_info.get("data", {}) or {}
+                                if isinstance(json_data, dict):
+                                    org_block = json_data.get("organization") or {}
+                                    oid_value = (
+                                        org_block.get("id")
+                                        or org_block.get("oid")
+                                        or json_data.get("oid")
+                                        or json_data.get("id")
+                                    )
+                                    if expected_oid and oid_value and str(oid_value) == str(
+                                        expected_oid
+                                    ):
+                                        print("✅ Location-info уже перехвачен с нужным OID")
+                                        orgcard_found = True
+                                        break
+                            except Exception:
+                                pass
+
+                    if not orgcard_found:
+                        try:
+                            print("⏳ Ждём org/orgcard API ответ...")
+                            page.wait_for_event(
+                                "response",
+                                predicate=_orgcard_predicate,
+                                timeout=10000,
+                            )
+                            print("✅ Orgcard API ответ получен через wait_for_event")
+                        except Exception:
+                            print("❌ Orgcard API ответ не получен за 10 секунд → orgcard_not_received")
+                            # Собираем расширенный список endpoint'ов с метаданными
+                            endpoints = []
+                            for url_resp, response_info in self.api_responses.items():
+                                try:
+                                    headers = response_info.get("headers") or {}
+                                    endpoints.append(
+                                        {
+                                            "url": url_resp,
+                                            "status": response_info.get("status"),
+                                            "content_type": headers.get("content-type"),
+                                            "has_data": bool(response_info.get("data")),
+                                        }
+                                    )
+                                except Exception:
+                                    print(
+                                        f"⚠️ Ошибка при сборе raw_endpoints (timeout case) для url={url_resp[:80]}"
+                                    )
+
+                            return {
+                                "error": "orgcard_not_received",
+                                "_raw_capture": {
+                                    "endpoints": endpoints,
+                                },
+                            }
+
+                    # Double-check капчи
+                    title = page.title()
+                    if (
+                        "Ой!" in title
+                        or "Captcha" in title
+                        or "Robot" in title
+                        or "Вы не робот" in title
+                    ):
+                        print(
+                            f"❌ Капча не была решена за отведённое время. Заголовок: {title}"
+                        )
+                        if browser:
+                            browser.close()
+                        return {"error": "captcha_detected"}
+
+                    # Ожидание загрузки карточки
+                    try:
+                        print("⏳ Ожидание загрузки карточки организации...")
+                        page.wait_for_selector(
+                            "h1, div.business-card-title-view, div.card-title-view__title, "
+                            "div.orgpage-header-view__header, "
+                            "div.orgpage-header-view__header-wrapper > h1",
+                            timeout=15000,
+                        )
+                        print("✅ Карточка загружена")
+                    except Exception:
+                        print(
+                            "⚠️ Не удалось дождаться загрузки карточки. Возможно, капча не решена или бан."
+                        )
+
+                    # Проверка редиректа
+                    current_url = page.url
+                    title = page.title()
+                    print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+
+                    is_business_card = False
+                    try:
+                        is_business_card = (
+                            page.locator(
+                                "h1.orgpage-header-view__header, "
+                                "div.business-title-view, "
+                                "div.card-title-view__title, "
+                                "div.orgpage-header-view__header-wrapper > h1"
+                            ).count()
+                            > 0
+                        )
+                    except Exception:
+                        is_business_card = False
+
+                    if (not is_business_card) or (
+                        "yandex.ru" in current_url and "/org/" not in current_url
+                    ):
+                        print(
+                            "⚠️ Не похоже на карточку организации! (Редирект?). Пробуем перейти по ссылке снова..."
+                        )
+                        try:
+                            with open(
+                                "debug_data/redirect_page.html", "w", encoding="utf-8"
+                            ) as f:
+                                f.write(page.content())
+                            print(
+                                "💾 Сохранена HTML страница редиректа в debug_data/redirect_page.html"
+                            )
+                        except Exception:
+                            pass
+
+                        page.goto(url, wait_until="domcontentloaded")
+                        try:
+                            print("⏳ Повторное ожидание заголовка организации...")
+                            page.wait_for_selector(
+                                "h1.orgpage-header-view__header, "
+                                "div.business-title-view, "
+                                "div.card-title-view__title, "
+                                "h1[itemprop='name'], "
+                                "div.orgpage-header-view__header-wrapper > h1",
+                                timeout=20000,
+                            )
+                            print("✅ Карточка загружена (после повторного перехода)")
+                        except Exception:
+                            print(
+                                "❌ Не удалось загрузить карточку даже после повторного перехода. Возможно бан."
+                            )
+                            try:
+                                with open(
+                                    "debug_data/failed_page_final.html",
+                                    "w",
+                                    encoding="utf-8",
+                                ) as f:
+                                    f.write(page.content())
+                            except Exception:
+                                pass
+                    else:
+                        print("✅ Страница похожа на карточку организации.")
+
+                    # Вспомогательная функция для скролла
+                    def scroll_page(times: int = 5) -> None:
+                        for _ in range(times):
+                            page.mouse.wheel(0, 1000)
+                            time.sleep(random.uniform(0.5, 1.0))
+
+                    extra_photos_count = 0
+
+                    # 1. Скроллим основную страницу
+                    print("📜 Скроллим основную страницу...")
+                    scroll_page(3)
+
+                    # 2. Кликаем и скроллим Отзывы (Reviews)
+                    reviews_tab = page.query_selector(
+                        "div.tabs-select-view__title._name_reviews"
+                    )
                     if reviews_tab:
                         print("💬 Переходим во вкладку Отзывы...")
                         reviews_tab.click(force=True)
                         time.sleep(2)
-                        
-                        # Скроллим отзывы (очень агрессивно)
-                        # Скроллим отзывы (очень агрессивно)
-                        print("📜 Скроллим отзывы (глубокий скролл - загрузка всех)...")
-                        # Увеличиваем количество скроллов и добавляем "стряхивание" мыши
+
+                        print(
+                            "📜 Скроллим отзывы (глубокий скролл - загрузка всех)..."
+                        )
                         last_height = 0
                         stuck_count = 0
-                        
-                        for i in range(80): # Increased to 80
-                            # Random scroll amount
+
+                        for i in range(80):
                             delta = random.randint(2000, 4000)
                             page.mouse.wheel(0, delta)
-                            page.evaluate(f"window.scrollBy(0, {delta//2})") # JS scroll helper
-                            
+                            page.evaluate(
+                                f"window.scrollBy(0, {delta//2})"
+                            )
                             time.sleep(random.uniform(0.5, 1.2))
-                            
-                            # Small "wobble" (scroll up slightly) to trigger intersection observers
+
                             if i % 5 == 0:
                                 page.mouse.wheel(0, -500)
                                 time.sleep(0.5)
                                 page.mouse.wheel(0, 500)
-                            
-                            # Move mouse to trigger hover events
-                            page.mouse.move(random.randint(100, 800), random.randint(100, 800))
-                            
-                            # Пытаемся кликнуть "Показать еще" если есть
+
+                            page.mouse.move(
+                                random.randint(100, 800), random.randint(100, 800)
+                            )
+
                             try:
-                                more_btn = page.query_selector("button:has-text('Показать ещё')") or \
-                                           page.query_selector("div.reviews-view__more")
+                                more_btn = page.query_selector(
+                                    "button:has-text('Показать ещё')"
+                                ) or page.query_selector("div.reviews-view__more")
                                 if more_btn and more_btn.is_visible():
                                     more_btn.click()
                                     time.sleep(2)
-                            except:
+                            except Exception:
                                 pass
                     else:
                         print("ℹ️ Вкладка Отзывы не найдена (селектор)")
-                except Exception as e:
-                    print(f"⚠️ Ошибка при обработке отзывов: {e}")
 
-                # 3. Кликаем и скроллим Фото (Photos)
-                try:
-                    photos_tab = page.query_selector("div.tabs-select-view__title._name_gallery")
+                    # 3. Кликаем и скроллим Фото (Photos)
+                    photos_tab = page.query_selector(
+                        "div.tabs-select-view__title._name_gallery"
+                    )
                     if photos_tab:
                         print("📷 Переходим во вкладку Фото...")
-                        
-                        # Пытаемся получить количество фото
                         try:
                             photos_text = photos_tab.inner_text()
                             print(f"ℹ️ Текст вкладки фото: {photos_text}")
-                            match = re.search(r'(\d+)', photos_text)
-                            if match:
-                                extra_photos_count = int(match.group(1))
-                        except:
+                            m = re.search(r"(\\d+)", photos_text)
+                            if m:
+                                extra_photos_count = int(m.group(1))
+                        except Exception:
                             pass
 
                         photos_tab.click(force=True)
@@ -323,349 +512,184 @@ class YandexMapsInterceptionParser:
                         scroll_page(10)
                     else:
                         print("ℹ️ Вкладка Фото не найдена")
-                except Exception as e:
-                    print(f"⚠️ Ошибка при обработке фото: {e}")
 
-                # 4. Кликаем и скроллим Новости (News/Posts)
-                try:
-                    news_tab = page.query_selector("div.tabs-select-view__title._name_posts")
-                    if news_tab:
-                        print("📰 Переходим во вкладку Новости...")
-                        news_tab.click(force=True)
-                        time.sleep(2)
-                        print("📜 Скроллим новости...")
-                        scroll_page(10)
-                    else:
-                        print("ℹ️ Вкладка Новости не найдена")
-                except Exception as e:
-                    print(f"⚠️ Ошибка при обработке новостей: {e}")
+                    # 4. Кликаем и скроллим Новости (News/Posts)
+                    try:
+                        news_tab = page.query_selector(
+                            "div.tabs-select-view__title._name_posts"
+                        )
+                        if news_tab:
+                            print("📰 Переходим во вкладку Новости...")
+                            news_tab.click(force=True)
+                            time.sleep(2)
+                            print("📜 Скроллим новости...")
+                            scroll_page(10)
+                        else:
+                            print("ℹ️ Вкладка Новости не найдена")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка при обработке новостей: {e}")
 
-                # 5. Кликаем и скроллим Товары/Услуги (Prices/Goods)
-                try:
-                    # Пробуем разные селекторы для таба товаров
-                    services_tab = page.query_selector("div.tabs-select-view__title._name_price")
-                    if not services_tab:
-                        services_tab = page.query_selector("div.tabs-select-view__title._name_goods")
-                    if not services_tab:
-                         # User provided selector (simplified) - 2nd tab in carousel
-                         services_tab = page.query_selector("div.carousel__content > div:nth-child(2) > div")
-                    
-                    # Fallback на поиск по тексту
-                    if not services_tab:
-                        for text in ["Цены", "Товары и услуги", "Услуги", "Товары", "Меню", "Прайс"]:
+                    # 5. Кликаем и скроллим Товары/Услуги (Prices/Goods)
+                    try:
+                        services_tab = page.query_selector(
+                            "div.tabs-select-view__title._name_price"
+                        ) or page.query_selector(
+                            "div.tabs-select-view__title._name_goods"
+                        )
+                        if services_tab:
+                            print("💰 Переходим во вкладку Цены/Услуги...")
+                            services_tab.click(force=True)
+                            time.sleep(3)
+                            print("📜 Скроллим услуги...")
+                            scroll_page(20)
+                        else:
+                            print("ℹ️ Вкладка Цены/Услуги не найдена")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка при обработке услуг: {e}")
+
+                    # Проверка верификации через HTML
+                    is_verified = False
+                    try:
+                        verified_selectors = [
+                            ".business-verified-badge-view",
+                            "div._name_verified",
+                            ".business-card-view__verified-badge",
+                            "span[aria-label='Информация подтверждена владельцем']",
+                            "span.business-verified-badge",
+                            "div.business-verified-badge",
+                        ]
+                        for sel in verified_selectors:
                             try:
-                                found = page.get_by_text(text, exact=False)
-                                if found.count() > 0:
-                                    # Check visibility to avoid hidden elements
-                                    if found.first.is_visible():
-                                        services_tab = found.first
-                                        print(f"✅ Нашли таб услуг по тексту: {text}")
-                                        break
-                            except:
-                                pass
+                                if page.query_selector(sel):
+                                    is_verified = True
+                                    print("✅ Найдена галочка верификации (HTML)")
+                                    break
+                            except Exception:
+                                continue
+                    except Exception as e:
+                        print(f"Ошибка проверки верификации: {e}")
 
-                    if services_tab:
-                        print("💰 Переходим во вкладку Цены/Услуги...")
-                        services_tab.click(force=True)
-                        time.sleep(3) # Чуть больше времени на загрузку
-                        print("📜 Скроллим услуги...")
-                        scroll_page(20) # Больше скролла
-                    else:
-                        print("ℹ️ Вкладка Цены/Услуги не найдена")
-                except Exception as e:
-                    print(f"⚠️ Ошибка при обработке услуг: {e}")
+                    print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
 
-                # Проверка верификации через HTML (так как в JSON это может быть спрятано)
-                is_verified = False
-                try:
-                    verified_selectors = [
-                        ".business-verified-badge-view",
-                        "div._name_verified",
-                        ".business-card-view__verified-badge",
-                        "span[aria-label='Информация подтверждена владельцем']",
-                        "span.business-verified-badge", 
-                        "div.business-verified-badge"
-                    ]
-                    for sel in verified_selectors:
-                        # Используем короткий таймаут для проверки
+                    # SOURCE PRIORITY PIPELINE
+                    results: List[ParseResult] = []
+
+                    try:
+                        api_data = self._extract_data_from_responses()
+                        if api_data:
+                            api_data["is_verified"] = is_verified
+                            if extra_photos_count > 0:
+                                api_data["photos_count"] = extra_photos_count
+                            results.append(
+                                ParseResult(api_data, "yandex_api_v2", 100)
+                            )
+                            print("✅ API данные извлечены (quality: 100)")
+                    except Exception as e:
+                        print(f"⚠️ API parsing failed: {e}")
+
+                    api_has_data = results and results[0].data and (
+                        results[0].data.get("title")
+                        or results[0].data.get("overview", {}).get("title")
+                        or results[0].data.get("products") is not None
+                    )
+
+                    if not api_has_data:
+                        print(
+                            "⚠️ API не вернул данных, пробуем HTML fallback (quality: 70)..."
+                        )
                         try:
-                            if page.query_selector(sel):
-                                is_verified = True
-                                print("✅ Найдена галочка верификации (HTML)")
-                                break
-                        except:
-                            continue
-                except Exception as e:
-                    print(f"Ошибка проверки верификации: {e}")
-
-                print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
-                
-                # ===== SOURCE PRIORITY PIPELINE =====
-                # Собираем данные из всех источников параллельно
-                results = []
-                
-                # 1. API Interception (quality: 100)
-                try:
-                    api_data = self._extract_data_from_responses()
-                    if api_data:
-                        api_data['is_verified'] = is_verified
-                        if extra_photos_count > 0:
-                            api_data['photos_count'] = extra_photos_count
-                        results.append(ParseResult(api_data, 'yandex_api_v2', 100))
-                        print("✅ API данные извлечены (quality: 100)")
-                except Exception as e:
-                    print(f"⚠️ API parsing failed: {e}")
-                
-                # 2. HTML Fallback (quality: 70) - только если API не вернул данных
-                # Правило: если API вернул данные (даже пустой список) - используем только API
-                api_has_data = results and results[0].data and (
-                    results[0].data.get('title') or 
-                    results[0].data.get('overview', {}).get('title') or
-                    results[0].data.get('products') is not None  # None = не сработал, [] = сработал но пусто
-                )
-                
-                if not api_has_data:
-                    print("⚠️ API не вернул данных, пробуем HTML fallback (quality: 70)...")
-                    try:
-                        html_data = self._fallback_html_parsing(page, url)
-                        if html_data and not html_data.get('error'):
-                            results.append(ParseResult(html_data, 'html_fallback', 70))
-                            print("✅ HTML данные извлечены (quality: 70)")
-                    except Exception as e:
-                        print(f"⚠️ HTML parsing failed: {e}")
-                
-                # 3. Meta tags (quality: 40) - только если API и HTML не сработали
-                if not results:
-                    print("⚠️ API и HTML не сработали, пробуем meta tags (quality: 40)...")
-                    try:
-                        meta_data = self._parse_meta_tags(page, url)
-                        if meta_data:
-                            results.append(ParseResult(meta_data, 'meta_tags', 40))
-                            print("✅ Meta данные извлечены (quality: 40)")
-                    except Exception as e:
-                        print(f"⚠️ Meta parsing failed: {e}")
-                
-                # Выбираем лучший результат и мержим остальные
-                if not results:
-                    return {'error': 'all_sources_failed', 'url': url}
-                
-                # Сортируем по quality_score
-                results.sort(key=lambda r: r.quality_score, reverse=True)
-                
-                # Мержим все результаты (лучший как база)
-                final = results[0]
-                for other in results[1:]:
-                    final = final.merge(other)
-                
-                # Добавляем метаданные
-                data = final.to_dict()
-                data['_parse_metadata']['sources_used'] = [r.source for r in results]
-                
-                # Специальная обработка для услуг: Source Priority без merge по имени
-                # Если API вернул данные (даже пустой список) - используем только API
-                api_products = None
-                if results and results[0].source == 'yandex_api_v2':
-                    api_products = results[0].data.get('products')
-                
-                if api_products is None:
-                    # API не сработал вообще - используем HTML как fallback
-                    print("⚠️ API не вернул данные об услугах, пробуем HTML парсинг...")
-                    try:
-                        from yandex_maps_scraper import parse_products
-                        html_products = parse_products(page)
-                        if html_products:
-                            # Пересобираем overview grouped products
-                            grouped_products = {}
-                            for prod in html_products:
-                                cat = prod.get('category', 'Другое') or 'Другое'
-                                if cat not in grouped_products:
-                                    grouped_products[cat] = []
-                                grouped_products[cat].append(prod)
-                            
-                            final_products = []
-                            for cat, items in grouped_products.items():
-                                final_products.append({
-                                    'category': cat,
-                                    'items': items
-                                })
-                            data['products'] = final_products
-                            data['_parse_metadata']['products_source'] = 'html_fallback'
-                            data['_parse_metadata']['products_quality_score'] = 70
-                            print(f"✅ Услуги найдены через HTML: {len(html_products)}")
-                    except Exception as e:
-                        print(f"⚠️ HTML парсинг услуг не удался: {e}")
-                        data['products'] = []
-                        data['_parse_metadata']['products_source'] = 'none'
-                        data['_parse_metadata']['products_quality_score'] = 0
-                elif api_products == []:
-                    # API вернул пустой список - услуг нет, не используем HTML
-                    print("✅ API вернул пустой список услуг - услуг нет")
-                    data['products'] = []
-                    data['_parse_metadata']['products_source'] = 'api'
-                    data['_parse_metadata']['products_quality_score'] = 100
-                else:
-                    # API вернул данные - используем только их
-                    data['_parse_metadata']['products_source'] = 'api'
-                    data['_parse_metadata']['products_quality_score'] = 100
-                
-                return data
-
-                    try:
-                        # 0. Попытка извлечь из мета-тегов (самый надежный способ для заголовка)
-                        meta_title = None
-                        try:
-                            # og:title
-                            og_title = page.locator("meta[property='og:title']").get_attribute("content")
-                            if og_title:
-                                meta_title = og_title.split('|')[0].strip() # "Name | City" -> "Name"
-                                print(f"✅ Нашли заголовок в og:title: {meta_title}")
-                            
-                            # title tag
-                            if not meta_title:
-                                page_title = page.title()
-                                if page_title:
-                                    meta_title = page_title.split('-')[0].strip() # "Name - Yandex Maps" -> "Name"
-                                    print(f"✅ Нашли заголовок в page title: {meta_title}")
+                            html_data = self._fallback_html_parsing(page, url)
+                            if html_data and not html_data.get("error"):
+                                results.append(
+                                    ParseResult(html_data, "html_fallback", 70)
+                                )
+                                print("✅ HTML данные извлечены (quality: 70)")
                         except Exception as e:
-                            print(f"⚠️ Ошибка извлечения мета-заголовка: {e}")
+                            print(f"⚠️ HTML parsing failed: {e}")
 
-                        # 0.1 Попытка извлечь заголовок через user selector (если мета не сработала или для надежности)
-                        if not meta_title:
-                            try:
-                                h1_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1")
-                                if h1_el:
-                                     meta_title = h1_el.inner_text().strip()
-                                     print(f"✅ Нашли заголовок через CSS селектор: {meta_title}")
-                            except Exception as e:
-                                 print(f"⚠️ Ошибка CSS селектора заголовка: {e}")
+                    if not results:
+                        print(
+                            "⚠️ API и HTML не сработали, пробуем meta tags (quality: 40)..."
+                        )
+                        try:
+                            meta_data = self._parse_meta_tags(page, url)
+                            if meta_data:
+                                results.append(
+                                    ParseResult(meta_data, "meta_tags", 40)
+                                )
+                                print("✅ Meta данные извлечены (quality: 40)")
+                        except Exception as e:
+                            print(f"⚠️ Meta parsing failed: {e}")
 
-                        if meta_title:
-                            if 'overview' not in data: data['overview'] = {}
-                            data['title'] = meta_title
-                            data['overview']['title'] = meta_title
-                            
-                        # Проверка верификации через user selector (если еще не найдено)
-                        if not is_verified:
-                             try:
-                                 # body > ... > h1 > span
-                                 verified_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1 > span.business-verified-badge")
-                                 if not verified_el:
-                                      verified_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1 > span")
-                                 
-                                 if verified_el:
-                                     data['is_verified'] = True
-                                     print("✅ Найдена галочка верификации (User CSS)")
-                             except:
-                                 pass
-                        
-                        # Извлечение адреса (если нет в API)
-                        if not data.get('address') and not data.get('overview', {}).get('address'):
-                             try:
-                                 # 1. Meta tag
-                                 meta_address = page.locator("meta[property='business:contact_data:street_address']").get_attribute("content")
-                                 if meta_address:
-                                     print(f"✅ Нашли адрес в meta: {meta_address}")
-                                     data['address'] = meta_address
-                                 else:
-                                     # 2. CSS Selector
-                                     address_el = page.query_selector("div.orgpage-header-view__address") or \
-                                                  page.query_selector("a.orgpage-header-view__address") or \
-                                                  page.query_selector("div.business-contacts-view__address-link")
-                                     if address_el:
-                                          addr_text = address_el.inner_text()
-                                          print(f"✅ Нашли адрес через CSS: {addr_text}")
-                                          data['address'] = addr_text
-                             except Exception as e:
-                                 print(f"⚠️ Ошибка извлечения адреса HTML: {e}")
-                             
-                    except Exception as e:
-                        print(f"⚠️ Error extracting title from meta/css: {e}")
-                    
-                    # Передаем селектор пользователя в парсер
-                    try:
-                        # Поскольку YandexMapsScraper класса нет, парсим руками
-                        
-                        # Only try to parse products if we don't have them yet
-                        if not data.get('products'):
-                            print("🛠 Parsing services via HTML with USER Selectors...")
-                            
-                            products_html = []
-                            
-                            # 0. Сначала кликаем по табу "Цены" или "Услуги" если еще не там
-                            # (В parse_yandex_card мы уже пробовали, но может не вышло)
-                            # ...
-                            
-                            # 1. Используем логику пользователя (селекторы)
-                            # Selector: body > ... > div.business-full-items-grouped-view__content
-                            
-                            groups = page.query_selector_all("div.business-full-items-grouped-view__content > div")
-                            for group in groups:
-                                # Category title?
-                                cat_title_el = group.query_selector("div.business-full-items-grouped-view__title")
-                                cat_title = cat_title_el.inner_text() if cat_title_el else "Другое"
-                                
-                                items = group.query_selector_all("div.business-full-items-grouped-view__item, div.related-product-view")
-                                if not items:
-                                    # Try user selector
-                                    items = group.query_selector_all("div.business-full-items-grouped-view__items._grid > div")
-                                
-                                for item in items:
-                                    try:
-                                        name_el = item.query_selector("div.related-product-view__title")
-                                        price_el = item.query_selector("div.related-product-view__price")
-                                        if name_el:
-                                            products_html.append({
-                                                'name': name_el.inner_text(),
-                                                'price': price_el.inner_text() if price_el else '',
-                                                'category': cat_title,
-                                                'description': '',
-                                                'photo': ''
-                                            })
-                                    except:
-                                        pass
-                            
-                            # 2. Если не вышло - пробуем функцию из старого парсера
-                            if not products_html:
-                                 print("🔄 Пробуем функцию parse_products из yandex_maps_scraper...")
-                                 try:
-                                     from yandex_maps_scraper import parse_products
-                                     products_html = parse_products(page)
-                                 except ImportError:
-                                     print("⚠️ Не удалось импортировать parse_products")
+                    if not results:
+                        return {"error": "all_sources_failed", "url": url}
 
-                            if products_html:
-                                print(f"✅ HTML Fallback нашел {len(products_html)} услуг")
-                                current = data.get('products', [])
-                                current.extend(products_html)
-                                data['products'] = current
-                        
-                    except Exception as e:
-                        print(f"⚠️ Ошибка user-selector HTML parsing: {e}")
-                    
-                    # Пробуем еще раз получить title если нет
-                    if not data.get('title'):
-                         try:
-                             title_el = page.query_selector("h1.orgpage-header-view__header")
-                             if title_el:
-                                 data['title'] = title_el.inner_text()
-                         except:
-                             pass
-                
-                if browser:
-                    browser.close()
-                
-                print(f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'")
-                return data
-                
-            except PlaywrightTimeoutError as e:
-                if browser:
-                    browser.close()
-                raise Exception(f"Тайм-аут при загрузке страницы: {e}")
-            except Exception as e:
-                if browser:
-                    browser.close()
-                raise Exception(f"Ошибка при парсинге: {e}")
+                    results.sort(key=lambda r: r.quality_score, reverse=True)
+
+                    final = results[0]
+                    for other in results[1:]:
+                        final = final.merge(other)
+
+                    data = final.to_dict()
+                    data["_parse_metadata"]["sources_used"] = [
+                        r.source for r in results
+                    ]
+
+                    api_products = None
+                    if results and results[0].source == "yandex_api_v2":
+                        api_products = results[0].data.get("products")
+
+                    if api_products is None:
+                        print(
+                            "⚠️ API не вернул данные об услугах, пробуем HTML парсинг..."
+                        )
+                        try:
+                            from yandex_maps_scraper import parse_products
+
+                            html_products = parse_products(page)
+                            if html_products:
+                                grouped_products: Dict[
+                                    str, List[Dict[str, Any]]
+                                ] = {}
+                                for prod in html_products:
+                                    cat = prod.get("category", "Другое") or "Другое"
+                                    grouped_products.setdefault(cat, []).append(
+                                        prod
+                                    )
+
+                                final_products: List[Dict[str, Any]] = []
+                                for cat, items in grouped_products.items():
+                                    final_products.append(
+                                        {"category": cat, "items": items}
+                                    )
+                                data["products"] = final_products
+                                data["_parse_metadata"]["products_source"] = (
+                                    "html_fallback"
+                                )
+                                data["_parse_metadata"][
+                                    "products_quality_score"
+                                ] = 70
+                                print(
+                                    f"✅ Услуги найдены через HTML: {len(html_products)}"
+                                )
+                        except Exception as e:
+                            print(f"⚠️ HTML парсинг услуг не удался: {e}")
+                            data["products"] = []
+                            data["_parse_metadata"]["products_source"] = "none"
+                            data["_parse_metadata"]["products_quality_score"] = 0
+                    elif api_products == []:
+                        print("✅ API вернул пустой список услуг - услуг нет")
+                        data["products"] = []
+                        data["_parse_metadata"]["products_source"] = "api"
+                        data["_parse_metadata"]["products_quality_score"] = 100
+                    else:
+                        data["_parse_metadata"]["products_source"] = "api"
+                        data["_parse_metadata"]["products_quality_score"] = 100
+
+                    return data
     
+    
+   
     def _extract_data_from_responses(self) -> Dict[str, Any]:
         """Извлекает данные из перехваченных API ответов"""
         data = {
@@ -709,10 +733,36 @@ class YandexMapsInterceptionParser:
             elif 'location-info' in url:
                 org_data = self._extract_location_info(json_data)
                 if org_data:
-                    print(f"✅ Извлечены данные организации из location-info API")
-                if org_data:
-                    print(f"✅ Извлечены данные организации из location-info API")
+                    print("✅ Извлечены данные организации из location-info API")
                     data.update(org_data)
+
+                # Прямое извлечение базовых полей из location-info
+                try:
+                    organization = json_data.get("organization") or {}
+                    if organization:
+                        name = organization.get("name") or organization.get("title")
+                        if name:
+                            data["title"] = name
+                        address = organization.get("address") or {}
+                        if isinstance(address, dict):
+                            formatted = address.get("formatted") or address.get("text")
+                            if formatted:
+                                data["address"] = formatted
+                        phones = organization.get("phones") or []
+                        if isinstance(phones, list) and phones:
+                            # Берём первый телефон как основной
+                            phone_raw = phones[0]
+                            if isinstance(phone_raw, dict):
+                                value = (
+                                    phone_raw.get("formatted")
+                                    or phone_raw.get("number")
+                                    or phone_raw.get("value")
+                                )
+                                if value:
+                                    data["phone"] = value
+                except Exception:
+                    # Не ломаем весь парсинг, если структура неожиданная
+                    pass
             
             # Специальная обработка для fetchGoods/Prices API
             elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower() or 'catalog' in url.lower():
@@ -800,6 +850,27 @@ class YandexMapsInterceptionParser:
         ]
         data['overview'] = {k: data.get(k, '') for k in overview_keys}
         data['overview']['reviews_count'] = data.get('reviews_count', 0)
+
+        # Структурированный raw_capture для воркера:
+        # - список всех перехваченных endpoint'ов
+        # - базовая телеметрия по ответам
+        raw_endpoints = []
+        for url, response_info in self.api_responses.items():
+            try:
+                headers = response_info.get('headers') or {}
+                raw_endpoints.append({
+                    'url': url,
+                    'status': response_info.get('status'),
+                    'content_type': headers.get('content-type'),
+                    'has_data': bool(response_info.get('data')),
+                })
+            except Exception:
+                # Логгер для отладки, но не ломаем парсинг
+                print(f"⚠️ Ошибка при сборе raw_endpoints для url={url[:80]}")
+
+        data['_raw_capture'] = {
+            'endpoints': raw_endpoints,
+        }
         
         return data
     

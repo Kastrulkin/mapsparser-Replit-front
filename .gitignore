@@ -1,23 +1,33 @@
-# Python
 venv/
-*.pyc
+env/
 __pycache__/
-
-# Node.js
-node_modules/
-
-# Env files
-.env
-.env.*
-
-# Mac
-.DS_Store
-
-# Logs
+*.pyc
+*.pyo
 *.log
-
-# Other
-*.sqlite3
-*.db
-*.db-shm
-*.db-wal 
+worker_*.log
+backend_*.log
+frontend_*.log
+spa_server.log
+data/*.db
+reports.db
+reports.db.bak_*
+db_backups/
+.env
+frontend/node_modules/
+debug_data/
+tmp/
+# Чувствительные данные
+COOKIES_STRING.txt
+*_result.json
+test_parser_result_*.json
+yandex_*.html
+# Временные скрипты (архивированы в archive/temp_scripts/)
+debug_*.py
+repro_*.py
+check_*.py
+cleanup_*.py
+fix_*.py
+reset_*.py
+extract_*.py
+find_*.py
+diagnose_*.py

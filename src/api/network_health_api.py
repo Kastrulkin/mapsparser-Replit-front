@@ -6,7 +6,6 @@ Provides endpoints for monitoring the health of all locations in a user's networ
 
 from flask import Blueprint, jsonify, request
 from functools import wraps
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
@@ -42,10 +41,9 @@ def require_auth(f):
 
 
 def get_db():
-    """Get database connection."""
-    db = sqlite3.connect('src/reports.db')
-    db.row_factory = sqlite3.Row
-    return db
+    """Get PostgreSQL database connection."""
+    from core.db_connection import get_db_connection
+    return get_db_connection()
 
 
 @network_health_bp.route('/api/network/health', methods=['GET'])
@@ -85,22 +83,23 @@ def get_network_health(current_user):
         business_id = request.args.get('business_id')
         
         # Build WHERE clause
-        where_clauses = ["b.owner_id = ?"]
+        where_clauses = ["b.owner_id = %s"]
         params = [user_id]
         
         if network_id:
-            where_clauses.append("b.network_id = ?")
+            where_clauses.append("b.network_id = %s")
             params.append(network_id)
         
         if business_id:
             # Phase 0.1: Security & Validation
-            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT owner_id, network_id FROM businesses WHERE id = %s", (business_id,))
             biz_row = cursor.fetchone()
             
             if not biz_row:
                 return jsonify({"error": "Business not found"}), 404
                 
-            owner_id, biz_network_id = biz_row
+            owner_id = biz_row.get('owner_id') if isinstance(biz_row, dict) else biz_row[0]
+            biz_network_id = biz_row.get('network_id') if isinstance(biz_row, dict) else biz_row[1]
             
             # 403 Forbidden
             if owner_id != user_id and not current_user.get('is_superadmin'):
@@ -112,7 +111,7 @@ def get_network_health(current_user):
             if biz_network_id:
                  return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
 
-            where_clauses.append("b.id = ?")
+            where_clauses.append("b.id = %s")
             params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
@@ -123,16 +122,16 @@ def get_network_health(current_user):
                 COUNT(DISTINCT b.id) as locations_count,
                 AVG(CAST(mpr.rating AS REAL)) as avg_rating,
                 SUM(mpr.reviews_count) as total_reviews
-            FROM Businesses b
-            LEFT JOIN MapParseResults mpr ON b.id = mpr.business_id
+            FROM businesses b
+            LEFT JOIN mapparseresults mpr ON b.id = mpr.business_id
             WHERE {where_sql}
         """, params)
         
         row = cursor.fetchone()
         
-        locations_count = row['locations_count'] or 0
-        avg_rating = round(row['avg_rating'] or 0, 1)
-        total_reviews = row['total_reviews'] or 0
+        locations_count = row.get('locations_count') if isinstance(row, dict) else (row[0] if row else 0)
+        avg_rating = round(float(row.get('avg_rating') if isinstance(row, dict) else (row[1] if len(row) > 1 else 0)) or 0, 1)
+        total_reviews = row.get('total_reviews') if isinstance(row, dict) else (row[2] if len(row) > 2 else 0)
         
         # For now, set unanswered_reviews_count to 0 (will implement later)
         unanswered_reviews_count = 0
@@ -215,22 +214,23 @@ def get_location_alerts(current_user):
         alert_type = request.args.get('alert_type')
         
         # Build WHERE clause
-        where_clauses = ["b.owner_id = ?"]
+        where_clauses = ["b.owner_id = %s"]
         params = [user_id]
         
         if network_id:
-            where_clauses.append("b.network_id = ?")
+            where_clauses.append("b.network_id = %s")
             params.append(network_id)
 
         if business_id:
             # Phase 0.1: Security & Validation
-            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT owner_id, network_id FROM businesses WHERE id = %s", (business_id,))
             biz_row = cursor.fetchone()
             
             if not biz_row:
                 return jsonify({"error": "Business not found"}), 404
                 
-            owner_id, biz_network_id = biz_row
+            owner_id = biz_row.get('owner_id') if isinstance(biz_row, dict) else biz_row[0]
+            biz_network_id = biz_row.get('network_id') if isinstance(biz_row, dict) else biz_row[1]
             
             if owner_id != user_id and not current_user.get('is_superadmin'):
                 return jsonify({"error": "Access denied"}), 403
@@ -238,7 +238,7 @@ def get_location_alerts(current_user):
             if biz_network_id:
                  return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
 
-            where_clauses.append("b.id = ?")
+            where_clauses.append("b.id = %s")
             params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
@@ -256,9 +256,9 @@ def get_location_alerts(current_user):
                 mpr.reviews_count,
                 mpr.photos_count,
                 mpr.created_at as last_parse
-            FROM Businesses b
-            LEFT JOIN BusinessTypes bt ON b.business_type = bt.type_key
-            LEFT JOIN MapParseResults mpr ON b.id = mpr.business_id
+            FROM businesses b
+            LEFT JOIN businesstypes bt ON b.business_type = bt.type_key
+            LEFT JOIN mapparseresults mpr ON b.id = mpr.business_id
             WHERE {where_sql}
             ORDER BY b.name
         """, params)
@@ -282,8 +282,8 @@ def get_location_alerts(current_user):
             # Check for stale news
             cursor.execute("""
                 SELECT MAX(created_at) as last_news
-                FROM UserNews
-                WHERE business_id = ?
+                FROM usernews
+                WHERE business_id = %s
             """, (business_id,))
             news_row = cursor.fetchone()
             
