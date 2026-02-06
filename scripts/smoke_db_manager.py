@@ -240,7 +240,6 @@ def test_cards_versioning(db: DatabaseManager):
         print("   Создаём версию 1...")
         card_id_1 = db.save_new_card_version(
             business_id=test_business_id,
-            user_id=all_businesses[0].get('owner_id'),
             title="Версия 1",
             seo_score=85
         )
@@ -261,7 +260,6 @@ def test_cards_versioning(db: DatabaseManager):
         print("   Создаём версию 2...")
         card_id_2 = db.save_new_card_version(
             business_id=test_business_id,
-            user_id=all_businesses[0].get('owner_id'),
             title="Версия 2",
             seo_score=90
         )

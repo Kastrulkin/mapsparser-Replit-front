@@ -335,7 +335,7 @@ class DatabaseManager:
         self.conn.commit()
         return card_id
     
-    def save_new_card_version(self, business_id: str, user_id: str = None, url: str = None, **kwargs) -> str:
+    def save_new_card_version(self, business_id: str, url: str = None, **kwargs) -> str:
         """
         Сохранить новую версию карточки с версионированием.
         
@@ -346,7 +346,6 @@ class DatabaseManager:
         
         Args:
             business_id: ID бизнеса (обязательно)
-            user_id: ID пользователя (опционально)
             url: URL карточки (опционально)
             **kwargs: Дополнительные поля карточки
         
@@ -384,10 +383,6 @@ class DatabaseManager:
             
             values = [card_id, business_id]
             field_names = ['id', 'business_id']
-            
-            if user_id:
-                values.append(user_id)
-                field_names.append('user_id')
             
             if url:
                 values.append(url)
