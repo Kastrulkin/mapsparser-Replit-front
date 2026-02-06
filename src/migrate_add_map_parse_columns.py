@@ -3,12 +3,12 @@
 Миграция: Добавление колонок services_count и products в таблицу MapParseResults
 """
 try:
-    from safe_db_utils import get_db_connection, get_db_path
+    from safe_db_utils import get_db_connection
 except ImportError:
     import sys
     import os
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from safe_db_utils import get_db_connection, get_db_path
+    from safe_db_utils import get_db_connection
 
 def migrate():
     print("🔄 Запуск миграции: добавление services_count и products в MapParseResults...")

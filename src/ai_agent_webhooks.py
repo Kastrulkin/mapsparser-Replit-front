@@ -6,8 +6,7 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 import os
 import requests
-import json
-from ai_agent import process_message, get_business_info
+from ai_agent import process_message
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -212,7 +211,7 @@ def telegram_webhook():
         db.close()
         
         if not row:
-            print(f"⚠️ Бизнес не найден для токена бота")
+            print("⚠️ Бизнес не найден для токена бота")
             return jsonify({"status": "ok"}), 200
         
         business_id = row[0]

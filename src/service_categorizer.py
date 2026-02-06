@@ -3,7 +3,6 @@
 Система умной категоризации услуг для BeautyBot
 """
 
-import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 

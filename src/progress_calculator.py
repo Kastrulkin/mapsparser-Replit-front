@@ -4,7 +4,7 @@
 """
 import json
 from database_manager import DatabaseManager
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 
 class ProgressCalculator:

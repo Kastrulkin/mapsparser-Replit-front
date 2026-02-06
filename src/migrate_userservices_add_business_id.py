@@ -6,8 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from safe_db_utils import safe_migrate, get_db_connection
-import sqlite3
+from safe_db_utils import safe_migrate
 
 def migrate_userservices_add_business_id(cursor):
     """Добавить колонку business_id в таблицу UserServices"""

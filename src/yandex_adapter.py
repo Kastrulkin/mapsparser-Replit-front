@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, date
-from typing import Optional, Dict
+from datetime import date
+from typing import Optional
 
 
 @dataclass

@@ -54,7 +54,7 @@ def verify_password(password: str, hashed: str) -> bool:
     try:
         result = verify_password_legacy(password, hashed)
         if result:
-            print(f"[AUTH] Использован legacy формат пароля (будет перехеширован при следующем входе)")
+            print("[AUTH] Использован legacy формат пароля (будет перехеширован при следующем входе)")
         return result
     except Exception as e:
         print(f"❌ Ошибка при проверке пароля (legacy): {e}")
@@ -107,7 +107,6 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         500 - ошибка БД/SQL (логируется traceback)
     """
     import os
-    import sys
     
     # DEBUG флаг для логирования
     DEBUG_AUTH = os.getenv('DEBUG_AUTH', 'false').lower() == 'true'
@@ -183,7 +182,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         if password_hash.startswith('scrypt:'):
             # Новый формат (werkzeug) - проверяем ТОЛЬКО через werkzeug
-            debug_log(f"[AUTH] path=werkzeug")
+            debug_log("[AUTH] path=werkzeug")
             try:
                 password_valid = check_password_hash(password_hash, password)
                 debug_log(f"[AUTH] werkzeug.check_password_hash result: {password_valid}")
@@ -192,7 +191,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
                 password_valid = False
         else:
             # Старый формат (legacy) - используем fallback
-            debug_log(f"[AUTH] path=legacy")
+            debug_log("[AUTH] path=legacy")
             try:
                 password_valid = verify_password_legacy(password, password_hash)
                 used_legacy = password_valid
@@ -207,7 +206,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         # Migration-on-login: если использовали legacy и пароль верный -> перехешируем
         if used_legacy and password_valid:
-            debug_log(f"[AUTH] Migration-on-login: перехешируем пароль в werkzeug формат")
+            debug_log("[AUTH] Migration-on-login: перехешируем пароль в werkzeug формат")
             try:
                 new_hash = generate_password_hash(password)
                 cursor.execute("""
@@ -216,7 +215,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
                     WHERE id = %s
                 """, (new_hash, datetime.now().isoformat(), user_id))
                 conn.commit()
-                debug_log(f"[AUTH] ✅ Пароль перехеширован в werkzeug формат")
+                debug_log("[AUTH] ✅ Пароль перехеширован в werkzeug формат")
             except Exception as e:
                 debug_log(f"⚠️ [AUTH] Ошибка при перехешировании пароля: {e}")
                 conn.rollback()
@@ -281,7 +280,6 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
         Dict с ключами: user_id, expires_at, email, name, phone, is_active, is_superadmin
         или None если сессия недействительна
     """
-    import os
     import traceback
     
     LOG_FILE = '/tmp/seo_api.out'

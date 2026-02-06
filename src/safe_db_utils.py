@@ -7,9 +7,7 @@
 - PostgreSQL-only: SQLite больше не поддерживается в runtime
 """
 import os
-import shutil
 from datetime import datetime
-from pathlib import Path
 
 # Импортируем единую точку подключения (lazy import для избежания циклических зависимостей)
 def get_db_connection():
@@ -48,7 +46,7 @@ def safe_migrate(callback, description=""):
     
     try:
         print(f"🔄 Выполняю миграцию: {description}")
-        print(f"📊 Тип БД: PostgreSQL")
+        print("📊 Тип БД: PostgreSQL")
         
         # Проверяем существующие данные перед миграцией
         businesses_before = 0
@@ -93,7 +91,7 @@ def safe_migrate(callback, description=""):
         conn.commit()
         
         print(f"✅ Данные после миграции: {businesses_after} бизнесов, {services_after} услуг")
-        print(f"✅ Миграция выполнена успешно!")
+        print("✅ Миграция выполнена успешно!")
         return True
         
     except Exception as e:
@@ -101,7 +99,7 @@ def safe_migrate(callback, description=""):
         print(f"❌ Ошибка миграции: {e}")
         import traceback
         traceback.print_exc()
-        print(f"⚠️  Для PostgreSQL откат нужно делать вручную через pg_restore")
+        print("⚠️  Для PostgreSQL откат нужно делать вручную через pg_restore")
         return False
     finally:
         conn.close()

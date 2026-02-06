@@ -13,8 +13,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from safe_db_utils import get_db_connection, safe_migrate
-import sqlite3
+from safe_db_utils import safe_migrate
 
 def column_exists(cursor, table_name, column_name):
     """Проверяет наличие колонки в таблице"""

@@ -3,7 +3,6 @@
 Скрипт для очистки базы данных
 """
 from safe_db_utils import get_db_connection
-import sqlite3
 import os
 
 def clear_database():

@@ -2,8 +2,6 @@ from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from core.auth_helpers import require_auth_from_request, verify_business_access
 import uuid
-import json
-from datetime import datetime
 
 metrics_history_bp = Blueprint('metrics_history_api', __name__)
 

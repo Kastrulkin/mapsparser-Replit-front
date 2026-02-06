@@ -1,8 +1,5 @@
 import requests
-import json
-import time
-from typing import List, Dict, Optional
-import os
+from typing import List, Dict
 from datetime import datetime, timedelta
 
 class WordstatClient:

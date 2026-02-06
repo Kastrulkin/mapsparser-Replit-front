@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import json
 import traceback
-from typing import List, Optional
-from datetime import datetime
+from typing import Optional
 
 from database_manager import DatabaseManager
-from external_sources import ExternalSource, ExternalReview
+from external_sources import ExternalSource
 from auth_encryption import decrypt_auth_data
 from two_gis_business_parser import TwoGisBusinessParser
 from base_sync_worker import BaseSyncWorker
@@ -28,11 +27,11 @@ class TwoGisBusinessSyncWorker(BaseSyncWorker):
     def _get_account_by_id(self, db: DatabaseManager, account_id: str) -> Optional[dict]:
         cursor = db.conn.cursor()
         cursor.execute(
-            \"\"\"
+            """
             SELECT *
             FROM ExternalBusinessAccounts
             WHERE id = ? AND source = ?
-            \"\"\",
+            """,
             (account_id, self.source),
         )
         row = cursor.fetchone()

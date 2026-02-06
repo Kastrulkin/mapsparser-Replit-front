@@ -6,8 +6,7 @@ Provides endpoints for monitoring the health of all locations in a user's networ
 
 from flask import Blueprint, jsonify, request
 from functools import wraps
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from datetime import datetime
 
 network_health_bp = Blueprint('network_health', __name__)
 
@@ -308,7 +307,7 @@ def get_location_alerts(current_user):
                         "severity": "warning",
                         "days_since": None,
                         "threshold": threshold_news,
-                        "message": f"Нет новостей"
+                        "message": "Нет новостей"
                     })
             
             # Check for stale photos (placeholder - need to implement photo tracking)

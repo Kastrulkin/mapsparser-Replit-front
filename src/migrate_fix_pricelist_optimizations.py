@@ -1,6 +1,4 @@
 
-import sqlite3
-import os
 from safe_db_utils import safe_migrate
 
 def run_migration(cursor):

@@ -10,7 +10,7 @@ from database_manager import DatabaseManager
 from auth_system import verify_session
 from google_business_auth import GoogleBusinessAuth
 from google_business_sync_worker import GoogleBusinessSyncWorker
-from auth_encryption import encrypt_auth_data, decrypt_auth_data
+from auth_encryption import encrypt_auth_data
 from core.helpers import get_business_owner_id
 
 google_business_bp = Blueprint('google_business', __name__)

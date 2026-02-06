@@ -17,7 +17,7 @@ def create_backup():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_path = f"{db_path}.backup_{timestamp}"
     
-    print(f"📦 Creating database backup...")
+    print("📦 Creating database backup...")
     print(f"   Source: {db_path}")
     print(f"   Backup: {backup_path}")
     
@@ -28,7 +28,7 @@ def create_backup():
         return backup_path
     except Exception as e:
         print(f"❌ Failed to create backup: {e}")
-        print(f"⚠️  MIGRATION ABORTED - Cannot proceed without backup!")
+        print("⚠️  MIGRATION ABORTED - Cannot proceed without backup!")
         return None
 
 def migrate():
@@ -84,9 +84,9 @@ def migrate():
         else:
             print("✅ No new columns to add - schema is up to date")
         print()
-        print(f"💾 Database backup saved to:")
+        print("💾 Database backup saved to:")
         print(f"   {backup_path}")
-        print(f"   (Keep this backup until you verify the migration worked)")
+        print("   (Keep this backup until you verify the migration worked)")
         print("=" * 60)
         
         return True
@@ -96,7 +96,7 @@ def migrate():
         print("=" * 60)
         print(f"❌ Migration failed: {e}")
         print()
-        print(f"🔄 To restore from backup:")
+        print("🔄 To restore from backup:")
         print(f"   cp {backup_path} {get_db_path()}")
         print("=" * 60)
         import traceback

@@ -5,13 +5,12 @@ parser_interception.py — Парсер Яндекс.Карт через Network
 Это в 10x быстрее, чем парсинг HTML через Playwright.
 """
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 import json
 import re
 import time
 import random
 from typing import Dict, Any, List, Optional
-from urllib.parse import urlparse, parse_qs
 from parsers.parse_result import ParseResult
 
 
@@ -459,8 +458,6 @@ class YandexMapsInterceptionParser:
                         print(
                             "📜 Скроллим отзывы (глубокий скролл - загрузка всех)..."
                         )
-                        last_height = 0
-                        stuck_count = 0
 
                         for i in range(80):
                             delta = random.randint(2000, 4000)
@@ -806,8 +803,8 @@ class YandexMapsInterceptionParser:
                         current_products = data.get('products', [])
                         current_products.extend(products)
                         data['products'] = current_products
-                        break # Нашли - выходим, чтобы не дублировать если несколько чанков
-                except:
+                        break  # Нашли - выходим, чтобы не дублировать если несколько чанков
+                except Exception:
                     pass
         
         # Deduplicate products by name and price
@@ -986,11 +983,13 @@ class YandexMapsInterceptionParser:
                 elif 'ratingData' in data:
                     rd = data['ratingData']
                     if isinstance(rd, dict):
-                         val = rd.get('rating') or rd.get('value') or rd.get('score')
-                         if val: result['rating'] = str(val)
-                         
-                         count = rd.get('count') or rd.get('reviewCount')
-                         if count: result['reviews_count'] = int(count)
+                        val = rd.get('rating') or rd.get('value') or rd.get('score')
+                        if val:
+                            result['rating'] = str(val)
+
+                        count = rd.get('count') or rd.get('reviewCount')
+                        if count:
+                            result['reviews_count'] = int(count)
                 
                 # Ищем количество отзывов
                 if 'reviewsCount' in data:
@@ -1155,7 +1154,7 @@ class YandexMapsInterceptionParser:
                         date_clean = date_raw.replace('Z', '+00:00')
                         datetime.fromisoformat(date_clean)  # Проверяем валидность
                         date = date_clean
-                    except:
+                    except Exception:
                         # Если не ISO, оставляем как есть (будет парситься в worker.py)
                         date = date_raw
                 else:
@@ -1375,7 +1374,7 @@ class YandexMapsInterceptionParser:
                                             # Убираем Z и заменяем на +00:00
                                             date_clean = date_raw.replace('Z', '+00:00')
                                             date = date_clean
-                                        except:
+                                        except Exception:
                                             date = date_raw
                                 
                                 if not date:
@@ -1452,8 +1451,8 @@ class YandexMapsInterceptionParser:
 
                                 if not name:
                                     text_val = item.get('text', '')
-                                    if text_val and len(text_val) < 100: 
-                                         name = text_val
+                                    if text_val and len(text_val) < 100:
+                                        name = text_val
                                 
                                 if not name:
                                     continue
@@ -1606,7 +1605,12 @@ class YandexMapsInterceptionParser:
             return None
 
 
-def parse_yandex_card(url: str) -> Dict[str, Any]:
+def parse_yandex_card(
+    url: str,
+    keep_open_on_captcha: bool = False,
+    session_registry: Optional[dict] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
     """
     Главная функция для парсинга Яндекс.Карт через Network Interception.
     
@@ -1615,6 +1619,9 @@ def parse_yandex_card(url: str) -> Dict[str, Any]:
         data = parse_yandex_card("https://yandex.ru/maps/org/123456/")
     """
     parser = YandexMapsInterceptionParser()
+    # В текущей версии класс-метод parse_yandex_card принимает только url.
+    # Параметры keep_open_on_captcha / session_registry зарезервированы для будущей
+    # поддержки human-in-the-loop и здесь сознательно не используются.
     return parser.parse_yandex_card(url)
 
 

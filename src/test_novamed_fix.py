@@ -1,7 +1,6 @@
 
 import sys
 import os
-import json
 
 # Add current directory to path
 sys.path.append(os.getcwd())

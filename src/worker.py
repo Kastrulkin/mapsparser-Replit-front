@@ -19,6 +19,7 @@ from database_manager import DatabaseManager
 from yandex_business_sync_worker import YandexBusinessSyncWorker
 from external_sources import ExternalReview, ExternalSource, ExternalPost, ExternalStatsPoint, make_stats_id
 from dateutil import parser as date_parser
+from parser_interception import parse_yandex_card
 
 # ==================== PART A: OID MISMATCH HARDENING ====================
 
@@ -32,6 +33,269 @@ class ColumnsInfo:
 
 # Константы для raw capture
 MAX_CAPTURE_BYTES = 300_000
+
+# ==================== PART B: CAPTCHA SESSION REGISTRY ====================
+# Реестр активных сессий браузера для human-in-the-loop обработки капчи
+ACTIVE_CAPTCHA_SESSIONS: dict[str, dict] = {}
+"""
+Структура записи:
+{
+    "session_id": {
+        "task_id": str,
+        "browser": Browser,  # Playwright Browser объект
+        "context": BrowserContext,  # Playwright Context объект
+        "page": Page,  # Playwright Page объект
+        "created_at": datetime,
+    }
+}
+"""
+
+def is_captcha_page(page) -> bool:
+    """
+    Проверяет, является ли текущая страница страницей с капчей.
+    
+    Args:
+        page: Playwright Page объект
+    
+    Returns:
+        bool: True если это страница с капчей
+    """
+    try:
+        current_url = page.url
+        if "/showcaptcha" in current_url:
+            return True
+        
+        title = page.title()
+        if any(keyword in title for keyword in ["Ой!", "Captcha", "Robot", "Вы не робот"]):
+            return True
+        
+        # Проверка селекторов капчи
+        try:
+            if page.locator(".smart-captcha").count() > 0:
+                return True
+            if page.locator("input[name='smart-token']").count() > 0:
+                return True
+            if page.get_by_text("Подтвердите, что вы не робот").is_visible():
+                return True
+        except Exception:
+            pass
+        
+        return False
+    except Exception:
+        return False
+
+def park_task_for_captcha(task_id: str, page, session_id: str, token: str, vnc_path: str, browser=None, context=None) -> None:
+    """
+    Сохраняет задачу в статус WAIT_CAPTCHA и сохраняет сессию браузера.
+    
+    Args:
+        task_id: ID задачи в очереди
+        page: Playwright Page объект
+        session_id: UUID сессии
+        token: одноразовый токен для доступа
+        vnc_path: путь для открытия в кабинете
+        browser: Playwright Browser объект (опционально)
+        context: Playwright Context объект (опционально)
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        captcha_url = page.url
+        captcha_started_at = datetime.now()
+        
+        # Сохраняем screenshot
+        screenshot_path = None
+        try:
+            screenshot_bytes = page.screenshot()
+            screenshot_dir = "debug_data/captcha_screenshots"
+            os.makedirs(screenshot_dir, exist_ok=True)
+            screenshot_path = os.path.join(screenshot_dir, f"{task_id}_{session_id}.png")
+            with open(screenshot_path, "wb") as f:
+                f.write(screenshot_bytes)
+            print(f"📸 Screenshot сохранён: {screenshot_path}")
+        except Exception as e:
+            print(f"⚠️ Не удалось сохранить screenshot: {e}")
+        
+        # Обновляем задачу в БД (добавляем captcha_token_expires_at если колонка есть)
+        captcha_token_expires_at = captcha_started_at + timedelta(minutes=30)  # TTL 30 минут
+        try:
+            cursor.execute("""
+                UPDATE parsequeue 
+                SET status = 'captcha',
+                    captcha_required = TRUE,
+                    captcha_url = %s,
+                    captcha_session_id = %s,
+                    captcha_token = %s,
+                    captcha_token_expires_at = %s,
+                    captcha_vnc_path = %s,
+                    captcha_started_at = %s,
+                    captcha_status = 'waiting',
+                    resume_requested = FALSE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (captcha_url, session_id, token, captcha_token_expires_at, vnc_path, captcha_started_at, task_id))
+        except Exception as e:
+            # Если колонка captcha_token_expires_at не существует, обновляем без неё
+            if 'captcha_token_expires_at' in str(e) or 'column' in str(e).lower():
+                cursor.execute("""
+                    UPDATE parsequeue 
+                    SET status = 'captcha',
+                        captcha_required = TRUE,
+                        captcha_url = %s,
+                        captcha_session_id = %s,
+                        captcha_token = %s,
+                        captcha_vnc_path = %s,
+                        captcha_started_at = %s,
+                        captcha_status = 'waiting',
+                        resume_requested = FALSE,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (captcha_url, session_id, token, vnc_path, captcha_started_at, task_id))
+            else:
+                raise
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Сохраняем сессию в реестре
+        ACTIVE_CAPTCHA_SESSIONS[session_id] = {
+            "task_id": task_id,
+            "browser": browser,
+            "context": context,
+            "page": page,
+            "created_at": captcha_started_at,
+        }
+        
+        print(f"✅ Задача {task_id} поставлена в очередь ожидания решения капчи (сессия: {session_id})")
+    except Exception as e:
+        print(f"❌ Ошибка при сохранении задачи капчи: {e}")
+        import traceback
+        traceback.print_exc()
+
+def wait_for_resume(task_id: str, timeout_sec: int = 1800) -> bool:
+    """
+    Ожидает запрос на продолжение парсинга от оператора.
+    
+    Args:
+        task_id: ID задачи
+        timeout_sec: таймаут ожидания в секундах (по умолчанию 30 минут)
+    
+    Returns:
+        bool: True если получен запрос на продолжение, False при таймауте
+    """
+    start_time = datetime.now()
+    poll_interval = 3  # Проверяем каждые 3 секунды
+    
+    while True:
+        elapsed = (datetime.now() - start_time).total_seconds()
+        if elapsed >= timeout_sec:
+            print(f"⏱️ Таймаут ожидания решения капчи для задачи {task_id}")
+            return False
+        
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT resume_requested, captcha_status
+                FROM parsequeue
+                WHERE id = %s
+            """, (task_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if row:
+                resume_requested = row.get('resume_requested') if isinstance(row, dict) else row[0]
+                captcha_status = row.get('captcha_status') if isinstance(row, dict) else row[1]
+                
+                if resume_requested or captcha_status == 'resume':
+                    print(f"✅ Получен запрос на продолжение парсинга для задачи {task_id}")
+                    return True
+            
+            time.sleep(poll_interval)
+        except Exception as e:
+            print(f"⚠️ Ошибка при проверке resume_requested: {e}")
+            time.sleep(poll_interval)
+
+def verify_captcha_solved(page, timeout_sec: int = 10) -> bool:
+    """
+    Проверяет, что капча решена (страница больше не содержит капчу).
+    Усиленная проверка: отсутствие капчи + наличие целевого селектора.
+    
+    Args:
+        page: Playwright Page объект
+        timeout_sec: таймаут ожидания целевого селектора (по умолчанию 10 сек)
+    
+    Returns:
+        bool: True если капча решена И целевая страница загружена
+    """
+    try:
+        current_url = page.url
+        if "/showcaptcha" in current_url:
+            return False
+        
+        title = page.title()
+        if any(keyword in title for keyword in ["Ой!", "Captcha", "Robot", "Вы не робот"]):
+            return False
+        
+        # Проверка селекторов капчи
+        try:
+            if page.locator(".smart-captcha").count() > 0:
+                return False
+            if page.locator("input[name='smart-token']").count() > 0:
+                return False
+            # Проверка текста капчи
+            if page.get_by_text("Вы не робот", exact=False).is_visible():
+                return False
+            if page.get_by_text("Подтвердите, что вы не робот", exact=False).is_visible():
+                return False
+            # Проверка iframe капчи
+            if page.locator("iframe[src*='captcha']").count() > 0:
+                return False
+        except Exception:
+            pass
+        
+        # КРИТИЧНО: Проверяем наличие целевого селектора карточки организации
+        # Если селектор есть - значит капча решена и мы на нужной странице
+        try:
+            page.wait_for_selector(
+                "h1, div.business-card-title-view, div.card-title-view__title, "
+                "div.orgpage-header-view__header, "
+                "div.orgpage-header-view__header-wrapper > h1",
+                timeout=timeout_sec * 1000,
+            )
+            print("✅ Целевой селектор найден - капча решена")
+            return True
+        except Exception:
+            print("⚠️ Целевой селектор не найден - возможно капча не решена или страница не загрузилась")
+            return False
+        
+    except Exception as e:
+        print(f"⚠️ Ошибка при проверке капчи: {e}")
+        return False
+
+def close_session(session_id: str) -> None:
+    """
+    Закрывает сессию браузера и удаляет её из реестра.
+    
+    Args:
+        session_id: UUID сессии
+    """
+    if session_id not in ACTIVE_CAPTCHA_SESSIONS:
+        return
+    
+    session = ACTIVE_CAPTCHA_SESSIONS[session_id]
+    try:
+        browser = session.get("browser")
+        if browser:
+            browser.close()
+            print(f"🔒 Браузер закрыт для сессии {session_id}")
+    except Exception as e:
+        print(f"⚠️ Ошибка при закрытии браузера: {e}")
+    
+    del ACTIVE_CAPTCHA_SESSIONS[session_id]
+    print(f"🗑️ Сессия {session_id} удалена из реестра")
 
 def get_expected_oid(queue_dict: dict) -> Optional[str]:
     """
@@ -702,9 +966,6 @@ def init_schema_checks() -> None:
             pass
 
 # Используем parser_config для автоматического выбора парсера (interception или legacy)
-from parser_config import parse_yandex_card
-from gigachat_analyzer import analyze_business_data
-
 try:
     # Используем psycopg2.sql для безопасной сборки ALTER TABLE (PostgreSQL)
     from psycopg2 import sql as _psql_sql
@@ -763,6 +1024,98 @@ def _detect_db_kind(cursor) -> str:
     return _DB_KIND
 
 
+def _recover_lost_captcha_sessions():
+    """
+    Восстанавливает состояние после рестарта воркера.
+    Помечает задачи с потерянными сессиями как expired.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Находим задачи со status='captcha' AND captcha_status='waiting'
+        cursor.execute("""
+            SELECT id, captcha_session_id
+            FROM parsequeue
+            WHERE status = 'captcha' 
+              AND captcha_status = 'waiting'
+        """)
+        rows = cursor.fetchall()
+        
+        expired_count = 0
+        for row in rows:
+            task_id = row.get('id') if isinstance(row, dict) else row[0]
+            session_id = row.get('captcha_session_id') if isinstance(row, dict) else row[1]
+            
+            # Если сессии нет в реестре - помечаем как expired
+            if session_id and session_id not in ACTIVE_CAPTCHA_SESSIONS:
+                cursor.execute("""
+                    UPDATE parsequeue 
+                    SET captcha_status = 'expired',
+                        error_message = 'captcha session lost (worker restarted)',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (task_id,))
+                expired_count += 1
+                print(f"⚠️ Задача {task_id}: сессия {session_id} потеряна после рестарта → expired")
+        
+        if expired_count > 0:
+            conn.commit()
+            print(f"🔄 Восстановление после рестарта: {expired_count} задач помечено как expired")
+        else:
+            print("✅ Восстановление после рестарта: потерянных сессий не найдено")
+    except Exception as e:
+        print(f"⚠️ Ошибка при восстановлении сессий: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def _recover_lost_captcha_sessions():
+    """
+    Восстанавливает состояние после рестарта воркера.
+    Помечает задачи с потерянными сессиями как expired.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Находим задачи со status='captcha' AND captcha_status='waiting'
+        cursor.execute("""
+            SELECT id, captcha_session_id
+            FROM parsequeue
+            WHERE status = 'captcha' 
+              AND captcha_status = 'waiting'
+        """)
+        rows = cursor.fetchall()
+        
+        expired_count = 0
+        for row in rows:
+            task_id = row.get('id') if isinstance(row, dict) else row[0]
+            session_id = row.get('captcha_session_id') if isinstance(row, dict) else (row[1] if len(row) > 1 else None)
+            
+            # Если сессии нет в реестре - помечаем как expired
+            if session_id and session_id not in ACTIVE_CAPTCHA_SESSIONS:
+                cursor.execute("""
+                    UPDATE parsequeue 
+                    SET captcha_status = 'expired',
+                        error_message = 'captcha session lost (worker restarted)',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (task_id,))
+                expired_count += 1
+                print(f"⚠️ Задача {task_id}: сессия {session_id} потеряна после рестарта → expired")
+        
+        if expired_count > 0:
+            conn.commit()
+            print(f"🔄 Восстановление после рестарта: {expired_count} задач помечено как expired")
+        else:
+            print("✅ Восстановление после рестарта: потерянных сессий не найдено")
+    except Exception as e:
+        print(f"⚠️ Ошибка при восстановлении сессий: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
 def process_queue():
     """Обрабатывает очередь парсинга из SQLite базы данных"""
     queue_dict = None
@@ -792,13 +1145,17 @@ def process_queue():
         except Exception as e:
             print(f"⚠️ Ошибка при проверке существования таблицы parsequeue через to_regclass: {e}")
         # Получаем заявки из очереди (обрабатываем и parse_card, и sync задачи)
+        # Также обрабатываем задачи с captcha_status='waiting' и resume_requested=TRUE
         now = datetime.now().isoformat()
         cursor.execute("""
             SELECT * FROM parsequeue 
             WHERE status = 'pending' 
-               OR (status = 'captcha' AND (retry_after IS NULL OR retry_after <= %s))
+               OR (status = 'captcha' AND captcha_status = 'waiting' AND resume_requested = TRUE)
+               OR (status = 'captcha' AND captcha_status IS NULL AND (retry_after IS NULL OR retry_after <= %s))
             ORDER BY 
-                CASE WHEN status = 'pending' THEN 1 ELSE 2 END,
+                CASE WHEN status = 'pending' THEN 1 
+                     WHEN resume_requested = TRUE THEN 2
+                     ELSE 3 END,
                 created_at ASC 
             LIMIT 1
         """, (now,))
@@ -885,8 +1242,51 @@ def process_queue():
                 url = new_url
                 queue_dict['url'] = new_url # Обновляем и в словаре
 
+        # Проверяем, нужно ли продолжить парсинг после решения капчи
+        resume_captcha = queue_dict.get("resume_requested") and queue_dict.get("captcha_status") == "waiting"
+        session_id = queue_dict.get("captcha_session_id")
+        
+        # Если это продолжение после капчи, восстанавливаем сессию
+        if resume_captcha and session_id and session_id in ACTIVE_CAPTCHA_SESSIONS:
+            print(f"🔄 Продолжаем парсинг после решения капчи (сессия: {session_id})")
+            session = ACTIVE_CAPTCHA_SESSIONS[session_id]
+            page = session.get("page")
+            browser = session.get("browser")
+            context = session.get("context")
+            
+            # Проверяем, что капча решена
+            if not verify_captcha_solved(page):
+                print("❌ Капча ещё не решена, ожидаем...")
+                # Обновляем статус обратно на waiting
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE parsequeue 
+                    SET resume_requested = FALSE,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (queue_dict["id"],))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return
+            
+            # Продолжаем парсинг в той же сессии (используем специальный режим)
+            # Для продолжения парсинга нужно вызвать парсер с уже открытой страницей
+            # Пока что просто проверяем, что капча решена и продолжаем стандартный flow
+            print("✅ Капча решена, продолжаем парсинг...")
+        
         parse_start_time = datetime.now()
-        card_data = parse_yandex_card(url)
+        
+        # Если это новая задача или капча не была решена, запускаем парсинг с keep_open_on_captcha
+        if not resume_captcha:
+            # Для новых задач включаем режим keep_open_on_captcha
+            card_data = parse_yandex_card(url, keep_open_on_captcha=True, session_registry=ACTIVE_CAPTCHA_SESSIONS)
+        else:
+            # Для продолжения после капчи используем существующую страницу
+            # Пока что просто перезапускаем парсинг (в будущем можно оптимизировать)
+            card_data = parse_yandex_card(url, keep_open_on_captcha=False, session_registry=None)
+        
         parse_end_time = datetime.now()
         parse_time_ms = int((parse_end_time - parse_start_time).total_seconds() * 1000)
         
@@ -971,7 +1371,7 @@ def process_queue():
         if card_data.get("error") == "captcha_detected":
             # Если был создан фоллбэк, то считаем задачу выполненной, не уходим в цикл
             if fallback_created:
-                print(f"✅ Капча обнаружена, но создан фоллбэк. Помечаю задачу как выполненную, чтобы не зацикливать.")
+                print("✅ Капча обнаружена, но создан фоллбэк. Помечаю задачу как выполненную, чтобы не зацикливать.")
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 try:
@@ -983,7 +1383,43 @@ def process_queue():
                     conn.close()
                 return
 
-            # Открываем новое соединение только для обновления статуса капчи
+            # НОВЫЙ FLOW: Сохраняем сессию браузера для human-in-the-loop
+            if card_data.get("captcha_needs_human") and card_data.get("_browser") and card_data.get("_page"):
+                print("🔒 Капча обнаружена, сохраняем сессию браузера для human-in-the-loop")
+                
+                # Защита от утечки Playwright объектов: удаляем их из card_data
+                # Объекты сохраняются только в ACTIVE_CAPTCHA_SESSIONS
+                browser_obj = card_data.pop("_browser", None)
+                context_obj = card_data.pop("_context", None)
+                page_obj = card_data.pop("_page", None)
+                
+                # Проверка: убеждаемся, что в card_data нет Playwright объектов
+                assert "_browser" not in card_data, "Playwright объекты не должны попадать в card_data"
+                assert "_context" not in card_data, "Playwright объекты не должны попадать в card_data"
+                assert "_page" not in card_data, "Playwright объекты не должны попадать в card_data"
+                
+                # Генерируем session_id и token
+                session_id = str(uuid.uuid4())
+                token = str(uuid.uuid4())
+                vnc_path = f"/tasks/{queue_dict['id']}/captcha?token={token}"
+                
+                # Сохраняем задачу в статус WAIT_CAPTCHA
+                park_task_for_captcha(
+                    task_id=queue_dict["id"],
+                    page=page_obj,
+                    session_id=session_id,
+                    token=token,
+                    vnc_path=vnc_path,
+                    browser=browser_obj,
+                    context=context_obj,
+                )
+                
+                print(f"⏳ Задача {queue_dict['id']} ожидает решения капчи оператором")
+                print(f"🔗 Ссылка для оператора: {vnc_path}")
+                return
+            
+            # СТАРЫЙ FLOW (fallback): Если keep_open_on_captcha не сработал, используем старую логику
+            print("⚠️ Капча обнаружена, но сессия не сохранена. Используем старую логику retry.")
             conn = get_db_connection()
             cursor = conn.cursor()
             try:
@@ -1010,6 +1446,42 @@ def process_queue():
                 cursor.close()
                 conn.close()
             return
+        
+        # Проверяем таймаут капчи (30 минут)
+        if queue_dict.get("captcha_started_at"):
+            try:
+                captcha_started = datetime.fromisoformat(queue_dict["captcha_started_at"].replace('Z', '+00:00'))
+                if isinstance(captcha_started, str):
+                    captcha_started = datetime.fromisoformat(captcha_started)
+            except:
+                try:
+                    captcha_started = date_parser.parse(queue_dict["captcha_started_at"])
+                except:
+                    captcha_started = None
+            
+            if captcha_started:
+                elapsed = (datetime.now() - captcha_started).total_seconds()
+                if elapsed > 1800:  # 30 минут
+                    print(f"⏱️ Таймаут ожидания решения капчи для задачи {queue_dict['id']}")
+                    session_id = queue_dict.get("captcha_session_id")
+                    if session_id:
+                        close_session(session_id)
+                    
+                    # Обновляем статус на expired
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE parsequeue 
+                        SET captcha_status = 'expired',
+                            status = 'error',
+                            error_message = 'Капча не решена в течение 30 минут',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (queue_dict["id"],))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    return
         
         # ШАГ 3: Сохраняем результаты (открываем новое соединение)
         # Сохраняем только если статус success или partial (не fail)
@@ -1556,7 +2028,7 @@ def process_queue():
                         owner_id = owner_row[0] if isinstance(owner_row, dict) else owner_row[0]
                         print(f"🔄 Синхронизация услуг для business_id={business_id} (owner_id={owner_id})...")
                         _sync_parsed_services_to_db(business_id, card_data.get('products'), conn, owner_id)
-                        print(f"✅ Услуги успешно синхронизированы.")
+                        print("✅ Услуги успешно синхронизированы.")
                     else:
                         print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
                 except Exception as sync_error:
@@ -1569,6 +2041,24 @@ def process_queue():
             if card_data.get('fallback_used'):
                 warning_msg = "⚠️ Fast Endpoint Outdated (Used HTML Fallback)"
                 
+            # Очищаем сессию капчи, если она была
+            session_id = queue_dict.get("captcha_session_id")
+            if session_id:
+                close_session(session_id)
+                # Очищаем поля капчи в БД
+                cursor.execute("""
+                    UPDATE parsequeue 
+                    SET captcha_required = FALSE,
+                        captcha_url = NULL,
+                        captcha_session_id = NULL,
+                        captcha_token = NULL,
+                        captcha_vnc_path = NULL,
+                        captcha_started_at = NULL,
+                        captcha_status = NULL,
+                        resume_requested = FALSE
+                    WHERE id = %s
+                """, (queue_dict["id"],))
+            
             if warning_msg:
                  cursor.execute("UPDATE parsequeue SET status = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", ("completed", warning_msg, queue_dict["id"]))
             else:
@@ -1847,19 +2337,19 @@ def _process_sync_yandex_business_task(queue_dict):
             }
             
             # Получаем данные из кабинета
-            print(f"📥 Получение отзывов из кабинета...")
+            print("📥 Получение отзывов из кабинета...")
             reviews = parser.fetch_reviews(account_data)
             print(f"✅ Получено отзывов: {len(reviews)}")
             
-            print(f"📥 Получение статистики из кабинета...")
+            print("📥 Получение статистики из кабинета...")
             stats = parser.fetch_stats(account_data)
             print(f"✅ Получено точек статистики: {len(stats)}")
             
-            print(f"📥 Получение публикаций из кабинета...")
+            print("📥 Получение публикаций из кабинета...")
             posts = parser.fetch_posts(account_data)
             print(f"✅ Получено публикаций: {len(posts)}")
             
-            print(f"📥 Получение информации об организации из кабинета...")
+            print("📥 Получение информации об организации из кабинета...")
             org_info = parser.fetch_organization_info(account_data)
             
             # Сохраняем отзывы и статистику
@@ -2217,7 +2707,7 @@ def _process_sync_2gis_task(queue_dict):
     
     try:
         from services.two_gis_client import TwoGISClient
-        from external_sources import ExternalSource, ExternalStatsPoint, make_stats_id
+        from external_sources import ExternalSource, make_stats_id
         
         # Инициализация клиента
         # TODO: Можно брать ключ из настроек бизнеса, если мы разрешаем клиентам свои ключи
@@ -2588,6 +3078,12 @@ if __name__ == "__main__":
     except Exception as e:
         # Не даём worker упасть из‑за проблем со схемой — просто логируем
         print(f"⚠️ init_schema_checks: необработанная ошибка при старте worker: {e}")
+    
+    # Восстановление потерянных сессий после рестарта
+    try:
+        _recover_lost_captcha_sessions()
+    except Exception as e:
+        print(f"⚠️ Ошибка при восстановлении сессий: {e}")
 
     print("Worker запущен. Проверка очереди каждые 5 минут...")
     while True:

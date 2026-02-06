@@ -9,7 +9,7 @@ import os
 # Добавляем путь к src для импорта
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from safe_db_utils import get_db_connection, safe_migrate
+from safe_db_utils import safe_migrate
 
 def migrate():
     """Добавить UNIQUE constraint через уникальный индекс"""
@@ -54,7 +54,7 @@ def migrate():
                     )
                 """, (business_id, source, external_review_id, business_id, source, external_review_id))
             
-            print(f"✅ Удалено дубликатов")
+            print("✅ Удалено дубликатов")
         
         # Создаем уникальный индекс (в SQLite это работает как UNIQUE constraint)
         cursor.execute("""

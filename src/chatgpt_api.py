@@ -7,12 +7,10 @@ API endpoints для ChatGPT интеграции
 - Определение часового пояса
 """
 from flask import Blueprint, request, jsonify
-from database_manager import DatabaseManager, get_db_connection
+from database_manager import DatabaseManager
 from auth_system import verify_session, create_session
 from timezone_utils import get_timezone_from_address
-import uuid
 import json
-from datetime import datetime, timedelta
 
 chatgpt_bp = Blueprint('chatgpt', __name__)
 

@@ -6,7 +6,6 @@
 """
 import os
 import requests
-from datetime import datetime
 
 # Загружаем переменные окружения
 try:

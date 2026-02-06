@@ -4,7 +4,6 @@
 PostgreSQL-only: SQLite больше не поддерживается в runtime
 """
 import os
-from typing import Optional
 
 
 def get_db_connection():

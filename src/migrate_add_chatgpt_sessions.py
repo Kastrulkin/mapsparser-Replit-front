@@ -2,7 +2,7 @@
 """
 Миграция: Создание таблицы ChatGPTUserSessions для персонализации и учета истории
 """
-from safe_db_utils import get_db_connection, safe_migrate
+from safe_db_utils import safe_migrate
 
 def migrate():
     """Создать таблицу ChatGPTUserSessions"""

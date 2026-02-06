@@ -3,11 +3,10 @@
 OAuth 2.0 аутентификация для Google Business Profile API
 """
 import os
-import json
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 class GoogleBusinessAuth:
     def __init__(self):

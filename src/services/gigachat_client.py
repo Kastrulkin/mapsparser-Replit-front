@@ -8,9 +8,8 @@ import time
 import random
 import base64
 import requests
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 import json
-from datetime import datetime, timedelta
 from gigachat_config import get_gigachat_config
 
 class GigaChatClient:
@@ -213,7 +212,7 @@ class GigaChatClient:
                       news_generation, ai_agent_marketing, ai_agent_booking, ai_agent_booking_complex)
         """
         try:
-            print(f"🚨 DEBUG: Начинаем анализ скриншота")
+            print("🚨 DEBUG: Начинаем анализ скриншота")
             print(f"🚨 DEBUG: Размер base64: {len(image_base64)} символов")
             
             # Загружаем файл в GigaChat
@@ -287,10 +286,10 @@ class GigaChatClient:
             # Исправляем согласно документации GigaChat
             if "alternatives" in result:
                 content = result["alternatives"][0]["message"]["content"]
-                print(f"🚨 DEBUG: Используем структуру 'alternatives'")
+                print("🚨 DEBUG: Используем структуру 'alternatives'")
             elif "choices" in result:
                 content = result["choices"][0]["message"]["content"]
-                print(f"🚨 DEBUG: Используем структуру 'choices' (старая)")
+                print("🚨 DEBUG: Используем структуру 'choices' (старая)")
             else:
                 raise Exception("Неизвестная структура ответа от GigaChat")
             
@@ -315,7 +314,7 @@ class GigaChatClient:
             # Проверяем, что JSON валидный
             try:
                 json.loads(cleaned_content)
-                print(f"✅ JSON валидный после очистки")
+                print("✅ JSON валидный после очистки")
             except json.JSONDecodeError as e:
                 print(f"❌ JSON все еще невалидный: {e}")
                 # Попробуем более агрессивную очистку
@@ -555,7 +554,7 @@ class GigaChatClient:
                                     # Закрываем массив services и объект
                                     fixed_json += ']}'
                                     
-                                    print(f"🔧 Попытка восстановить обрезанный JSON")
+                                    print("🔧 Попытка восстановить обрезанный JSON")
                                     print(f"🔧 Длина восстановленного JSON: {len(fixed_json)}")
                                     parsed = json.loads(fixed_json)
                                     services_count = len(parsed.get('services', []))

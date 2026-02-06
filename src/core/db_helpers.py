@@ -1,7 +1,6 @@
 """
 Helper функции для работы с базой данных
 """
-import sqlite3
 
 def ensure_user_examples_table(cursor):
     """

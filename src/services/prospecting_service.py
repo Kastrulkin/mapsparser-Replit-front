@@ -7,7 +7,6 @@ except ImportError:
     APIFY_AVAILABLE = False
     print("Warning: apify_client not installed. Prospecting features disabled.")
 from typing import List, Dict, Any, Optional
-import datetime
 
 class ProspectingService:
     def __init__(self, api_token: Optional[str] = None):

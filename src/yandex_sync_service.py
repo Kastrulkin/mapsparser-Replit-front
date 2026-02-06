@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from datetime import datetime, date
-from typing import Optional
 
 from database_manager import DatabaseManager
 from yandex_adapter import YandexAdapter, YandexBusinessStatsPayload

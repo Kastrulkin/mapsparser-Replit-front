@@ -70,12 +70,12 @@ def main():
         camel_case_tables = [t for t in table_names if t[0].isupper()]
         lowercase_tables = [t for t in table_names if t[0].islower()]
         
-        print(f"\n📊 Статистика:")
+        print("\n📊 Статистика:")
         print(f"  CamelCase таблиц: {len(camel_case_tables)}")
         print(f"  lowercase таблиц: {len(lowercase_tables)}")
         
         if camel_case_tables and lowercase_tables:
-            print(f"\n  ⚠️  СМЕШЕНИЕ СТАНДАРТОВ!")
+            print("\n  ⚠️  СМЕШЕНИЕ СТАНДАРТОВ!")
             print(f"  CamelCase: {', '.join(camel_case_tables[:5])}...")
             print(f"  lowercase: {', '.join(lowercase_tables[:5])}...")
         

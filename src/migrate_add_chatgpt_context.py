@@ -2,7 +2,7 @@
 """
 Миграция: Добавление поля chatgpt_context в таблицы Businesses и UserServices
 """
-from safe_db_utils import get_db_connection, safe_migrate
+from safe_db_utils import safe_migrate
 
 def migrate():
     """Добавить поле chatgpt_context в Businesses и UserServices"""

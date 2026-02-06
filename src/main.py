@@ -7,7 +7,6 @@ import json
 # PostgreSQL-only: sqlite3 больше не используется
 import uuid
 import base64
-import random
 from datetime import datetime, timedelta
 
 # Временный лог для диагностики интерпретатора
@@ -50,7 +49,7 @@ from database_manager import DatabaseManager, get_db_connection
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
 from db_helpers import get_db, close_db
-from config import USE_BUSINESS_REPOSITORY, USE_SERVICE_REPOSITORY, USE_REVIEW_REPOSITORY
+from config import USE_SERVICE_REPOSITORY, USE_REVIEW_REPOSITORY
 from core.helpers import get_business_owner_id
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
@@ -69,6 +68,7 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
+from api.captcha_api import captcha_bp
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -150,6 +150,7 @@ app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
 app.register_blueprint(admin_prospecting_bp)
+app.register_blueprint(captcha_bp)
 
 try:
     from api.wordstat_api import wordstat_bp
@@ -1213,8 +1214,6 @@ def upsert_external_account(business_id):
         # В PostgreSQL работаем напрямую с таблицей
         # Если таблицы нет, вернется ошибка при выполнении запроса
 
-        import uuid
-        from datetime import datetime
         from auth_encryption import encrypt_auth_data
 
         # Логирование для отладки
@@ -1287,7 +1286,7 @@ def upsert_external_account(business_id):
                 print(f"✅ Аккаунт обновлен без auth_data: external_id={external_id}, display_name={display_name}")
         else:
             # UUID будет сгенерирован автоматически
-            print(f"🆕 Создание нового аккаунта")
+            print("🆕 Создание нового аккаунта")
             # auth_data теперь необязателен - можно создавать аккаунт без cookies для парсинга через открытые эндпоинты
             cursor.execute(
                 """
@@ -1312,7 +1311,7 @@ def upsert_external_account(business_id):
             print(f"✅ Аккаунт создан: id={account_id}, external_id={external_id}, display_name={display_name}")
 
         db.conn.commit()
-        print(f"✅ Изменения закоммичены в БД")
+        print("✅ Изменения закоммичены в БД")
         db.close()
 
         return jsonify({"success": True, "account_id": account_id})
@@ -2351,7 +2350,7 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
 def services_optimize():
     """Единая точка: перефразирование услуг из текста или файла."""
     try:
-        print(f"🔍 Начало обработки запроса /api/services/optimize")
+        print("🔍 Начало обработки запроса /api/services/optimize")
         # Разрешим preflight запросы
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -2682,7 +2681,7 @@ def services_optimize():
                     # JSON не найден, пробуем распарсить всю строку
                     parsed_result = json.loads(result)
             except json.JSONDecodeError:
-                print(f"❌ Не удалось распарсить JSON из результата")
+                print("❌ Не удалось распарсить JSON из результата")
                 print(f"❌ Полный результат: {result[:500]}")
                 return jsonify({
                     "success": False,
@@ -2839,7 +2838,7 @@ def delete_user_service_example(example_id: str):
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 def news_generate():
     try:
-        print(f"🔍 Начало обработки запроса /api/news/generate")
+        print("🔍 Начало обработки запроса /api/news/generate")
         if request.method == 'OPTIONS':
             return ('', 204)
         auth_header = request.headers.get('Authorization')
@@ -3411,8 +3410,8 @@ def news_examples_delete(example_id: str):
 def reviews_reply():
     """Сгенерировать короткий вежливый ответ на отзыв в заданном тоне."""
     import sys
-    print(f"🔍 Начало обработки запроса /api/reviews/reply", file=sys.stderr, flush=True)
-    print(f"🔍 Начало обработки запроса /api/reviews/reply", flush=True)
+    print("🔍 Начало обработки запроса /api/reviews/reply", file=sys.stderr, flush=True)
+    print("🔍 Начало обработки запроса /api/reviews/reply", flush=True)
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
@@ -4117,7 +4116,7 @@ def update_service(service_id):
                 # Commit transaction
                 db.conn.commit()
                 
-                print(f"✅ DEBUG update_service: UPDATE выполнен через репозиторий", flush=True)
+                print("✅ DEBUG update_service: UPDATE выполнен через репозиторий", flush=True)
                 return jsonify({"success": True, "message": "Услуга обновлена"})
                 
             except (RecordNotFoundError, OrphanRecordError) as repo_error:
@@ -4146,7 +4145,7 @@ def update_service(service_id):
             print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
             
             if has_optimized_description and has_optimized_name:
-                print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
+                print("🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
                 cursor.execute("""
                     UPDATE userservices SET
                     category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
@@ -4155,7 +4154,7 @@ def update_service(service_id):
                 print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
 
             else:
-                print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
+                print("🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
                 cursor.execute("""
                     UPDATE userservices SET
                     category = %s, name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
@@ -4550,7 +4549,7 @@ def client_info():
                     print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, user_id={user_id}, is_superadmin={user_data.get('is_superadmin')}")
                     # Проверяем права доступа
                     if owner_id == user_id or user_data.get('is_superadmin'):
-                        print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из Businesses")
+                        print("✅ GET /api/client-info: Доступ разрешен, возвращаю данные из Businesses")
                         # Получаем ссылки на карты для этого бизнеса
                         links = []
                         cursor.execute("""
@@ -4690,7 +4689,7 @@ def client_info():
                             "message": "У вас нет прав для просмотра данных этого бизнеса"
                         }), 403
                 else:
-                    print(f"⚠️ GET /api/client-info: Бизнес не найден в таблице Businesses")
+                    print("⚠️ GET /api/client-info: Бизнес не найден в таблице Businesses")
                     db.close()
                     return jsonify({
                         "success": False,
@@ -4742,7 +4741,7 @@ def client_info():
                         traceback.print_exc()
                         # Если ошибка "no such column: business_id" - значит проверка колонки не сработала
                         if "no such column: business_id" in error_msg.lower():
-                            print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Колонка business_id не найдена, хотя проверка показала, что она есть!")
+                            print("🚨 КРИТИЧЕСКАЯ ОШИБКА: Колонка business_id не найдена, хотя проверка показала, что она есть!")
                             print(f"🚨 Колонки из проверки: {columns}")
                         # Пытаемся получить без business_id
                         cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM clientinfo WHERE user_id = %s LIMIT 1", (user_id,))
@@ -7118,7 +7117,7 @@ def admin_sync_business_yandex(business_id):
                 auth_data = account_row[1] if len(account_row) > 1 else None
             print(f"✅ Найден аккаунт: {account_id}, auth_data length={len(auth_data) if auth_data else 0}")
         else:
-             print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
+             print("⚠️ Аккаунт Яндекс.Бизнес не найден")
 
         # Ищем ссылку на карты (NEW)
         print(f"🔍 Поиск ссылки на карты для бизнеса {business_id}...")
@@ -7145,7 +7144,7 @@ def admin_sync_business_yandex(business_id):
         if account_id and not map_url:
             # Если есть аккаунт, но нет ссылки на карты - нужны cookies для синхронизации
             if not auth_data or (isinstance(auth_data, str) and len(auth_data.strip()) == 0):
-                print(f"❌ Аккаунт найден, но auth_data пустой. Для синхронизации через аккаунт нужны cookies.")
+                print("❌ Аккаунт найден, но auth_data пустой. Для синхронизации через аккаунт нужны cookies.")
                 db.close()
                 return jsonify({
                     "success": False,
@@ -7167,7 +7166,7 @@ def admin_sync_business_yandex(business_id):
             task_type = 'sync_yandex_business'
             source = 'yandex_business'
             target_url = ''
-            print(f"⚠️ Ссылка на карты не найдена, но есть аккаунт с cookies. Запуск прямой синхронизации.")
+            print("⚠️ Ссылка на карты не найдена, но есть аккаунт с cookies. Запуск прямой синхронизации.")
             message = "Запущена синхронизация (без парсинга)"
 
         print(f"🔄 Добавление задачи {task_type} в очередь для бизнеса {business_id}")
@@ -7270,10 +7269,10 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         auth_data_plain = decrypt_auth_data(auth_data_encrypted)
         if not auth_data_plain:
             print(f"❌ Не удалось расшифровать auth_data для аккаунта {account_id}")
-            print(f"   Проверьте:")
-            print(f"   1. Установлен ли EXTERNAL_AUTH_SECRET_KEY в .env (должен совпадать с ключом при шифровании)")
-            print(f"   2. Установлена ли библиотека cryptography: pip install cryptography")
-            print(f"   3. Правильный ли формат данных в БД")
+            print("   Проверьте:")
+            print("   1. Установлен ли EXTERNAL_AUTH_SECRET_KEY в .env (должен совпадать с ключом при шифровании)")
+            print("   2. Установлена ли библиотека cryptography: pip install cryptography")
+            print("   3. Правильный ли формат данных в БД")
             return False
         print(f"✅ auth_data успешно расшифрован (длина: {len(auth_data_plain)} символов)")
         
@@ -7295,27 +7294,27 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
             "external_id": external_id
         }
         
-        print(f"📥 Получение отзывов...")
+        print("📥 Получение отзывов...")
         reviews = parser.fetch_reviews(account_data)
         print(f"✅ Получено отзывов: {len(reviews)}")
         
-        print(f"📥 Получение статистики...")
+        print("📥 Получение статистики...")
         stats = parser.fetch_stats(account_data)
         print(f"✅ Получено точек статистики: {len(stats)}")
         
-        print(f"📥 Получение публикаций...")
+        print("📥 Получение публикаций...")
         posts = parser.fetch_posts(account_data)
         print(f"✅ Получено публикаций: {len(posts)}")
         
         # Получаем услуги/прайс-лист
-        print(f"📥 Получение услуг/прайс-листа...")
+        print("📥 Получение услуг/прайс-листа...")
         services = parser.fetch_services(account_data)
         print(f"✅ Получено услуг: {len(services)}")
         
         # Получаем информацию об организации (рейтинг, количество отзывов, новостей, фото)
-        print(f"📥 Получение информации об организации...")
+        print("📥 Получение информации об организации...")
         org_info = parser.fetch_organization_info(account_data)
-        print(f"✅ Информация об организации:")
+        print("✅ Информация об организации:")
         print(f"   Рейтинг: {org_info.get('rating')}")
         print(f"   Отзывов: {org_info.get('reviews_count')}")
         print(f"   Новостей: {org_info.get('news_count')}")
@@ -7378,7 +7377,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                 owner_row = cursor.fetchone()
                 user_id = owner_row[0] if owner_row else None
                 if not user_id:
-                    print(f"⚠️ Нет user_id для сохранения услуг")
+                    print("⚠️ Нет user_id для сохранения услуг")
                 else:
                     saved_count = 0
                     updated_count = 0
@@ -7391,7 +7390,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                             
                             # Проверяем наличие обязательного поля name
                             if "name" not in service or not service["name"]:
-                                print(f"⚠️ Услуга без названия, пропускаем")
+                                print("⚠️ Услуга без названия, пропускаем")
                                 continue
                             
                             # Проверяем, есть ли уже такая услуга

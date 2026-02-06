@@ -7,13 +7,6 @@ from datetime import datetime
 import json
 import uuid
 
-# Исправляем импорт для работы с safe_db_utils
-try:
-    from safe_db_utils import get_db_connection
-except ImportError:
-    # Fallback на DatabaseManager
-    pass
-
 def get_or_create_session(chatgpt_user_id: str, business_id: str = None) -> dict:
     """
     Получить или создать сессию пользователя ChatGPT

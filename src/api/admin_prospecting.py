@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.prospecting_service import ProspectingService
 from database_manager import DatabaseManager
-import threading
 
 admin_prospecting_bp = Blueprint('admin_prospecting', __name__)
 

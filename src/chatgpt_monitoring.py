@@ -6,7 +6,6 @@ from database_manager import DatabaseManager
 from datetime import datetime, timedelta
 import json
 import uuid
-import time
 
 def log_request(
     endpoint: str,

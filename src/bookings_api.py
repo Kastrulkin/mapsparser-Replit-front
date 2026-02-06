@@ -4,8 +4,6 @@ API endpoints для управления бронированиями
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
-import uuid
-from datetime import datetime
 
 bookings_bp = Blueprint('bookings', __name__)
 

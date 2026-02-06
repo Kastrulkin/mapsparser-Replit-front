@@ -4,10 +4,8 @@
 """
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 
 class GoogleBusinessAPI:
     def __init__(self, credentials: Credentials):

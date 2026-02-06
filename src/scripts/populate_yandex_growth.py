@@ -4,7 +4,6 @@ Script to populate Growth Stages and Tasks for Yandex Maps Strategy.
 """
 import sys
 import os
-import uuid
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))

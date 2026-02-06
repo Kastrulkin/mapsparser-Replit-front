@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from database_manager import DatabaseManager
-from repositories.external_data_repository import ExternalDataRepository
 
 class BaseSyncWorker(ABC):
     def __init__(self, source: str):

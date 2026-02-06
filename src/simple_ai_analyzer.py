@@ -1,7 +1,6 @@
 """
 Простой ИИ-анализатор без внешних API
 """
-import re
 from typing import Dict, Any, List
 
 def analyze_business_data(card_data: Dict[str, Any]) -> Dict[str, Any]:

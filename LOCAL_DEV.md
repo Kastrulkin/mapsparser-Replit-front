@@ -67,6 +67,26 @@ npm run dev
 ./scripts/check_health.sh
 ```
 
+## Обязательные проверки после изменений кода
+
+После любых правок в backend (особенно в файлах парсера, воркера и auth-логики) прогоняй быстрые проверки перед запуском сервисов:
+
+```zsh
+source venv/bin/activate
+
+# 1. Синтаксис ключевых модулей
+python3 -m py_compile \
+  src/main.py \
+  src/worker.py \
+  src/parser_interception.py \
+  src/auth_system.py
+
+# 2. Стиль и простые ошибки Ruff для парсера
+python3 -m ruff check src/parser_interception.py
+```
+
+Рекомендуется считать эти проверки частью рабочего цикла: **сделал правку → py_compile → ruff (для парсера) → запуск.**
+
 ## Устранение проблем
 
 ### ModuleNotFoundError

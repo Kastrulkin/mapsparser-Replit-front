@@ -227,7 +227,7 @@ def update_service(service_id):
         
         # Обновляем услугу с учетом наличия полей
         if has_optimized_description and has_optimized_name:
-            print(f"🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
+            print("🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE userservices 
                 SET category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s
@@ -250,7 +250,7 @@ def update_service(service_id):
             if check_row:
                 print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
             else:
-                print(f"❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
+                print("❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
         elif has_optimized_description:
             cursor.execute("""
                 UPDATE userservices 

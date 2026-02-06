@@ -2,7 +2,6 @@
 """
 Скрипт для добавления "Стратегии успеха для Салона красоты" в базу данных
 """
-import sys
 import uuid
 import json
 from database_manager import DatabaseManager

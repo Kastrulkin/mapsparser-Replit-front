@@ -113,7 +113,7 @@ class ReviewRepository(BaseRepository):
         """
         
         if limit:
-            query += f" LIMIT ? OFFSET ?"
+            query += " LIMIT ? OFFSET ?"
             params.extend([limit, offset])
         
         self._execute(cursor, query, tuple(params))

@@ -6,13 +6,11 @@
 """
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
-from subscription_manager import check_access
 from datetime import datetime, timedelta, time as dt_time
 import uuid
 import json
 import math
 import time
-from chatgpt_personalization import record_search, get_user_preferences
 from chatgpt_monitoring import log_request
 
 chatgpt_search_bp = Blueprint('chatgpt_search', __name__)

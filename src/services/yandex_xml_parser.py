@@ -4,7 +4,6 @@ Yandex Business XML Parser
 """
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 
 
 def parse_yandex_network_xml(xml_content: str) -> List[Dict[str, Any]]:

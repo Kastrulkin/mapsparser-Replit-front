@@ -13,7 +13,7 @@ def get_parser():
     Возвращает функцию парсинга в зависимости от конфигурации.
     
     Returns:
-        Функция parse_yandex_card(url: str) -> dict
+        Функция parse_yandex_card(url: str, keep_open_on_captcha: bool = False, session_registry: dict = None) -> dict
     """
     if PARSER_MODE == 'interception':
         try:

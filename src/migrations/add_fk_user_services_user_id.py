@@ -9,7 +9,7 @@ import os
 # Добавляем путь к src для импорта
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from safe_db_utils import get_db_connection, safe_migrate
+from safe_db_utils import safe_migrate
 
 def migrate():
     """Добавить FOREIGN KEY на user_id"""

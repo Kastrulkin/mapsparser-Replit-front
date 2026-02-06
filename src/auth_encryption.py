@@ -104,7 +104,7 @@ def decrypt_auth_data(encrypted_text: str) -> Optional[str]:
             return base64.b64decode(encrypted_text.encode()).decode()
     except base64.binascii.Error as e:
         print(f"❌ Ошибка base64 декодирования: {e}")
-        print(f"   Возможно, данные не зашифрованы или в другом формате")
+        print("   Возможно, данные не зашифрованы или в другом формате")
         return None
     except Exception as e:
         print(f"❌ Ошибка расшифровки auth_data: {type(e).__name__}: {e}")

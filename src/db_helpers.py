@@ -2,7 +2,7 @@
 Database connection helpers for Flask routes
 """
 from flask import g
-from database_manager import DatabaseManager, get_db_connection
+from database_manager import DatabaseManager
 
 
 def get_db():

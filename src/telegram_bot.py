@@ -264,7 +264,7 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    text = f"⚙️ *Настройки компании*\n\n"
+    text = "⚙️ *Настройки компании*\n\n"
     text += f"📝 Название: {business[0] or 'Не указано'}\n"
     text += f"📍 Адрес: {business[1] or 'Не указано'}\n"
     text += f"🕐 Часы работы: {business[2] or 'Не указано'}\n\n"
@@ -926,10 +926,10 @@ def main():
         application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
     except Exception as e:
         print(f"❌ Ошибка запуска бота: {e}")
-        print(f"💡 Проверьте:")
-        print(f"   1. Правильность токена TELEGRAM_BOT_TOKEN")
-        print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
-        print(f"   3. Доступность интернета для подключения к Telegram API")
+        print("💡 Проверьте:")
+        print("   1. Правильность токена TELEGRAM_BOT_TOKEN")
+        print("   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
+        print("   3. Доступность интернета для подключения к Telegram API")
         raise
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ PostgreSQL-only: SQLite больше не поддерживается
 Для PostgreSQL схема применяется через schema_postgres.sql
 """
 from safe_db_utils import get_db_connection
-import os
 
 def _get_table_columns(cursor, table_name):
     """

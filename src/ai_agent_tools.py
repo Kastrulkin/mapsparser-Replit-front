@@ -2,13 +2,9 @@
 Модуль с реальными tools для ИИ агента
 Эти функции вызываются, когда агент использует соответствующие инструменты
 """
-import json
 import uuid
-from datetime import datetime, timedelta
 from database_manager import DatabaseManager
-from ai_agent_webhooks import send_whatsapp_message, send_telegram_message
-import requests
-import os
+from ai_agent_webhooks import send_whatsapp_message
 
 def notify_operator(business_id: str, message: str, conversation_id: str = None, client_phone: str = None, client_name: str = None) -> dict:
     """
@@ -54,7 +50,7 @@ def notify_operator(business_id: str, message: str, conversation_id: str = None,
         """, (owner_id,))
         user_row = cursor.fetchone()
         
-        notification_text = f"🔔 Требуется ваше участие\n\n"
+        notification_text = "🔔 Требуется ваше участие\n\n"
         notification_text += f"{message}\n\n"
         if client_name:
             notification_text += f"Клиент: {client_name}\n"

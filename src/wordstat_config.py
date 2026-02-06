@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 class WordstatConfig:
     """Конфигурация для API Яндекс.Вордстат"""

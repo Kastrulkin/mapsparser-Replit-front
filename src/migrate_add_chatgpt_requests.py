@@ -2,7 +2,7 @@
 """
 Миграция: Создание таблицы ChatGPTRequests для мониторинга и логирования запросов
 """
-from safe_db_utils import get_db_connection, safe_migrate
+from safe_db_utils import safe_migrate
 
 def migrate():
     """Создать таблицу ChatGPTRequests"""

@@ -2,7 +2,6 @@
 """
 Скрипт для добавления заявки в очередь парсинга
 """
-import sqlite3
 import uuid
 from datetime import datetime
 

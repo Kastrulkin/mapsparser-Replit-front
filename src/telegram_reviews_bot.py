@@ -8,10 +8,8 @@ Telegram-бот для обмена отзывами (@beautyreviewexchange_bot)
 - Ежедневная рассылка в 9 утра
 """
 import os
-import json
 import uuid
 import re
-from datetime import datetime, time, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ChatMemberStatus
@@ -753,7 +751,7 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
             VALUES (?, ?, ?)
         """, (distribution_id, other_participant_id, participant_id))
         
-        message_text = f"📝 Новый бизнес для обмена отзывами:\n\n"
+        message_text = "📝 Новый бизнес для обмена отзывами:\n\n"
         if business_name:
             message_text += f"🏢 {business_name}\n"
         if business_address:
@@ -807,8 +805,6 @@ async def daily_distribution_task(bot):
 
 def run_daily_scheduler():
     """Запуск планировщика ежедневной рассылки"""
-    import schedule
-    import time
     
     def run_distribution():
         if not TELEGRAM_REVIEWS_BOT_TOKEN:
@@ -853,10 +849,14 @@ def main():
         
         # Запускаем планировщик ежедневной рассылки в отдельном потоке
         try:
-            import schedule
-            scheduler_thread = threading.Thread(target=run_daily_scheduler, daemon=True)
-            scheduler_thread.start()
-            print("⏰ Ежедневная рассылка настроена на 9:00 утра")
+            import importlib.util
+
+            if importlib.util.find_spec("schedule") is not None:
+                scheduler_thread = threading.Thread(target=run_daily_scheduler, daemon=True)
+                scheduler_thread.start()
+                print("⏰ Ежедневная рассылка настроена на 9:00 утра")
+            else:
+                raise ImportError("schedule not installed")
         except ImportError:
             print("⚠️ Библиотека schedule не установлена. Ежедневная рассылка не будет работать.")
             print("💡 Установите: pip install schedule")
@@ -868,10 +868,10 @@ def main():
         application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
     except Exception as e:
         print(f"❌ Ошибка запуска бота: {e}")
-        print(f"💡 Проверьте:")
-        print(f"   1. Правильность токена TELEGRAM_REVIEWS_BOT_TOKEN")
-        print(f"   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
-        print(f"   3. Доступность интернета для подключения к Telegram API")
+        print("💡 Проверьте:")
+        print("   1. Правильность токена TELEGRAM_REVIEWS_BOT_TOKEN")
+        print("   2. Установлена ли зависимость: pip install python-telegram-bot>=20.0")
+        print("   3. Доступность интернета для подключения к Telegram API")
         raise
 
 if __name__ == "__main__":

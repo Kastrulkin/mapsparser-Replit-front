@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 import random
 from datetime import datetime, date
@@ -63,7 +62,7 @@ class YandexBusinessParser:
         
         # Убеждаемся, что cookies действительно установлены в сессии
         if len(self.session.cookies) == 0 and len(self.cookies_dict) > 0:
-            print(f"⚠️ Предупреждение: cookies не установлены в сессии, устанавливаем вручную")
+            print("⚠️ Предупреждение: cookies не установлены в сессии, устанавливаем вручную")
             for key, value in self.cookies_dict.items():
                 self.session.cookies.set(key, value)
 
@@ -137,8 +136,8 @@ class YandexBusinessParser:
                     error_data = response.json()
                     if error_data.get("error", {}).get("message") == "NEED_RESET":
                         print(f"⚠️ Сессия истекла (401 NEED_RESET) для {url}")
-                        print(f"   🔐 Cookies устарели, нужно обновить авторизацию")
-                        print(f"   Решение: Обновите cookies в админской панели")
+                        print("   🔐 Cookies устарели, нужно обновить авторизацию")
+                        print("   Решение: Обновите cookies в админской панели")
                         print(f"   Redirect: {error_data.get('error', {}).get('redirectPath', 'N/A')}")
                         return None
                 except:
@@ -148,11 +147,11 @@ class YandexBusinessParser:
             response_text_lower = response.text.lower()
             if "captcha" in response_text_lower or "робот" in response_text_lower or "smartcaptcha" in response_text_lower:
                 print(f"⚠️ Яндекс показал капчу для {url}")
-                print(f"   Это означает, что запросы похожи на автоматические")
-                print(f"   Решения:")
-                print(f"   1. Обновить cookies в админской панели")
-                print(f"   2. Использовать сессию requests для сохранения cookies между запросами")
-                print(f"   3. Добавить задержки между запросами")
+                print("   Это означает, что запросы похожи на автоматические")
+                print("   Решения:")
+                print("   1. Обновить cookies в админской панели")
+                print("   2. Использовать сессию requests для сохранения cookies между запросами")
+                print("   3. Добавить задержки между запросами")
                 return None
             
             response.raise_for_status()
@@ -164,7 +163,7 @@ class YandexBusinessParser:
                 # Если не JSON, проверяем, может это HTML с ошибкой
                 if response.text.strip().startswith("<!DOCTYPE") or response.text.strip().startswith("<html"):
                     print(f"⚠️ Получен HTML вместо JSON от {url}")
-                    print(f"   Возможно, требуется авторизация или cookies устарели")
+                    print("   Возможно, требуется авторизация или cookies устарели")
                     print(f"   Начало ответа: {response.text[:200]}")
                 return None
                 
@@ -173,23 +172,23 @@ class YandexBusinessParser:
             if hasattr(e, 'response') and e.response is not None:
                 print(f"   Статус код: {e.response.status_code}")
                 if e.response.status_code == 401:
-                    print(f"   ⚠️ Не авторизован (401) - сессия истекла")
+                    print("   ⚠️ Не авторизован (401) - сессия истекла")
                     try:
                         error_data = e.response.json()
                         if error_data.get("error", {}).get("message") == "NEED_RESET":
-                            print(f"   🔐 Cookies устарели (NEED_RESET)")
-                            print(f"   Решение: Обновите cookies в админской панели")
+                            print("   🔐 Cookies устарели (NEED_RESET)")
+                            print("   Решение: Обновите cookies в админской панели")
                             print(f"   Redirect: {error_data.get('error', {}).get('redirectPath', 'N/A')}")
                     except:
-                        print(f"   ⚠️ Возможные причины:")
-                        print(f"      1. Cookies устарели (нужно обновить в админской панели)")
-                        print(f"      2. Cookies не передаются правильно")
-                        print(f"      3. Нужны дополнительные headers")
+                        print("   ⚠️ Возможные причины:")
+                        print("      1. Cookies устарели (нужно обновить в админской панели)")
+                        print("      2. Cookies не передаются правильно")
+                        print("      3. Нужны дополнительные headers")
                 elif e.response.status_code == 302:
-                    print(f"   ⚠️ Редирект (302) - возможно, сессия истекла")
-                    print(f"   Решение: Обновите cookies в админской панели")
+                    print("   ⚠️ Редирект (302) - возможно, сессия истекла")
+                    print("   Решение: Обновите cookies в админской панели")
                 elif e.response.status_code == 403:
-                    print(f"   ⚠️ Доступ запрещён (403) - возможно, нужны свежие cookies")
+                    print("   ⚠️ Доступ запрещён (403) - возможно, нужны свежие cookies")
             return None
         except Exception as e:
             print(f"❌ Неожиданная ошибка при запросе к {url}: {e}")
@@ -216,7 +215,7 @@ class YandexBusinessParser:
         
         if not external_id:
             print(f"❌ Нет external_id для бизнеса {business_id}")
-            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            print("   Решение: Укажите external_id (permalink) в настройках аккаунта")
             return []
         
         # Правильный endpoint для отзывов (найден через Network tab браузера)
@@ -272,16 +271,16 @@ class YandexBusinessParser:
                 print(f"❌ Не удалось получить данные со страницы {current_page}")
                 if len(all_reviews_data) == 0:
                     # Если первая страница не загрузилась, возвращаем пустой список
-                    print(f"   Возможные причины:")
-                    print(f"   1. Cookies устарели - обновите их в админской панели")
-                    print(f"   2. Сессия истекла (401 NEED_RESET)")
-                    print(f"   3. Проблемы с сетью или API Яндекс изменился")
+                    print("   Возможные причины:")
+                    print("   1. Cookies устарели - обновите их в админской панели")
+                    print("   2. Сессия истекла (401 NEED_RESET)")
+                    print("   3. Проблемы с сетью или API Яндекс изменился")
                     return []
                 break
             
             # Логируем структуру ответа для отладки (только для первого запроса)
             if len(all_reviews_data) == 0:
-                print(f"📋 Структура ответа (первый запрос):")
+                print("📋 Структура ответа (первый запрос):")
                 print(f"   Тип: {type(result)}")
                 if isinstance(result, dict):
                     print(f"   Ключи верхнего уровня: {list(result.keys())[:10]}")
@@ -310,10 +309,10 @@ class YandexBusinessParser:
                     page_reviews = result["data"]["reviews"]
             
             if not page_reviews:
-                print(f"⚠️ Нет отзывов в ответе")
+                print("⚠️ Нет отзывов в ответе")
                 if len(all_reviews_data) == 0:
                     # Для первого запроса выводим полную структуру для отладки
-                    print(f"🔍 Полная структура ответа (для отладки):")
+                    print("🔍 Полная структура ответа (для отладки):")
                     import json
                     print(json.dumps(result, ensure_ascii=False, indent=2)[:2000])
                 break
@@ -345,7 +344,7 @@ class YandexBusinessParser:
                 print(f"✅ Получено {len(new_reviews)} новых отзывов (всего на странице: {len(page_reviews)}, дубликатов: {len(page_reviews) - len(new_reviews)})")
                 all_reviews_data.extend(new_reviews)
             else:
-                print(f"⚠️ Все отзывы на странице - дубликаты, останавливаем загрузку")
+                print("⚠️ Все отзывы на странице - дубликаты, останавливаем загрузку")
                 break
             
             # Проверяем, достигли ли мы общего количества отзывов
@@ -404,10 +403,10 @@ class YandexBusinessParser:
         
         if not reviews_list:
             print(f"❌ Не удалось получить отзывы для {business_id}")
-            print(f"   Возможные причины:")
-            print(f"   1. Cookies устарели - обновите их в админской панели")
-            print(f"   2. Сессия истекла (401 NEED_RESET)")
-            print(f"   3. Проблемы с сетью или API Яндекс изменился")
+            print("   Возможные причины:")
+            print("   1. Cookies устарели - обновите их в админской панели")
+            print("   2. Сессия истекла (401 NEED_RESET)")
+            print("   3. Проблемы с сетью или API Яндекс изменился")
             return []
         
         # Парсим отзывы
@@ -433,7 +432,7 @@ class YandexBusinessParser:
                 if date_fields:
                     print(f"   Поля с датой: {date_fields}", flush=True)
                 else:
-                    print(f"   ⚠️ Поля с датой не найдены!", flush=True)
+                    print("   ⚠️ Поля с датой не найдены!", flush=True)
             
             try:
                 # Пробуем разные варианты полей с датой
@@ -491,13 +490,13 @@ class YandexBusinessParser:
                     # Проверяем, что это не пустой объект {}
                     if not response_data or len(response_data) == 0:
                         if idx < 3:
-                            print(f"      ⚠️ owner_comment - пустой объект {{}}", flush=True)
+                            print("      ⚠️ owner_comment - пустой объект {}", flush=True)
                         response_data = None
                 elif isinstance(response_data, str):
                     # Проверяем, что строка не пустая
                     if not response_data.strip():
                         if idx < 3:
-                            print(f"      ⚠️ owner_comment - пустая строка", flush=True)
+                            print("      ⚠️ owner_comment - пустая строка", flush=True)
                         response_data = None
                 
                 # Если owner_comment не найден, пробуем альтернативные поля
@@ -589,7 +588,7 @@ class YandexBusinessParser:
                         if response_at:
                             print(f"   Дата ответа: {response_at}", flush=True)
                     else:
-                        print(f"   ❌ Ответа нет", flush=True)
+                        print("   ❌ Ответа нет", flush=True)
                 
                 # Парсим текст отзыва
                 # В API Яндекс.Бизнес текст отзыва может быть в разных полях:
@@ -624,7 +623,7 @@ class YandexBusinessParser:
         # Логируем первые несколько отзывов без ответов для отладки
         reviews_without_response_list = [r for r in reviews if not r.response_text]
         if reviews_without_response_list:
-            print(f"   🔍 Первые 5 отзывов БЕЗ ответов (для отладки):")
+            print("   🔍 Первые 5 отзывов БЕЗ ответов (для отладки):")
             for idx, r in enumerate(reviews_without_response_list[:5]):
                 print(f"      #{idx + 1}: ID={r.external_review_id}, Рейтинг={r.rating}, Автор={r.author_name}")
                 # Проверяем, есть ли owner_comment в raw_payload
@@ -632,7 +631,7 @@ class YandexBusinessParser:
                     owner_comment = r.raw_payload.get("owner_comment")
                     print(f"         ⚠️ owner_comment найден в raw_payload: {str(owner_comment)[:100]}")
         
-        print(f"   📊 Статистика по отзывам:")
+        print("   📊 Статистика по отзывам:")
         print(f"      - Всего: {total_reviews}")
         print(f"      - С ответами: {reviews_with_response}")
         print(f"      - Без ответов: {reviews_without_response}")
@@ -660,7 +659,7 @@ class YandexBusinessParser:
         
         if not external_id:
             print(f"❌ Нет external_id для бизнеса {business_id}")
-            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            print("   Решение: Укажите external_id (permalink) в настройках аккаунта")
             return []
         
         # Пробуем несколько возможных вариантов endpoints
@@ -687,10 +686,10 @@ class YandexBusinessParser:
         
         if not data:
             print(f"❌ Не удалось получить статистику для {business_id} ни с одного endpoint")
-            print(f"   Возможные причины:")
-            print(f"   1. Cookies устарели - обновите их в админской панели")
-            print(f"   2. Сессия истекла (401 NEED_RESET)")
-            print(f"   3. API endpoint изменился - проверьте через DevTools → Network tab")
+            print("   Возможные причины:")
+            print("   1. Cookies устарели - обновите их в админской панели")
+            print("   2. Сессия истекла (401 NEED_RESET)")
+            print("   3. API endpoint изменился - проверьте через DevTools → Network tab")
             return []
         
         # Парсим ответ (структура зависит от реального API)
@@ -719,7 +718,7 @@ class YandexBusinessParser:
         
         # Если список пустой, выводим структуру для отладки
         if not stats_list:
-            print(f"⚠️ Список статистики пуст. Структура ответа:")
+            print("⚠️ Список статистики пуст. Структура ответа:")
             print(f"   Тип: {type(data)}")
             if isinstance(data, dict):
                 print(f"   Ключи верхнего уровня: {list(data.keys())[:10]}")
@@ -946,7 +945,7 @@ class YandexBusinessParser:
         
         if not external_id:
             print(f"❌ Нет external_id для бизнеса {business_id}")
-            print(f"   Решение: Укажите external_id (permalink) в настройках аккаунта")
+            print("   Решение: Укажите external_id (permalink) в настройках аккаунта")
             return []
         
         # Endpoint для постов (публикаций/новостей)
@@ -961,7 +960,7 @@ class YandexBusinessParser:
         # Сначала пробуем получить данные из API endpoint sidebar?permalink=...
         # Это реальный endpoint, который видели в Network tab (125 kB ответ)
         # Правильный URL: https://yandex.ru/business/server-components/sidebar?permalink={external_id}
-        print(f"🔍 Пробуем получить данные из sidebar API endpoint...")
+        print("🔍 Пробуем получить данные из sidebar API endpoint...")
         sidebar_url = f"https://yandex.ru/business/server-components/sidebar?permalink={external_id}"
         
         result = None
@@ -989,7 +988,7 @@ class YandexBusinessParser:
                     try:
                         result = response.json()
                         working_url = sidebar_url
-                        print(f"✅ Успешно получены данные из sidebar API (JSON)")
+                        print("✅ Успешно получены данные из sidebar API (JSON)")
                     except json.JSONDecodeError:
                         result = None
                 
@@ -1019,7 +1018,7 @@ class YandexBusinessParser:
                     
                     if found_endpoints:
                         unique_endpoints = list(set(found_endpoints))[:10]  # Первые 10 уникальных
-                        print(f"   🔍 Найдены потенциальные API endpoints в Response:")
+                        print("   🔍 Найдены потенциальные API endpoints в Response:")
                         for ep in unique_endpoints:
                             print(f"      - {ep}")
                         
@@ -1050,14 +1049,14 @@ class YandexBusinessParser:
                                                 if isinstance(endpoint_data[0], dict) and any(k in endpoint_data[0] for k in ['title', 'text', 'content', 'published_at']):
                                                     result = {"posts": endpoint_data} if not isinstance(endpoint_data, dict) else endpoint_data
                                                     working_url = full_url
-                                                    print(f"   ✅ Успешно получены данные с найденного endpoint!")
+                                                    print("   ✅ Успешно получены данные с найденного endpoint!")
                                                     break
                                             elif isinstance(endpoint_data, dict):
                                                 # Проверяем, есть ли ключи, связанные с постами
                                                 if any(k in endpoint_data for k in ['posts', 'publications', 'news', 'items', 'data']):
                                                     result = endpoint_data
                                                     working_url = full_url
-                                                    print(f"   ✅ Успешно получены данные с найденного endpoint!")
+                                                    print("   ✅ Успешно получены данные с найденного endpoint!")
                                                     break
                                     except json.JSONDecodeError:
                                         # Не JSON, пропускаем
@@ -1068,7 +1067,7 @@ class YandexBusinessParser:
                     
                     # Сохраняем сырой ответ для отладки (первые 5000 символов)
                     debug_sample = html_content[:5000]
-                    print(f"   📝 Первые 5000 символов ответа:")
+                    print("   📝 Первые 5000 символов ответа:")
                     print(f"   {debug_sample[:500]}...")
                     
                     # Ищем любые упоминания URL в ответе (для более широкого поиска)
@@ -1076,7 +1075,7 @@ class YandexBusinessParser:
                     post_related_urls = [url for url in all_urls if any(word in url.lower() for word in ['post', 'publication', 'news', 'публикац', 'новост', 'api', 'sprav'])]
                     if post_related_urls:
                         unique_urls = list(set(post_related_urls))[:15]
-                        print(f"   🔍 Найдены URL, связанные с постами/API:")
+                        print("   🔍 Найдены URL, связанные с постами/API:")
                         for url in unique_urls:
                             print(f"      - {url[:100]}")
                     
@@ -1114,7 +1113,7 @@ class YandexBusinessParser:
                                     # Если это STATE, ищем company или другие ключи
                                     if "company" in initial_data or "tld" in initial_data:
                                         # Это STATE объект, ищем посты внутри него
-                                        print(f"   📊 Найден STATE объект, ищем посты внутри...")
+                                        print("   📊 Найден STATE объект, ищем посты внутри...")
                                         # STATE может содержать посты в разных местах
                                         sidebar_data = (
                                             initial_data.get("sidebar") or
@@ -1138,7 +1137,7 @@ class YandexBusinessParser:
                                     if sidebar_data:
                                         result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
                                         working_url = sidebar_url
-                                        print(f"   ✅ Извлечены данные sidebar из JavaScript")
+                                        print("   ✅ Извлечены данные sidebar из JavaScript")
                                         print(f"   📊 Структура данных: {list(result.keys())[:10] if isinstance(result, dict) else type(result)}")
                                         # Показываем ключи, связанные с постами
                                         if isinstance(result, dict):
@@ -1206,7 +1205,7 @@ class YandexBusinessParser:
                                             if sidebar_data:
                                                 result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
                                                 working_url = sidebar_url
-                                                print(f"   ✅ Извлечены данные sidebar (сбалансированный JSON)")
+                                                print("   ✅ Извлечены данные sidebar (сбалансированный JSON)")
                                                 break
                                     
                                     # Если не получилось, пробуем найти JSON с постами напрямую
@@ -1216,7 +1215,7 @@ class YandexBusinessParser:
                                         if "posts" in initial_data or "publications" in initial_data or "news" in initial_data:
                                             result = initial_data
                                             working_url = sidebar_url
-                                            print(f"   ✅ Найден JSON с постами (частичный парсинг)")
+                                            print("   ✅ Найден JSON с постами (частичный парсинг)")
                                             break
                                 except Exception as e2:
                                     print(f"   ⚠️ Не удалось распарсить JSON даже после балансировки: {e2}")
@@ -1227,9 +1226,9 @@ class YandexBusinessParser:
                                 continue
                     
                     if not result:
-                        print(f"⚠️ Не удалось извлечь данные из HTML/JavaScript sidebar API")
+                        print("⚠️ Не удалось извлечь данные из HTML/JavaScript sidebar API")
                         # Пробуем найти любые JSON объекты в тексте
-                        print(f"   🔍 Пробуем найти любые JSON объекты в ответе...")
+                        print("   🔍 Пробуем найти любые JSON объекты в ответе...")
                         json_objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', html_content[:10000], re.DOTALL)
                         print(f"   📊 Найдено потенциальных JSON объектов: {len(json_objects)}")
                         for idx, json_obj in enumerate(json_objects[:5]):  # Проверяем первые 5
@@ -1267,16 +1266,16 @@ class YandexBusinessParser:
                         try:
                             result = json.loads(match.group(1))
                             working_url = sidebar_url
-                            print(f"✅ Успешно извлечены данные из sidebar API (через _make_request + парсинг HTML)")
+                            print("✅ Успешно извлечены данные из sidebar API (через _make_request + парсинг HTML)")
                         except:
                             result = None
                 else:
                     result = response_data
                     working_url = sidebar_url
-                    print(f"✅ Успешно получены данные из sidebar API (через _make_request)")
+                    print("✅ Успешно получены данные из sidebar API (через _make_request)")
         
         # Пробуем извлечь данные из HTML страницы (приоритет - здесь реальные посты)
-        print(f"🔍 Пробуем получить посты/новости из HTML страницы...")
+        print("🔍 Пробуем получить посты/новости из HTML страницы...")
         posts_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
         
         # Делаем запрос к HTML странице
@@ -1319,7 +1318,7 @@ class YandexBusinessParser:
                         json_str = match.group(1)
                         # Пробуем распарсить JSON
                         initial_data = json.loads(json_str)
-                        print(f"   ✅ Найден window.__INITIAL__ в HTML")
+                        print("   ✅ Найден window.__INITIAL__ в HTML")
                         
                         # Ищем sidebar в initial_data
                         sidebar_data = None
@@ -1333,7 +1332,7 @@ class YandexBusinessParser:
                             )
                         
                         if sidebar_data:
-                            print(f"   ✅ Найден sidebar/data в window.__INITIAL__")
+                            print("   ✅ Найден sidebar/data в window.__INITIAL__")
                             result = sidebar_data if isinstance(sidebar_data, dict) else {"data": sidebar_data}
                             html_parsed = True
                             break
@@ -1347,7 +1346,7 @@ class YandexBusinessParser:
                                 if "posts" in initial_data or "publications" in initial_data or "news" in initial_data:
                                     result = initial_data
                                     html_parsed = True
-                                    print(f"   ✅ Найден JSON с постами (частичный парсинг)")
+                                    print("   ✅ Найден JSON с постами (частичный парсинг)")
                                     break
                         except:
                             pass
@@ -1361,7 +1360,7 @@ class YandexBusinessParser:
             try:
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(html_content, 'html.parser')
-                print(f"   ✅ BeautifulSoup установлен, парсим HTML...")
+                print("   ✅ BeautifulSoup установлен, парсим HTML...")
                 
                 # Ищем реальные посты по селектору .Post (из структуры страницы)
                 post_elements = soup.select('div.Post')
@@ -1458,7 +1457,7 @@ class YandexBusinessParser:
                             break
             except ImportError:
                 # Если BeautifulSoup не установлен, используем регулярные выражения
-                print(f"   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
+                print("   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
                 # Ищем паттерны типа "5 новостей" или "5 публикаций" в HTML
                 post_count_patterns = [
                     r'(\d+)\s*(?:новост|публикац|пост|news|post)',
@@ -1488,7 +1487,7 @@ class YandexBusinessParser:
         
         # Если не получили данные, пробуем другие API endpoints (предположения)
         if not result and not html_posts:
-            print(f"⚠️ Не удалось получить данные из sidebar/HTML, пробуем другие API endpoints (предположения)...")
+            print("⚠️ Не удалось получить данные из sidebar/HTML, пробуем другие API endpoints (предположения)...")
             possible_urls = [
                 # Правильный endpoint по аналогии с price-lists
                 f"https://yandex.ru/sprav/api/company/{external_id}/posts",
@@ -1516,10 +1515,10 @@ class YandexBusinessParser:
         
         if not result:
             print(f"❌ Не удалось получить посты для {business_id} ни с одного endpoint")
-            print(f"   Возможные причины:")
-            print(f"   1. Cookies устарели - обновите их в админской панели")
-            print(f"   2. Сессия истекла (401 NEED_RESET)")
-            print(f"   3. API endpoint изменился - проверьте через DevTools → Network tab")
+            print("   Возможные причины:")
+            print("   1. Cookies устарели - обновите их в админской панели")
+            print("   2. Сессия истекла (401 NEED_RESET)")
+            print("   3. API endpoint изменился - проверьте через DevTools → Network tab")
             return []
         
         # Парсим структуру ответа
@@ -1669,13 +1668,13 @@ class YandexBusinessParser:
                     found_posts = find_any_posts_array(result)
                     if found_posts:
                         posts_data = found_posts
-                        print(f"   ✅ Найдены посты через глубокий поиск")
+                        print("   ✅ Найдены посты через глубокий поиск")
         
         print(f"📊 Найдено постов в ответе: {len(posts_data)}")
         
         # Если список пустой, пробуем найти посты в HTML странице напрямую
         if not posts_data:
-            print(f"⚠️ Посты не найдены в sidebar ответе, пробуем парсить HTML страницу напрямую...")
+            print("⚠️ Посты не найдены в sidebar ответе, пробуем парсить HTML страницу напрямую...")
             try:
                 posts_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
                 delay = random.uniform(1.5, 3.5)
@@ -1717,13 +1716,13 @@ class YandexBusinessParser:
                                             if isinstance(api_data, list) and len(api_data) > 0:
                                                 if isinstance(api_data[0], dict) and any(k in api_data[0] for k in ['title', 'text', 'content', 'published_at']):
                                                     posts_data = api_data
-                                                    print(f"   ✅ Найдены посты через API endpoint!")
+                                                    print("   ✅ Найдены посты через API endpoint!")
                                                     break
                                             elif isinstance(api_data, dict):
                                                 if any(k in api_data for k in ['posts', 'publications', 'news', 'items']):
                                                     posts_data = api_data.get('posts') or api_data.get('publications') or api_data.get('news') or api_data.get('items') or []
                                                     if posts_data:
-                                                        print(f"   ✅ Найдены посты через API endpoint!")
+                                                        print("   ✅ Найдены посты через API endpoint!")
                                                         break
                                     except json.JSONDecodeError:
                                         pass
@@ -1735,7 +1734,7 @@ class YandexBusinessParser:
         
         # Если список пустой, выводим структуру для отладки
         if not posts_data:
-            print(f"⚠️ Список постов пуст. Структура ответа:")
+            print("⚠️ Список постов пуст. Структура ответа:")
             print(f"   Тип: {type(result)}")
             if isinstance(result, dict):
                 print(f"   Ключи верхнего уровня: {list(result.keys())[:30]}")
@@ -1782,7 +1781,7 @@ class YandexBusinessParser:
                     return arrays
                 arrays = find_arrays(result)
                 if arrays:
-                    print(f"   Найдены массивы в структуре:")
+                    print("   Найдены массивы в структуре:")
                     for arr_path, arr_len, arr_type in arrays[:15]:
                         print(f"      {arr_path}: {arr_len} элементов (тип: {arr_type})")
                         
@@ -1892,7 +1891,7 @@ class YandexBusinessParser:
         
         # Сначала пробуем получить данные из API endpoint sidebar?permalink=...
         # Это реальный endpoint, который видели в Network tab
-        print(f"🔍 Пробуем получить количество фотографий из sidebar API endpoint...")
+        print("🔍 Пробуем получить количество фотографий из sidebar API endpoint...")
         sidebar_url = f"https://yandex.ru/business/server-components/sidebar?permalink={external_id}"
         
         result = None
@@ -1905,7 +1904,7 @@ class YandexBusinessParser:
         result = self._make_request(sidebar_url)
         if result:
             working_url = sidebar_url
-            print(f"✅ Успешно получены данные из sidebar API")
+            print("✅ Успешно получены данные из sidebar API")
             
             # Парсим структуру ответа и ищем количество фотографий
             # Рекурсивно ищем поля: photos_count, total, count, photos (массив)
@@ -1943,13 +1942,13 @@ class YandexBusinessParser:
                 print(f"✅ Количество фотографий из sidebar API: {photos_count}")
                 return photos_count
             else:
-                print(f"⚠️ Не удалось найти количество фотографий в структуре sidebar API")
+                print("⚠️ Не удалось найти количество фотографий в структуре sidebar API")
         
         # Если sidebar API не сработал или не нашёл количество, пробуем HTML страницу
         if not result:
-            print(f"⚠️ Не удалось получить данные из sidebar API, пробуем HTML страницу...")
+            print("⚠️ Не удалось получить данные из sidebar API, пробуем HTML страницу...")
         
-        print(f"🔍 Пробуем получить количество фотографий из HTML страницы...")
+        print("🔍 Пробуем получить количество фотографий из HTML страницы...")
         photos_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/photos/"
         
         # Делаем запрос к HTML странице
@@ -2013,7 +2012,7 @@ class YandexBusinessParser:
                 
             except ImportError:
                 # Если BeautifulSoup не установлен, используем регулярные выражения
-                print(f"   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
+                print("   ⚠️ BeautifulSoup не установлен, используем регулярные выражения")
                 import re
                 
                 # Ищем селектор .PhotosPage-Description в HTML
@@ -2059,9 +2058,9 @@ class YandexBusinessParser:
         # Если не получили данные из HTML, пробуем другие API endpoints (предположения)
         if not result or (result and not html_parsed):
             if not html_parsed:
-                print(f"⚠️ Не удалось получить данные из HTML, пробуем другие API endpoints (предположения)...")
+                print("⚠️ Не удалось получить данные из HTML, пробуем другие API endpoints (предположения)...")
             else:
-                print(f"⚠️ HTML страница загружена, но количество не найдено. Пробуем другие API endpoints (предположения)...")
+                print("⚠️ HTML страница загружена, но количество не найдено. Пробуем другие API endpoints (предположения)...")
             
             # Fallback endpoints (предположения, если sidebar не сработал)
             possible_urls = [
@@ -2090,7 +2089,7 @@ class YandexBusinessParser:
         
         # Если не получили данные через API, возвращаем 0
         if not result:
-            print(f"   ❌ Не удалось получить количество фотографий ни через sidebar API, ни через HTML, ни через другие API endpoints")
+            print("   ❌ Не удалось получить количество фотографий ни через sidebar API, ни через HTML, ни через другие API endpoints")
             return 0
         
         # Парсим структуру ответа и считаем количество
@@ -2141,7 +2140,7 @@ class YandexBusinessParser:
         
         # Если список пустой, выводим структуру для отладки
         if photos_count == 0:
-            print(f"⚠️ Не удалось определить количество фотографий. Структура ответа:")
+            print("⚠️ Не удалось определить количество фотографий. Структура ответа:")
             print(f"   Тип: {type(result)}")
             if isinstance(result, dict):
                 print(f"   Ключи верхнего уровня: {list(result.keys())[:10]}")
@@ -2195,10 +2194,10 @@ class YandexBusinessParser:
             if not result:
                 print(f"❌ Не удалось получить данные со страницы {current_page}")
                 if len(all_services_data) == 0:
-                    print(f"   Возможные причины:")
-                    print(f"   1. Cookies устарели - обновите их в админской панели")
-                    print(f"   2. Капча (SmartCaptcha) - нужно обновить cookies или увеличить задержки")
-                    print(f"   3. Проблемы с сетью или API Яндекс изменился")
+                    print("   Возможные причины:")
+                    print("   1. Cookies устарели - обновите их в админской панели")
+                    print("   2. Капча (SmartCaptcha) - нужно обновить cookies или увеличить задержки")
+                    print("   3. Проблемы с сетью или API Яндекс изменился")
                     return []
                 break
             
@@ -2222,7 +2221,7 @@ class YandexBusinessParser:
                 print(f"⚠️ Нет услуг на странице {current_page}")
                 if len(all_services_data) == 0:
                     # Для первого запроса выводим полную структуру для отладки
-                    print(f"🔍 Полная структура ответа (для отладки):")
+                    print("🔍 Полная структура ответа (для отладки):")
                     result_str = json.dumps(result, ensure_ascii=False, indent=2)[:2000]
                     print(f"{result_str}...")
                 break
@@ -2325,7 +2324,7 @@ class YandexBusinessParser:
                 
                 # Логируем первую услугу для отладки структуры
                 if len(services) == 0:
-                    print(f"🔍 Пример структуры услуги (для отладки):")
+                    print("🔍 Пример структуры услуги (для отладки):")
                     print(f"   Ключи верхнего уровня: {list(service_data.keys())[:15]}")
                     print(f"   Извлечённая категория: {category}")
                     print(f"   Извлечённое название: {name}")
@@ -2475,7 +2474,7 @@ class YandexBusinessParser:
                 break
                 
         if not data:
-            print(f"⚠️ Не удалось получить товары через API endpoints.")
+            print("⚠️ Не удалось получить товары через API endpoints.")
             return []
             
         # Парсим ответ

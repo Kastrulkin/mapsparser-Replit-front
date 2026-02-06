@@ -3,9 +3,8 @@
 Мы перехватываем внутренние API запросы, эмулируя поведение пользователя в браузере.
 """
 import logging
-import json
-from typing import List, Optional, Dict, Any, Union
-from playwright.sync_api import sync_playwright, Page, Response
+from typing import List, Dict, Any
+from playwright.sync_api import sync_playwright, Response
 
 from external_sources import ExternalReview, ExternalStatsPoint, ExternalPost
 

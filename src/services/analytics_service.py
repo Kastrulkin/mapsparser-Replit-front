@@ -3,8 +3,7 @@ analytics_service.py — Сервис для анализа данных биз�
 Используется как воркером (после парсинга), так и API (при ручном обновлении).
 """
 
-import json
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 def calculate_profile_completeness(business_data: Dict[str, Any]) -> int:
     """

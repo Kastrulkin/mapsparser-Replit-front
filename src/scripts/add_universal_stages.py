@@ -260,7 +260,7 @@ def add_universal_stages():
                         1 if task.get('check_logic') != 'manual_check' else 0
                     ))
             
-            print(f"   ✅ Added 6 universal stages")
+            print("   ✅ Added 6 universal stages")
         
         conn.commit()
         print("\n✅ Successfully added universal stages to all business types!")

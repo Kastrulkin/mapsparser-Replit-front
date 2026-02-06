@@ -2,7 +2,7 @@
 Base repository class with SQL logging and error handling
 """
 import logging
-from typing import Any, Optional
+from typing import Any
 from psycopg2 import IntegrityError
 from psycopg2.errorcodes import UNIQUE_VIOLATION, FOREIGN_KEY_VIOLATION
 

@@ -7,7 +7,6 @@ from database_manager import DatabaseManager
 from core.auth_helpers import require_auth_from_request
 from services.yandex_xml_parser import parse_yandex_network_xml, validate_xml
 import uuid
-from datetime import datetime
 
 networks_bp = Blueprint('networks_api', __name__)
 

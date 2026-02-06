@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-import os
 import sqlite3
 import subprocess
-import sys
 
 def check_git_status():
     print("🔍 1. GIthub Status:")

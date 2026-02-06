@@ -22,7 +22,7 @@ def show_auth_instructions():
     print("=" * 60)
     
     auth_url = config.get_auth_url()
-    print(f"1️⃣ Откройте эту ссылку в браузере:")
+    print("1️⃣ Откройте эту ссылку в браузере:")
     print(f"   {auth_url}")
     print()
     

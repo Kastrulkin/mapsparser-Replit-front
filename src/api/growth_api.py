@@ -89,10 +89,10 @@ def get_business_stages(business_id):
                     metrics["reviews_count"] = int(map_row.get('reviews_count', 0) or 0)
                     metrics["photos_count"] = int(map_row.get('photos_count', 0) or 0)
                 else:
-                metrics["rating"] = float(map_row[0]) if map_row[0] else 0.0
-                metrics["reviews_count"] = int(map_row[1]) if map_row[1] else 0
-                metrics["photos_count"] = int(map_row[2]) if map_row[2] else 0
-            except:
+                    metrics["rating"] = float(map_row[0]) if map_row[0] else 0.0
+                    metrics["reviews_count"] = int(map_row[1]) if map_row[1] else 0
+                    metrics["photos_count"] = int(map_row[2]) if map_row[2] else 0
+            except Exception:
                 pass
 
         # 2. UserServices (Services Added)
@@ -110,10 +110,10 @@ def get_business_stages(business_id):
                 metrics["has_website"] = bool(biz_info.get('website'))
                 metrics["yandex_url"] = biz_info.get('yandex_url')
             else:
-            metrics["has_phone"] = bool(biz_info[0])
-            metrics["has_address"] = bool(biz_info[1])
-            metrics["has_website"] = bool(biz_info[2])
-            metrics["yandex_url"] = biz_info[3]
+                metrics["has_phone"] = bool(biz_info[0])
+                metrics["has_address"] = bool(biz_info[1])
+                metrics["has_website"] = bool(biz_info[2])
+                metrics["yandex_url"] = biz_info[3]
 
         def check_task_status(logic_code, metrics):
             """Проверяет выполнение задачи на основе метрик"""
@@ -156,8 +156,8 @@ def get_business_stages(business_id):
                 stage_id = stage_row.get('id')
                 stage_number = stage_row.get('stage_number')
             else:
-            stage_id = stage_row[0]
-            stage_number = stage_row[1]
+                stage_id = stage_row[0]
+                stage_number = stage_row[1]
             
             # Получаем задачи для этапа
             cursor.execute("""
@@ -174,6 +174,9 @@ def get_business_stages(business_id):
             for tr in tasks_rows:
                 if isinstance(tr, dict):
                     check_logic = tr.get('check_logic')
+                    is_completed = check_task_status(check_logic, metrics)
+                    if is_completed:
+                        completed_tasks_count += 1
                     tasks.append({
                         'id': tr.get('id'),
                         'task_number': tr.get('task_number'),
@@ -185,28 +188,26 @@ def get_business_stages(business_id):
                         'link_url': tr.get('link_url'),
                         'link_text': tr.get('link_text'),
                         'is_auto_verifiable': bool(tr.get('is_auto_verifiable')),
-                        'is_completed': check_task_status(check_logic, metrics)
+                        'is_completed': is_completed,
                     })
                 else:
-                check_logic = tr[3]
-                is_completed = check_task_status(check_logic, metrics)
-                if is_completed:
-                    completed_tasks_count += 1
-                tasks.append({
-                    'id': tr[0],
-                    'task_number': tr[1],
-                    'text': tr[2],
-                    'check_logic': check_logic,
-                    'reward_value': tr[4],
-                    'reward_type': tr[5],
-                    'tooltip': tr[6],
-                    'link_url': tr[7],
-                    'link_text': tr[8],
-                    'is_auto_verifiable': bool(tr[9]),
-                        'is_completed': is_completed
-                })
+                    check_logic = tr[3]
+                    is_completed = check_task_status(check_logic, metrics)
                     if is_completed:
                         completed_tasks_count += 1
+                    tasks.append({
+                        'id': tr[0],
+                        'task_number': tr[1],
+                        'text': tr[2],
+                        'check_logic': check_logic,
+                        'reward_value': tr[4],
+                        'reward_type': tr[5],
+                        'tooltip': tr[6],
+                        'link_url': tr[7],
+                        'link_text': tr[8],
+                        'is_auto_verifiable': bool(tr[9]),
+                        'is_completed': is_completed,
+                    })
 
             # Определяем статус этапа (динамически, если задачи выполнены)
             # Или используем wizard step как hard constraint
@@ -238,18 +239,18 @@ def get_business_stages(business_id):
                     'tasks': tasks
                 })
             else:
-            stages.append({
-                'id': stage_row[0],
-                'stage_number': stage_number,
-                'title': stage_row[2],
-                'stage_description': stage_row[3],
-                'status': status,
-                'progress_percentage': progress_percentage,
-                'duration': stage_row[6],
-                'goal': stage_row[4],
-                'expected_result': stage_row[5],
-                'tasks': tasks
-            })
+                stages.append({
+                    'id': stage_row[0],
+                    'stage_number': stage_number,
+                    'title': stage_row[2],
+                    'stage_description': stage_row[3],
+                    'status': status,
+                    'progress_percentage': progress_percentage,
+                    'duration': stage_row[6],
+                    'goal': stage_row[4],
+                    'expected_result': stage_row[5],
+                    'tasks': tasks
+                })
             
         db.close()
         

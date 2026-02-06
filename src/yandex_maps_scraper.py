@@ -3,10 +3,7 @@ parser.py — Модуль для парсинга публичной стран
 """
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
-import re
 import random
-import os
-from random import randint, uniform
 
 def _launch_browser(p):
     """Пробует запустить браузер, возвращает (browser, name) или None"""

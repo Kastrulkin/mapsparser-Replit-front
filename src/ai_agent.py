@@ -2,7 +2,6 @@
 ИИ агент для автоматического консультирования клиентов
 Использует захардкоженные стейты разговора и настраиваемые промпты
 """
-import os
 import json
 import re
 import uuid
@@ -390,20 +389,20 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
         
         scenarios = current_state_config.get('state_scenarios', [])
         if scenarios:
-            prompt += f"##### **Возможные переходы:**\n"
+            prompt += "##### **Возможные переходы:**\n"
             for scenario in scenarios:
                 prompt += f"- {scenario.get('transition_name', '')}: {scenario.get('description', '')} → {scenario.get('next_state', '')}\n"
             prompt += "\n"
         
         tools = current_state_config.get('available_tools', {})
         if tools:
-            prompt += f"##### **Доступные инструменты:**\n"
+            prompt += "##### **Доступные инструменты:**\n"
             for tool_type, tool_list in tools.items():
                 prompt += f"- {tool_type}: {', '.join(tool_list)}\n"
             prompt += "\n"
     
     # Информация о бизнесе
-    prompt += f"##### **Информация о бизнесе:**\n"
+    prompt += "##### **Информация о бизнесе:**\n"
     prompt += f"- Название: {business_info.get('name', 'Не указано')}\n"
     prompt += f"- Адрес: {business_info.get('address', 'Не указано')}, {business_info.get('city', 'Не указано')}\n"
     prompt += f"- Телефон: {business_info.get('phone', 'Не указано')}\n"
@@ -413,7 +412,7 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     
     # Услуги
     if services:
-        prompt += f"##### **Доступные услуги:**\n"
+        prompt += "##### **Доступные услуги:**\n"
         for service in services:
             price_str = f"${service['price']}" if service['price'] else "Цена по запросу"
             duration_str = f"{service['duration']} мин" if service['duration'] else ""
@@ -428,7 +427,7 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
         prompt += f"##### **Ограничения:**\n{restrictions['text']}\n\n"
     
     # Доступные tools (всегда добавляем список доступных tools)
-    prompt += f"##### **Доступные инструменты (tools):**\n"
+    prompt += "##### **Доступные инструменты (tools):**\n"
     prompt += "- notify_operator: Уведомить оператора о необходимости его участия. Используй, когда нужна помощь человека.\n"
     prompt += "- create_booking: Создать бронирование/заказ. Параметры: service_id, service_name, booking_date, booking_time, notes.\n"
     prompt += "- send_message: Отправить сообщение клиенту через WhatsApp/Telegram. Параметры: message, channel (whatsapp/telegram).\n"
@@ -443,7 +442,7 @@ def build_prompt(business_info: dict, services: list, current_state: str, messag
     prompt += "После использования tool, продолжай общение с клиентом.\n\n"
     
     # История разговора
-    prompt += f"##### **История разговора:**\n"
+    prompt += "##### **История разговора:**\n"
     if conversation_history:
         for msg in conversation_history[-5:]:  # Последние 5 сообщений
             sender = msg.get('sender', 'unknown')

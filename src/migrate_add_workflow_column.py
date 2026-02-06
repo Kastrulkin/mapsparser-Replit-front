@@ -2,9 +2,6 @@
 """
 Миграция: добавление колонки workflow в таблицу AIAgents
 """
-import sqlite3
-import sys
-from pathlib import Path
 from safe_db_utils import safe_migrate
 
 def migrate_add_workflow():

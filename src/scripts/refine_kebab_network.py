@@ -46,7 +46,7 @@ def refine_network():
     conn.commit()
     conn.close()
     
-    print(f"\n🎉 Done:")
+    print("\n🎉 Done:")
     print(f"   - Kept: {kept_count}")
     print(f"   - Removed: {removed_count}")
 

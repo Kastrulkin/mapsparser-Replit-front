@@ -12,7 +12,7 @@ from pathlib import Path
 # Добавляем путь к модулям
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
 
-from wordstat_client import WordstatClient, WordstatDataProcessor
+from wordstat_client import WordstatClient
 from wordstat_config import config
 
 def main():
@@ -130,7 +130,7 @@ def main():
                     saved_count += 1
             
             db.conn.commit()
-            print(f"✅ Данные успешно сохранены в БД")
+            print("✅ Данные успешно сохранены в БД")
             print(f"   ➕ Новых: {saved_count}")
             print(f"   🔄 Обновлено: {updated_count}")
             
