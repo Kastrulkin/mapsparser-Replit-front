@@ -82,6 +82,22 @@ except ImportError:
 
 app = Flask(__name__)
 
+# Flask-SQLAlchemy + Flask-Migrate: только для миграций (runtime по-прежнему pg_db_utils/psycopg2)
+_database_url = os.getenv("DATABASE_URL")
+if _database_url:
+    app.config["SQLALCHEMY_DATABASE_URI"] = _database_url
+app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+try:
+    from flask_sqlalchemy import SQLAlchemy
+    from flask_migrate import Migrate
+    db = SQLAlchemy(app)
+    # directory: не трогаем существующую папку migrations/ с кастомными скриптами
+    migrate = Migrate(app, db, directory="alembic_migrations")
+    import alembic_migrations.models_for_migrate  # noqa: F401  # модели только для Alembic
+except ImportError:
+    db = None
+    migrate = None
+
 # Настройка CORS для продакшена и разработки
 # В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
@@ -399,11 +415,8 @@ def get_token_usage_stats():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем, существует ли таблица TokenUsage
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='TokenUsage'
-        """)
+        # Проверяем, существует ли таблица tokenusage (Postgres)
+        cursor.execute("SELECT to_regclass('public.tokenusage')")
         if not cursor.fetchone():
             db.close()
             return jsonify({
@@ -630,7 +643,7 @@ def get_parsing_tasks():
             
             # Получаем название бизнеса
             if task_dict.get('business_id'):
-                cursor.execute("SELECT name FROM Businesses WHERE id = ?", (task_dict['business_id'],))
+                cursor.execute("SELECT name FROM businesses WHERE id = %s", (task_dict['business_id'],))
                 business_row = cursor.fetchone()
                 task_dict['business_name'] = business_row[0] if business_row else None
             else:
@@ -674,7 +687,7 @@ def restart_parsing_task(task_id):
         cursor = db.conn.cursor()
         
         # Проверяем, существует ли задача
-        cursor.execute("SELECT id, status FROM ParseQueue WHERE id = ?", (task_id,))
+        cursor.execute("SELECT id, status FROM parsequeue WHERE id = %s", (task_id,))
         task = cursor.fetchone()
         
         if not task:
@@ -731,7 +744,7 @@ def delete_parsing_task(task_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (task_id,))
+        cursor.execute("DELETE FROM parsequeue WHERE id = %s", (task_id,))
         db.conn.commit()
         db.close()
         
@@ -997,10 +1010,10 @@ def get_external_accounts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица ExternalBusinessAccounts
+        # Проверяем, существует ли таблица externalbusinessaccounts (Postgres)
         cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ExternalBusinessAccounts'
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'externalbusinessaccounts'
         """)
         table_exists = cursor.fetchone()
         
@@ -1013,8 +1026,8 @@ def get_external_accounts(business_id):
             """
             SELECT id, source, external_id, display_name, is_active,
                    last_sync_at, last_error, created_at, updated_at
-            FROM ExternalBusinessAccounts
-            WHERE business_id = ?
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
             ORDER BY source, created_at DESC
             """,
             (business_id,),
@@ -1093,10 +1106,10 @@ def upsert_external_account(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица ExternalBusinessAccounts
+        # Проверяем, существует ли таблица externalbusinessaccounts (Postgres)
         cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ExternalBusinessAccounts'
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'externalbusinessaccounts'
         """)
         table_exists = cursor.fetchone()
         
@@ -1244,7 +1257,7 @@ def delete_external_account(account_id):
 
         # Находим аккаунт и соответствующий бизнес
         cursor.execute(
-            "SELECT business_id FROM ExternalBusinessAccounts WHERE id = ?", (account_id,)
+            "SELECT business_id FROM externalbusinessaccounts WHERE id = %s", (account_id,)
         )
         row = cursor.fetchone()
         if not row:
@@ -1265,9 +1278,9 @@ def delete_external_account(account_id):
 
         cursor.execute(
             """
-            UPDATE ExternalBusinessAccounts
-            SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            UPDATE externalbusinessaccounts
+            SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
             """,
             (account_id,),
         )
@@ -1568,11 +1581,8 @@ def get_external_reviews(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица ExternalBusinessReviews
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ExternalBusinessReviews'
-        """)
+        # Проверяем, существует ли таблица externalbusinessreviews (Postgres)
+        cursor.execute("SELECT to_regclass('public.externalbusinessreviews')")
         table_exists = cursor.fetchone()
         
         if not table_exists:
@@ -1653,14 +1663,14 @@ def get_external_summary(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существуют ли таблицы
+        # Проверяем, существуют ли таблицы (Postgres)
         cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name IN ('ExternalBusinessStats', 'ExternalBusinessReviews')
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name IN ('externalbusinessstats', 'externalbusinessreviews')
         """)
-        tables = {row[0] for row in cursor.fetchall()}
+        tables = {row['table_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()}
         
-        if 'ExternalBusinessStats' not in tables or 'ExternalBusinessReviews' not in tables:
+        if 'externalbusinessstats' not in tables or 'externalbusinessreviews' not in tables:
             # Таблицы не существуют - возвращаем пустую статистику
             db.close()
             return jsonify({
@@ -1765,11 +1775,8 @@ def get_external_posts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица ExternalBusinessPosts
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ExternalBusinessPosts'
-        """)
+        # Проверяем, существует ли таблица externalbusinessposts (Postgres)
+        cursor.execute("SELECT to_regclass('public.externalbusinessposts')")
         table_exists = cursor.fetchone()
         
         if not table_exists:
@@ -1910,7 +1917,7 @@ def delete_user(user_id):
         
         # Проверяем, что пользователь существует
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id, email FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, email FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -1918,7 +1925,7 @@ def delete_user(user_id):
             return jsonify({"error": "Пользователь не найден"}), 404
         
         # Удаляем пользователя (каскадное удаление удалит все связанные данные)
-        cursor.execute("DELETE FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         
         db.conn.commit()
         db.close()
@@ -1953,7 +1960,7 @@ def pause_user(user_id):
         
         # Проверяем, что пользователь существует
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id, email, is_active FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, email, is_active FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -2012,7 +2019,7 @@ def unpause_user(user_id):
         
         # Проверяем, что пользователь существует
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -3669,11 +3676,14 @@ def get_services():
 
                     # Получаем внешние услуги
                     external_services = []
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ExternalBusinessServices'")
+                    cursor.execute("SELECT to_regclass('public.externalbusinessservices')")
                     if cursor.fetchone():
-                        # Проверяем колонки ExternalBusinessServices
-                        cursor.execute("PRAGMA table_info(ExternalBusinessServices)")
-                        ext_cols = [col[1] for col in cursor.fetchall()]
+                        # Проверяем колонки externalbusinessservices (Postgres)
+                        cursor.execute("""
+                            SELECT column_name FROM information_schema.columns 
+                            WHERE table_schema = 'public' AND table_name = 'externalbusinessservices'
+                        """)
+                        ext_cols = [col['column_name'] if isinstance(col, dict) else col[0] for col in cursor.fetchall()]
                         ext_has_updated_at = 'updated_at' in ext_cols
                         
                         query_cols = "id, name, price, description, category, created_at"
@@ -3682,8 +3692,8 @@ def get_services():
                             
                         cursor.execute(f"""
                             SELECT {query_cols}
-                            FROM ExternalBusinessServices
-                            WHERE business_id = ?
+                            FROM externalbusinessservices
+                            WHERE business_id = %s
                         """, (business_id,))
                         
                         for r in cursor.fetchall():
@@ -3952,212 +3962,13 @@ def client_info():
             return jsonify({"error": "Недействительный токен"}), 401
 
         user_id = user_data.get('user_id') or user_data.get('id')
+        print(f"🔍 /api/client-info: method={request.method}, user_id={user_id}")
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Таблица для бизнес-профиля
-        # Проверяем существование таблицы и её структуру
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ClientInfo'")
-        table_exists = cursor.fetchone() is not None
-        
-        # #region agent log
-        log_data = {
-            "location": "src/main.py:2971",
-            "message": "client-info: проверка существования таблицы",
-            "data": {
-                "table_exists": table_exists,
-                "method": request.method
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "F"
-        }
-        try:
-            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except: pass
-        # #endregion
-        
-        if not table_exists:
-            # Создаем таблицу с правильной структурой
-            cursor.execute("""
-                CREATE TABLE ClientInfo (
-                    user_id TEXT,
-                    business_id TEXT,
-                    business_name TEXT,
-                    business_type TEXT,
-                    address TEXT,
-                    working_hours TEXT,
-                    description TEXT,
-                    services TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (user_id, business_id)
-                )
-            """)
-            db.conn.commit()
-        else:
-            # Проверяем структуру существующей таблицы
-            cursor.execute("PRAGMA table_info(ClientInfo)")
-            columns = [col[1] for col in cursor.fetchall()]
-            
-            # Проверяем PRIMARY KEY
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='ClientInfo'")
-            table_sql = cursor.fetchone()
-            has_composite_pk = table_sql and ("PRIMARY KEY (user_id, business_id)" in table_sql[0] or "PRIMARY KEY(user_id,business_id)" in table_sql[0])
-            
-            if 'business_id' not in columns or not has_composite_pk:
-                # Нужна миграция
-                print(f"⚠️ Миграция ClientInfo: business_id exists={('business_id' in columns)}, composite PK={has_composite_pk}")
-                print(f"⚠️ Колонки таблицы: {columns}")
-                # #region agent log
-                log_data = {
-                    "location": "src/main.py:3001",
-                    "message": "client-info: начало миграции",
-                    "data": {
-                        "has_business_id": 'business_id' in columns,
-                        "has_composite_pk": has_composite_pk,
-                        "columns": columns
-                    },
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "G"
-                }
-                try:
-                    with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps(log_data) + '\n')
-                except: pass
-                # #endregion
-                try:
-                    # Сохраняем структуру колонок перед удалением таблицы
-                    cursor.execute("PRAGMA table_info(ClientInfo)")
-                    old_column_names = [col[1] for col in cursor.fetchall()]
-                    
-                    # Сохраняем данные
-                    cursor.execute("SELECT * FROM ClientInfo")
-                    existing_data = cursor.fetchall()
-                    
-                    # Удаляем старую таблицу
-                    cursor.execute("DROP TABLE ClientInfo")
-                    
-                    # Создаем новую с правильной структурой
-                    cursor.execute("""
-                        CREATE TABLE ClientInfo (
-                            user_id TEXT,
-                            business_id TEXT,
-                            business_name TEXT,
-                            business_type TEXT,
-                            address TEXT,
-                            working_hours TEXT,
-                            description TEXT,
-                            services TEXT,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY (user_id, business_id)
-                        )
-                    """)
-                    
-                    # Восстанавливаем данные с правильным маппингом колонок
-                    restored_count = 0
-                    for row in existing_data:
-                        # Преобразуем row в словарь для удобства
-                        row_dict = dict(zip(old_column_names, row))
-                        
-                        user_id = row_dict.get('user_id', '')
-                        # Если business_id нет в старых данных, пытаемся найти его в таблице Businesses
-                        business_id = row_dict.get('business_id')
-                        if not business_id:
-                            business_id = find_business_id_for_user(cursor, user_id)
-                            if business_id == user_id:
-                                print(f"⚠️ Не найден business_id для user_id={user_id}, используем user_id как fallback")
-                        
-                        cursor.execute("""
-                            INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            user_id,
-                            business_id,
-                            row_dict.get('business_name', ''),
-                            row_dict.get('business_type', ''),
-                            row_dict.get('address', ''),
-                            row_dict.get('working_hours', ''),
-                            row_dict.get('description', ''),
-                            row_dict.get('services', ''),
-                            row_dict.get('updated_at', None)
-                        ))
-                        restored_count += 1
-                    
-                    db.conn.commit()
-                    print(f"✅ Миграция ClientInfo выполнена успешно! Восстановлено записей: {restored_count}")
-                    # #region agent log
-                    log_data = {
-                        "location": "src/main.py:3042",
-                        "message": "client-info: миграция успешна",
-                        "data": {
-                            "migration_success": True
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "H"
-                    }
-                    try:
-                        with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                            f.write(json.dumps(log_data) + '\n')
-                    except: pass
-                    # #endregion
-                except Exception as e:
-                    print(f"❌ Ошибка миграции ClientInfo: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # #region agent log
-                    log_data = {
-                        "location": "src/main.py:3044",
-                        "message": "client-info: ошибка миграции",
-                        "data": {
-                            "migration_success": False,
-                            "error": str(e)
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "I"
-                    }
-                    try:
-                        with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                            f.write(json.dumps(log_data) + '\n')
-                    except: pass
-                    # #endregion
-                    # Если миграция не удалась, продолжаем работу
-
-        # Таблица ссылок на карты (несколько на бизнес)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS BusinessMapLinks (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                business_id TEXT,
-                url TEXT,
-                map_type TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Таблица результатов парсинга карт
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS MapParseResults (
-                id TEXT PRIMARY KEY,
-                business_id TEXT,
-                url TEXT,
-                map_type TEXT,
-                rating TEXT,
-                reviews_count INTEGER,
-                news_count INTEGER,
-                photos_count INTEGER,
-                report_path TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Postgres-only: данные профиля из businesses, userservices, businessprofiles, users;
+        # ссылки на карты — только из businessmaplinks. Таблица ClientInfo не используется.
 
         if request.method == 'GET':
             current_business_id = request.args.get('business_id')
@@ -4167,11 +3978,11 @@ def client_info():
             if current_business_id:
                 print(f"🔍 GET /api/client-info: Ищу бизнес в таблице Businesses, business_id={current_business_id}")
                 # Проверяем доступ к бизнесу
-                cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM Businesses WHERE id = ? AND is_active = 1", (current_business_id,))
+                cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM businesses WHERE id = %s AND is_active = TRUE", (current_business_id,))
                 business_row = cursor.fetchone()
                 
                 if business_row:
-                    owner_id = business_row[0]
+                    owner_id = business_row['owner_id'] if isinstance(business_row, dict) else business_row[0]
                     print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, user_id={user_id}, is_superadmin={user_data.get('is_superadmin')}")
                     # Проверяем права доступа
                     if owner_id == user_id or user_data.get('is_superadmin'):
@@ -4180,68 +3991,67 @@ def client_info():
                         links = []
                         cursor.execute("""
                             SELECT id, url, map_type, created_at 
-                            FROM BusinessMapLinks 
-                            WHERE business_id = ? 
+                            FROM businessmaplinks 
+                            WHERE business_id = %s 
                             ORDER BY created_at DESC
                         """, (current_business_id,))
                         link_rows = cursor.fetchall()
                         links = [
                             {
-                                "id": r[0],
-                                "url": r[1],
-                                "mapType": r[2],
-                                "createdAt": r[3]
+                                "id": r['id'] if isinstance(r, dict) else r[0],
+                                "url": r['url'] if isinstance(r, dict) else r[1],
+                                "mapType": r['map_type'] if isinstance(r, dict) else r[2],
+                                "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
                             } for r in link_rows
                         ]
                         
                         # Получаем услуги для этого бизнеса
                         cursor.execute("""
                             SELECT name, description, category, price 
-                            FROM UserServices 
-                            WHERE business_id = ? 
+                            FROM userservices 
+                            WHERE business_id = %s 
                             ORDER BY created_at DESC
                         """, (current_business_id,))
                         services_rows = cursor.fetchall()
-                        services_list = [{"name": r[0], "description": r[1], "category": r[2], "price": r[3]} for r in services_rows]
+                        services_list = [
+                            {
+                                "name": r['name'] if isinstance(r, dict) else r[0],
+                                "description": r['description'] if isinstance(r, dict) else r[1],
+                                "category": r['category'] if isinstance(r, dict) else r[2],
+                                "price": r['price'] if isinstance(r, dict) else r[3]
+                            } for r in services_rows
+                        ]
                         
                         # Получаем данные владельца бизнеса для отображения
                         owner_data = None
                         
-                        # Сначала проверяем BusinessProfiles (где сохраняются обновления)
-                        cursor.execute("""
-                            CREATE TABLE IF NOT EXISTS BusinessProfiles (
-                                id TEXT PRIMARY KEY,
-                                business_id TEXT NOT NULL,
-                                contact_name TEXT,
-                                contact_phone TEXT,
-                                contact_email TEXT,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
-                            )
-                        """)
-                        
+                        # Сначала проверяем businessprofiles (где сохраняются обновления)
+                        # Таблица создаётся через миграции, не создаём здесь
                         cursor.execute("""
                             SELECT contact_name, contact_phone, contact_email
-                            FROM BusinessProfiles
-                            WHERE business_id = ?
+                            FROM businessprofiles
+                            WHERE business_id = %s
                         """, (current_business_id,))
                         profile_row = cursor.fetchone()
                         
-                        if profile_row and (profile_row[0] or profile_row[1] or profile_row[2]):
-                             owner_data = {
-                                'id': owner_id, # Оставляем ID реального владельца
-                                'name': profile_row[0] or "",
-                                'phone': profile_row[1] or "",
-                                'email': profile_row[2] or ""
-                            }
+                        if profile_row:
+                            contact_name = profile_row['contact_name'] if isinstance(profile_row, dict) else profile_row[0]
+                            contact_phone = profile_row['contact_phone'] if isinstance(profile_row, dict) else profile_row[1]
+                            contact_email = profile_row['contact_email'] if isinstance(profile_row, dict) else profile_row[2]
+                            if contact_name or contact_phone or contact_email:
+                                owner_data = {
+                                    'id': owner_id, # Оставляем ID реального владельца
+                                    'name': contact_name or "",
+                                    'phone': contact_phone or "",
+                                    'email': contact_email or ""
+                                }
                         
-                        # Если в профиле нет данных, берем из таблицы Users
+                        # Если в профиле нет данных, берем из таблицы users
                         if not owner_data and owner_id:
                             cursor.execute("""
                                 SELECT id, email, name, phone
-                                FROM Users
-                                WHERE id = ?
+                                FROM users
+                                WHERE id = %s
                             """, (owner_id,))
                             owner_row = cursor.fetchone()
                             if owner_row:
@@ -4260,13 +4070,19 @@ def client_info():
                                         'phone': owner_row[3] if len(owner_row) > 3 else None
                                     }
                         
+                        # Обработка результатов для Postgres
+                        business_name = business_row['name'] if isinstance(business_row, dict) else business_row[1]
+                        business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[2]
+                        address = business_row['address'] if isinstance(business_row, dict) else business_row[3]
+                        working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[4]
+                        
                         db.close()
                         return jsonify({
                             "success": True,
-                            "businessName": business_row[1] or "",
-                            "businessType": business_row[2] or "",
-                            "address": business_row[3] or "",
-                            "workingHours": business_row[4] or "",
+                            "businessName": business_name or "",
+                            "businessType": business_type or "",
+                            "address": address or "",
+                            "workingHours": working_hours or "",
                             "description": "",
                             "services": services_list,
                             "mapLinks": links,
@@ -4277,99 +4093,16 @@ def client_info():
                         db.close()
                         return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
                 else:
-                    print(f"⚠️ GET /api/client-info: Бизнес не найден в таблице Businesses, перехожу к ClientInfo")
-                    # Бизнес не найден в Businesses - пробуем получить из ClientInfo
-                    # НЕ закрываем db.close() здесь, продолжаем выполнение
-            
-            # Старая логика для обратной совместимости (если business_id не передан ИЛИ бизнес не найден в Businesses)
-            # Пытаемся получить данные из ClientInfo по user_id и business_id (если есть)
-            current_business_id = request.args.get('business_id')
-            if current_business_id:
-                print(f"🔍 GET /api/client-info: Пытаюсь получить данные из ClientInfo, business_id={current_business_id}")
-                # Сначала проверяем, что колонка business_id существует
-                cursor.execute("PRAGMA table_info(ClientInfo)")
-                columns = [col[1] for col in cursor.fetchall()]
-                
-                # #region agent log
-                import json
-                log_data = {
-                    "location": "src/main.py:3167",
-                    "message": "GET client-info: проверка структуры таблицы",
-                    "data": {
-                        "columns": columns,
-                        "has_business_id": 'business_id' in columns,
-                        "current_business_id": current_business_id
-                    },
-                    "timestamp": int(datetime.now().timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "J"
-                }
-                try:
-                    with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps(log_data) + '\n')
-                except: pass
-                # #endregion
-                
-                if 'business_id' in columns:
-                    # Колонка существует - используем запрос с business_id
-                    try:
-                        print(f"🔍 GET /api/client-info: Выполняю запрос с business_id={current_business_id}, user_id={user_id}")
-                        cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? AND business_id = ?", (user_id, current_business_id))
-                        row = cursor.fetchone()
-                        print(f"✅ GET /api/client-info: Запрос выполнен успешно, row={row is not None}")
-                    except Exception as e:
-                        error_msg = str(e)
-                        print(f"❌ Ошибка запроса ClientInfo с business_id: {error_msg}")
-                        import traceback
-                        traceback.print_exc()
-                        # Если ошибка "no such column: business_id" - значит проверка колонки не сработала
-                        if "no such column: business_id" in error_msg.lower():
-                            print(f"🚨 КРИТИЧЕСКАЯ ОШИБКА: Колонка business_id не найдена, хотя проверка показала, что она есть!")
-                            print(f"🚨 Колонки из проверки: {columns}")
-                        # Пытаемся получить без business_id
-                        cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
-                        row = cursor.fetchone()
-                    else:
-                        # Другая ошибка - пробуем без business_id
-                        cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
-                        row = cursor.fetchone()
-                else:
-                    # Колонка не существует - используем запрос без business_id
-                    print(f"⚠️ Колонка business_id отсутствует, используем запрос без неё. Колонки: {columns}")
-                    cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
-                    row = cursor.fetchone()
-                
-                # Если не найдено, пытаемся получить из Businesses
-                if not row:
-                    cursor.execute("SELECT name, business_type, address, working_hours FROM Businesses WHERE id = ? AND owner_id = ?", (current_business_id, user_id))
-                    business_row = cursor.fetchone()
-                    if business_row:
-                        row = (business_row[0], business_row[1], business_row[2], business_row[3], "", "")
-            else:
-                cursor.execute("SELECT business_name, business_type, address, working_hours, description, services FROM ClientInfo WHERE user_id = ? LIMIT 1", (user_id,))
-                row = cursor.fetchone()
+                    # Бизнес не найден в businesses — Postgres-only, ClientInfo не используем
+                    print(f"⚠️ GET /api/client-info: Бизнес не найден, business_id={current_business_id}")
+                    db.close()
+                    return jsonify({"error": "Бизнес не найден"}), 404
 
-            # Получаем ссылки на карты (старая логика - по user_id)
-            links = []
-            cursor.execute("""
-                SELECT id, url, map_type, created_at 
-                FROM BusinessMapLinks 
-                WHERE user_id = ? 
-                ORDER BY created_at DESC
-            """, (user_id,))
-            link_rows = cursor.fetchall()
-            links = [
-                {
-                    "id": r[0],
-                    "url": r[1],
-                    "mapType": r[2],
-                    "createdAt": r[3]
-                } for r in link_rows
-            ]
-
-            db.close()
-            if not row:
+            # business_id не передан — возвращаем данные первого бизнеса пользователя из businesses + businessmaplinks
+            cursor.execute("SELECT id FROM businesses WHERE owner_id = %s AND is_active = TRUE ORDER BY created_at ASC LIMIT 1", (user_id,))
+            first_row = cursor.fetchone()
+            if not first_row:
+                db.close()
                 return jsonify({
                     "success": True,
                     "businessName": "",
@@ -4377,18 +4110,71 @@ def client_info():
                     "address": "",
                     "workingHours": "",
                     "description": "",
-                    "services": "",
-                    "mapLinks": links
+                    "services": [],
+                    "mapLinks": [],
+                    "owner": None
                 })
+            current_business_id = first_row['id'] if isinstance(first_row, dict) else first_row[0]
+            cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM businesses WHERE id = %s AND is_active = TRUE", (current_business_id,))
+            business_row = cursor.fetchone()
+            if not business_row:
+                db.close()
+                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "services": [], "mapLinks": [], "owner": None})
+            owner_id = business_row['owner_id'] if isinstance(business_row, dict) else business_row[0]
+            links = []
+            cursor.execute("""
+                SELECT id, url, map_type, created_at FROM businessmaplinks WHERE business_id = %s ORDER BY created_at DESC
+            """, (current_business_id,))
+            for r in cursor.fetchall():
+                links.append({
+                    "id": r['id'] if isinstance(r, dict) else r[0],
+                    "url": r['url'] if isinstance(r, dict) else r[1],
+                    "mapType": r['map_type'] if isinstance(r, dict) else r[2],
+                    "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
+                })
+            cursor.execute("SELECT name, description, category, price FROM userservices WHERE business_id = %s ORDER BY created_at DESC", (current_business_id,))
+            services_list = []
+            for r in cursor.fetchall():
+                services_list.append({
+                    "name": r['name'] if isinstance(r, dict) else r[0],
+                    "description": r['description'] if isinstance(r, dict) else r[1],
+                    "category": r['category'] if isinstance(r, dict) else r[2],
+                    "price": r['price'] if isinstance(r, dict) else r[3]
+                })
+            owner_data = None
+            cursor.execute("SELECT contact_name, contact_phone, contact_email FROM businessprofiles WHERE business_id = %s", (current_business_id,))
+            profile_row = cursor.fetchone()
+            if profile_row:
+                contact_name = profile_row['contact_name'] if isinstance(profile_row, dict) else profile_row[0]
+                contact_phone = profile_row['contact_phone'] if isinstance(profile_row, dict) else profile_row[1]
+                contact_email = profile_row['contact_email'] if isinstance(profile_row, dict) else profile_row[2]
+                if contact_name or contact_phone or contact_email:
+                    owner_data = {'id': owner_id, 'name': contact_name or "", 'phone': contact_phone or "", 'email': contact_email or ""}
+            if not owner_data and owner_id:
+                cursor.execute("SELECT id, email, name, phone FROM users WHERE id = %s", (owner_id,))
+                owner_row = cursor.fetchone()
+                if owner_row:
+                    owner_data = {
+                        'id': owner_row['id'] if isinstance(owner_row, dict) else owner_row[0],
+                        'email': owner_row['email'] if isinstance(owner_row, dict) else owner_row[1],
+                        'name': owner_row['name'] if isinstance(owner_row, dict) else owner_row[2],
+                        'phone': owner_row['phone'] if isinstance(owner_row, dict) else (owner_row[3] if len(owner_row) > 3 else None)
+                    }
+            business_name = business_row['name'] if isinstance(business_row, dict) else business_row[1]
+            business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[2]
+            address = business_row['address'] if isinstance(business_row, dict) else business_row[3]
+            working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[4]
+            db.close()
             return jsonify({
                 "success": True,
-                "businessName": row[0] or "",
-                "businessType": row[1] or "",
-                "address": row[2] or "",
-                "workingHours": row[3] or "",
-                "description": row[4] or "",
-                "services": row[5] or "",
-                "mapLinks": links
+                "businessName": business_name or "",
+                "businessType": business_type or "",
+                "address": address or "",
+                "workingHours": working_hours or "",
+                "description": "",
+                "services": services_list,
+                "mapLinks": links,
+                "owner": owner_data
             })
 
         # POST/PUT: сохранить/обновить
@@ -4397,10 +4183,11 @@ def client_info():
             return jsonify({"error": "Invalid JSON"}), 400
         
         # Получаем business_id из запроса или используем первый бизнес пользователя
-        business_id = request.args.get('business_id') or data.get('business_id')
+        business_id = request.args.get('business_id') or data.get('business_id') or data.get('businessId')
+        print(f"📝 POST /api/client-info: business_id={business_id}, data keys={list(data.keys()) if data else 'None'}")
         if not business_id:
             # Если business_id не передан, пытаемся найти первый бизнес пользователя
-            cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? AND is_active = 1 LIMIT 1", (user_id,))
+            cursor.execute("SELECT id FROM businesses WHERE owner_id = %s AND is_active = TRUE LIMIT 1", (user_id,))
             business_row = cursor.fetchone()
             if business_row:
                 business_id = business_row[0] if isinstance(business_row, tuple) else business_row['id']
@@ -4408,146 +4195,13 @@ def client_info():
                 # Если бизнеса нет, используем user_id как business_id для обратной совместимости
                 business_id = user_id
         
-        # #region agent log
-        log_data = {
-            "location": "src/main.py:3256",
-            "message": "POST/PUT client-info: перед INSERT",
-            "data": {
-                "user_id": user_id,
-                "business_id": business_id,
-                "has_business_id_param": bool(request.args.get('business_id') or data.get('business_id'))
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "A"
-        }
-        try:
-            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except: pass
-        # #endregion
-        
-        # Проверяем структуру таблицы перед INSERT (критично для POST/PUT)
-        # #region agent log
-        cursor.execute("PRAGMA table_info(ClientInfo)")
-        columns_after = [col[1] for col in cursor.fetchall()]
-        log_data = {
-            "location": "src/main.py:3270",
-            "message": "POST/PUT client-info: проверка структуры таблицы",
-            "data": {
-                "columns": columns_after,
-                "has_business_id": 'business_id' in columns_after
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "B"
-        }
-        try:
-            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except: pass
-        # #endregion
-        
-        if 'business_id' not in columns_after:
-            # Таблица не имеет business_id - это критическая ошибка
-            error_msg = f"Критическая ошибка: таблица ClientInfo не имеет колонки business_id. Колонки: {columns_after}"
-            print(f"❌ {error_msg}")
-            # #region agent log
-            log_data = {
-                "location": "src/main.py:3285",
-                "message": "POST/PUT client-info: ОШИБКА - нет business_id",
-                "data": {
-                    "columns": columns_after,
-                    "error": error_msg
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "C"
-            }
-            try:
-                with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps(log_data) + '\n')
-            except: pass
-            # #endregion
-            db.close()
-            return jsonify({"error": error_msg}), 500
-        
-        # #region agent log
-        log_data = {
-            "location": "src/main.py:3295",
-            "message": "POST/PUT client-info: выполнение INSERT",
-            "data": {
-                "user_id": user_id,
-                "business_id": business_id,
-                "will_use_business_id": True
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "D"
-        }
-        try:
-            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except: pass
-        # #endregion
-        
-        cursor.execute(
-            """
-            INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id, business_id) DO UPDATE SET
-                business_name=excluded.business_name,
-                business_type=excluded.business_type,
-                address=excluded.address,
-                working_hours=excluded.working_hours,
-                description=excluded.description,
-                services=excluded.services,
-                updated_at=CURRENT_TIMESTAMP
-            """,
-            (
-                user_id,
-                business_id,
-                data.get('businessName') or "",
-                data.get('businessType') or "",
-                data.get('address') or "",
-                data.get('workingHours') or "",
-                data.get('description') or "",
-                data.get('services') or ""
-            )
-        )
-        
-        # #region agent log
-        log_data = {
-            "location": "src/main.py:3330",
-            "message": "POST/PUT client-info: INSERT выполнен успешно",
-            "data": {
-                "user_id": user_id,
-                "business_id": business_id
-            },
-            "timestamp": int(datetime.now().timestamp() * 1000),
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "E"
-        }
-        try:
-            with open('/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/AI bots/SEO с Реплит на Курсоре/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps(log_data) + '\n')
-        except: pass
-        # #endregion
-        print(f"📋 Сохранено в ClientInfo: businessType = {data.get('businessType') or ''}")
-        db.conn.commit()
-
-        # Сохраняем ссылки на карты, если переданы (чтобы не стирать при отсутствии поля)
+        # Сохраняем ссылки на карты в businessmaplinks (Postgres-only, ClientInfo не используется)
         map_links = None
         if 'mapLinks' in data:
             map_links = data.get('mapLinks')
         elif 'map_links' in data:
             map_links = data.get('map_links')
-        business_id = (data.get('businessId') or data.get('business_id'))
+        # Не перезаписывать business_id: он уже задан выше из args/data/БД
 
         print(f"🔍 DEBUG client-info: business_id={business_id}, map_links={map_links}, type={type(map_links)}")
 
@@ -4564,6 +4218,8 @@ def client_info():
 
         # Обновляем ссылки, только если поле пришло в payload
         if business_id and isinstance(map_links, list):
+            print(f"📝 SAVE mapLinks: business_id={business_id}, user_id={user_id}, map_links={map_links}")
+            
             # Фильтруем пустые ссылки
             valid_links = []
             for link in map_links:
@@ -4571,41 +4227,57 @@ def client_info():
                 if url and url.strip():
                     valid_links.append(url.strip())
             
-            print(f"🔍 DEBUG: valid_links={valid_links}")
+            print(f"📝 SAVE mapLinks: valid_links={valid_links}, count={len(valid_links)}")
             
             # Удаляем старые ссылки для консистентности
-            cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = ?", (business_id,))
+            cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
+            deleted_count = cursor.rowcount
+            print(f"📝 DELETE mapLinks: business_id={business_id}, deleted_count={deleted_count}, SQL: DELETE FROM businessmaplinks WHERE business_id = %s")
             db.conn.commit()
+            print(f"📝 DELETE mapLinks: commit() выполнен")
 
             # Сохраняем валидные ссылки
+            inserted_count = 0
             for url in valid_links:
                 map_type = detect_map_type(url)
+                link_id = str(uuid.uuid4())
                 cursor.execute("""
-                    INSERT INTO BusinessMapLinks (id, user_id, business_id, url, map_type, created_at)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (str(uuid.uuid4()), user_id, business_id, url, map_type))
-                print(f"✅ Сохранена ссылка: {url} (тип: {map_type})")
+                    INSERT INTO businessmaplinks (id, user_id, business_id, url, map_type, created_at)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """, (link_id, user_id, business_id, url, map_type))
+                rowcount = cursor.rowcount
+                inserted_count += rowcount
+                print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}, rowcount={rowcount}")
             
             db.conn.commit()
+            print(f"📝 INSERT mapLinks: commit() выполнен, inserted_count={inserted_count}")
+            
+            # Проверяем, что данные сохранились
+            cursor.execute("SELECT COUNT(*) FROM businessmaplinks WHERE business_id = %s", (business_id,))
+            count_row = cursor.fetchone()
+            saved_count = count_row['count'] if isinstance(count_row, dict) else count_row[0]
+            print(f"📝 VERIFY mapLinks: business_id={business_id}, saved_count={saved_count}")
 
         # Всегда возвращаем текущие ссылки для бизнеса
         current_links = []
         if business_id:
+            print(f"📖 GET mapLinks: business_id={business_id}")
             cursor.execute("""
                 SELECT id, url, map_type, created_at 
-                FROM BusinessMapLinks 
-                WHERE business_id = ? 
+                FROM businessmaplinks 
+                WHERE business_id = %s 
                 ORDER BY created_at DESC
             """, (business_id,))
             link_rows = cursor.fetchall()
             current_links = [
                 {
-                    "id": r[0],
-                    "url": r[1],
-                    "mapType": r[2],
-                    "createdAt": r[3]
+                    "id": r['id'] if isinstance(r, dict) else r[0],
+                    "url": r['url'] if isinstance(r, dict) else r[1],
+                    "mapType": r['map_type'] if isinstance(r, dict) else r[2],
+                    "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
                 } for r in link_rows
             ]
+            print(f"📖 GET mapLinks: business_id={business_id}, found_count={len(current_links)}, links={[l['url'] for l in current_links]}")
 
         # Синхронизация с Businesses: обновляем существующий бизнес
         try:
@@ -4616,26 +4288,26 @@ def client_info():
                 # Сначала ищем по имени (если переименовали)
                 if business_name:
                     cursor.execute("""
-                        SELECT id FROM Businesses 
-                        WHERE owner_id = ? AND name = ? AND is_active = 1
+                        SELECT id FROM businesses
+                        WHERE owner_id = %s AND name = %s AND is_active = TRUE
                         LIMIT 1
                     """, (user_id, business_name))
                     existing_by_name = cursor.fetchone()
                     if existing_by_name:
-                        business_id = existing_by_name[0]
+                        business_id = existing_by_name['id'] if isinstance(existing_by_name, dict) else existing_by_name[0]
                         print(f"✅ Найден бизнес по имени: {business_name} (ID: {business_id})")
                 
                 # Если не нашли по имени, берём первый активный бизнес пользователя
                 if not business_id:
                     cursor.execute("""
-                        SELECT id FROM Businesses 
-                        WHERE owner_id = ? AND is_active = 1
+                        SELECT id FROM businesses
+                        WHERE owner_id = %s AND is_active = TRUE
                         ORDER BY created_at ASC
                         LIMIT 1
                     """, (user_id,))
                     first_business = cursor.fetchone()
                     if first_business:
-                        business_id = first_business[0]
+                        business_id = first_business['id'] if isinstance(first_business, dict) else first_business[0]
                         print(f"✅ Используется первый бизнес пользователя (ID: {business_id})")
             
             # Обновляем бизнес, если найден
@@ -4650,19 +4322,19 @@ def client_info():
                     updates = []
                     params = []
                     if data.get('businessName') is not None:
-                        updates.append('name = ?'); params.append(data.get('businessName'))
+                        updates.append('name = %s'); params.append(data.get('businessName'))
                     if data.get('address') is not None:
-                        updates.append('address = ?'); params.append(data.get('address'))
+                        updates.append('address = %s'); params.append(data.get('address'))
                     if data.get('workingHours') is not None:
-                        updates.append('working_hours = ?'); params.append(data.get('workingHours'))
+                        updates.append('working_hours = %s'); params.append(data.get('workingHours'))
                     if data.get('businessType') is not None:
                         business_type_value = data.get('businessType')
-                        print(f"📋 Сохраняем businessType в Businesses: {business_type_value}")
-                        updates.append('business_type = ?'); params.append(business_type_value)
+                        print(f"📋 Сохраняем businessType в businesses: {business_type_value}")
+                        updates.append('business_type = %s'); params.append(business_type_value)
                     if updates:
                         updates.append('updated_at = CURRENT_TIMESTAMP')
                         params.append(business_id)
-                        cursor.execute(f"UPDATE Businesses SET {', '.join(updates)} WHERE id = ?", params)
+                        cursor.execute(f"UPDATE businesses SET {', '.join(updates)} WHERE id = %s", params)
                         db.conn.commit()
                         print(f"✅ Обновлён бизнес: {business_id}")
         except Exception as e:
@@ -4678,23 +4350,39 @@ def client_info():
         
         # Если есть business_id, добавляем обновленные данные бизнеса
         if business_id:
-            cursor.execute("SELECT name, business_type, address, working_hours FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT name, business_type, address, working_hours FROM businesses WHERE id = %s", (business_id,))
             business_row = cursor.fetchone()
             if business_row:
-                business_type = business_row[1] or ""
-                print(f"📋 POST /api/client-info: businessType из Businesses = '{business_type}' для business_id={business_id}")
+                business_name = business_row['name'] if isinstance(business_row, dict) else business_row[0]
+                business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[1]
+                address = business_row['address'] if isinstance(business_row, dict) else business_row[2]
+                working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[3]
+                print(f"📋 POST /api/client-info: businessType из businesses = '{business_type}' для business_id={business_id}")
                 response_data.update({
-                    "businessName": business_row[0] or "",
-                    "businessType": business_type,
-                    "address": business_row[2] or "",
-                    "workingHours": business_row[3] or ""
+                    "businessName": business_name or "",
+                    "businessType": business_type or "",
+                    "address": address or "",
+                    "workingHours": working_hours or ""
                 })
 
         db.close()
         return jsonify(response_data)
 
     except Exception as e:
-        print(f"❌ Ошибка сохранения клиентской информации: {e}")
+        import traceback
+        print(f"❌ Ошибка в /api/client-info: {e}")
+        print(f"❌ Method: {request.method}")
+        print(f"❌ User ID: {user_id if 'user_id' in locals() else 'N/A'}")
+        try:
+            if request.method == 'POST' or request.method == 'PUT':
+                print(f"❌ Request JSON: {request.json}")
+                print(f"❌ Request data: {request.get_data(as_text=True)[:500]}")
+            elif request.method == 'GET':
+                print(f"❌ Request args: {request.args}")
+        except Exception as log_err:
+            print(f"❌ Ошибка логирования request: {log_err}")
+        print("❌ Traceback:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/business/<string:business_id>/parse-status', methods=['GET'])
@@ -4859,8 +4547,12 @@ def get_map_parses(business_id):
             return jsonify({"error": "Нет доступа"}), 403
 
         # Проверяем какие колонки существуют
-        cursor.execute("PRAGMA table_info(MapParseResults)")
-        columns = [row[1] for row in cursor.fetchall()]
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = 'mapparseresults'
+        """)
+        columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
         
         has_unanswered_col = 'unanswered_reviews_count' in columns
         has_profile_fields = 'profile_completeness' in columns
@@ -4884,9 +4576,9 @@ def get_map_parses(business_id):
         
         cursor.execute(f"""
             SELECT {select_fields}
-            FROM MapParseResults
-            WHERE business_id = ?
-            ORDER BY datetime(created_at) DESC
+            FROM mapparseresults
+            WHERE business_id = %s
+            ORDER BY created_at DESC
         """, (business_id,))
         
         rows = cursor.fetchall()
@@ -5716,10 +5408,10 @@ def upload_transaction_file():
             # Получаем master_id по имени мастера (если есть таблица Masters)
             master_id = None
             if trans.get('master_name'):
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Masters'")
+                cursor.execute("SELECT to_regclass('public.masters')")
                 masters_table_exists = cursor.fetchone()
                 if masters_table_exists:
-                    cursor.execute("SELECT id FROM Masters WHERE name = ? LIMIT 1", (trans['master_name'],))
+                    cursor.execute("SELECT id FROM masters WHERE name = %s LIMIT 1", (trans['master_name'],))
                     master_row = cursor.fetchone()
                     if master_row:
                         master_id = master_row[0]
@@ -6174,11 +5866,11 @@ def get_financial_breakdown():
             
             if master_id:
                 # Проверяем наличие таблицы Masters
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Masters'")
+                cursor.execute("SELECT to_regclass('public.masters')")
                 masters_table_exists = cursor.fetchone()
                 
                 if masters_table_exists:
-                    cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
+                    cursor.execute("SELECT name FROM masters WHERE id = %s", (master_id,))
                     master_row = cursor.fetchone()
                     master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
                 else:
@@ -6536,7 +6228,7 @@ def admin_sync_business_yandex(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id, name FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, name FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
 
         if not business:
@@ -6573,9 +6265,9 @@ def admin_sync_business_yandex(business_id):
 
         # Ищем ссылку на карты (NEW)
         print(f"🔍 Поиск ссылки на карты для бизнеса {business_id}...")
-        cursor.execute("SELECT url FROM BusinessMapLinks WHERE business_id = ? AND map_type = 'yandex' LIMIT 1", (business_id,))
+        cursor.execute("SELECT url FROM businessmaplinks WHERE business_id = %s AND map_type = 'yandex' LIMIT 1", (business_id,))
         map_link_row = cursor.fetchone()
-        map_url = map_link_row[0] if map_link_row else None
+        map_url = map_link_row['url'] if isinstance(map_link_row, dict) else (map_link_row[0] if map_link_row else None)
         
         if not account_id and not map_url:
             print(f"❌ Не найден ни аккаунт Яндекс.Бизнес, ни ссылка на карты для бизнеса {business_id}")
@@ -6670,7 +6362,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         auth_data_encrypted = account_row[0]
         external_id = account_row[1] if len(account_row) > 1 else None
         
-        cursor.execute("SELECT name FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT name FROM businesses WHERE id = %s", (business_id,))
         business_row = cursor.fetchone()
         business_name = business_row[0] if business_row else 'Unknown'
         
@@ -6786,7 +6478,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         if services:
             try:
                 cursor = db.conn.cursor()
-                cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+                cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
                 owner_row = cursor.fetchone()
                 user_id = owner_row[0] if owner_row else None
                 if not user_id:
@@ -6883,7 +6575,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
         
             # Сохраняем историю парсинга в MapParseResults
             try:
-                cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (business_id,))
+                cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
                 yandex_url_row = cursor.fetchone()
                 yandex_url = yandex_url_row[0] if yandex_url_row else None
                 
@@ -6991,7 +6683,7 @@ def admin_sync_status(sync_id):
         
         sync_data = dict(sync_row)
         
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (sync_data['business_id'],))
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (sync_data['business_id'],))
         owner_row = cursor.fetchone()
         owner_id = owner_row[0] if owner_row else None
         
@@ -7032,8 +6724,8 @@ def get_user_networks():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие таблицы Networks
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Networks'")
+        # Проверяем наличие таблицы networks (Postgres)
+        cursor.execute("SELECT to_regclass('public.networks')")
         networks_table_exists = cursor.fetchone()
         
         if not networks_table_exists:
@@ -7391,6 +7083,8 @@ def login():
         result = authenticate_user(email, password)
         
         if 'error' in result:
+            if result.get('error') == 'account_blocked':
+                return jsonify({"error": "account_blocked", "message": "user is blocked"}), 403
             return jsonify({"error": result['error']}), 401
         
         # Проверяем, есть ли у пользователя хотя бы один активный бизнес
@@ -7463,6 +7157,10 @@ def get_user_info():
         user_data = verify_session(token)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
+        
+        # Заблокированный пользователь — 403 (не 401)
+        if user_data.get('is_active') is False:
+            return jsonify({"error": "account_blocked", "message": "user is blocked"}), 403
         
         # Отладочное логирование
         print(f"🔍 DEBUG get_user_info: user_data type = {type(user_data)}")
@@ -8189,7 +7887,7 @@ def get_business_types_public():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT type_key, label FROM BusinessTypes WHERE is_active = 1 ORDER BY label")
+        cursor.execute("SELECT type_key, label FROM businesstypes WHERE is_active = TRUE ORDER BY label")
         rows = cursor.fetchall()
         
         types = []
@@ -8323,7 +8021,7 @@ def update_or_delete_business_type(type_id):
         cursor = db.conn.cursor()
         
         if request.method == 'DELETE':
-            cursor.execute("DELETE FROM BusinessTypes WHERE id = ?", (type_id,))
+            cursor.execute("DELETE FROM businesstypes WHERE id = %s", (type_id,))
             db.conn.commit()
             db.close()
             return jsonify({"success": True})
@@ -8386,17 +8084,17 @@ def get_business_progress():
             return jsonify({"error": "Нет доступа"}), 403
             
         # 1. Определяем тип бизнеса
-        cursor.execute("SELECT business_type FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT business_type FROM businesses WHERE id = %s", (business_id,))
         row = cursor.fetchone()
         business_type_key = row[0] if row else 'other'
         
         # Находим ID типа бизнеса
-        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        cursor.execute("SELECT id FROM businesstypes WHERE type_key = %s OR id = %s", (business_type_key, business_type_key))
         bt_row = cursor.fetchone()
         
         if not bt_row:
              # Fallback
-             cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
+             cursor.execute("SELECT id FROM businesstypes WHERE type_key = 'other'")
              bt_row = cursor.fetchone()
              
         business_type_id = bt_row[0] if bt_row else None
@@ -8407,7 +8105,7 @@ def get_business_progress():
             return jsonify({"stages": [], "current_step": 1})
             
         # 2. Получаем текущий прогресс (шаг визарда)
-        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        cursor.execute("SELECT step FROM businessoptimizationwizard WHERE business_id = %s", (business_id,))
         wiz_row = cursor.fetchone()
         current_step = wiz_row[0] if wiz_row else 1
         
@@ -8490,43 +8188,44 @@ def get_business_stages(business_id):
         cursor = db.conn.cursor()
         
         # Проверка доступа
-        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, business_type FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
             
-        owner_id, business_type_key = business[0], business[1]
+        owner_id = business['owner_id'] if isinstance(business, dict) else business[0]
+        business_type_key = business['business_type'] if isinstance(business, dict) else business[1]
         
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
             
         # Находим ID типа бизнеса
-        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        cursor.execute("SELECT id FROM businesstypes WHERE type_key = %s OR id = %s", (business_type_key, business_type_key))
         bt_row = cursor.fetchone()
         
         if not bt_row:
-            cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
+            cursor.execute("SELECT id FROM businesstypes WHERE type_key = 'other'")
             bt_row = cursor.fetchone()
              
-        business_type_id = bt_row[0] if bt_row else None
+        business_type_id = bt_row['id'] if isinstance(bt_row, dict) else (bt_row[0] if bt_row else None)
         
         if not business_type_id:
             db.close()
             return jsonify({"stages": []})
             
         # Получаем текущий шаг визарда
-        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        cursor.execute("SELECT step FROM businessoptimizationwizard WHERE business_id = %s", (business_id,))
         wiz_row = cursor.fetchone()
         current_step = wiz_row[0] if wiz_row else 1
         
         # Получаем этапы
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration
-            FROM GrowthStages
-            WHERE business_type_id = ?
+            FROM growthstages
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -8718,7 +8417,7 @@ def update_or_delete_growth_stage(stage_id):
         cursor = db.conn.cursor()
         
         if request.method == 'DELETE':
-            cursor.execute("DELETE FROM GrowthStages WHERE id = ?", (stage_id,))
+            cursor.execute("DELETE FROM growthstages WHERE id = %s", (stage_id,))
             db.conn.commit()
             db.close()
             return jsonify({"success": True})
@@ -9061,7 +8760,7 @@ def set_promo_tier(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что бизнес существует
-        cursor.execute("SELECT id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT id FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -9206,7 +8905,7 @@ def business_optimization_wizard(business_id):
             }
             
             # Проверяем, есть ли уже запись
-            cursor.execute("SELECT id FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+            cursor.execute("SELECT id FROM businessoptimizationwizard WHERE business_id = %s", (business_id,))
             existing = cursor.fetchone()
             
             if existing:
@@ -9999,7 +9698,7 @@ def generate_telegram_bind_token():
         # Проверяем, что бизнес принадлежит пользователю
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id FROM Businesses WHERE id = ? AND owner_id = ?", (business_id, user_data['user_id']))
+        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
         business_row = cursor.fetchone()
         if not business_row:
             db.close()
@@ -10085,7 +9784,7 @@ def get_telegram_bind_status():
         cursor = db.conn.cursor()
         
         # Проверяем, что бизнес принадлежит пользователю
-        cursor.execute("SELECT id FROM Businesses WHERE id = ? AND owner_id = ?", (business_id, user_data['user_id']))
+        cursor.execute("SELECT id FROM businesses WHERE id = %s AND owner_id = %s", (business_id, user_data['user_id']))
         business_row = cursor.fetchone()
         if not business_row:
             db.close()
@@ -10115,7 +9814,7 @@ def get_telegram_bind_status():
             
             if has_used_token_for_this_business:
                 # Проверяем, что у пользователя есть telegram_id
-                cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
+                cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (user_data['user_id'],))
                 user_row = cursor.fetchone()
                 is_linked = user_row and user_row[0] is not None and user_row[0] != 'None' and user_row[0] != ''
                 print(f"🔍 Telegram ID пользователя: {user_row[0] if user_row else None}, is_linked={is_linked}")
@@ -10235,7 +9934,7 @@ def verify_telegram_bind_token():
         db.conn.commit()
         
         # Получаем информацию о пользователе
-        cursor.execute("SELECT email, name FROM Users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT email, name FROM users WHERE id = %s", (user_id,))
         user_info = cursor.fetchone()
         
         db.close()
@@ -10444,9 +10143,10 @@ def handle_exception(e):
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    # Инициализируем схему базы данных при первом запуске
-    print("🔄 Проверка схемы базы данных...")
-    init_database_schema()
-    
+    # Runtime строго Postgres-only: подключаемся только через pg_db_utils.
+    from pg_db_utils import log_connection_info
+
+    log_connection_info(prefix="BACKEND")
+
     print("SEO анализатор запущен на порту 8000")
-    app.run(host='0.0.0.0', port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=False)

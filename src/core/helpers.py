@@ -9,17 +9,19 @@ def get_business_owner_id(cursor, business_id: str, include_active_check: bool =
     Args:
         cursor: Курсор БД
         business_id: ID бизнеса
-        include_active_check: Проверять ли is_active = 1
+        include_active_check: Проверять ли is_active = TRUE
     
     Returns:
         owner_id или None если бизнес не найден
     """
     if include_active_check:
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ? AND is_active = 1", (business_id,))
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s AND is_active = TRUE", (business_id,))
     else:
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
     row = cursor.fetchone()
-    return row[0] if row else None
+    if row:
+        return row['owner_id'] if isinstance(row, dict) else row[0]
+    return None
 
 def get_business_id_from_user(user_id: str, business_id_from_request: str = None) -> str:
     """Получить business_id для отслеживания токенов
@@ -39,8 +41,8 @@ def get_business_id_from_user(user_id: str, business_id_from_request: str = None
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT id FROM Businesses 
-            WHERE owner_id = ? 
+            SELECT id FROM businesses 
+            WHERE owner_id = %s 
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
@@ -72,8 +74,8 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT language FROM Businesses 
-            WHERE owner_id = ? 
+            SELECT language FROM businesses 
+            WHERE owner_id = %s 
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
@@ -98,7 +100,7 @@ def find_business_id_for_user(cursor, user_id: str) -> str:
     Returns:
         business_id или user_id если не найден
     """
-    cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_id,))
+    cursor.execute("SELECT id FROM businesses WHERE owner_id = %s LIMIT 1", (user_id,))
     business_row = cursor.fetchone()
     if business_row:
         return business_row[0]

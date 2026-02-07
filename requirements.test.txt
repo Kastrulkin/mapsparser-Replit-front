@@ -1,0 +1,9 @@
+pytest
+psycopg2-binary
+sqlalchemy
+testcontainers
+docker
+flask
+flask-migrate
+flask-sqlalchemy
+

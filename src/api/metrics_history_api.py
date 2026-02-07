@@ -32,8 +32,8 @@ def get_metrics_history(business_id):
             # Поэтому явно фильтруем пустые строки
             cursor.execute("""
                 SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
-                FROM MapParseResults 
-                WHERE business_id = ? 
+                FROM mapparseresults 
+                WHERE business_id = %s 
                 GROUP BY parse_date 
             """, (business_id,))
             
@@ -44,8 +44,8 @@ def get_metrics_history(business_id):
                 
                 # Проверяем, есть ли запись в истории за эту дату
                 cursor.execute("""
-                    SELECT id, rating FROM BusinessMetricsHistory 
-                    WHERE business_id = ? AND metric_date = ? AND source = 'parsing'
+                    SELECT id, rating FROM businessmetricshistory 
+                    WHERE business_id = %s AND metric_date = %s AND source = 'parsing'
                 """, (business_id, parse_date))
                 
                 existing = cursor.fetchone()
@@ -54,11 +54,11 @@ def get_metrics_history(business_id):
                     # Создаем запись
                     metric_id = str(uuid.uuid4())
                     cursor.execute("""
-                        INSERT INTO BusinessMetricsHistory (
+                        INSERT INTO businessmetricshistory (
                             id, business_id, metric_date, rating, reviews_count, 
                             photos_count, news_count, source
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'parsing')
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'parsing')
                     """, (
                         metric_id, business_id, parse_date,
                         parse[0], parse[1], parse[2], parse[3]
@@ -66,9 +66,9 @@ def get_metrics_history(business_id):
                 # Обновляем, если в базе пусто (None или ''), а у нас есть данные
                 elif (existing[1] is None or existing[1] == '') and parse[0]:
                      cursor.execute("""
-                        UPDATE BusinessMetricsHistory
-                        SET rating = ?, reviews_count = ?, photos_count = ?, news_count = ?
-                        WHERE id = ?
+                        UPDATE businessmetricshistory
+                        SET rating = %s, reviews_count = %s, photos_count = %s, news_count = %s
+                        WHERE id = %s
                     """, (parse[0], parse[1], parse[2], parse[3], existing[0]))
                     
             db.conn.commit()
@@ -83,8 +83,8 @@ def get_metrics_history(business_id):
             # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
             cursor.execute("""
                 SELECT source, date, rating, reviews_total, unanswered_reviews_count
-                FROM ExternalBusinessStats 
-                WHERE business_id = ? AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
+                FROM externalbusinessstats 
+                WHERE business_id = %s AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
             """, (business_id,))
             
             stats_rows = cursor.fetchall()
@@ -97,8 +97,8 @@ def get_metrics_history(business_id):
                 
                 # Проверяем, есть ли запись
                 cursor.execute("""
-                    SELECT id FROM BusinessMetricsHistory 
-                    WHERE business_id = ? AND metric_date = ? AND source = ?
+                    SELECT id FROM businessmetricshistory 
+                    WHERE business_id = %s AND metric_date = %s AND source = %s
                 """, (business_id, metric_date, source))
                 
                 existing = cursor.fetchone()
@@ -106,20 +106,20 @@ def get_metrics_history(business_id):
                 if not existing:
                     metric_id = str(uuid.uuid4())
                     cursor.execute("""
-                        INSERT INTO BusinessMetricsHistory (
+                        INSERT INTO businessmetricshistory (
                             id, business_id, metric_date, rating, reviews_count, 
                             photos_count, news_count, unanswered_reviews_count, source
                         )
-                        VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, 0, 0, %s, %s)
                     """, (metric_id, business_id, metric_date, rating, reviews_count, unanswered, source))
                 else:
                     # Обновляем
                     cursor.execute("""
-                        UPDATE BusinessMetricsHistory
-                        SET rating = COALESCE(?, rating), 
-                            reviews_count = COALESCE(?, reviews_count),
-                            unanswered_reviews_count = COALESCE(?, unanswered_reviews_count)
-                        WHERE id = ?
+                        UPDATE businessmetricshistory
+                        SET rating = COALESCE(%s, rating), 
+                            reviews_count = COALESCE(%s, reviews_count),
+                            unanswered_reviews_count = COALESCE(%s, unanswered_reviews_count)
+                        WHERE id = %s
                     """, (rating, reviews_count, unanswered, existing[0]))
             
             db.conn.commit()
@@ -131,8 +131,8 @@ def get_metrics_history(business_id):
         cursor.execute("""
             SELECT id, metric_date, rating, reviews_count, 
                    photos_count, news_count, unanswered_reviews_count, source, created_at
-            FROM BusinessMetricsHistory
-            WHERE business_id = ?
+            FROM businessmetricshistory
+            WHERE business_id = %s
             ORDER BY metric_date DESC
             LIMIT 100
         """, (business_id,))
@@ -183,7 +183,7 @@ def add_manual_metric(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business or (business[0] != user_data['user_id'] and not user_data.get('is_superadmin')):
@@ -192,8 +192,8 @@ def add_manual_metric(business_id):
         
         # Проверяем, есть ли уже запись за эту дату
         cursor.execute("""
-            SELECT id FROM BusinessMetricsHistory
-            WHERE business_id = ? AND metric_date = ? AND source = 'manual'
+            SELECT id FROM businessmetricshistory
+            WHERE business_id = %s AND metric_date = %s AND source = 'manual'
         """, (business_id, metric_date))
         
         existing = cursor.fetchone()
@@ -201,20 +201,20 @@ def add_manual_metric(business_id):
         if existing:
             # Обновляем существующую
             cursor.execute("""
-                UPDATE BusinessMetricsHistory
-                SET rating = ?, reviews_count = ?, photos_count = ?, news_count = ?
-                WHERE id = ?
+                UPDATE businessmetricshistory
+                SET rating = %s, reviews_count = %s, photos_count = %s, news_count = %s
+                WHERE id = %s
             """, (rating, reviews_count, photos_count, news_count, existing[0]))
             message = "Метрика обновлена"
         else:
             # Создаем новую
             metric_id = str(uuid.uuid4())
             cursor.execute("""
-                INSERT INTO BusinessMetricsHistory (
+                INSERT INTO businessmetricshistory (
                     id, business_id, metric_date, rating, reviews_count,
                     photos_count, news_count, source
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'manual')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'manual')
             """, (metric_id, business_id, metric_date, rating, reviews_count, 
                   photos_count, news_count))
             message = "Метрика добавлена"
@@ -242,7 +242,7 @@ def delete_manual_metric(business_id, metric_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business or (business[0] != user_data['user_id'] and not user_data.get('is_superadmin')):
@@ -251,8 +251,8 @@ def delete_manual_metric(business_id, metric_id):
         
         # Удаляем только ручные записи
         cursor.execute("""
-            DELETE FROM BusinessMetricsHistory
-            WHERE id = ? AND business_id = ? AND source = 'manual'
+            DELETE FROM businessmetricshistory
+            WHERE id = %s AND business_id = %s AND source = 'manual'
         """, (metric_id, business_id))
         
         if cursor.rowcount == 0:

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Система аутентификации для SQLite базы данных
+Система аутентификации (Postgres‑only runtime).
+
+Runtime всегда использует PostgreSQL через pg_db_utils и psycopg2.
+SQLite/`reports.db` допускаются только в legacy‑скриптах, но не здесь.
 """
-import sqlite3
+
 import uuid
 from typing import Optional, Dict, Any
 import hashlib
@@ -11,10 +14,9 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-def get_db_connection():
-    """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+from pg_db_utils import get_db_connection
+
+PLACEHOLDER = "%s"
 
 def hash_password(password: str) -> str:
     """Хеширование пароля"""
@@ -50,7 +52,7 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
     
     try:
         # Проверяем, существует ли пользователь
-        cursor.execute("SELECT id FROM Users WHERE email = ?", (email,))
+        cursor.execute(f"SELECT id FROM Users WHERE email = {PLACEHOLDER}", (email,))
         if cursor.fetchone():
             return {"error": "Пользователь с таким email уже существует"}
         
@@ -59,10 +61,13 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
         password_hash = hash_password(password) if password else None
         verification_token = secrets.token_urlsafe(32)
         
-        cursor.execute("""
+        cursor.execute(
+            f"""
             INSERT INTO Users (id, email, password_hash, name, phone, verification_token, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, email, password_hash, name, phone, verification_token, datetime.now().isoformat()))
+            VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+        """,
+            (user_id, email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
+        )
         
         conn.commit()
         
@@ -86,10 +91,13 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        cursor.execute(
+            f"""
             SELECT id, email, password_hash, name, phone, is_active, is_verified
-            FROM Users WHERE email = ?
-        """, (email,))
+            FROM Users WHERE email = {PLACEHOLDER}
+        """,
+            (email,),
+        )
         
         user = cursor.fetchone()
         if not user:
@@ -124,7 +132,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         if not is_active:
             print(f"❌ Аккаунт заблокирован: {email}")
-            return {"error": "Аккаунт заблокирован"}
+            return {"error": "account_blocked", "message": "user is blocked"}
         
         # Если у пользователя нет пароля, это новый пользователь
         if not password_hash:
@@ -167,10 +175,13 @@ def create_session(user_id: str, ip_address: str = None, user_agent: str = None)
         token = secrets.token_urlsafe(64)
         expires_at = datetime.now() + timedelta(days=30)
         
-        cursor.execute("""
+        cursor.execute(
+            f"""
             INSERT INTO UserSessions (id, user_id, token, expires_at, ip_address, user_agent, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (session_id, user_id, token, expires_at.isoformat(), ip_address, user_agent, datetime.now().isoformat()))
+            VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+        """,
+            (session_id, user_id, token, expires_at.isoformat(), ip_address, user_agent, datetime.now().isoformat()),
+        )
         
         conn.commit()
         return token
@@ -186,12 +197,15 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        cursor.execute(
+            f"""
             SELECT s.user_id, s.expires_at, u.email, u.name, u.phone, u.is_active, u.is_superadmin
             FROM UserSessions s
             JOIN Users u ON s.user_id = u.id
-            WHERE s.token = ? AND s.expires_at > ?
-        """, (token, datetime.now().isoformat()))
+            WHERE s.token = {PLACEHOLDER} AND s.expires_at > {PLACEHOLDER}
+        """,
+            (token, datetime.now().isoformat()),
+        )
         
         session = cursor.fetchone()
         if not session:
@@ -205,13 +219,15 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 email = session['email'] if 'email' in session.keys() else None
                 name = session['name'] if 'name' in session.keys() else None
                 phone = session['phone'] if 'phone' in session.keys() else None
+                is_active_val = session['is_active'] if 'is_active' in session.keys() else True
                 is_superadmin_val = session['is_superadmin'] if 'is_superadmin' in session.keys() else None
             else:
-                # Если это tuple или другой тип
+                # Если это tuple или другой тип (user_id, expires_at, email, name, phone, is_active, is_superadmin)
                 user_id = session[0] if len(session) > 0 else None
                 email = session[2] if len(session) > 2 else None
                 name = session[3] if len(session) > 3 else None
                 phone = session[4] if len(session) > 4 else None
+                is_active_val = session[5] if len(session) > 5 else True
                 is_superadmin_val = session[6] if len(session) > 6 else None
             
             return {
@@ -219,6 +235,7 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 "email": email,
                 "name": name,
                 "phone": phone,
+                "is_active": bool(is_active_val) if is_active_val is not None else True,
                 "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False
             }
         except Exception as e:
@@ -241,7 +258,7 @@ def logout_session(token: str) -> bool:
     cursor = conn.cursor()
     
     try:
-        cursor.execute("DELETE FROM UserSessions WHERE token = ?", (token,))
+        cursor.execute(f"DELETE FROM UserSessions WHERE token = {PLACEHOLDER}", (token,))
         conn.commit()
         return cursor.rowcount > 0
     except:
@@ -256,7 +273,7 @@ def set_password(user_id: str, password: str) -> Dict[str, Any]:
     
     try:
         # Проверяем, что пользователь существует
-        cursor.execute("SELECT id FROM Users WHERE id = ?", (user_id,))
+        cursor.execute(f"SELECT id FROM Users WHERE id = {PLACEHOLDER}", (user_id,))
         if not cursor.fetchone():
             return {"error": "Пользователь не найден"}
         
@@ -264,11 +281,14 @@ def set_password(user_id: str, password: str) -> Dict[str, Any]:
         password_hash = hash_password(password)
         
         # Обновляем пароль
-        cursor.execute("""
+        cursor.execute(
+            f"""
             UPDATE Users 
-            SET password_hash = ?, updated_at = ?
-            WHERE id = ?
-        """, (password_hash, datetime.now().isoformat(), user_id))
+            SET password_hash = {PLACEHOLDER}, updated_at = {PLACEHOLDER}
+            WHERE id = {PLACEHOLDER}
+        """,
+            (password_hash, datetime.now().isoformat(), user_id),
+        )
         
         conn.commit()
         
@@ -285,10 +305,13 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        cursor.execute(
+            f"""
             SELECT id, email, name, phone, telegram_id, created_at, is_active, is_verified
-            FROM Users WHERE id = ?
-        """, (user_id,))
+            FROM Users WHERE id = {PLACEHOLDER}
+        """,
+            (user_id,),
+        )
         
         user = cursor.fetchone()
         if not user:
@@ -341,7 +364,7 @@ def change_password(user_id: str, old_password: str, new_password: str) -> Dict[
     
     try:
         # Проверяем старый пароль
-        cursor.execute("SELECT password_hash FROM Users WHERE id = ?", (user_id,))
+        cursor.execute(f"SELECT password_hash FROM Users WHERE id = {PLACEHOLDER}", (user_id,))
         user = cursor.fetchone()
         
         if not user or not verify_password(old_password, user['password_hash']):
@@ -349,8 +372,10 @@ def change_password(user_id: str, old_password: str, new_password: str) -> Dict[
         
         # Устанавливаем новый пароль
         new_hash = hash_password(new_password)
-        cursor.execute("UPDATE Users SET password_hash = ?, updated_at = ? WHERE id = ?", 
-                      (new_hash, datetime.now().isoformat(), user_id))
+        cursor.execute(
+            f"UPDATE Users SET password_hash = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE id = {PLACEHOLDER}",
+            (new_hash, datetime.now().isoformat(), user_id),
+        )
         conn.commit()
         
         return {"success": True}
@@ -367,12 +392,15 @@ def create_invite(invited_by: str, email: str) -> Dict[str, Any]:
     
     try:
         # Проверяем, существует ли пользователь с таким email
-        cursor.execute("SELECT id FROM Users WHERE email = ?", (email,))
+        cursor.execute(f"SELECT id FROM Users WHERE email = {PLACEHOLDER}", (email,))
         if cursor.fetchone():
             return {"error": "Пользователь с таким email уже существует"}
         
         # Проверяем, есть ли уже приглашение
-        cursor.execute("SELECT id FROM Invites WHERE email = ? AND status = 'pending'", (email,))
+        cursor.execute(
+            f"SELECT id FROM Invites WHERE email = {PLACEHOLDER} AND status = 'pending'",
+            (email,),
+        )
         if cursor.fetchone():
             return {"error": "Приглашение уже отправлено"}
         
@@ -380,10 +408,13 @@ def create_invite(invited_by: str, email: str) -> Dict[str, Any]:
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(days=7)
         
-        cursor.execute("""
+        cursor.execute(
+            f"""
             INSERT INTO Invites (id, email, invited_by, token, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (invite_id, email, invited_by, token, expires_at.isoformat(), datetime.now().isoformat()))
+            VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+        """,
+            (invite_id, email, invited_by, token, expires_at.isoformat(), datetime.now().isoformat()),
+        )
         
         conn.commit()
         
@@ -405,11 +436,14 @@ def verify_invite(token: str) -> Optional[Dict[str, Any]]:
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        cursor.execute(
+            f"""
             SELECT id, email, invited_by, expires_at
             FROM Invites 
-            WHERE token = ? AND status = 'pending' AND expires_at > ?
-        """, (token, datetime.now().isoformat()))
+            WHERE token = {PLACEHOLDER} AND status = 'pending' AND expires_at > {PLACEHOLDER}
+        """,
+            (token, datetime.now().isoformat()),
+        )
         
         invite = cursor.fetchone()
         if not invite:
@@ -439,7 +473,10 @@ def accept_invite(token: str, password: str, name: str = None) -> Dict[str, Any]
             return result
         
         # Отмечаем приглашение как принятое
-        cursor.execute("UPDATE Invites SET status = 'accepted' WHERE id = ?", (invite['id'],))
+        cursor.execute(
+            f"UPDATE Invites SET status = 'accepted' WHERE id = {PLACEHOLDER}",
+            (invite["id"],),
+        )
         conn.commit()
         
         return result

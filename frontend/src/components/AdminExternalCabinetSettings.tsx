@@ -240,16 +240,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           cookies: savedCookies,
           headers: {},
         });
-      } else if (!account) {
-        // Если аккаунта нет и cookies пустые - ошибка
-        toast({
-          title: 'Ошибка',
-          description: 'Cookies обязательны для нового аккаунта',
-          variant: 'destructive',
-        });
-        setSaving(false);
-        return;
       }
+      // Cookies опциональны - можно сохранить аккаунт без cookies
       // Если аккаунт есть и cookies пустые - просто обновляем другие поля, не трогая cookies
 
       await newAuth.makeRequest(`/business/${businessId}/external-accounts`, {
@@ -344,7 +336,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               />
             </div>
             <div>
-              <Label htmlFor="yandex-auth-data">Cookies (обязательно) *</Label>
+              <Label htmlFor="yandex-auth-data">Cookies (опционально)</Label>
               {yandexAccount && yandexAccount.last_sync_at && (() => {
                 const lastSync = new Date(yandexAccount.last_sync_at);
                 const daysSinceSync = Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
@@ -390,7 +382,6 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                   ? "Вставьте новые cookies для обновления (или оставьте пустым, чтобы не менять)"
                   : "Вставьте cookies из браузера (например: yandexuid=123...; Session_id=abc...; yandex_login=user@example.com; ...)"}
                 rows={6}
-                required={!yandexAccount || !yandexAccount.last_sync_at}
               />
               <div className="mt-2">
                 <button
@@ -417,7 +408,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                       <strong>⚠️ Важно:</strong>
                       <ul className="list-disc list-inside ml-2 mt-1 space-y-1">
                         <li>Cookies должны быть скопированы <strong>после входа</strong> в личный кабинет</li>
-                        <li>Обязательные cookies: <code className="bg-gray-100 px-1 rounded">Session_id</code>, <code className="bg-gray-100 px-1 rounded">yandexuid</code>, <code className="bg-gray-100 px-1 rounded">sessionid2</code></li>
+                        <li>Рекомендуемые cookies: <code className="bg-gray-100 px-1 rounded">Session_id</code>, <code className="bg-gray-100 px-1 rounded">yandexuid</code>, <code className="bg-gray-100 px-1 rounded">sessionid2</code></li>
                         <li>Обновляйте cookies раз в 1-2 недели или при ошибках 401/302</li>
                       </ul>
                     </div>
@@ -439,14 +430,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             <div className="flex gap-2 items-center">
               <Button
                 onClick={() => testCookies('yandex_business', yandexForm)}
-                disabled={testingCookies || saving || !yandexForm.auth_data || !yandexForm.external_id}
+                disabled={testingCookies || saving || !yandexForm.external_id}
                 variant="outline"
               >
                 {testingCookies ? 'Проверка...' : 'Проверить cookies'}
               </Button>
               <Button
                 onClick={() => saveAccount('yandex_business', yandexForm)}
-                disabled={saving || testingCookies || (!yandexAccount && !yandexForm.auth_data)}
+                disabled={saving || testingCookies}
               >
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
               </Button>
@@ -485,7 +476,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               />
             </div>
             <div>
-              <Label htmlFor="2gis-auth-data">Cookies / Токен сессии *</Label>
+              <Label htmlFor="2gis-auth-data">Cookies / Токен сессии (опционально)</Label>
               <Textarea
                 id="2gis-auth-data"
                 value={twoGisForm.auth_data}
@@ -503,7 +494,6 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 }}
                 placeholder="Вставьте cookies из браузера или токен сессии 2ГИС"
                 rows={4}
-                required
               />
               <p className="text-xs text-gray-500 mt-1">
                 Скопируйте cookies из браузера после входа в личный кабинет 2ГИС
@@ -523,7 +513,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             <div className="flex gap-2 items-center">
               <Button
                 onClick={() => saveAccount('2gis', twoGisForm)}
-                disabled={saving || !twoGisForm.auth_data}
+                disabled={saving}
               >
                 {saving ? 'Сохранение...' : twoGisAccount ? 'Обновить' : 'Сохранить'}
               </Button>

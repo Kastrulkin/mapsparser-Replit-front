@@ -398,6 +398,46 @@ Resolve `column "optimized_description" of relation "userservices" does not exis
 ### Status
 - [x] Completed
 
+## 2026-02-06 - BrowserSession manager для human-in-the-loop Playwright
+
+### Current Task
+Вынести lifecycle Playwright (запуск/закрытие браузера) из `parser_interception.py` в отдельный helper и сделать чистую оркестрацию human-in-the-loop капчи через BrowserSession.
+
+### Architecture Decision
+- Создан модуль `browser_session.py` с:
+  - `BrowserSession` (dataclass с playwright, browser, context, page, keep_open).
+  - `BrowserSessionManager` с методами `open_session`, `close_session`, `park`, `get`.
+- В `YandexMapsInterceptionParser.parse_yandex_card`:
+  - Функция больше не вызывает `sync_playwright()` и не создаёт/не закрывает браузер.
+  - Работает только с переданным `BrowserSession` (`session.context`, `session.page`), сохраняя всю существующую логику скролла/антидетекта/HTML-fallback.
+- Глобальная функция `parse_yandex_card` в `parser_interception.py` стала оркестратором:
+  - При первом заходе открывает сессию через `BrowserSessionManager.open_session(...)`.
+  - При `session_id` берёт сессию из переданного `session_registry` через `manager.get(...)`.
+  - При `error='captcha_detected'` и `keep_open_on_captcha=True` вызывает `manager.park(...)`, добавляет `captcha_session_id` и не закрывает сессию.
+  - В остальных случаях закрывает сессию через `manager.close_session(...)` и чистит registry для `session_id`.
+- В `worker.py`:
+  - Добавлен `ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession]` и `BROWSER_SESSION_MANAGER`.
+  - Вызов парсера заменён на `parse_yandex_card(url, keep_open_on_captcha=True, session_registry=ACTIVE_CAPTCHA_SESSIONS)`.
+  - При `error='captcha_detected'` логируется `captcha_session_id` для дальнейшей интеграции с DB/операторским UI.
+
+### Files to Modify
+- `src/browser_session.py` - новый модуль, инкапсулирующий Playwright lifecycle.
+- `src/parser_interception.py` - `parse_yandex_card` класса принимает `BrowserSession`, глобальный `parse_yandex_card` стал оркестратором human-in-the-loop.
+- `src/worker.py` - подключён `BrowserSessionManager`, добавлен `ACTIVE_CAPTCHA_SESSIONS`, обновлён вызов парсера и лог капчи.
+
+### Trade-offs & Decisions
+- **Чистота архитектуры**: Парсер теперь не знает о Playwright lifecycle и не управляет ресурсами — это упростит последующую доработку human-in-the-loop (noVNC, TTL токенов, перезапуск воркера).
+- **Backwards compatibility**: Логика извлечения данных (API + HTML fallback, антидетект) в `parse_yandex_card` сохранена максимально близко к прежней реализации.
+- **Ресурсы**: Закрытие браузера централизовано в `BrowserSessionManager.close_session`, что снижает риск утечек при ошибках.
+- **Риски**: Сейчас воркер только логирует `captcha_session_id`, дальнейшая привязка к БД/кабинету будет сделана отдельной задачей, чтобы не смешивать ответственность.
+
+### Dependencies
+- Новая зависимость на модуль `browser_session` внутри `parser_interception.py` и `worker.py`.
+- Playwright уже использовался ранее; дополнительных внешних пакетов не добавлено.
+
+### Status
+- [x] Completed
+
 ## 2026-01-31 - Fix Schema Drift (ReviewExchangeDistribution)
 
 ### Current Task

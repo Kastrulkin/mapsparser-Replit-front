@@ -1,0 +1,55 @@
+# Один и тот же compose для локального и серверного запуска.
+# Postgres и приложение — в разных контейнерах; данные БД — в volume.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beautybot}
+      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beautybot} -d ${POSTGRES_DB:-beautybot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
+      FLASK_APP: src.main:app
+      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
+      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+      PYTHONPATH: /app:/app/src
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: ["python", "src/main.py"]
+
+  worker:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
+      FLASK_APP: src.main:app
+      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
+      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+      PYTHONPATH: /app:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "src/worker.py"]
+
+volumes:
+  pgdata:

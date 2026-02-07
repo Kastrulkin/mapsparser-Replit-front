@@ -1,15 +1,16 @@
 import time
-import sqlite3
-import os
 import uuid
 import json
 import re
 from datetime import datetime, timedelta
 import signal
 import sys
+from typing import Dict
 from dotenv import load_dotenv
 
-# Load environment variables
+from browser_session import BrowserSession, BrowserSessionManager
+from parser_config_cookies import get_yandex_cookies
+
 load_dotenv()
 
 # New imports
@@ -18,23 +19,33 @@ from yandex_business_sync_worker import YandexBusinessSyncWorker
 from external_sources import ExternalReview, ExternalSource, ExternalPost, ExternalStatsPoint, make_stats_id
 from dateutil import parser as date_parser
 
+# Реестр активных Playwright-сессий для human-in-the-loop
+ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
+BROWSER_SESSION_MANAGER = BrowserSessionManager()
+CAPTCHA_TTL_MINUTES = 30
+
+
 def get_db_connection():
-    """Получить соединение с SQLite базой данных"""
-    from safe_db_utils import get_db_connection as _get_db_connection
-    return _get_db_connection()
+    """Runtime worker всегда использует PostgreSQL через pg_db_utils."""
+    from pg_db_utils import get_db_connection as _get_pg_connection
+
+    return _get_pg_connection()
 
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE ParseQueue 
-            SET status = 'error', 
-                error_message = ?,
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = 'error',
+                error_message = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (error_msg, queue_id))
+            WHERE id = %s
+            """,
+            (error_msg, queue_id),
+        )
         conn.commit()
         cursor.close()
         conn.close()
@@ -238,14 +249,20 @@ def _has_cabinet_account(business_id: str) -> tuple:
 
 def _ensure_column_exists(cursor, conn, table_name, column_name, column_type="TEXT"):
     """Проверяет и добавляет колонку если её нет"""
+    # Эта функция использовалась только для SQLite (PRAGMA, ALTER TABLE on the fly).
+    # В PostgreSQL схема управляется через миграции (schema_postgres.sql),
+    # поэтому в worker'е при DB_TYPE='postgres' просто выходим.
+    if DB_TYPE == "postgres":
+        return
+
     try:
         # PRAGMA не поддерживает параметризованные запросы, используем f-string с проверкой
-        ALLOWED_TABLES = {'ParseQueue', 'MapParseResults'}
+        ALLOWED_TABLES = {"ParseQueue", "MapParseResults"}
         if table_name not in ALLOWED_TABLES:
             raise ValueError(f"Неразрешенная таблица: {table_name}")
         cursor.execute(f"PRAGMA table_info({table_name})")
         columns = [row[1] for row in cursor.fetchall()]
-        
+
         if column_name not in columns:
             print(f"📝 Добавляю поле {column_name} в {table_name}...")
             cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
@@ -266,48 +283,77 @@ def process_queue():
     cursor = conn.cursor()
     
     try:
-        # Проверяем, существует ли таблица ParseQueue
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ParseQueue'")
-        if not cursor.fetchone():
-            print("⚠️ Таблица ParseQueue не найдена. Инициализирую схему БД...")
-            conn.close()
-            # Импортируем и вызываем инициализацию
-            from init_database_schema import init_database_schema
-            init_database_schema()
-            # Открываем новое соединение после инициализации
-            conn = get_db_connection()
-            cursor = conn.cursor()
-        
-        # Проверяем и добавляем недостающие поля в ParseQueue
-        _ensure_column_exists(cursor, conn, "ParseQueue", "retry_after")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "business_id")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "task_type", "TEXT DEFAULT 'parse_card'")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "account_id")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "source")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "error_message")
-        _ensure_column_exists(cursor, conn, "ParseQueue", "updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        # Для PostgreSQL схема очереди уже задана в schema_postgres.sql,
+        # поэтому проверки через sqlite_master / PRAGMA здесь не нужны.
+
+        # Санитайзер "битых" captcha-записей: status='captcha' без корректного captcha_started_at
+        try:
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = 'pending',
+                    captcha_status = 'expired',
+                    captcha_required = 0,
+                    captcha_url = NULL,
+                    captcha_session_id = NULL,
+                    captcha_started_at = NULL,
+                    resume_requested = 0,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = COALESCE(
+                        error_message || '; broken captcha record: missing captcha_started_at',
+                        'broken captcha record: missing captcha_started_at'
+                    )
+                WHERE status = 'captcha'
+                  AND captcha_started_at IS NULL
+                """
+            )
+            if cursor.rowcount:
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка санитации битых captcha-записей: {e}")
         
         # Получаем заявки из очереди (обрабатываем и parse_card, и sync задачи)
-        now = datetime.now().isoformat()
-        cursor.execute("""
-            SELECT * FROM ParseQueue 
-            WHERE status = 'pending' 
-               OR (status = 'captcha' AND (retry_after IS NULL OR retry_after <= ?))
+        now = datetime.now()
+        now_iso = now.isoformat()
+        ttl_cutoff_iso = (now - timedelta(minutes=CAPTCHA_TTL_MINUTES)).isoformat()
+        cursor.execute(
+            """
+            SELECT *
+            FROM parsequeue
+            WHERE 
+                status = 'pending'
+                OR (
+                    status = 'captcha'
+                    AND (
+                        resume_requested = 1
+                        OR (retry_after IS NULL OR retry_after <= %s)
+                        OR (captcha_started_at <= %s)
+                    )
+                )
             ORDER BY 
-                CASE WHEN status = 'pending' THEN 1 ELSE 2 END,
+                CASE 
+                    WHEN status = 'pending' THEN 1 
+                    WHEN status = 'captcha' THEN 2 
+                    ELSE 3 
+                END,
                 created_at ASC 
             LIMIT 1
-        """, (now,))
+            """,
+            (now_iso, ttl_cutoff_iso),
+        )
         queue_item = cursor.fetchone()
         
         if not queue_item:
             return
         
-        # Преобразуем Row в словарь (row_factory уже установлен в safe_db_utils)
+        # Преобразуем Row в словарь (RealDictCursor в pg_db_utils)
         queue_dict = dict(queue_item)
         
         # Обновляем статус на "processing"
-        cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("processing", queue_dict["id"]))
+        cursor.execute(
+            "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+            ("processing", queue_dict["id"]),
+        )
         conn.commit()
     finally:
         # ВАЖНО: Закрываем соединение перед долгим парсингом
@@ -317,11 +363,163 @@ def process_queue():
     if not queue_dict:
         return
     
-    # Определяем тип задачи (по умолчанию parse_card для обратной совместимости)
+    status = queue_dict.get("status") or "pending"
     task_type = queue_dict.get("task_type") or "parse_card"
     
-    print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}")
+    print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}, статус: {status}")
     
+    # Если задача в статусе captcha — обрабатываем HITL-flow (resume/expired)
+    if status == "captcha":
+        task_id = queue_dict["id"]
+        captcha_session_id = queue_dict.get("captcha_session_id")
+        captcha_started_at = queue_dict.get("captcha_started_at")
+        resume_requested = queue_dict.get("resume_requested")
+        url = queue_dict.get("url")
+
+        # 1) Проверка TTL (expired)
+        try:
+            if captcha_started_at:
+                started_dt = datetime.fromisoformat(str(captcha_started_at))
+                age_minutes = (datetime.now() - started_dt).total_seconds() / 60.0
+            else:
+                age_minutes = 0
+        except Exception:
+            age_minutes = 0
+
+        if age_minutes > CAPTCHA_TTL_MINUTES:
+            print(f"⏰ CAPTCHA TTL истёк для задачи {task_id}, помечаем как expired")
+            session = BROWSER_SESSION_MANAGER.get(ACTIVE_CAPTCHA_SESSIONS, str(captcha_session_id)) if captcha_session_id else None
+            if session:
+                BROWSER_SESSION_MANAGER.close_session(session)
+            if captcha_session_id:
+                ACTIVE_CAPTCHA_SESSIONS.pop(str(captcha_session_id), None)
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    UPDATE parsequeue
+                    SET captcha_status = 'expired',
+                        captcha_session_id = NULL,
+                        captcha_required = 0,
+                        captcha_url = NULL,
+                        captcha_started_at = NULL,
+                        resume_requested = 0,
+                        status = 'pending',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (task_id,),
+                )
+                conn.commit()
+            finally:
+                cursor.close()
+                conn.close()
+            return
+
+        # 2) Resume по запросу оператора
+        if resume_requested and captcha_session_id and url:
+            print(f"▶️ RESUME CAPTCHA для задачи {task_id}, session_id={captcha_session_id}")
+            card_data = parse_yandex_card(
+                url,
+                keep_open_on_captcha=False,
+                session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                session_id=str(captcha_session_id),
+            )
+
+            if card_data.get("error") == "captcha_session_lost":
+                print(f"⚠️ CAPTCHA session lost для задачи {task_id}")
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET captcha_status = 'expired',
+                            captcha_session_id = NULL,
+                            captcha_required = 0,
+                            captcha_url = NULL,
+                            captcha_started_at = NULL,
+                            resume_requested = 0,
+                            status = 'pending',
+                            updated_at = CURRENT_TIMESTAMP,
+                            error_message = %s
+                        WHERE id = %s
+                        """,
+                        ("captcha session lost", task_id),
+                    )
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                ACTIVE_CAPTCHA_SESSIONS.pop(str(captcha_session_id), None)
+                return
+
+            if card_data.get("error") == "captcha_detected":
+                # Капча не решена или появилась заново — остаёмся в waiting с новым session_id (если есть)
+                new_session_id = card_data.get("captcha_session_id") or captcha_session_id
+                print(f"⚠️ Капча всё ещё активна для задачи {task_id}, session_id={new_session_id}")
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    retry_after = datetime.now() + timedelta(minutes=CAPTCHA_TTL_MINUTES)
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET captcha_status = 'waiting',
+                            retry_after = %s,
+                            captcha_session_id = %s,
+                            resume_requested = 0,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        """,
+                        (retry_after.isoformat(), str(new_session_id), task_id),
+                    )
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                return
+
+            # Иначе — капча решена, продолжаем как обычный успешный парсинг
+            print(f"✅ CAPTCHA решена для задачи {task_id}, продолжаем обработку")
+            queue_dict["status"] = "processing"
+            queue_dict["resume_requested"] = 0
+            # Чистим captcha-поля
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    UPDATE parsequeue
+                    SET captcha_status = NULL,
+                        captcha_required = 0,
+                        captcha_url = NULL,
+                        captcha_session_id = NULL,
+                        captcha_started_at = NULL,
+                        resume_requested = 0,
+                        status = 'processing',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (task_id,),
+                )
+                conn.commit()
+            finally:
+                cursor.close()
+                conn.close()
+
+            # Убираем сессию из реестра на всякий случай (оркестратор уже её закрыл)
+            ACTIVE_CAPTCHA_SESSIONS.pop(str(captcha_session_id), None)
+
+            # card_data уже получен, можно использовать его дальше, минуя повторный вызов parse_yandex_card
+            # Для простоты здесь можно пойти по "обычному" пути: переиспользуем card_data ниже.
+        else:
+            # Пока ждём оператора или TTL, ничего не делаем
+            print(f"⏳ Задача {queue_dict.get('id')} в статусе CAPTCHA/waiting, действий не требуется")
+            return
+
     # Обрабатываем в зависимости от типа задачи
     if task_type == "sync_yandex_business":
         # Синхронизация Яндекс.Бизнес
@@ -340,13 +538,16 @@ def process_queue():
         print(f"⚠️ Тип задачи {task_type} пока не реализован")
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE ParseQueue 
-            SET status = 'error', 
-                error_message = ?,
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = 'error',
+                error_message = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (f"Тип задачи {task_type} пока не реализован", queue_dict["id"]))
+            WHERE id = %s
+            """,
+            (f"Тип задачи {task_type} пока не реализован", queue_dict["id"]),
+        )
         conn.commit()
         cursor.close()
         conn.close()
@@ -381,7 +582,22 @@ def process_queue():
                 url = new_url
                 queue_dict['url'] = new_url # Обновляем и в словаре
 
-        card_data = parse_yandex_card(url)
+        cookies = get_yandex_cookies()
+        card_data = parse_yandex_card(
+            url,
+            keep_open_on_captcha=True,
+            session_registry=ACTIVE_CAPTCHA_SESSIONS,
+            cookies=cookies,
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+            locale="ru-RU",
+            timezone_id="Europe/Moscow",
+            headless=True,
+        )
         
         # Проверяем успешность парсинга
         business_id = queue_dict.get("business_id")
@@ -423,35 +639,60 @@ def process_queue():
             print(f"⚠️ Парсинг неполный ({reason}). Автоматический fallback отключен.")
         
         if card_data.get("error") == "captcha_detected":
+            captcha_session_id = card_data.get("captcha_session_id")
+            if captcha_session_id:
+                print(f"⚠️ Капча обнаружена, session_id={captcha_session_id} (human-in-the-loop)")
+            else:
+                print("⚠️ Капча обнаружена, но session_id отсутствует (registry недоступен)")
+
             # Если был создан фоллбэк, то считаем задачу выполненной, не уходим в цикл
             if fallback_created:
-                print(f"✅ Капча обнаружена, но создан фоллбэк. Помечаю задачу как выполненную, чтобы не зацикливать.")
+                print(
+                    "✅ Капча обнаружена, но создан фоллбэк. "
+                    "Помечаю задачу как выполненную, чтобы не зацикливать."
+                )
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 try:
-                    cursor.execute("UPDATE ParseQueue SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", ("done", queue_dict["id"]))
-                    cursor.execute("DELETE FROM ParseQueue WHERE id = ?", (queue_dict["id"],))
+                    cursor.execute(
+                        "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                        ("done", queue_dict["id"]),
+                    )
+                    cursor.execute("DELETE FROM parsequeue WHERE id = %s", (queue_dict["id"],))
                     conn.commit()
                 finally:
                     cursor.close()
                     conn.close()
                 return
 
-            # Открываем новое соединение только для обновления статуса капчи
+            # Открываем новое соединение только для обновления статуса капчи и сохранения метаданных
             conn = get_db_connection()
             cursor = conn.cursor()
             try:
-                retry_after = datetime.now() + timedelta(hours=2)
-                cursor.execute("SELECT COUNT(*) FROM ParseQueue WHERE status = 'pending' AND id != ?", (queue_dict["id"],))
-                pending_count = cursor.fetchone()[0]
-                
-                # Обновляем статус капчи (created_at обновляем только если есть pending задачи)
-                if pending_count > 0:
-                    cursor.execute("UPDATE ParseQueue SET status = ?, retry_after = ?, created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                                 ("captcha", retry_after.isoformat(), datetime.now().isoformat(), queue_dict["id"]))
-                else:
-                    cursor.execute("UPDATE ParseQueue SET status = ?, retry_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                                 ("captcha", retry_after.isoformat(), queue_dict["id"]))
+                retry_after = datetime.now() + timedelta(minutes=30)
+                now_iso = datetime.now().isoformat()
+                cursor.execute(
+                    """
+                    UPDATE ParseQueue
+                    SET status = 'captcha',
+                        retry_after = ?,
+                        captcha_required = 1,
+                        captcha_url = ?,
+                        captcha_session_id = ?,
+                        captcha_started_at = ?,
+                        captcha_status = 'waiting',
+                        resume_requested = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        retry_after.isoformat(),
+                        card_data.get("captcha_url") or queue_dict.get("url"),
+                        captcha_session_id,
+                        now_iso,
+                        queue_dict["id"],
+                    ),
+                )
                 conn.commit()
             finally:
                 cursor.close()
@@ -465,13 +706,16 @@ def process_queue():
             # Обновляем статус задачи на error
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE ParseQueue 
-                SET status = 'error', 
-                    error_message = ?,
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = 'error',
+                    error_message = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (f"Parsing failed: {reason}", queue_dict["id"]))
+                WHERE id = %s
+                """,
+                (f"Parsing failed: {reason}", queue_dict["id"]),
+            )
             conn.commit()
             cursor.close()
             conn.close()
@@ -536,7 +780,8 @@ def process_queue():
                     parse_result_id = str(uuid.uuid4())
                     
                     # Убеждаемся, что колонка unanswered_reviews_count существует
-                    _ensure_column_exists(cursor, conn, "MapParseResults", "unanswered_reviews_count", "INTEGER")
+                    if DB_TYPE != "postgres":
+                        _ensure_column_exists(cursor, conn, "MapParseResults", "unanswered_reviews_count", "INTEGER")
                     
                     # Убеждаемся, что колонки для профайла бизнеса существуют
                     profile_columns = [
@@ -549,8 +794,9 @@ def process_queue():
                         ("services_count", "INTEGER DEFAULT 0"),
                         ("profile_completeness", "INTEGER DEFAULT 0"),
                     ]
-                    for col_name, col_type in profile_columns:
-                        _ensure_column_exists(cursor, conn, "MapParseResults", col_name, col_type)
+                    if DB_TYPE != "postgres":
+                        for col_name, col_type in profile_columns:
+                            _ensure_column_exists(cursor, conn, "MapParseResults", col_name, col_type)
                     
                     # Извлекаем данные профайла из card_data
                     phone = card_data.get('phone', '') or ''
@@ -1029,7 +1275,7 @@ def process_queue():
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
 
-def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.Connection, owner_id: str):
+def _sync_parsed_services_to_db(business_id: str, products: list, conn, owner_id: str):
     """
     Синхронизирует распаршенные услуги в таблицу UserServices.
     Добавляет новые, обновляет цены существующих.
@@ -1045,11 +1291,19 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
 
     cursor = conn.cursor()
     
-    # 1. Проверяем наличие таблицы UserServices и нужных колонок
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
+    # Старый путь синхронизации в таблицу UserServices использует SQLite-специфичные конструкции.
+    # В PostgreSQL основной источник правды по услугам — YandexBusinessSyncWorker и связанные таблицы,
+    # поэтому здесь просто выходим, чтобы не ломать worker.
+    if DB_TYPE == "postgres":
+        print(f"⚠️ Service sync via _sync_parsed_services_to_db пропущен для Postgres (business_id={business_id})")
+        return
+
+    # 1. Проверяем наличие таблицы UserServices и нужных колонок (SQLite)
+    cursor.execute("SELECT to_regclass('public.userservices')")
     if not cursor.fetchone():
         # Если таблицы нет, создаём (должна быть, но на всякий случай)
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS UserServices (
                 id TEXT PRIMARY KEY,
                 business_id TEXT NOT NULL,
@@ -1064,7 +1318,8 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
                 user_id TEXT,
                 FOREIGN KEY (business_id) REFERENCES Businesses(id) ON DELETE CASCADE
             )
-        """)
+        """
+        )
     
     count_new = 0
     count_updated = 0
@@ -1100,29 +1355,38 @@ def _sync_parsed_services_to_db(business_id: str, products: list, conn: sqlite3.
                     pass
             
             # Ищем существующую услугу по имени и business_id
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id FROM UserServices 
                 WHERE business_id = ? AND name = ?
-            """, (business_id, name))
+            """,
+                (business_id, name),
+            )
             
             row = cursor.fetchone()
             
             if row:
                 # Обновляем существующую
                 service_id = row[0]
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE UserServices 
                     SET price = ?, description = ?, category = ?, updated_at = CURRENT_TIMESTAMP, is_active = 1
                     WHERE id = ?
-                """, (price_cents, description, category_name, service_id))
+                """,
+                    (price_cents, description, category_name, service_id),
+                )
                 count_updated += 1
             else:
                 # Создаем новую
                 service_id = str(uuid.uuid4())
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO UserServices (id, business_id, user_id, name, description, category, price, is_active)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-                """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
+                """,
+                    (service_id, business_id, owner_id, name, description, category_name, price_cents),
+                )
                 count_new += 1
                 
     conn.commit()
@@ -1663,7 +1927,8 @@ def _process_sync_2gis_task(queue_dict):
             parse_result_id = str(uuid.uuid4())
             
             # Map Parse Results (Profile)
-            _ensure_column_exists(cursor, conn, "MapParseResults", "unanswered_reviews_count", "INTEGER")
+            # В Postgres считаем, что схема уже мигрирована (schema_postgres.sql)
+            # и поле unanswered_reviews_count присутствует.
             profile_columns = [
                 ("is_verified", "INTEGER DEFAULT 0"),
                 ("phone", "TEXT"),
@@ -1674,8 +1939,7 @@ def _process_sync_2gis_task(queue_dict):
                 ("services_count", "INTEGER DEFAULT 0"),
                 ("profile_completeness", "INTEGER DEFAULT 0"),
             ]
-            for col_name, col_type in profile_columns:
-                _ensure_column_exists(cursor, conn, "MapParseResults", col_name, col_type)
+            # Для Postgres не выполняем ALTER TABLE на лету — только миграции.
 
             cursor.execute("""
                 INSERT INTO MapParseResults
