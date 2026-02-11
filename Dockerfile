@@ -1,5 +1,14 @@
-# Backend + worker + tests — один образ, одна сборка.
-# Базовый образ Python 3.11
+# Этап 1: сборка фронтенда (Vite/React)
+FROM node:20-slim AS frontend-builder
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+WORKDIR /app/frontend
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+# Этап 2: backend + worker
+# Базовый образ Python 3.11 (Debian); Playwright плохо дружит с Alpine.
 FROM python:3.11-slim
 
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
@@ -11,12 +20,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python-зависимости
+# Python-зависимости (слой кешируется отдельно)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright: браузер Chromium + системные зависимости (worker/парсинг)
+# apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
+RUN apt-get update \
+    && python -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 # Код проекта (src, scripts, tests и т.д.). Папка scripts/ не должна быть в .dockerignore (migrate_sqlite_to_postgres.py, smoke).
 COPY . .
+# Подставляем собранный фронтенд из первого этапа (поле «Город» и прочие правки всегда актуальны)
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Entrypoint: ждёт Postgres, выполняет flask db upgrade, затем exec CMD
 COPY entrypoint.sh /app/entrypoint.sh

@@ -29,6 +29,7 @@ from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
+from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
 from chatgpt_api import chatgpt_bp
@@ -145,6 +146,17 @@ app.register_blueprint(metrics_history_bp)
 app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
 app.register_blueprint(admin_prospecting_bp)
+
+# Dev-safeguard: не допускаем дублирования /api/services/list
+try:
+    _routes = [r.rule for r in app.url_map.iter_rules()]
+    assert _routes.count("/api/services/list") == 1, "Duplicate /api/services/list route detected"
+except Exception as e:
+    # В debug режиме пусть assert падает явно, в проде только логируем.
+    if getattr(app, "debug", False):
+        raise
+    else:
+        print(f"[ROUTE_CHECK] Warning: {e}")
 
 try:
     from api.wordstat_api import wordstat_bp
@@ -547,6 +559,18 @@ def get_token_usage_stats():
 
 # ===== АДМИНСКИЕ ЭНДПОИНТЫ ДЛЯ ПАРСИНГА =====
 
+def _count_from_row(cursor, row):
+    """Безопасно извлечь число из строки SELECT COUNT(*) AS cnt: tuple или RealDictRow."""
+    if row is None:
+        return 0
+    rd = _row_to_dict(cursor, row)
+    if not rd:
+        return 0
+    if "cnt" in rd and rd["cnt"] is not None:
+        return int(rd["cnt"])
+    return int(list(rd.values())[0]) if rd else 0
+
+
 @app.route('/api/admin/parsing/tasks', methods=['GET'])
 def get_parsing_tasks():
     """Получить список задач парсинга для администратора"""
@@ -579,76 +603,62 @@ def get_parsing_tasks():
         params = []
         
         if status_filter:
-            where_conditions.append("status = ?")
-            params.append(status_filter)
+            # Фильтр "completed": учитываем и старый статус "done"
+            if status_filter == STATUS_COMPLETED:
+                where_conditions.append("(status = %s OR status = 'done')")
+                params.append(STATUS_COMPLETED)
+            else:
+                where_conditions.append("status = %s")
+                params.append(status_filter)
         
         if task_type_filter:
-            where_conditions.append("task_type = ?")
+            where_conditions.append("task_type = %s")
             params.append(task_type_filter)
         
         if source_filter:
-            where_conditions.append("source = ?")
+            where_conditions.append("source = %s")
             params.append(source_filter)
         
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
-        
-        # Получаем задачи
+
         cursor.execute(f"""
-            SELECT 
-                id, url, user_id, business_id, task_type, account_id, source,
-                status, retry_after, error_message, created_at, updated_at
-            FROM ParseQueue
+            SELECT
+                pq.id, pq.url, pq.user_id, pq.business_id, pq.task_type, pq.account_id, pq.source,
+                pq.status, pq.retry_after, pq.error_message, pq.created_at, pq.updated_at,
+                b.name AS business_name
+            FROM parsequeue pq
+            LEFT JOIN businesses b ON b.id = pq.business_id
             WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
+            ORDER BY pq.created_at DESC
+            LIMIT %s OFFSET %s
         """, params + [limit, offset])
-        
         rows = cursor.fetchall()
-        
-        # Получаем общее количество
+
         cursor.execute(f"""
-            SELECT COUNT(*) FROM ParseQueue WHERE {where_clause}
+            SELECT COUNT(*) AS cnt FROM parsequeue WHERE {where_clause}
         """, params)
-        total = cursor.fetchone()[0]
-        
-        # Получаем статистику по статусам
+        total = _count_from_row(cursor, cursor.fetchone())
+
         cursor.execute("""
-            SELECT 
-                status,
-                COUNT(*) as count
-            FROM ParseQueue
+            SELECT status, COUNT(*) AS cnt
+            FROM parsequeue
             GROUP BY status
         """)
         status_stats = {}
         for row in cursor.fetchall():
-            status_stats[row[0]] = row[1]
-        
-        # Получаем информацию о бизнесах для отображения
+            rd = _row_to_dict(cursor, row)
+            if rd:
+                st_canonical = normalize_status(rd.get("status"))
+                status_stats[st_canonical] = status_stats.get(st_canonical, 0) + (rd.get("cnt") or 0)
+
         tasks = []
         for row in rows:
-            task_dict = dict(row) if hasattr(row, 'keys') else {
-                'id': row[0],
-                'url': row[1],
-                'user_id': row[2],
-                'business_id': row[3],
-                'task_type': row[4] or 'parse_card',
-                'account_id': row[5],
-                'source': row[6],
-                'status': row[7],
-                'retry_after': row[8],
-                'error_message': row[9],
-                'created_at': row[10],
-                'updated_at': row[11] if len(row) > 11 else None
-            }
-            
-            # Получаем название бизнеса
-            if task_dict.get('business_id'):
-                cursor.execute("SELECT name FROM businesses WHERE id = %s", (task_dict['business_id'],))
-                business_row = cursor.fetchone()
-                task_dict['business_name'] = business_row[0] if business_row else None
-            else:
-                task_dict['business_name'] = None
-            
+            task_dict = _row_to_dict(cursor, row)
+            if not task_dict:
+                continue
+            task_dict.setdefault("task_type", "parse_card")
+            task_dict["status"] = normalize_status(task_dict.get("status"))
+            task_dict["business_name"] = (task_dict.get("business_name") or "").strip() or None
             tasks.append(task_dict)
         
         db.close()
@@ -661,10 +671,13 @@ def get_parsing_tasks():
         })
         
     except Exception as e:
-        print(f"❌ Ошибка получения задач парсинга: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        body = {"success": False, "error": str(e), "where": "get_parsing_tasks"}
+        if getattr(app, "debug", False):
+            body["error_type"] = type(e).__name__
+            body["traceback"] = traceback.format_exc()
+        return jsonify(body), 500
 
 @app.route('/api/admin/parsing/tasks/<task_id>/restart', methods=['POST'])
 def restart_parsing_task(task_id):
@@ -700,14 +713,13 @@ def restart_parsing_task(task_id):
              # tuple or sqlite3.Row
             current_status = task[1]
         
-        # Перезапускаем задачу (сбрасываем статус на pending)
         cursor.execute("""
-            UPDATE ParseQueue
+            UPDATE parsequeue
             SET status = 'pending',
                 error_message = NULL,
                 retry_after = NULL,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (task_id,))
         
         db.conn.commit()
@@ -776,46 +788,36 @@ def switch_task_to_sync(task_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Получаем задачу
         cursor.execute("""
-            SELECT id, business_id, task_type, status 
-            FROM ParseQueue 
-            WHERE id = ?
+            SELECT id, business_id, task_type, status
+            FROM parsequeue
+            WHERE id = %s
         """, (task_id,))
-        task = cursor.fetchone()
+        raw_task = cursor.fetchone()
+        task_dict = _row_to_dict(cursor, raw_task) if raw_task else None
         
-        if not task:
+        if not task_dict:
             db.close()
             return jsonify({"error": "Задача не найдена"}), 404
-        
-        task_dict = dict(task) if hasattr(task, 'keys') else {
-            'id': task[0],
-            'business_id': task[1],
-            'task_type': task[2],
-            'status': task[3]
-        }
         
         business_id = task_dict.get('business_id')
         if not business_id:
             db.close()
             return jsonify({"error": "У задачи нет business_id"}), 400
         
-        # Проверяем, что задача еще не синхронизация
         if task_dict.get('task_type') == 'sync_yandex_business':
             db.close()
             return jsonify({"error": "Задача уже является синхронизацией"}), 400
         
-        # Ищем аккаунт Яндекс.Бизнес для этого бизнеса
         cursor.execute("""
-            SELECT id 
-            FROM ExternalBusinessAccounts 
-            WHERE business_id = ? 
-              AND source = 'yandex_business' 
-              AND is_active = 1
+            SELECT id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
             ORDER BY created_at DESC
             LIMIT 1
         """, (business_id,))
-        account_row = cursor.fetchone()
+        raw_account = cursor.fetchone()
+        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
         
         if not account_row:
             db.close()
@@ -825,23 +827,18 @@ def switch_task_to_sync(task_id):
                 "message": "Добавьте аккаунт Яндекс.Бизнес в настройках внешних интеграций"
             }), 400
         
-        if isinstance(account_row, dict):
-            account_id = account_row.get('id')
-        else:
-            # tuple or sqlite3.Row (supports index access)
-            account_id = account_row[0]
+        account_id = account_row.get("id")
         
-        # Обновляем задачу на синхронизацию
         cursor.execute("""
-            UPDATE ParseQueue
+            UPDATE parsequeue
             SET task_type = 'sync_yandex_business',
-                account_id = ?,
+                account_id = %s,
                 source = 'yandex_business',
                 status = 'pending',
                 error_message = NULL,
                 retry_after = NULL,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (account_id, task_id))
         
         db.conn.commit()
@@ -878,72 +875,61 @@ def get_parsing_stats():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Общая статистика
-        cursor.execute("SELECT COUNT(*) FROM ParseQueue")
-        total_tasks = cursor.fetchone()[0]
-        
-        # По статусам
+        cursor.execute("SELECT COUNT(*) AS cnt FROM parsequeue")
+        total_tasks = _count_from_row(cursor, cursor.fetchone())
+
         cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM ParseQueue
+            SELECT status, COUNT(*) AS cnt
+            FROM parsequeue
             GROUP BY status
         """)
         by_status = {}
         for row in cursor.fetchall():
-            by_status[row[0]] = row[1]
-        
-        # По типам задач
+            rd = _row_to_dict(cursor, row)
+            if rd:
+                st_canonical = normalize_status(rd.get("status") or "idle")
+                by_status[st_canonical] = by_status.get(st_canonical, 0) + (rd.get("cnt") or 0)
+
         cursor.execute("""
-            SELECT task_type, COUNT(*) as count
-            FROM ParseQueue
+            SELECT task_type, COUNT(*) AS cnt
+            FROM parsequeue
             GROUP BY task_type
         """)
         by_task_type = {}
         for row in cursor.fetchall():
-            task_type = row[0] or 'parse_card'
-            by_task_type[task_type] = row[1]
-        
-        # По источникам
+            rd = _row_to_dict(cursor, row)
+            if rd:
+                by_task_type[rd.get("task_type") or "parse_card"] = rd.get("cnt") or 0
+
         cursor.execute("""
-            SELECT source, COUNT(*) as count
-            FROM ParseQueue
+            SELECT source, COUNT(*) AS cnt
+            FROM parsequeue
             WHERE source IS NOT NULL
             GROUP BY source
         """)
         by_source = {}
         for row in cursor.fetchall():
-            by_source[row[0]] = row[1]
+            rd = _row_to_dict(cursor, row)
+            if rd and rd.get("source") is not None:
+                by_source[rd["source"]] = rd.get("cnt") or 0
         
-        # Зависшие задачи (processing более 30 минут)
-        # Проверяем наличие колонки updated_at
-        cursor.execute("PRAGMA table_info(ParseQueue)")
-        columns = [row[1] for row in cursor.fetchall()]
-        has_updated_at = 'updated_at' in columns
-        
-        if has_updated_at:
-            cursor.execute("""
-                SELECT id, business_id, task_type, created_at, updated_at
-                FROM ParseQueue
-                WHERE status = 'processing'
-                  AND updated_at < datetime('now', '-30 minutes')
-            """)
-        else:
-            cursor.execute("""
-                SELECT id, business_id, task_type, created_at, created_at as updated_at
-                FROM ParseQueue
-                WHERE status = 'processing'
-                  AND created_at < datetime('now', '-30 minutes')
-            """)
-        
+        cursor.execute("""
+            SELECT id, business_id, task_type, created_at, updated_at
+            FROM parsequeue
+            WHERE status = 'processing'
+              AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '30 minutes'
+        """)
         stuck_tasks = []
         for row in cursor.fetchall():
-            stuck_tasks.append({
-                'id': row[0],
-                'business_id': row[1],
-                'task_type': row[2] or 'parse_card',
-                'created_at': row[3],
-                'updated_at': row[4] if len(row) > 4 else row[3]
-            })
+            rd = _row_to_dict(cursor, row)
+            if rd:
+                stuck_tasks.append({
+                    'id': rd.get('id'),
+                    'business_id': rd.get('business_id'),
+                    'task_type': rd.get('task_type') or 'parse_card',
+                    'created_at': rd.get('created_at'),
+                    'updated_at': rd.get('updated_at') or rd.get('created_at')
+                })
         
         db.close()
         
@@ -951,19 +937,21 @@ def get_parsing_stats():
             "success": True,
             "stats": {
                 "total_tasks": total_tasks,
-                "by_status": by_status,
-                "by_task_type": by_task_type,
-                "by_source": by_source,
+                "by_status": by_status or {},
+                "by_task_type": by_task_type or {},
+                "by_source": by_source or {},
                 "stuck_tasks_count": len(stuck_tasks),
-                "stuck_tasks": stuck_tasks
+                "stuck_tasks": stuck_tasks or []
             }
         })
-        
     except Exception as e:
-        print(f"❌ Ошибка получения статистики парсинга: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        body = {"success": False, "error": str(e), "where": "get_parsing_stats"}
+        if getattr(app, "debug", False):
+            body["error_type"] = type(e).__name__
+            body["traceback"] = traceback.format_exc()
+        return jsonify(body), 500
 
 @app.route('/favicon.ico')
 def favicon():
@@ -984,10 +972,9 @@ def robots():
 def get_external_accounts(business_id):
     """
     Получить все подключённые внешние аккаунты (Яндекс.Бизнес, Google Business, 2ГИС)
-    для конкретного бизнеса.
+    для конкретного бизнеса. Всегда возвращает JSON: 200 { "success": true, "accounts": [] } или список.
     """
     try:
-        # Авторизация: владелец бизнеса или суперадмин
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Требуется авторизация"}), 401
@@ -1000,7 +987,6 @@ def get_external_accounts(business_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Проверяем, что пользователь владелец бизнеса или суперадмин
         owner_id = get_business_owner_id(cursor, business_id)
         if not owner_id:
             db.close()
@@ -1010,55 +996,62 @@ def get_external_accounts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица externalbusinessaccounts (Postgres)
-        cursor.execute("""
-            SELECT table_name FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_name = 'externalbusinessaccounts'
-        """)
-        table_exists = cursor.fetchone()
-        
-        if not table_exists:
-            # Таблица не существует - возвращаем пустой список
+        # Таблица из миграции 20250207_008: externalbusinessaccounts (lowercase)
+        try:
+            cursor.execute(
+                """
+                SELECT id, source, external_id, display_name, is_active,
+                       last_sync_at, last_error, created_at, updated_at
+                FROM externalbusinessaccounts
+                WHERE business_id = %s
+                ORDER BY source, created_at DESC
+                """,
+                (business_id,),
+            )
+            rows = cursor.fetchall()
+        except Exception as table_err:
             db.close()
-            return jsonify({"success": True, "accounts": []})
-
-        cursor.execute(
-            """
-            SELECT id, source, external_id, display_name, is_active,
-                   last_sync_at, last_error, created_at, updated_at
-            FROM externalbusinessaccounts
-            WHERE business_id = %s
-            ORDER BY source, created_at DESC
-            """,
-            (business_id,),
-        )
-        rows = cursor.fetchall()
-        db.close()
+            err_str = str(table_err)
+            is_missing_relation = "does not exist" in err_str or "relation" in err_str.lower()
+            if is_missing_relation and getattr(app, "debug", False):
+                print(f"⚠️ GET external-accounts: таблица отсутствует, возвращаем [] (dev): {table_err}")
+                return jsonify({"success": True, "accounts": [], "_debug": {"tableMissing": True, "tableName": "externalbusinessaccounts"}})
+            if is_missing_relation:
+                import traceback
+                print(f"❌ GET external-accounts: таблица externalbusinessaccounts не найдена: {table_err}\n{traceback.format_exc()}")
+                return jsonify({"error": "Schema error: external accounts table missing", "detail": "get_external_accounts"}), 500
+            raise
 
         accounts = []
         for r in rows:
-            accounts.append(
-                {
-                    "id": r[0],
-                    "source": r[1],
-                    "external_id": r[2],
-                    "display_name": r[3],
-                    "is_active": r[4],
-                    "last_sync_at": r[5],
-                    "last_error": r[6],
-                    "created_at": r[7],
-                    "updated_at": r[8],
-                }
-            )
-
-        return jsonify({"success": True, "accounts": accounts})
+            row_dict = _row_to_dict(cursor, r)
+            if not row_dict:
+                continue
+            accounts.append({
+                "id": row_dict.get("id"),
+                "source": row_dict.get("source"),
+                "external_id": row_dict.get("external_id"),
+                "display_name": row_dict.get("display_name"),
+                "is_active": row_dict.get("is_active"),
+                "last_sync_at": row_dict.get("last_sync_at"),
+                "last_error": row_dict.get("last_error"),
+                "created_at": row_dict.get("created_at"),
+                "updated_at": row_dict.get("updated_at"),
+            })
+        db.close()
+        resp = {"success": True, "accounts": accounts}
+        if getattr(app, "debug", False):
+            resp["_debug"] = {"tableName": "externalbusinessaccounts"}
+        return jsonify(resp)
 
     except Exception as e:
-        print(f"❌ Ошибка получения внешних аккаунтов: {e}")
         import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        err_tb = traceback.format_exc()
+        print(f"❌ Ошибка GET external-accounts: {e}\n{err_tb}")
+        payload = {"error": str(e), "detail": "get_external_accounts"}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route("/api/business/<business_id>/external-accounts", methods=["POST"])
@@ -1087,8 +1080,28 @@ def upsert_external_account(business_id):
         source = (data.get("source") or "").strip()
         external_id = (data.get("external_id") or "").strip() or None
         display_name = (data.get("display_name") or "").strip() or None
-        auth_data = (data.get("auth_data") or "").strip() or None
         is_active = data.get("is_active", True)
+
+        # Нормализация auth_data: строка или объект → строка для шифрования; валидация JSON при необходимости
+        raw_auth = data.get("auth_data")
+        auth_data_str = None
+        if raw_auth is not None:
+            if isinstance(raw_auth, dict):
+                try:
+                    auth_data_str = json.dumps(raw_auth)
+                except (TypeError, ValueError) as e:
+                    return jsonify({"error": "auth_data: объект не сериализуется в JSON", "field": "auth_data", "detail": str(e)}), 400
+            elif isinstance(raw_auth, str):
+                s = raw_auth.strip() or None
+                if s:
+                    if s.startswith("{") or s.startswith("["):
+                        try:
+                            json.loads(s)
+                        except json.JSONDecodeError as e:
+                            return jsonify({"error": "auth_data: некорректный JSON", "field": "auth_data", "detail": str(e)}), 400
+                    auth_data_str = s
+            else:
+                return jsonify({"error": "auth_data должен быть строкой или объектом", "field": "auth_data"}), 400
 
         if source not in ("yandex_business", "google_business", "2gis"):
             return jsonify({"error": "Некорректный source"}), 400
@@ -1114,122 +1127,123 @@ def upsert_external_account(business_id):
         table_exists = cursor.fetchone()
         
         if not table_exists:
-            # Таблица не существует - нужно применить миграцию
             db.close()
             return jsonify({
-                "error": "Таблица ExternalBusinessAccounts не существует. Необходимо применить миграцию migrate_external_sources.py"
+                "error": "Таблица externalbusinessaccounts не существует. Необходимо применить миграцию."
             }), 500
 
         import uuid
         from datetime import datetime
         from auth_encryption import encrypt_auth_data
 
-        # Логирование для отладки
-        print(f"🔍 POST /api/business/{business_id}/external-accounts:")
-        print(f"   source={source}, external_id={external_id}, display_name={display_name}")
-        print(f"   auth_data length={len(auth_data) if auth_data else 0}")
+        now = datetime.utcnow().isoformat()
+        print(f"🔍 POST /api/business/{business_id}/external-accounts: source={source}, external_id={external_id}, display_name={display_name}, auth_data length={len(auth_data_str) if auth_data_str else 0}")
 
-        # Шифруем auth_data перед сохранением
+        # Шифруем auth_data перед сохранением (auth_data_str уже нормализован)
         auth_data_encrypted = None
-        if auth_data:
+        if auth_data_str:
             try:
-                auth_data_encrypted = encrypt_auth_data(auth_data)
-                print(f"✅ auth_data зашифрован, длина={len(auth_data_encrypted)}")
+                auth_data_encrypted = encrypt_auth_data(auth_data_str)
             except Exception as e:
-                print(f"❌ Ошибка шифрования auth_data: {e}")
                 import traceback
                 traceback.print_exc()
                 db.close()
-                return jsonify({"error": f"Ошибка шифрования данных: {str(e)}"}), 500
+                return jsonify({"error": f"Ошибка шифрования данных: {str(e)}", "field": "auth_data"}), 500
 
-        # Для простоты: один активный аккаунт на source + business
+        # SELECT с блокировкой при наличии строки, чтобы избежать гонки update/create
         cursor.execute(
             """
-            SELECT id FROM ExternalBusinessAccounts
-            WHERE business_id = ? AND source = ?
+            SELECT id, external_id, display_name, is_active
+            FROM externalbusinessaccounts
+            WHERE business_id = %s AND source = %s
+            FOR UPDATE
             """,
             (business_id, source),
         )
-        existing = cursor.fetchone()
-        print(f"🔍 Существующий аккаунт: {existing[0] if existing else 'не найден'}")
+        existing_row = cursor.fetchone()
+        existing_dict = _row_to_dict(cursor, existing_row) if existing_row else None
+        account_id = (existing_dict.get("id") if existing_dict else None)
 
-        now = datetime.utcnow().isoformat()
+        if existing_dict:
+            # Update: считаем реально изменённые поля для saved_fields
+            action = "updated"
+            old_ext = existing_dict.get("external_id")
+            old_name = existing_dict.get("display_name")
+            old_active = existing_dict.get("is_active")
+            new_active = bool(is_active)
+            saved_fields = []
+            if (external_id or None) != (old_ext or None):
+                saved_fields.append("external_id")
+            if (display_name or None) != (old_name or None):
+                saved_fields.append("display_name")
+            if new_active != (bool(old_active) if old_active is not None else True):
+                saved_fields.append("is_active")
+            if auth_data_encrypted is not None:
+                saved_fields.append("auth_data_updated")
 
-        if existing:
-            account_id = existing[0]
-            print(f"🔄 Обновление существующего аккаунта: {account_id}")
-            # Если auth_data не передан, не обновляем его (сохраняем существующий)
             if auth_data_encrypted is not None:
                 cursor.execute(
                     """
-                    UPDATE ExternalBusinessAccounts
-                    SET external_id = ?, display_name = ?, 
-                        auth_data_encrypted = ?, is_active = ?, updated_at = ?
-                    WHERE id = ?
+                    UPDATE externalbusinessaccounts
+                    SET external_id = %s, display_name = %s, auth_data_encrypted = %s, is_active = %s, updated_at = %s
+                    WHERE id = %s
                     """,
-                    (
-                        external_id,
-                        display_name,
-                        auth_data_encrypted,
-                        1 if is_active else 0,
-                        now,
-                        account_id,
-                    ),
+                    (external_id, display_name, auth_data_encrypted, new_active, now, account_id),
                 )
-                print(f"✅ Аккаунт обновлен с auth_data: external_id={external_id}, display_name={display_name}")
             else:
-                # Обновляем только другие поля, не трогая auth_data_encrypted
                 cursor.execute(
                     """
-                    UPDATE ExternalBusinessAccounts
-                    SET external_id = ?, display_name = ?, 
-                        is_active = ?, updated_at = ?
-                    WHERE id = ?
+                    UPDATE externalbusinessaccounts
+                    SET external_id = %s, display_name = %s, is_active = %s, updated_at = %s
+                    WHERE id = %s
                     """,
-                    (
-                        external_id,
-                        display_name,
-                        1 if is_active else 0,
-                        now,
-                        account_id,
-                    ),
+                    (external_id, display_name, new_active, now, account_id),
                 )
-                print(f"✅ Аккаунт обновлен без auth_data: external_id={external_id}, display_name={display_name}")
         else:
-            # При создании нового аккаунта auth_data обязателен
-            if not auth_data_encrypted:
+            # Create: auth_data обязателен; после INSERT проверяем дубли (без unique constraint)
+            if not auth_data_str:
                 db.close()
-                return jsonify({"error": "auth_data обязателен для нового аккаунта"}), 400
-            
-            account_id = str(uuid.uuid4())
-            print(f"🆕 Создание нового аккаунта: {account_id}")
+                return jsonify({"error": "При создании аккаунта auth_data обязателен", "field": "auth_data"}), 400
+            action = "created"
+            new_active = bool(is_active)
+            insert_id = str(uuid.uuid4())
             cursor.execute(
                 """
-                INSERT INTO ExternalBusinessAccounts (
-                    id, business_id, source, external_id, display_name,
-                    auth_data_encrypted, is_active, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO externalbusinessaccounts (id, business_id, source, external_id, display_name, auth_data_encrypted, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (
-                    account_id,
-                    business_id,
-                    source,
-                    external_id,
-                    display_name,
-                    auth_data_encrypted,
-                    1 if is_active else 0,
-                    now,
-                    now,
-                ),
+                (insert_id, business_id, source, external_id, display_name, auth_data_encrypted, new_active, now, now),
             )
-            print(f"✅ Аккаунт создан: id={account_id}, external_id={external_id}, display_name={display_name}")
+            # Повторный SELECT по (business_id, source): при конкурентном create может быть несколько строк
+            cursor.execute(
+                """
+                SELECT id, created_at FROM externalbusinessaccounts
+                WHERE business_id = %s AND source = %s
+                ORDER BY created_at ASC
+                """,
+                (business_id, source),
+            )
+            rows_after = cursor.fetchall()
+            if len(rows_after) > 1:
+                print(f"⚠️ Дубликаты externalbusinessaccounts (business_id={business_id}, source={source}): записей={len(rows_after)}, используем с min(created_at)")
+            # Канонический id — запись с минимальным created_at (стабильный выбор при дублях)
+            row0 = _row_to_dict(cursor, rows_after[0]) if rows_after else None
+            account_id = row0.get("id") if row0 else insert_id
+            saved_fields = ["external_id", "display_name", "is_active", "auth_data_updated"]
 
         db.conn.commit()
-        print(f"✅ Изменения закоммичены в БД")
         db.close()
 
-        return jsonify({"success": True, "account_id": account_id})
+        resp = {"success": True, "account_id": account_id}
+        if getattr(app, "debug", False):
+            resp["_debug"] = {
+                "action": action,
+                "business_id": business_id,
+                "source": source,
+                "saved_fields": saved_fields,
+                "returned_id": account_id,
+            }
+        return jsonify(resp)
 
     except Exception as e:
         print(f"❌ Ошибка сохранения внешнего аккаунта: {e}")
@@ -1584,19 +1598,17 @@ def get_external_reviews(business_id):
         # Проверяем, существует ли таблица externalbusinessreviews (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessreviews')")
         table_exists = cursor.fetchone()
-        
-        if not table_exists:
-            # Таблица не существует - возвращаем пустой список
+        if not table_exists or (table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is None):
             db.close()
-            return jsonify({"success": True, "reviews": []})
+            return jsonify({"success": True, "reviews": [], "total": 0, "with_response": 0, "without_response": 0})
 
-        # Получаем все отзывы для этого бизнеса, отсортированные по дате публикации (новые сначала)
+        # Читаем из externalbusinessreviews (lowercase для Postgres)
         cursor.execute(
             """
             SELECT id, source, external_review_id, rating, author_name, text,
                    response_text, response_at, published_at, created_at
-            FROM ExternalBusinessReviews
-            WHERE business_id = ?
+            FROM externalbusinessreviews
+            WHERE business_id = %s
             ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
             """,
             (business_id,),
@@ -1606,33 +1618,40 @@ def get_external_reviews(business_id):
 
         reviews = []
         for r in rows:
+            rd = _row_to_dict(cursor, r)
+            if not rd:
+                continue
+            resp_text = rd.get("response_text")
             reviews.append({
-                "id": r[0],
-                "source": r[1],
-                "external_review_id": r[2],
-                "rating": r[3],
-                "author_name": r[4] or "Анонимный пользователь",
-                "text": r[5] or "",
-                "response_text": r[6],
-                "response_at": r[7],
-                "published_at": r[8],
-                "created_at": r[9],
-                "has_response": bool(r[6]),  # Есть ли ответ организации
+                "id": rd.get("id"),
+                "source": rd.get("source"),
+                "external_review_id": rd.get("external_review_id"),
+                "rating": rd.get("rating"),
+                "author_name": rd.get("author_name") or "Анонимный пользователь",
+                "text": rd.get("text") or "",
+                "response_text": resp_text,
+                "response_at": rd.get("response_at"),
+                "published_at": rd.get("published_at"),
+                "created_at": rd.get("created_at"),
+                "has_response": bool(resp_text),
             })
 
         return jsonify({
             "success": True,
             "reviews": reviews,
             "total": len(reviews),
-            "with_response": sum(1 for r in reviews if r["has_response"]),
-            "without_response": sum(1 for r in reviews if not r["has_response"]),
+            "with_response": sum(1 for x in reviews if x["has_response"]),
+            "without_response": sum(1 for x in reviews if not x["has_response"]),
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения внешних отзывов: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        err_tb = traceback.format_exc()
+        print(f"❌ get_external_reviews: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_external_reviews", "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route("/api/business/<business_id>/external/summary", methods=["GET"])
@@ -1671,80 +1690,150 @@ def get_external_summary(business_id):
         tables = {row['table_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()}
         
         if 'externalbusinessstats' not in tables or 'externalbusinessreviews' not in tables:
-            # Таблицы не существуют - возвращаем пустую статистику
+            # Таблицы не существуют — отдаём хотя бы данные из cards (парсинг)
+            cursor.execute("""
+                SELECT created_at, rating, reviews_count, competitors
+                FROM cards WHERE business_id = %s ORDER BY created_at DESC LIMIT 1
+            """, (business_id,))
+            raw = cursor.fetchone()
+            card_row = _row_to_dict(cursor, raw) if raw else None
             db.close()
+            rating = None
+            reviews_total = 0
+            last_parse_date = None
+            competitors = None
+            if card_row:
+                try:
+                    rating = float(card_row.get("rating")) if card_row.get("rating") is not None else None
+                except (TypeError, ValueError):
+                    pass
+                reviews_total = int(card_row.get("reviews_count") or 0)
+                last_parse_date = card_row.get("created_at")
+                competitors = card_row.get("competitors")
             return jsonify({
                 "success": True,
-                "rating": None,
-                "reviews_total": 0,
+                "rating": rating,
+                "reviews_total": reviews_total,
                 "reviews_with_response": 0,
-                "reviews_without_response": 0,
-                "last_update": None
+                "reviews_without_response": reviews_total,
+                "last_sync_date": None,
+                "last_parse_date": last_parse_date,
+                "competitors": competitors,
             })
 
-        # Получаем последнюю статистику
+        # Статистика из externalbusinessstats (Postgres)
         cursor.execute(
             """
             SELECT rating, reviews_total, date
-            FROM ExternalBusinessStats
-            WHERE business_id = ? AND source = 'yandex_business'
+            FROM externalbusinessstats
+            WHERE business_id = %s AND source = 'yandex_business'
             ORDER BY date DESC
             LIMIT 1
             """,
             (business_id,),
         )
-        stats_row = cursor.fetchone()
-        
-        # Получаем количество отзывов
+        raw_stats = cursor.fetchone()
+        stats_row = _row_to_dict(cursor, raw_stats) if raw_stats else None
+
         cursor.execute(
             """
-            SELECT COUNT(*) as total,
-                   SUM(CASE WHEN response_text IS NOT NULL THEN 1 ELSE 0 END) as with_response,
-                   SUM(CASE WHEN response_text IS NULL THEN 1 ELSE 0 END) as without_response
-            FROM ExternalBusinessReviews
-            WHERE business_id = ? AND source = 'yandex_business'
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN response_text IS NOT NULL AND response_text != '' THEN 1 ELSE 0 END) AS with_response,
+                   SUM(CASE WHEN response_text IS NULL OR response_text = '' THEN 1 ELSE 0 END) AS without_response
+            FROM externalbusinessreviews
+            WHERE business_id = %s AND source = 'yandex_business'
             """,
             (business_id,),
         )
-        reviews_row = cursor.fetchone()
+        raw_reviews = cursor.fetchone()
+        reviews_row = _row_to_dict(cursor, raw_reviews) if raw_reviews else None
 
-        # Получаем дату последнего парсинга
+        # Карточка для UI:
+        # full_card  — последняя snapshot_type='full' (богатый слепок)
+        # metrics_card — последняя is_latest (может быть metrics_update или full)
+
+        # 1) full_card: последняя полноценная карточка
         cursor.execute(
             """
-            SELECT created_at, competitors
-            FROM MapParseResults
-            WHERE business_id = ?
+            SELECT *
+            FROM cards
+            WHERE business_id = %s
+              AND (overview->>'snapshot_type') = 'full'
             ORDER BY created_at DESC
             LIMIT 1
             """,
             (business_id,),
         )
-        parse_row = cursor.fetchone()
-        last_parse_date = parse_row[0] if parse_row else None
-        
+        raw_full = cursor.fetchone()
+        full_card = _row_to_dict(cursor, raw_full) if raw_full else None
+
+        # 2) metrics_card: последняя is_latest (она может быть metrics_update или full)
+        cursor.execute(
+            """
+            SELECT *
+            FROM cards
+            WHERE business_id = %s AND is_latest = TRUE
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        raw_latest = cursor.fetchone()
+        metrics_card = _row_to_dict(cursor, raw_latest) if raw_latest else None
+
+        # 3) chosen_card: источник rich-контента (предпочитаем full, иначе metrics_card)
+        chosen_card = full_card or metrics_card
+        parse_row = chosen_card
+        last_parse_date = parse_row.get("created_at") if parse_row else None
+
         db.close()
 
-        rating = stats_row[0] if stats_row else None
-        reviews_total = stats_row[1] if stats_row else (reviews_row[0] if reviews_row else 0)
-        reviews_with_response = reviews_row[1] if reviews_row else 0
-        reviews_without_response = reviews_row[2] if reviews_row else 0
+        # Метрики: сначала внешние источники, затем cards (metrics_card / chosen_card)
+        rating = stats_row.get("rating") if stats_row else None
+        reviews_total = (reviews_row.get("total") or 0) if reviews_row else 0
+        reviews_with_response = (reviews_row.get("with_response") or 0) if reviews_row else 0
+        reviews_without_response = (reviews_row.get("without_response") or 0) if reviews_row else 0
+
+        # 4) Fallback по метрикам:
+        #   - сначала metrics_card, если это metrics_update
+        #   - затем chosen_card (обычно full)
+        if rating is None:
+            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
+                try:
+                    rating = float(metrics_card.get("rating"))
+                except (TypeError, ValueError):
+                    rating = None
+            elif parse_row and parse_row.get("rating") is not None:
+                try:
+                    rating = float(parse_row.get("rating"))
+                except (TypeError, ValueError):
+                    rating = None
+
+        if reviews_total == 0:
+            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
+                reviews_total = int(metrics_card.get("reviews_count") or 0)
+            elif parse_row and (parse_row.get("reviews_count") or 0) != 0:
+                reviews_total = int(parse_row.get("reviews_count") or 0)
 
         return jsonify({
             "success": True,
-            "rating": float(rating) if rating else None,
+            "rating": float(rating) if rating is not None else None,
             "reviews_total": reviews_total,
             "reviews_with_response": reviews_with_response,
             "reviews_without_response": reviews_without_response,
-            "last_sync_date": stats_row[2] if stats_row else None,
+            "last_sync_date": stats_row.get("date") if stats_row else None,
             "last_parse_date": last_parse_date,
-            "competitors": parse_row[1] if parse_row and len(parse_row) > 1 else None
+            "competitors": parse_row.get("competitors") if parse_row else None
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения сводки внешних данных: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        err_tb = traceback.format_exc()
+        print(f"❌ get_external_summary: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_external_summary", "error_type": type(e).__name__, "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route("/api/business/<business_id>/external/posts", methods=["GET"])
@@ -1775,51 +1864,77 @@ def get_external_posts(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Проверяем, существует ли таблица externalbusinessposts (Postgres)
+        # Сначала пробуем externalbusinessposts (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessposts')")
         table_exists = cursor.fetchone()
-        
-        if not table_exists:
-            # Таблица не существует - возвращаем пустой список
-            db.close()
-            return jsonify({"success": True, "posts": []})
-
-        # Получаем все посты, исключая некорректные (метаданные)
-        cursor.execute(
-            """
-            SELECT id, source, external_post_id, title, text, published_at, created_at
-            FROM ExternalBusinessPosts
-            WHERE business_id = ?
-            AND title NOT IN ('working_intervals', 'urls', 'phone', 'photos', 'price_lists', 'logo', 'features', 'english_name')
-            AND (title IS NOT NULL OR text IS NOT NULL)
-            AND (title != '' OR text != '')
-            ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
-            """,
-            (business_id,),
-        )
-        rows = cursor.fetchall()
-        db.close()
-
         posts = []
-        for r in rows:
-            # Дополнительная проверка - пропускаем метаданные
-            title = r[3] or ""
-            text = r[4] or ""
-            metadata_titles = ["working_intervals", "urls", "phone", "photos", "price_lists", "logo", "features", "english_name"]
-            
-            if title in metadata_titles or (not title and not text):
-                continue  # Пропускаем метаданные
-            
-            posts.append({
-                "id": r[0],
-                "source": r[1],
-                "external_post_id": r[2],
-                "title": title,
-                "text": text,
-                "published_at": r[5],
-                "created_at": r[6],
-            })
+        if table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is not None:
+            cursor.execute(
+                """
+                SELECT id, source, external_post_id, title, text, published_at, created_at
+                FROM externalbusinessposts
+                WHERE business_id = %s
+                AND (title IS NULL OR title NOT IN ('working_intervals', 'urls', 'phone', 'photos', 'price_lists', 'logo', 'features', 'english_name'))
+                AND (title IS NOT NULL OR text IS NOT NULL)
+                AND (COALESCE(title, '') != '' OR COALESCE(text, '') != '')
+                ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
+                """,
+                (business_id,),
+            )
+            for r in cursor.fetchall():
+                rd = _row_to_dict(cursor, r)
+                if not rd:
+                    continue
+                title = rd.get("title") or ""
+                text = rd.get("text") or ""
+                if not title and not text:
+                    continue
+                posts.append({
+                    "id": rd.get("id"),
+                    "source": rd.get("source") or "external",
+                    "external_post_id": rd.get("external_post_id"),
+                    "title": title,
+                    "text": text,
+                    "published_at": rd.get("published_at"),
+                    "created_at": rd.get("created_at"),
+                })
 
+        # Если постов нет — временно отдаём новости из последней карточки (cards.news)
+        if not posts:
+            cursor.execute("""
+                SELECT news FROM cards
+                WHERE business_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (business_id,))
+            card_row = cursor.fetchone()
+            if card_row:
+                rd = _row_to_dict(cursor, card_row)
+                news_raw = rd.get("news") if rd else None
+                if news_raw is not None:
+                    if isinstance(news_raw, list):
+                        news_list = news_raw
+                    elif isinstance(news_raw, str):
+                        try:
+                            news_list = json.loads(news_raw) if news_raw.strip() else []
+                        except Exception:
+                            news_list = []
+                    else:
+                        news_list = []
+                    for i, entry in enumerate(news_list):
+                        if not isinstance(entry, dict):
+                            continue
+                        posts.append({
+                            "id": f"card_news_{i}",
+                            "source": "yandex_maps",
+                            "external_post_id": None,
+                            "title": entry.get("title") or entry.get("name") or "",
+                            "text": entry.get("text") or entry.get("content") or "",
+                            "published_at": entry.get("published_at") or entry.get("date"),
+                            "created_at": None,
+                        })
+
+        db.close()
         return jsonify({
             "success": True,
             "posts": posts,
@@ -1827,10 +1942,13 @@ def get_external_posts(business_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения внешних постов: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        err_tb = traceback.format_exc()
+        print(f"❌ get_external_posts: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_external_posts", "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route("/api/business/<business_id>/services", methods=["GET"])
@@ -1861,31 +1979,43 @@ def get_business_services(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Получение услуг
+        # Читаем из userservices (Postgres, каноничная таблица услуг)
         cursor.execute("""
-            SELECT id, category, name, description, price, created_at
-            FROM UserServices
-            WHERE business_id = ?
-            ORDER BY category, name
+            SELECT id, category, name, description, price, price_from, price_to, created_at
+            FROM userservices
+            WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL)
+            ORDER BY category NULLS LAST, name NULLS LAST, created_at DESC
         """, (business_id,))
-        
+        rows = cursor.fetchall()
+        db.close()
+
         services = []
-        for row in cursor.fetchall():
+        for r in rows:
+            rd = _row_to_dict(cursor, r)
+            if not rd:
+                continue
+            price = rd.get("price")
+            if price is None and (rd.get("price_from") is not None or rd.get("price_to") is not None):
+                price = str(rd.get("price_from") or "") if rd.get("price_from") == rd.get("price_to") else f"{rd.get('price_from') or ''}-{rd.get('price_to') or ''}"
             services.append({
-                "id": row[0],
-                "category": row[1] or "Без категории",
-                "name": row[2],
-                "description": row[3],
-                "price": row[4],
-                "created_at": row[5]
+                "id": rd.get("id"),
+                "category": rd.get("category") or "Без категории",
+                "name": rd.get("name") or "",
+                "description": rd.get("description") or "",
+                "price": price,
+                "created_at": rd.get("created_at"),
             })
 
-        db.close()
         return jsonify({"success": True, "services": services})
 
     except Exception as e:
-        print(f"❌ Ошибка получения услуг: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        err_tb = traceback.format_exc()
+        print(f"❌ get_business_services: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_business_services", "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 # ==================== SUPERADMIN USER MANAGEMENT ====================
 # Эти маршруты должны быть ПЕРЕД SPA fallback, чтобы Flask их правильно обрабатывал
@@ -2167,6 +2297,69 @@ def health():
 # ==================== ХЕЛПЕР: РАБОТА С БИЗНЕСАМИ ====================
 # Импортируем helper функции из core модуля
 from core.helpers import get_business_owner_id, get_business_id_from_user, get_user_language, find_business_id_for_user
+
+
+def _row_to_dict(cursor, row):
+    """Маппинг строки в dict: dict-like row — по ключам, tuple-row — по cursor.description."""
+    if row is None:
+        return None
+    if hasattr(row, "keys"):
+        return {k: row[k] for k in row.keys()}
+    cols = [d[0] for d in cursor.description]
+    return dict(zip(cols, row))
+
+
+def _business_display_fields(row_dict):
+    """Из row_dict (из businesses) извлечь поля для UI: name, business_type, address, working_hours (строки)."""
+    if not row_dict:
+        return "", "", "", ""
+    def s(v):
+        return (v or "").strip() if v is not None else ""
+    return s(row_dict.get("name")), s(row_dict.get("business_type")), s(row_dict.get("address")), s(row_dict.get("working_hours"))
+
+
+def suggest_city_from_address(address: str):
+    """Подсказка города из адреса (best-effort, без справочника). Не перезаписывает введённый пользователем city."""
+    if not address or not isinstance(address, str):
+        return None
+    addr = address.strip()
+    if not addr:
+        return None
+    # Первый кандидат — до первой запятой
+    if "," in addr:
+        candidate = addr.split(",")[0].strip()
+    else:
+        candidate = addr
+    if not candidate:
+        return None
+    # Убираем префиксы: г. / город / city
+    for prefix in ("г.", "город", "city", "Г.", "Город", "City"):
+        if candidate.lower().startswith(prefix.lower()):
+            candidate = candidate[len(prefix):].strip()
+            break
+    return candidate if candidate else None
+
+
+def parse_ll_from_maps_url(maps_url: str):
+    """Из ссылки на карты (yandex и т.п.) извлечь ll=lon,lat. Возвращает (geo_lon, geo_lat) или (None, None)."""
+    if not maps_url or "ll=" not in maps_url:
+        return None, None
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(maps_url)
+        qs = parse_qs(parsed.query)
+        ll = qs.get("ll") or qs.get("LL")
+        if not ll or not ll[0]:
+            return None, None
+        parts = ll[0].strip().split(",")
+        if len(parts) != 2:
+            return None, None
+        lon_f = float(parts[0].strip())
+        lat_f = float(parts[1].strip())
+        return lon_f, lat_f
+    except (ValueError, IndexError, TypeError):
+        return None, None
+
 
 def get_user_language(user_id: str, requested_language: str = None) -> str:
     """
@@ -3611,8 +3804,8 @@ def add_service():
         print(f"❌ Ошибка добавления услуги: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/services/list', methods=['GET', 'OPTIONS'])
-def get_services():
+@app.route('/api/services/list-legacy', methods=['GET', 'OPTIONS'])
+def get_services_legacy():
     """Получение списка услуг пользователя."""
     try:
         if request.method == 'OPTIONS':
@@ -3974,20 +4167,29 @@ def client_info():
             current_business_id = request.args.get('business_id')
             print(f"🔍 GET /api/client-info: method=GET, business_id={current_business_id}, user_id={user_id}")
             
-            # Если передан business_id - берём данные из таблицы Businesses
+            # Если передан business_id — данные только из таблицы businesses (lowercase). Фильтр is_active согласован с dropdown (auth/me).
             if current_business_id:
-                print(f"🔍 GET /api/client-info: Ищу бизнес в таблице Businesses, business_id={current_business_id}")
-                # Проверяем доступ к бизнесу
-                cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM businesses WHERE id = %s AND is_active = TRUE", (current_business_id,))
+                print(f"🔍 GET /api/client-info: Ищу бизнес в таблице businesses, business_id={current_business_id}")
+                cursor.execute(
+                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                    (current_business_id,),
+                )
                 business_row = cursor.fetchone()
-                
-                if business_row:
-                    owner_id = business_row['owner_id'] if isinstance(business_row, dict) else business_row[0]
-                    print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, user_id={user_id}, is_superadmin={user_data.get('is_superadmin')}")
-                    # Проверяем права доступа
-                    if owner_id == user_id or user_data.get('is_superadmin'):
-                        print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из Businesses")
-                        # Получаем ссылки на карты для этого бизнеса
+                row_dict = _row_to_dict(cursor, business_row)
+
+                if row_dict:
+                    owner_id = row_dict.get("owner_id")
+                    business_name, business_type, address, working_hours = _business_display_fields(row_dict)
+                    is_active_val = row_dict.get("is_active")
+                    city = (row_dict.get("city") or "").strip() or None
+                    geo_lat = row_dict.get("geo_lat")
+                    geo_lon = row_dict.get("geo_lon")
+                    city_suggestion = None
+                    if not city and address:
+                        city_suggestion = suggest_city_from_address(address)
+                    print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, name={business_name!r}, is_active={is_active_val}")
+                    if owner_id == user_id or user_data.get("is_superadmin"):
+                        print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из businesses")
                         links = []
                         cursor.execute("""
                             SELECT id, url, map_type, created_at 
@@ -3996,16 +4198,16 @@ def client_info():
                             ORDER BY created_at DESC
                         """, (current_business_id,))
                         link_rows = cursor.fetchall()
-                        links = [
-                            {
-                                "id": r['id'] if isinstance(r, dict) else r[0],
-                                "url": r['url'] if isinstance(r, dict) else r[1],
-                                "mapType": r['map_type'] if isinstance(r, dict) else r[2],
-                                "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
-                            } for r in link_rows
-                        ]
-                        
-                        # Получаем услуги для этого бизнеса
+                        for r in link_rows:
+                            rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                            if rd:
+                                links.append({
+                                    "id": rd.get("id"),
+                                    "url": rd.get("url") or "",
+                                    "mapType": rd.get("map_type") or "other",
+                                    "createdAt": rd.get("created_at"),
+                                })
+
                         cursor.execute("""
                             SELECT name, description, category, price 
                             FROM userservices 
@@ -4013,93 +4215,82 @@ def client_info():
                             ORDER BY created_at DESC
                         """, (current_business_id,))
                         services_rows = cursor.fetchall()
-                        services_list = [
-                            {
-                                "name": r['name'] if isinstance(r, dict) else r[0],
-                                "description": r['description'] if isinstance(r, dict) else r[1],
-                                "category": r['category'] if isinstance(r, dict) else r[2],
-                                "price": r['price'] if isinstance(r, dict) else r[3]
-                            } for r in services_rows
-                        ]
-                        
-                        # Получаем данные владельца бизнеса для отображения
+                        services_list = []
+                        for r in services_rows:
+                            rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                            if rd:
+                                services_list.append({
+                                    "name": rd.get("name") or "",
+                                    "description": rd.get("description") or "",
+                                    "category": rd.get("category") or "",
+                                    "price": rd.get("price") or "",
+                                })
+
                         owner_data = None
-                        
-                        # Сначала проверяем businessprofiles (где сохраняются обновления)
-                        # Таблица создаётся через миграции, не создаём здесь
-                        cursor.execute("""
-                            SELECT contact_name, contact_phone, contact_email
-                            FROM businessprofiles
-                            WHERE business_id = %s
-                        """, (current_business_id,))
+                        cursor.execute("SELECT contact_name, contact_phone, contact_email FROM businessprofiles WHERE business_id = %s", (current_business_id,))
                         profile_row = cursor.fetchone()
-                        
                         if profile_row:
-                            contact_name = profile_row['contact_name'] if isinstance(profile_row, dict) else profile_row[0]
-                            contact_phone = profile_row['contact_phone'] if isinstance(profile_row, dict) else profile_row[1]
-                            contact_email = profile_row['contact_email'] if isinstance(profile_row, dict) else profile_row[2]
-                            if contact_name or contact_phone or contact_email:
+                            pr = _row_to_dict(cursor, profile_row)
+                            if pr and (pr.get("contact_name") or pr.get("contact_phone") or pr.get("contact_email")):
                                 owner_data = {
-                                    'id': owner_id, # Оставляем ID реального владельца
-                                    'name': contact_name or "",
-                                    'phone': contact_phone or "",
-                                    'email': contact_email or ""
+                                    "id": owner_id,
+                                    "name": (pr.get("contact_name") or "").strip(),
+                                    "phone": (pr.get("contact_phone") or "").strip(),
+                                    "email": (pr.get("contact_email") or "").strip(),
                                 }
-                        
-                        # Если в профиле нет данных, берем из таблицы users
                         if not owner_data and owner_id:
-                            cursor.execute("""
-                                SELECT id, email, name, phone
-                                FROM users
-                                WHERE id = %s
-                            """, (owner_id,))
+                            cursor.execute("SELECT id, email, name, phone FROM users WHERE id = %s", (owner_id,))
                             owner_row = cursor.fetchone()
                             if owner_row:
-                                if hasattr(owner_row, 'keys'):
+                                ur = _row_to_dict(cursor, owner_row)
+                                if ur:
                                     owner_data = {
-                                        'id': owner_row['id'],
-                                        'email': owner_row['email'],
-                                        'name': owner_row['name'],
-                                        'phone': owner_row['phone']
+                                        "id": ur.get("id"),
+                                        "email": ur.get("email") or "",
+                                        "name": ur.get("name") or "",
+                                        "phone": ur.get("phone") or "",
                                     }
-                                else:
-                                    owner_data = {
-                                        'id': owner_row[0],
-                                        'email': owner_row[1],
-                                        'name': owner_row[2],
-                                        'phone': owner_row[3] if len(owner_row) > 3 else None
-                                    }
-                        
-                        # Обработка результатов для Postgres
-                        business_name = business_row['name'] if isinstance(business_row, dict) else business_row[1]
-                        business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[2]
-                        address = business_row['address'] if isinstance(business_row, dict) else business_row[3]
-                        working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[4]
-                        
-                        db.close()
-                        return jsonify({
+
+                        payload = {
                             "success": True,
                             "businessName": business_name or "",
                             "businessType": business_type or "",
                             "address": address or "",
                             "workingHours": working_hours or "",
+                            "city": city or "",
+                            "citySuggestion": city_suggestion or "",
+                            "geoLat": geo_lat,
+                            "geoLon": geo_lon,
                             "description": "",
                             "services": services_list,
                             "mapLinks": links,
-                            "owner": owner_data  # Добавляем данные владельца
-                        })
+                            "owner": owner_data,
+                        }
+                        if getattr(app, "debug", False):
+                            payload["_debug"] = {
+                                "foundBusiness": True,
+                                "isActive": is_active_val,
+                                "returnedName": business_name or "",
+                            }
+                        db.close()
+                        return jsonify(payload)
                     else:
                         print(f"❌ GET /api/client-info: Нет доступа к бизнесу, owner_id={owner_id}, user_id={user_id}")
                         db.close()
                         return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
                 else:
-                    # Бизнес не найден в businesses — Postgres-only, ClientInfo не используем
                     print(f"⚠️ GET /api/client-info: Бизнес не найден, business_id={current_business_id}")
+                    err_payload = {"error": "Бизнес не найден"}
+                    if getattr(app, "debug", False):
+                        err_payload["_debug"] = {"foundBusiness": False, "isActive": None, "returnedName": ""}
                     db.close()
-                    return jsonify({"error": "Бизнес не найден"}), 404
+                    return jsonify(err_payload), 404
 
-            # business_id не передан — возвращаем данные первого бизнеса пользователя из businesses + businessmaplinks
-            cursor.execute("SELECT id FROM businesses WHERE owner_id = %s AND is_active = TRUE ORDER BY created_at ASC LIMIT 1", (user_id,))
+            # business_id не передан — первый бизнес пользователя (фильтр is_active как в dropdown)
+            cursor.execute(
+                "SELECT id FROM businesses WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL) ORDER BY created_at ASC LIMIT 1",
+                (user_id,),
+            )
             first_row = cursor.fetchone()
             if not first_row:
                 db.close()
@@ -4114,68 +4305,83 @@ def client_info():
                     "mapLinks": [],
                     "owner": None
                 })
-            current_business_id = first_row['id'] if isinstance(first_row, dict) else first_row[0]
-            cursor.execute("SELECT owner_id, name, business_type, address, working_hours FROM businesses WHERE id = %s AND is_active = TRUE", (current_business_id,))
-            business_row = cursor.fetchone()
-            if not business_row:
+            first_dict = _row_to_dict(cursor, first_row)
+            current_business_id = first_dict.get("id") if first_dict else None
+            if not current_business_id:
                 db.close()
                 return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "services": [], "mapLinks": [], "owner": None})
-            owner_id = business_row['owner_id'] if isinstance(business_row, dict) else business_row[0]
+            cursor.execute(
+                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                (current_business_id,),
+            )
+            business_row = cursor.fetchone()
+            row_dict = _row_to_dict(cursor, business_row)
+            if not row_dict:
+                db.close()
+                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "city": "", "citySuggestion": "", "geoLat": None, "geoLon": None, "description": "", "services": [], "mapLinks": [], "owner": None})
+            owner_id = row_dict.get("owner_id")
+            business_name, business_type, address, working_hours = _business_display_fields(row_dict)
+            is_active_val = row_dict.get("is_active")
+            city = (row_dict.get("city") or "").strip() or None
+            geo_lat, geo_lon = row_dict.get("geo_lat"), row_dict.get("geo_lon")
+            city_suggestion = suggest_city_from_address(address) if not city and address else None
             links = []
             cursor.execute("""
                 SELECT id, url, map_type, created_at FROM businessmaplinks WHERE business_id = %s ORDER BY created_at DESC
             """, (current_business_id,))
             for r in cursor.fetchall():
-                links.append({
-                    "id": r['id'] if isinstance(r, dict) else r[0],
-                    "url": r['url'] if isinstance(r, dict) else r[1],
-                    "mapType": r['map_type'] if isinstance(r, dict) else r[2],
-                    "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
-                })
+                rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                if rd:
+                    links.append({
+                        "id": rd.get("id"),
+                        "url": rd.get("url") or "",
+                        "mapType": rd.get("map_type") or "other",
+                        "createdAt": rd.get("created_at"),
+                    })
             cursor.execute("SELECT name, description, category, price FROM userservices WHERE business_id = %s ORDER BY created_at DESC", (current_business_id,))
             services_list = []
             for r in cursor.fetchall():
-                services_list.append({
-                    "name": r['name'] if isinstance(r, dict) else r[0],
-                    "description": r['description'] if isinstance(r, dict) else r[1],
-                    "category": r['category'] if isinstance(r, dict) else r[2],
-                    "price": r['price'] if isinstance(r, dict) else r[3]
-                })
+                rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                if rd:
+                    services_list.append({
+                        "name": rd.get("name") or "",
+                        "description": rd.get("description") or "",
+                        "category": rd.get("category") or "",
+                        "price": rd.get("price") or "",
+                    })
             owner_data = None
             cursor.execute("SELECT contact_name, contact_phone, contact_email FROM businessprofiles WHERE business_id = %s", (current_business_id,))
             profile_row = cursor.fetchone()
             if profile_row:
-                contact_name = profile_row['contact_name'] if isinstance(profile_row, dict) else profile_row[0]
-                contact_phone = profile_row['contact_phone'] if isinstance(profile_row, dict) else profile_row[1]
-                contact_email = profile_row['contact_email'] if isinstance(profile_row, dict) else profile_row[2]
-                if contact_name or contact_phone or contact_email:
-                    owner_data = {'id': owner_id, 'name': contact_name or "", 'phone': contact_phone or "", 'email': contact_email or ""}
+                pr = _row_to_dict(cursor, profile_row)
+                if pr and (pr.get("contact_name") or pr.get("contact_phone") or pr.get("contact_email")):
+                    owner_data = {"id": owner_id, "name": (pr.get("contact_name") or "").strip(), "phone": (pr.get("contact_phone") or "").strip(), "email": (pr.get("contact_email") or "").strip()}
             if not owner_data and owner_id:
                 cursor.execute("SELECT id, email, name, phone FROM users WHERE id = %s", (owner_id,))
                 owner_row = cursor.fetchone()
                 if owner_row:
-                    owner_data = {
-                        'id': owner_row['id'] if isinstance(owner_row, dict) else owner_row[0],
-                        'email': owner_row['email'] if isinstance(owner_row, dict) else owner_row[1],
-                        'name': owner_row['name'] if isinstance(owner_row, dict) else owner_row[2],
-                        'phone': owner_row['phone'] if isinstance(owner_row, dict) else (owner_row[3] if len(owner_row) > 3 else None)
-                    }
-            business_name = business_row['name'] if isinstance(business_row, dict) else business_row[1]
-            business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[2]
-            address = business_row['address'] if isinstance(business_row, dict) else business_row[3]
-            working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[4]
-            db.close()
-            return jsonify({
+                    ur = _row_to_dict(cursor, owner_row)
+                    if ur:
+                        owner_data = {"id": ur.get("id"), "email": ur.get("email") or "", "name": ur.get("name") or "", "phone": ur.get("phone") or ""}
+            payload = {
                 "success": True,
                 "businessName": business_name or "",
                 "businessType": business_type or "",
                 "address": address or "",
                 "workingHours": working_hours or "",
+                "city": city or "",
+                "citySuggestion": city_suggestion or "",
+                "geoLat": geo_lat,
+                "geoLon": geo_lon,
                 "description": "",
                 "services": services_list,
                 "mapLinks": links,
-                "owner": owner_data
-            })
+                "owner": owner_data,
+            }
+            if getattr(app, "debug", False):
+                payload["_debug"] = {"foundBusiness": True, "isActive": is_active_val, "returnedName": business_name or ""}
+            db.close()
+            return jsonify(payload)
 
         # POST/PUT: сохранить/обновить
         data = request.get_json(silent=True) or {}
@@ -4216,27 +4422,20 @@ def client_info():
         # Парсер больше не запускается автоматически при сохранении ссылок
         # Он запускается только вручную через кнопку "Запустить парсер" на странице "Обзор карточки"
 
-        # Обновляем ссылки, только если поле пришло в payload
-        if business_id and isinstance(map_links, list):
+        # mapLinks: обновляем только если в теле явно передан ключ mapLinks/map_links. Если ключа нет — существующие ссылки не трогаем. Пустой список [] = удалить все.
+        if business_id and ("mapLinks" in data or "map_links" in data) and isinstance(map_links, list):
             print(f"📝 SAVE mapLinks: business_id={business_id}, user_id={user_id}, map_links={map_links}")
-            
-            # Фильтруем пустые ссылки
             valid_links = []
             for link in map_links:
                 url = link.get('url') if isinstance(link, dict) else str(link)
                 if url and url.strip():
                     valid_links.append(url.strip())
-            
             print(f"📝 SAVE mapLinks: valid_links={valid_links}, count={len(valid_links)}")
-            
-            # Удаляем старые ссылки для консистентности
+
             cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
             deleted_count = cursor.rowcount
-            print(f"📝 DELETE mapLinks: business_id={business_id}, deleted_count={deleted_count}, SQL: DELETE FROM businessmaplinks WHERE business_id = %s")
-            db.conn.commit()
-            print(f"📝 DELETE mapLinks: commit() выполнен")
+            print(f"📝 DELETE mapLinks: business_id={business_id}, deleted_count={deleted_count}")
 
-            # Сохраняем валидные ссылки
             inserted_count = 0
             for url in valid_links:
                 map_type = detect_map_type(url)
@@ -4245,14 +4444,25 @@ def client_info():
                     INSERT INTO businessmaplinks (id, user_id, business_id, url, map_type, created_at)
                     VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 """, (link_id, user_id, business_id, url, map_type))
-                rowcount = cursor.rowcount
-                inserted_count += rowcount
-                print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}, rowcount={rowcount}")
-            
+                inserted_count += cursor.rowcount
+                print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}")
+
             db.conn.commit()
-            print(f"📝 INSERT mapLinks: commit() выполнен, inserted_count={inserted_count}")
-            
-            # Проверяем, что данные сохранились
+            print(f"📝 mapLinks: commit() выполнен (DELETE + {inserted_count} INSERT)")
+
+            # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
+            for url in valid_links:
+                if "yandex" in (url or "").lower() and "ll=" in (url or ""):
+                    geo_lon, geo_lat = parse_ll_from_maps_url(url)
+                    if geo_lon is not None and geo_lat is not None:
+                        cursor.execute(
+                            "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                            (geo_lon, geo_lat, business_id),
+                        )
+                        db.conn.commit()
+                        print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
+                    break
+
             cursor.execute("SELECT COUNT(*) FROM businessmaplinks WHERE business_id = %s", (business_id,))
             count_row = cursor.fetchone()
             saved_count = count_row['count'] if isinstance(count_row, dict) else count_row[0]
@@ -4331,6 +4541,19 @@ def client_info():
                         business_type_value = data.get('businessType')
                         print(f"📋 Сохраняем businessType в businesses: {business_type_value}")
                         updates.append('business_type = %s'); params.append(business_type_value)
+                    # city: ручной приоритет; если не передан и в БД пусто — подсказка из address
+                    if 'city' in data:
+                        updates.append('city = %s'); params.append((data.get('city') or "").strip() or None)
+                    else:
+                        cursor.execute("SELECT city, address FROM businesses WHERE id = %s", (business_id,))
+                        cur_row = cursor.fetchone()
+                        cur_dict = _row_to_dict(cursor, cur_row) if cur_row else {}
+                        current_city = (cur_dict.get("city") or "").strip() if cur_dict else ""
+                        if not current_city:
+                            addr = data.get('address') or (cur_dict.get("address") or "")
+                            suggested = suggest_city_from_address(addr)
+                            if suggested:
+                                updates.append('city = %s'); params.append(suggested)
                     if updates:
                         updates.append('updated_at = CURRENT_TIMESTAMP')
                         params.append(business_id)
@@ -4348,21 +4571,25 @@ def client_info():
             "mapLinks": current_links
         }
         
-        # Если есть business_id, добавляем обновленные данные бизнеса
+        # Ответ: данные бизнеса всегда из таблицы businesses (lowercase), маппинг через cursor.description
         if business_id:
-            cursor.execute("SELECT name, business_type, address, working_hours FROM businesses WHERE id = %s", (business_id,))
+            cursor.execute("SELECT name, business_type, address, working_hours, city, geo_lat, geo_lon FROM businesses WHERE id = %s", (business_id,))
             business_row = cursor.fetchone()
-            if business_row:
-                business_name = business_row['name'] if isinstance(business_row, dict) else business_row[0]
-                business_type = business_row['business_type'] if isinstance(business_row, dict) else business_row[1]
-                address = business_row['address'] if isinstance(business_row, dict) else business_row[2]
-                working_hours = business_row['working_hours'] if isinstance(business_row, dict) else business_row[3]
-                print(f"📋 POST /api/client-info: businessType из businesses = '{business_type}' для business_id={business_id}")
+            row_dict = _row_to_dict(cursor, business_row)
+            if row_dict:
+                business_name, business_type, address, working_hours = _business_display_fields(row_dict)
+                city = (row_dict.get("city") or "").strip() or ""
+                city_suggestion = suggest_city_from_address(address) if not city and address else ""
+                print(f"📋 POST /api/client-info: из businesses для business_id={business_id}: name={business_name!r}, businessType={business_type!r}")
                 response_data.update({
                     "businessName": business_name or "",
                     "businessType": business_type or "",
                     "address": address or "",
-                    "workingHours": working_hours or ""
+                    "workingHours": working_hours or "",
+                    "city": city or "",
+                    "citySuggestion": city_suggestion or "",
+                    "geoLat": row_dict.get("geo_lat"),
+                    "geoLon": row_dict.get("geo_lon"),
                 })
 
         db.close()
@@ -4410,22 +4637,22 @@ def get_parse_status(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        # Получаем последнюю задачу парсинга для этого бизнеса с retry_after
         cursor.execute("""
-            SELECT status, retry_after, created_at 
-            FROM ParseQueue 
-            WHERE business_id = ? 
-            ORDER BY created_at DESC 
+            SELECT status, retry_after, created_at
+            FROM parsequeue
+            WHERE business_id = %s
+            ORDER BY created_at DESC
             LIMIT 1
         """, (business_id,))
-        queue_row = cursor.fetchone()
+        raw_queue = cursor.fetchone()
+        queue_row = _row_to_dict(cursor, raw_queue) if raw_queue else None
         
         retry_info = None
         overall_status = "idle"
         
         if queue_row:
-            overall_status = queue_row[0] if queue_row[0] else 'idle'
-            retry_after = queue_row[1] if queue_row[1] else None
+            overall_status = normalize_status(queue_row.get("status") or "") or "idle"
+            retry_after = queue_row.get("retry_after")
             
             # Вычисляем оставшееся время до повтора для статуса captcha
             if overall_status == 'captcha' and retry_after:
@@ -4455,19 +4682,21 @@ def get_parse_status(business_id):
                 if overall_status == 'captcha':
                     print(f"⚠️ Статус captcha, но retry_after отсутствует: {retry_after}")
         
-        # Проверяем статусы в очереди для этого бизнеса (для обратной совместимости)
         cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM ParseQueue
-            WHERE business_id = ?
+            SELECT status, COUNT(*) AS count
+            FROM parsequeue
+            WHERE business_id = %s
             GROUP BY status
         """, (business_id,))
         status_rows = cursor.fetchall()
         
         statuses = {}
         for row in status_rows:
-            statuses[row[0]] = row[1]
-        
+            rd = _row_to_dict(cursor, row)
+            if rd:
+                st = normalize_status(rd.get("status") or "idle")
+                statuses[st] = statuses.get(st, 0) + (rd.get("count") or 0)
+
         # Определяем общий статус (если не определён выше из queue_row)
         # НЕ переопределяем статус, если он уже установлен из queue_row (например, captcha)
         if overall_status == "idle":
@@ -4477,22 +4706,25 @@ def get_parse_status(business_id):
                 overall_status = "queued"
             elif statuses.get('error'):
                 overall_status = "error"
+            elif statuses.get(STATUS_COMPLETED):
+                overall_status = STATUS_COMPLETED
             elif statuses.get('captcha'):
                 overall_status = "captcha"
                 # Если статус captcha, но retry_info не был вычислен выше, вычисляем его здесь
                 if retry_info is None:
                     cursor.execute("""
-                        SELECT retry_after 
-                        FROM ParseQueue 
-                        WHERE business_id = ? AND status = 'captcha'
-                        ORDER BY created_at DESC 
+                        SELECT retry_after
+                        FROM parsequeue
+                        WHERE business_id = %s AND status = 'captcha'
+                        ORDER BY created_at DESC
                         LIMIT 1
                     """, (business_id,))
-                    retry_row = cursor.fetchone()
-                    if retry_row and retry_row[0]:
+                    raw_retry = cursor.fetchone()
+                    retry_row = _row_to_dict(cursor, raw_retry) if raw_retry else None
+                    if retry_row and retry_row.get("retry_after"):
                         try:
                             from datetime import datetime
-                            retry_dt = datetime.fromisoformat(retry_row[0])
+                            retry_dt = datetime.fromisoformat(str(retry_row["retry_after"]))
                             now = datetime.now()
                             if retry_dt > now:
                                 delta = retry_dt - now
@@ -4506,8 +4738,6 @@ def get_parse_status(business_id):
                                 print(f"✅ Вычислен retry_info (fallback): {hours} ч {minutes} мин")
                         except Exception as e:
                             print(f"⚠️ Ошибка вычисления retry_info (fallback): {e}")
-            elif statuses.get('done'):
-                overall_status = "done"
         
         print(f"📊 Возвращаю статус: {overall_status}, retry_info: {retry_info}")
         db.close()
@@ -4519,8 +4749,13 @@ def get_parse_status(business_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения статуса парсинга: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        err_tb = traceback.format_exc()
+        print(f"❌ get_parse_status: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_parse_status", "error_type": type(e).__name__, "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 @app.route('/api/business/<string:business_id>/map-parses', methods=['GET'])
 def get_map_parses(business_id):
@@ -4546,81 +4781,64 @@ def get_map_parses(business_id):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
-        # Проверяем какие колонки существуют
+        # В PostgreSQL все результаты парсинга в cards. Берём реальные поля и считаем counts из JSONB.
         cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = 'mapparseresults'
-        """)
-        columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
-        
-        has_unanswered_col = 'unanswered_reviews_count' in columns
-        has_profile_fields = 'profile_completeness' in columns
-        has_competitors = 'competitors' in columns
-        
-        # Формируем SELECT с учётом существующих колонок
-        base_fields = "id, url, map_type, rating, reviews_count"
-        
-        if has_unanswered_col:
-            select_fields = f"{base_fields}, unanswered_reviews_count, news_count, photos_count, report_path"
-        else:
-            select_fields = f"{base_fields}, 0 as unanswered_reviews_count, news_count, photos_count, report_path"
-        
-        if has_profile_fields:
-            select_fields += ", is_verified, phone, website, messengers, working_hours, services_count, profile_completeness"
-        
-        if has_competitors:
-            select_fields += ", competitors"
-            
-        select_fields += ", created_at"
-        
-        cursor.execute(f"""
-            SELECT {select_fields}
-            FROM mapparseresults
+            SELECT id, url, rating, reviews_count, report_path, created_at,
+                   overview, products, news, photos, competitors, hours_full
+            FROM cards
             WHERE business_id = %s
             ORDER BY created_at DESC
         """, (business_id,))
-        
         rows = cursor.fetchall()
         db.close()
 
+        def _len(v):
+            if v is None:
+                return 0
+            if isinstance(v, (list, dict)):
+                return len(v)
+            if isinstance(v, str):
+                try:
+                    p = json.loads(v)
+                    return len(p) if isinstance(p, (list, dict)) else 0
+                except Exception:
+                    return 0
+            return 0
+
         items = []
         for r in rows:
-            idx = 0
+            rd = _row_to_dict(cursor, r)
+            if not rd:
+                continue
+            news_count = _len(rd.get("news"))
+            photos_count = _len(rd.get("photos"))
+            products_count = _len(rd.get("products"))
             item = {
-                "id": r[idx], "url": r[idx+1], "mapType": r[idx+2],
-                "rating": r[idx+3], "reviewsCount": r[idx+4],
-                "unansweredReviewsCount": r[idx+5],
-                "newsCount": r[idx+6], "photosCount": r[idx+7],
-                "reportPath": r[idx+8]
+                "id": rd.get("id"),
+                "url": rd.get("url"),
+                "mapType": "yandex",
+                "rating": rd.get("rating"),
+                "reviewsCount": rd.get("reviews_count") or 0,
+                "unansweredReviewsCount": 0,
+                "newsCount": news_count,
+                "photosCount": photos_count,
+                "productsCount": products_count,
+                "servicesCount": products_count,
+                "reportPath": rd.get("report_path"),
+                "createdAt": rd.get("created_at"),
             }
-            idx = 9
-            
-            # Добавляем новые поля если они есть
-            if has_profile_fields:
-                item["isVerified"] = bool(r[idx]) if r[idx] is not None else False
-                item["phone"] = r[idx+1]
-                item["website"] = r[idx+2]
-                item["messengers"] = r[idx+3]
-                item["workingHours"] = r[idx+4]
-                item["servicesCount"] = r[idx+5] if r[idx+5] is not None else 0
-                item["profileCompleteness"] = r[idx+6] if r[idx+6] is not None else 0
-                idx += 7
-            
-            if has_competitors:
-                item["competitors"] = r[idx]
-                idx += 1
-            
-            item["createdAt"] = r[idx]
             items.append(item)
 
         return jsonify({"success": True, "items": items})
 
     except Exception as e:
-        print(f"❌ Ошибка получения результатов парсинга: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        err_tb = traceback.format_exc()
+        print(f"❌ get_map_parses: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_map_parses", "error_type": type(e).__name__, "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route('/api/map-report/<string:parse_id>', methods=['GET'])
@@ -4640,20 +4858,21 @@ def get_map_report(parse_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT m.report_path, m.business_id, b.owner_id
-            FROM MapParseResults m
-            LEFT JOIN Businesses b ON m.business_id = b.id
-            WHERE m.id = ?
+            SELECT c.report_path, c.business_id, b.owner_id
+            FROM cards c
+            LEFT JOIN businesses b ON c.business_id = b.id
+            WHERE c.id = %s
             LIMIT 1
         """, (parse_id,))
-        row = cursor.fetchone()
+        raw = cursor.fetchone()
+        row = _row_to_dict(cursor, raw) if raw else None
         db.close()
 
         if not row:
             return jsonify({"error": "Отчет не найден"}), 404
 
-        report_path = row[0]
-        business_owner = row[2]
+        report_path = row.get("report_path")
+        business_owner = row.get("owner_id")
         if business_owner != user_id:
             # Проверка суперадмина
             db2 = DatabaseManager()
@@ -4670,8 +4889,13 @@ def get_map_report(parse_id):
         return Response(html, mimetype='text/html')
 
     except Exception as e:
-        print(f"❌ Ошибка выдачи отчета: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        err_tb = traceback.format_exc()
+        print(f"❌ get_map_report: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_map_report", "error_type": type(e).__name__, "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
 
 
 @app.route('/api/analyze-screenshot', methods=['POST'])
@@ -6209,131 +6433,123 @@ def admin_sync_business_yandex(business_id):
     Ручной запуск синхронизации Яндекс-данных для одного бизнеса.
     Требует действующей сессии и прав суперадмина или владельца бизнеса.
     """
-    print(f"🔄 Запрос на синхронизацию бизнеса {business_id}")
     import traceback
+    print(f"🔄 Запрос на синхронизацию бизнеса {business_id}")
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            print("❌ Отсутствует заголовок авторизации")
             return jsonify({"error": "Требуется авторизация"}), 401
 
         token = auth_header.split(' ')[1]
         user_data = verify_session(token)
         if not user_data:
-            print("❌ Недействительный токен")
             return jsonify({"error": "Недействительный токен"}), 401
-
-        print(f"✅ Пользователь авторизован: {user_data.get('email', 'unknown')}")
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
         cursor.execute("SELECT owner_id, name FROM businesses WHERE id = %s", (business_id,))
-        business = cursor.fetchone()
+        raw_business = cursor.fetchone()
+        business = _row_to_dict(cursor, raw_business) if raw_business else None
 
         if not business:
             db.close()
-            print(f"❌ Бизнес {business_id} не найден")
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        business_owner_id = business[0]
-        business_name = business[1] if len(business) > 1 else 'Unknown'
-        print(f"📊 Бизнес найден: {business_name}, владелец: {business_owner_id}")
+        business_owner_id = business.get("owner_id")
+        business_name = (business.get("name") or "").strip() or "Unknown"
 
         if business_owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
-            print(f"❌ Нет доступа: пользователь {user_data['user_id']} не является владельцем бизнеса")
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Ищем аккаунт Яндекс.Бизнес для этого бизнеса
-        print(f"🔍 Поиск аккаунта Яндекс.Бизнес для бизнеса {business_id}...")
+        # Аккаунт Яндекс.Бизнес (таблица externalbusinessaccounts — Postgres)
         cursor.execute("""
-            SELECT id, auth_data_encrypted, external_id 
-            FROM ExternalBusinessAccounts 
-            WHERE business_id = ? AND source = 'yandex_business' AND is_active = 1
+            SELECT id, auth_data_encrypted, external_id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
             ORDER BY created_at DESC
             LIMIT 1
         """, (business_id,))
-        account_row = cursor.fetchone()
-        
-        account_id = None
-        if account_row:
-             account_id = account_row[0]
-             print(f"✅ Найден аккаунт: {account_id}")
-        else:
-             print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
+        raw_account = cursor.fetchone()
+        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
+        account_id = account_row.get("id") if account_row else None
 
-        # Ищем ссылку на карты (NEW)
-        print(f"🔍 Поиск ссылки на карты для бизнеса {business_id}...")
+        if account_id:
+            print(f"✅ Найден аккаунт: {account_id}")
+        else:
+            print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
+
         cursor.execute("SELECT url FROM businessmaplinks WHERE business_id = %s AND map_type = 'yandex' LIMIT 1", (business_id,))
-        map_link_row = cursor.fetchone()
-        map_url = map_link_row['url'] if isinstance(map_link_row, dict) else (map_link_row[0] if map_link_row else None)
-        
+        raw_map = cursor.fetchone()
+        map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
+        map_url = map_link_row.get("url") if map_link_row else None
+
         if not account_id and not map_url:
-            print(f"❌ Не найден ни аккаунт Яндекс.Бизнес, ни ссылка на карты для бизнеса {business_id}")
             db.close()
             return jsonify({
                 "success": False,
                 "error": "Не найден источник данных",
                 "message": "Для запуска парсинга добавьте ссылку на Яндекс.Карты или подключите аккаунт Яндекс.Бизнес"
             }), 400
-            
-        # Определяем тип задачи
+
         task_id = str(uuid.uuid4())
         user_id = user_data["user_id"]
-        
+
         if map_url:
             task_type = 'parse_card'
-            source = 'yandex_maps'  # Worker ожидает это для parse_card? В worker.py source используется для fallback.
+            source = 'yandex_maps'
             target_url = map_url
-            print(f"✅ Найдена ссылка на карты: {map_url}. Запуск парсинга (с фоллбеком на синхронизацию).")
             message = "Запущен парсинг карт"
         else:
             task_type = 'sync_yandex_business'
             source = 'yandex_business'
             target_url = ''
-            print(f"⚠️ Ссылка на карты не найдена, но есть аккаунт. Запуск прямой синхронизации.")
             message = "Запущена синхронизация (без парсинга)"
 
-        print(f"🔄 Добавление задачи {task_type} в очередь для бизнеса {business_id}")
-        
-        try:
-            cursor.execute("""
-                INSERT INTO ParseQueue (
-                    id, business_id, account_id, task_type, source, 
-                    status, user_id, url, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, 
-                        'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
-            db.conn.commit()
-            print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
-        except Exception as e:
-            db.close()
-            print(f"❌ Ошибка при добавлении задачи в очередь: {e}")
-            return jsonify({
-                "success": False,
-                "error": f"Ошибка при добавлении задачи в очередь: {str(e)}"
-            }), 500
-        finally:
-            db.close()
-        
+        cursor.execute("""
+            INSERT INTO parsequeue (
+                id, business_id, account_id, task_type, source,
+                status, user_id, url, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s,
+                    'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
+        db.conn.commit()
+        db.close()
+        print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
+
         return jsonify({
             "success": True,
             "message": message,
             "sync_id": task_id,
             "task_type": task_type
         })
-    
+
     except Exception as e:
         error_details = traceback.format_exc()
-        print(f"❌ Критическая ошибка в admin_sync_business_yandex: {e}")
-        print(f"❌ Детали ошибки:\n{error_details}")
-        return jsonify({
+        print(f"❌ admin_sync_business_yandex: {e}\n{error_details}")
+        payload = {
             "success": False,
-            "error": f"Критическая ошибка: {str(e)}",
-            "message": str(e)
-        }), 500
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
+        if getattr(app, "debug", False):
+            payload["traceback"] = error_details
+        return jsonify(payload), 500
+
+
+@app.route('/api/admin/2gis/sync/business/<string:business_id>', methods=['POST'])
+def admin_sync_business_2gis(business_id):
+    """
+    Stub: 2ГИС синхронизация пока не реализована. Возвращает 501 JSON (без 404/HTML).
+    """
+    return jsonify({
+        "success": False,
+        "message": "2ГИС синк пока не реализован",
+        "where": "admin_sync_business_2gis"
+    }), 501
+
 
 def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
     """Внутренняя функция для выполнения синхронизации (вызывается из worker)"""
@@ -6346,25 +6562,28 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
     
     try:
         cursor.execute("""
-            SELECT auth_data_encrypted, external_id 
-            FROM ExternalBusinessAccounts 
-            WHERE id = ?
+            SELECT auth_data_encrypted, external_id
+            FROM externalbusinessaccounts
+            WHERE id = %s
         """, (account_id,))
-        account_row = cursor.fetchone()
+        raw_account = cursor.fetchone()
+        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
         
         if not account_row:
             print(f"❌ Аккаунт {account_id} не найден")
-            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                         ("Аккаунт не найден", sync_id))
+            cursor.execute("""
+                UPDATE parsequeue SET status = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s
+            """, (STATUS_ERROR, "Аккаунт не найден", sync_id))
             db.conn.commit()
             return False
         
-        auth_data_encrypted = account_row[0]
-        external_id = account_row[1] if len(account_row) > 1 else None
+        auth_data_encrypted = account_row.get("auth_data_encrypted")
+        external_id = account_row.get("external_id")
         
         cursor.execute("SELECT name FROM businesses WHERE id = %s", (business_id,))
-        business_row = cursor.fetchone()
-        business_name = business_row[0] if business_row else 'Unknown'
+        raw_business = cursor.fetchone()
+        business_row = _row_to_dict(cursor, raw_business) if raw_business else None
+        business_name = (business_row.get("name") or "").strip() or "Unknown"
         
         db.close()
         
@@ -6568,51 +6787,38 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
             # Обновляем last_sync_at
             cursor = db.conn.cursor()
             cursor.execute("""
-                UPDATE ExternalBusinessAccounts 
+                UPDATE externalbusinessaccounts
                 SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
-                WHERE id = ?
+                WHERE id = %s
             """, (account_id,))
         
-            # Сохраняем историю парсинга в MapParseResults
+            # Сохраняем срез в cards (Postgres source of truth вместо MapParseResults)
             try:
                 cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
-                yandex_url_row = cursor.fetchone()
-                yandex_url = yandex_url_row[0] if yandex_url_row else None
-                
+                raw_url = cursor.fetchone()
+                yandex_url = (_row_to_dict(cursor, raw_url) or {}).get("yandex_url") if raw_url else None
                 if not yandex_url and external_id:
                     yandex_url = f"https://yandex.ru/sprav/{external_id}"
-                
-                parse_id = str(uuid.uuid4())
-                reviews_without_response = sum(1 for r in reviews if not r.response_text) if reviews else 0
-                
-                cursor.execute("""
-                    INSERT INTO MapParseResults (
-                        id, business_id, url, map_type, rating, reviews_count, 
-                        unanswered_reviews_count, news_count, photos_count, 
-                        created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, (
-                    parse_id,
+                url = yandex_url or f"https://yandex.ru/sprav/{external_id or 'unknown'}"
+                rating_val = org_info.get('rating') if org_info else None
+                reviews_cnt = len(reviews) if reviews else 0
+                photos_cnt = org_info.get('photos_count', 0) if org_info else 0
+                db.save_new_card_version(
                     business_id,
-                yandex_url or f"https://yandex.ru/sprav/{external_id or 'unknown'}",
-                    'yandex',
-                    org_info.get('rating') if org_info else None,
-                    len(reviews) if reviews else 0,
-                    reviews_without_response,
-                    len(posts) if posts else 0,
-                    org_info.get('photos_count', 0) if org_info else 0,
-                ))
+                    url=url,
+                    rating=float(rating_val) if rating_val is not None else None,
+                    reviews_count=reviews_cnt,
+                    overview=json.dumps({"photos_count": photos_cnt, "posts_count": len(posts) if posts else 0}, ensure_ascii=False),
+                )
                 db.conn.commit()
-                print(f"💾 Сохранена история парсинга: {parse_id}")
+                print(f"💾 Сохранена история в cards для business_id={business_id}")
             except Exception as e:
-                print(f"⚠️ Ошибка сохранения истории парсинга: {e}")
+                print(f"⚠️ Ошибка сохранения в cards: {e}")
                 import traceback
                 traceback.print_exc()
         
-        # Обновляем статус задачи на completed
         cursor = db.conn.cursor()
-        cursor.execute("UPDATE SyncQueue SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (sync_id,))
+        cursor.execute("UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (STATUS_COMPLETED, sync_id))
         db.conn.commit()
         db.close()
         
@@ -6622,37 +6828,17 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"❌ Ошибка при синхронизации бизнеса {business_id}: {e}")
-        print(f"❌ Детали ошибки:\n{error_details}")
-            
-        # Сохраняем ошибку в SyncQueue и ExternalBusinessAccounts
+        print(f"❌ Ошибка при синхронизации бизнеса {business_id}: {e}\n{error_details}")
         try:
             db = DatabaseManager()
             cursor = db.conn.cursor()
-            cursor.execute("UPDATE SyncQueue SET status = 'error', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
-                         (str(e), sync_id))
-            cursor.execute("UPDATE ExternalBusinessAccounts SET last_error = ? WHERE id = ?", (str(e), account_id))
+            cursor.execute("UPDATE parsequeue SET status = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", (STATUS_ERROR, str(e), sync_id))
+            cursor.execute("UPDATE externalbusinessaccounts SET last_error = %s WHERE id = %s", (str(e), account_id))
             db.conn.commit()
             db.close()
         except Exception as save_error:
             print(f"⚠️ Не удалось сохранить ошибку в БД: {save_error}")
-            
         return False
-    except Exception as e:
-        error_details = traceback.format_exc()
-        print(f"❌ Критическая ошибка в admin_sync_business_yandex: {e}")
-        print(f"❌ Детали ошибки:\n{error_details}")
-        return jsonify({
-            "success": False,
-            "error": f"Критическая ошибка: {str(e)}",
-            "message": str(e)
-        }), 500
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"❌ Ошибка синхронизации Яндекс для бизнеса {business_id}: {e}")
-        print(f"❌ Детали ошибки:\n{error_details}")
-        return jsonify({"error": f"Ошибка синхронизации Яндекс для бизнеса: {str(e)}"}), 500
 
 @app.route('/api/admin/yandex/sync/status/<string:sync_id>', methods=['GET'])
 def admin_sync_status(sync_id):
@@ -6672,20 +6858,20 @@ def admin_sync_status(sync_id):
         
         cursor.execute("""
             SELECT id, business_id, account_id, source, status, error_message, created_at, updated_at
-            FROM ParseQueue 
-            WHERE id = ? AND task_type = 'sync_yandex_business'
+            FROM parsequeue
+            WHERE id = %s AND task_type = 'sync_yandex_business'
         """, (sync_id,))
-        sync_row = cursor.fetchone()
+        raw_sync = cursor.fetchone()
+        sync_data = _row_to_dict(cursor, raw_sync) if raw_sync else None
         
-        if not sync_row:
+        if not sync_data:
             db.close()
             return jsonify({"error": "Синхронизация не найдена"}), 404
         
-        sync_data = dict(sync_row)
-        
         cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (sync_data['business_id'],))
-        owner_row = cursor.fetchone()
-        owner_id = owner_row[0] if owner_row else None
+        raw_owner = cursor.fetchone()
+        owner_row = _row_to_dict(cursor, raw_owner) if raw_owner else None
+        owner_id = owner_row.get("owner_id") if owner_row else None
         
         if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
@@ -8690,10 +8876,19 @@ def get_users_with_businesses():
         return jsonify({"success": True, "users": users_with_businesses})
         
     except Exception as e:
-        print(f"❌ Ошибка получения пользователей с бизнесами: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        error_traceback = traceback.format_exc()
+        print(f"❌ Ошибка получения пользователей с бизнесами: {e}")
+        print(f"❌ Полный traceback:\n{error_traceback}")
+        # Всегда возвращаем JSON с подробной ошибкой (для dev).
+        payload = {
+            "detail": "internal_error in /api/admin/users-with-businesses",
+            "where": "main.get_users_with_businesses",
+            "error_type": e.__class__.__name__,
+            "error": str(e),
+            "traceback": error_traceback,
+        }
+        return jsonify(payload), 500
 
 @app.route('/api/admin/businesses/<business_id>/block', methods=['POST'])
 def block_business(business_id):
@@ -8847,12 +9042,23 @@ def get_network_locations(business_id):
         locations = db.get_businesses_by_network(network_id)
         print(f"🔍 API DEBUG: Found {len(locations)} locations for network {network_id}")
         
+        # Нормализация: алиас website = site для фронта, пустые строки вместо NULL
+        def _norm_loc(loc):
+            if not loc or not isinstance(loc, dict):
+                return loc
+            site_val = loc.get("site") or loc.get("website") or ""
+            out = {k: (v if v is not None else "") for k, v in loc.items() if isinstance(k, str)}
+            out["website"] = site_val
+            out["site"] = loc.get("site") or loc.get("website") or ""
+            return out
+
+        normalized_locations = [_norm_loc(loc) for loc in locations]
         db.close()
-        
+
         return jsonify({
             "success": True,
             "is_network": (business_id == network_id),
-            "locations": locations
+            "locations": normalized_locations
         })
         
     except Exception as e:

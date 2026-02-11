@@ -12,16 +12,204 @@ import time
 import random
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse, parse_qs
+import os
+from datetime import datetime
 
 from browser_session import BrowserSession, BrowserSessionManager
+
+DEBUG_DIR = os.getenv("DEBUG_DIR", "/app/debug_data")
+
+# Только ключи, передаваемые в manager.open_session (parser_interception) или используемые воркером.
+ALLOWED_SESSION_KWARGS = {
+    "headless",
+    "cookies",
+    "user_agent",
+    "viewport",
+    "locale",
+    "timezone_id",
+    "proxy",
+    "launch_args",
+    "init_scripts",
+    "geolocation",
+}
+
+def _find_paths(obj: Any, target_keys: List[str], max_depth: int = 6, max_preview_len: int = 120,
+                max_results_per_key: int = 20) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Dev-only утилита: найти пути к ключам target_keys в произвольном JSON (dict/list).
+
+    Возвращает словарь:
+      { key: [ { "path": "payload.company.rubrics[0].name", "preview": "..." }, ... ] }
+    """
+    targets = set(target_keys)
+    results: Dict[str, List[Dict[str, str]]] = {k: [] for k in targets}
+
+    def _add_result(key: str, path: str, value: Any) -> None:
+        bucket = results.setdefault(key, [])
+        if len(bucket) >= max_results_per_key:
+            return
+        try:
+            if isinstance(value, (dict, list)):
+                preview = json.dumps(value, ensure_ascii=False)
+            else:
+                preview = str(value)
+        except Exception:
+            preview = repr(value)
+        if len(preview) > max_preview_len:
+            preview = preview[:max_preview_len] + "…"
+        bucket.append({"path": path, "preview": preview})
+
+    def _walk(node: Any, path: str, depth: int) -> None:
+        if depth > max_depth:
+            return
+        if isinstance(node, dict):
+            for k, v in node.items():
+                new_path = f"{path}.{k}" if path else k
+                if k in targets:
+                    _add_result(k, new_path, v)
+                _walk(v, new_path, depth + 1)
+        elif isinstance(node, list):
+            for idx, item in enumerate(node):
+                new_path = f"{path}[{idx}]" if path else f"[{idx}]"
+                _walk(item, new_path, depth + 1)
+
+    _walk(obj, "", 0)
+    return {k: v for k, v in results.items() if v}
+
+
+def _set_if_empty(result: Dict[str, Any], key: str, value: Any) -> None:
+    """
+    Поставить result[key] только если там сейчас "пусто" и value осмысленное.
+    Пусто: None, '', [], {}.
+    """
+    if value is None:
+        return
+    if isinstance(value, str) and not value.strip():
+        return
+
+    current = result.get(key)
+    if current is None or current == "" or current == [] or current == {}:
+        result[key] = value
+
+
+def _extend_unique(result: Dict[str, Any], key: str, items: List[Any]) -> None:
+    """
+    Добавить строки в список result[key] без дублей, не затирая существующее.
+    """
+    if not items:
+        return
+
+    # Для categories храним только список строк (имен/меток), без dict и других типов.
+    if key == "categories":
+        def _cat_str_from_item(it: Any) -> Optional[str]:
+            if isinstance(it, str):
+                s = it.strip()
+                return s or None
+            if isinstance(it, dict):
+                for k in ("name", "label", "text", "title"):
+                    v = it.get(k)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip()
+            return None
+
+        existing_raw = result.get(key)
+        existing_list: List[str] = []
+        if isinstance(existing_raw, list):
+            for it in existing_raw:
+                s = _cat_str_from_item(it)
+                if s and s not in existing_list:
+                    existing_list.append(s)
+        elif isinstance(existing_raw, str) and existing_raw.strip():
+            existing_list = [existing_raw.strip()]
+
+        seen = set(existing_list)
+        for item in items:
+            s = _cat_str_from_item(item)
+            if not s or s in seen:
+                continue
+            existing_list.append(s)
+            seen.add(s)
+
+        result[key] = existing_list
+        return
+
+    # Общий случай: сохраняем типы как есть, но избегаем дублей по строковому представлению.
+    existing = result.get(key)
+    if existing is None:
+        existing_list: List[Any] = []
+    elif isinstance(existing, list):
+        existing_list = existing
+    else:
+        existing_list = [existing]
+
+    seen = {str(x) for x in existing_list}
+    for item in items:
+        s = str(item)
+        if s in seen:
+            continue
+        existing_list.append(item)
+        seen.add(s)
+
+    result[key] = existing_list
+
+
+def _get_nested(obj: Any, path: str) -> Any:
+    """
+    Достать значение по пути вида "payload.company.rubrics[0].name"
+    с поддержкой индексов [0].
+    """
+    if not path:
+        return obj
+
+    # Разбиваем по точкам, внутри каждой части могут быть индексы [0]
+    for part in path.split("."):
+        if not part:
+            continue
+        # Выделяем ключ и индексы.
+        # Пример part: "rubrics[0][1]"
+        i = 0
+        key = ""
+        # Собираем буквенно-цифровую часть до первой скобки
+        while i < len(part) and part[i] != "[":
+            key += part[i]
+            i += 1
+
+        if key:
+            if not isinstance(obj, dict):
+                return None
+            obj = obj.get(key)
+            if obj is None:
+                return None
+
+        # Обрабатываем индексы вида [0]
+        while i < len(part):
+            if part[i] != "[":
+                return None
+            j = part.find("]", i)
+            if j == -1:
+                return None
+            index_str = part[i + 1 : j]
+            try:
+                idx = int(index_str)
+            except ValueError:
+                return None
+            if not isinstance(obj, list) or idx < 0 or idx >= len(obj):
+                return None
+            obj = obj[idx]
+            i = j + 1
+
+    return obj
 
 
 class YandexMapsInterceptionParser:
     """Парсер Яндекс.Карт через перехват сетевых запросов"""
     
-    def __init__(self):
-        self.api_responses = {}
-        self.org_id = None
+    def __init__(self, debug_bundle_id: Optional[str] = None):
+        self.api_responses: Dict[str, Any] = {}
+        self.org_id: Optional[str] = None
+        self.debug_bundle_id: Optional[str] = debug_bundle_id
+        _base = os.getenv("DEBUG_DIR", "/app/debug_data")
+        self.debug_bundle_dir: Optional[str] = os.path.join(_base, debug_bundle_id) if debug_bundle_id else None
         
     def extract_org_id(self, url: str) -> Optional[str]:
         """Извлечь org_id из URL Яндекс.Карт
@@ -61,8 +249,27 @@ class YandexMapsInterceptionParser:
         
         print(f"📋 Извлечен org_id: {self.org_id}")
 
+        # Инициализируем bundle-директорию для этого прогона (если ещё не задана в __init__)
+        if not self.debug_bundle_id:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.debug_bundle_id = f"yandex_{self.org_id}_{ts}"
+        if not self.debug_bundle_dir:
+            self.debug_bundle_dir = os.path.join(os.getenv("DEBUG_DIR", "/app/debug_data"), self.debug_bundle_id)
+        try:
+            if self.debug_bundle_dir:
+                os.makedirs(self.debug_bundle_dir, exist_ok=True)
+        except Exception as e:
+            print(f"⚠️ Не удалось создать debug bundle dir {self.debug_bundle_dir}: {e}")
+        else:
+            if self.debug_bundle_dir:
+                print(f"[DEBUG_BUNDLE] {self.debug_bundle_dir}")
+
         context = session.context
         page = session.page
+
+        # Базовая информация для debug bundle
+        initial_url = url
+        main_http_status: Optional[int] = None
 
         # Очищаем предыдущие ответы
         self.api_responses = {}
@@ -82,24 +289,18 @@ class YandexMapsInterceptionParser:
                             # Пытаемся получить JSON
                             json_data = response.json()
 
-                            # DEBUG: Save to file for inspection
-                            try:
-                                import os
-
-                                debug_dir = os.path.join(os.getcwd(), "debug_data")
-                                os.makedirs(debug_dir, exist_ok=True)
-
-                                # Create filename from URL path last part or timestamp
-                                clean_url = url.split("?")[0].replace("/", "_").replace(":", "")[-50:]
-                                timestamp = int(time.time() * 1000)
-                                filename = f"{timestamp}_{clean_url}.json"
-                                filepath = os.path.join(debug_dir, filename)
-
-                                with open(filepath, "w", encoding="utf-8") as f:
-                                    json.dump(json_data, f, ensure_ascii=False, indent=2)
-                                print(f"💾 Saved debug response: {filename}")
-                            except Exception as e:
-                                print(f"Failed to save debug json: {e}")
+                            # DEBUG: Save to file for inspection (только при наличии bundle)
+                            if self.debug_bundle_dir:
+                                try:
+                                    os.makedirs(self.debug_bundle_dir, exist_ok=True)
+                                    clean_url = url.split("?")[0].replace("/", "_").replace(":", "")[-50:]
+                                    timestamp = int(time.time() * 1000)
+                                    filename = f"{timestamp}_{clean_url}.json"
+                                    filepath = os.path.join(self.debug_bundle_dir, filename)
+                                    with open(filepath, "w", encoding="utf-8") as f:
+                                        json.dump(json_data, f, ensure_ascii=False, indent=2)
+                                except Exception as e:
+                                    print(f"Failed to save debug json: {e}")
 
                             # Check for organization data (search or location-info)
                             if json_data:
@@ -135,7 +336,12 @@ class YandexMapsInterceptionParser:
         # Загружаем страницу
         print("🌐 Загружаем страницу и перехватываем API запросы...")
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            main_response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                if main_response is not None:
+                    main_http_status = main_response.status
+            except Exception:
+                main_http_status = None
 
             # Проверяем на капчу с ожиданием решения
             for _ in range(24):  # Ждем до 120 секунд
@@ -207,13 +413,15 @@ class YandexMapsInterceptionParser:
         if (not is_business_card) or ("yandex.ru" in current_url and "/org/" not in current_url):
             print("⚠️ Не похоже на карточку организации! (Редирект?). Пробуем перейти по ссылке снова...")
 
-            # Debug: Save bad page
-            try:
-                with open("debug_data/redirect_page.html", "w", encoding="utf-8") as f:
-                    f.write(page.content())
-                print("💾 Сохранена HTML страница редиректа в debug_data/redirect_page.html")
-            except Exception:
-                pass
+            # Debug: Save bad page (только при наличии bundle)
+            if self.debug_bundle_dir:
+                try:
+                    html_redirect = page.content()
+                    os.makedirs(self.debug_bundle_dir, exist_ok=True)
+                    with open(os.path.join(self.debug_bundle_dir, "redirect_page.html"), "w", encoding="utf-8") as f:
+                        f.write(html_redirect or "")
+                except Exception:
+                    pass
 
             page.goto(url, wait_until="domcontentloaded")
             try:
@@ -229,11 +437,14 @@ class YandexMapsInterceptionParser:
                 print("✅ Карточка загружена (после повторного перехода)")
             except PlaywrightTimeoutError:
                 print("❌ Не удалось загрузить карточку даже после повторного перехода. Возможно бан.")
-                try:
-                    with open("debug_data/failed_page_final.html", "w", encoding="utf-8") as f:
-                        f.write(page.content())
-                except Exception:
-                    pass
+                if self.debug_bundle_dir:
+                    try:
+                        html_failed = page.content()
+                        os.makedirs(self.debug_bundle_dir, exist_ok=True)
+                        with open(os.path.join(self.debug_bundle_dir, "failed_page_final.html"), "w", encoding="utf-8") as f:
+                            f.write(html_failed or "")
+                    except Exception:
+                        pass
         else:
             print("✅ Страница похожа на карточку организации.")
 
@@ -591,6 +802,212 @@ class YandexMapsInterceptionParser:
                 except Exception:
                     pass
 
+        # DEBUG BUNDLE (dev): сохранить сводку по странице и перехваченным данным (только при наличии bundle)
+        if self.debug_bundle_dir:
+            try:
+                debug_dir = self.debug_bundle_dir
+                os.makedirs(debug_dir, exist_ok=True)
+
+                final_url = page.url
+                page_title = ""
+                try:
+                    page_title = page.title()
+                except Exception:
+                    pass
+
+                html_content = ""
+                try:
+                    html_content = page.content()
+                except Exception:
+                    pass
+                html_length = len(html_content or "")
+
+                intercepted_json_count = len(self.api_responses)
+                all_urls = list(self.api_responses.keys())
+                last_10_urls = all_urls[-10:]
+
+                # Топ-3 самых крупных JSON-ответа по длине body
+                sized = []
+                for u, info in self.api_responses.items():
+                    try:
+                        body = info.get("data")
+                        body_str = json.dumps(body, ensure_ascii=False)
+                        sized.append((u, len(body_str)))
+                    except Exception:
+                        continue
+                sized.sort(key=lambda x: x[1], reverse=True)
+                top_3_urls = [u for (u, _) in sized[:3]]
+
+                # Информация о cookies и доменах
+                cookie_domains = set()
+                final_host = ""
+                try:
+                    parsed = urlparse(final_url)
+                    final_host = parsed.hostname or ""
+                except Exception:
+                    final_host = ""
+
+                try:
+                    cookies = context.cookies()
+                    for c in cookies:
+                        dom = c.get("domain")
+                        if dom:
+                            cookie_domains.add(dom)
+                except Exception:
+                    pass
+
+                # Признаки блокировки / капчи
+                blocked_flags = {
+                    "has_captcha_text": any(
+                        kw in (page_title or "")
+                        for kw in ["Ой!", "Captcha", "Robot", "Вы не робот"]
+                    ),
+                    "html_contains_captcha": ("smart-captcha" in (html_content or "")),
+                }
+
+                timestamp = int(time.time() * 1000)
+                safe_org = (self.org_id or "unknown")[:32]
+                summary_name = f"debug_{timestamp}_{safe_org}.json"
+                html_name = f"debug_{timestamp}_{safe_org}.html"
+                screenshot_name = f"debug_{timestamp}_{safe_org}.png"
+
+                summary_path = os.path.join(debug_dir, summary_name)
+                html_path = os.path.join(debug_dir, html_name)
+                screenshot_path = os.path.join(debug_dir, screenshot_name)
+
+                debug_summary = {
+                    "final_url": final_url,
+                    "page_title": page_title,
+                    "html_length": html_length,
+                    "intercepted_json_count": intercepted_json_count,
+                    "last_10_json_urls": last_10_urls,
+                    "top_3_largest_json_urls": top_3_urls,
+                    "cookie_domains": sorted(cookie_domains),
+                    "final_host": final_host,
+                    "blocked_flags": blocked_flags,
+                    "org_id": self.org_id,
+                }
+
+                # Поиск ключевых путей в крупнейших JSON-ответах
+                target_keys = [
+                    "address",
+                    "address_name",
+                    "fullAddress",
+                    "rating",
+                    "score",
+                    "ratingData",
+                    "rubrics",
+                    "categories",
+                    "rubric",
+                ]
+                found_key_paths: Dict[str, List[Dict[str, str]]] = {}
+                for u in top_3_urls:
+                    info = self.api_responses.get(u)
+                    if not info:
+                        continue
+                    data = info.get("data")
+                    try:
+                        paths = _find_paths(data, target_keys)
+                        for key, items in paths.items():
+                            bucket = found_key_paths.setdefault(key, [])
+                            # лимитируем общий размер по ключу
+                            for item in items:
+                                if len(bucket) >= 30:
+                                    break
+                                bucket.append({"url": u, **item})
+                    except Exception:
+                        continue
+
+                if found_key_paths:
+                    debug_summary["found_key_paths"] = found_key_paths
+
+                with open(summary_path, "w", encoding="utf-8") as f:
+                    json.dump(debug_summary, f, ensure_ascii=False, indent=2)
+
+                if html_content:
+                    with open(html_path, "w", encoding="utf-8") as f:
+                        f.write(html_content)
+
+                try:
+                    page.screenshot(path=screenshot_path, full_page=True)
+                except Exception:
+                    pass
+
+                print(f"💾 Debug bundle saved: {summary_name}, {html_name}, {screenshot_name}")
+            except Exception as e:
+                print(f"⚠️ Failed to save debug bundle: {e}")
+
+        # DEV-лог по итоговым полям
+        try:
+            cats = data.get("categories") or []
+            if isinstance(cats, list):
+                categories_count = len(cats)
+            elif cats:
+                categories_count = 1
+            else:
+                categories_count = 0
+
+            quality_score = None
+            meta = data.get("_meta")
+            if isinstance(meta, dict):
+                quality_score = meta.get("quality_score")
+
+            print(
+                f"DEV summary: title='{str(data.get('title', ''))[:80]}', "
+                f"address_present={bool(data.get('address'))}, "
+                f"rating='{data.get('rating', '')}', "
+                f"reviews_count={data.get('reviews_count')}, "
+                f"categories_count={categories_count}, "
+                f"quality_score={quality_score}"
+            )
+        except Exception:
+            pass
+
+        # Канонический debug bundle для расследований:
+        # request_url.txt, final_url.txt, http_status.txt, page.html, payload.json
+        if self.debug_bundle_dir:
+            try:
+                bundle_dir = self.debug_bundle_dir
+                os.makedirs(bundle_dir, exist_ok=True)
+
+                # HTML последней страницы — всегда сохраняем
+                try:
+                    page_html = page.content()
+                except Exception:
+                    page_html = html_content or ""
+                with open(os.path.join(bundle_dir, "page.html"), "w", encoding="utf-8") as f:
+                    f.write(page_html or "")
+
+                # Исходный URL
+                try:
+                    with open(os.path.join(bundle_dir, "request_url.txt"), "w", encoding="utf-8") as f:
+                        f.write(initial_url or "")
+                except Exception:
+                    pass
+
+                # Финальный URL
+                try:
+                    with open(os.path.join(bundle_dir, "final_url.txt"), "w", encoding="utf-8") as f:
+                        f.write(final_url or "")
+                except Exception:
+                    pass
+
+                # HTTP статус основного запроса
+                try:
+                    with open(os.path.join(bundle_dir, "http_status.txt"), "w", encoding="utf-8") as f:
+                        f.write("" if main_http_status is None else str(main_http_status))
+                except Exception:
+                    pass
+
+                # Сырой payload (итоговый card_data)
+                try:
+                    with open(os.path.join(bundle_dir, "payload.json"), "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(f"⚠️ Failed to write payload.json: {e}")
+            except Exception as e:
+                print(f"⚠️ Failed to write canonical debug bundle files: {e}")
+
         print(
             f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'"
         )
@@ -767,29 +1184,44 @@ class YandexMapsInterceptionParser:
                 if title_cand and title_cand not in ['Санкт-Петербург', 'Россия', 'Яндекс Карты', 'Москва']:
                     result['title'] = title_cand
                 
-                # Ищем адрес
+                # Ищем адрес (стандартный ключ + альтернативы для разных эндпоинтов)
+                addr_val = None
                 if 'address' in data:
                     addr = data['address']
                     if isinstance(addr, dict):
-                        result['address'] = addr.get('formatted', '') or addr.get('full', '') or addr.get('text', '') or str(addr)
+                        addr_val = addr.get('formatted', '') or addr.get('full', '') or addr.get('text', '') or str(addr)
                     else:
-                        result['address'] = str(addr)
+                        addr_val = str(addr)
+                if not addr_val:
+                    addr_val = data.get('address_name') or data.get('fullAddress') or data.get('full_address') or ''
+                if addr_val and isinstance(addr_val, str) and len(addr_val.strip()) > 2:
+                    _set_if_empty(result, "address", addr_val.strip())
                 
                 # Ищем рейтинг
                 if 'rating' in data:
                     rating = data['rating']
                     if isinstance(rating, (int, float)):
-                        result['rating'] = str(rating)
+                        _set_if_empty(result, "rating", str(rating))
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value', rating.get('score', rating.get('val', ''))))
+                        _set_if_empty(
+                            result,
+                            "rating",
+                            str(rating.get('value', rating.get('score', rating.get('val', '')))),
+                        )
                 elif 'score' in data:
-                    result['rating'] = str(data['score'])
+                    _set_if_empty(result, "rating", str(data['score']))
                 
                 # Ищем количество отзывов
                 if 'reviewsCount' in data:
-                    result['reviews_count'] = int(data['reviewsCount'])
+                    try:
+                        _set_if_empty(result, "reviews_count", int(data['reviewsCount']))
+                    except (TypeError, ValueError):
+                        pass
                 elif 'reviews_count' in data:
-                    result['reviews_count'] = int(data['reviews_count'])
+                    try:
+                        _set_if_empty(result, "reviews_count", int(data['reviews_count']))
+                    except (TypeError, ValueError):
+                        pass
                 
                 # Рекурсивно обходим вложенные объекты
                 for value in data.values():
@@ -821,13 +1253,18 @@ class YandexMapsInterceptionParser:
                         # print(f"✅ [Parser] Found title: {title_cand}")
                         result['title'] = title_cand
                 
-                # Ищем адрес
+                # Ищем адрес (стандартный ключ + альтернативы для разных эндпоинтов)
+                addr_val = None
                 if 'address' in data:
                     addr = data['address']
                     if isinstance(addr, dict):
-                        result['address'] = addr.get('formatted', '') or addr.get('full', '') or addr.get('text', '') or str(addr)
+                        addr_val = addr.get('formatted', '') or addr.get('full', '') or addr.get('text', '') or str(addr)
                     else:
-                        result['address'] = str(addr)
+                        addr_val = str(addr)
+                if not addr_val:
+                    addr_val = data.get('address_name') or data.get('fullAddress') or data.get('full_address') or ''
+                if addr_val and isinstance(addr_val, str) and len(addr_val.strip()) > 2:
+                    result['address'] = addr_val.strip()
                 
                 # Ищем рейтинг
                 if 'rating' in data:
@@ -857,6 +1294,57 @@ class YandexMapsInterceptionParser:
                 elif 'reviews_count' in data:
                     result['reviews_count'] = int(data['reviews_count'])
                 
+                # Ищем категории / рубрики
+                if 'rubrics' in data and isinstance(data['rubrics'], list):
+                    names = []
+                    for r in data['rubrics']:
+                        if isinstance(r, dict):
+                            n = r.get('name') or r.get('label')
+                            if n:
+                                names.append(str(n))
+                    if names:
+                        result['categories'] = names
+                elif 'categories' in data:
+                    cats = data['categories']
+                    if isinstance(cats, list) and cats:
+                        # Уже список строк или объектов
+                        result['categories'] = cats
+                    elif isinstance(cats, dict) and cats:
+                        result['categories'] = [cats]
+                elif 'rubric' in data:
+                    rub = data['rubric']
+                    if isinstance(rub, str) and rub.strip():
+                        result['categories'] = [rub.strip()]
+                    elif isinstance(rub, dict):
+                        n = rub.get('name') or rub.get('label')
+                        if n:
+                            result['categories'] = [str(n)]
+                
+                # Ищем категории / рубрики
+                if 'rubrics' in data and isinstance(data['rubrics'], list):
+                    names = []
+                    for r in data['rubrics']:
+                        if isinstance(r, dict):
+                            n = r.get('name') or r.get('label')
+                            if n:
+                                names.append(str(n))
+                    if names:
+                        _extend_unique(result, 'categories', names)
+                elif 'categories' in data:
+                    cats = data['categories']
+                    if isinstance(cats, list) and cats:
+                        _extend_unique(result, 'categories', cats)
+                    elif isinstance(cats, dict) and cats:
+                        _extend_unique(result, 'categories', [cats])
+                elif 'rubric' in data:
+                    rub = data['rubric']
+                    if isinstance(rub, str) and rub.strip():
+                        _extend_unique(result, 'categories', [rub.strip()])
+                    elif isinstance(rub, dict):
+                        n = rub.get('name') or rub.get('label')
+                        if n:
+                            _extend_unique(result, 'categories', [str(n)])
+                
                 # Ищем телефон
                 if 'phones' in data:
                     phones = data['phones']
@@ -874,6 +1362,52 @@ class YandexMapsInterceptionParser:
                     extract_nested(value)
         
         extract_nested(json_data)
+
+        # Fallback по наиболее частым путям (payload.company.*)
+        try:
+            addr_nested = (
+                _get_nested(json_data, "payload.company.address.formatted")
+                or _get_nested(json_data, "payload.company.address_name")
+                or _get_nested(json_data, "payload.company.fullAddress")
+            )
+            _set_if_empty(result, "address", addr_nested)
+        except Exception:
+            pass
+
+        try:
+            rating_nested = (
+                _get_nested(json_data, "payload.company.ratingData.rating")
+                or _get_nested(json_data, "payload.company.ratingData.score")
+            )
+            _set_if_empty(result, "rating", rating_nested)
+        except Exception:
+            pass
+
+        try:
+            cnt = _get_nested(json_data, "payload.company.ratingData.count")
+            if isinstance(cnt, (int, float, str)):
+                try:
+                    cnt_int = int(cnt)
+                    _set_if_empty(result, "reviews_count", cnt_int)
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+
+        try:
+            rubrics = _get_nested(json_data, "payload.company.rubrics") or []
+            names = []
+            if isinstance(rubrics, list):
+                for r in rubrics:
+                    if isinstance(r, dict):
+                        n = r.get("name") or r.get("label")
+                        if n:
+                            names.append(str(n))
+            if names:
+                _extend_unique(result, "categories", names)
+        except Exception:
+            pass
+
         return result
     
     def _extract_organization_data(self, json_data: Any) -> Dict[str, Any]:
@@ -887,21 +1421,35 @@ class YandexMapsInterceptionParser:
                 if 'name' in data or 'title' in data:
                     result['title'] = data.get('name') or data.get('title', '')
                 
+                # Адрес: стандартный ключ + альтернативы (разные эндпоинты Яндекса)
+                addr_val = None
                 if 'address' in data:
                     addr = data['address']
                     if isinstance(addr, dict):
-                        result['address'] = addr.get('formatted', '') or addr.get('full', '') or str(addr)
+                        addr_val = addr.get('formatted', '') or addr.get('full', '') or addr.get('text', '') or str(addr)
                     else:
-                        result['address'] = str(addr)
+                        addr_val = str(addr)
+                if not addr_val and 'address_name' in data:
+                    addr_val = data.get('address_name') or ''
+                if not addr_val and 'fullAddress' in data:
+                    addr_val = data.get('fullAddress') or ''
+                if not addr_val and 'full_address' in data:
+                    addr_val = data.get('full_address') or ''
+                if addr_val and isinstance(addr_val, str) and len(addr_val.strip()) > 2:
+                    _set_if_empty(result, "address", addr_val.strip())
                 
                 if 'rating' in data:
                     rating = data['rating']
                     if isinstance(rating, (int, float)):
-                        result['rating'] = str(rating)
+                        _set_if_empty(result, "rating", str(rating))
                     elif isinstance(rating, dict):
-                         result['rating'] = str(rating.get('value', rating.get('score', rating.get('val', ''))))
+                         _set_if_empty(
+                             result,
+                             "rating",
+                             str(rating.get('value', rating.get('score', rating.get('val', '')))),
+                         )
                 elif 'score' in data:
-                    result['rating'] = str(data['score'])
+                    _set_if_empty(result, "rating", str(data['score']))
                 
                 # Support modularPin rating (Yandex Update)
                 if 'modularPin' in data and isinstance(data['modularPin'], dict):
@@ -912,7 +1460,14 @@ class YandexMapsInterceptionParser:
                              break
                 
                 if 'reviewsCount' in data or 'reviews_count' in data:
-                    result['reviews_count'] = int(data.get('reviewsCount') or data.get('reviews_count', 0))
+                    try:
+                        _set_if_empty(
+                            result,
+                            "reviews_count",
+                            int(data.get('reviewsCount') or data.get('reviews_count', 0)),
+                        )
+                    except (TypeError, ValueError):
+                        pass
                 
                 if 'phones' in data:
                     phones = data['phones']
@@ -927,6 +1482,31 @@ class YandexMapsInterceptionParser:
                 if 'description' in data or 'about' in data:
                     result['description'] = data.get('description') or data.get('about', '')
                 
+                # Категории / рубрики
+                if 'rubrics' in data and isinstance(data['rubrics'], list):
+                    names = []
+                    for r in data['rubrics']:
+                        if isinstance(r, dict):
+                            n = r.get('name') or r.get('label')
+                            if n:
+                                names.append(str(n))
+                    if names:
+                        _extend_unique(result, 'categories', names)
+                elif 'categories' in data:
+                    cats = data['categories']
+                    if isinstance(cats, list) and cats:
+                        _extend_unique(result, 'categories', cats)
+                    elif isinstance(cats, dict) and cats:
+                        _extend_unique(result, 'categories', [cats])
+                elif 'rubric' in data:
+                    rub = data['rubric']
+                    if isinstance(rub, str) and rub.strip():
+                        _extend_unique(result, 'categories', [rub.strip()])
+                    elif isinstance(rub, dict):
+                        n = rub.get('name') or rub.get('label')
+                        if n:
+                            _extend_unique(result, 'categories', [str(n)])
+                
                 # Рекурсивно обходим вложенные объекты
                 for key, value in data.items():
                     extract_nested(value, f"{path}.{key}")
@@ -936,6 +1516,52 @@ class YandexMapsInterceptionParser:
                     extract_nested(item, path)
         
         extract_nested(json_data)
+
+        # Fallback по наиболее частым путям (payload.company.*)
+        try:
+            addr_nested = (
+                _get_nested(json_data, "payload.company.address.formatted")
+                or _get_nested(json_data, "payload.company.address_name")
+                or _get_nested(json_data, "payload.company.fullAddress")
+            )
+            _set_if_empty(result, "address", addr_nested)
+        except Exception:
+            pass
+
+        try:
+            rating_nested = (
+                _get_nested(json_data, "payload.company.ratingData.rating")
+                or _get_nested(json_data, "payload.company.ratingData.score")
+            )
+            _set_if_empty(result, "rating", rating_nested)
+        except Exception:
+            pass
+
+        try:
+            cnt = _get_nested(json_data, "payload.company.ratingData.count")
+            if isinstance(cnt, (int, float, str)):
+                try:
+                    cnt_int = int(cnt)
+                    _set_if_empty(result, "reviews_count", cnt_int)
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+
+        try:
+            rubrics = _get_nested(json_data, "payload.company.rubrics") or []
+            names = []
+            if isinstance(rubrics, list):
+                for r in rubrics:
+                    if isinstance(r, dict):
+                        n = r.get("name") or r.get("label")
+                        if n:
+                            names.append(str(n))
+            if names:
+                _extend_unique(result, "categories", names)
+        except Exception:
+            pass
+
         return result
     
     def _is_reviews_data(self, json_data: Any) -> bool:
@@ -1429,7 +2055,8 @@ def parse_yandex_card(
     keep_open_on_captcha: bool = False,
     session_registry: Optional[Dict[str, BrowserSession]] = None,
     session_id: Optional[str] = None,
-    **kwargs: Any,
+    debug_bundle_id: Optional[str] = None,
+    **session_kwargs: Any,
 ) -> Dict[str, Any]:
     """
     Оркестратор для парсинга Яндекс.Карт c поддержкой human-in-the-loop.
@@ -1439,6 +2066,20 @@ def parse_yandex_card(
     """
     manager = BrowserSessionManager()
     session: Optional[BrowserSession] = None
+
+    # Валидация разрешённых kwargs для сессии
+    unknown = set(session_kwargs.keys()) - ALLOWED_SESSION_KWARGS
+    if unknown:
+        msg = f"Unknown session kwargs in parse_yandex_card: {unknown}"
+        env = os.getenv("FLASK_ENV", "").lower()
+        is_debug_env = env in ("development", "dev", "debug", "test", "testing")
+        if is_debug_env:
+            raise ValueError(msg)
+        else:
+            print(f"⚠️ {msg}")
+            # В production — просто отбрасываем неизвестные ключи
+            for k in list(unknown):
+                session_kwargs.pop(k, None)
 
     # 1. Режим resume: берём сессию из registry по session_id
     if session_id and session_registry is not None:
@@ -1451,19 +2092,20 @@ def parse_yandex_card(
     else:
         # 2. Первый заход: открываем новую сессию
         session = manager.open_session(
-            headless=kwargs.get("headless", True),
-            cookies=kwargs.get("cookies"),
-            user_agent=kwargs.get("user_agent"),
-            viewport=kwargs.get("viewport"),
-            locale=kwargs.get("locale", "ru-RU"),
-            timezone_id=kwargs.get("timezone_id", "Europe/Moscow"),
-            proxy=kwargs.get("proxy"),
-            launch_args=kwargs.get("launch_args"),
-            init_scripts=kwargs.get("init_scripts"),
+            headless=session_kwargs.get("headless", True),
+            cookies=session_kwargs.get("cookies"),
+            user_agent=session_kwargs.get("user_agent"),
+            viewport=session_kwargs.get("viewport"),
+            locale=session_kwargs.get("locale", "ru-RU"),
+            timezone_id=session_kwargs.get("timezone_id", "Europe/Moscow"),
+            proxy=session_kwargs.get("proxy"),
+            launch_args=session_kwargs.get("launch_args"),
+            init_scripts=session_kwargs.get("init_scripts"),
             keep_open=keep_open_on_captcha,
+            geolocation=session_kwargs.get("geolocation"),
         )
 
-    parser = YandexMapsInterceptionParser()
+    parser = YandexMapsInterceptionParser(debug_bundle_id=debug_bundle_id)
 
     result: Dict[str, Any]
     try:

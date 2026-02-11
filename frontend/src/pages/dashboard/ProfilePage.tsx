@@ -26,10 +26,13 @@ export const ProfilePage = () => {
     businessName: '',
     businessType: '',
     address: '',
+    city: '',
+    citySuggestion: '',
     workingHours: '',
     mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
-  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued' | 'captcha'>('idle');
+  // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'completed' | 'done' | 'error' | 'queued' | 'captcha'>('idle');
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [retryInfo, setRetryInfo] = useState<{ hours: number; minutes: number } | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<{ hours: number; minutes: number } | null>(null);
@@ -139,6 +142,8 @@ export const ProfilePage = () => {
           businessName: data.businessName || '',
           businessType: businessType,
           address: data.address || '',
+          city: data.city ?? '',
+          citySuggestion: data.citySuggestion ?? '',
           workingHours: data.workingHours || t.dashboard.profile.workingHoursPlaceholder,
           mapLinks: normalizedMapLinks
         });
@@ -255,6 +260,7 @@ export const ProfilePage = () => {
       const payload: any = {
         ...clientInfo,
         workingHours: clientInfo.workingHours || t.dashboard.profile.workingHoursPlaceholder,
+        city: (clientInfo.city || '').trim() || undefined,
         mapLinks: validMapLinks.map(url => ({ url: url.trim() }))
       };
 
@@ -291,6 +297,8 @@ export const ProfilePage = () => {
           businessName: reloadData.businessName || '',
           businessType: businessType,
           address: reloadData.address || '',
+          city: reloadData.city ?? '',
+          citySuggestion: reloadData.citySuggestion ?? '',
           workingHours: reloadData.workingHours || t.dashboard.profile.workingHoursPlaceholder,
           mapLinks: normalizedMapLinks
         });
@@ -690,6 +698,37 @@ export const ProfilePage = () => {
                 editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
               )}
             />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" />
+              {t.dashboard.profile.city}
+            </label>
+            <div className="flex gap-2 items-center flex-wrap">
+              <input
+                type="text"
+                value={clientInfo.city}
+                onChange={(e) => setClientInfo({ ...clientInfo, city: e.target.value })}
+                disabled={!editClientInfo}
+                placeholder={!clientInfo.city && clientInfo.citySuggestion
+                  ? (t.dashboard.profile.citySuggestionPlaceholder || 'Похоже на: {city}').replace('{city}', clientInfo.citySuggestion)
+                  : undefined}
+                className={cn(
+                  "flex-1 min-w-[200px] px-4 py-2.5 border rounded-xl transition-all duration-200",
+                  editClientInfo ? "border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" : "border-gray-200 bg-gray-50/50"
+                )}
+              />
+              {editClientInfo && !clientInfo.city && clientInfo.citySuggestion && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setClientInfo({ ...clientInfo, city: clientInfo.citySuggestion })}
+                >
+                  {t.dashboard.profile.applySuggestion}
+                </Button>
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">

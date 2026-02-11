@@ -48,6 +48,7 @@ class BrowserSessionManager:
         launch_args: Optional[list[str]] = None,
         init_scripts: Optional[list[str]] = None,
         keep_open: bool = False,
+        geolocation: Optional[Dict[str, float]] = None,
     ) -> BrowserSession:
         """Создать новую Playwright-сессию (единый источник правды по stealth)."""
         playwright = sync_playwright().start()
@@ -97,6 +98,13 @@ class BrowserSessionManager:
                     context.add_cookies(cookies)
                 except Exception:
                     # Куки — best-effort, не валим сессию
+                    pass
+
+            if geolocation and isinstance(geolocation.get("latitude"), (int, float)) and isinstance(geolocation.get("longitude"), (int, float)):
+                try:
+                    context.grant_permissions(["geolocation"])
+                    context.set_geolocation({"latitude": float(geolocation["latitude"]), "longitude": float(geolocation["longitude"])})
+                except Exception:
                     pass
 
             page = context.new_page()
