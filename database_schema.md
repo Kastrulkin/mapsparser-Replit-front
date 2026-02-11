@@ -1,6 +1,19 @@
 # Database Schema
 
-This document serves as the source of truth for the BeautyBot database schema. It is based on the PostgreSQL migration schema definitions (`src/schema_postgres.sql`).
+This document serves as the source of truth for the BeautyBot database schema. It is based on the PostgreSQL migration schema definitions (`src/schema_postgres.sql`) and Alembic migrations in `alembic_migrations/versions/`.
+
+## PostgreSQL runtime: имена таблиц и source of truth
+
+В коде (main.py, worker.py, database_manager) при работе с **PostgreSQL** используются только **имена таблиц в нижнем регистре** и плейсхолдеры **`%s`**:
+
+- **parsequeue** — очередь задач парсинга и синхронизации (статусы: pending, processing, completed, error, captcha).
+- **cards** — **источник правды по результатам парсинга карт**: рейтинг, отзывы, отчёт, версионирование. Все новые результаты (парсинг карты, синхронизация Яндекс.Бизнес, 2ГИС) пишутся в **cards**, а не в MapParseResults.
+- **externalbusinessaccounts** — внешние аккаунты (Яндекс.Бизнес, Google Business, 2ГИС); поле `auth_data_encrypted` не отдаётся в API.
+- **businessmaplinks** — ссылки бизнеса на карты (Яндекс, Google и т.д.).
+- **businesses**, **users**, **userservices** — бизнесы, пользователи, услуги.
+- **businessmetricshistory** — история метрик (рейтинг, отзывы по датам); **externalbusinessstats**, **externalbusinessreviews** — агрегаты и отзывы из внешних источников.
+
+Таблицы **MapParseResults** и **ParseQueue** в CamelCase — legacy для SQLite; в PG не используются.
 
 ## Tables
 
@@ -80,38 +93,27 @@ Employees or specialists working at a business.
 - `name` (TEXT)
 - `specialization` (TEXT)
 
-### ParseQueue
-Queue for background parsing tasks (e.g., parsing a Yandex Maps card).
+### parsequeue (PostgreSQL)
+Очередь задач парсинга и синхронизации. В коде — только имя в нижнем регистре.
+- **Статусы (канонические)**: `pending`, `processing`, `completed`, `error`, `captcha`. Запись/обновление всегда использует `completed`; при чтении и фильтрации учитывается и старый `done` (константы и нормализация в `src/parsequeue_status.py`).
 - `id` (TEXT, PK)
-- `user_id` (TEXT, FK -> Users.id)
-- `business_id` (TEXT, FK -> Businesses.id)
-- `url` (TEXT)
-- `status` (TEXT): 'pending', 'processing', 'completed', 'failed'
-- `task_type` (TEXT)
+- `user_id` (TEXT), `business_id` (TEXT), `account_id` (TEXT)
+- `url` (TEXT), `status` (TEXT)
+- `task_type` (TEXT): 'parse_card', 'sync_yandex_business' и др.
+- `source` (TEXT), `error_message` (TEXT), `retry_after` (TIMESTAMP)
+- `created_at`, `updated_at`
 
-### SyncQueue
-Queue for synchronization tasks (Yandex Business, Google, 2GIS).
-- `id` (TEXT, PK)
-- `business_id` (TEXT, FK -> Businesses.id)
-- `source` (TEXT): e.g., 'yandex_business'
-- `status` (TEXT)
+### cards (PostgreSQL) — source of truth для результатов парсинга
+Все результаты парсинга карт и синхронизаций (Яндекс.Карты, Яндекс.Бизнес, 2ГИС) сохраняются здесь. Версионирование: `version`, `is_latest`.
+- `id` (TEXT, PK), `business_id` (TEXT), `user_id` (TEXT)
+- `url`, `title`, `address`, `phone`, `site`
+- `rating` (REAL), `reviews_count` (INTEGER)
+- `categories`, `overview`, `products`, `news`, `photos`, `features_full`, `competitors`, `hours`, `hours_full`
+- `report_path`, `seo_score`, `ai_analysis` (JSONB), `recommendations` (JSONB)
+- `version`, `is_latest`, `created_at`, `updated_at`
 
-### MapParseResults
-Cached results of map parsing.
-- `id` (TEXT, PK)
-- `business_id` (TEXT, FK -> Businesses.id)
-- `rating`, `reviews_count`, `news_count`, `photos_count`
-- `products` (TEXT): JSON string of parsed products/services.
-- `is_verified` (BOOLEAN)
-- `phone` (TEXT)
-- `website` (TEXT)
-- `working_hours` (TEXT)
-- `features` (TEXT)
-- `features` (TEXT)
-- `posts_count` (INTEGER)
-- `messengers` (TEXT)
-- `profile_completeness` (INTEGER)
-- `competitors` (TEXT)
+### MapParseResults (legacy / SQLite)
+В PostgreSQL не используется; эквивалент — таблица **cards**.
 
 ### PricelistOptimizations
 - `id` (TEXT, PK)
@@ -125,13 +127,11 @@ Cached results of map parsing.
 - `business_id` (TEXT, FK -> Businesses.id)
 - `original_text`, `optimized_text`
 
-### External Data Tables
-Captured data from external platforms (Yandex, Google, 2GIS).
-- **ExternalBusinessReviews**: Reviews text, rating, author, response status, `account_id`, `author_profile_url`, `lang`.
-- **ExternalBusinessStats**: Daily statistics (views, clicks, actions), `account_id`, `unanswered_reviews_count`.
-- **ExternalBusinessPosts**: News posts/updates.
-- **ExternalBusinessPhotos**: Business photos.
-- **ExternalBusinessAccounts**: Auth data (cookies/tokens) for syncing.
+### External Data Tables (PostgreSQL: имена в нижнем регистре)
+- **externalbusinessaccounts**: Внешние аккаунты (Яндекс.Бизнес, Google, 2ГИС); `auth_data_encrypted` не отдаётся в API. Уникальность по паре (business_id, source) в runtime (без жёсткого UNIQUE в миграции).
+- **externalbusinessreviews**: Отзывы из внешних источников; `account_id`, `response_text`, `published_at`.
+- **externalbusinessstats**: Агрегированная статистика по дням (rating, reviews_total, date, source).
+- **externalbusinessposts**, **externalbusinessphotos**: Публикации и фото из кабинетов.
 
 ### Financial Tables
 - **FinancialTransactions**: Records of sales/services rendered.
@@ -142,7 +142,7 @@ Captured data from external platforms (Yandex, Google, 2GIS).
 - **ProxyServers**: Rotation pool for parsers.
 - **BusinessMapLinks**: Links to business on different maps.
 - **WordstatKeywords**: cached SEO keywords.
-- **BusinessMetricsHistory**: Snapshots of business metrics over time (`rating`, `reviews_count`, `unanswered_reviews_count`, `source`, etc).
+- **businessmetricshistory**: Снимки метрик по датам (`rating`, `reviews_count`, `photos_count`, `news_count`, `source` = 'parsing' и др.). В коде — имя в нижнем регистре.
 - **TelegramBindTokens**: Tokens for linking Telegram accounts.
 - **ReviewExchange* **: Tables for cross-promotion review system.
 - **AIPrompts**: System prompts for AI generation features.
@@ -155,3 +155,21 @@ Captured data from external platforms (Yandex, Google, 2GIS).
 - **Businesses** 1:N **UserServices**
 - **Businesses** 1:N **Masters**
 - **Businesses** 1:N **ExternalBusinessReviews**
+
+## Проверка полной схемы (PostgreSQL)
+
+Актуальная схема в БД задаётся миграциями Alembic (`alembic_migrations/versions/`). Чтобы вывести **текущее состояние** схемы (все таблицы и колонки в `public`):
+
+**Из контейнера app (рекомендуется):**
+```bash
+docker compose exec app python scripts/check_postgres_schema.py
+```
+
+**Локально** (если задан `DATABASE_URL` и установлены зависимости):
+```bash
+cd "/path/to/project"
+export DATABASE_URL="postgresql://user:pass@localhost:5432/dbname"
+python scripts/check_postgres_schema.py
+```
+
+Скрипт выводит список таблиц и для каждой — колонки, типы, NULL/NOT NULL, default. По нему можно сверить, что все нужные таблицы (в т.ч. `businessprofiles`, `businessmaplinks`, `externalbusinessaccounts`) есть в БД.

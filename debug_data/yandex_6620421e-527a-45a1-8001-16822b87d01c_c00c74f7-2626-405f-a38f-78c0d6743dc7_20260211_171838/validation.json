@@ -1,0 +1,30 @@
+{
+  "is_successful": true,
+  "reason": "success",
+  "quality_score": 0.4,
+  "hard_missing": [],
+  "missing_fields": [
+    "address",
+    "rating",
+    "categories",
+    "reviews",
+    "news",
+    "products",
+    "phone",
+    "site",
+    "hours",
+    "hours_full",
+    "description",
+    "photos",
+    "rubric"
+  ],
+  "found_fields": [
+    "title_or_name",
+    "reviews_count"
+  ],
+  "warnings": [
+    "missing_in_source:address",
+    "missing_in_source:rating",
+    "missing_in_source:categories"
+  ]
+}
