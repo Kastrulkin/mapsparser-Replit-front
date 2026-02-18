@@ -23,134 +23,161 @@ def get_metrics_history(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
-        
-        # --- SYNC LEGACY PARSES START ---
-                # Проверяем старые парсинги и добавляем их в историю, если их нет
-        try:
-            # Используем MAX(), чтобы выбрать непустые значения. 
-            # SQLite MAX игнорирует NULL, но может выбрать пустую строку, если она считается "больше" NULL.
-            # Поэтому явно фильтруем пустые строки
-            cursor.execute("""
-                SELECT MAX(rating), MAX(reviews_count), MAX(photos_count), MAX(news_count), DATE(created_at) as parse_date
-                FROM mapparseresults 
-                WHERE business_id = %s 
-                GROUP BY parse_date 
-            """, (business_id,))
-            
-            parses = cursor.fetchall()
-            for parse in parses:
-                parse_date = parse[4]
-                if not parse_date: continue
-                
-                # Проверяем, есть ли запись в истории за эту дату
-                cursor.execute("""
-                    SELECT id, rating FROM businessmetricshistory 
-                    WHERE business_id = %s AND metric_date = %s AND source = 'parsing'
-                """, (business_id, parse_date))
-                
-                existing = cursor.fetchone()
-                
-                if not existing:
-                    # Создаем запись
-                    metric_id = str(uuid.uuid4())
-                    cursor.execute("""
-                        INSERT INTO businessmetricshistory (
-                            id, business_id, metric_date, rating, reviews_count, 
-                            photos_count, news_count, source
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'parsing')
-                    """, (
-                        metric_id, business_id, parse_date,
-                        parse[0], parse[1], parse[2], parse[3]
-                    ))
-                # Обновляем, если в базе пусто (None или ''), а у нас есть данные
-                elif (existing[1] is None or existing[1] == '') and parse[0]:
-                     cursor.execute("""
-                        UPDATE businessmetricshistory
-                        SET rating = %s, reviews_count = %s, photos_count = %s, news_count = %s
-                        WHERE id = %s
-                    """, (parse[0], parse[1], parse[2], parse[3], existing[0]))
-                    
-            db.conn.commit()
-        except Exception as e:
-            db.conn.commit()
-        except Exception as e:
-            print(f"⚠️ Ошибка синхронизации истории метрик из MapParseResults: {e}")
 
-        # --- SYNC EXTERNAL STATS START ---
-        try:
-            # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
-            # Синхронизируем исторические данные из ExternalBusinessStats (если они есть)
-            cursor.execute("""
-                SELECT source, date, rating, reviews_total, unanswered_reviews_count
-                FROM externalbusinessstats 
-                WHERE business_id = %s AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
-            """, (business_id,))
-            
-            stats_rows = cursor.fetchall()
-            for row in stats_rows:
-                source = row[0]
-                metric_date = row[1]
-                rating = row[2]
-                reviews_count = row[3]
-                unanswered = row[4]
-                
-                # Проверяем, есть ли запись
-                cursor.execute("""
-                    SELECT id FROM businessmetricshistory 
-                    WHERE business_id = %s AND metric_date = %s AND source = %s
-                """, (business_id, metric_date, source))
-                
-                existing = cursor.fetchone()
-                
-                if not existing:
-                    metric_id = str(uuid.uuid4())
-                    cursor.execute("""
-                        INSERT INTO businessmetricshistory (
-                            id, business_id, metric_date, rating, reviews_count, 
-                            photos_count, news_count, unanswered_reviews_count, source
-                        )
-                        VALUES (%s, %s, %s, %s, %s, 0, 0, %s, %s)
-                    """, (metric_id, business_id, metric_date, rating, reviews_count, unanswered, source))
-                else:
-                    # Обновляем
-                    cursor.execute("""
-                        UPDATE businessmetricshistory
-                        SET rating = COALESCE(%s, rating), 
-                            reviews_count = COALESCE(%s, reviews_count),
-                            unanswered_reviews_count = COALESCE(%s, unanswered_reviews_count)
-                        WHERE id = %s
-                    """, (rating, reviews_count, unanswered, existing[0]))
-            
-            db.conn.commit()
-        except Exception as e:
-            print(f"⚠️ Ошибка синхронизации истории метрик из ExternalBusinessStats: {e}")
-        # --- SYNC EXTERNAL STATS END ---
+        def _as_dict(row):
+            if row is None:
+                return None
+            if isinstance(row, dict):
+                return row
+            cols = [d[0] for d in cursor.description] if cursor.description else []
+            return dict(zip(cols, row)) if cols else {}
 
-        # Загружаем историю метрик
-        cursor.execute("""
-            SELECT id, metric_date, rating, reviews_count, 
-                   photos_count, news_count, unanswered_reviews_count, source, created_at
-            FROM businessmetricshistory
+        def _parse_json(value):
+            if value is None:
+                return None
+            if isinstance(value, (dict, list)):
+                return value
+            if isinstance(value, str):
+                raw = value.strip()
+                if not raw:
+                    return None
+                try:
+                    return json.loads(raw)
+                except Exception:
+                    return None
+            return None
+
+        def _count_unanswered_from_reviews(reviews_obj):
+            if not isinstance(reviews_obj, list):
+                return 0
+            cnt = 0
+            for r in reviews_obj:
+                if not isinstance(r, dict):
+                    continue
+                resp = (r.get("org_reply") or r.get("response_text") or "").strip()
+                if not resp:
+                    cnt += 1
+            return cnt
+
+        history_by_date = {}
+
+        # 1) История из cards (даёт фото/новости/unanswered).
+        # В ряде инсталляций колонки cards.reviews нет — учитываем это динамически.
+        cursor.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'cards'
+              AND column_name = 'reviews'
+            LIMIT 1
+            """
+        )
+        has_cards_reviews = cursor.fetchone() is not None
+        cards_select = "id, created_at, rating, reviews_count, overview, photos, news"
+        if has_cards_reviews:
+            cards_select += ", reviews"
+        cursor.execute(
+            f"""
+            SELECT {cards_select}
+            FROM cards
             WHERE business_id = %s
-            ORDER BY metric_date DESC
-            LIMIT 100
-        """, (business_id,))
-        
-        history = []
+            ORDER BY created_at DESC
+            LIMIT 365
+            """,
+            (business_id,),
+        )
         for row in cursor.fetchall():
-            history.append({
-                "id": row[0],
-                "date": row[1],
-                "rating": float(row[2]) if row[2] is not None and row[2] != '' else None,
-                "reviews_count": row[3],
-                "photos_count": row[4],
-                "news_count": row[5],
-                "unanswered_reviews_count": row[6],
-                "source": row[7],
-                "created_at": row[8]
-            })
-        
+            rd = _as_dict(row) or {}
+            created_at = rd.get("created_at")
+            if not created_at:
+                continue
+            date_key = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
+            overview = _parse_json(rd.get("overview")) or {}
+            photos = _parse_json(rd.get("photos"))
+            news = _parse_json(rd.get("news"))
+            reviews = _parse_json(rd.get("reviews")) if has_cards_reviews else None
+            photos_count = max(
+                len(photos) if isinstance(photos, list) else 0,
+                int(overview.get("photos_count") or 0),
+            )
+            news_count = max(
+                len(news) if isinstance(news, list) else 0,
+                int(overview.get("news_count") or 0),
+            )
+            item = {
+                "id": rd.get("id"),
+                "date": date_key,
+                "rating": float(rd["rating"]) if rd.get("rating") not in (None, "") else None,
+                "reviews_count": int(rd.get("reviews_count") or 0),
+                "photos_count": int(photos_count or 0),
+                "news_count": int(news_count or 0),
+                "unanswered_reviews_count": _count_unanswered_from_reviews(reviews),
+                "source": "parsing",
+                "created_at": created_at,
+            }
+            if date_key not in history_by_date or (history_by_date[date_key].get("created_at") or created_at) < created_at:
+                history_by_date[date_key] = item
+
+        # 2) История из externalbusinessstats (подмешиваем rating/reviews)
+        cursor.execute(
+            """
+            SELECT source, date, rating, reviews_total, created_at
+            FROM externalbusinessstats
+            WHERE business_id = %s
+              AND source IN ('yandex_business', 'yandex_maps')
+              AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
+            ORDER BY created_at DESC
+            LIMIT 365
+            """,
+            (business_id,),
+        )
+        for row in cursor.fetchall():
+            rd = _as_dict(row) or {}
+            date_raw = str(rd.get("date") or "").strip()
+            if not date_raw:
+                continue
+            date_key = date_raw[:10]
+            current = history_by_date.get(date_key) or {
+                "id": None,
+                "date": date_key,
+                "rating": None,
+                "reviews_count": 0,
+                "photos_count": 0,
+                "news_count": 0,
+                "unanswered_reviews_count": 0,
+                "source": rd.get("source") or "external",
+                "created_at": rd.get("created_at"),
+            }
+            if rd.get("rating") not in (None, ""):
+                current["rating"] = float(rd.get("rating"))
+            if rd.get("reviews_total") not in (None, ""):
+                current["reviews_count"] = int(rd.get("reviews_total") or 0)
+            if not current.get("source"):
+                current["source"] = rd.get("source") or "external"
+            history_by_date[date_key] = current
+
+        # 3) Текущее количество неотвеченных отзывов — в последнюю дату
+        unanswered_now = 0
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM externalbusinessreviews
+            WHERE business_id = %s
+              AND source IN ('yandex_business', 'yandex_maps')
+              AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+            """,
+            (business_id,),
+        )
+        cnt_row = _as_dict(cursor.fetchone()) or {}
+        unanswered_now = int(cnt_row.get("cnt") or 0)
+
+        history = list(history_by_date.values())
+        history.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
+        if history and (history[0].get("unanswered_reviews_count") or 0) == 0:
+            history[0]["unanswered_reviews_count"] = unanswered_now
+        history = history[:100]
+
         db.close()
         
         return jsonify({"success": True, "history": history})

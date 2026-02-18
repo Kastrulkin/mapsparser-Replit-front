@@ -5,7 +5,15 @@
 import os
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
+from psycopg2.extras import Json
+import psycopg2
+
+try:
+    from parsequeue_status import STATUS_PENDING, normalize_status
+except ImportError:
+    STATUS_PENDING = "pending"
+    def normalize_status(s): return (s or "").strip() or STATUS_PENDING
 
 class DBConnectionWrapper:
     """Wrapper around database connection"""
@@ -242,20 +250,21 @@ class DatabaseManager:
         return [dict(row) for row in cursor.fetchall()]
     
     def add_to_queue(self, url: str, user_id: str) -> str:
-        """Добавить в очередь"""
+        """Добавить в очередь (статус при создании — pending)."""
         queue_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO parsequeue (id, url, user_id, status, created_at)
-            VALUES (%s, %s, %s, 'pending', %s)
-        """, (queue_id, url, user_id, datetime.now().isoformat()))
+            VALUES (%s, %s, %s, %s, %s)
+        """, (queue_id, url, user_id, STATUS_PENDING, datetime.now().isoformat()))
         self.conn.commit()
         return queue_id
-    
+
     def update_queue_status(self, queue_id: str, status: str) -> bool:
-        """Обновить статус элемента очереди"""
+        """Обновить статус элемента очереди. Запись всегда в каноническом виде (done → completed)."""
         cursor = self.conn.cursor()
-        cursor.execute("UPDATE parsequeue SET status = %s WHERE id = %s", (status, queue_id))
+        canonical = normalize_status(status)
+        cursor.execute("UPDATE parsequeue SET status = %s WHERE id = %s", (canonical, queue_id))
         self.conn.commit()
         return cursor.rowcount > 0
     
@@ -267,13 +276,13 @@ class DatabaseManager:
         return cursor.rowcount > 0
     
     def get_pending_queue_items(self) -> List[Dict[str, Any]]:
-        """Получить ожидающие элементы очереди"""
+        """Получить ожидающие элементы очереди (status = pending)."""
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM parsequeue 
-            WHERE status = 'pending' 
+            WHERE status = %s 
             ORDER BY created_at ASC
-        """)
+        """, (STATUS_PENDING,))
         return [dict(row) for row in cursor.fetchall()]
     
     # ===== CARDS (Готовые отчёты) =====
@@ -344,6 +353,17 @@ class DatabaseManager:
         2. Определяет version новой карточки (MAX(version) + 1)
         3. Вставляет новую карточку с is_latest = TRUE
         
+        Инварианты (для ручной проверки в БД):
+        - Не более одной записи с is_latest = TRUE на business_id:
+            SELECT business_id, COUNT(*) AS cnt
+            FROM cards
+            WHERE is_latest = TRUE
+            GROUP BY business_id
+            HAVING COUNT(*) > 1;
+        
+        - Новая версия не должна создаваться, если все поля карточки NULL
+          (проверяется на уровне caller'а, см. sync-блок в worker).
+        
         Args:
             business_id: ID бизнеса (обязательно)
             url: URL карточки (опционально)
@@ -376,9 +396,10 @@ class DatabaseManager:
             next_version = row['next_version'] if isinstance(row, dict) else row[0]
             
             # 3. Подготавливаем данные для новой карточки
-            fields = ['url', 'title', 'address', 'phone', 'site', 'rating', 'reviews_count', 
-                     'categories', 'overview', 'products', 'news', 'photos', 'features_full', 
-                     'competitors', 'hours', 'hours_full', 'report_path', 'seo_score', 
+            # url уже обрабатывается отдельно выше, поэтому в fields его нет
+            fields = ['title', 'address', 'phone', 'site', 'rating', 'reviews_count',
+                     'categories', 'overview', 'products', 'news', 'photos', 'features_full',
+                     'competitors', 'hours', 'hours_full', 'report_path', 'seo_score',
                      'ai_analysis', 'recommendations']
             
             values = [card_id, business_id]
@@ -388,10 +409,36 @@ class DatabaseManager:
                 values.append(url)
                 if 'url' not in field_names:
                     field_names.append('url')
+
+            # Поля, которые в БД хранятся как JSON/JSONB и могут приходить как dict/list.
+            json_like_fields = {
+                'categories',
+                'overview',
+                'products',
+                'news',
+                'photos',
+                'features_full',
+                'competitors',
+                'hours',
+                'hours_full',
+                'ai_analysis',
+                'recommendations',
+            }
+
+            def _adapt_value(field_name: str, value: Any) -> Any:
+                """
+                Универсальная адаптация для JSON-полей:
+                - dict / list → psycopg2.extras.Json(value)
+                - остальные типы → без изменений
+                """
+                if field_name in json_like_fields and isinstance(value, (dict, list)):
+                    return Json(value)
+                return value
             
             for field in fields:
                 if field in kwargs:
-                    values.append(kwargs[field])
+                    raw_val = kwargs[field]
+                    values.append(_adapt_value(field, raw_val))
                     if field not in field_names:
                         field_names.append(field)
             
@@ -413,11 +460,236 @@ class DatabaseManager:
             
             self.conn.commit()
             return card_id
-            
+        except psycopg2.IntegrityError as e:
+            # Возможная гонка из-за uq_cards_latest_per_business (unique_violation 23505).
+            self.conn.rollback()
+            if getattr(e, "pgcode", None) != "23505":
+                # Не наш случай — пробрасываем дальше.
+                raise
+            print(f"[CARDS] IntegrityError(unique_violation) in save_new_card_version for business_id={business_id}: {e}")
+            # Перечитываем актуальную карточку и возвращаем её id, не роняя worker.
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT id
+                FROM cards
+                WHERE business_id = %s AND is_latest = TRUE
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return row["id"] if isinstance(row, dict) else row[0]
+            raise
         except Exception as e:
             self.conn.rollback()
             raise Exception(f"Ошибка при сохранении новой версии карточки: {e}")
-    
+
+    def update_business_from_card(self, business_id: str, card: Dict[str, Any]) -> None:
+        """
+        Обновить таблицу businesses на основе данных карточки (card_data/cards).
+        Поля обновляются только если есть в card и осмысленны.
+        """
+        if not business_id or not isinstance(card, dict):
+            return
+
+        # Канон: храним сайт в колонке site; website не удаляем (legacy/алиас в API).
+        field_map = {
+            "address": "address",
+            "phone": "phone",
+            "site": "site",
+            "rating": "rating",
+            "reviews_count": "reviews_count",
+            "categories": "categories",
+            "hours": "hours",
+            "hours_full": "hours_full",
+            "description": "description",
+            "industry": "industry",
+            "geo": "geo",
+            "external_ids": "external_ids",
+        }
+
+        json_fields = {"categories", "hours", "hours_full", "geo", "external_ids"}
+
+        updates = []
+        values: List[Any] = []
+
+        def has_value(v: Any) -> bool:
+            if v is None:
+                return False
+            if isinstance(v, str):
+                return bool(v.strip())
+            if isinstance(v, (list, dict)):
+                return len(v) > 0
+            return True
+
+        for card_key, col in field_map.items():
+            v = card.get(card_key)
+            if not has_value(v):
+                continue
+
+            if card_key == "rating":
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    continue
+            if card_key == "reviews_count":
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    continue
+
+            if card_key in json_fields:
+                if isinstance(v, (dict, list)):
+                    v = Json(v)
+
+            updates.append(f"{col} = %s")
+            values.append(v)
+
+        # Всегда обновляем last_parsed_at, если есть хоть одно обновление
+        if not updates:
+            return
+
+        updates.append("last_parsed_at = CURRENT_TIMESTAMP")
+
+        values.append(business_id)
+
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                f"UPDATE businesses SET {', '.join(updates)} WHERE id = %s",
+                values,
+            )
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            # Не роняем весь воркер, но логируем на stderr
+            print(f"⚠️ update_business_from_card failed for {business_id}: {e}")
+
+    def upsert_parsed_services(self, business_id: str, user_id: str, service_rows: List[Dict[str, Any]]) -> int:
+        """
+        Upsert распарсенных услуг в userservices.
+        Для строк с external_id используется ON CONFLICT (business_id, source, external_id) DO UPDATE.
+        Без external_id — обычный INSERT.
+        Возвращает количество сохранённых записей.
+        """
+        if not service_rows:
+            return 0
+        cursor = self.conn.cursor()
+        saved = 0
+        try:
+            parsed_sources = sorted({
+                (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                for row in service_rows
+                if isinstance(row, dict) and row.get("name")
+            })
+            # Перед апдейтом нового снапшота выключаем старые распарсенные строки этого source.
+            # Ручные услуги не затрагиваем (у них source обычно NULL/другой, raw отсутствует).
+            for src in parsed_sources:
+                cursor.execute(
+                    """
+                    UPDATE userservices
+                    SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                    WHERE business_id = %s
+                      AND source = %s
+                      AND raw IS NOT NULL
+                    """,
+                    (business_id, src),
+                )
+
+            rows_sorted = sorted(
+                service_rows,
+                key=lambda r: len(str((r or {}).get("description") or "").strip()),
+                reverse=True,
+            )
+            seen_keys = set()
+            for row in rows_sorted:
+                if not row or not row.get("name"):
+                    continue
+                sid = str(uuid.uuid4())
+                name = row.get("name", "").strip()
+                description = (row.get("description") or "").strip() or None
+                category = (row.get("category") or "Разное").strip() or "Разное"
+                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                external_id = row.get("external_id")
+                if external_id is not None:
+                    external_id = str(external_id).strip() or None
+                price_from = row.get("price_from")
+                price_to = row.get("price_to")
+                price_str = None
+                if price_from is not None:
+                    price_str = str(price_from)
+                elif price_to is not None:
+                    price_str = str(price_to)
+                dedup_key = (
+                    source.lower(),
+                    name.lower(),
+                    category.lower(),
+                    str(price_from or ""),
+                    str(price_to or ""),
+                    str(price_str or ""),
+                )
+                if dedup_key in seen_keys:
+                    continue
+                seen_keys.add(dedup_key)
+                raw = row.get("raw")
+                if isinstance(raw, (dict, list)):
+                    raw = Json(raw)
+                duration_minutes = row.get("duration_minutes")
+                if external_id:
+                    cursor.execute(
+                        """
+                        INSERT INTO userservices (
+                            id, business_id, user_id, name, description, category,
+                            source, external_id, price_from, price_to, price, raw,
+                            duration_minutes, is_active, updated_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP
+                        )
+                        ON CONFLICT (business_id, source, external_id) WHERE (external_id IS NOT NULL)
+                        DO UPDATE SET
+                            name = EXCLUDED.name,
+                            description = EXCLUDED.description,
+                            category = EXCLUDED.category,
+                            price_from = EXCLUDED.price_from,
+                            price_to = EXCLUDED.price_to,
+                            price = EXCLUDED.price,
+                            raw = EXCLUDED.raw,
+                            duration_minutes = EXCLUDED.duration_minutes,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (
+                            sid, business_id, user_id, name, description, category,
+                            source, external_id, price_from, price_to, price_str, raw,
+                            duration_minutes,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO userservices (
+                            id, business_id, user_id, name, description, category,
+                            source, external_id, price_from, price_to, price, raw,
+                            duration_minutes, is_active, updated_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP
+                        )
+                        """,
+                        (
+                            sid, business_id, user_id, name, description, category,
+                            source, price_from, price_to, price_str, raw,
+                            duration_minutes,
+                        ),
+                    )
+                saved += 1
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            print(f"⚠️ upsert_parsed_services failed for business_id={business_id}: {e}")
+        return saved
+
     def get_latest_card_by_business(self, business_id: str) -> Optional[Dict[str, Any]]:
         """
         Получить последнюю версию карточки для бизнеса.
@@ -555,7 +827,7 @@ class DatabaseManager:
         stats['queue_items_count'] = cursor.fetchone()['count']
         
         # Количество ожидающих в очереди
-        cursor.execute("SELECT COUNT(*) as count FROM parsequeue WHERE status = 'pending'")
+        cursor.execute("SELECT COUNT(*) as count FROM parsequeue WHERE status = %s", (STATUS_PENDING,))
         stats['pending_queue_count'] = cursor.fetchone()['count']
         
         # Количество готовых отчётов
@@ -739,8 +1011,9 @@ class DatabaseManager:
         cursor.execute("""
             SELECT COUNT(*) FROM networks WHERE owner_id = %s
         """, (user_id,))
-        count = cursor.fetchone()[0]
-        return count > 0
+        row = cursor.fetchone()
+        count = row[0] if not hasattr(row, "keys") else row.get("count", 0)
+        return (count or 0) > 0
     
     def create_network(self, name: str, owner_id: str, description: str = None) -> str:
         """Создать новую сеть"""
@@ -786,14 +1059,17 @@ class DatabaseManager:
         return cursor.rowcount > 0
     
     def get_businesses_by_network(self, network_id: str) -> List[Dict[str, Any]]:
-        """Получить все бизнесы (точки) сети - включая заблокированные"""
+        """Получить все бизнесы (точки) сети - включая заблокированные.
+        Возвращает список словарей с именами колонок (совместимо со схемой businesses)."""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM businesses 
+            SELECT * FROM businesses
             WHERE network_id = %s
             ORDER BY created_at DESC
         """, (network_id,))
-        return [dict(row) for row in cursor.fetchall()]
+        cols = [d[0] for d in cursor.description] if cursor.description else []
+        rows = cursor.fetchall()
+        return [dict(zip(cols, row)) for row in rows]
     
     def get_all_users_with_businesses(self) -> List[Dict[str, Any]]:
         """Получить всех пользователей с их бизнесами и сетями (для админской страницы)
@@ -801,42 +1077,84 @@ class DatabaseManager:
         Оптимизировано: вместо N+1 запросов используется один запрос с JOIN и группировка в Python
         """
         cursor = self.conn.cursor()
-        
+
         # Получаем всех пользователей одним запросом
         cursor.execute("""
             SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
             FROM users 
             ORDER BY created_at DESC
         """)
-        users = cursor.fetchall()
+        user_cols = [d[0] for d in cursor.description]
+        users = []
+        for row in cursor.fetchall():
+            if hasattr(row, "keys"):
+                users.append({k: row[k] for k in row.keys()})
+            else:
+                users.append(dict(zip(user_cols, row)))
+
+        # Временный лог формата строк (dev/debug)
+        if users:
+            print(
+                "🔍 DEBUG get_all_users_with_businesses: users row "
+                f"type={type(users[0])}, keys={list(users[0].keys())}"
+            )
         
-        # Получаем все прямые бизнесы одним запросом (не в сети)
+        # Все прямые бизнесы (не в сети)
         cursor.execute("""
             SELECT * FROM businesses 
             WHERE network_id IS NULL
             ORDER BY owner_id, created_at DESC
         """)
-        all_direct_businesses = cursor.fetchall()
-        
-        # Получаем все сети одним запросом
+        biz_cols = [d[0] for d in cursor.description]
+        all_direct_businesses = []
+        for row in cursor.fetchall():
+            if hasattr(row, "keys"):
+                all_direct_businesses.append({k: row[k] for k in row.keys()})
+            else:
+                all_direct_businesses.append(dict(zip(biz_cols, row)))
+
+        if all_direct_businesses:
+            print(
+                "🔍 DEBUG get_all_users_with_businesses: businesses row "
+                f"keys={list(all_direct_businesses[0].keys())}"
+            )
+
+        # Все сети
         cursor.execute("""
             SELECT * FROM networks 
             ORDER BY owner_id, created_at DESC
         """)
-        all_networks = cursor.fetchall()
-        
-        # Получаем все бизнесы в сетях одним запросом
+        net_cols = [d[0] for d in cursor.description]
+        all_networks = []
+        for row in cursor.fetchall():
+            if hasattr(row, "keys"):
+                all_networks.append({k: row[k] for k in row.keys()})
+            else:
+                all_networks.append(dict(zip(net_cols, row)))
+
+        if all_networks:
+            print(
+                "🔍 DEBUG get_all_users_with_businesses: networks row "
+                f"keys={list(all_networks[0].keys())}"
+            )
+
+        # Все бизнесы в сетях
         cursor.execute("""
             SELECT * FROM businesses 
             WHERE network_id IS NOT NULL
             ORDER BY network_id, created_at DESC
         """)
-        all_network_businesses = cursor.fetchall()
+        nbiz_cols = [d[0] for d in cursor.description]
+        all_network_businesses = []
+        for row in cursor.fetchall():
+            if hasattr(row, "keys"):
+                all_network_businesses.append({k: row[k] for k in row.keys()})
+            else:
+                all_network_businesses.append(dict(zip(nbiz_cols, row)))
         
         # Группируем бизнесы по owner_id
         businesses_by_owner = {}
-        for business_row in all_direct_businesses:
-            business = dict(business_row)
+        for business in all_direct_businesses:
             owner_id = business.get('owner_id')
             if owner_id:
                 if owner_id not in businesses_by_owner:
@@ -845,8 +1163,7 @@ class DatabaseManager:
         
         # Группируем сети по owner_id
         networks_by_owner = {}
-        for network_row in all_networks:
-            network = dict(network_row)
+        for network in all_networks:
             owner_id = network.get('owner_id')
             if owner_id:
                 if owner_id not in networks_by_owner:
@@ -855,8 +1172,7 @@ class DatabaseManager:
         
         # Группируем бизнесы в сетях по network_id
         businesses_by_network = {}
-        for business_row in all_network_businesses:
-            business = dict(business_row)
+        for business in all_network_businesses:
             network_id = business.get('network_id')
             if network_id:
                 if network_id not in businesses_by_network:
@@ -865,15 +1181,8 @@ class DatabaseManager:
         
         # Формируем результат
         result = []
-        for user_row in users:
-            user_id = user_row['id'] if hasattr(user_row, 'keys') else user_row[0]
-            
-            # Преобразуем пользователя в словарь
-            if hasattr(user_row, 'keys'):
-                user_dict = {key: user_row[key] for key in user_row.keys()}
-            else:
-                columns = [desc[0] for desc in cursor.description]
-                user_dict = dict(zip(columns, user_row))
+        for user_dict in users:
+            user_id = user_dict.get('id')
             
             # Получаем прямые бизнесы пользователя
             direct_businesses = businesses_by_owner.get(user_id, [])
@@ -979,12 +1288,7 @@ class DatabaseManager:
     def get_business_by_id(self, business_id: str) -> Optional[Dict[str, Any]]:
         """Получить бизнес по ID"""
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT id, name, description, industry, business_type, address, working_hours, 
-                   phone, email, website, owner_id, network_id, is_active, 
-                   created_at, updated_at
-            FROM businesses WHERE id = %s
-        """, (business_id,))
+        cursor.execute("SELECT * FROM businesses WHERE id = %s", (business_id,))
         row = cursor.fetchone()
         if not row:
             return None
@@ -1032,20 +1336,21 @@ class DatabaseManager:
             print(f"❌ Бизнес с ID {business_id} не найден")
             return False
         
-        print(f"🔍 Удаление бизнеса: ID={business_id}, name={business[1] if business else 'N/A'}")
+        biz_name = business.get('name') if hasattr(business, 'get') else (business[1] if len(business) > 1 else 'N/A')
+        print(f"🔍 Удаление бизнеса: ID={business_id}, name={biz_name}")
         
         # Удаляем связанные данные
         cursor.execute("DELETE FROM userservices WHERE business_id = %s", (business_id,))
         deleted_services = cursor.rowcount
         cursor.execute("DELETE FROM financialtransactions WHERE business_id = %s", (business_id,))
         deleted_transactions = cursor.rowcount
-        cursor.execute("DELETE FROM BusinessMapLinks WHERE business_id = %s", (business_id,))
+        cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
         deleted_links = cursor.rowcount
-        cursor.execute("DELETE FROM MapParseResults WHERE business_id = %s", (business_id,))
+        cursor.execute("DELETE FROM cards WHERE business_id = %s", (business_id,))
         deleted_results = cursor.rowcount
         cursor.execute("DELETE FROM parsequeue WHERE business_id = %s", (business_id,))
         deleted_queue = cursor.rowcount
-        cursor.execute("DELETE FROM TelegramBindTokens WHERE business_id = %s", (business_id,))
+        cursor.execute("DELETE FROM telegrambindtokens WHERE business_id = %s", (business_id,))
         deleted_tokens = cursor.rowcount
         
         print(f"🔍 Удалено связанных данных: services={deleted_services}, transactions={deleted_transactions}, links={deleted_links}, results={deleted_results}, queue={deleted_queue}, tokens={deleted_tokens}")

@@ -50,7 +50,7 @@ def add_service():
         service_id = str(uuid.uuid4())
         cursor.execute("""
             INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (
             service_id,
             user_data["user_id"],
@@ -93,70 +93,155 @@ def get_services():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         user_id = user_data['user_id']
-        
+
         # Получаем business_id из query параметров
         business_id = request.args.get('business_id')
-        
-        # Проверяем, есть ли поля optimized_description и optimized_name
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+
+        # PostgreSQL: список колонок таблицы userservices
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+            ORDER BY ordinal_position
+        """)
+        columns = [row[0] if isinstance(row, (list, tuple)) else row.get('column_name') for row in cursor.fetchall()]
         has_optimized_desc = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
-        
-        # Формируем SELECT с учетом наличия полей
+        has_price_from = 'price_from' in columns
+
         select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
         if has_optimized_desc:
             select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
         if has_optimized_name:
             select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
-        
-        # Если передан business_id - фильтруем по нему, иначе по user_id
+        if has_price_from:
+            select_fields.append('price_from')
+            select_fields.append('price_to')
+        # Служебные поля для разделения распарсенных/ручных услуг и дедупликации.
         if business_id:
-            # Проверяем доступ к бизнесу
+            if 'source' not in select_fields:
+                select_fields.append('source')
+            if 'raw' not in select_fields:
+                select_fields.append('raw')
+
+        # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
+        if business_id:
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
-            if owner_id:
-                if owner_id == user_id or user_data.get('is_superadmin'):
-                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
-                    cursor.execute(select_sql, (business_id,))
-                else:
-                    db.close()
-                    return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-            else:
+            if not owner_id:
                 db.close()
                 return jsonify({"error": "Бизнес не найден"}), 404
+            if owner_id != user_id and not user_data.get('is_superadmin'):
+                db.close()
+                return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+            order_by = "ORDER BY category NULLS LAST, name NULLS LAST"
+            if has_price_from:
+                order_by += ", price_from NULLS LAST"
+            order_by += ", updated_at DESC NULLS LAST"
+
+            select_sql = (
+                f"SELECT {', '.join(select_fields)} FROM userservices "
+                "WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL) "
+                f"{order_by}"
+            )
+            cursor.execute(select_sql, (business_id,))
         else:
-            # Старая логика: получаем все услуги пользователя
-            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            select_sql = (
+                f"SELECT {', '.join(select_fields)} FROM userservices "
+                "WHERE user_id = %s ORDER BY created_at DESC NULLS LAST"
+            )
             cursor.execute(select_sql, (user_id,))
-        
+
         services_rows = cursor.fetchall()
+        col_names = [d[0] for d in cursor.description] if cursor.description else select_fields
         db.close()
-        
-        # Преобразуем Row в словари
+
         services = []
         for service in services_rows:
-            # Преобразуем Row в словарь через dict() - это гарантирует правильное извлечение всех полей
             if hasattr(service, 'keys'):
-                service_dict = dict(service)  # Преобразуем Row в dict
+                service_dict = dict(service)
             else:
-                # Fallback для tuple/list - создаем словарь по порядку полей
-                service_dict = {field_name: service[idx] for idx, field_name in enumerate(select_fields) if idx < len(service)}
-            
-            # Парсим keywords
+                service_dict = dict(zip(col_names, service)) if col_names else {}
+            # Нормализация NULL
+            for k in list(service_dict.keys()):
+                if service_dict[k] is None and k in ('description', 'category', 'name', 'price', 'keywords'):
+                    service_dict[k] = '' if k != 'keywords' else []
             raw_kw = service_dict.get('keywords')
             parsed_kw = []
             if raw_kw:
                 try:
                     import json
-                    parsed_kw = json.loads(raw_kw)
+                    parsed_kw = json.loads(raw_kw) if isinstance(raw_kw, str) else raw_kw
                     if not isinstance(parsed_kw, list):
                         parsed_kw = []
                 except Exception:
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
             service_dict['keywords'] = parsed_kw
-            
             services.append(service_dict)
-        
+
+        # Для business_id отдаём в приоритете распарсенные услуги.
+        # Это скрывает устаревшие ручные строки с предыдущих дат, если для них уже есть свежий парсинг.
+        if business_id:
+            def _price_norm(svc: dict) -> str:
+                pf = svc.get('price_from')
+                pt = svc.get('price_to')
+                if pf is not None or pt is not None:
+                    return f"{pf or ''}-{pt or ''}"
+                return str(svc.get('price') or '').strip()
+
+            def _svc_key(svc: dict):
+                return (
+                    str(svc.get('name') or '').strip().lower(),
+                    str(svc.get('category') or '').strip().lower(),
+                    _price_norm(svc).lower(),
+                )
+
+            parsed_services = []
+            manual_services = []
+            for svc in services:
+                source = str(svc.get('source') or '').strip().lower()
+                is_parsed = source in ('yandex_maps', 'yandex_business') or svc.get('raw') is not None
+                if is_parsed:
+                    parsed_services.append(svc)
+                else:
+                    manual_services.append(svc)
+
+            if parsed_services:
+                # Берём только последний снапшот парсинга по updated_at.
+                parsed_services = sorted(
+                    parsed_services,
+                    key=lambda s: str(s.get('updated_at') or ''),
+                    reverse=True,
+                )
+                latest_ts = str(parsed_services[0].get('updated_at') or '')
+                parsed_services = [s for s in parsed_services if str(s.get('updated_at') or '') == latest_ts]
+
+                # Дедуп распарсенных: один ключ -> одна запись, приоритет более полному описанию.
+                parsed_by_key = {}
+                for svc in parsed_services:
+                    key = _svc_key(svc)
+                    prev = parsed_by_key.get(key)
+                    if not prev:
+                        parsed_by_key[key] = svc
+                        continue
+                    prev_desc_len = len((prev.get('description') or '').strip())
+                    cur_desc_len = len((svc.get('description') or '').strip())
+                    if cur_desc_len > prev_desc_len:
+                        parsed_by_key[key] = svc
+                    elif cur_desc_len == prev_desc_len:
+                        prev_upd = str(prev.get('updated_at') or '')
+                        cur_upd = str(svc.get('updated_at') or '')
+                        if cur_upd > prev_upd:
+                            parsed_by_key[key] = svc
+
+                # Если есть распарсенные услуги, в UI отдаём только их:
+                # это гарантирует замену устаревшего ручного списка актуальными данными парсинга.
+                services = list(parsed_by_key.values())
+
+            # Убираем служебные поля из ответа API
+            for svc in services:
+                svc.pop('source', None)
+                svc.pop('raw', None)
+
         return jsonify({"success": True, "services": services})
     
     except Exception as e:
@@ -189,7 +274,7 @@ def update_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -212,9 +297,12 @@ def update_service(service_id):
         else:
             keywords_str = json.dumps([])
         
-        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+        # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+        """)
+        columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
         
@@ -230,8 +318,8 @@ def update_service(service_id):
             print(f"🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                SET category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -245,7 +333,7 @@ def update_service(service_id):
             print(f"✅ DEBUG services_api.update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
             
             # Проверяем, что данные сохранились
-            cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
+            cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = %s", (service_id,))
             check_row = cursor.fetchone()
             if check_row:
                 print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
@@ -254,8 +342,8 @@ def update_service(service_id):
         elif has_optimized_description:
             cursor.execute("""
                 UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                SET category = %s, name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -268,8 +356,8 @@ def update_service(service_id):
         elif has_optimized_name:
             cursor.execute("""
                 UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                SET category = %s, name = %s, optimized_name = %s, description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -282,8 +370,8 @@ def update_service(service_id):
         else:
             cursor.execute("""
                 UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                SET category = %s, name = %s, description = %s, keywords = %s, price = %s
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -321,7 +409,7 @@ def delete_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id FROM UserServices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -333,7 +421,7 @@ def delete_service(service_id):
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Удаляем услугу
-        cursor.execute("DELETE FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("DELETE FROM UserServices WHERE id = %s", (service_id,))
         db.conn.commit()
         db.close()
         
@@ -344,4 +432,3 @@ def delete_service(service_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

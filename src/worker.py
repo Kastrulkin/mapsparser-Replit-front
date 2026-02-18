@@ -66,6 +66,55 @@ def _handle_worker_error(queue_id: str, error_msg: str):
     except Exception as ex:
         print(f"❌ Не удалось обновить статус ошибки для {queue_id}: {ex}")
 
+
+def _upsert_map_parse_from_card(
+    conn,
+    business_id: str,
+    *,
+    url: str = "",
+    rating: float | None = None,
+    reviews_count: int = 0,
+    photos_count: int = 0,
+    news_count: int = 0,
+    products: list | None = None,
+    competitors: list | None = None,
+):
+    """Записать срез в MapParseResults для обратной совместимости с Progress/growth_api."""
+    import uuid as _uuid
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'mapparseresults'
+        """)
+        cols = {r[0] for r in cursor.fetchall()}
+        # Таблица отсутствует/не видна в схеме — silently skip для совместимости окружений.
+        if not cols:
+            return
+        pid = str(_uuid.uuid4())
+        url_val = url or f"https://yandex.ru/maps/"
+        fields = ["id", "business_id", "url", "map_type", "rating", "reviews_count", "news_count", "photos_count", "created_at"]
+        values = [pid, business_id, url_val, "yandex", str(rating) if rating else None, reviews_count, news_count, photos_count]
+        if "services_count" in cols and products:
+            s_count = sum(len(c.get("items") or []) for c in products if isinstance(c, dict))
+            fields.append("services_count")
+            values.append(s_count)
+        if "products" in cols and products:
+            fields.append("products")
+            values.append(json.dumps(products, ensure_ascii=False) if products else None)
+        if "competitors" in cols and competitors:
+            fields.append("competitors")
+            values.append(json.dumps(competitors, ensure_ascii=False) if competitors else None)
+        placeholders = ", ".join(["%s"] * len(values))
+        cursor.execute(
+            f"INSERT INTO mapparseresults ({', '.join(fields)}) VALUES ({placeholders})",
+            values,
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+
+
 def _extract_date_from_review(review: dict) -> str | int | float | None:
     """Извлечь дату из отзыва, проверяя различные поля"""
     date_fields = ['date', 'published_at', 'publishedAt', 'created_at', 'createdAt', 'time', 'timestamp']
@@ -184,11 +233,6 @@ def _parse_date_string(date_str: str) -> datetime | None:
     if russian_date:
         return russian_date
     
-    # Пробуем русские даты (27 января 2026)
-    russian_date = _parse_russian_date(date_str)
-    if russian_date:
-        return russian_date
-    
     # Пробуем ISO формат
     try:
         if 'T' in date_str or 'Z' in date_str or date_str.count('-') >= 2:
@@ -198,7 +242,6 @@ def _parse_date_string(date_str: str) -> datetime | None:
     
     # Пробуем dateutil для других форматов
     try:
-        from dateutil import parser as date_parser
         return date_parser.parse(date_str, fuzzy=True)
     except Exception:
         return None
@@ -483,6 +526,8 @@ def process_queue():
             if card_data.get("error") == "captcha_detected":
                 # Капча не решена или появилась заново — остаёмся в waiting с новым session_id (если есть)
                 new_session_id = card_data.get("captcha_session_id") or captcha_session_id
+                captcha_url = card_data.get("captcha_url") or url
+                captcha_comment = f"captcha_required: откройте ссылку и пройдите капчу: {captcha_url}" if captcha_url else "captcha_required: пройдите капчу и нажмите продолжить"
                 print(f"⚠️ Капча всё ещё активна для задачи {task_id}, session_id={new_session_id}")
                 conn = get_db_connection()
                 cursor = conn.cursor()
@@ -493,12 +538,14 @@ def process_queue():
                         UPDATE parsequeue
                         SET captcha_status = 'waiting',
                             retry_after = %s,
+                            captcha_url = %s,
                             captcha_session_id = %s,
+                            error_message = %s,
                             resume_requested = 0,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = %s
                         """,
-                        (retry_after.isoformat(), str(new_session_id), task_id),
+                        (retry_after.isoformat(), captcha_url, str(new_session_id), captcha_comment, task_id),
                     )
                     conn.commit()
                 finally:
@@ -660,6 +707,40 @@ def process_queue():
                 debug_bundle_id=debug_bundle_id,
                 **geolocation_kwarg,
             )
+
+            # Защита от некорректного возврата парсера
+            if card_data is None:
+                print("[FATAL] parse_yandex_card вернул None", flush=True)
+                card_data = {"error": "parser_returned_none", "url": url}
+            elif not isinstance(card_data, dict):
+                print(f"[FATAL] parse_yandex_card вернул {type(card_data)}", flush=True)
+                card_data = {"error": f"parser_returned_{type(card_data).__name__}", "url": url}
+
+            # Нормализация title_or_name до валидации (каскад: title → name → overview → page_title → og_title)
+            if isinstance(card_data, dict) and not card_data.get("error"):
+                if not card_data.get("title_or_name", "").strip():
+                    og_raw = (card_data.get("og_title") or "").strip()
+                    og_clean = og_raw.replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").split("|")[0].split(",")[0].strip() if og_raw else ""
+                    sources = [
+                        (card_data.get("title") or "").strip(),
+                        (card_data.get("name") or "").strip(),
+                        (card_data.get("overview") or {}).get("title") if isinstance(card_data.get("overview"), dict) else "",
+                        (card_data.get("page_title") or "").replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").strip() if card_data.get("page_title") else "",
+                        og_clean,
+                    ]
+                    fallback = next((s for s in sources if s and str(s).strip()), None)
+                    if fallback:
+                        fallback = str(fallback).strip()
+                        card_data["title_or_name"] = fallback
+                        if not card_data.get("title"):
+                            card_data["title"] = fallback
+                        overview = card_data.get("overview") or {}
+                        if isinstance(overview, dict) and not overview.get("title"):
+                            overview["title"] = fallback
+                        used_og = fallback == og_clean and og_clean
+                        print(f"[WORKER_NORMALIZE] title_or_name='{fallback[:50]}'" + (" (from og_title)" if used_og else " из title/name/overview/page_title"), flush=True)
+                    else:
+                        print("[CRITICAL] Нет источников для title_or_name", flush=True)
         except Exception as e:
             msg = str(e)
             if "Playwright Sync API inside the asyncio loop" in msg:
@@ -711,6 +792,9 @@ def process_queue():
         if bundle_dir and validation_result:
             try:
                 v_path = os.path.join(bundle_dir, "validation.json")
+                val_warnings = list(validation_result.get("warnings") or [])
+                parser_warnings = list(card_data.get("warnings") or []) if isinstance(card_data, dict) else []
+                all_warnings = list(dict.fromkeys(val_warnings + parser_warnings))
                 payload = {
                     "is_successful": bool(is_successful),
                     "reason": str(reason),
@@ -718,7 +802,7 @@ def process_queue():
                     "hard_missing": validation_result.get("hard_missing") or [],
                     "missing_fields": validation_result.get("missing_fields") or [],
                     "found_fields": validation_result.get("found_fields") or [],
-                    "warnings": validation_result.get("warnings") or [],
+                    "warnings": all_warnings,
                 }
                 with open(v_path, "w", encoding="utf-8") as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
@@ -741,67 +825,17 @@ def process_queue():
             meta = build_parsing_meta(card_data, validation_result, source=SOURCE_YANDEX_BUSINESS)
             card_data["_meta"] = meta
         
-        fallback_created = False
         if not is_successful and business_id:
-            # DISABLE AUTOMATIC FALLBACK (User Request 2026-01-23)
-            # Fallback to cabinet parsing should be manual only.
-            # has_account, account_id = _has_cabinet_account(business_id)
-            # if has_account: ...
-            
-            # Проверяем, есть ли кабинет для fallback
-            # has_account, account_id = _has_cabinet_account(business_id)
-            
-            # if has_account:
-            #     print(f"⚠️ Парсинг неполный ({reason}), создаю задачу fallback через кабинет")
-                
-            #     # Создаем задачу fallback
-            #     fallback_task_id = str(uuid.uuid4())
-            #     conn = get_db_connection()
-            #     cursor = conn.cursor()
-                
-            #     try:
-            #         cursor.execute("""
-            #             INSERT INTO ParseQueue (
-            #                 id, business_id, account_id, task_type, source,
-            #                 status, user_id, url, created_at, updated_at
-            #             )
-            #             VALUES (?, ?, ?, 'parse_cabinet_fallback', 'yandex_business',
-            #                     'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            #         """, (fallback_task_id, business_id, account_id, queue_dict["user_id"], queue_dict["url"]))
-            #         conn.commit()
-            #         print(f"✅ Создана задача fallback: {fallback_task_id}")
-            #         fallback_created = True
-            #     finally:
-            #         cursor.close()
-            #         conn.close()
             print(f"⚠️ Парсинг неполный ({reason}). Автоматический fallback отключен.")
         
         if card_data.get("error") == "captcha_detected":
             captcha_session_id = card_data.get("captcha_session_id")
+            captcha_url = card_data.get("captcha_url") or queue_dict.get("url")
+            captcha_comment = f"captcha_required: откройте ссылку и пройдите капчу: {captcha_url}" if captcha_url else "captcha_required: пройдите капчу и нажмите продолжить"
             if captcha_session_id:
                 print(f"⚠️ Капча обнаружена, session_id={captcha_session_id} (human-in-the-loop)")
             else:
                 print("⚠️ Капча обнаружена, но session_id отсутствует (registry недоступен)")
-
-            # Если был создан фоллбэк, то считаем задачу выполненной, не уходим в цикл
-            if fallback_created:
-                print(
-                    "✅ Капча обнаружена, но создан фоллбэк. "
-                    "Помечаю задачу как выполненную, чтобы не зацикливать."
-                )
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                try:
-                    cursor.execute(
-                        "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                        (STATUS_COMPLETED, queue_dict["id"]),
-                    )
-                    cursor.execute("DELETE FROM parsequeue WHERE id = %s", (queue_dict["id"],))
-                    conn.commit()
-                finally:
-                    cursor.close()
-                    conn.close()
-                return
 
             # Открываем новое соединение только для обновления статуса капчи и сохранения метаданных
             conn = get_db_connection()
@@ -819,6 +853,7 @@ def process_queue():
                         captcha_session_id = %s,
                         captcha_started_at = %s,
                         captcha_status = 'waiting',
+                        error_message = %s,
                         resume_requested = 0,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
@@ -826,9 +861,10 @@ def process_queue():
                     (
                         STATUS_CAPTCHA,
                         retry_after.isoformat(),
-                        card_data.get("captcha_url") or queue_dict.get("url"),
+                        captcha_url,
                         captcha_session_id,
                         now_iso,
+                        captcha_comment,
                         queue_dict["id"],
                     ),
                 )
@@ -922,7 +958,9 @@ def process_queue():
                     hours_struct = {'schedule': hours_full} if hours_full else None
                     competitors = card_data.get('competitors', [])
                     products = card_data.get('products', [])
-                    news_list = card_data.get('news') or []
+                    news_list = card_data.get('news') or card_data.get('posts') or []
+                    if not isinstance(news_list, list):
+                        news_list = []
                     
                     rating_float = None
                     if rating not in (None, ''):
@@ -943,6 +981,9 @@ def process_queue():
                     db_manager = DatabaseManager()
                     services_saved_count = 0
                     try:
+                        _photos = card_data.get("photos") or []
+                        if isinstance(_photos, int):
+                            _photos = []
                         db_manager.save_new_card_version(
                             business_id,
                             url=queue_dict["url"],
@@ -955,6 +996,7 @@ def process_queue():
                             overview=overview_payload,
                             products=products or None,
                             news=news_list or None,
+                            photos=_photos if _photos else None,
                             competitors=competitors or None,
                             hours=hours_struct,
                             hours_full=hours_full or None,
@@ -989,19 +1031,42 @@ def process_queue():
                                     service_rows = map_card_services(card_data, business_id, owner_id)
                                     if service_rows:
                                         services_saved_count = db_manager.upsert_parsed_services(business_id, owner_id, service_rows)
-                                        print(f"Saved services={services_saved_count} for business_id={business_id}")
+                                        print(f"[Services] Saved {services_saved_count} services")
                                 except Exception as svc_e:
                                     print(f"⚠️ upsert_parsed_services failed for {business_id}: {svc_e}")
                         except Exception as sync_e:
                             print(f"⚠️ Failed to update businesses from card for {business_id}: {sync_e}")
 
                     except Exception as e:
-                        # Помечаем задачу как ошибочную, чтобы не зависала в processing
+                        # Помечаем задачу как ошибочной, чтобы не зависала в processing
                         err_text = f"save_failed:{e.__class__.__name__}:{e}"
                         _handle_worker_error(queue_dict["id"], err_text)
                         db_manager.close()
                         raise
                     else:
+                        # MapParseResults для обратной совместимости (Progress, growth_api)
+                        try:
+                            mpr_fields = {
+                                'rating': rating_float,
+                                'reviews_count': reviews_count,
+                                'photos_count': photos_count,
+                                'news_count': len(news_list or []),
+                            }
+                            print(f"[METRICS_SAVE] {business_id} | rating={mpr_fields['rating']} | reviews={mpr_fields['reviews_count']} | photos={mpr_fields['photos_count']} | news={mpr_fields['news_count']}")
+                            _upsert_map_parse_from_card(
+                                db_manager.conn,
+                                business_id,
+                                url=queue_dict["url"],
+                                rating=mpr_fields['rating'],
+                                reviews_count=mpr_fields['reviews_count'],
+                                photos_count=mpr_fields['photos_count'],
+                                news_count=mpr_fields['news_count'],
+                                products=products if products else None,
+                                competitors=competitors if competitors else None,
+                            )
+                        except Exception as mpr_e:
+                            print(f"❌ [MapParseResults] Failed for {business_id}: {mpr_e}")
+                            traceback.print_exc()
                         db_manager.close()
 
                     # Диагностический лог: одна строка, без секретов
@@ -1042,6 +1107,14 @@ def process_queue():
                                 from safe_db_utils import get_db_path
                                 db_path_debug = get_db_path()
                                 r_len = len(reviews_list) if reviews_list else 0
+                                # Расчёт неотвеченных отзывов (если reviews_list определён)
+                                if 'reviews_list' in locals() and reviews_list:
+                                    unanswered_reviews_count = sum(
+                                        1 for r in reviews_list
+                                        if not r.get("org_reply")
+                                    )
+                                else:
+                                    unanswered_reviews_count = 0
                                 debug_log(f"Worker DB Path: {db_path_debug}")
                                 debug_log(f"Reviews in list: {r_len}")
                                 debug_log(f"Unanswered calc: {unanswered_reviews_count}")
@@ -1123,7 +1196,8 @@ def process_queue():
                                 
                                 if external_reviews:
                                     sync_worker._upsert_reviews(db_manager, external_reviews)
-                                    print(f"💾 Сохранено {len(external_reviews)} уникальных отзывов (было {len(reviews_list)})")
+                                    db_manager.conn.commit()
+                                    print(f"✅ Saved {len(external_reviews)} reviews to ExternalBusinessReviews")
 
                             # 2. СОХРАНЕНИЕ НОВОСТЕЙ (Posts)
                             news_items = card_data.get('news', [])
@@ -1154,8 +1228,12 @@ def process_queue():
                                     external_posts.append(ext_post)
                                 
                                 if external_posts:
-                                    sync_worker._upsert_posts(db_manager, external_posts)
-                                    print(f"💾 Сохранено {len(external_posts)} новостей")
+                                    try:
+                                        sync_worker._upsert_posts(db_manager, external_posts)
+                                        print(f"✅ Saved {len(external_posts)} posts to ExternalBusinessPosts")
+                                    except Exception as posts_err:
+                                        # Не блокируем синк услуг/статистики, если таблица постов ещё не мигрирована.
+                                        print(f"⚠️ Skip posts sync (ExternalBusinessPosts unavailable): {posts_err}")
 
                             # 3. СОХРАНЕНИЕ УСЛУГ (Services)
                             products = card_data.get('products')
@@ -1206,12 +1284,10 @@ def process_queue():
                                 
                     except Exception as det_err:
                         print(f"⚠️ Ошибка сохранения детальных данных (reviews/posts/stats): {det_err}")
-                        import traceback
                         traceback.print_exc()
 
                 except Exception as e:
                     print(f"⚠️ Ошибка сохранения в cards: {e}")
-                    import traceback
                     traceback.print_exc()
                     try:
                         from user_api import send_email
@@ -1320,25 +1396,6 @@ def process_queue():
                 except Exception as analysis_error:
                     print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
             
-            # --- SYNC SERVICES AFTER PARSING (NEW) ---
-            if business_id and card_data.get('products'):
-                try:
-                    # Need owner_id for sync
-                    cursor = conn.cursor() # Ensure we have cursor
-                    cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
-                    owner_row = cursor.fetchone()
-                    if owner_row:
-                        owner_id = owner_row[0] if isinstance(owner_row, (list, tuple)) else owner_row.get("owner_id")
-                        print(f"🔄 Синхронизация услуг для business_id={business_id} (owner_id={owner_id})...")
-                        _sync_parsed_services_to_db(business_id, card_data.get('products'), conn, owner_id)
-                        print(f"✅ Услуги успешно синхронизированы.")
-                    else:
-                        print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
-                except Exception as sync_error:
-                    print(f"⚠️ Ошибка синхронизации услуг: {sync_error}")
-                    import traceback
-                    traceback.print_exc()
-            
             # Обновляем статус на "completed" (чтобы задача осталась в списке)
             warning_parts = []
             # Старое предупреждение про HTML fallback (если используется быстрый эндпоинт)
@@ -1393,7 +1450,6 @@ def process_queue():
         signal.alarm(0)  # Отключаем таймаут при ошибке
         queue_id = queue_dict.get('id', 'unknown') if queue_dict else 'unknown'
         print(f"❌ Ошибка при обработке заявки {queue_id}: {e}")
-        import traceback
         traceback.print_exc()
         
         # Обновляем статус ошибки
@@ -1427,32 +1483,66 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
     Поддерживает структуру: список категорий с items или плоский список элементов.
     """
     products = card_data.get("products") or card_data.get("services") or []
+    print(f"[map_card_services] Found {len(products) if isinstance(products, list) else 0} product categories for {business_id}")
+    if not products:
+        print(f"[map_card_services] No products in card_data. Keys: {list(card_data.keys())}")
+        return []
     if not isinstance(products, list):
+        print(f"[map_card_services] No products in card_data. Keys: {list(card_data.keys())}")
         return []
     rows = []
+    seen = set()
     source = "yandex_maps"
-    # Формат: [{"category": "…", "items": [{"name", "price", "description", "id", ...}]}] или плоский список
     for cat_block in products:
-        if not isinstance(cat_block, dict):
-            if isinstance(cat_block, (str, int, float)):
-                continue
-            if isinstance(cat_block, list):
-                for item in cat_block:
-                    if isinstance(item, dict) and item.get("name"):
-                        row = _one_service_row(item, business_id, user_id, source)
-                        if row:
-                            rows.append(row)
+        # cat_block может быть: dict (категория), list (вложенные items), или мусор
+        if isinstance(cat_block, list):
+            # Плоский список items без обёртки категории
+            items = cat_block
+            category_name = "Разное"
+            for item in items:
+                if isinstance(item, dict) and item.get("name"):
+                    row = _one_service_row(item, business_id, user_id, source)
+                    if row:
+                        row["category"] = category_name
+                        key = (
+                            (row.get("source") or "").lower(),
+                            (row.get("name") or "").strip().lower(),
+                            (row.get("category") or "").strip().lower(),
+                            str(row.get("price_from") or ""),
+                            str(row.get("price_to") or ""),
+                        )
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        rows.append(row)
             continue
+
+        if not isinstance(cat_block, dict):
+            # Примитивы и неизвестные типы — пропускаем
+            continue
+
+        # Стандартная структура: dict с category и items
         category_name = (cat_block.get("category") or "Разное").strip() or "Разное"
         items = cat_block.get("items") or cat_block.get("products") or []
         if not isinstance(items, list):
             continue
+
         for item in items:
             if not isinstance(item, dict) or not item.get("name"):
                 continue
             row = _one_service_row(item, business_id, user_id, source)
             if row:
                 row["category"] = category_name
+                key = (
+                    (row.get("source") or "").lower(),
+                    (row.get("name") or "").strip().lower(),
+                    (row.get("category") or "").strip().lower(),
+                    str(row.get("price_from") or ""),
+                    str(row.get("price_to") or ""),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
                 rows.append(row)
     return rows
 
@@ -1469,11 +1559,18 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     price_from = price_to = None
     if raw_price is not None and str(raw_price).strip():
         try:
-            digits = re.sub(r"[^0-9.,]", "", str(raw_price))
-            digits = digits.replace(",", ".")
-            if digits:
-                price_from = float(digits)
-                price_to = price_from
+            # Ищем все числа в строке
+            numbers = re.findall(r"\d+", str(raw_price).replace(" ", "").replace(",", ""))
+            if len(numbers) >= 2:
+                n1, n2 = int(numbers[0]), int(numbers[1])
+                # Защита от выбросов: если разница >100x, вероятно это не диапазон
+                if max(n1, n2) / max(min(n1, n2), 1) <= 100:
+                    price_from = float(min(n1, n2))
+                    price_to = float(max(n1, n2))
+                else:
+                    price_from = price_to = float(n1)
+            elif len(numbers) == 1:
+                price_from = price_to = float(numbers[0])
         except (ValueError, TypeError):
             pass
     return {
@@ -1486,7 +1583,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "external_id": external_id,
         "price_from": price_from,
         "price_to": price_to,
-        "raw": item,
+        "raw": (dict(item) if isinstance(item, dict) else {"_error": "not_a_dict", "_type": type(item).__name__}),
         "duration_minutes": item.get("duration_minutes") or item.get("duration"),
     }
 
@@ -1645,7 +1742,6 @@ def _process_sync_yandex_business_task(queue_dict):
         from auth_encryption import decrypt_auth_data
         from database_manager import DatabaseManager
         import json
-        import traceback
         
         # Получаем auth_data
         db = None  # Initialize to None for safe cleanup
@@ -1908,7 +2004,6 @@ def _process_sync_yandex_business_task(queue_dict):
             
         except Exception as e:
             print(f"❌ Ошибка синхронизации: {e}", flush=True)
-            import traceback
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
             signal.alarm(0)  # Отменяем таймаут при ошибке
@@ -1942,7 +2037,6 @@ def _process_sync_yandex_business_task(queue_dict):
             
     except Exception as e:
         print(f"❌ Критическая ошибка синхронизации: {e}")
-        import traceback
         traceback.print_exc()
         
         # Обновляем статус ошибки
@@ -2002,7 +2096,6 @@ def _process_cabinet_fallback_task(queue_dict):
         
     except Exception as e:
         print(f"❌ Ошибка fallback парсинга: {e}", flush=True)
-        import traceback
         traceback.print_exc(file=sys.stdout)
         sys.stdout.flush()
         _handle_worker_error(queue_dict["id"], str(e))
@@ -2150,7 +2243,6 @@ if __name__ == "__main__":
             process_queue()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
-            import traceback
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
         

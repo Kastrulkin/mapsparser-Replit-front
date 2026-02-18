@@ -3,8 +3,124 @@
 Модуль для расчета прогресса выполнения этапов роста бизнеса
 """
 import json
+from datetime import datetime, timedelta
 from database_manager import DatabaseManager
 from typing import Dict, Any, List
+
+
+def _row_val(row, key_or_idx):
+    """Извлечь значение из row (dict или tuple)."""
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        if isinstance(key_or_idx, int):
+            vals = list(row.values())
+            return vals[key_or_idx] if 0 <= key_or_idx < len(vals) else None
+        return row.get(key_or_idx)
+    if isinstance(row, (list, tuple)):
+        return row[key_or_idx] if 0 <= key_or_idx < len(row) else None
+    return None
+
+
+def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dict[str, Any]:
+    """Приоритет: external -> cards -> mapparseresults."""
+    _ = freshness_hours
+    fallback = {
+        "rating": None,
+        "reviews_count": 0,
+        "photos_count": 0,
+        "news_count": 0,
+        "unanswered_reviews_count": 0,
+        "source": "mapparseresults",
+    }
+    try:
+        cursor.execute(
+            """
+            SELECT
+                rating,
+                reviews_total,
+                photos_count,
+                news_count,
+                (
+                    SELECT COUNT(*)
+                    FROM externalbusinessreviews
+                    WHERE business_id = %s
+                      AND source IN ('yandex_business', 'yandex_maps')
+                      AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+                ) AS unanswered
+            FROM externalbusinessstats
+            WHERE business_id = %s
+              AND source IN ('yandex_business', 'yandex_maps')
+            ORDER BY date DESC
+            LIMIT 1
+            """,
+            (business_id, business_id),
+        )
+        row = cursor.fetchone()
+        reviews_total = _row_val(row, "reviews_total") if isinstance(row, dict) else _row_val(row, 1)
+        if row and reviews_total not in (None, ""):
+            out = {
+                "rating": _row_val(row, "rating") if isinstance(row, dict) else _row_val(row, 0),
+                "reviews_count": int(reviews_total or 0),
+                "photos_count": int((_row_val(row, "photos_count") if isinstance(row, dict) else _row_val(row, 2)) or 0),
+                "news_count": int((_row_val(row, "news_count") if isinstance(row, dict) else _row_val(row, 3)) or 0),
+                "unanswered_reviews_count": int((_row_val(row, "unanswered") if isinstance(row, dict) else _row_val(row, 4)) or 0),
+                "source": "external",
+            }
+            print(f"[METRICS] source: {out['source']} | rating: {out['rating']} | reviews: {out['reviews_count']}")
+            return out
+
+        cursor.execute(
+            """
+            SELECT
+                rating,
+                reviews_count,
+                COALESCE((overview->>'photos_count')::int, 0) AS photos_count,
+                COALESCE((overview->>'news_count')::int, 0) AS news_count
+            FROM cards
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            out = {
+                "rating": _row_val(row, "rating") if isinstance(row, dict) else _row_val(row, 0),
+                "reviews_count": int((_row_val(row, "reviews_count") if isinstance(row, dict) else _row_val(row, 1)) or 0),
+                "photos_count": int((_row_val(row, "photos_count") if isinstance(row, dict) else _row_val(row, 2)) or 0),
+                "news_count": int((_row_val(row, "news_count") if isinstance(row, dict) else _row_val(row, 3)) or 0),
+                "unanswered_reviews_count": 0,
+                "source": "cards",
+            }
+            print(f"[METRICS] source: {out['source']} | rating: {out['rating']} | reviews: {out['reviews_count']}")
+            return out
+
+        cursor.execute(
+            """
+            SELECT rating, reviews_count, photos_count, news_count, unanswered_reviews_count
+            FROM mapparseresults
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        out = {
+            "rating": (_row_val(row, "rating") if isinstance(row, dict) else _row_val(row, 0)) if row else None,
+            "reviews_count": int(((_row_val(row, "reviews_count") if isinstance(row, dict) else _row_val(row, 1)) or 0) if row else 0),
+            "photos_count": int(((_row_val(row, "photos_count") if isinstance(row, dict) else _row_val(row, 2)) or 0) if row else 0),
+            "news_count": int(((_row_val(row, "news_count") if isinstance(row, dict) else _row_val(row, 3)) or 0) if row else 0),
+            "unanswered_reviews_count": int(((_row_val(row, "unanswered_reviews_count") if isinstance(row, dict) else _row_val(row, 4)) or 0) if row else 0),
+            "source": "mapparseresults",
+        }
+        print(f"[METRICS] source: {out['source']} | rating: {out['rating']} | reviews: {out['reviews_count']}")
+        return out
+    except Exception as e:
+        print(f"⚠️ _get_map_metrics error: {e}")
+        return fallback
 
 
 class ProgressCalculator:
@@ -31,7 +147,7 @@ class ProgressCalculator:
         self.cursor.execute("""
             SELECT email, phone, name, 
                    name AS business_name, business_type, address, working_hours, owner_id
-            FROM Businesses WHERE id = ?
+            FROM Businesses WHERE id = %s
         """, (business_id,))
         business_row = self.cursor.fetchone()
         
@@ -66,7 +182,7 @@ class ProgressCalculator:
         # 1. Проверка Яндекс.Карты
         self.cursor.execute("""
             SELECT COUNT(*) FROM BusinessMapLinks 
-            WHERE business_id = ? AND map_type = 'yandex'
+            WHERE business_id = %s AND map_type = 'yandex'
         """, (business_id,))
         yandex_count = self.cursor.fetchone()[0]
         checks['yandex_maps_profile'] = {'completed': yandex_count > 0, 'points': 17}
@@ -74,30 +190,17 @@ class ProgressCalculator:
         # 2. Проверка Google Maps
         self.cursor.execute("""
             SELECT COUNT(*) FROM BusinessMapLinks 
-            WHERE business_id = ? AND map_type = 'google'
+            WHERE business_id = %s AND map_type = 'google'
         """, (business_id,))
         google_count = self.cursor.fetchone()[0]
         checks['google_maps_profile'] = {'completed': google_count > 0, 'points': 17}
         
-        # 3. Проверка фото (из последнего парсинга)
-        self.cursor.execute("""
-            SELECT photos_count FROM MapParseResults 
-            WHERE business_id = ? 
-            ORDER BY created_at DESC LIMIT 1
-        """, (business_id,))
-        photos_row = self.cursor.fetchone()
-        photos_count = photos_row[0] if photos_row else 0
+        # 3–4. Метрики карты: external → cards → MapParseResults
+        metrics = _get_map_metrics(self.cursor, business_id)
+        photos_count = metrics["photos_count"]
+        reviews_count = metrics["reviews_count"]
+        rating = metrics["rating"]
         checks['photos_uploaded'] = {'completed': photos_count >= 7, 'points': 17}
-        
-        # 4. Проверка отзывов и рейтинга
-        self.cursor.execute("""
-            SELECT reviews_count, rating FROM MapParseResults 
-            WHERE business_id = ? 
-            ORDER BY created_at DESC LIMIT 1
-        """, (business_id,))
-        reviews_row = self.cursor.fetchone()
-        reviews_count = reviews_row[0] if reviews_row else 0
-        rating = float(reviews_row[1]) if reviews_row and reviews_row[1] else 0.0
         checks['reviews_collected'] = {
             'completed': reviews_count >= 10 and rating >= 4.5, 
             'points': 17
@@ -106,7 +209,7 @@ class ProgressCalculator:
         # 5. Проверка соцсетей/мессенджеров
         self.cursor.execute("""
             SELECT COUNT(*) FROM ExternalIntegrations 
-            WHERE business_id = ? AND type IN ('telegram', 'whatsapp')
+            WHERE business_id = %s AND type IN ('telegram', 'whatsapp')
         """, (business_id,))
         social_count = self.cursor.fetchone()[0]
         checks['social_links'] = {'completed': social_count > 0, 'points': 16}
@@ -136,7 +239,7 @@ class ProgressCalculator:
         
         # 1. Виджет записи (booking агент)
         self.cursor.execute("""
-            SELECT ai_agents_config FROM Businesses WHERE id = ?
+            SELECT ai_agents_config FROM Businesses WHERE id = %s
         """, (business_id,))
         row = self.cursor.fetchone()
         booking_enabled = False
@@ -148,17 +251,23 @@ class ProgressCalculator:
                 pass
         checks['booking_widget'] = {'completed': booking_enabled, 'points': 33}
         
-        # 2. Автосбор отзывов (наличие отзывов + регулярность)
+        # 2. Автосбор отзывов (наличие отзывов + регулярность): cards или MapParseResults
         self.cursor.execute("""
-            SELECT COUNT(*) FROM MapParseResults 
-            WHERE business_id = ? AND created_at >= datetime('now', '-30 days')
+            SELECT COUNT(*) FROM cards
+            WHERE business_id = %s AND created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
         """, (business_id,))
         recent_parses = self.cursor.fetchone()[0]
+        if recent_parses == 0:
+            self.cursor.execute("""
+                SELECT COUNT(*) FROM MapParseResults
+                WHERE business_id = %s AND created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+            """, (business_id,))
+            recent_parses = self.cursor.fetchone()[0]
         checks['auto_reviews'] = {'completed': recent_parses >= 2, 'points': 33}
         
         # 3. Прайс-лист (услуги)
         self.cursor.execute("""
-            SELECT COUNT(*) FROM UserServices WHERE business_id = ?
+            SELECT COUNT(*) FROM UserServices WHERE business_id = %s
         """, (business_id,))
         services_count = self.cursor.fetchone()[0]
         checks['pricelist_added'] = {'completed': services_count >= 3, 'points': 34}
@@ -187,14 +296,14 @@ class ProgressCalculator:
         # 1. CRM внедрена
         self.cursor.execute("""
             SELECT COUNT(*) FROM UserServices 
-            WHERE business_id = ? AND service_type = 'crm' AND is_active = 1
+            WHERE business_id = %s AND service_type = 'crm' AND is_active = 1
         """, (business_id,))
         crm_count = self.cursor.fetchone()[0]
         checks['crm_implemented'] = {'completed': crm_count > 0, 'points': 50}
         
         # 2. База заполнена (услуги)
         self.cursor.execute("""
-            SELECT COUNT(*) FROM UserServices WHERE business_id = ?
+            SELECT COUNT(*) FROM UserServices WHERE business_id = %s
         """, (business_id,))
         services_count = self.cursor.fetchone()[0]
         checks['database_filled'] = {'completed': services_count >= 5, 'points': 50}
@@ -222,7 +331,7 @@ class ProgressCalculator:
         
         # 1. Боты подключены
         self.cursor.execute("""
-            SELECT ai_agents_config FROM Businesses WHERE id = ?
+            SELECT ai_agents_config FROM Businesses WHERE id = %s
         """, (business_id,))
         row = self.cursor.fetchone()
         bots_enabled = False
@@ -241,7 +350,7 @@ class ProgressCalculator:
         # 2. Интеграция с CRM
         self.cursor.execute("""
             SELECT COUNT(*) FROM UserServices 
-            WHERE business_id = ? AND service_type = 'crm' AND is_active = 1
+            WHERE business_id = %s AND service_type = 'crm' AND is_active = 1
         """, (business_id,))
         crm_active = self.cursor.fetchone()[0] > 0
         checks['crm_integration'] = {'completed': bots_enabled and crm_active, 'points': 50}

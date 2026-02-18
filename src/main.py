@@ -245,7 +245,7 @@ def competitor_exists(url: str) -> bool:
     try:
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("SELECT id FROM Cards WHERE url = ? LIMIT 1", (url,))
+        cur.execute("SELECT id FROM Cards WHERE url = %s LIMIT 1", (url,))
         row = cur.fetchone()
         db.close()
         return row is not None
@@ -297,7 +297,7 @@ def save_card_to_db(card: dict) -> None:
             competitors, hours, hours_full, report_path, user_id, seo_score,
             ai_analysis, recommendations
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """,
         (
@@ -1200,10 +1200,7 @@ def upsert_external_account(business_id):
                     (external_id, display_name, new_active, now, account_id),
                 )
         else:
-            # Create: auth_data обязателен; после INSERT проверяем дубли (без unique constraint)
-            if not auth_data_str:
-                db.close()
-                return jsonify({"error": "При создании аккаунта auth_data обязателен", "field": "auth_data"}), 400
+            # Create: auth_data опционален — можно сохранить external_id, cookies добавить позже
             action = "created"
             new_active = bool(is_active)
             insert_id = str(uuid.uuid4())
@@ -1229,7 +1226,9 @@ def upsert_external_account(business_id):
             # Канонический id — запись с минимальным created_at (стабильный выбор при дублях)
             row0 = _row_to_dict(cursor, rows_after[0]) if rows_after else None
             account_id = row0.get("id") if row0 else insert_id
-            saved_fields = ["external_id", "display_name", "is_active", "auth_data_updated"]
+            saved_fields = ["external_id", "display_name", "is_active"]
+            if auth_data_encrypted is not None:
+                saved_fields.append("auth_data_updated")
 
         db.conn.commit()
         db.close()
@@ -1598,7 +1597,14 @@ def get_external_reviews(business_id):
         # Проверяем, существует ли таблица externalbusinessreviews (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessreviews')")
         table_exists = cursor.fetchone()
-        if not table_exists or (table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is None):
+        reg_val = None
+        if isinstance(table_exists, dict):
+            reg_val = next(iter(table_exists.values()), None)
+        elif isinstance(table_exists, (list, tuple)):
+            reg_val = table_exists[0] if table_exists else None
+        else:
+            reg_val = table_exists
+        if not reg_val:
             db.close()
             return jsonify({"success": True, "reviews": [], "total": 0, "with_response": 0, "without_response": 0})
 
@@ -1726,7 +1732,7 @@ def get_external_summary(business_id):
             """
             SELECT rating, reviews_total, date
             FROM externalbusinessstats
-            WHERE business_id = %s AND source = 'yandex_business'
+            WHERE business_id = %s AND source IN ('yandex_business', 'yandex_maps')
             ORDER BY date DESC
             LIMIT 1
             """,
@@ -1741,7 +1747,7 @@ def get_external_summary(business_id):
                    SUM(CASE WHEN response_text IS NOT NULL AND response_text != '' THEN 1 ELSE 0 END) AS with_response,
                    SUM(CASE WHEN response_text IS NULL OR response_text = '' THEN 1 ELSE 0 END) AS without_response
             FROM externalbusinessreviews
-            WHERE business_id = %s AND source = 'yandex_business'
+            WHERE business_id = %s AND source IN ('yandex_business', 'yandex_maps')
             """,
             (business_id,),
         )
@@ -1752,20 +1758,58 @@ def get_external_summary(business_id):
         # full_card  — последняя snapshot_type='full' (богатый слепок)
         # metrics_card — последняя is_latest (может быть metrics_update или full)
 
-        # 1) full_card: последняя полноценная карточка
+        # 1) full_card: последняя полноценная карточка (совместимо с overview как text/json/jsonb)
         cursor.execute(
             """
             SELECT *
             FROM cards
             WHERE business_id = %s
-              AND (overview->>'snapshot_type') = 'full'
             ORDER BY created_at DESC
-            LIMIT 1
+            LIMIT 100
             """,
             (business_id,),
         )
-        raw_full = cursor.fetchone()
-        full_card = _row_to_dict(cursor, raw_full) if raw_full else None
+        raw_cards = cursor.fetchall()
+        cards_rows = [_row_to_dict(cursor, row) for row in raw_cards if row]
+
+        def _snapshot_type(card_row):
+            if not card_row:
+                return None
+            overview = card_row.get("overview")
+            if isinstance(overview, dict):
+                st = overview.get("snapshot_type")
+                return str(st).strip().lower() if st else None
+            if isinstance(overview, str):
+                raw = overview.strip()
+                if not raw:
+                    return None
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    return None
+                if isinstance(parsed, dict):
+                    st = parsed.get("snapshot_type")
+                    return str(st).strip().lower() if st else None
+            return None
+
+        def _overview_dict(card_row):
+            if not card_row:
+                return {}
+            overview = card_row.get("overview")
+            if isinstance(overview, dict):
+                return overview
+            if isinstance(overview, str):
+                raw = overview.strip()
+                if not raw:
+                    return {}
+                try:
+                    parsed = json.loads(raw)
+                    return parsed if isinstance(parsed, dict) else {}
+                except Exception:
+                    return {}
+            return {}
+
+        full_card = next((row for row in cards_rows if _snapshot_type(row) == "full"), None)
 
         # 2) metrics_card: последняя is_latest (она может быть metrics_update или full)
         cursor.execute(
@@ -1798,7 +1842,7 @@ def get_external_summary(business_id):
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
         if rating is None:
-            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
+            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
                 try:
                     rating = float(metrics_card.get("rating"))
                 except (TypeError, ValueError):
@@ -1810,7 +1854,7 @@ def get_external_summary(business_id):
                     rating = None
 
         if reviews_total == 0:
-            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
+            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
                 reviews_total = int(metrics_card.get("reviews_count") or 0)
             elif parse_row and (parse_row.get("reviews_count") or 0) != 0:
                 reviews_total = int(parse_row.get("reviews_count") or 0)
@@ -1867,8 +1911,15 @@ def get_external_posts(business_id):
         # Сначала пробуем externalbusinessposts (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessposts')")
         table_exists = cursor.fetchone()
+        reg_val = None
+        if isinstance(table_exists, dict):
+            reg_val = next(iter(table_exists.values()), None)
+        elif isinstance(table_exists, (list, tuple)):
+            reg_val = table_exists[0] if table_exists else None
+        else:
+            reg_val = table_exists
         posts = []
-        if table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is not None:
+        if reg_val:
             cursor.execute(
                 """
                 SELECT id, source, external_post_id, title, text, published_at, created_at
@@ -2106,14 +2157,14 @@ def pause_user(user_id):
         cursor.execute("""
             UPDATE Users 
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
+            WHERE id = %s
         """, (user_id,))
         
         # Деактивируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses 
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = ?
+            WHERE owner_id = %s
         """, (user_id,))
         
         db.conn.commit()
@@ -2160,14 +2211,14 @@ def unpause_user(user_id):
         cursor.execute("""
             UPDATE Users 
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = ?
+            WHERE id = %s
         """, (user_id,))
         
         # Активируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses 
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = ?
+            WHERE owner_id = %s
         """, (user_id,))
         
         db.conn.commit()
@@ -2384,7 +2435,7 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
         cursor.execute("""
             SELECT ai_agent_language 
             FROM Businesses 
-            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
+            WHERE owner_id = %s AND (is_active = 1 OR is_active IS NULL)
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_id,))
@@ -2620,7 +2671,7 @@ def services_optimize():
                     cur = db.conn.cursor()
                     from core.db_helpers import ensure_user_examples_table
                     ensure_user_examples_table(cur)
-                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                     rows = cur.fetchall()
                     db.close()
                     examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
@@ -2784,7 +2835,7 @@ def services_optimize():
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             optimization_id,
             user_data['user_id'],
@@ -2829,7 +2880,7 @@ def user_service_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall()
             db.close()
             examples = []
@@ -2848,13 +2899,13 @@ def user_service_examples():
             db.close()
             return jsonify({"error": "Текст примера обязателен"}), 400
         # Ограничим 5 примеров на пользователя
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'service'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'service'", (user_data['user_id'],))
         count = cur.fetchone()[0]
         if count >= 5:
             db.close()
             return jsonify({"error": "Максимум 5 примеров"}), 400
         example_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'service', ?)", (example_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'service', %s)", (example_id, user_data['user_id'], text))
         db.conn.commit()
         db.close()
         return jsonify({"success": True, "id": example_id})
@@ -2877,7 +2928,7 @@ def delete_user_service_example(example_id: str):
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'service'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'service'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -2949,14 +3000,14 @@ def news_generate():
         
         if use_service:
             if selected_service_id:
-                cur.execute("SELECT name, description FROM UserServices WHERE id = ? AND user_id = ?", (selected_service_id, user_data['user_id']))
+                cur.execute("SELECT name, description FROM UserServices WHERE id = %s AND user_id = %s", (selected_service_id, user_data['user_id']))
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
             else:
                 # выбрать случайную услугу пользователя
-                cur.execute("SELECT name, description FROM UserServices WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
+                cur.execute("SELECT name, description FROM UserServices WHERE user_id = %s ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
@@ -2968,7 +3019,7 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes, client_type
                     FROM FinancialTransactions
-                    WHERE id = ? AND user_id = ?
+                    WHERE id = %s AND user_id = %s
                 """, (selected_transaction_id, user_data['user_id']))
                 row = cur.fetchone()
                 if row:
@@ -2989,7 +3040,7 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes
                     FROM FinancialTransactions
-                    WHERE user_id = ?
+                    WHERE user_id = %s
                     ORDER BY transaction_date DESC, created_at DESC
                     LIMIT 1
                 """, (user_data['user_id'],))
@@ -3013,7 +3064,7 @@ def news_generate():
         try:
             from core.db_helpers import ensure_user_examples_table
             ensure_user_examples_table(cur)
-            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
             r = cur.fetchall()
             ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
             if ex:
@@ -3164,7 +3215,7 @@ Write all generated text in {language_name}.
         cur.execute(
             """
             INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text)
         )
@@ -3212,7 +3263,7 @@ def news_approve():
             )
             """
         )
-        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
@@ -3251,7 +3302,7 @@ def news_list():
             )
             """
         )
-        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = %s ORDER BY created_at DESC", (user_data['user_id'],))
         rows = cur.fetchall()
         db.close()
         items = []
@@ -3289,7 +3340,7 @@ def news_update():
         if not news_id or not text:
             return jsonify({"error": "news_id и text обязательны"}), 400
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("UPDATE UserNews SET generated_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (text, news_id, user_data['user_id']))
+        cur.execute("UPDATE UserNews SET generated_text = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s", (text, news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close(); return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit(); db.close()
@@ -3318,7 +3369,7 @@ def news_delete():
         
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserNews WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -3349,7 +3400,7 @@ def review_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -3360,12 +3411,12 @@ def review_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'review'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'review'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'review', ?)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'review', %s)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -3385,7 +3436,7 @@ def review_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'review'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'review'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -3413,7 +3464,7 @@ def news_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -3424,12 +3475,12 @@ def news_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'news'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'news'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'news', ?)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'news', %s)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -3449,7 +3500,7 @@ def news_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'news'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'news'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -3518,7 +3569,7 @@ def reviews_reply():
                 cur = db.conn.cursor()
                 from core.db_helpers import ensure_user_examples_table
                 ensure_user_examples_table(cur)
-                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                 rows = cur.fetchall(); db.close()
                 examples = []
                 for row in rows:
@@ -3734,7 +3785,7 @@ def review_replies_update():
         cursor.execute("""
             INSERT OR REPLACE INTO UserReviewReplies 
             (id, user_id, reply_text, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
         """, (reply_id, user_data['user_id'], reply_text))
         
         db.conn.commit()
@@ -3781,19 +3832,22 @@ def add_service():
         user_id = user_data['user_id']
         service_id = str(uuid.uuid4())
 
-        # Проверяем, есть ли поле business_id в таблице UserServices
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем, есть ли поле business_id в таблице UserServices (PostgreSQL: information_schema)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         
         if 'business_id' in columns and business_id:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
         else:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
 
         db.conn.commit()
@@ -3832,9 +3886,12 @@ def get_services_legacy():
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    # Проверяем, есть ли поля optimized_description и optimized_name
-                    cursor.execute("PRAGMA table_info(UserServices)")
-                    columns = [col[1] for col in cursor.fetchall()]
+                    # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
+                    cursor.execute("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'userservices'
+                    """)
+                    columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
                     has_optimized_desc = 'optimized_description' in columns
                     has_optimized_name = 'optimized_name' in columns
                     
@@ -3845,7 +3902,7 @@ def get_services_legacy():
                     if has_optimized_name:
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
-                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = %s ORDER BY created_at DESC"
                     cursor.execute(select_sql, (business_id,))
                     
                     user_services = []
@@ -3870,7 +3927,15 @@ def get_services_legacy():
                     # Получаем внешние услуги
                     external_services = []
                     cursor.execute("SELECT to_regclass('public.externalbusinessservices')")
-                    if cursor.fetchone():
+                    ext_reg_row = cursor.fetchone()
+                    ext_reg_val = None
+                    if isinstance(ext_reg_row, dict):
+                        ext_reg_val = next(iter(ext_reg_row.values()), None)
+                    elif isinstance(ext_reg_row, (list, tuple)):
+                        ext_reg_val = ext_reg_row[0] if ext_reg_row else None
+                    else:
+                        ext_reg_val = ext_reg_row
+                    if ext_reg_val:
                         # Проверяем колонки externalbusinessservices (Postgres)
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns 
@@ -3922,9 +3987,11 @@ def get_services_legacy():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика для обратной совместимости
-            # Проверяем, есть ли поля optimized_description и optimized_name
-            cursor.execute("PRAGMA table_info(UserServices)")
-            columns = [col[1] for col in cursor.fetchall()]
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'userservices'
+            """)
+            columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
             has_optimized_desc = 'optimized_description' in columns
             has_optimized_name = 'optimized_name' in columns
             
@@ -3935,7 +4002,7 @@ def get_services_legacy():
             if has_optimized_name:
                 select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
             
-            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = %s ORDER BY created_at DESC"
             print(f"🔍 DEBUG get_services: SQL запрос (старая логика) = {select_sql}", flush=True)
             print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
             # Сохраняем select_fields для использования в цикле
@@ -3958,8 +4025,11 @@ def get_services_legacy():
             # Если не установлены (старая логика), проверяем заново
             cursor_temp = db.conn.cursor() if 'db' in locals() else None
             if cursor_temp:
-                cursor_temp.execute("PRAGMA table_info(UserServices)")
-                columns = [col[1] for col in cursor_temp.fetchall()]
+                cursor_temp.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'userservices'
+                """)
+                columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor_temp.fetchall()]
                 has_optimized_desc = 'optimized_description' in columns
                 has_optimized_name = 'optimized_name' in columns
                 select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
@@ -4060,9 +4130,12 @@ def update_service(service_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+        # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+        """)
+        columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
         
@@ -4077,8 +4150,8 @@ def update_service(service_id):
             print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
-                category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
+                category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
             """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
             print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
 
@@ -4086,8 +4159,8 @@ def update_service(service_id):
             print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
-                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
+                category = %s, name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
             """, (category, name, description, keywords_str, price, service_id, user_id))
 
         if cursor.rowcount == 0:
@@ -4123,7 +4196,7 @@ def delete_service(service_id):
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM UserServices WHERE id = ? AND user_id = ?", (service_id, user_id))
+        cursor.execute("DELETE FROM UserServices WHERE id = %s AND user_id = %s", (service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -4638,7 +4711,7 @@ def get_parse_status(business_id):
             return jsonify({"error": "Нет доступа"}), 403
 
         cursor.execute("""
-            SELECT status, retry_after, created_at
+            SELECT status, retry_after, captcha_url, error_message, created_at
             FROM parsequeue
             WHERE business_id = %s
             ORDER BY created_at DESC
@@ -4745,7 +4818,9 @@ def get_parse_status(business_id):
             "success": True,
             "status": overall_status,
             "details": statuses,
-            "retry_info": retry_info
+            "retry_info": retry_info,
+            "captcha_url": (queue_row.get("captcha_url") if queue_row else None),
+            "error_message": (queue_row.get("error_message") if queue_row else None),
         })
 
     except Exception as e:
@@ -4784,13 +4859,13 @@ def get_map_parses(business_id):
         # В PostgreSQL все результаты парсинга в cards. Берём реальные поля и считаем counts из JSONB.
         cursor.execute("""
             SELECT id, url, rating, reviews_count, report_path, created_at,
-                   overview, products, news, photos, competitors, hours_full
+                   overview, products, news, photos, competitors, hours_full, phone, site
             FROM cards
             WHERE business_id = %s
             ORDER BY created_at DESC
         """, (business_id,))
-        rows = cursor.fetchall()
-        db.close()
+        rows_raw = cursor.fetchall()
+        rows = [_row_to_dict(cursor, r) for r in rows_raw if r]
 
         def _len(v):
             if v is None:
@@ -4805,30 +4880,168 @@ def get_map_parses(business_id):
                     return 0
             return 0
 
+        def _products_count(v):
+            """Считает уникальные услуги: дедуп по (name, category, price)."""
+            if v is None:
+                return 0
+            if isinstance(v, str):
+                try:
+                    v = json.loads(v)
+                except Exception:
+                    return 0
+            if not isinstance(v, list):
+                return 0
+            seen = set()
+            for cat in v:
+                if isinstance(cat, dict) and "items" in cat:
+                    cat_name = (cat.get("category") or "Разное").strip() or "Разное"
+                    for item in (cat.get("items") or []):
+                        if not isinstance(item, dict):
+                            continue
+                        name = (item.get("name") or item.get("title") or "").strip().lower()
+                        if not name:
+                            continue
+                        price = str(item.get("price") or item.get("price_from") or item.get("price_to") or "").strip()
+                        seen.add((name, cat_name.lower(), price))
+                else:
+                    if isinstance(cat, dict):
+                        name = (cat.get("name") or cat.get("title") or "").strip().lower()
+                        if name:
+                            price = str(cat.get("price") or "").strip()
+                            ccat = (cat.get("category") or "Разное").strip().lower()
+                            seen.add((name, ccat, price))
+            return len(seen)
+
+        def _overview_dict(v):
+            if isinstance(v, dict):
+                return v
+            if isinstance(v, str):
+                raw = v.strip()
+                if not raw:
+                    return {}
+                try:
+                    parsed = json.loads(raw)
+                    return parsed if isinstance(parsed, dict) else {}
+                except Exception:
+                    return {}
+            return {}
+
+        # Текущее число неотвеченных отзывов (для отображения в прогрессе и отчёте)
+        unanswered_current = 0
+        latest_parsed_services_count = 0
+        stat_cursor = None
+        try:
+            stat_cursor = db.conn.cursor()
+            stat_cursor.execute(
+                """
+                SELECT COUNT(*) AS cnt
+                FROM externalbusinessreviews
+                WHERE business_id = %s
+                  AND source IN ('yandex_business', 'yandex_maps')
+                  AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+                """,
+                (business_id,),
+            )
+            raw_unanswered = stat_cursor.fetchone()
+            raw_unanswered = _row_to_dict(stat_cursor, raw_unanswered) if raw_unanswered else None
+            unanswered_current = int((raw_unanswered or {}).get("cnt") or 0)
+
+            # Количество услуг из последнего распарсенного снапшота userservices.
+            stat_cursor.execute(
+                """
+                WITH latest_ts AS (
+                    SELECT MAX(updated_at) AS ts
+                    FROM userservices
+                    WHERE business_id = %s
+                      AND source IN ('yandex_maps', 'yandex_business')
+                      AND (is_active IS TRUE OR is_active IS NULL)
+                      AND raw IS NOT NULL
+                )
+                SELECT COUNT(DISTINCT (
+                    LOWER(TRIM(COALESCE(name, ''))),
+                    LOWER(TRIM(COALESCE(category, ''))),
+                    TRIM(COALESCE(price::text, ''))
+                )) AS cnt
+                FROM userservices
+                WHERE business_id = %s
+                  AND source IN ('yandex_maps', 'yandex_business')
+                  AND (is_active IS TRUE OR is_active IS NULL)
+                  AND raw IS NOT NULL
+                  AND updated_at = (SELECT ts FROM latest_ts)
+                """,
+                (business_id, business_id),
+            )
+            raw_services_cnt = stat_cursor.fetchone()
+            raw_services_cnt = _row_to_dict(stat_cursor, raw_services_cnt) if raw_services_cnt else None
+            latest_parsed_services_count = int((raw_services_cnt or {}).get("cnt") or 0)
+        except Exception:
+            unanswered_current = 0
+        finally:
+            if stat_cursor is not None:
+                stat_cursor.close()
+
         items = []
-        for r in rows:
-            rd = _row_to_dict(cursor, r)
+        for rd in rows:
             if not rd:
                 continue
             news_count = _len(rd.get("news"))
             photos_count = _len(rd.get("photos"))
-            products_count = _len(rd.get("products"))
+            overview = _overview_dict(rd.get("overview"))
+            try:
+                overview_photos_count = int(overview.get("photos_count") or 0)
+            except (TypeError, ValueError):
+                overview_photos_count = 0
+            photos_count = max(photos_count, overview_photos_count)
+            products_count = _products_count(rd.get("products"))
+            if len(items) == 0 and latest_parsed_services_count > 0:
+                products_count = latest_parsed_services_count
+            phone = (rd.get("phone") or "").strip() if isinstance(rd.get("phone"), str) else (rd.get("phone") or "")
+            website = (rd.get("site") or "").strip() if isinstance(rd.get("site"), str) else (rd.get("site") or "")
+            hours_full = rd.get("hours_full")
+            if isinstance(hours_full, str):
+                try:
+                    hours_full = json.loads(hours_full)
+                except Exception:
+                    hours_full = []
+            if not isinstance(hours_full, list):
+                hours_full = []
+            working_hours_payload = {"schedule": hours_full} if hours_full else None
+            social_links = overview.get("social_links") if isinstance(overview, dict) else None
+            competitors_val = rd.get("competitors")
+            if isinstance(competitors_val, (list, dict)):
+                competitors_val = json.dumps(competitors_val, ensure_ascii=False)
+
+            completeness_points = 0
+            completeness_points += 1 if phone else 0
+            completeness_points += 1 if website else 0
+            completeness_points += 1 if hours_full else 0
+            completeness_points += 1 if products_count > 0 else 0
+            completeness_points += 1 if photos_count > 0 else 0
+            profile_completeness = int((completeness_points / 5) * 100)
+
             item = {
                 "id": rd.get("id"),
                 "url": rd.get("url"),
                 "mapType": "yandex",
                 "rating": rd.get("rating"),
                 "reviewsCount": rd.get("reviews_count") or 0,
-                "unansweredReviewsCount": 0,
+                "unansweredReviewsCount": unanswered_current if len(items) == 0 else 0,
                 "newsCount": news_count,
                 "photosCount": photos_count,
                 "productsCount": products_count,
                 "servicesCount": products_count,
+                "phone": phone or None,
+                "website": website or None,
+                "workingHours": json.dumps(working_hours_payload, ensure_ascii=False) if working_hours_payload else None,
+                "messengers": json.dumps(social_links, ensure_ascii=False) if isinstance(social_links, list) else None,
+                "profileCompleteness": profile_completeness,
+                "competitors": competitors_val,
                 "reportPath": rd.get("report_path"),
                 "createdAt": rd.get("created_at"),
             }
             items.append(item)
 
+        db.close()
         return jsonify({"success": True, "items": items})
 
     except Exception as e:
@@ -4986,7 +5199,7 @@ def analyze_screenshot():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO ScreenshotAnalyses (id, user_id, image_path, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -5095,7 +5308,7 @@ def optimize_pricelist():
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             optimization_id,
             user_data['user_id'],
@@ -5137,7 +5350,7 @@ def get_analysis(analysis_id):
         # Ищем анализ скриншота
         cursor.execute("""
             SELECT * FROM ScreenshotAnalyses 
-            WHERE id = ? AND user_id = ? AND expires_at > ?
+            WHERE id = %s AND user_id = %s AND expires_at > %s
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         analysis = cursor.fetchone()
@@ -5153,7 +5366,7 @@ def get_analysis(analysis_id):
         # Ищем оптимизацию прайс-листа
         cursor.execute("""
             SELECT * FROM PricelistOptimizations 
-            WHERE id = ? AND user_id = ? AND expires_at > ?
+            WHERE id = %s AND user_id = %s AND expires_at > %s
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         optimization = cursor.fetchone()
@@ -5217,7 +5430,7 @@ def analyze_card_auto():
         cursor.execute("""
             INSERT INTO ScreenshotAnalyses 
             (id, user_id, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -5352,16 +5565,19 @@ def add_transaction():
         
         transaction_id = str(uuid.uuid4())
         
-        # Проверяем наличие поля master_id в таблице
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие поля master_id (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_master_id = 'master_id' in columns
         
         if has_master_id:
             cursor.execute("""
                 INSERT INTO FinancialTransactions 
                 (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 transaction_id,
                 user_data['user_id'],
@@ -5376,7 +5592,7 @@ def add_transaction():
             cursor.execute("""
                 INSERT INTO FinancialTransactions 
                 (id, user_id, transaction_date, amount, client_type, services, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 transaction_id,
                 user_data['user_id'],
@@ -5423,7 +5639,7 @@ def update_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -5435,19 +5651,19 @@ def update_transaction(transaction_id):
         fields = []
         params = []
         if 'transaction_date' in data:
-            fields.append("transaction_date = ?")
+            fields.append("transaction_date = %s")
             params.append(data.get('transaction_date'))
         if 'amount' in data:
-            fields.append("amount = ?")
+            fields.append("amount = %s")
             params.append(float(data.get('amount') or 0))
         if 'client_type' in data:
-            fields.append("client_type = ?")
+            fields.append("client_type = %s")
             params.append(data.get('client_type') or 'new')
         if 'services' in data:
-            fields.append("services = ?")
+            fields.append("services = %s")
             params.append(json.dumps(data.get('services') or []))
         if 'notes' in data:
-            fields.append("notes = ?")
+            fields.append("notes = %s")
             params.append(data.get('notes') or '')
 
         if not fields:
@@ -5455,7 +5671,7 @@ def update_transaction(transaction_id):
             return jsonify({"error": "Нет полей для обновления"}), 400
 
         params.append(transaction_id)
-        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = ?", params)
+        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = %s", params)
         db.conn.commit()
         db.close()
 
@@ -5486,7 +5702,7 @@ def delete_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -5495,7 +5711,7 @@ def delete_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
-        cursor.execute("DELETE FROM FinancialTransactions WHERE id = ?", (transaction_id,))
+        cursor.execute("DELETE FROM FinancialTransactions WHERE id = %s", (transaction_id,))
         db.conn.commit()
         db.close()
 
@@ -5619,9 +5835,12 @@ def upload_transaction_file():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие полей master_id и business_id
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие полей master_id и business_id (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_master_id = 'master_id' in columns
         has_business_id = 'business_id' in columns
         
@@ -5643,7 +5862,7 @@ def upload_transaction_file():
             # Получаем business_id из текущего бизнеса пользователя
             business_id = None
             if has_business_id:
-                cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_data['user_id'],))
+                cursor.execute("SELECT id FROM Businesses WHERE owner_id = %s LIMIT 1", (user_data['user_id'],))
                 business_row = cursor.fetchone()
                 if business_row:
                     business_id = business_row[0]
@@ -5652,7 +5871,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5668,7 +5887,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5683,7 +5902,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5698,7 +5917,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5767,25 +5986,25 @@ def get_transactions():
                 notes,
                 created_at
             FROM FinancialTransactions
-            WHERE user_id = ?
+            WHERE user_id = %s
         """
         params = [user_data['user_id']]
         
         # Фильтр по бизнесу, если передан
         current_business_id = request.args.get('business_id')
         if current_business_id:
-            query += " AND business_id = ?"
+            query += " AND business_id = %s"
             params.append(current_business_id)
         
         if start_date:
-            query += " AND transaction_date >= ?"
+            query += " AND transaction_date >= %s"
             params.append(start_date)
         
         if end_date:
-            query += " AND transaction_date <= ?"
+            query += " AND transaction_date <= %s"
             params.append(end_date)
         
-        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -5886,15 +6105,15 @@ def get_financial_metrics():
                 end_date = now.strftime('%Y-%m-%d')
         
         # Формируем WHERE условие с учётом business_id
-        where_clause = "transaction_date BETWEEN ? AND ?"
+        where_clause = "transaction_date BETWEEN %s AND %s"
         where_params = [start_date, end_date]
         
         if business_id:
-            where_clause = f"business_id = ? AND {where_clause}"
+            where_clause = f"business_id = %s AND {where_clause}"
             where_params = [business_id] + where_params
         else:
             # Старая логика для обратной совместимости
-            where_clause = f"user_id = ? AND {where_clause}"
+            where_clause = f"user_id = %s AND {where_clause}"
             where_params = [user_data['user_id']] + where_params
         
         # Получаем агрегированные данные
@@ -5928,14 +6147,14 @@ def get_financial_metrics():
         prev_end = start_date
         
         # Формируем WHERE условие для предыдущего периода
-        prev_where_clause = "transaction_date BETWEEN ? AND ?"
+        prev_where_clause = "transaction_date BETWEEN %s AND %s"
         prev_where_params = [prev_start, prev_end]
         
         if business_id:
-            prev_where_clause = f"business_id = ? AND {prev_where_clause}"
+            prev_where_clause = f"business_id = %s AND {prev_where_clause}"
             prev_where_params = [business_id] + prev_where_params
         else:
-            prev_where_clause = f"user_id = ? AND {prev_where_clause}"
+            prev_where_clause = f"user_id = %s AND {prev_where_clause}"
             prev_where_params = [user_data['user_id']] + prev_where_params
         
         cursor.execute(f"""
@@ -6024,9 +6243,12 @@ def get_financial_breakdown():
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
         
-        # Проверяем наличие полей в таблице
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие полей в таблице (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
         has_master_id = 'master_id' in columns
         
@@ -6039,26 +6261,26 @@ def get_financial_breakdown():
                 cursor.execute("""
                     SELECT services, amount, master_id
                     FROM FinancialTransactions 
-                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (current_business_id, start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
                     FROM FinancialTransactions 
-                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (current_business_id, start_date, end_date))
         else:
             if has_master_id:
                 cursor.execute("""
                     SELECT services, amount, master_id
                     FROM FinancialTransactions 
-                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (user_data['user_id'], start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
                     FROM FinancialTransactions 
-                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (user_data['user_id'], start_date, end_date))
         
         transactions = cursor.fetchall()
@@ -6148,7 +6370,7 @@ def get_network_locations_by_network_id(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что пользователь имеет доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -6164,7 +6386,7 @@ def get_network_locations_by_network_id(network_id):
         cursor.execute("""
             SELECT id, name, address, description 
             FROM Businesses 
-            WHERE network_id = ? 
+            WHERE network_id = %s 
             ORDER BY name
         """, (network_id,))
         
@@ -6208,7 +6430,7 @@ def get_network_stats(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -6220,7 +6442,7 @@ def get_network_stats(network_id):
             return jsonify({"error": "Нет доступа к этой сети"}), 403
         
         # Получаем точки сети
-        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = ?", (network_id,))
+        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = %s", (network_id,))
         locations = cursor.fetchall()
         location_ids = [loc[0] for loc in locations]
         
@@ -6258,25 +6480,27 @@ def get_network_stats(network_id):
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
         
-        # Получаем транзакции всех точек сети
-        # Проверяем наличие поля business_id
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Получаем транзакции всех точек сети (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
         
         if has_business_id and location_ids:
-            placeholders = ','.join(['?'] * len(location_ids))
+            placeholders = ','.join(['%s'] * len(location_ids))
             cursor.execute(f"""
                 SELECT services, amount, master_id, business_id
                 FROM FinancialTransactions 
-                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN ? AND ?
+                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN %s AND %s
             """, location_ids + [start_date, end_date])
         else:
             # Если business_id нет, получаем через user_id владельца сети
             cursor.execute("""
                 SELECT services, amount, master_id, NULL as business_id
                 FROM FinancialTransactions 
-                WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
             """, (network[0], start_date, end_date))
         
         transactions = cursor.fetchall()
@@ -6307,7 +6531,7 @@ def get_network_stats(network_id):
             
             # По мастерам
             if master_id:
-                cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
+                cursor.execute("SELECT name FROM Masters WHERE id = %s", (master_id,))
                 master_row = cursor.fetchone()
                 master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
                 masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
@@ -6332,7 +6556,7 @@ def get_network_stats(network_id):
                 """
                 SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
                 FROM Businesses
-                WHERE network_id = ? AND is_active = 1
+                WHERE network_id = %s AND is_active = 1
                 """,
                 (network_id,),
             )
@@ -6391,7 +6615,7 @@ def admin_sync_network_yandex(network_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
         network = cursor.fetchone()
 
         if not network:
@@ -6720,7 +6944,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                             # Проверяем, есть ли уже такая услуга
                             cursor.execute("""
                                 SELECT id FROM UserServices 
-                                WHERE business_id = ? AND name = ? 
+                                WHERE business_id = %s AND name = %s 
                                 LIMIT 1
                             """, (business_id, service["name"]))
                             existing = cursor.fetchone()
@@ -6744,7 +6968,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 service_id = str(uuid.uuid4())
                                 cursor.execute("""
                                     INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                 """, (
                                     service_id,
                                     user_id,
@@ -6760,8 +6984,8 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 # Обновляем существующую услугу
                                 cursor.execute("""
                                     UPDATE UserServices 
-                                    SET category = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                                    WHERE business_id = ? AND name = ?
+                                    SET category = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                                    WHERE business_id = %s AND name = %s
                                 """, (
                                     category,
                                     description,
@@ -6925,7 +7149,7 @@ def get_user_networks():
         cursor.execute("""
             SELECT id, name, description 
             FROM Networks 
-            WHERE owner_id = ? 
+            WHERE owner_id = %s 
             ORDER BY name
         """, (user_data['user_id'],))
         
@@ -7008,7 +7232,7 @@ def add_business_to_network(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем права доступа к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -7082,7 +7306,7 @@ def get_roi_data():
         # Получаем последние данные ROI
         cursor.execute("""
             SELECT * FROM ROIData 
-            WHERE user_id = ? 
+            WHERE user_id = %s 
             ORDER BY created_at DESC 
             LIMIT 1
         """, (user_data['user_id'],))
@@ -7159,7 +7383,7 @@ def calculate_roi():
         cursor.execute("""
             INSERT OR REPLACE INTO ROIData 
             (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (roi_id, user_data['user_id'], investment, returns, roi_percentage, period_start, period_end))
         
         db.conn.commit()
@@ -7484,10 +7708,10 @@ def update_user_profile():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
+        set_clause = ', '.join([f"{key} = %s" for key in updates.keys()])
         values = list(updates.values()) + [user['user_id']]
         
-        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = ?", values)
+        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = %s", values)
         db.conn.commit()
         db.close()
         
@@ -7581,7 +7805,7 @@ def create_business():
                     try:
                         cursor.execute("""
                             INSERT INTO Users (id, email, name, phone, created_at, is_active, is_verified)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """, (
                             owner_id,
                             owner_email,
@@ -7734,7 +7958,7 @@ def add_proxy():
                 id, proxy_type, host, port, username, password,
                 is_active, is_working, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, (
             proxy_id,
             data.get('type', 'http'),
@@ -7772,7 +7996,7 @@ def delete_proxy(proxy_id):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM ProxyServers WHERE id = ?", (proxy_id,))
+        cursor.execute("DELETE FROM ProxyServers WHERE id = %s", (proxy_id,))
         db.conn.commit()
         db.close()
         
@@ -7803,7 +8027,7 @@ def toggle_proxy(proxy_id):
         
         cursor = db.conn.cursor()
         # Получаем текущий статус
-        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = ?", (proxy_id,))
+        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = %s", (proxy_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -7812,8 +8036,8 @@ def toggle_proxy(proxy_id):
         new_status = 0 if row[0] else 1
         cursor.execute("""
             UPDATE ProxyServers 
-            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET is_active = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (new_status, proxy_id))
         db.conn.commit()
         db.close()
@@ -7924,7 +8148,7 @@ Write all generated text in {language_name}.
             for prompt_type, prompt_text, description in default_prompts:
                 cursor.execute("""
                     INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
-                    VALUES (?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s)
                 """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
             
             db.conn.commit()
@@ -7980,15 +8204,15 @@ def update_prompt(prompt_type):
         cursor = db.conn.cursor()
         cursor.execute("""
             UPDATE AIPrompts 
-            SET prompt_text = ?, description = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
-            WHERE prompt_type = ?
+            SET prompt_text = %s, description = %s, updated_at = CURRENT_TIMESTAMP, updated_by = %s
+            WHERE prompt_type = %s
         """, (prompt_text, description, user_data['user_id'], prompt_type))
         
         if cursor.rowcount == 0:
             # Если промпта нет, создаём его
             cursor.execute("""
                 INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description, user_data['user_id']))
         
         db.conn.commit()
@@ -8007,7 +8231,7 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = ?", (prompt_type,))
+        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
         row = cursor.fetchone()
         db.close()
         
@@ -8168,7 +8392,7 @@ def create_business_type():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO BusinessTypes (id, type_key, label, description)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (type_id, type_key, label, description))
         
         db.conn.commit()
@@ -8223,8 +8447,8 @@ def update_or_delete_business_type(type_id):
         
         cursor.execute("""
             UPDATE BusinessTypes 
-            SET label = ?, description = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET label = %s, description = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (label, description, 1 if is_active else 0, type_id))
         
         db.conn.commit()
@@ -8299,7 +8523,7 @@ def get_business_progress():
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = ?
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -8313,7 +8537,7 @@ def get_business_progress():
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = ?
+                WHERE stage_id = %s
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -8481,7 +8705,7 @@ def get_growth_stages(business_type_id):
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = ?
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -8493,7 +8717,7 @@ def get_growth_stages(business_type_id):
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = ?
+                WHERE stage_id = %s
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -8559,7 +8783,7 @@ def create_growth_stage():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (stage_id, business_type_id, stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0))
         
         # Добавляем задачи
@@ -8567,7 +8791,7 @@ def create_growth_stage():
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (task_id, stage_id, task_idx, task_text.strip()))
         
         db.conn.commit()
@@ -8624,17 +8848,17 @@ def update_or_delete_growth_stage(stage_id):
         
         cursor.execute("""
             UPDATE GrowthStages 
-            SET stage_number = ?, title = ?, description = ?, goal = ?, expected_result = ?, duration = ?, is_permanent = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET stage_number = %s, title = %s, description = %s, goal = %s, expected_result = %s, duration = %s, is_permanent = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0, stage_id))
         
         # Удаляем старые задачи и добавляем новые
-        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = ?", (stage_id,))
+        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = %s", (stage_id,))
         for task_idx, task_text in enumerate(tasks, 1):
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (task_id, stage_id, task_idx, task_text.strip()))
         
         db.conn.commit()
@@ -8673,7 +8897,7 @@ def send_business_credentials(business_id):
             SELECT b.*, u.email, u.name as owner_name
             FROM Businesses b
             LEFT JOIN Users u ON b.owner_id = u.id
-            WHERE b.id = ?
+            WHERE b.id = %s
         """, (business_id,))
         business_row = cursor.fetchone()
         
@@ -8710,7 +8934,7 @@ def send_business_credentials(business_id):
             print(f"✅ Сгенерирован временный пароль для {owner_email}")
         
         # Отправляем email с данными для входа
-        login_url = "https://beautybot.pro/login"
+        login_url = "https://localhost/login"
         subject = f"Данные для входа в личный кабинет {business.get('name', 'BeautyBot')}"
         
         if temp_password:
@@ -8962,9 +9186,12 @@ def set_promo_tier(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        # Проверяем наличие колонок subscription_tier и subscription_status
-        cursor.execute("PRAGMA table_info(Businesses)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие колонок subscription_tier и subscription_status (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         
         # Добавляем колонки, если их нет
         if 'subscription_tier' not in columns:
@@ -8983,7 +9210,7 @@ def set_promo_tier(business_id):
                 SET subscription_tier = 'promo',
                     subscription_status = 'active',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (business_id,))
             message = "Промо тариф установлен"
         else:
@@ -8993,7 +9220,7 @@ def set_promo_tier(business_id):
                 SET subscription_tier = 'trial',
                     subscription_status = 'inactive',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (business_id,))
             message = "Промо тариф отключен"
         
@@ -9118,15 +9345,15 @@ def business_optimization_wizard(business_id):
                 # Обновляем существующую запись
                 cursor.execute("""
                     UPDATE BusinessOptimizationWizard 
-                    SET data = ?, completed = 1, updated_at = CURRENT_TIMESTAMP
-                    WHERE business_id = ?
+                    SET data = %s, completed = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE business_id = %s
                 """, (json.dumps(wizard_data, ensure_ascii=False), business_id))
             else:
                 # Создаем новую запись
                 wizard_id = str(uuid.uuid4())
                 cursor.execute("""
                     INSERT INTO BusinessOptimizationWizard (id, business_id, step, data, completed)
-                    VALUES (?, ?, 3, ?, 1)
+                    VALUES (%s, %s, 3, %s, 1)
                 """, (wizard_id, business_id, json.dumps(wizard_data, ensure_ascii=False)))
             
             db.conn.commit()
@@ -9141,7 +9368,7 @@ def business_optimization_wizard(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data, completed FROM BusinessOptimizationWizard 
-                WHERE business_id = ? 
+                WHERE business_id = %s 
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id,))
@@ -9221,7 +9448,7 @@ def business_sprint(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data FROM BusinessOptimizationWizard 
-                WHERE business_id = ? AND completed = 1
+                WHERE business_id = %s AND completed = 1
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id,))
@@ -9284,7 +9511,7 @@ def business_sprint(business_id):
             sprint_id = str(uuid.uuid4())
             cursor.execute("""
                 INSERT OR REPLACE INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
             
             db.conn.commit()
@@ -9303,7 +9530,7 @@ def business_sprint(business_id):
             # Получаем спринт на текущую неделю
             cursor.execute("""
                 SELECT id, tasks, updated_at FROM BusinessSprints 
-                WHERE business_id = ? AND week_start = ?
+                WHERE business_id = %s AND week_start = %s
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id, week_start.isoformat()))
@@ -9423,7 +9650,7 @@ def get_business_data(business_id):
         cursor.execute("""
             SELECT contact_name, contact_phone, contact_email
             FROM BusinessProfiles 
-            WHERE business_id = ?
+            WHERE business_id = %s
         """, (business_id,))
         profile_row = cursor.fetchone()
         business_profile = {
@@ -9496,8 +9723,8 @@ def update_business_yandex_link(business_id):
         cursor.execute(
             """
             UPDATE Businesses
-            SET yandex_url = ?, yandex_org_id = ?
-            WHERE id = ?
+            SET yandex_url = %s, yandex_org_id = %s
+            WHERE id = %s
             """,
             (yandex_url, org_id, business_id),
         )
@@ -9567,7 +9794,7 @@ def update_business_profile(business_id):
         cursor.execute("""
             INSERT OR REPLACE INTO BusinessProfiles 
             (id, business_id, contact_name, contact_phone, contact_email, updated_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (
             profile_id,
             business_id,
@@ -9596,7 +9823,7 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
         # Настройки SMTP из .env
         smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
+        smtp_username = os.getenv("SMTP_USERNAME", "info@localhost")
         smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_password:
@@ -9627,7 +9854,7 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
 
 def send_contact_email(name, email, phone, message):
     """Отправка email с сообщением обратной связи"""
-    contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+    contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
     
     subject = f"Новое сообщение с сайта BeautyBot от {name}"
     body = f"""
@@ -9641,7 +9868,7 @@ Email: {email}
 {message}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localhost
     """
     
     return send_email(contact_email, subject, body)
@@ -9660,7 +9887,7 @@ def reset_password():
         # Проверяем, существует ли пользователь
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM Users WHERE email = ?", (email,))
+        cursor.execute("SELECT id, name FROM Users WHERE email = %s", (email,))
         user = cursor.fetchone()
         
         if not user:
@@ -9676,8 +9903,8 @@ def reset_password():
         # Сохраняем токен в базе
         cursor.execute("""
             UPDATE Users 
-            SET reset_token = ?, reset_token_expires = ? 
-            WHERE email = ?
+            SET reset_token = %s, reset_token_expires = %s 
+            WHERE email = %s
         """, (reset_token, expires_at.isoformat(), email))
         conn.commit()
         conn.close()
@@ -9695,7 +9922,7 @@ def reset_password():
 Действителен до: {expires_at.strftime('%d.%m.%Y %H:%M')}
 
 Для сброса пароля перейдите по ссылке:
-https://beautybot.pro/reset-password?token={reset_token}&email={email}
+https://localhost/reset-password?token={reset_token}&email={email}
 
 Если вы не запрашивали восстановление пароля, проигнорируйте это письмо.
 
@@ -9738,7 +9965,7 @@ def confirm_reset():
         cursor.execute("""
             SELECT id, reset_token, reset_token_expires 
             FROM Users 
-            WHERE email = ? AND reset_token = ?
+            WHERE email = %s AND reset_token = %s
         """, (email, token))
         user = cursor.fetchone()
         
@@ -9761,7 +9988,7 @@ def confirm_reset():
         cursor.execute("""
             UPDATE Users 
             SET reset_token = NULL, reset_token_expires = NULL 
-            WHERE id = ?
+            WHERE id = %s
         """, (user[0],))
         conn.commit()
         conn.close()
@@ -9775,7 +10002,7 @@ def confirm_reset():
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 def public_request_report():
     """Публичная заявка на отчёт без авторизации.
-    Принимает email и url, отправляет email на info@beautybot.pro о новой заявке.
+    Принимает email и url, отправляет email на info@localhost о новой заявке.
     """
     try:
         if request.method == 'OPTIONS':
@@ -9791,8 +10018,8 @@ def public_request_report():
         if not email or not url:
             return jsonify({"error": "Email и URL обязательны"}), 400
         
-        # Отправляем email на info@beautybot.pro о новой заявке
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        # Отправляем email на info@localhost о новой заявке
+        contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
         subject = f"Новая заявка с сайта BeautyBot от {email}"
         body = f"""
 Новая заявка с сайта BeautyBot
@@ -9801,7 +10028,7 @@ Email клиента: {email}
 Ссылка на бизнес: {url}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localhost
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -9825,7 +10052,7 @@ Email клиента: {email}
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
 def public_request_registration():
     """Публичная заявка на регистрацию без авторизации.
-    Принимает данные регистрации, отправляет email на info@beautybot.pro о новой заявке.
+    Принимает данные регистрации, отправляет email на info@localhost о новой заявке.
     """
     try:
         if request.method == 'OPTIONS':
@@ -9843,8 +10070,8 @@ def public_request_registration():
         if not email:
             return jsonify({"error": "Email обязателен"}), 400
         
-        # Отправляем email на info@beautybot.pro о новой заявке на регистрацию
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        # Отправляем email на info@localhost о новой заявке на регистрацию
+        contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
         subject = f"Новая заявка на регистрацию от {email}"
         body = f"""
 Новая заявка на регистрацию с сайта BeautyBot
@@ -9855,7 +10082,7 @@ Email: {email}
 Ссылка на Яндекс.Карты: {yandex_url or 'Не указана'}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localhost
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -9917,39 +10144,43 @@ def generate_telegram_bind_token():
         bind_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
         
-        # Проверяем наличие поля business_id в таблице TelegramBindTokens
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-        
+
         # Если поля нет, добавляем его
         if not has_business_id:
             cursor.execute("ALTER TABLE TelegramBindTokens ADD COLUMN business_id TEXT")
             db.conn.commit()
+            has_business_id = True  # только что добавили
         
         # Удаляем старые неиспользованные токены для этого бизнеса
-        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
+        if has_business_id:
             cursor.execute("""
                 DELETE FROM TelegramBindTokens 
-                WHERE business_id = ? AND used = 0 AND expires_at < ?
+                WHERE business_id = %s AND used = 0 AND expires_at < %s
             """, (business_id, datetime.now().isoformat()))
         else:
             cursor.execute("""
                 DELETE FROM TelegramBindTokens 
-                WHERE user_id = ? AND used = 0 AND expires_at < ?
+                WHERE user_id = %s AND used = 0 AND expires_at < %s
             """, (user_data['user_id'], datetime.now().isoformat()))
         
         # Создаем новый токен
         token_id = str(uuid.uuid4())
-        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
+        if has_business_id:
             cursor.execute("""
                 INSERT INTO TelegramBindTokens (id, user_id, business_id, token, expires_at, used, created_at)
-                VALUES (?, ?, ?, ?, ?, 0, ?)
+                VALUES (%s, %s, %s, %s, %s, 0, %s)
             """, (token_id, user_data['user_id'], business_id, bind_token, expires_at.isoformat(), datetime.now().isoformat()))
         else:
             cursor.execute("""
                 INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
-                VALUES (?, ?, ?, ?, 0, ?)
+                VALUES (%s, %s, %s, %s, 0, %s)
             """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
         
         db.conn.commit()
@@ -9996,11 +10227,14 @@ def get_telegram_bind_status():
             db.close()
             return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
         
-        # Проверяем наличие поля business_id в таблице TelegramBindTokens
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-        
+
         # Проверяем, привязан ли Telegram для этого бизнеса
         is_linked = False
         user_row = None
@@ -10011,7 +10245,7 @@ def get_telegram_bind_status():
             # Токены с business_id = NULL или другим бизнесом не учитываются
             cursor.execute("""
                 SELECT COUNT(*) as count FROM TelegramBindTokens 
-                WHERE business_id = ? AND used = 1 AND user_id = ?
+                WHERE business_id = %s AND used = 1 AND user_id = %s
             """, (business_id, user_data['user_id']))
             result = cursor.fetchone()
             has_used_token_for_this_business = result[0] > 0 if result else False
@@ -10031,7 +10265,7 @@ def get_telegram_bind_status():
                 print(f"🔍 Нет использованного токена для бизнеса {business_id} - не подключен")
         else:
             # Старая логика: проверяем только привязку к пользователю
-            cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
+            cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (user_data['user_id'],))
             user_row = cursor.fetchone()
             is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
         
@@ -10064,16 +10298,19 @@ def verify_telegram_bind_token():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем токен (включая business_id)
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем токен (включая business_id) (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
+        """)
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-        
+
         if has_business_id:
             cursor.execute("""
                 SELECT id, user_id, business_id, expires_at, used
                 FROM TelegramBindTokens
-                WHERE token = ?
+                WHERE token = %s
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
@@ -10084,7 +10321,7 @@ def verify_telegram_bind_token():
             cursor.execute("""
                 SELECT id, user_id, expires_at, used
                 FROM TelegramBindTokens
-                WHERE token = ?
+                WHERE token = %s
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
@@ -10109,7 +10346,7 @@ def verify_telegram_bind_token():
             return jsonify({"error": "Токен уже использован"}), 400
         
         # Проверяем, не привязан ли уже этот Telegram к другому аккаунту
-        cursor.execute("SELECT id FROM Users WHERE telegram_id = ? AND id != ?", (telegram_id, user_id))
+        cursor.execute("SELECT id FROM Users WHERE telegram_id = %s AND id != %s", (telegram_id, user_id))
         existing_user = cursor.fetchone()
         if existing_user:
             db.close()
@@ -10118,8 +10355,8 @@ def verify_telegram_bind_token():
         # Привязываем Telegram к аккаунту
         cursor.execute("""
             UPDATE Users 
-            SET telegram_id = ?, updated_at = ?
-            WHERE id = ?
+            SET telegram_id = %s, updated_at = %s
+            WHERE id = %s
         """, (telegram_id, datetime.now().isoformat(), user_id))
         
         # Помечаем токен как использованный
@@ -10127,14 +10364,14 @@ def verify_telegram_bind_token():
         if has_business_id and business_id_from_token:
             cursor.execute("""
                 UPDATE TelegramBindTokens
-                SET used = 1, business_id = ?
-                WHERE id = ?
+                SET used = 1, business_id = %s
+                WHERE id = %s
             """, (business_id_from_token, token_id))
         else:
             cursor.execute("""
                 UPDATE TelegramBindTokens
                 SET used = 1
-                WHERE id = ?
+                WHERE id = %s
             """, (token_id,))
         
         db.conn.commit()
@@ -10207,7 +10444,7 @@ def download_report(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
@@ -10277,7 +10514,7 @@ def view_report(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
@@ -10320,7 +10557,7 @@ def report_status(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
