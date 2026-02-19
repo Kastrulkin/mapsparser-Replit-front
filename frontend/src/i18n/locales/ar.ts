@@ -1,6 +1,6 @@
 export const ar = {
   // Page title
-  pageTitle: "BeautyBot.pro - ترويج محلي للأعمال المحلية",
+  pageTitle: "LocalOS.pro - ترويج محلي للأعمال المحلية",
 
   common: {
     success: "نجاح",
@@ -20,13 +20,14 @@ export const ar = {
     tryFree: "جرّب مجانًا"
   },
   footer: {
-    title: "BeautyBot",
-    description: "ترويج محلي للأعمال المحلية",
-    madeWithLove: "صنع بحب لصناعة الجمال",
+    title: "Local OS",
+    description: "نحرر الأعمال المحلية من الروتين",
+    madeWithLovePrefix: "صنع بحب لـ ",
+    madeWithLoveIndustries: ["صالونات التجميل", "الحرفيين", "الورش", "المتاجر", "المدارس", "خدمات السيارات", "العيادات", "المقاهي", "محطات الوقود"],
     company: "الشركة",
     whoWeAre: "من نحن؟",
     contacts: "تواصل معنا",
-    copyright: "© 2025 BeautyBot. جميع الحقوق محفوظة."
+    copyright: "© 2025 Local. جميع الحقوق محفوظة."
   },
   stats: {
     title: "نحن لا نقدّم أدوات فقط —",
@@ -193,7 +194,7 @@ export const ar = {
     pricingOption1Point4: "تحسين عمليات العمل",
     pricingOption1Point5: "مدير مخصص",
     pricingOption1Button: "إعداد العمليات",
-    pricingStarterPoint1: "الاتصال بشبكة Beautybot الاحترافية",
+    pricingStarterPoint1: "الاتصال بشبكة Local الاحترافية",
     pricingStarterPoint2: "ابدأ في استخدام ChatGPT لجذب العملاء المحتملين",
     pricingStarterPoint3: "مثالي لمن يبحثون عن قنوات جديدة لجذب العملاء",
     pricingStarterPoint4: "5 دولارات شهريًا",
@@ -968,7 +969,7 @@ export const ar = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

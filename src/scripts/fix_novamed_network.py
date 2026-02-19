@@ -16,7 +16,7 @@ def fix_novamed():
     NOVAMED_ID = '38a11c0e-6eea-4fdc-90d6-66f21af9adce'
     
     # Check current status
-    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE id = ?", (NOVAMED_ID,))
+    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE id = %s", (NOVAMED_ID,))
     novamed = cursor.fetchone()
     
     if not novamed:
@@ -33,7 +33,7 @@ def fix_novamed():
     
     if novamed['network_id']:
         print("Removing from network...")
-        cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = ?", (novamed['id'],))
+        cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = %s", (novamed['id'],))
         db.conn.commit()
         print("✅ Novamed is now independent (network_id = NULL)")
     else:

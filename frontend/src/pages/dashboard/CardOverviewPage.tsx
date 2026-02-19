@@ -58,7 +58,8 @@ export const CardOverviewPage = () => {
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
 
   // Состояния для парсера
-  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'done' | 'error' | 'queued'>('idle');
+  // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
+  const [parseStatus, setParseStatus] = useState<'idle' | 'processing' | 'completed' | 'done' | 'error' | 'queued'>('idle');
 
   // Общие состояния
   const [error, setError] = useState<string | null>(null);
@@ -427,7 +428,7 @@ export const CardOverviewPage = () => {
               <div className="p-2 bg-orange-100 rounded-lg">
                 <LayoutGrid className="w-6 h-6 text-orange-600" />
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title} (Updated)</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{t.dashboard.card.title}</h1>
             </div>
             <p className="text-gray-600 text-lg">{t.dashboard.card.subtitle}</p>
           </div>
@@ -934,7 +935,7 @@ export const CardOverviewPage = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap align-top">
-                              {service.price ? `${(Number(service.price) / 100).toLocaleString('ru-RU')} ₽` : '—'}
+                              {service.price ? `${Number(service.price).toLocaleString('ru-RU')} ₽` : '—'}
                             </td>
                             <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap align-top">
                               {service.updated_at ? new Date(service.updated_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
@@ -998,7 +999,7 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="keywords">
-            <SEOKeywordsTab />
+            <SEOKeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
       </div>

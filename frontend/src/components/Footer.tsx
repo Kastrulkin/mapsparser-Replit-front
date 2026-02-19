@@ -1,9 +1,25 @@
-import { Button } from "@/components/ui/button";
-import { Heart, Mail, Phone, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Heart } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageContext";
 
 const Footer = () => {
   const { t } = useLanguage();
+  const industries = t.footer.madeWithLoveIndustries ?? ["индустрии красоты"];
+  const prefix = t.footer.madeWithLovePrefix ?? "Сделано с любовью для ";
+  const [index, setIndex] = useState(0);
+  const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsExiting(true);
+      setTimeout(() => {
+        setIndex((i) => (i + 1) % industries.length);
+        setIsExiting(false);
+      }, 400);
+    }, 2600);
+    return () => clearInterval(interval);
+  }, [industries.length]);
+
   const footerLinks = {
     company: [
       { name: t.footer.whoWeAre, href: '/about' },
@@ -21,8 +37,20 @@ const Footer = () => {
               {t.footer.description}
             </p>
             <div className="flex items-center text-sm text-muted-foreground">
-              <Heart className="w-4 h-4 mr-1 text-primary" />
-              {t.footer.madeWithLove}
+              <Heart className="w-4 h-4 mr-1.5 text-primary animate-pulse flex-shrink-0" />
+              <span className="flex items-baseline gap-0.5 min-h-[1.5em]">
+                {prefix}
+                <span
+                  className="inline-block text-primary font-semibold transition-all duration-400 ease-out"
+                  style={{
+                    opacity: isExiting ? 0 : 1,
+                    transform: isExiting ? "translateY(-8px)" : "translateY(0)",
+                    filter: isExiting ? "blur(4px)" : "blur(0)",
+                  }}
+                >
+                  {industries[index]}
+                </span>
+              </span>
             </div>
           </div>
 

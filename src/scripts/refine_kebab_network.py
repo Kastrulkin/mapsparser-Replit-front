@@ -28,7 +28,7 @@ def refine_network():
     print(f"🌐 Network ID: {network_id}")
 
     # 2. Get all businesses in this network
-    cursor.execute("SELECT id, name FROM Businesses WHERE network_id = ?", (network_id,))
+    cursor.execute("SELECT id, name FROM Businesses WHERE network_id = %s", (network_id,))
     businesses = cursor.fetchall()
     
     removed_count = 0
@@ -40,7 +40,7 @@ def refine_network():
             kept_count += 1
         else:
             print(f"   ⚠️  Removing non-kebab business from network: {b['name']}")
-            cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = ?", (b['id'],))
+            cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = %s", (b['id'],))
             removed_count += 1
             
     conn.commit()

@@ -66,8 +66,7 @@ def chatgpt_search():
             WHERE b.moderation_status = 'approved'
             AND b.chatgpt_enabled = 1
             AND b.subscription_status = 'active'
-            AND b.city LIKE ?
-            AND (us.name LIKE ? OR b.name LIKE ? OR us.description LIKE ? OR us.keywords LIKE ?)
+            AND b.city LIKE %s AND (us.name LIKE %s OR b.name LIKE %s OR us.description LIKE %s OR us.keywords LIKE %s)
         """
         
         # Поиск по ключевым словам в описании услуг
@@ -78,10 +77,10 @@ def chatgpt_search():
         
         # Фильтр по бюджету (если указан)
         if budget:
-            query += " AND (us.price IS NULL OR us.price <= ?)"
+            query += " AND (us.price IS NULL OR us.price <= %s)"
             params.append(budget * 100)  # Конвертируем в центы
         
-        query += " LIMIT ?"
+        query += " LIMIT %s"
         params.append(limit)
         
         cursor.execute(query, params)
@@ -100,7 +99,7 @@ def chatgpt_search():
                 cursor.execute("""
                     SELECT rating
                     FROM ExternalBusinessStats
-                    WHERE business_id = ? AND source = 'yandex_business'
+                    WHERE business_id = %s AND source = 'yandex_business'
                     ORDER BY date DESC
                     LIMIT 1
                 """, (business_id,))
@@ -149,7 +148,7 @@ def chatgpt_search():
                 SELECT id, name, price, duration, description, 
                        COALESCE(chatgpt_context, '') as chatgpt_context
                 FROM UserServices
-                WHERE business_id = ?
+                WHERE business_id = %s
             """, (business_id,))
             services = cursor.fetchall()
             
@@ -295,7 +294,7 @@ def chatgpt_book():
         cursor.execute("""
             SELECT id, name, owner_id, timezone, phone, whatsapp_phone, telegram_username
             FROM Businesses
-            WHERE id = ? AND moderation_status = 'approved' AND chatgpt_enabled = 1
+            WHERE id = %s AND moderation_status = 'approved' AND chatgpt_enabled = 1
         """, (salon_id,))
         
         salon = cursor.fetchone()
@@ -312,7 +311,7 @@ def chatgpt_book():
             cursor.execute("""
                 SELECT name, duration, price
                 FROM UserServices
-                WHERE id = ? AND business_id = ?
+                WHERE id = %s AND business_id = %s
             """, (service_id, business_id))
             service = cursor.fetchone()
             if service:
@@ -338,7 +337,7 @@ def chatgpt_book():
             INSERT INTO Bookings 
             (id, business_id, client_name, client_phone, client_email, service_id, service_name,
              booking_time, booking_time_local, source, status, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'chatgpt', 'pending', ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'chatgpt', 'pending', %s)
         """, (
             booking_id,
             business_id,
@@ -437,7 +436,7 @@ def get_salon_details(salon_id):
                    working_hours_json, timezone, latitude, longitude, 
                    COALESCE(chatgpt_context, '') as chatgpt_context
             FROM Businesses
-            WHERE id = ? AND moderation_status = 'approved' AND chatgpt_enabled = 1
+            WHERE id = %s AND moderation_status = 'approved' AND chatgpt_enabled = 1
         """, (salon_id,))
         
         salon = cursor.fetchone()
@@ -450,7 +449,7 @@ def get_salon_details(salon_id):
             SELECT id, name, price, duration, description, 
                    COALESCE(chatgpt_context, '') as chatgpt_context
             FROM UserServices
-            WHERE business_id = ?
+            WHERE business_id = %s
             ORDER BY name
         """, (salon_id,))
         
@@ -460,7 +459,7 @@ def get_salon_details(salon_id):
         cursor.execute("""
             SELECT rating, reviews_total
             FROM ExternalBusinessStats
-            WHERE business_id = ? AND source = 'yandex_business'
+            WHERE business_id = %s AND source = 'yandex_business'
             ORDER BY date DESC
             LIMIT 1
         """, (salon_id,))
@@ -472,7 +471,7 @@ def get_salon_details(salon_id):
         cursor.execute("""
             SELECT author_name, rating, text, published_at
             FROM ExternalBusinessReviews
-            WHERE business_id = ? AND source = 'yandex_business'
+            WHERE business_id = %s AND source = 'yandex_business'
             ORDER BY published_at DESC
             LIMIT 10
         """, (salon_id,))
@@ -492,7 +491,7 @@ def get_salon_details(salon_id):
         cursor.execute("""
             SELECT total_count
             FROM ExternalBusinessPhotos
-            WHERE business_id = ? AND source = 'yandex_business'
+            WHERE business_id = %s AND source = 'yandex_business'
             ORDER BY last_updated DESC
             LIMIT 1
         """, (salon_id,))
@@ -583,7 +582,7 @@ def get_available_slots(salon_id):
         cursor.execute("""
             SELECT id, name, working_hours_json, timezone
             FROM Businesses
-            WHERE id = ? AND moderation_status = 'approved' AND chatgpt_enabled = 1
+            WHERE id = %s AND moderation_status = 'approved' AND chatgpt_enabled = 1
         """, (salon_id,))
         
         salon = cursor.fetchone()
@@ -596,7 +595,7 @@ def get_available_slots(salon_id):
         # Получаем длительность услуги, если указана
         service_duration = 60  # По умолчанию 60 минут
         if service_id:
-            cursor.execute("SELECT duration FROM UserServices WHERE id = ? AND business_id = ?", (service_id, business_id))
+            cursor.execute("SELECT duration FROM UserServices WHERE id = %s AND business_id = %s", (service_id, business_id))
             service_row = cursor.fetchone()
             if service_row and service_row[0]:
                 service_duration = service_row[0]
@@ -613,9 +612,8 @@ def get_available_slots(salon_id):
         cursor.execute("""
             SELECT booking_time, service_id
             FROM Bookings
-            WHERE business_id = ? AND status != 'cancelled'
-            AND booking_time >= ?
-            AND booking_time < ?
+            WHERE business_id = %s AND status != 'cancelled'
+            AND booking_time >= %s AND booking_time < %s
         """, (
             business_id,
             start_date.isoformat(),
@@ -735,7 +733,7 @@ def request_human_support():
         cursor.execute("""
             SELECT id, name, owner_id, phone, whatsapp_phone, telegram_username, email, telegram_bot_token
             FROM Businesses
-            WHERE id = ? AND moderation_status = 'approved' AND chatgpt_enabled = 1
+            WHERE id = %s AND moderation_status = 'approved' AND chatgpt_enabled = 1
         """, (salon_id,))
         
         salon = cursor.fetchone()
@@ -749,7 +747,7 @@ def request_human_support():
         cursor.execute("""
             SELECT id, email, telegram_id
             FROM Users
-            WHERE id = ?
+            WHERE id = %s
         """, (owner_id,))
         
         owner = cursor.fetchone()

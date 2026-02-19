@@ -40,7 +40,7 @@ def fix_permissions():
     # We want to keep 'Оливер' with Tislitskaya, move everything else to Demyanovap
     print("\n🔍 Analyzing businesses owned by Tislitskaya...")
     
-    cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = ?", (tislitskaya_id,))
+    cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = %s", (tislitskaya_id,))
     businesses = cursor.fetchall()
     
     to_transfer = []
@@ -60,11 +60,11 @@ def fix_permissions():
     if to_transfer:
         ids_to_transfer = [b[0] for b in to_transfer]
         # SQLite doesn't support list parameters directly easily in all versions, iterate or use IN
-        placeholders = ','.join('?' * len(ids_to_transfer))
+        placeholders = ','.join(['%s'] * len(ids_to_transfer))
         
         cursor.execute(f"""
             UPDATE Businesses 
-            SET owner_id = ? 
+            SET owner_id = %s 
             WHERE id IN ({placeholders})
         """, [demyanovap_id] + ids_to_transfer)
         
@@ -75,7 +75,7 @@ def fix_permissions():
         # Verify
         print("\n🔍 Verification:")
         for bid, bname in to_transfer:
-             cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (bid,))
+             cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (bid,))
              new_owner = cursor.fetchone()[0]
              status = "OK" if new_owner == demyanovap_id else "FAIL"
              print(f"   - {bname}: {status}")

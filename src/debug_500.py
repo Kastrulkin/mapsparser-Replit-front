@@ -26,7 +26,7 @@ def debug_500(business_id):
         cursor.execute("SELECT count(*) FROM GrowthStages")
         print(f"📊 GrowthStages count: {cursor.fetchone()[0]}")
         
-        cursor.execute("SELECT * FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT * FROM Businesses WHERE id = %s", (business_id,))
         biz = cursor.fetchone()
         if biz:
             print(f"🏢 Business found: Type={biz['business_type'] if 'business_type' in biz.keys() else 'Unknown index'}")

@@ -32,11 +32,11 @@ class YandexSyncService:
             """
             UPDATE Businesses
             SET
-                yandex_rating = ?,
-                yandex_reviews_total = ?,
-                yandex_reviews_30d = ?,
-                yandex_last_sync = ?
-            WHERE id = ?
+                yandex_rating = %s,
+                yandex_reviews_total = %s,
+                yandex_reviews_30d = %s,
+                yandex_last_sync = %s
+            WHERE id = %s
             """,
             (
                 payload.rating,
@@ -52,7 +52,7 @@ class YandexSyncService:
         cursor.execute(
             """
             SELECT id FROM YandexBusinessStats
-            WHERE business_id = ? AND date = ?
+            WHERE business_id = %s AND date = %s
             """,
             (business_id, today),
         )
@@ -63,8 +63,8 @@ class YandexSyncService:
             cursor.execute(
                 """
                 UPDATE YandexBusinessStats
-                SET rating = ?, reviews_total = ?, reviews_30d = ?, fetched_at = ?
-                WHERE id = ?
+                SET rating = %s, reviews_total = %s, reviews_30d = %s, fetched_at = %s
+                WHERE id = %s
                 """,
                 (
                     payload.rating,
@@ -80,7 +80,7 @@ class YandexSyncService:
             cursor.execute(
                 """
                 INSERT INTO YandexBusinessStats (id, business_id, date, rating, reviews_total, reviews_30d, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     stat_id,
@@ -99,7 +99,7 @@ class YandexSyncService:
         cursor = db.conn.cursor()
         try:
             cursor.execute(
-                "SELECT yandex_org_id, yandex_url, name FROM Businesses WHERE id = ?",
+                "SELECT yandex_org_id, yandex_url, name FROM Businesses WHERE id = %s",
                 (business_id,),
             )
             row = cursor.fetchone()
@@ -113,7 +113,7 @@ class YandexSyncService:
                 yandex_org_id = self.adapter.parse_org_id_from_url(yandex_url)
                 if yandex_org_id:
                     cursor.execute(
-                        "UPDATE Businesses SET yandex_org_id = ? WHERE id = ?",
+                        "UPDATE Businesses SET yandex_org_id = %s WHERE id = %s",
                         (yandex_org_id, business_id),
                     )
 
@@ -149,7 +149,7 @@ class YandexSyncService:
                 """
                 SELECT id, name
                 FROM Businesses
-                WHERE network_id = ? AND is_active = 1
+                WHERE network_id = %s AND is_active = 1
                 """,
                 (network_id,),
             )

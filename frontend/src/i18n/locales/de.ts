@@ -1,6 +1,6 @@
 export const de = {
   // Page title
-  pageTitle: "BeautyBot.pro - Lokale Förderung für lokale Unternehmen",
+  pageTitle: "LocalOS.pro - Lokale Förderung für lokale Unternehmen",
 
   common: {
     success: "Erfolg",
@@ -23,13 +23,14 @@ export const de = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
-    description: "Lokale Förderung für lokale Unternehmen",
-    madeWithLove: "Mit Liebe für die Beauty-Branche gemacht",
+    title: "Local OS",
+    description: "Befreien wir lokale Unternehmen von der Routine",
+    madeWithLovePrefix: "Mit Liebe gemacht für ",
+    madeWithLoveIndustries: ["Friseursalons", "Handwerker", "Werkstätten", "Geschäfte", "Schulen", "Autowerkstätten", "Kliniken", "Cafés", "Tankstellen"],
     company: "Unternehmen",
     whoWeAre: "Wer Sind Wir?",
     contacts: "Kontakte",
-    copyright: "© 2025 BeautyBot. Alle Rechte vorbehalten."
+    copyright: "© 2025 Local. Alle Rechte vorbehalten."
   },
 
   // Stats
@@ -197,7 +198,7 @@ export const de = {
     pricingTitle: "Bedingungen",
     pricingStarterTitle: "Starter",
     pricingStarterPrice: "$15 / Monat",
-    pricingStarterPoint1: "Verbinden Sie sich mit dem professionellen Beautybot-Netzwerk",
+    pricingStarterPoint1: "Verbinden Sie sich mit dem professionellen Local-Netzwerk",
     pricingStarterPoint2: "Beginnen Sie, ChatGPT für Leadgenerierung zu nutzen",
     pricingStarterPoint3: "Ideal für alle, die neue Kanäle zur Kundengewinnung suchen",
     pricingStarterPoint4: "Menschen werden Sie auf Karten finden",
@@ -991,7 +992,7 @@ export const de = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

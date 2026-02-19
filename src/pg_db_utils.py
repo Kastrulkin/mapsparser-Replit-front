@@ -28,7 +28,7 @@ def _get_required_dsn() -> str:
     if not dsn:
         raise RuntimeError(
             "DATABASE_URL is not set. Runtime requires PostgreSQL. "
-            "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/beautybot_local'"
+            "Example: export DATABASE_URL='postgresql://user:pass@localhost:5432/local_db'"
         )
     return dsn
 

@@ -26,7 +26,7 @@ def get_business_progress(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:

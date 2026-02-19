@@ -152,7 +152,7 @@ def create_stripe_checkout():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT owner_id, stripe_customer_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, stripe_customer_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -166,7 +166,7 @@ def create_stripe_checkout():
         owner_id, existing_customer_id = business
         
         # Получаем email пользователя для Stripe
-        cursor.execute("SELECT email FROM Users WHERE id = ?", (owner_id,))
+        cursor.execute("SELECT email FROM Users WHERE id = %s", (owner_id,))
         user_email = cursor.fetchone()
         user_email = user_email[0] if user_email else None
         
@@ -194,8 +194,8 @@ def create_stripe_checkout():
             cursor = db.conn.cursor()
             cursor.execute("""
                 UPDATE Businesses 
-                SET stripe_customer_id = ?
-                WHERE id = ?
+                SET stripe_customer_id = %s
+                WHERE id = %s
             """, (customer.id, business_id))
             db.conn.commit()
             db.close()
@@ -216,8 +216,8 @@ def create_stripe_checkout():
                     'quantity': 1,
                 }],
                 mode='subscription',
-                success_url=f"{os.getenv('FRONTEND_URL', 'https://beautybot.pro')}/dashboard?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{os.getenv('FRONTEND_URL', 'https://beautybot.pro')}/dashboard?payment=cancelled",
+                success_url=f"{os.getenv('FRONTEND_URL', 'http://localhost:8000')}/dashboard?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{os.getenv('FRONTEND_URL', 'http://localhost:8000')}/dashboard?payment=cancelled",
                 metadata={
                     'business_id': business_id,
                     'tier': tier
@@ -331,12 +331,12 @@ def handle_checkout_completed(session):
         
         cursor.execute("""
             UPDATE Businesses 
-            SET stripe_subscription_id = ?,
-                subscription_tier = ?,
+            SET stripe_subscription_id = %s,
+                subscription_tier = %s,
                 subscription_status = 'active',
-                trial_ends_at = ?,
-                subscription_ends_at = ?
-            WHERE id = ?
+                trial_ends_at = %s,
+                subscription_ends_at = %s
+            WHERE id = %s
         """, (
             subscription_id,
             tier,
@@ -350,7 +350,7 @@ def handle_checkout_completed(session):
         cursor.execute("""
             INSERT INTO StripePayments 
             (id, business_id, stripe_payment_intent_id, amount, currency, status, subscription_tier)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             payment_id,
             business_id,
@@ -383,9 +383,9 @@ def handle_subscription_created(subscription):
         
         cursor.execute("""
             UPDATE Businesses 
-            SET stripe_subscription_id = ?,
+            SET stripe_subscription_id = %s,
                 subscription_status = 'active'
-            WHERE id = ?
+            WHERE id = %s
         """, (subscription['id'], business_id))
         
         db.conn.commit()
@@ -409,9 +409,9 @@ def handle_subscription_updated(subscription):
         
         cursor.execute("""
             UPDATE Businesses 
-            SET subscription_status = ?,
-                subscription_tier = ?
-            WHERE id = ?
+            SET subscription_status = %s,
+                subscription_tier = %s
+            WHERE id = %s
         """, (status, tier, business_id))
         
         db.conn.commit()
@@ -435,7 +435,7 @@ def handle_subscription_deleted(subscription):
             UPDATE Businesses 
             SET subscription_status = 'cancelled',
                 subscription_ends_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         
         db.conn.commit()
@@ -457,7 +457,7 @@ def handle_payment_succeeded(invoice):
         cursor = db.conn.cursor()
         
         # Находим бизнес по subscription_id
-        cursor.execute("SELECT id FROM Businesses WHERE stripe_subscription_id = ?", (subscription_id,))
+        cursor.execute("SELECT id FROM Businesses WHERE stripe_subscription_id = %s", (subscription_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -470,8 +470,8 @@ def handle_payment_succeeded(invoice):
         cursor.execute("""
             UPDATE Businesses 
             SET subscription_status = 'active',
-                subscription_ends_at = datetime('now', '+1 month')
-            WHERE id = ?
+                subscription_ends_at = CURRENT_TIMESTAMP + INTERVAL '1 month'
+            WHERE id = %s
         """, (business_id,))
         
         # Логируем платёж
@@ -479,7 +479,7 @@ def handle_payment_succeeded(invoice):
         cursor.execute("""
             INSERT INTO StripePayments 
             (id, business_id, stripe_invoice_id, amount, currency, status, subscription_tier)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             payment_id,
             business_id,
@@ -508,7 +508,7 @@ def handle_payment_failed(invoice):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT id FROM Businesses WHERE stripe_subscription_id = ?", (subscription_id,))
+        cursor.execute("SELECT id FROM Businesses WHERE stripe_subscription_id = %s", (subscription_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -521,7 +521,7 @@ def handle_payment_failed(invoice):
         cursor.execute("""
             UPDATE Businesses 
             SET subscription_status = 'past_due'
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         
         db.conn.commit()
@@ -544,7 +544,7 @@ def handle_invoice_upcoming(invoice):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT id, owner_id FROM Businesses WHERE stripe_subscription_id = ?", (subscription_id,))
+        cursor.execute("SELECT id, owner_id FROM Businesses WHERE stripe_subscription_id = %s", (subscription_id,))
         business = cursor.fetchone()
         
         if not business:

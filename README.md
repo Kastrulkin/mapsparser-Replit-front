@@ -155,6 +155,12 @@ source venv/bin/activate
 pytest -q tests/test_parsed_payload_validation.py
 ```
 
+Unit‑тесты парсера Яндекс.Карт (org-bound, extract object, scoring, wait logic):
+
+```bash
+python3 tests/test_parser_interception.py --unit-only
+```
+
 Для полного прогона тестов (A–I) и gate‑тестов `/api/client-info` см. раздел **Тестирование** ниже и секцию «Gate‑тесты и smoke в Docker».
 
 ## Docker
@@ -186,9 +192,9 @@ Backend будет доступен на `http://localhost:8000`. Проверк
 2. Склонируйте репозиторий (или скопируйте проект) в каталог на сервере.
 3. При необходимости создайте `.env` в корне проекта:
    ```bash
-   POSTGRES_USER=beautybot
+   POSTGRES_USER=local
    POSTGRES_PASSWORD=<надёжный_пароль>
-   POSTGRES_DB=beautybot
+   POSTGRES_DB=local
    ```
 4. Запустите:
    ```bash
@@ -362,6 +368,7 @@ pytest tests/test_client_info_gate.py -v
 - **G** — статический тест: в runtime (`src/`, без `scripts` и `migrate_*.py`) нет вхождений `PRAGMA table_info(ClientInfo)`, `FROM ClientInfo`, `INTO ClientInfo`.
 - **H** — после POST данные читаются из нового соединения (проверка commit).
 - **I** — unit‑тест для `parsed_payload_validation.validate_parsed_payload` и хелперов (`_has_content`, `_resolve_categories`, one‑of `title_or_name`, `quality_score`): `tests/test_parsed_payload_validation.py`. Запуск: `pytest -q tests/test_parsed_payload_validation.py` (локально в venv, без Docker и БД).
+- **Parser interception** — unit‑тесты парсера Яндекс.Карт: org-bound валидация, извлечение объекта организации, scoring, ожидание fetchGoods. Запуск: `python3 tests/test_parser_interception.py --unit-only` (без браузера).
 
 **Smoke (локальный DATABASE_URL, для dev/stage):**
 
@@ -403,7 +410,7 @@ WantedBy=multi-user.target
 Создайте файл `.env` в корне проекта:
 ```bash
 # Telegram боты
-TELEGRAM_BOT_TOKEN=токен_для_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=токен_для_Local_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=токен_для_beautyreviewexchange_bot
 
 # API
@@ -424,7 +431,7 @@ YANDEX_BUSINESS_FAKE=0
 # SMTP (для отправки email)
 SMTP_SERVER=mail.hosting.reg.ru
 SMTP_PORT=587
-SMTP_USERNAME=info@beautybot.pro
+SMTP_USERNAME=info@local.pro
 SMTP_PASSWORD=ваш_пароль
 ```
 
@@ -534,8 +541,27 @@ lsof -i :443   # Nginx HTTPS
 
 📖 **Подробная инструкция**: см. [ALGORITHM_UPDATE.md](./ALGORITHM_UPDATE.md)
 
+### Через Docker (основной сценарий)
+
+После изменений в коде (`git pull` или локальные правки):
+
+```bash
+./scripts/docker-compose-build.sh up -d --build
+```
+
+Скрипт пересобирает образы (включая фронтенд — multi-stage build в Dockerfile) и перезапускает контейнеры. Миграции БД применяются автоматически при старте.
+
+При необходимости принудительно пересоздать контейнеры:
+
+```bash
+./scripts/docker-compose-build.sh up -d --build --force-recreate
+```
+
+Фронтенд для разработки с hot-reload: `cd frontend && npm run dev`.
+
+### Без Docker (systemd, Nginx)
+
 **Кратко (РЕКОМЕНДУЕТСЯ):**
-Используйте автоматический скрипт:
 ```bash
 cd /root/mapsparser-Replit-front
 bash update_server.sh
@@ -543,7 +569,7 @@ bash update_server.sh
 
 **Вручную (если скрипт недоступен):**
 1. После изменений в `frontend/src/*` → пересобрать: `cd frontend && npm run build && cp -r dist/* /var/www/html/`
-2. После изменений в `src/*.py` → перезапустить процессы: `systemctl restart seo-api seo-worker`
+2. После изменений в `src/*.py` → перезапустить: `systemctl restart seo-api seo-worker`
 3. После изменений в БД → создать бэкап и применить миграцию
 
 ## Интеграция с внешними источниками (Яндекс.Бизнес, Google Business, 2ГИС)

@@ -18,7 +18,7 @@ def get_business_stages(business_id):
         cursor = db.conn.cursor()
         
         # Проверка доступа
-        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -46,7 +46,7 @@ def get_business_stages(business_id):
             return jsonify({"stages": []})
             
         # Получаем текущий шаг визарда
-        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = %s", (business_id,))
         wiz_row = cursor.fetchone()
         current_step = wiz_row[0] if wiz_row else 1
         

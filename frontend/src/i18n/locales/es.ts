@@ -1,6 +1,6 @@
 export const es = {
   // Page title
-  pageTitle: "BeautyBot.pro - Promoción local para negocios locales",
+  pageTitle: "LocalOS.pro - Promoción local para negocios locales",
 
   common: {
     success: "Éxito",
@@ -23,13 +23,14 @@ export const es = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
-    description: "Promoción local para negocios locales",
-    madeWithLove: "Hecho con amor para la industria de la belleza",
+    title: "Local OS",
+    description: "Liberamos al negocio local de la rutina",
+    madeWithLovePrefix: "Hecho con amor para ",
+    madeWithLoveIndustries: ["salones de belleza", "maestros", "talleres", "tiendas", "escuelas", "talleres de autos", "clínicas", "cafeterías", "gasolineras"],
     company: "Empresa",
     whoWeAre: "¿Quiénes Somos?",
     contacts: "Contactos",
-    copyright: "© 2025 BeautyBot. Todos los derechos reservados."
+    copyright: "© 2025 Local. Todos los derechos reservados."
   },
 
   // Stats
@@ -195,7 +196,7 @@ export const es = {
     option2Point4: "Ves resultados desde el primer mes — nuevos clientes, crecimiento del ticket promedio, visitas repetidas",
     option2Button: "Contactar un experto",
     pricingTitle: "Condiciones",
-    pricingStarterPoint1: "Conéctese a la red profesional de Beautybot",
+    pricingStarterPoint1: "Conéctese a la red profesional de Local",
     pricingStarterPoint2: "Comience a usar ChatGPT para la generación de clientes potenciales",
     pricingStarterPoint3: "Perfecto para quienes buscan nuevos canales de captación de clientes",
     pricingStarterPoint4: "5$ al mes",
@@ -983,7 +984,7 @@ export const es = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

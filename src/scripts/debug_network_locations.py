@@ -16,7 +16,7 @@ def debug_network(business_id):
     print(f"--- Debugging Business ID: {business_id} ---")
     
     # 1. Check the business itself
-    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE id = ?", (business_id,))
+    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE id = %s", (business_id,))
     bus = cursor.fetchone()
     if not bus:
         print("❌ Business not found in DB")
@@ -37,8 +37,8 @@ def debug_network(business_id):
         print(f" - {loc['name']} ({loc['id']})")
         
     # 3. Manual query to see if there are others
-    print("\n--- Manual SQL check (SELECT * FROM Businesses WHERE network_id = ?) ---")
-    cursor.execute("SELECT id, name, is_active FROM Businesses WHERE network_id = ?", (bus['network_id'],))
+    print("\n--- Manual SQL check (SELECT * FROM Businesses WHERE network_id = %s) ---")
+    cursor.execute("SELECT id, name, is_active FROM Businesses WHERE network_id = %s", (bus['network_id'],))
     raw_locs = cursor.fetchall()
     print(f"Found {len(raw_locs)} rows in DB:")
     for row in raw_locs:

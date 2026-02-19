@@ -1862,8 +1862,79 @@ class YandexBusinessParser:
                 print(f"⚠️ Ошибка парсинга поста {post_id}: {e}")
                 continue
         
+        if not posts:
+            print("[fetch_posts] API returned empty, trying HTML fallback...")
+            posts = self._fetch_posts_from_html(account_row)
+
         print(f"✅ Получено постов: {len(posts)}")
         return posts
+
+    def _fetch_posts_from_html(self, account_row: dict) -> List[ExternalPost]:
+        """Парсит посты из HTML страницы /p/edit/posts/."""
+        business_id = account_row["business_id"]
+        external_id = account_row.get("external_id")
+        if not external_id:
+            return []
+
+        url = f"https://yandex.ru/sprav/{external_id}/p/edit/posts/"
+        headers = {
+            **self.session_headers,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        try:
+            response = self.session.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            post_elements = soup.select("div.Post")
+            html_posts: List[ExternalPost] = []
+            for idx, post_elem in enumerate(post_elements):
+                title_el = post_elem.select_one(".Post-Title")
+                text_el = post_elem.select_one(".Post-Text, .PostText")
+                date_el = post_elem.select_one(".Post-Hint")
+
+                title = title_el.get_text(strip=True) if title_el else None
+                text = text_el.get_text(strip=True) if text_el else None
+                if not title and not text:
+                    continue
+
+                published_at = None
+                date_str = date_el.get_text(strip=True) if date_el else None
+                if date_str:
+                    try:
+                        published_at = datetime.strptime(date_str, "%d.%m.%Y, %H:%M")
+                    except Exception:
+                        try:
+                            published_at = datetime.strptime(date_str, "%d.%m.%Y")
+                        except Exception:
+                            published_at = None
+
+                external_post_id = f"html_{idx}_{business_id}"
+                html_posts.append(
+                    ExternalPost(
+                        id=f"{business_id}_yandex_business_post_{external_post_id}",
+                        business_id=business_id,
+                        source="yandex_business",
+                        external_post_id=external_post_id,
+                        title=title,
+                        text=text,
+                        published_at=published_at,
+                        image_url=None,
+                        raw_payload={
+                            "title": title,
+                            "text": text,
+                            "date": date_str,
+                            "source": "html_fallback",
+                        },
+                    )
+                )
+            if html_posts:
+                print(f"[_fetch_posts_from_html] parsed posts: {len(html_posts)}")
+            return html_posts
+        except Exception as e:
+            print(f"[_fetch_posts_from_html] Error: {e}")
+            return []
 
     def fetch_photos_count(self, account_row: dict) -> int:
         """

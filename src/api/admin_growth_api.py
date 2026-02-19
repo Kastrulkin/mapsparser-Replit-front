@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from core.growth_schema import ensure_growth_schema
 import uuid
 import json
 
@@ -34,8 +35,10 @@ def get_business_types():
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
         cursor.execute("SELECT * FROM BusinessTypes ORDER BY created_at DESC")
@@ -55,7 +58,8 @@ def get_business_types():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
 
 @admin_growth_bp.route('/api/admin/business-types', methods=['POST'])
 def create_business_type():
@@ -64,6 +68,7 @@ def create_business_type():
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         data = request.json
         type_key = data.get('type_key')
@@ -73,12 +78,13 @@ def create_business_type():
             return jsonify({"error": "Missing required fields"}), 400
             
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
         type_id = str(uuid.uuid4())
         cursor.execute("""
             INSERT INTO BusinessTypes (id, type_key, label, description)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (type_id, type_key, label, data.get('description', '')))
         
         db.conn.commit()
@@ -86,7 +92,8 @@ def create_business_type():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
 
 @admin_growth_bp.route('/api/admin/business-types/<type_id>', methods=['DELETE'])
 def delete_business_type(type_id):
@@ -95,18 +102,21 @@ def delete_business_type(type_id):
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
-        cursor.execute("DELETE FROM BusinessTypes WHERE id = ?", (type_id,))
+        cursor.execute("DELETE FROM BusinessTypes WHERE id = %s", (type_id,))
         db.conn.commit()
         
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
 
 # ===== GROWTH STAGES =====
 
@@ -117,13 +127,15 @@ def get_growth_stages(type_id):
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
         cursor.execute("""
             SELECT * FROM GrowthStages 
-            WHERE business_type_id = ? 
+            WHERE business_type_id = %s 
             ORDER BY stage_number ASC
         """, (type_id,))
         
@@ -160,7 +172,8 @@ def get_growth_stages(type_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
 
 @admin_growth_bp.route('/api/admin/growth-stages', methods=['POST'])
 def create_growth_stage():
@@ -169,6 +182,7 @@ def create_growth_stage():
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         data = request.json
         business_type_id = data.get('business_type_id')
@@ -179,6 +193,7 @@ def create_growth_stage():
             return jsonify({"error": "Missing required fields"}), 400
             
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
         stage_id = str(uuid.uuid4())
@@ -189,7 +204,7 @@ def create_growth_stage():
                 id, business_type_id, stage_number, title, description, 
                 goal, expected_result, duration, is_permanent, tasks
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             stage_id, business_type_id, stage_number, title, 
             data.get('description', ''), data.get('goal', ''), 
@@ -202,7 +217,8 @@ def create_growth_stage():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
 
 @admin_growth_bp.route('/api/admin/growth-stages/<stage_id>', methods=['PUT'])
 def update_growth_stage(stage_id):
@@ -211,19 +227,21 @@ def update_growth_stage(stage_id):
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         data = request.json
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
         tasks_json = json.dumps(data.get('tasks', []))
         
         cursor.execute("""
             UPDATE GrowthStages
-            SET stage_number = ?, title = ?, description = ?, 
-                goal = ?, expected_result = ?, duration = ?, 
-                is_permanent = ?, tasks = ?
-            WHERE id = ?
+            SET stage_number = %s, title = %s, description = %s, 
+                goal = %s, expected_result = %s, duration = %s, 
+                is_permanent = %s, tasks = %s
+            WHERE id = %s
         """, (
             data.get('stage_number'), data.get('title'), 
             data.get('description', ''), data.get('goal', ''), 
@@ -237,7 +255,8 @@ def update_growth_stage(stage_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()
         
 @admin_growth_bp.route('/api/admin/growth-stages/<stage_id>', methods=['DELETE'])
 def delete_growth_stage(stage_id):
@@ -246,15 +265,18 @@ def delete_growth_stage(stage_id):
     if not user:
         return jsonify({"error": "Forbidden"}), 403
         
+    db = None
     try:
         db = DatabaseManager()
+        ensure_growth_schema(db)
         cursor = db.conn.cursor()
         
-        cursor.execute("DELETE FROM GrowthStages WHERE id = ?", (stage_id,))
+        cursor.execute("DELETE FROM GrowthStages WHERE id = %s", (stage_id,))
         db.conn.commit()
         
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        db.close()
+        if db:
+            db.close()

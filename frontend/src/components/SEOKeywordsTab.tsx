@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Search, TrendingUp, Filter } from 'lucide-react';
+import { RefreshCw, Search, TrendingUp } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { useLanguage } from '@/i18n/LanguageContext';
 
@@ -15,7 +15,11 @@ interface GroupedKeywords {
     [key: string]: Keyword[];
 }
 
-export default function SEOKeywordsTab() {
+interface SEOKeywordsTabProps {
+    businessId?: string | null;
+}
+
+export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const { t } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
@@ -29,7 +33,8 @@ export default function SEOKeywordsTab() {
         setLoading(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`${window.location.origin}/api/wordstat/keywords`, {
+            const qs = businessId ? `?business_id=${encodeURIComponent(businessId)}&use_city=1` : '';
+            const response = await fetch(`${window.location.origin}/api/wordstat/keywords${qs}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await response.json();
@@ -60,7 +65,7 @@ export default function SEOKeywordsTab() {
             const data = await response.json();
 
             if (data.success) {
-                setSuccess(data.message || 'Update started.');
+                setSuccess(data.message || (t.common.success || 'Update started.'));
                 // Reload after a delay to show new data if possible, or user can refresh manually
                 setTimeout(loadKeywords, 3000);
             } else {
@@ -75,7 +80,7 @@ export default function SEOKeywordsTab() {
 
     useEffect(() => {
         loadKeywords();
-    }, []);
+    }, [businessId]);
 
     const categories = ['all', ...Object.keys(grouped)];
     const displayedKeywords = activeCategory === 'all'
@@ -88,10 +93,10 @@ export default function SEOKeywordsTab() {
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <TrendingUp className="w-6 h-6 text-indigo-600" />
-                        SEO Keywords
+                        {t.dashboard.card.seoKeywords?.title || 'SEO Keywords'}
                     </h2>
                     <p className="text-gray-500 mt-1">
-                        Top search queries from Yandex.Wordstat used for AI optimization.
+                        {t.dashboard.card.seoKeywords?.subtitle || 'Top search queries from Yandex.Wordstat used for AI optimization.'}
                     </p>
                 </div>
                 <Button
@@ -100,7 +105,7 @@ export default function SEOKeywordsTab() {
                     className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
                 >
                     <RefreshCw className={cn("w-4 h-4 mr-2", updating && "animate-spin")} />
-                    {updating ? "Updating..." : "Update Data"}
+                    {updating ? (t.dashboard.card.seoKeywords?.updating || "Updating...") : (t.dashboard.card.seoKeywords?.update || "Update Data")}
                 </Button>
             </div>
 
@@ -129,7 +134,7 @@ export default function SEOKeywordsTab() {
                                 : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
                         )}
                     >
-                        {cat === 'all' ? 'All Keywords' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        {cat === 'all' ? (t.dashboard.card.seoKeywords?.all || 'All Keywords') : cat.charAt(0).toUpperCase() + cat.slice(1)}
                         {cat !== 'all' && <span className="ml-2 text-xs opacity-60">({grouped[cat]?.length || 0})</span>}
                     </button>
                 ))}
@@ -140,10 +145,10 @@ export default function SEOKeywordsTab() {
                 <table className="min-w-full divide-y divide-gray-100">
                     <thead className="bg-gray-50/50">
                         <tr>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Keyword</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Monthly Views</th>
-                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.keyword || 'Keyword'}</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.category || 'Category'}</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.views || 'Monthly Views'}</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dashboard.card.seoKeywords?.columns?.updated || 'Last Updated'}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -152,7 +157,7 @@ export default function SEOKeywordsTab() {
                                 <td colSpan={4} className="px-6 py-8 text-center">
                                     <div className="flex justify-center items-center gap-2 text-gray-500">
                                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
-                                        <span>Loading keywords...</span>
+                                        <span>{t.dashboard.card.seoKeywords?.loading || "Loading keywords..."}</span>
                                     </div>
                                 </td>
                             </tr>
@@ -163,14 +168,14 @@ export default function SEOKeywordsTab() {
                                         <div className="p-3 bg-gray-50 rounded-full">
                                             <Search className="w-8 h-8 text-gray-300" />
                                         </div>
-                                        <p>No keywords found. Click "Update Data" to fetch from Wordstat.</p>
+                                        <p>{t.dashboard.card.seoKeywords?.empty || 'No keywords found. Click "Update Data" to fetch from Wordstat.'}</p>
                                     </div>
                                 </td>
                             </tr>
                         ) : (
                             displayedKeywords.map((k) => (
                                 <tr key={k.keyword} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{k.keyword}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{(k as any).keyword_with_city || k.keyword}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                             {k.category}

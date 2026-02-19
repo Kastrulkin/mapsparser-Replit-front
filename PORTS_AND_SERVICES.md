@@ -9,7 +9,7 @@
 | Сервис | Порт | Протокол | Описание | Проверка |
 |--------|------|----------|----------|----------|
 | **Фронтенд (Dev)** | `3000` | HTTP | Vite dev server (разработка) | `http://localhost:3000` |
-| **Фронтенд (Prod)** | `80/443` | HTTP/HTTPS | Nginx (статический фронтенд) | `https://beautybot.pro` |
+| **Фронтенд (Prod)** | `80/443` | HTTP/HTTPS | Nginx (статический фронтенд) | `https://localhost` |
 | **Бэкенд API** | `8000` | HTTP | Flask API сервер | `http://localhost:8000` |
 | **Бот управления** | - | - | Systemd сервис (polling) | `systemctl status telegram-bot` |
 | **Бот обмена отзывами** | - | - | Systemd сервис (polling) | `systemctl status telegram-reviews-bot` |

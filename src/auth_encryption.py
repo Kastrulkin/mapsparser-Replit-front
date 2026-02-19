@@ -38,7 +38,7 @@ def _get_encryption_key() -> bytes:
     
     if CRYPTOGRAPHY_AVAILABLE:
         # Используем PBKDF2 для генерации ключа из секрета
-        salt = b"beautybot_external_auth_salt"  # В продакшене лучше использовать случайную соль
+        salt = b"local_external_auth_salt"  # В продакшене лучше использовать случайную соль
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,

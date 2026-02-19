@@ -82,7 +82,7 @@ def run_debug():
         
     # Check details of a few
     print("\n🔍 Detail check (First 3):")
-    cursor.execute("SELECT name, price, description, updated_at FROM UserServices WHERE business_id = ? LIMIT 3", (BUSINESS_ID,))
+    cursor.execute("SELECT name, price, description, updated_at FROM UserServices WHERE business_id = %s LIMIT 3", (BUSINESS_ID,))
     samples = cursor.fetchall()
     for s in samples:
         print(f"   Name: {s[0]}")

@@ -1,5 +1,6 @@
 # Этап 1: сборка фронтенда (Vite/React)
-FROM node:20-slim AS frontend-builder
+# --platform=linux/amd64: на Mac ARM @swc/core даёт Bus error; amd64 через QEMU стабильнее
+FROM --platform=linux/amd64 node:20-slim AS frontend-builder
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /app/frontend
@@ -21,8 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Python-зависимости (слой кешируется отдельно)
+# --timeout 300: при нестабильной сети pip может обрываться по умолчанию (15 сек)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш

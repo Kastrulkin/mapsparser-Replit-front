@@ -66,7 +66,7 @@ def migrate_merge_examples_tables(cursor):
         print(f"📋 Переношу данные из {table_name} (type={example_type})...")
         cursor.execute("""
             INSERT INTO UserExamples (id, user_id, example_type, example_text, created_at)
-            SELECT id, user_id, ?, example_text, created_at 
+            SELECT id, user_id, %s, example_text, created_at 
             FROM """ + table_name + """
             WHERE NOT EXISTS (
                 SELECT 1 FROM UserExamples WHERE UserExamples.id = """ + table_name + """.id

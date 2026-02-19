@@ -1,0 +1,1237 @@
+diff --git a/src/parser_interception.py b/src/parser_interception.py
+index 17138f9..5f3ada0 100644
+--- a/src/parser_interception.py
++++ b/src/parser_interception.py
+@@ -77,6 +77,112 @@ def _find_paths(obj: Any, target_keys: List[str], max_depth: int = 6, max_previe
+     return {k: v for k, v in results.items() if v}
+ 
+ 
++def _pick_first(d: Any, paths: List[List[str]]) -> Any:
++    """
++    Достать первое непустое значение по одному из путей.
++    paths: [["data", "items", "0", "title"], ["data", "name"], ...]
++    Поддерживает числовые индексы для списков ("0", "1").
++    """
++    for p in paths:
++        cur = d
++        ok = True
++        for k in p:
++            if isinstance(cur, list) and k.isdigit():
++                idx = int(k)
++                if idx < 0 or idx >= len(cur):
++                    ok = False
++                    break
++                cur = cur[idx]
++            elif isinstance(cur, dict) and k in cur:
++                cur = cur[k]
++            else:
++                ok = False
++                break
++        if ok and cur is not None and cur != "":
++            return cur
++    return None
++
++
++def _is_empty(val: Any) -> bool:
++    """Проверка на пустое значение (для merge_non_empty)."""
++    if val is None:
++        return True
++    if isinstance(val, str):
++        return not val.strip()
++    if isinstance(val, (list, dict)):
++        return len(val) == 0
++    return False
++
++
++def _is_non_empty(val: Any) -> bool:
++    """Проверка на непустое значение (truthy для скаляров, len>0 для list/dict)."""
++    if val is None:
++        return False
++    if isinstance(val, str):
++        return bool(val.strip())
++    if isinstance(val, (list, dict)):
++        return len(val) > 0
++    return bool(val)
++
++
++def merge_non_empty(dst: Dict[str, Any], src: Dict[str, Any], meta_src: Optional[Dict[str, str]] = None) -> None:
++    """
++    Мерджит src в dst без затирания валидных полей пустыми.
++    - Скаляры: копировать только если src_val truthy и dst пусто.
++    - Списки: только если len > 0 и dst пусто.
++    - Dict: рекурсивно по ключам, не затирать непустое пустым.
++    meta_src: {field: source} — при копировании поля записать meta[field+"_source"]=source.
++    """
++    if not isinstance(src, dict):
++        return
++    meta = dst.get("meta")
++    if not isinstance(meta, dict):
++        meta = {}
++        dst["meta"] = meta
++
++    for k, v in src.items():
++        if k in ("meta", "_search_debug"):
++            continue
++        if not _is_non_empty(v):
++            continue
++        current = dst.get(k)
++        if isinstance(v, dict) and not isinstance(v, list):
++            if not isinstance(current, dict):
++                dst[k] = dict(v)
++            else:
++                merge_non_empty(current, v, meta_src)
++        elif isinstance(v, list):
++            if len(v) > 0 and _is_empty(current):
++                dst[k] = v
++                if meta_src and k in meta_src:
++                    meta[k + "_source"] = meta_src[k]
++        else:
++            if _is_empty(current):
++                dst[k] = v
++                if meta_src and k in meta_src:
++                    meta[k + "_source"] = meta_src[k]
++
++
++def _normalize_title_fields(payload: Dict[str, Any]) -> None:
++    """
++    Гарантирует наличие title_or_name и title, если есть хоть один источник.
++    Вызывать на финальном payload перед return.
++    """
++    t = (
++        payload.get("title_or_name")
++        or payload.get("title")
++        or payload.get("name")
++        or payload.get("page_title_short")
++        or payload.get("og_title")
++    )
++    if t and isinstance(t, str) and t.strip():
++        payload.setdefault("title_or_name", t)
++        payload.setdefault("title", t)
++        ov = payload.get("overview")
++        if isinstance(ov, dict):
++            ov.setdefault("title", t)
++
++
+ def _set_if_empty(result: Dict[str, Any], key: str, value: Any) -> None:
+     """
+     Поставить result[key] только если там сейчас "пусто" и value осмысленное.
+@@ -206,10 +312,17 @@ class YandexMapsInterceptionParser:
+     
+     def __init__(self, debug_bundle_id: Optional[str] = None):
+         self.api_responses: Dict[str, Any] = {}
++        self.api_responses_list: List[tuple] = []  # [(url, json_data), ...] — журнал без перезаписи
++        self.location_info_payload: Optional[Dict[str, Any]] = None  # первый валидный location-info
++        self.reviews_pages: List[Dict[str, Any]] = []
++        self.products_pages: List[Dict[str, Any]] = []
++        self.search_api_payload: Optional[Dict[str, Any]] = None  # search?business_oid=...
++        self._search_api_debug: Optional[Dict[str, Any]] = None  # для selected_item_debug.json
+         self.org_id: Optional[str] = None
+         self.debug_bundle_id: Optional[str] = debug_bundle_id
+         _base = os.getenv("DEBUG_DIR", "/app/debug_data")
+         self.debug_bundle_dir: Optional[str] = os.path.join(_base, debug_bundle_id) if debug_bundle_id else None
++        self._debug_raw_services_count: int = 0
+         
+     def extract_org_id(self, url: str) -> Optional[str]:
+         """Извлечь org_id из URL Яндекс.Карт
+@@ -249,6 +362,17 @@ class YandexMapsInterceptionParser:
+         
+         print(f"📋 Извлечен org_id: {self.org_id}")
+ 
++        def _is_captcha_page(title: str) -> bool:
++            """Проверка капчи по заголовку (регистронезависимо, рус/англ)."""
++            t = (title or "").lower()
++            return (
++                "ой!" in t or "captcha" in t or "robot" in t
++                or "подтвердите, что вы не робот" in t
++                or "are you not a robot" in t
++                or "confirm that you" in t
++                or "запросы отправляли вы" in t
++            )
++
+         # Инициализируем bundle-директорию для этого прогона (если ещё не задана в __init__)
+         if not self.debug_bundle_id:
+             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+@@ -273,6 +397,12 @@ class YandexMapsInterceptionParser:
+ 
+         # Очищаем предыдущие ответы
+         self.api_responses = {}
++        self.api_responses_list = []
++        self.location_info_payload = None
++        self.reviews_pages = []
++        self.products_pages = []
++        self.search_api_payload = None
++        self._search_api_debug = None
+ 
+         # Перехватываем все ответы
+         def handle_response(response):
+@@ -280,8 +410,8 @@ class YandexMapsInterceptionParser:
+             try:
+                 url = response.url
+ 
+-                # Ищем API запросы Яндекс.Карт
+-                if "yandex.ru" in url or "yandex.net" in url:
++                # Ищем API запросы Яндекс.Карт (yandex.com при редиректе региона!)
++                if any(h in url for h in ("yandex.ru", "yandex.net", "yandex.com")):
+                     # Проверяем, это JSON ответ?
+                     content_type = response.headers.get("content-type", "")
+                     if "application/json" in content_type or "json" in url.lower() or "ajax=1" in url:
+@@ -304,12 +434,22 @@ class YandexMapsInterceptionParser:
+ 
+                             # Check for organization data (search or location-info)
+                             if json_data:
+-                                # Сохраняем ответ
++                                # Сохраняем ответ (последний по URL для обратной совместимости)
+                                 self.api_responses[url] = {
+                                     "data": json_data,
+                                     "status": response.status,
+                                     "headers": dict(response.headers),
+                                 }
++                                self.api_responses_list.append((url, json_data))
++                                # Агрегаты: не перезаписываем, дополняем
++                                if "location-info" in url and self.location_info_payload is None:
++                                    self.location_info_payload = json_data
++                                if "fetchReviews" in url or ("reviews" in url.lower() and "business" in url.lower()):
++                                    self.reviews_pages.append(json_data)
++                                if "fetchGoods" in url or "prices" in url.lower() or "goods" in url.lower():
++                                    self.products_pages.append(json_data)
++                                if "search" in url and "business_oid" in url:
++                                    self.search_api_payload = json_data
+                                 # Показываем только важные запросы
+                                 if any(
+                                     keyword in url
+@@ -333,7 +473,7 @@ class YandexMapsInterceptionParser:
+ 
+         page.on("response", handle_response)
+ 
+-        # Загружаем страницу
++        # Загружаем страницу (interception зарегистрирован ДО goto — все ответы будут перехвачены)
+         print("🌐 Загружаем страницу и перехватываем API запросы...")
+         try:
+             main_response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+@@ -346,14 +486,12 @@ class YandexMapsInterceptionParser:
+             # Проверяем на капчу с ожиданием решения
+             for _ in range(24):  # Ждем до 120 секунд
+                 try:
+-                    # Более точная проверка капчи
++                    # Более точная проверка капчи (регистронезависимо + рус/англ)
+                     title = page.title()
+-                    # Проверяем заголовок, текст и наличие элементов SmartCaptcha
+                     is_captcha = (
+-                        "Ой!" in title
+-                        or "Captcha" in title
+-                        or "Robot" in title
++                        _is_captcha_page(title)
+                         or page.get_by_text("Подтвердите, что вы не робот").is_visible()
++                        or page.get_by_text("Are you not a robot", exact=False).is_visible()
+                         or page.locator(".smart-captcha").count() > 0
+                         or page.locator("input[name='smart-token']").count() > 0
+                     )
+@@ -372,7 +510,7 @@ class YandexMapsInterceptionParser:
+ 
+         # Double check if we are still stuck on Captcha
+         title = page.title()
+-        if "Ой!" in title or "Captcha" in title or "Robot" in title or "Вы не робот" in title:
++        if _is_captcha_page(title):
+             print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
+             # Возвращаем специальную ошибку, чтобы воркер знал о капче
+             return {"error": "captcha_detected", "captcha_url": page.url}
+@@ -394,6 +532,31 @@ class YandexMapsInterceptionParser:
+         title = page.title()
+         print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+ 
++        # Редирект на /prices/ — на странице цен нет address/rating/categories. Возвращаемся на overview.
++        if "/prices/" in current_url or current_url.rstrip("/").endswith("/prices"):
++            print("⚠️ Редирект на страницу цен (/prices/). Переходим на overview по исходному URL...")
++            # Используем исходный URL (с ll= из ссылки на карты) для стабилизации региона
++            overview_url = initial_url if initial_url and "/prices/" not in initial_url else url
++            if not overview_url or "/prices/" in overview_url:
++                overview_url = re.sub(r"/prices/?", "/", current_url)
++            try:
++                # Ждём org API при переходе на overview
++                def _is_org_api_resp(r):
++                    u = r.url
++                    return any(kw in u for kw in ("org", "location-info", "organization", "business"))
++                with page.expect_response(_is_org_api_resp, timeout=20000) as resp_info:
++                    page.goto(overview_url, wait_until="domcontentloaded", timeout=15000)
++                try:
++                    resp_info.value
++                    print("✅ Org API перехвачен при переходе на overview")
++                except Exception:
++                    pass
++                page.wait_for_timeout(3000)
++                current_url = page.url
++                print(f"📍 После перехода на overview: {current_url}")
++            except Exception as e:
++                print(f"⚠️ Не удалось перейти на overview: {e}")
++
+         # Более строгая проверка: ищем заголовок организации
+         is_business_card = False
+         try:
+@@ -410,7 +573,7 @@ class YandexMapsInterceptionParser:
+         except Exception:
+             pass
+ 
+-        if (not is_business_card) or ("yandex.ru" in current_url and "/org/" not in current_url):
++        if (not is_business_card) or ("yandex" in current_url and "/org/" not in current_url):
+             print("⚠️ Не похоже на карточку организации! (Редирект?). Пробуем перейти по ссылке снова...")
+ 
+             # Debug: Save bad page (только при наличии bundle)
+@@ -454,12 +617,32 @@ class YandexMapsInterceptionParser:
+                 page.mouse.wheel(0, 1000)
+                 time.sleep(random.uniform(0.5, 1.0))
+ 
++        def wait_for_location_info(timeout_sec: float = 5.0) -> bool:
++            """Ожидание загрузки location-info API (где title). Возвращает True если загружен."""
++            start = time.time()
++            while time.time() - start < timeout_sec:
++                if any("location-info" in u for u in self.api_responses):
++                    print("✅ [WAIT] location-info загружен")
++                    return True
++                time.sleep(0.5)
++                try:
++                    page.evaluate("window.scrollBy(0, 100)")
++                except Exception:
++                    pass
++            print("⏱️ [WAIT] Таймаут ожидания location-info")
++            return False
++
+         extra_photos_count = 0
++        ui_counts: Dict[str, int] = {"reviews": 0, "photos": 0, "services": 0}
+ 
+         # 1. Скроллим основную страницу
+         print("📜 Скроллим основную страницу...")
+         scroll_page(3)
+ 
++        # 1.5 Ожидание location-info перед переходом по вкладкам (title берётся оттуда)
++        if not wait_for_location_info():
++            print("⚠️ Переход по вкладкам без location-info — title может отсутствовать")
++
+         # 2. Кликаем и скроллим Отзывы (Reviews)
+         try:
+             reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews")
+@@ -512,7 +695,7 @@ class YandexMapsInterceptionParser:
+                 try:
+                     photos_text = photos_tab.inner_text()
+                     print(f"ℹ️ Текст вкладки фото: {photos_text}")
+-                    match = re.search(r"(\\d+)", photos_text)
++                    match = re.search(r"(\d+)", photos_text)
+                     if match:
+                         extra_photos_count = int(match.group(1))
+                 except Exception:
+@@ -576,6 +759,24 @@ class YandexMapsInterceptionParser:
+         except Exception as e:
+             print(f"⚠️ Ошибка при обработке услуг: {e}")
+ 
++        # Сбор ui_counts из текста вкладок (что видно на UI: 74 отзыва, 64 фото, 36 услуг)
++        try:
++            for sel, key in [
++                ("div.tabs-select-view__title._name_reviews", "reviews"),
++                ("div.tabs-select-view__title._name_gallery", "photos"),
++                ("div.tabs-select-view__title._name_price", "services"),
++            ]:
++                tab = page.query_selector(sel) or page.query_selector(
++                    "div.tabs-select-view__title._name_goods" if key == "services" else ""
++                )
++                if tab:
++                    txt = tab.inner_text()
++                    m = re.search(r"(\d+)", txt)
++                    if m:
++                        ui_counts[key] = int(m.group(1))
++        except Exception:
++            pass
++
+         # Проверка верификации через HTML (так как в JSON это может быть спрятано)
+         is_verified = False
+         try:
+@@ -601,9 +802,23 @@ class YandexMapsInterceptionParser:
+ 
+         print(f"📦 Перехвачено {len(self.api_responses)} API запросов")
+ 
+-        # Извлекаем данные из перехваченных ответов
+-        data = self._extract_data_from_responses()
++        # Извлекаем данные из перехваченных ответов (api_payload)
++        api_payload = self._extract_data_from_responses()
++        data = dict(api_payload)  # final будет мерджиться с html
+         data["is_verified"] = is_verified
++
++        # Жёсткий fail: org API не перехвачен, критичных полей нет — не low_quality, а org_api_not_loaded
++        has_org_api = any(
++            kw in u for u in self.api_responses
++            for kw in ("org", "location-info", "organization", "business", "company")
++        )
++        has_critical = bool(
++            data.get("address") or data.get("rating")
++            or (data.get("categories") and len(data.get("categories", [])) > 0)
++        )
++        if not has_org_api and not has_critical:
++            print("❌ Org API не перехвачен, критичных полей нет. Возвращаем org_api_not_loaded.")
++            return {"error": "org_api_not_loaded", "url": page.url}
+         if extra_photos_count > 0:
+             data["photos_count"] = extra_photos_count
+ 
+@@ -642,165 +857,92 @@ class YandexMapsInterceptionParser:
+             except Exception as e:
+                 print(f"⚠️ Ошибка Hybrid Mode для услуг: {e}")
+ 
+-        if not data.get("title") and not data.get("overview", {}).get("title"):
+-            print("⚠️ Не удалось извлечь данные через API, используем HTML парсинг как fallback")
++        # HTML fallback: merge_non_empty — не затираем валидные API-поля пустыми
++        html_payload = self._extract_from_html_fallback(page)
++        meta_src_html = {k: "html_fallback" for k in html_payload if html_payload.get(k)}
++        merge_non_empty(data, html_payload, meta_src_html)
+ 
++        # Верификация через user selector (если еще не найдено)
++        if not is_verified:
+             try:
+-                # 0. Попытка извлечь из мета-тегов (самый надежный способ для заголовка)
+-                meta_title = None
+-                try:
+-                    # og:title
+-                    og_title = page.locator("meta[property='og:title']").get_attribute("content")
+-                    if og_title:
+-                        meta_title = og_title.split("|")[0].strip()  # "Name | City" -> "Name"
+-                        print(f"✅ Нашли заголовок в og:title: {meta_title}")
+-
+-                    # title tag
+-                    if not meta_title:
+-                        page_title = page.title()
+-                        if page_title:
+-                            meta_title = page_title.split("-")[0].strip()  # "Name - Yandex Maps" -> "Name"
+-                            print(f"✅ Нашли заголовок в page title: {meta_title}")
+-                except Exception as e:
+-                    print(f"⚠️ Ошибка извлечения мета-заголовка: {e}")
+-
+-                # 0.1 Попытка извлечь заголовок через user selector (если мета не сработала или для надежности)
+-                if not meta_title:
+-                    try:
+-                        h1_el = page.query_selector("div.orgpage-header-view__header-wrapper > h1")
+-                        if h1_el:
+-                            meta_title = h1_el.inner_text().strip()
+-                            print(f"✅ Нашли заголовок через CSS селектор: {meta_title}")
+-                    except Exception as e:
+-                        print(f"⚠️ Ошибка CSS селектора заголовка: {e}")
+-
+-                if meta_title:
+-                    if "overview" not in data:
+-                        data["overview"] = {}
+-                    data["title"] = meta_title
+-                    data["overview"]["title"] = meta_title
++                verified_el = page.query_selector(
++                    "div.orgpage-header-view__header-wrapper > h1 > span.business-verified-badge, "
++                    "div.orgpage-header-view__header-wrapper > h1 > span"
++                )
++                if verified_el:
++                    data["is_verified"] = True
++                    print("✅ Найдена галочка верификации (User CSS)")
++            except Exception:
++                pass
+ 
+-                # Проверка верификации через user selector (если еще не найдено)
+-                if not is_verified:
++        # Передаем селектор пользователя в парсер (products HTML)
++        try:
++            if not data.get("products"):
++                print("🛠 Parsing services via HTML with USER Selectors...")
++                products_html: List[Dict[str, Any]] = []
++                groups = page.query_selector_all("div.business-full-items-grouped-view__content > div")
++                for group in groups:
++                    cat_title_el = group.query_selector("div.business-full-items-grouped-view__title")
++                    cat_title = cat_title_el.inner_text() if cat_title_el else "Другое"
++                    items = group.query_selector_all(
++                        "div.business-full-items-grouped-view__item, div.related-product-view"
++                    )
++                    if not items:
++                        items = group.query_selector_all("div.business-full-items-grouped-view__items._grid > div")
++                    for item in items:
++                        try:
++                            name_el = item.query_selector("div.related-product-view__title")
++                            price_el = item.query_selector("div.related-product-view__price")
++                            if name_el:
++                                products_html.append({
++                                    "name": name_el.inner_text(),
++                                    "price": price_el.inner_text() if price_el else "",
++                                    "category": cat_title,
++                                    "description": "",
++                                    "photo": "",
++                                })
++                        except Exception:
++                            pass
++                if not products_html:
+                     try:
+-                        # body > ... > h1 > span
+-                        verified_el = page.query_selector(
+-                            "div.orgpage-header-view__header-wrapper > h1 > span.business-verified-badge"
+-                        )
+-                        if not verified_el:
+-                            verified_el = page.query_selector(
+-                                "div.orgpage-header-view__header-wrapper > h1 > span"
+-                            )
+-
+-                        if verified_el:
+-                            data["is_verified"] = True
+-                            print("✅ Найдена галочка верификации (User CSS)")
+-                    except Exception:
++                        from yandex_maps_scraper import parse_products
++                        products_html = parse_products(page)
++                    except ImportError:
+                         pass
++                if products_html:
++                    print(f"✅ HTML Fallback нашел {len(products_html)} услуг")
++                    current = data.get("products", [])
++                    current.extend(products_html)
++                    data["products"] = current
++        except Exception as e:
++            print(f"⚠️ Ошибка user-selector HTML parsing: {e}")
+ 
+-                # Извлечение адреса (если нет в API)
+-                if not data.get("address") and not data.get("overview", {}).get("address"):
+-                    try:
+-                        # 1. Meta tag
+-                        meta_address = page.locator(
+-                            "meta[property='business:contact_data:street_address']"
+-                        ).get_attribute("content")
+-                        if meta_address:
+-                            print(f"✅ Нашли адрес в meta: {meta_address}")
+-                            data["address"] = meta_address
+-                        else:
+-                            # 2. CSS Selector
+-                            address_el = (
+-                                page.query_selector("div.orgpage-header-view__address")
+-                                or page.query_selector("a.orgpage-header-view__address")
+-                                or page.query_selector("div.business-contacts-view__address-link")
+-                            )
+-                            if address_el:
+-                                addr_text = address_el.inner_text()
+-                                print(f"✅ Нашли адрес через CSS: {addr_text}")
+-                                data["address"] = addr_text
+-                    except Exception as e:
+-                        print(f"⚠️ Ошибка извлечения адреса HTML: {e}")
+-
+-            except Exception as e:
+-                print(f"⚠️ Error extracting title from meta/css: {e}")
+-
+-            # Передаем селектор пользователя в парсер
+-            try:
+-                # Поскольку YandexMapsScraper класса нет, парсим руками
+-
+-                # Only try to parse products if we don't have them yet
+-                if not data.get("products"):
+-                    print("🛠 Parsing services via HTML with USER Selectors...")
+-
+-                    products_html: List[Dict[str, Any]] = []
+-
+-                    # 0. Сначала кликаем по табу "Цены" или "Услуги" если еще не там
+-                    # (В parse_yandex_card мы уже пробовали, но может не вышло)
+-                    # ...
+-
+-                    # 1. Используем логику пользователя (селекторы)
+-                    # Selector: body > ... > div.business-full-items-grouped-view__content
+-
+-                    groups = page.query_selector_all("div.business-full-items-grouped-view__content > div")
+-                    for group in groups:
+-                        # Category title?
+-                        cat_title_el = group.query_selector("div.business-full-items-grouped-view__title")
+-                        cat_title = cat_title_el.inner_text() if cat_title_el else "Другое"
+-
+-                        items = group.query_selector_all(
+-                            "div.business-full-items-grouped-view__item, div.related-product-view"
+-                        )
+-                        if not items:
+-                            # Try user selector
+-                            items = group.query_selector_all(
+-                                "div.business-full-items-grouped-view__items._grid > div"
+-                            )
+-
+-                        for item in items:
+-                            try:
+-                                name_el = item.query_selector("div.related-product-view__title")
+-                                price_el = item.query_selector("div.related-product-view__price")
+-                                if name_el:
+-                                    products_html.append(
+-                                        {
+-                                            "name": name_el.inner_text(),
+-                                            "price": price_el.inner_text() if price_el else "",
+-                                            "category": cat_title,
+-                                            "description": "",
+-                                            "photo": "",
+-                                        }
+-                                    )
+-                            except Exception:
+-                                pass
+-
+-                    # 2. Если не вышло - пробуем функцию из старого парсера
+-                    if not products_html:
+-                        print("🔄 Пробуем функцию parse_products из yandex_maps_scraper...")
+-                        try:
+-                            from yandex_maps_scraper import parse_products
+-
+-                            products_html = parse_products(page)
+-                        except ImportError:
+-                            print("⚠️ Не удалось импортировать parse_products")
+-
+-                    if products_html:
+-                        print(f"✅ HTML Fallback нашел {len(products_html)} услуг")
+-                        current = data.get("products", [])
+-                        current.extend(products_html)
+-                        data["products"] = current
+-
+-            except Exception as e:
+-                print(f"⚠️ Ошибка user-selector HTML parsing: {e}")
++        # page_title для fallback в worker
++        try:
++            pt = page.title()
++            if pt and _is_empty(data.get("page_title")):
++                data["page_title"] = pt
++        except Exception:
++            pass
+ 
+-            # Пробуем еще раз получить title если нет
+-            if not data.get("title"):
+-                try:
+-                    title_el = page.query_selector("h1.orgpage-header-view__header")
+-                    if title_el:
+-                        data["title"] = title_el.inner_text()
+-                except Exception:
+-                    pass
++        # Warnings по полноте извлечения (ui_counts vs extracted)
++        extracted_reviews = len(data.get("reviews") or [])
++        extracted_photos = data.get("photos_count") or len(data.get("photos") or [])
++        products_raw = data.get("products") or []
++        extracted_services = sum(len(g.get("items", [])) for g in products_raw if isinstance(g, dict)) if products_raw else 0
++        if not extracted_services and products_raw:
++            extracted_services = len(products_raw)
++        warnings_list: List[str] = list(data.get("warnings") or [])
++        if ui_counts.get("reviews", 0) >= 50 and extracted_reviews < ui_counts["reviews"] * 0.8:
++            warnings_list.append("reviews_incomplete")
++        if ui_counts.get("photos", 0) > 0 and extracted_photos == 0:
++            warnings_list.append("photos_not_extracted")
++        if ui_counts.get("services", 0) > 0 and extracted_services < ui_counts["services"] * 0.8:
++            warnings_list.append("services_incomplete")
++        data["warnings"] = warnings_list
++
++        # Нормализация title_or_name ПЕРЕД return (инвариант)
++        _normalize_title_fields(data)
+ 
+         # DEBUG BUNDLE (dev): сохранить сводку по странице и перехваченным данным (только при наличии bundle)
+         if self.debug_bundle_dir:
+@@ -856,12 +998,9 @@ class YandexMapsInterceptionParser:
+                 except Exception:
+                     pass
+ 
+-                # Признаки блокировки / капчи
++                # Признаки блокировки / капчи (регистронезависимо, рус/англ)
+                 blocked_flags = {
+-                    "has_captcha_text": any(
+-                        kw in (page_title or "")
+-                        for kw in ["Ой!", "Captcha", "Robot", "Вы не робот"]
+-                    ),
++                    "has_captcha_text": _is_captcha_page(page_title or ""),
+                     "html_contains_captcha": ("smart-captcha" in (html_content or "")),
+                 }
+ 
+@@ -999,15 +1138,83 @@ class YandexMapsInterceptionParser:
+                 except Exception:
+                     pass
+ 
+-                # Сырой payload (итоговый card_data)
++                # api_extract.json — результат extractor'а из API (до HTML merge)
++                try:
++                    api_extract = {
++                        "title": api_payload.get("title"),
++                        "title_or_name": api_payload.get("title_or_name"),
++                        "address": api_payload.get("address"),
++                        "categories": api_payload.get("categories"),
++                        "rating": api_payload.get("rating"),
++                        "reviews_count": api_payload.get("reviews_count"),
++                    }
++                    # location-info structure helper: top-level keys и 1–2 уровня
++                    li_struct = None
++                    if self.location_info_payload:
++                        li = self.location_info_payload
++                        li_keys = list(li.keys())[:20] if isinstance(li, dict) else []
++                        li_nested = {}
++                        if isinstance(li, dict) and "data" in li:
++                            d = li["data"]
++                            li_nested["data_keys"] = list(d.keys())[:25] if isinstance(d, dict) else []
++                            if isinstance(d, dict) and "toponymSearchResult" in d:
++                                tsr = d["toponymSearchResult"]
++                                li_nested["toponymSearchResult_keys"] = list(tsr.keys())[:15] if isinstance(tsr, dict) else []
++                        li_struct = {"top_keys": li_keys, "nested": li_nested}
++                    api_extract["location_info_structure"] = li_struct
++                    with open(os.path.join(bundle_dir, "api_extract.json"), "w", encoding="utf-8") as f:
++                        json.dump(api_extract, f, ensure_ascii=False, indent=2)
++                except Exception as e:
++                    print(f"⚠️ Failed to write api_extract.json: {e}")
++
++                # payload.json (legacy) и final_payload.json — то, что возвращается из parse_yandex_card
+                 try:
+                     with open(os.path.join(bundle_dir, "payload.json"), "w", encoding="utf-8") as f:
+                         json.dump(data, f, ensure_ascii=False, indent=2)
++                    with open(os.path.join(bundle_dir, "final_payload.json"), "w", encoding="utf-8") as f:
++                        json.dump(data, f, ensure_ascii=False, indent=2)
+                 except Exception as e:
+-                    print(f"⚠️ Failed to write payload.json: {e}")
++                    print(f"⚠️ Failed to write payload.json/final_payload.json: {e}")
++
++                # selected_item_debug.json — search API: сколько items, какой выбран, по какому ключу
++                try:
++                    if getattr(self, "_search_api_debug", None):
++                        with open(os.path.join(bundle_dir, "selected_item_debug.json"), "w", encoding="utf-8") as f:
++                            json.dump(self._search_api_debug, f, ensure_ascii=False, indent=2)
++                except Exception as e:
++                    print(f"⚠️ Failed to write selected_item_debug.json: {e}")
++
++                # Счётчики для сравнения с UI
++                try:
++                    services_list = data.get("products") or []
++                    if isinstance(services_list, list):
++                        services_count = sum(len(g.get("items", [])) for g in services_list if isinstance(g, dict)) or len(services_list)
++                    else:
++                        services_count = 0
++                    counts = {
++                        "extracted": {
++                            "services": services_count,
++                            "reviews": len(data.get("reviews") or []),
++                            "photos": data.get("photos_count") or len(data.get("photos") or []),
++                        },
++                        "raw_before_dedup": {
++                            "services": getattr(self, "_debug_raw_services_count", 0),
++                        },
++                    }
++                    with open(os.path.join(bundle_dir, "counts_comparison.json"), "w", encoding="utf-8") as f:
++                        json.dump(counts, f, ensure_ascii=False, indent=2)
++                except Exception as ce:
++                    print(f"⚠️ Failed to write counts_comparison.json: {ce}")
+             except Exception as e:
+                 print(f"⚠️ Failed to write canonical debug bundle files: {e}")
+ 
++        # [PHOTOS_COUNT]
++        photos_count = data.get("photos_count") or len(data.get("photos") or [])
++        print(f"[PHOTOS_COUNT] extracted={photos_count}")
++
++        # DATA_TRACE
++        print(f"[DATA_TRACE] data.title: {data.get('title')}, title_or_name: {data.get('title_or_name')}")
++
+         print(
+             f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'"
+         )
+@@ -1052,14 +1259,23 @@ class YandexMapsInterceptionParser:
+                     data['reviews'] = reviews
+                     data['reviews_count'] = len(reviews)
+             
++            # Search API с business_oid — основной источник title/address для org-страниц
++            elif 'search' in url and 'business_oid' in url:
++                search_data = self._extract_search_api_business(json_data)
++                if search_data:
++                    print(f"✅ Извлечены данные из search API (business_oid)")
++                    _search_debug = search_data.pop("_search_debug", None)
++                    if _search_debug is not None:
++                        self._search_api_debug = _search_debug
++                    meta_src = search_data.pop("meta", None) or {}
++                    merge_non_empty(data, search_data, meta_src)
+             # Специальная обработка для location-info API
+             elif 'location-info' in url:
+                 org_data = self._extract_location_info(json_data)
+                 if org_data:
+                     print(f"✅ Извлечены данные организации из location-info API")
+-                if org_data:
+-                    print(f"✅ Извлечены данные организации из location-info API")
+-                    data.update(org_data)
++                    meta_src = {k: "location_info" for k in org_data if k not in ("meta",) and org_data.get(k)}
++                    merge_non_empty(data, org_data, meta_src)
+             
+             # Специальная обработка для fetchGoods/Prices API
+             elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower() or 'catalog' in url.lower():
+@@ -1108,7 +1324,10 @@ class YandexMapsInterceptionParser:
+                     pass
+         
+         # Deduplicate products by name and price
++        raw_services_count = 0
+         if data.get('products'):
++            raw_services_count = len(data['products'])
++            self._debug_raw_services_count = raw_services_count
+             unique_products = {}
+             for p in data['products']:
+                 # Key: Name + Price (to distinguish "Haircut" 500 vs "Haircut" 1000)
+@@ -1117,7 +1336,11 @@ class YandexMapsInterceptionParser:
+                 if key not in unique_products:
+                     unique_products[key] = p
+             data['products'] = list(unique_products.values())
+-            print(f"✅ Уникальных услуг после дедупликации: {len(data['products'])}")
++            unique_count = len(data['products'])
++            print(f"✅ Уникальных услуг после дедупликации: {unique_count}")
++            print(f"[SERVICES_COUNT] raw_extracted={raw_services_count}, after_dedup={unique_count}")
++            if raw_services_count != unique_count:
++                print(f"[SERVICES_DUPLICATES] found {raw_services_count - unique_count} duplicates")
+         
+         # Группируем товары по категориям (для совместимости с отчетом)
+         if data.get('products'):
+@@ -1147,6 +1370,11 @@ class YandexMapsInterceptionParser:
+         ]
+         data['overview'] = {k: data.get(k, '') for k in overview_keys}
+         data['overview']['reviews_count'] = data.get('reviews_count', 0)
++
++        reviews_count = len(data.get('reviews', []))
++        print(f"[REVIEWS_COUNT] extracted={reviews_count}")
++        if reviews_count < 50:
++            print(f"[REVIEWS_MISSING] possible pagination or filtering issue (count={reviews_count})")
+         
+         return data
+     
+@@ -1231,10 +1459,189 @@ class YandexMapsInterceptionParser:
+         extract_nested(json_data)
+         return result
+     
++    def _extract_from_html_fallback(self, page) -> Dict[str, Any]:
++        """
++        Извлекает title/address из HTML (og:title, page title, h1).
++        Возвращает dict — результат мерджится в final, только заполняя пустые слоты.
++        """
++        out: Dict[str, Any] = {}
++        try:
++            og_title = page.locator("meta[property='og:title']").get_attribute("content")
++            if og_title:
++                out["og_title"] = og_title
++                clean = og_title.replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").split("|")[0].split(",")[0].strip()
++                t = clean or og_title.split("|")[0].strip()
++                if t:
++                    out["title_or_name"] = t
++                    out["title"] = t
++                    print(f"✅ [HTML_FALLBACK] og:title -> {t[:50]}")
++            if not out.get("title"):
++                pt = page.title()
++                if pt:
++                    out["page_title"] = pt
++                    t = pt.replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").split("|")[0].split("-")[0].strip()
++                    if t:
++                        out["title_or_name"] = t
++                        out["title"] = t
++                        print(f"✅ [HTML_FALLBACK] page_title -> {t[:50]}")
++            if not out.get("title"):
++                h1 = page.query_selector("div.orgpage-header-view__header-wrapper > h1, h1.orgpage-header-view__header")
++                if h1:
++                    t = h1.inner_text().strip()
++                    if t:
++                        out["title_or_name"] = t
++                        out["title"] = t
++                        print(f"✅ [HTML_FALLBACK] h1 -> {t[:50]}")
++            # Адрес
++            meta_addr = page.locator("meta[property='business:contact_data:street_address']").get_attribute("content")
++            if meta_addr:
++                out["address"] = meta_addr
++            elif not out.get("address"):
++                addr_el = page.query_selector("div.orgpage-header-view__address, a.orgpage-header-view__address, div.business-contacts-view__address-link")
++                if addr_el:
++                    out["address"] = addr_el.inner_text().strip()
++        except Exception as e:
++            print(f"⚠️ [HTML_FALLBACK] error: {e}")
++        return out
++
++    def _extract_search_api_business(self, json_data: Any) -> Dict[str, Any]:
++        """
++        Извлекает данные бизнеса из search API (business_oid=...).
++        Выбирает item, где id/oid/businessOid совпадает с self.org_id.
++        Если не найден — возвращает пустой result (не используем search API).
++        """
++        result: Dict[str, Any] = {}
++        expected_oid = self.org_id
++        items = _pick_first(json_data, [["data", "items"], ["items"]])
++        if not isinstance(items, list) or not items:
++            return result
++
++        # Найти item с совпадающим org_id (id, oid, businessOid, uri oid=)
++        def _item_oid(it: Any) -> Optional[str]:
++            if not isinstance(it, dict):
++                return None
++            oid = it.get("id") or it.get("oid") or it.get("businessOid")
++            if oid is not None:
++                return str(oid)
++            uri = it.get("uri") or ""
++            if isinstance(uri, str) and "oid=" in uri:
++                m = re.search(r"oid=(\d+)", uri)
++                if m:
++                    return m.group(1)
++            return None
++
++        item = None
++        matched_key = None
++        selected_index = -1
++        for i, it in enumerate(items):
++            oid = _item_oid(it)
++            if oid and expected_oid and str(oid) == str(expected_oid):
++                item = it
++                selected_index = i
++                if it.get("id") is not None and str(it.get("id")) == str(expected_oid):
++                    matched_key = "id"
++                elif it.get("oid") is not None and str(it.get("oid")) == str(expected_oid):
++                    matched_key = "oid"
++                elif it.get("businessOid") is not None and str(it.get("businessOid")) == str(expected_oid):
++                    matched_key = "businessOid"
++                else:
++                    matched_key = "uri"
++                break
++
++        if not item or not isinstance(item, dict):
++            return result
++
++        # meta для источников полей
++        meta_src: Dict[str, str] = {}
++        BLACKLIST = ("Санкт-Петербург", "Россия", "Яндекс Карты", "Москва")
++        title = item.get("title") or item.get("shortTitle") or item.get("name")
++        if title and str(title).strip() not in BLACKLIST:
++            result["title"] = str(title).strip()
++            result["title_or_name"] = result["title"]
++            meta_src["title"] = meta_src["title_or_name"] = "search_api"
++        addr = item.get("fullAddress") or item.get("address")
++        if addr and isinstance(addr, str) and len(addr.strip()) > 2:
++            result["address"] = addr.strip()
++            meta_src["address"] = "search_api"
++        if item.get("categories"):
++            cats = []
++            for c in item["categories"]:
++                if isinstance(c, dict) and c.get("name"):
++                    cats.append(str(c["name"]))
++                elif isinstance(c, str):
++                    cats.append(c)
++            if cats:
++                result["categories"] = cats
++                meta_src["categories"] = "search_api"
++        rd = item.get("ratingData")
++        if isinstance(rd, dict):
++            rv = rd.get("ratingValue") or rd.get("rating") or rd.get("value")
++            if rv is not None:
++                result["rating"] = str(rv)
++                meta_src["rating"] = "search_api"
++            rc = rd.get("reviewCount") or rd.get("reviewsCount") or rd.get("count")
++            if rc is not None:
++                try:
++                    result["reviews_count"] = int(rc)
++                    meta_src["reviews_count"] = "search_api"
++                except (TypeError, ValueError):
++                    pass
++        result["meta"] = meta_src
++        result["_search_debug"] = {
++            "items_count": len(items),
++            "selected_index": selected_index,
++            "matched_key": matched_key,
++            "expected_oid": expected_oid,
++        }
++        return result
++
+     def _extract_location_info(self, json_data: Any) -> Dict[str, Any]:
+-        """Извлекает данные организации из location-info API"""
++        """
++        Извлекает данные организации из location-info API.
++        Использует _pick_first с реальными путями из JSON.
++        location-info: data.toponymSearchResult.items[0].title (город), бизнес в showcase.
++        search API — основной источник для org-страниц.
++        """
+         result = {}
+-        
++        BLACKLIST = ("Санкт-Петербург", "Россия", "Яндекс Карты", "Москва")
++
++        # Прямые пути из location-info (по реальным bundle)
++        title = _pick_first(json_data, [
++            ["data", "toponymSearchResult", "items", "0", "toponymDiscovery", "categories", "0", "showcase", "0", "title"],
++            ["data", "toponymSearchResult", "exactResult", "toponymDiscovery", "categories", "0", "showcase", "0", "title"],
++            ["data", "toponymSearchResult", "items", "0", "title"],
++            ["data", "toponymSearchResult", "exactResult", "title"],
++        ])
++        if title and str(title).strip() not in BLACKLIST:
++            result["title"] = str(title).strip()
++            result["title_or_name"] = result["title"]
++
++        addr = _pick_first(json_data, [
++            ["data", "toponymSearchResult", "items", "0", "toponymDiscovery", "categories", "0", "showcase", "0", "fullAddress"],
++            ["data", "toponymSearchResult", "items", "0", "toponymDiscovery", "categories", "0", "showcase", "0", "address"],
++            ["data", "toponymSearchResult", "items", "0", "fullAddress"],
++            ["data", "toponymSearchResult", "items", "0", "address"],
++            ["data", "toponymSearchResult", "exactResult", "address"],
++        ])
++        if addr and isinstance(addr, str) and len(addr.strip()) > 2 and addr.strip() not in BLACKLIST:
++            result["address"] = addr.strip()
++
++        # ratingData из showcase
++        rd = _pick_first(json_data, [
++            ["data", "toponymSearchResult", "items", "0", "toponymDiscovery", "categories", "0", "showcase", "0", "ratingData"],
++            ["data", "toponymSearchResult", "items", "0", "ratingData"],
++        ])
++        if isinstance(rd, dict):
++            rv = rd.get("ratingValue") or rd.get("rating") or rd.get("value")
++            if rv is not None:
++                result["rating"] = str(rv)
++            rc = rd.get("reviewCount") or rd.get("reviewsCount") or rd.get("count")
++            if rc is not None:
++                try:
++                    result["reviews_count"] = int(rc)
++                except (TypeError, ValueError):
++                    pass
++
+         def extract_nested(data):
+             if isinstance(data, dict):
+                 # Ищем название
+diff --git a/src/worker.py b/src/worker.py
+index addd3f3..09dfe11 100644
+--- a/src/worker.py
++++ b/src/worker.py
+@@ -184,11 +184,6 @@ def _parse_date_string(date_str: str) -> datetime | None:
+     if russian_date:
+         return russian_date
+     
+-    # Пробуем русские даты (27 января 2026)
+-    russian_date = _parse_russian_date(date_str)
+-    if russian_date:
+-        return russian_date
+-    
+     # Пробуем ISO формат
+     try:
+         if 'T' in date_str or 'Z' in date_str or date_str.count('-') >= 2:
+@@ -198,7 +193,6 @@ def _parse_date_string(date_str: str) -> datetime | None:
+     
+     # Пробуем dateutil для других форматов
+     try:
+-        from dateutil import parser as date_parser
+         return date_parser.parse(date_str, fuzzy=True)
+     except Exception:
+         return None
+@@ -660,6 +654,40 @@ def process_queue():
+                 debug_bundle_id=debug_bundle_id,
+                 **geolocation_kwarg,
+             )
++
++            # Защита от некорректного возврата парсера
++            if card_data is None:
++                print("[FATAL] parse_yandex_card вернул None", flush=True)
++                card_data = {"error": "parser_returned_none", "url": url}
++            elif not isinstance(card_data, dict):
++                print(f"[FATAL] parse_yandex_card вернул {type(card_data)}", flush=True)
++                card_data = {"error": f"parser_returned_{type(card_data).__name__}", "url": url}
++
++            # Нормализация title_or_name до валидации (каскад: title → name → overview → page_title → og_title)
++            if isinstance(card_data, dict) and not card_data.get("error"):
++                if not card_data.get("title_or_name", "").strip():
++                    og_raw = (card_data.get("og_title") or "").strip()
++                    og_clean = og_raw.replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").split("|")[0].split(",")[0].strip() if og_raw else ""
++                    sources = [
++                        (card_data.get("title") or "").strip(),
++                        (card_data.get("name") or "").strip(),
++                        (card_data.get("overview") or {}).get("title") if isinstance(card_data.get("overview"), dict) else "",
++                        (card_data.get("page_title") or "").replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").strip() if card_data.get("page_title") else "",
++                        og_clean,
++                    ]
++                    fallback = next((s for s in sources if s and str(s).strip()), None)
++                    if fallback:
++                        fallback = str(fallback).strip()
++                        card_data["title_or_name"] = fallback
++                        if not card_data.get("title"):
++                            card_data["title"] = fallback
++                        overview = card_data.get("overview") or {}
++                        if isinstance(overview, dict) and not overview.get("title"):
++                            overview["title"] = fallback
++                        used_og = fallback == og_clean and og_clean
++                        print(f"[WORKER_NORMALIZE] title_or_name='{fallback[:50]}'" + (" (from og_title)" if used_og else " из title/name/overview/page_title"), flush=True)
++                    else:
++                        print("[CRITICAL] Нет источников для title_or_name", flush=True)
+         except Exception as e:
+             msg = str(e)
+             if "Playwright Sync API inside the asyncio loop" in msg:
+@@ -711,6 +739,9 @@ def process_queue():
+         if bundle_dir and validation_result:
+             try:
+                 v_path = os.path.join(bundle_dir, "validation.json")
++                val_warnings = list(validation_result.get("warnings") or [])
++                parser_warnings = list(card_data.get("warnings") or []) if isinstance(card_data, dict) else []
++                all_warnings = list(dict.fromkeys(val_warnings + parser_warnings))
+                 payload = {
+                     "is_successful": bool(is_successful),
+                     "reason": str(reason),
+@@ -718,7 +749,7 @@ def process_queue():
+                     "hard_missing": validation_result.get("hard_missing") or [],
+                     "missing_fields": validation_result.get("missing_fields") or [],
+                     "found_fields": validation_result.get("found_fields") or [],
+-                    "warnings": validation_result.get("warnings") or [],
++                    "warnings": all_warnings,
+                 }
+                 with open(v_path, "w", encoding="utf-8") as f:
+                     json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+@@ -741,39 +772,7 @@ def process_queue():
+             meta = build_parsing_meta(card_data, validation_result, source=SOURCE_YANDEX_BUSINESS)
+             card_data["_meta"] = meta
+         
+-        fallback_created = False
+         if not is_successful and business_id:
+-            # DISABLE AUTOMATIC FALLBACK (User Request 2026-01-23)
+-            # Fallback to cabinet parsing should be manual only.
+-            # has_account, account_id = _has_cabinet_account(business_id)
+-            # if has_account: ...
+-            
+-            # Проверяем, есть ли кабинет для fallback
+-            # has_account, account_id = _has_cabinet_account(business_id)
+-            
+-            # if has_account:
+-            #     print(f"⚠️ Парсинг неполный ({reason}), создаю задачу fallback через кабинет")
+-                
+-            #     # Создаем задачу fallback
+-            #     fallback_task_id = str(uuid.uuid4())
+-            #     conn = get_db_connection()
+-            #     cursor = conn.cursor()
+-                
+-            #     try:
+-            #         cursor.execute("""
+-            #             INSERT INTO ParseQueue (
+-            #                 id, business_id, account_id, task_type, source,
+-            #                 status, user_id, url, created_at, updated_at
+-            #             )
+-            #             VALUES (?, ?, ?, 'parse_cabinet_fallback', 'yandex_business',
+-            #                     'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+-            #         """, (fallback_task_id, business_id, account_id, queue_dict["user_id"], queue_dict["url"]))
+-            #         conn.commit()
+-            #         print(f"✅ Создана задача fallback: {fallback_task_id}")
+-            #         fallback_created = True
+-            #     finally:
+-            #         cursor.close()
+-            #         conn.close()
+             print(f"⚠️ Парсинг неполный ({reason}). Автоматический fallback отключен.")
+         
+         if card_data.get("error") == "captcha_detected":
+@@ -783,26 +782,6 @@ def process_queue():
+             else:
+                 print("⚠️ Капча обнаружена, но session_id отсутствует (registry недоступен)")
+ 
+-            # Если был создан фоллбэк, то считаем задачу выполненной, не уходим в цикл
+-            if fallback_created:
+-                print(
+-                    "✅ Капча обнаружена, но создан фоллбэк. "
+-                    "Помечаю задачу как выполненную, чтобы не зацикливать."
+-                )
+-                conn = get_db_connection()
+-                cursor = conn.cursor()
+-                try:
+-                    cursor.execute(
+-                        "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+-                        (STATUS_COMPLETED, queue_dict["id"]),
+-                    )
+-                    cursor.execute("DELETE FROM parsequeue WHERE id = %s", (queue_dict["id"],))
+-                    conn.commit()
+-                finally:
+-                    cursor.close()
+-                    conn.close()
+-                return
+-
+             # Открываем новое соединение только для обновления статуса капчи и сохранения метаданных
+             conn = get_db_connection()
+             cursor = conn.cursor()
+@@ -1042,6 +1021,14 @@ def process_queue():
+                                 from safe_db_utils import get_db_path
+                                 db_path_debug = get_db_path()
+                                 r_len = len(reviews_list) if reviews_list else 0
++                                # Расчёт неотвеченных отзывов (если reviews_list определён)
++                                if 'reviews_list' in locals() and reviews_list:
++                                    unanswered_reviews_count = sum(
++                                        1 for r in reviews_list
++                                        if not r.get("org_reply")
++                                    )
++                                else:
++                                    unanswered_reviews_count = 0
+                                 debug_log(f"Worker DB Path: {db_path_debug}")
+                                 debug_log(f"Reviews in list: {r_len}")
+                                 debug_log(f"Unanswered calc: {unanswered_reviews_count}")
+@@ -1320,25 +1307,6 @@ def process_queue():
+                 except Exception as analysis_error:
+                     print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
+             
+-            # --- SYNC SERVICES AFTER PARSING (NEW) ---
+-            if business_id and card_data.get('products'):
+-                try:
+-                    # Need owner_id for sync
+-                    cursor = conn.cursor() # Ensure we have cursor
+-                    cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
+-                    owner_row = cursor.fetchone()
+-                    if owner_row:
+-                        owner_id = owner_row[0] if isinstance(owner_row, (list, tuple)) else owner_row.get("owner_id")
+-                        print(f"🔄 Синхронизация услуг для business_id={business_id} (owner_id={owner_id})...")
+-                        _sync_parsed_services_to_db(business_id, card_data.get('products'), conn, owner_id)
+-                        print(f"✅ Услуги успешно синхронизированы.")
+-                    else:
+-                        print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
+-                except Exception as sync_error:
+-                    print(f"⚠️ Ошибка синхронизации услуг: {sync_error}")
+-                    import traceback
+-                    traceback.print_exc()
+-            
+             # Обновляем статус на "completed" (чтобы задача осталась в списке)
+             warning_parts = []
+             # Старое предупреждение про HTML fallback (если используется быстрый эндпоинт)
+@@ -1431,22 +1399,30 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
+         return []
+     rows = []
+     source = "yandex_maps"
+-    # Формат: [{"category": "…", "items": [{"name", "price", "description", "id", ...}]}] или плоский список
+     for cat_block in products:
++        # cat_block может быть: dict (категория), list (вложенные items), или мусор
++        if isinstance(cat_block, list):
++            # Плоский список items без обёртки категории
++            items = cat_block
++            category_name = "Разное"
++            for item in items:
++                if isinstance(item, dict) and item.get("name"):
++                    row = _one_service_row(item, business_id, user_id, source)
++                    if row:
++                        row["category"] = category_name
++                        rows.append(row)
++            continue
++
+         if not isinstance(cat_block, dict):
+-            if isinstance(cat_block, (str, int, float)):
+-                continue
+-            if isinstance(cat_block, list):
+-                for item in cat_block:
+-                    if isinstance(item, dict) and item.get("name"):
+-                        row = _one_service_row(item, business_id, user_id, source)
+-                        if row:
+-                            rows.append(row)
++            # Примитивы и неизвестные типы — пропускаем
+             continue
++
++        # Стандартная структура: dict с category и items
+         category_name = (cat_block.get("category") or "Разное").strip() or "Разное"
+         items = cat_block.get("items") or cat_block.get("products") or []
+         if not isinstance(items, list):
+             continue
++
+         for item in items:
+             if not isinstance(item, dict) or not item.get("name"):
+                 continue
+@@ -1469,11 +1445,18 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
+     price_from = price_to = None
+     if raw_price is not None and str(raw_price).strip():
+         try:
+-            digits = re.sub(r"[^0-9.,]", "", str(raw_price))
+-            digits = digits.replace(",", ".")
+-            if digits:
+-                price_from = float(digits)
+-                price_to = price_from
++            # Ищем все числа в строке
++            numbers = re.findall(r"\d+", str(raw_price).replace(" ", "").replace(",", ""))
++            if len(numbers) >= 2:
++                n1, n2 = int(numbers[0]), int(numbers[1])
++                # Защита от выбросов: если разница >100x, вероятно это не диапазон
++                if max(n1, n2) / max(min(n1, n2), 1) <= 100:
++                    price_from = float(min(n1, n2))
++                    price_to = float(max(n1, n2))
++                else:
++                    price_from = price_to = float(n1)
++            elif len(numbers) == 1:
++                price_from = price_to = float(numbers[0])
+         except (ValueError, TypeError):
+             pass
+     return {
+@@ -1486,7 +1469,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
+         "external_id": external_id,
+         "price_from": price_from,
+         "price_to": price_to,
+-        "raw": item,
++        "raw": (dict(item) if isinstance(item, dict) else {"_error": "not_a_dict", "_type": type(item).__name__}),
+         "duration_minutes": item.get("duration_minutes") or item.get("duration"),
+     }
+ 

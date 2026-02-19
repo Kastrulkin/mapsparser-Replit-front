@@ -268,20 +268,20 @@ def add_beauty_salon_strategy():
         cursor = db.conn.cursor()
         
         # Проверяем, есть ли уже такой тип
-        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ?", (BEAUTY_SALON_DATA['type_key'],))
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = %s", (BEAUTY_SALON_DATA['type_key'],))
         existing_type = cursor.fetchone()
         
         if existing_type:
             print(f"⚠️ Тип '{BEAUTY_SALON_DATA['type_key']}' уже существует. Удаляем старые данные...")
             business_type_id = existing_type[0]
             # Удаляем старые этапы
-            cursor.execute("DELETE FROM GrowthStages WHERE business_type_id = ?", (business_type_id,))
+            cursor.execute("DELETE FROM GrowthStages WHERE business_type_id = %s", (business_type_id,))
         else:
             # Создаем новый тип бизнеса
             business_type_id = str(uuid.uuid4())
             cursor.execute("""
                 INSERT INTO BusinessTypes (id, type_key, label, description, is_active)
-                VALUES (?, ?, ?, ?, 1)
+                VALUES (%s, %s, %s, %s, 1)
             """, (
                 business_type_id,
                 BEAUTY_SALON_DATA['type_key'],
@@ -300,7 +300,7 @@ def add_beauty_salon_strategy():
                     id, business_type_id, stage_number, title, description,
                     goal, expected_result, duration, is_permanent, tasks
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, %s)
             """, (
                 stage_id,
                 business_type_id,

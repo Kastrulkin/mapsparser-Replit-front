@@ -14,7 +14,7 @@ grep TELEGRAM_BOT_TOKEN .env
 
 # 2. Если токена нет, добавить его
 nano .env
-# Добавьте строку: TELEGRAM_BOT_TOKEN=ваш_токен_от_Beautybotpor_bot
+# Добавьте строку: TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot
 
 # 3. Перезапустить бота
 systemctl restart telegram-bot
@@ -129,7 +129,7 @@ grep -E "TELEGRAM_BOT_TOKEN|TELEGRAM_REVIEWS_BOT_TOKEN" .env
 
 Должно быть:
 ```
-TELEGRAM_BOT_TOKEN=токен_для_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=токен_для_Local_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=токен_для_beautyreviewexchange_bot
 ```
 

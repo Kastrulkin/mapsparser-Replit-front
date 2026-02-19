@@ -1,6 +1,6 @@
 export const el = {
   // Page title
-  pageTitle: "BeautyBot.pro - Τοπική προώθηση για τοπική επιχείρηση",
+  pageTitle: "LocalOS.pro - Τοπική προώθηση για τοπική επιχείρηση",
 
   common: {
     success: "Επιτυχία",
@@ -23,13 +23,14 @@ export const el = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
-    description: "Τοπική προώθηση για τοπική επιχείρηση",
-    madeWithLove: "Φτιαγμένο με αγάπη για τη βιομηχανία ομορφιάς",
+    title: "Local OS",
+    description: "Ελευθερώνουμε τις τοπικές επιχειρήσεις από τη ρουτίνα",
+    madeWithLovePrefix: "Φτιαγμένο με αγάπη για ",
+    madeWithLoveIndustries: ["κομμωτήρια", "τεχνίτες", "εργαστήρια", "καταστήματα", "σχολεία", "συνεργεία αυτοκινήτων", "κλινικές", "καφετέριες", "πρατήρια καυσίμων"],
     company: "Εταιρεία",
     whoWeAre: "Ποιοί Είμαστε?",
     contacts: "Επαφές",
-    copyright: "© 2025 BeautyBot. Όλα τα δικαιώματα διατηρούνται."
+    copyright: "© 2025 Local. Όλα τα δικαιώματα διατηρούνται."
   },
 
   // Stats
@@ -195,7 +196,7 @@ export const el = {
     option2Point4: "Βλέπεις αποτελέσματα από τον πρώτο μήνα — νέοι πελάτες, αύξηση μέσου τιμολογίου, επαναλαμβανόμενες επισκέψεις",
     option2Button: "Επικοινώνησε με ειδικό",
     pricingTitle: "Συνθήκες",
-    pricingStarterPoint1: "Συνδεθείτε με το επαγγελματικό δίκτυο Beautybot",
+    pricingStarterPoint1: "Συνδεθείτε με το επαγγελματικό δίκτυο Local",
     pricingStarterPoint2: "Ξεκινήστε να χρησιμοποιείτε το ChatGPT για δημιουργία leads",
     pricingStarterPoint3: "Ιδανικό για όσους αναζητούν νέους τρόπους προσέλκυσης πελατών",
     pricingStarterPoint4: "5$ το μήνα",
@@ -983,7 +984,7 @@ export const el = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

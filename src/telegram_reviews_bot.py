@@ -29,7 +29,7 @@ except ImportError:
 # Токен бота для обмена отзывами
 TELEGRAM_REVIEWS_BOT_TOKEN = os.getenv('TELEGRAM_REVIEWS_BOT_TOKEN', '')
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
-CHANNEL_USERNAME = '@beautybotpro'  # Канал для проверки подписки
+CHANNEL_USERNAME = '@beautybotpro'  # Канал для проверки подписки (пока остаётся beautybotpro)
 
 # Словарь для хранения состояния пользователей (telegram_id -> state)
 user_states = {}
@@ -152,7 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor = conn.cursor()
     
     # Проверяем, есть ли пользователь в базе
-    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = %s", (user_id,))
     participant = cursor.fetchone()
     
     if not is_subscribed:
@@ -185,7 +185,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
             SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (participant_id,))
         
         if not consent_given:
@@ -196,7 +196,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "👋 Привет! Рады видеть вас среди нас!\n\n"
                 "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
-                "Подробнее: https://beautybot.pro/policy",
+                "Подробнее: http://localhost:8000/policy",
                 reply_markup=reply_markup
             )
             user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
@@ -209,7 +209,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute("""
             INSERT INTO ReviewExchangeParticipants 
             (id, telegram_id, telegram_username, subscribed_to_channel)
-            VALUES (?, ?, ?, 1)
+            VALUES (%s, %s, %s, 1)
         """, (participant_id, user_id, username))
         conn.commit()
         
@@ -220,7 +220,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "👋 Привет! Рады видеть вас среди нас!\n\n"
             "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
-            "Подробнее: https://beautybot.pro/policy",
+            "Подробнее: http://localhost:8000/policy",
             reply_markup=reply_markup
         )
         conn.close()
@@ -269,7 +269,7 @@ async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     cursor = conn.cursor()
     
     # Проверяем, есть ли пользователь в базе
-    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = %s", (user_id,))
     participant = cursor.fetchone()
     
     if not is_subscribed:
@@ -302,7 +302,7 @@ async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
             SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (participant_id,))
         
         if not consent_given:
@@ -313,7 +313,7 @@ async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.edit_message_text(
                 "👋 Привет! Рады видеть вас среди нас!\n\n"
                 "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
-                "Подробнее: https://beautybot.pro/policy",
+                "Подробнее: http://localhost:8000/policy",
                 reply_markup=reply_markup
             )
             user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
@@ -326,7 +326,7 @@ async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         cursor.execute("""
             INSERT INTO ReviewExchangeParticipants 
             (id, telegram_id, telegram_username, subscribed_to_channel)
-            VALUES (?, ?, ?, 1)
+            VALUES (%s, %s, %s, 1)
         """, (participant_id, user_id, username))
         conn.commit()
         
@@ -337,7 +337,7 @@ async def start_over_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text(
             "👋 Привет! Рады видеть вас среди нас!\n\n"
             "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
-            "Подробнее: https://beautybot.pro/policy",
+            "Подробнее: http://localhost:8000/policy",
             reply_markup=reply_markup
         )
         conn.close()
@@ -374,7 +374,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         cursor = conn.cursor()
         
         username = update.effective_user.username or ''
-        cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+        cursor.execute("SELECT id, consent_personal_data FROM ReviewExchangeParticipants WHERE telegram_id = %s", (user_id,))
         participant = cursor.fetchone()
         
         if participant:
@@ -383,14 +383,14 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             cursor.execute("""
                 UPDATE ReviewExchangeParticipants 
                 SET subscribed_to_channel = 1, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (participant_id,))
         else:
             participant_id = str(uuid.uuid4())
             cursor.execute("""
                 INSERT INTO ReviewExchangeParticipants 
                 (id, telegram_id, telegram_username, subscribed_to_channel)
-                VALUES (?, ?, ?, 1)
+                VALUES (%s, %s, %s, 1)
             """, (participant_id, user_id, username))
             consent_given = False
         
@@ -405,7 +405,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             await query.edit_message_text(
                 "✅ Отлично! Вы подписаны на канал.\n\n"
                 "📋 Для участия в обмене отзывами нам необходимо ваше согласие на обработку персональных данных.\n"
-                "Подробнее: https://beautybot.pro/policy",
+                "Подробнее: http://localhost:8000/policy",
                 reply_markup=reply_markup
             )
             user_states[user_id] = {'state': 'waiting_consent', 'participant_id': participant_id}
@@ -443,7 +443,7 @@ async def review_left_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     cursor.execute("""
         SELECT receiver_participant_id, review_confirmed
         FROM ReviewExchangeDistribution
-        WHERE id = ?
+        WHERE id = %s
     """, (distribution_id,))
     
     result = cursor.fetchone()
@@ -459,7 +459,7 @@ async def review_left_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = str(query.from_user.id)
     cursor.execute("""
         SELECT id FROM ReviewExchangeParticipants 
-        WHERE telegram_id = ? AND id = ?
+        WHERE telegram_id = %s AND id = %s
     """, (user_id, receiver_participant_id))
     
     participant_check = cursor.fetchone()
@@ -478,7 +478,7 @@ async def review_left_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     cursor.execute("""
         UPDATE ReviewExchangeDistribution 
         SET review_confirmed = 1, confirmed_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = %s
     """, (distribution_id,))
     
     conn.commit()
@@ -508,7 +508,7 @@ async def consent_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("""
         UPDATE ReviewExchangeParticipants 
         SET consent_personal_data = 1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = %s
     """, (participant_id,))
     conn.commit()
     conn.close()
@@ -528,7 +528,7 @@ async def force_send_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor = conn.cursor()
     
     # Находим участника
-    cursor.execute("SELECT id FROM ReviewExchangeParticipants WHERE telegram_id = ?", (user_id,))
+    cursor.execute("SELECT id FROM ReviewExchangeParticipants WHERE telegram_id = %s", (user_id,))
     participant = cursor.fetchone()
     conn.close()
     
@@ -547,14 +547,14 @@ async def force_send_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("""
         SELECT COUNT(*) 
         FROM ReviewExchangeParticipants p
-        WHERE p.id != ? 
+        WHERE p.id != %s 
         AND p.is_active = 1
         AND p.business_url IS NOT NULL
         AND p.review_request IS NOT NULL
         AND NOT EXISTS (
             SELECT 1 FROM ReviewExchangeDistribution d
             WHERE d.sender_participant_id = p.id 
-            AND d.receiver_participant_id = ?
+            AND d.receiver_participant_id = %s
         )
     """, (participant_id, participant_id))
     
@@ -608,8 +608,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
-            SET business_url = ?, name = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET business_url = %s, name = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (business_url, user_name, participant_id))
         conn.commit()
         conn.close()
@@ -630,8 +630,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
-            SET review_request = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET review_request = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (text, participant_id))
         conn.commit()
         conn.close()
@@ -654,8 +654,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE ReviewExchangeParticipants 
-            SET review_request = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET review_request = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (text, participant_id))
         conn.commit()
         conn.close()
@@ -687,31 +687,31 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
         cursor.execute("""
             SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
             FROM ReviewExchangeParticipants p
-            WHERE p.id != ? 
+            WHERE p.id != %s 
             AND p.is_active = 1
             AND p.business_url IS NOT NULL
             AND p.review_request IS NOT NULL
             AND NOT EXISTS (
                 SELECT 1 FROM ReviewExchangeDistribution d
                 WHERE d.sender_participant_id = p.id 
-                AND d.receiver_participant_id = ?
+                AND d.receiver_participant_id = %s
             )
             ORDER BY RANDOM()
-            LIMIT ?
+            LIMIT %s
         """, (participant_id, participant_id, limit))
     else:
         # Для большого количества участников используем равномерное распределение
         cursor.execute("""
             SELECT p.id, p.business_url, p.review_request, p.business_name, p.business_address
             FROM ReviewExchangeParticipants p
-            WHERE p.id != ? 
+            WHERE p.id != %s 
             AND p.is_active = 1
             AND p.business_url IS NOT NULL
             AND p.review_request IS NOT NULL
             AND NOT EXISTS (
                 SELECT 1 FROM ReviewExchangeDistribution d
                 WHERE d.sender_participant_id = p.id 
-                AND d.receiver_participant_id = ?
+                AND d.receiver_participant_id = %s
             )
             AND (
                 SELECT COUNT(*) FROM ReviewExchangeDistribution d2
@@ -727,7 +727,7 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
                 SELECT COUNT(*) FROM ReviewExchangeDistribution d3
                 WHERE d3.sender_participant_id = p.id
             ) ASC, RANDOM()
-            LIMIT ?
+            LIMIT %s
         """, (participant_id, participant_id, limit))
     
     businesses = cursor.fetchall()
@@ -750,7 +750,7 @@ async def send_business_links(update: Update, context: ContextTypes.DEFAULT_TYPE
         cursor.execute("""
             INSERT INTO ReviewExchangeDistribution 
             (id, sender_participant_id, receiver_participant_id)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (distribution_id, other_participant_id, participant_id))
         
         message_text = f"📝 Новый бизнес для обмена отзывами:\n\n"

@@ -21,7 +21,7 @@ def debug_account(account_id):
     
     # Get auth data
     cursor = db.conn.cursor()
-    cursor.execute("SELECT auth_data_encrypted, business_id FROM ExternalBusinessAccounts WHERE id = ?", (account_id,))
+    cursor.execute("SELECT auth_data_encrypted, business_id FROM ExternalBusinessAccounts WHERE id = %s", (account_id,))
     row = cursor.fetchone()
     
     if not row:
@@ -43,7 +43,7 @@ def debug_account(account_id):
     parser = YandexBusinessParser(auth_dict)
     
     # Get external_id from DB
-    cursor.execute("SELECT external_id FROM ExternalBusinessAccounts WHERE id = ?", (account_id,))
+    cursor.execute("SELECT external_id FROM ExternalBusinessAccounts WHERE id = %s", (account_id,))
     row_ext = cursor.fetchone()
     if row_ext and row_ext[0]:
         account["external_id"] = row_ext[0]

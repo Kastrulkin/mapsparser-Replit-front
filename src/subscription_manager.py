@@ -29,7 +29,7 @@ def check_access(business_id: str, feature: str) -> bool:
                    b.trial_ends_at, b.subscription_ends_at, u.email
             FROM Businesses b
             JOIN Users u ON b.owner_id = u.id
-            WHERE b.id = ?
+            WHERE b.id = %s
         """, (business_id,))
         
         result = cursor.fetchone()
@@ -133,7 +133,7 @@ def get_subscription_info(business_id: str) -> dict:
                    trial_ends_at, subscription_ends_at,
                    stripe_subscription_id
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         
         result = cursor.fetchone()

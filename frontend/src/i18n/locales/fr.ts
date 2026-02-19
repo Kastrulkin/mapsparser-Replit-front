@@ -1,6 +1,6 @@
 export const fr = {
   // Page title
-  pageTitle: "BeautyBot.pro - Promotion locale pour les entreprises locales",
+  pageTitle: "LocalOS.pro - Promotion locale pour les entreprises locales",
 
   common: {
     success: "Succès",
@@ -23,13 +23,14 @@ export const fr = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
-    description: "Promotion locale pour les entreprises locales",
-    madeWithLove: "Fait avec amour pour l'industrie de la beauté",
+    title: "Local OS",
+    description: "Libérons les entreprises locales de la routine",
+    madeWithLovePrefix: "Fait avec amour pour les ",
+    madeWithLoveIndustries: ["salons de beauté", "artisans", "ateliers", "magasins", "écoles", "garages", "cliniques", "cafés", "stations-service"],
     company: "Entreprise",
     whoWeAre: "Qui Sommes-Nous?",
     contacts: "Contacts",
-    copyright: "© 2025 BeautyBot. Tous droits réservés."
+    copyright: "© 2025 Local. Tous droits réservés."
   },
 
   // Stats
@@ -195,7 +196,7 @@ export const fr = {
     option2Point4: "Vous voyez les résultats dès le premier mois — nouveaux clients, croissance du panier moyen, visites répétées",
     option2Button: "Contacter un expert",
     pricingTitle: "Conditions",
-    pricingStarterPoint1: "Connectez-vous au réseau professionnel Beautybot",
+    pricingStarterPoint1: "Connectez-vous au réseau professionnel Local",
     pricingStarterPoint2: "Commencez à utiliser ChatGPT pour la génération de leads",
     pricingStarterPoint3: "Parfait pour ceux qui recherchent de nouveaux canaux d'acquisition de clients",
     pricingStarterPoint4: "5$ par mois",
@@ -983,7 +984,7 @@ export const fr = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

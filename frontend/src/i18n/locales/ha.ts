@@ -1,6 +1,6 @@
 export const ha = {
   // Page title
-  pageTitle: "BeautyBot.pro - Tallata gida ga kasuwanci na gida",
+  pageTitle: "LocalOS.pro - Tallata gida ga kasuwanci na gida",
 
   common: {
     success: "Nasara",
@@ -20,13 +20,14 @@ export const ha = {
     tryFree: "Gwada kyauta"
   },
   footer: {
-    title: "BeautyBot",
-    description: "Tallata gida ga kasuwanci na gida",
-    madeWithLove: "An yi da ƙauna ga masana'antar kyau",
+    title: "Local OS",
+    description: "Mu 'yantar da kasuwanci na gida daga aikin yau da kullum",
+    madeWithLovePrefix: "An yi da ƙauna ga ",
+    madeWithLoveIndustries: ["salons na kyau", "masu sana'a", "aikin hannu", "shaguna", "makarantu", "tallace-tallace mota", "asibiti", "gidajen abinci", "tashoshin man fetur"],
     company: "Kamfani",
     whoWeAre: "Su waye mu?",
     contacts: "Tuntuɓe mu",
-    copyright: "© 2025 BeautyBot. Duk haƙƙoƙi na ajiya."
+    copyright: "© 2025 Local. Duk haƙƙoƙi na ajiya."
   },
   stats: {
     title: "Ba kayan aiki kaɗai muke bayarwa ba —",
@@ -193,7 +194,7 @@ export const ha = {
     pricingOption1Point4: "Inganta tsarin kasuwanci",
     pricingOption1Point5: "Manaja na musamman",
     pricingOption1Button: "Saita ayyuka",
-    pricingStarterPoint1: "Haɗa da ƙwararren hanyar sadarwar Beautybot",
+    pricingStarterPoint1: "Haɗa da ƙwararren hanyar sadarwar Local",
     pricingStarterPoint2: "Fara amfani da ChatGPT don samar da jerin abokan ciniki",
     pricingStarterPoint3: "Ya dace da masu neman sabbin hanyoyin jawo abokan ciniki",
     pricingStarterPoint4: "5$ a wata",
@@ -968,7 +969,7 @@ export const ha = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

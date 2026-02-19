@@ -32,7 +32,7 @@ def inspect_networks():
             print(f"  🔗 Network: '{name}' (ID: {nid}) - Owner: {owner}")
             
             # Check active businesses in this network
-            cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = ?", (nid,))
+            cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = %s", (nid,))
             count = cursor.fetchone()['c']
             print(f"     -> Linked Businesses: {count}")
 

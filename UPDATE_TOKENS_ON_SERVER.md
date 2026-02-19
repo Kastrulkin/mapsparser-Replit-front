@@ -13,7 +13,7 @@ nano .env
 
 В файле найдите или добавьте строки:
 ```
-TELEGRAM_BOT_TOKEN=ваш_токен_от_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot
 ```
 
@@ -29,7 +29,7 @@ cd /root/mapsparser-Replit-front
 grep -E "TELEGRAM_BOT_TOKEN|TELEGRAM_REVIEWS_BOT_TOKEN" .env
 
 # Если токенов нет, добавить их
-echo "TELEGRAM_BOT_TOKEN=ваш_токен_от_Beautybotpor_bot" >> .env
+echo "TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot" >> .env
 echo "TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot" >> .env
 ```
 
@@ -56,7 +56,7 @@ cp .env .env.backup
 # Создать новый .env (добавьте все остальные переменные, которые были в старом файле)
 cat > .env << 'EOF'
 # Telegram боты
-TELEGRAM_BOT_TOKEN=ваш_токен_от_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot
 TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot
 
 # Добавьте сюда остальные переменные из .env.backup

@@ -2,7 +2,7 @@
 
 У нас два Telegram-бота:
 
-1. **@Beautybotpor_bot** - для управления аккаунтом (использует `TELEGRAM_BOT_TOKEN`)
+1. **@Local_bot** - для управления аккаунтом (использует `TELEGRAM_BOT_TOKEN`)
 2. **@beautyreviewexchange_bot** - для обмена отзывами (использует `TELEGRAM_REVIEWS_BOT_TOKEN`)
 
 ## 📋 Требования
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 ```bash
 # Бот для управления аккаунтом
-TELEGRAM_BOT_TOKEN=ваш_токен_от_Beautybotpor_bot
+TELEGRAM_BOT_TOKEN=ваш_токен_от_Local_bot
 
 # Бот для обмена отзывами
 TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot

@@ -22,9 +22,9 @@
 3. Перейдите в раздел "WhatsApp" → "Configuration"
 4. В поле "Webhook URL" укажите:
    ```
-   https://beautybot.pro/api/webhooks/whatsapp
+   https://localhost/api/webhooks/whatsapp
    ```
-5. В поле "Verify Token" укажите токен из `.env` файла (по умолчанию: `beautybot_verify_token`)
+5. В поле "Verify Token" укажите токен из `.env` файла (по умолчанию: `local_verify_token`)
 6. Сохраните изменения
 
 ### 3. Подписка на события
@@ -69,7 +69,7 @@
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-  -d "url=https://beautybot.pro/api/webhooks/telegram/<YOUR_BOT_TOKEN>"
+  -d "url=https://localhost/api/webhooks/telegram/<YOUR_BOT_TOKEN>"
 ```
 
 #### Вариант 2: Webhook с токеном в заголовке
@@ -77,7 +77,7 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 ```bash
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
   -H "X-Bot-Token: <YOUR_BOT_TOKEN>" \
-  -d "url=https://beautybot.pro/api/webhooks/telegram"
+  -d "url=https://localhost/api/webhooks/telegram"
 ```
 
 ### 4. Включение ИИ агента
@@ -93,7 +93,7 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
 
 ```bash
 # WhatsApp Webhook Verify Token
-WHATSAPP_VERIFY_TOKEN=beautybot_verify_token
+WHATSAPP_VERIFY_TOKEN=local_verify_token
 
 # GigaChat (для ИИ агента)
 GIGACHAT_CLIENT_ID=your_client_id

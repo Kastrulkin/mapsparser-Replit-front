@@ -337,14 +337,14 @@ def update_user(user_id: str, **kwargs) -> bool:
         allowed_fields = ['name', 'phone', 'telegram_id']
         for field, value in kwargs.items():
             if field in allowed_fields and value is not None:
-                update_fields.append(f"{field} = ?")
+                update_fields.append(f"{field} = %s")
                 values.append(value)
         
         if not update_fields:
             return True
         
         values.append(user_id)
-        query = f"UPDATE Users SET {', '.join(update_fields)}, updated_at = ? WHERE id = ?"
+        query = f"UPDATE Users SET {', '.join(update_fields)}, updated_at = %s WHERE id = %s"
         values.append(datetime.now().isoformat())
         
         cursor.execute(query, values)

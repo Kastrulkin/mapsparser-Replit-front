@@ -20,7 +20,7 @@ export const en = {
   },
 
   // Page title
-  pageTitle: "BeautyBot.pro - Local promotion for local business",
+  pageTitle: "LocalOS.pro - Local promotion for local business",
 
   // Header
   header: {
@@ -33,13 +33,14 @@ export const en = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
-    description: "Local promotion for local business",
-    madeWithLove: "Made with love for the beauty industry",
+    title: "Local OS",
+    description: "Free local business from routine",
+    madeWithLovePrefix: "Made with love for ",
+    madeWithLoveIndustries: ["beauty salons", "masters", "workshops", "stores", "schools", "auto services", "clinics", "cafes", "gas stations"],
     company: "Company",
     whoWeAre: "Who We Are?",
     contacts: "Contacts",
-    copyright: "© 2025 BeautyBot. All rights reserved."
+    copyright: "© 2025 Local. All rights reserved."
   },
 
   // Stats
@@ -100,10 +101,10 @@ export const en = {
     howItWorks: "HOW IT WORKS:",
     result: "RESULT:",
     online: {
-      whatYouGet1: "Your salon is at the top of maps and search — new clients find you first.",
+      whatYouGet1: "Your business is at the top of maps and search — new clients find you first.",
       whatYouGet2: "A website with convenient online booking — clients choose a time without calls.",
       whatYouGet3: "Every review is visible to hundreds of potential clients — we make sure you stand out.",
-      whatYouGet4: "Fresh photos and news show that the salon is alive and working.",
+      whatYouGet4: "Fresh photos and news show that you work.",
       howItWorks1: "We optimize your Google card taking into account current requirements.",
       howItWorks2: "We create and maintain a website with online booking.",
       howItWorks3: "We monitor reviews and help respond to them.",
@@ -151,7 +152,7 @@ export const en = {
   // CTA
   cta: {
     title: "Ready to grow?",
-    subtitle: "Join 100+ salons that have already increased their revenue with us",
+    subtitle: "Join 800+ companies that have already increased their revenue with us",
     startFree: "Start free today:",
     setupMaps: "We'll set up your maps — so new clients find you first",
     helpProfile: "We'll help fill out your profile and post materials",
@@ -173,7 +174,7 @@ export const en = {
     support: "Personal support",
     supportDesc1: "We help at every stage — we guide to results",
     supportDesc2: "Available in chat, email, phone",
-    finalText: "Full salon development — payment only from new revenue!",
+    finalText: "Full business development — we'll take the routine on ourselves!",
     contactExpert: "Contact an expert"
   },
 
@@ -186,7 +187,7 @@ export const en = {
     teamTitle: "About Our Team",
     teamText: "We are a team of SEO and automation specialists. We know how to grow local businesses without large budgets and extra effort from the owner.",
     targetTitle: "Who Needs This",
-    targetText: "Beauty salons, masters, studios, and any local business where it's important that appointments don't sit empty and phones don't stay silent.",
+    targetText: "Beauty salons, clinics, masters, cafes and any local business where it's important that appointments don't sit empty and phones don't stay silent.",
     salons: "Beauty Salons",
     masters: "Masters",
     studios: "Studios",
@@ -701,6 +702,21 @@ export const en = {
         source: "Source:",
         yandexBusiness: "Yandex.Business"
       },
+      seoKeywords: {
+        title: "SEO Keywords",
+        subtitle: "Top search queries from Yandex.Wordstat used for AI optimization (based on your services and business type).",
+        update: "Update Data",
+        updating: "Updating...",
+        loading: "Loading keywords...",
+        empty: "No keywords found. Click \"Update Data\" to fetch from Wordstat.",
+        all: "All Keywords",
+        columns: {
+          keyword: "Keyword",
+          category: "Category",
+          views: "Monthly Views",
+          updated: "Last Updated"
+        }
+      },
     },
     bookings: {
       title: "Bookings",
@@ -1168,7 +1184,7 @@ export const en = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

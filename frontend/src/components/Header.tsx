@@ -76,7 +76,7 @@ const Header = () => {
               <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
                 <img
                   src={logo}
-                  alt="BeautyBot Logo"
+                  alt="Local OS"
                   className="h-12 w-auto"
                 />
               </Link>

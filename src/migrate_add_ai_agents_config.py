@@ -61,8 +61,8 @@ def migrate_add_ai_agents_config():
             if agents_config:
                 cursor.execute("""
                     UPDATE Businesses 
-                    SET ai_agents_config = ?
-                    WHERE id = ?
+                    SET ai_agents_config = %s
+                    WHERE id = %s
                 """, (json.dumps(agents_config), business_id))
                 migrated_count += 1
         

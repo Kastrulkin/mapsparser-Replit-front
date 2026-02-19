@@ -30,19 +30,19 @@ def check_services(business_id):
     cursor = conn.cursor()
     
     # Check Services
-    cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = ?", (business_id,))
+    cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = %s", (business_id,))
     count = cursor.fetchone()[0]
     print(f"📦 Services found in DB for {business_id}: {count}")
     
     if count > 0:
-        cursor.execute("SELECT name, price FROM UserServices WHERE business_id = ? LIMIT 5", (business_id,))
+        cursor.execute("SELECT name, price FROM UserServices WHERE business_id = %s LIMIT 5", (business_id,))
         rows = cursor.fetchall()
         print("🔹 Sample services:")
         for r in rows:
             print(f"   - {r[0]}: {r[1]}")
             
     # Check External Stats
-    cursor.execute("SELECT COUNT(*) FROM ExternalBusinessStats WHERE business_id = ?", (business_id,))
+    cursor.execute("SELECT COUNT(*) FROM ExternalBusinessStats WHERE business_id = %s", (business_id,))
     stats_count = cursor.fetchone()[0]
     print(f"📊 Stats entries in DB: {stats_count}")
 

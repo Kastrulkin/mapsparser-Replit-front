@@ -44,12 +44,12 @@ def auto_merge():
         # 1. Merge points (if any)
         if dup['count'] > 0 and dup['network_id']:
             print(f"   🔄 Moving {dup['count']} points from network {dup['network_id']} to {target['network_id']}...")
-            cursor.execute("UPDATE Businesses SET network_id = ? WHERE network_id = ?", 
+            cursor.execute("UPDATE Businesses SET network_id = %s WHERE network_id = %s", 
                            (target['network_id'], dup['network_id']))
         
         # 2. Delete the business entry itself
         print(f"   ❌ Deleting business entry {dup['id']}...")
-        cursor.execute("DELETE FROM Businesses WHERE id = ?", (dup['id'],))
+        cursor.execute("DELETE FROM Businesses WHERE id = %s", (dup['id'],))
         
     db.conn.commit()
     print("\n✅ Merge Complete! All points are now under the Main Business.")

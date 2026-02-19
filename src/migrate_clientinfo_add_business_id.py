@@ -60,7 +60,7 @@ def migrate_clientinfo_add_business_id(cursor):
         business_id = row_dict.get('business_id')
         if not business_id:
             # Пытаемся найти business_id из таблицы Businesses
-            cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_id,))
+            cursor.execute("SELECT id FROM Businesses WHERE owner_id = %s LIMIT 1", (user_id,))
             business_row = cursor.fetchone()
             if business_row:
                 business_id = business_row[0]
@@ -71,7 +71,7 @@ def migrate_clientinfo_add_business_id(cursor):
         
         cursor.execute("""
             INSERT INTO ClientInfo (user_id, business_id, business_name, business_type, address, working_hours, description, services, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id,
             business_id,

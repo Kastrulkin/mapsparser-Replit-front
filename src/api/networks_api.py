@@ -19,7 +19,7 @@ def verify_network_access(cursor, network_id: str, user_data: dict) -> tuple[boo
     Returns:
         (has_access: bool, owner_id: str | None)
     """
-    cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
+    cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
     network = cursor.fetchone()
     
     if not network:
@@ -106,7 +106,7 @@ def import_network_xml(network_id):
                 if company['yandex_org_id']:
                     cursor.execute("""
                         SELECT id FROM Businesses 
-                        WHERE yandex_org_id = ? AND network_id = ?
+                        WHERE yandex_org_id = %s AND network_id = %s
                     """, (company['yandex_org_id'], network_id))
                     existing = cursor.fetchone()
                     
@@ -125,7 +125,7 @@ def import_network_xml(network_id):
                         yandex_org_id, yandex_last_sync,
                         network_id, owner_id, is_active,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, (
                     business_id,
                     company['name'],
@@ -147,7 +147,7 @@ def import_network_xml(network_id):
                     cursor.execute("""
                         INSERT INTO BusinessMapLinks (
                             id, business_id, user_id, url, map_type, created_at
-                        ) VALUES (?, ?, ?, ?, 'yandex_maps', CURRENT_TIMESTAMP)
+                        ) VALUES (%s, %s, %s, %s, 'yandex_maps', CURRENT_TIMESTAMP)
                     """, (str(uuid.uuid4()), business_id, owner_id, yandex_url))
                 
                 created_ids.append(business_id)

@@ -30,7 +30,7 @@ def force_activate():
     independents = ['Immer Jung', 'Organika', 'Органика', 'Шььук Огтпб']
     
     for name in independents:
-        cursor.execute("UPDATE Businesses SET network_id = NULL WHERE name LIKE ?", (f'%{name}%',))
+        cursor.execute("UPDATE Businesses SET network_id = NULL WHERE name LIKE %s", (f'%{name}%',))
         if cursor.rowcount > 0:
             print(f"   - Decoupled {name} from networks.")
 
@@ -46,9 +46,9 @@ def force_activate():
             nw_id = nw[0]
             cursor.execute("""
                 UPDATE Businesses 
-                SET network_id = ? 
+                SET network_id = %s 
                 WHERE (name LIKE '%Kebab%' OR name LIKE '%Кебаб%') 
-                AND (network_id IS NULL OR network_id != ?)
+                AND (network_id IS NULL OR network_id != %s)
             """, (nw_id, nw_id))
             print(f"   - Linked {cursor.rowcount} Kebab businesses to network.")
 

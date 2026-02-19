@@ -31,7 +31,7 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             """
             SELECT *
             FROM ExternalBusinessAccounts
-            WHERE id = ? AND source = ?
+            WHERE id = %s AND source = %s
             """,
             (account_id, self.source),
         )
@@ -75,8 +75,8 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             cursor = db.conn.cursor()
             cursor.execute("""
                 UPDATE ExternalBusinessAccounts
-                SET auth_data = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                SET auth_data = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (encrypted_creds, account_id))
             db.conn.commit()
             db.close()

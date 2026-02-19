@@ -25,11 +25,11 @@
 # Из корня проекта
 cd "/path/to/project"   # замените на свой путь
 
-# Сборка образов и запуск в фоне
-docker compose up -d --build
+# Сборка образов (включая фронтенд) и запуск в фоне
+./scripts/docker-compose-build.sh up -d --build
 
 # Дождаться готовности Postgres и приложения (миграции выполняются в entrypoint)
-docker compose ps
+./scripts/docker-compose-build.sh ps
 # postgres, app, worker — состояние "running"
 ```
 
@@ -56,17 +56,17 @@ npm run dev
 После изменений в репозитории (например, `git pull`):
 
 ```bash
-# Остановить контейнеры, пересобрать образы и запустить заново
-docker compose up -d --build
+# Пересобрать образы (включая фронтенд — multi-stage build) и запустить контейнеры
+./scripts/docker-compose-build.sh up -d --build
 
 # При необходимости принудительно пересоздать контейнеры
-docker compose up -d --build --force-recreate
+./scripts/docker-compose-build.sh up -d --build --force-recreate
 ```
 
-Миграции БД (Flask-Migrate) применяются автоматически при старте контейнеров `app` и `worker`. После добавления новой миграции (например, изменение схемы) перезапустите стек, чтобы она применилась: `docker compose up -d --build`. Отдельно запускать `flask db upgrade` не нужно, если только не требуется выполнить миграции вручную (например, в отладочных целях):
+Фронтенд собирается внутри Docker (этап `frontend-builder` в Dockerfile) и копируется в образ `app`. Миграции БД (Flask-Migrate) применяются автоматически при старте контейнеров `app` и `worker`. Отдельно запускать `flask db upgrade` не нужно, если только не требуется выполнить миграции вручную (например, в отладочных целях):
 
 ```bash
-docker compose exec app flask db upgrade
+./scripts/docker-compose-build.sh exec app flask db upgrade
 ```
 
 **Пользователи, блокировка и верификация:** в таблице `users` используются флаги `is_active` (блокировка, по умолчанию TRUE), `is_verified` (верификация, по умолчанию TRUE) и `is_superadmin` (доступ ко всем бизнесам, по умолчанию FALSE). При `is_active = FALSE` логин возвращает **403** (account_blocked), `/api/auth/me` с валидным токеном тоже возвращает **403**. Код **401** — только для неверных кредов или отсутствующего/битого токена.
@@ -74,17 +74,17 @@ docker compose exec app flask db upgrade
 ### Остановка (Docker)
 
 ```bash
-docker compose down
+./scripts/docker-compose-build.sh down
 # Данные Postgres остаются в volume pgdata.
-# Полное удаление с данными: docker compose down -v
+# Полное удаление с данными: ./scripts/docker-compose-build.sh down -v
 ```
 
 ### Когда какой способ использовать
 
 | Сценарий | Способ |
 |----------|--------|
-| Локальная разработка с единым окружением (Postgres + app + worker) | **Docker**: `docker compose up -d --build` + фронт `npm run dev` |
-| Деплой на VPS с контейнерами | **Docker**: на сервере `git pull` и `docker compose up -d --build` |
+| Локальная разработка с единым окружением (Postgres + app + worker) | **Docker**: `./scripts/docker-compose-build.sh up -d --build` + фронт `npm run dev` |
+| Деплой на VPS с контейнерами | **Docker**: на сервере `git pull` и `./scripts/docker-compose-build.sh up -d --build` |
 | Сервер без Docker (systemd, venv, Nginx, скрипт обновления) | **Классический**: см. разделы 1–4 ниже и `update_server.sh` |
 
 ### Если Docker build падает (BuildKit / buildx)
@@ -99,9 +99,8 @@ docker buildx rm --all-inactive
 docker buildx create --use
 docker buildx inspect --bootstrap
 
-# Пересобрать проект
-docker compose build --no-cache
-docker compose up -d
+# Пересобрать проект (скрипт использует DOCKER_BUILDKIT=0)
+./scripts/docker-compose-build.sh up -d --build
 ```
 
 **Диагностика** (чтобы убедиться, что причина в BuildKit): `DOCKER_BUILDKIT=0 docker compose build` — только для проверки, не для постоянного использования.
@@ -200,7 +199,7 @@ lsof -i :8000  # Бэкенд API
 
 ### 2️⃣ Изменения в **Backend** (Python/Flask)
 
-*При запуске через Docker перезапуск бэкенда — через `docker compose up -d --build` или `docker compose restart app worker` (см. раздел «Запуск и обновление с Docker»). Ниже — порядок для деплоя без Docker (systemd, venv).*
+*При запуске через Docker перезапуск — через `./scripts/docker-compose-build.sh up -d --build` или `./scripts/docker-compose-build.sh restart app worker` (см. раздел «Запуск и обновление с Docker»). Ниже — порядок для деплоя без Docker (systemd, venv).*
 
 **⚠️ КРИТИЧЕСКИ ВАЖНО:** После **ЛЮБЫХ** изменений в файлах `src/*.py` (включая `main.py`, `database_manager.py`, `auth_system.py`, `worker.py` и т.д.) **ОБЯЗАТЕЛЬНО** перезапустить процессы, иначе изменения не применятся!
 

@@ -16,7 +16,7 @@ conn = get_db_connection()
 cursor = conn.cursor()
 
 # Проверить, есть ли бизнес в БД
-cursor.execute('SELECT id, name FROM Businesses WHERE id = ?', (business_id,))
+cursor.execute('SELECT id, name FROM Businesses WHERE id = %s', (business_id,))
 business = cursor.fetchone()
 if business:
     print(f'\n✅ Бизнес найден: {business[1]} (ID: {business[0]})')

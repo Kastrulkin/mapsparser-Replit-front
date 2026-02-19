@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Deployment script for beautybot.pro
+# Deployment script for local.pro
 
 echo "🚀 Starting server update (Full Algorithm)..."
 echo "📅 Date: $(date)"
@@ -48,10 +48,10 @@ if systemctl list-units --full -all | grep -q "seo-worker.service"; then
     systemctl restart seo-worker
 fi
 
-# Restart beautybot-worker if it exists
-if systemctl list-units --full -all | grep -q "beautybot-worker.service"; then
-    echo "   - Restarting beautybot-worker..."
-    systemctl restart beautybot-worker
+# Restart local-worker if it exists
+if systemctl list-units --full -all | grep -q "local-worker.service"; then
+    echo "   - Restarting local-worker..."
+    systemctl restart local-worker
 fi
 
 # Restart seo-api if it exists
@@ -60,10 +60,10 @@ if systemctl list-units --full -all | grep -q "seo-api.service"; then
     systemctl restart seo-api
 fi
 
-# Restart beautybot-backend if it exists
-if systemctl list-units --full -all | grep -q "beautybot-backend.service"; then
-    echo "   - Restarting beautybot-backend..."
-    systemctl restart beautybot-backend
+# Restart local-backend if it exists
+if systemctl list-units --full -all | grep -q "local-backend.service"; then
+    echo "   - Restarting local-backend..."
+    systemctl restart local-backend
 fi
 
 # 4. Nginx Update

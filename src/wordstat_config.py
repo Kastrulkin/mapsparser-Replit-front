@@ -3,13 +3,23 @@ from typing import Optional
 
 class WordstatConfig:
     """Конфигурация для API Яндекс.Вордстат"""
+
+    @staticmethod
+    def _int_env(name: str, default: int) -> int:
+        raw = (os.getenv(name, "") or "").strip()
+        if not raw:
+            return default
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
     
     def __init__(self):
         self.client_id = os.getenv('YANDEX_WORDSTAT_CLIENT_ID', '623b9605a95c4a57965cc4ccff1a7130')
         self.client_secret = os.getenv('YANDEX_WORDSTAT_CLIENT_SECRET', '8ec666a7306b49e78c895bfbbba63ad4')
         self.oauth_token = os.getenv('YANDEX_WORDSTAT_OAUTH_TOKEN')
-        self.update_interval = int(os.getenv('WORDSTAT_UPDATE_INTERVAL', '604800'))  # 7 дней
-        self.default_region = int(os.getenv('WORDSTAT_DEFAULT_REGION', '225'))  # Россия
+        self.update_interval = self._int_env('WORDSTAT_UPDATE_INTERVAL', 604800)  # 7 дней
+        self.default_region = self._int_env('WORDSTAT_DEFAULT_REGION', 225)  # Россия
         
     def is_configured(self) -> bool:
         """Проверка, настроен ли API"""

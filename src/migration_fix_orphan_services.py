@@ -34,12 +34,12 @@ def fix_orphan_services():
             business_id = row['business_id']
             
             # 3. Find owner
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
             owner_row = cursor.fetchone()
             
             if owner_row and owner_row['owner_id']:
                 owner_id = owner_row['owner_id']
-                cursor.execute("UPDATE UserServices SET user_id = ? WHERE id = ?", (owner_id, service_id))
+                cursor.execute("UPDATE UserServices SET user_id = %s WHERE id = %s", (owner_id, service_id))
                 fixed_count += 1
             else:
                 print(f"⚠️ Could not find owner for business {business_id} (Service ID: {service_id})")

@@ -40,8 +40,8 @@ def update_email():
             print(f"🔄 Обновление email на '{new_email}' и установка пароля для пользователя {owner_id}...")
             cursor.execute("""
                 UPDATE Users 
-                SET email = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ?
+                SET email = %s, password_hash = %s, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = %s
             """, (new_email, pwd_hash, owner_id))
             
             if cursor.rowcount > 0:

@@ -31,7 +31,7 @@ class TwoGisBusinessSyncWorker(BaseSyncWorker):
             """
             SELECT *
             FROM ExternalBusinessAccounts
-            WHERE id = ? AND source = ?
+            WHERE id = %s AND source = %s
             """,
             (account_id, self.source),
         )

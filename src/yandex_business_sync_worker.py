@@ -34,7 +34,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             """
             SELECT *
             FROM ExternalBusinessAccounts
-            WHERE id = ? AND source = ?
+            WHERE id = %s AND source = %s
             """,
             (account_id, self.source),
         )
@@ -66,12 +66,13 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
 
         cursor = conn.cursor()
         
-        # REMOVED: Internal SELECT owner_id from Businesses
-        
-        # 1. Проверяем наличие таблицы UserServices и нужных колонок
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UserServices'")
-        if not cursor.fetchone():
-            return # Если таблицы нет, то и синхронизировать некуда (она создается в worker.py или миграции)
+        # 1. Проверяем наличие таблицы UserServices (PostgreSQL: to_regclass)
+        cursor.execute("SELECT to_regclass('public.userservices') AS reg")
+        reg = cursor.fetchone()
+        # RealDictCursor возвращает dict; tuple — для sqlite
+        reg_val = (reg.get('reg') if isinstance(reg, dict) else (reg[0] if reg else None)) if reg else None
+        if not reg_val:
+            return  # Таблицы нет — синхронизировать некуда
         
         count_new = 0
         count_updated = 0
@@ -116,7 +117,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 # Ищем существующую услугу
                 cursor.execute("""
                     SELECT id FROM UserServices 
-                    WHERE business_id = ? AND name = ?
+                    WHERE business_id = %s AND name = %s
                 """, (business_id, name))
                 
                 row = cursor.fetchone()
@@ -125,15 +126,15 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                     service_id = row[0]
                     cursor.execute("""
                         UPDATE UserServices 
-                        SET price = ?, description = ?, category = ?, updated_at = CURRENT_TIMESTAMP, is_active = 1
-                        WHERE id = ?
+                        SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = 1
+                        WHERE id = %s
                     """, (price_cents, description, category_name, service_id))
                     count_updated += 1
                 else:
                     service_id = str(uuid.uuid4())
                     cursor.execute("""
                         INSERT INTO UserServices (id, business_id, user_id, name, description, category, price, is_active, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 1, CURRENT_TIMESTAMP)
                     """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
                     count_new += 1
                     
@@ -155,95 +156,114 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             return
 
         cursor = db.conn.cursor()
+        # В некоторых окружениях legacy-таблица может отсутствовать.
+        cursor.execute("SELECT to_regclass('public.mapparseresults') AS reg")
+        reg_row = cursor.fetchone()
+        reg_val = None
+        if isinstance(reg_row, dict):
+            reg_val = reg_row.get("reg")
+            if reg_val is None and reg_row:
+                reg_val = next(iter(reg_row.values()))
+        elif isinstance(reg_row, (list, tuple)):
+            reg_val = reg_row[0] if reg_row else None
+        else:
+            reg_val = reg_row
+        if not reg_val:
+            return
         
-        # Получаем данные о неотвеченных отзывах из БД
+        # Неотвеченные и общее количество — из БД (после upsert_reviews)
         cursor.execute("""
             SELECT COUNT(*) 
             FROM ExternalBusinessReviews 
-            WHERE business_id = ? AND source = ? 
-              AND (response_text IS NULL OR response_text = '' OR response_text = '—')
+            WHERE business_id = %s AND source = %s 
+              AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '' OR TRIM(response_text) = '—')
         """, (business_id, self.source))
-        unanswered_reviews_count = cursor.fetchone()[0]
+        unr_row = cursor.fetchone()
+        unanswered_reviews_count = list(unr_row.values())[0] if unr_row and isinstance(unr_row, dict) else (unr_row[0] if unr_row else 0)
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM ExternalBusinessReviews
+            WHERE business_id = %s AND source = %s
+        """, (business_id, self.source))
+        row = cursor.fetchone()
+        db_reviews_count = list(row.values())[0] if row and isinstance(row, dict) else (row[0] if row else 0)
+        if db_reviews_count and int(db_reviews_count) > reviews_count:
+            reviews_count = int(db_reviews_count)
 
         # Получаем последние успешные данные из MapParseResults для сравнения/слияния
         cursor.execute("""
             SELECT rating, reviews_count, news_count, photos_count, unanswered_reviews_count
             FROM MapParseResults
-            WHERE business_id = ?
+            WHERE business_id = %s
             ORDER BY created_at DESC
             LIMIT 1
         """, (business_id,))
         existing_row = cursor.fetchone()
-        
+
+        def _v(r, k):
+            if r is None:
+                return None
+            return r.get(k) if isinstance(r, dict) else (r[k] if isinstance(k, int) and isinstance(r, (list, tuple)) else None)
+
         # Рейтинг: берем из org_info, иначе из статистики, иначе из истории
-        rating = org_info.get('rating')
+        rating = org_info.get('rating') if org_info else None
         if not rating:
             cursor.execute("""
                 SELECT rating 
                 FROM ExternalBusinessStats 
-                WHERE business_id = ? AND source = ? 
+                WHERE business_id = %s AND source = %s 
                 ORDER BY date DESC LIMIT 1
             """, (business_id, self.source))
             stat_row = cursor.fetchone()
-            rating = stat_row[0] if stat_row else None
-            
-        # Smart Merge: Если текущие данные пустые/хуже, берем из истории
+            rating = _v(stat_row, 'rating') or (stat_row[0] if stat_row and isinstance(stat_row, (list, tuple)) else None)
+
+        # Smart Merge: если текущие данные пустые, берем из истории
         if existing_row:
-             # Рейтинг
-             if not rating and existing_row[0]:
-                 rating = existing_row[0]
-             
-             # Отзывы: если сейчас 0, а было больше - берем старое
-             if reviews_count == 0 and existing_row[1] and existing_row[1] > 0:
-                 reviews_count = existing_row[1]
-                 # И неотвеченные тоже берем старые, если вдруг сейчас 0 (хотя они считаются из БД)
-                 # Но мы считали из ExternalBusinessReviews, куда только что записали. 
-                 # Если записи не записались (ошибка парсера), count будет 0.
-                 # В этом случае логично взять старое
-                 if existing_row[4] is not None: # reviews_without_response check
-                     # Проверим, есть ли колонка unanswered_reviews_count в MapParseResults
-                     # (в fetchone она последняя, если запрос match'ит схему)
-                     # В запросе выше: rating, reviews_count, news_count, photos_count, reviews_without_response
-                     # В MapParseResults поля могут называться иначе. Проверим запрос:
-                     # "SELECT rating, reviews_count, news_count, photos_count FROM..."
-                     # А мы добавили reviews_without_response? Нет, надо быть осторожным с этим полем.
-                     pass 
-             
-             # Новости
-             if news_count == 0 and existing_row[2] and existing_row[2] > 0:
-                 news_count = existing_row[2]
-                 
-             # Фото
-             if photos_count == 0 and existing_row[3] and existing_row[3] > 0:
-                 photos_count = existing_row[3]
+            if not rating:
+                rating = _v(existing_row, 'rating') or (existing_row[0] if isinstance(existing_row, (list, tuple)) else None)
+            if reviews_count == 0:
+                rc = _v(existing_row, 'reviews_count') or (existing_row[1] if isinstance(existing_row, (list, tuple)) else None)
+                if rc and int(rc) > 0:
+                    reviews_count = int(rc)
+            if news_count == 0:
+                nc = _v(existing_row, 'news_count') or (existing_row[2] if isinstance(existing_row, (list, tuple)) else None)
+                if nc and int(nc) > 0:
+                    news_count = int(nc)
+            if photos_count == 0:
+                pc = _v(existing_row, 'photos_count') or (existing_row[3] if isinstance(existing_row, (list, tuple)) else None)
+                if pc and int(pc) > 0:
+                    photos_count = int(pc)
 
         parse_id = str(uuid.uuid4())
         url = f"https://yandex.ru/sprav/{external_id or 'unknown'}"
         
-        # Проверяем наличие колонки unanswered_reviews_count и products
-        cursor.execute("PRAGMA table_info(MapParseResults)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие колонок (PostgreSQL: information_schema)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'mapparseresults'
+        """)
+        columns = [row[0] for row in cursor.fetchall()]
 
         # Динамическое построение запроса
         fields = ["id", "business_id", "url", "map_type", "rating", "reviews_count", "news_count", "photos_count", "created_at"]
-        values_qm = ["?", "?", "?", "?", "?", "?", "?", "?", "CURRENT_TIMESTAMP"]
+        values_qm = ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "CURRENT_TIMESTAMP"]
         values = [parse_id, business_id, url, 'yandex', str(rating) if rating else None, reviews_count, news_count, photos_count]
 
         if 'unanswered_reviews_count' in columns:
             fields.append("unanswered_reviews_count")
-            values_qm.append("?")
+            values_qm.append("%s")
             values.append(unanswered_reviews_count)
             
         if 'services_count' in columns:
             fields.append("services_count")
-            values_qm.append("?")
+            values_qm.append("%s")
             # Calculate services count from products list
             s_count = len(products) if products else 0
             values.append(s_count)
             
         if 'products' in columns and products:
             fields.append("products")
-            values_qm.append("?")
+            values_qm.append("%s")
             values.append(json.dumps(products, ensure_ascii=False))
 
         query = f"INSERT INTO MapParseResults ({', '.join(fields)}) VALUES ({', '.join(values_qm)})"
@@ -286,7 +306,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
 
             # FETCH OWNER ID (Strict)
             cursor = db.conn.cursor()
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (account['business_id'],))
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (account['business_id'],))
             row = cursor.fetchone()
             owner_id = row[0] if row else None
             
@@ -296,32 +316,42 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             # Fetch & Upsert
             reviews = parser.fetch_reviews(account)
             repository.upsert_reviews(reviews)
-            
+
+            # Неотвеченные — из БД (точнее, чем len парсера при пагинации)
+            cursor.execute("""
+                SELECT COUNT(*) FROM ExternalBusinessReviews
+                WHERE business_id = %s AND source = %s
+                  AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) IN ('', '—'))
+            """, (account['business_id'], self.source))
+            unr_row = cursor.fetchone()
+            unanswered_count = list(unr_row.values())[0] if unr_row and isinstance(unr_row, dict) else (unr_row[0] if unr_row else 0)
+            unanswered_count = int(unanswered_count) if unanswered_count else 0
+
             stats = parser.fetch_stats(account)
             # Доп. логика для org_info в последней точке статистики
             org_info = parser.fetch_organization_info(account)
-            
-            if org_info:
+
+            if org_info and stats:
                 last_stat = stats[-1]
                 if last_stat.raw_payload:
                     last_stat.raw_payload.update(org_info)
                 else:
                     last_stat.raw_payload = org_info
-            
-            # --- Calculates Unanswered Reviews ---
-            unanswered_count = 0
-            for r in reviews:
-                # Считаем неотвеченным, если нет текста ответа или он пустой/прочерк
-                if not r.response_text or r.response_text.strip() == '' or r.response_text.strip() == '—':
-                    unanswered_count += 1
-            
+
+            # reviews_total из БД (точнее при пагинации)
+            cursor.execute("""
+                SELECT COUNT(*) FROM ExternalBusinessReviews
+                WHERE business_id = %s AND source = %s
+            """, (account['business_id'], self.source))
+            rt_row = cursor.fetchone()
+            reviews_total_db = list(rt_row.values())[0] if rt_row and isinstance(rt_row, dict) else (rt_row[0] if rt_row else len(reviews))
+
             # Обновляем стат-поинты (или добавляем в последний)
             if stats:
-                # Проставляем во всех? Или только в последнем?
-                # Логичнее в последнем (актуальном)
                 stats[-1].unanswered_reviews_count = unanswered_count
+                stats[-1].reviews_total = int(reviews_total_db) if reviews_total_db else len(reviews)
+                repository.upsert_stats(stats)
             else:
-                # Если статов нет, создаем синтетическую точку за сегодня
                 today_str = datetime.now().strftime('%Y-%m-%d')
                 stat_id = f"{account['business_id']}_{self.source}_{today_str}"
                 new_stat = ExternalStatsPoint(
@@ -331,10 +361,9 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                     date=today_str,
                     unanswered_reviews_count=unanswered_count,
                     rating=org_info.get('rating') if org_info else None,
-                    reviews_total=len(reviews)
+                    reviews_total=int(reviews_total_db) if reviews_total_db else len(reviews)
                 )
                 stats = [new_stat]
-
                 repository.upsert_stats(stats)
             
             posts = parser.fetch_posts(account)
@@ -356,15 +385,50 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             
             # Обновляем MapParseResults для совместимости с UI
             self._update_map_parse_results(
-                db, account, org_info, 
-                reviews_count=len(reviews), 
-                news_count=len(posts), 
+                db, account, org_info,
+                reviews_count=int(reviews_total_db) if reviews_total_db else len(reviews),
+                news_count=len(posts),
                 photos_count=photos_count,
-                products=products
+                products=products,
             )
-            db.conn.commit()
 
-            self._update_account_sync_status(db, account['id'])
+            # Принудительно обновляем статус синхронизации аккаунта.
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'externalbusinessaccounts'
+                  AND column_name = 'last_sync_status'
+                """
+            )
+            has_status_row = cursor.fetchone()
+            has_last_sync_status = (
+                (has_status_row.get("count", 0) if isinstance(has_status_row, dict) else has_status_row[0])
+                > 0
+            ) if has_status_row else False
+            if has_last_sync_status:
+                cursor.execute(
+                    """
+                    UPDATE ExternalBusinessAccounts
+                    SET last_sync_at = CURRENT_TIMESTAMP,
+                        last_sync_status = 'success',
+                        last_error = NULL
+                    WHERE id = %s
+                    """,
+                    (account['id'],),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE ExternalBusinessAccounts
+                    SET last_sync_at = CURRENT_TIMESTAMP,
+                        last_error = NULL
+                    WHERE id = %s
+                    """,
+                    (account['id'],),
+                )
+            db.conn.commit()
             print(f"✅ Синхронизация аккаунта {account_id} завершена")
 
         except Exception as e:

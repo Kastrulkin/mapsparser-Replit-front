@@ -16,7 +16,7 @@ def inspect_data():
     try:
         # 1. Find user Oliver
         print("--- Finding User: tislitskaya@yandex.ru ---")
-        cursor.execute("SELECT id, email FROM Users WHERE email = ?", ('tislitskaya@yandex.ru',))
+        cursor.execute("SELECT id, email FROM Users WHERE email = %s", ('tislitskaya@yandex.ru',))
         oliver = cursor.fetchone()
         
         if not oliver:
@@ -43,7 +43,7 @@ def inspect_data():
 
         # 4. Dump all businesses for Oliver again
         print(f"\n--- Businesses owned by Oliver ({oliver_id}) ---")
-        cursor.execute("SELECT * FROM Businesses WHERE owner_id = ?", (oliver_id,))
+        cursor.execute("SELECT * FROM Businesses WHERE owner_id = %s", (oliver_id,))
         businesses = cursor.fetchall()
         for b in businesses:
             print(f"ID: {b['id']}, Name: {b['name']}, NetworkID: {b['network_id']}")

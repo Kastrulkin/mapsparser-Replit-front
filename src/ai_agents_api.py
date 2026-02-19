@@ -9,6 +9,92 @@ import json
 
 ai_agents_api_bp = Blueprint('ai_agents_api', __name__)
 
+
+def _row_get(row, key, default=None):
+    if isinstance(row, dict):
+        return row.get(key, default)
+    return default
+
+
+def _json_loads_safe(value):
+    if not value:
+        return {}
+    try:
+        return json.loads(value)
+    except Exception:
+        return {}
+
+
+def _bool_safe(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in ("1", "true", "t", "yes", "y")
+
+
+def _get_table_columns(cursor, table_name: str):
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name,),
+    )
+    return {row["column_name"] for row in cursor.fetchall()}
+
+
+def _ensure_ai_agents_schema(db: DatabaseManager) -> None:
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AIAgents (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT,
+            personality TEXT,
+            states_json TEXT,
+            workflow TEXT,
+            task TEXT,
+            identity TEXT,
+            speech_style TEXT,
+            restrictions_json TEXT,
+            variables_json TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS workflow TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS task TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS identity TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS speech_style TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS restrictions_json TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS variables_json TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS created_by TEXT")
+    cursor.execute("ALTER TABLE AIAgents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    cursor.execute(
+        """
+        INSERT INTO AIAgents (id, name, type, description, personality, is_active)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO NOTHING
+        """,
+        (
+            "booking_agent_default",
+            "Booking Agent",
+            "booking",
+            "Агент для записи клиентов",
+            "Вежливый, пунктуальный администратор. Твоя задача - записать клиента на услугу.",
+            1,
+        ),
+    )
+    db.conn.commit()
+
 def require_superadmin():
     """Проверка, что пользователь - суперадмин"""
     token = request.headers.get('Authorization', '').replace('Bearer ', '')
@@ -26,17 +112,9 @@ def get_ai_agents():
             return jsonify({"error": "Требуются права суперадмина"}), 403
         
         db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
         cursor = db.conn.cursor()
-        
-        # Проверяем существование таблицы
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='AIAgents'")
-        if not cursor.fetchone():
-            db.close()
-            return jsonify({"error": "Таблица AIAgents не найдена. Выполните миграцию: python migrations/migrate_ai_agents_table.py"}), 500
-        
-        # Проверяем структуру таблицы
-        cursor.execute("PRAGMA table_info(AIAgents)")
-        columns = {row[1] for row in cursor.fetchall()}
+        columns = _get_table_columns(cursor, "aiagents")
         
         # Формируем SELECT в зависимости от наличия колонок
         select_fields = ["id", "name", "type", "description", "personality"]
@@ -73,31 +151,26 @@ def get_ai_agents():
         rows = cursor.fetchall()
         agents = []
         for row in rows:
-            # Определяем индексы в зависимости от наличия колонок
-            idx = 0
-            workflow_raw = row[idx + 5] if "workflow" in columns else ''
-            task_value = row[idx + 6] if "task" in columns else ''
-            identity_value = row[idx + 7] if "identity" in columns else ''
-            speech_style_value = row[idx + 8] if "speech_style" in columns else ''
-            
-            # Всегда возвращаем workflow как строку (YAML текст), чтобы сохранить форматирование
-            workflow_value = workflow_raw or ''
-            
+            workflow_value = (_row_get(row, "workflow", "") if "workflow" in columns else "") or ""
+            task_value = (_row_get(row, "task", "") if "task" in columns else "") or ""
+            identity_value = (_row_get(row, "identity", "") if "identity" in columns else "") or ""
+            speech_style_value = (_row_get(row, "speech_style", "") if "speech_style" in columns else "") or ""
+
             agents.append({
-                'id': row[0],
-                'name': row[1],
-                'type': row[2],
-                'description': row[3] or '',
-                'personality': row[4] or '',
+                'id': _row_get(row, "id"),
+                'name': _row_get(row, "name"),
+                'type': _row_get(row, "type"),
+                'description': _row_get(row, "description", "") or '',
+                'personality': _row_get(row, "personality", "") or '',
                 'workflow': workflow_value,  # Всегда строка (YAML)
                 'task': task_value or '',
                 'identity': identity_value or '',
                 'speech_style': speech_style_value or '',
-                'restrictions': json.loads(row[9]) if row[9] else {},
-                'variables': json.loads(row[10]) if row[10] else {},
-                'is_active': row[11] == 1 if len(row) > 11 else True,
-                'created_at': row[12] if len(row) > 12 else None,
-                'updated_at': row[13] if len(row) > 13 else None
+                'restrictions': _json_loads_safe(_row_get(row, "restrictions_json")),
+                'variables': _json_loads_safe(_row_get(row, "variables_json")),
+                'is_active': _bool_safe(_row_get(row, "is_active"), default=True),
+                'created_at': _row_get(row, "created_at"),
+                'updated_at': _row_get(row, "updated_at")
             })
         
         db.close()
@@ -142,11 +215,12 @@ def create_ai_agent():
         agent_id = str(uuid.uuid4())
         
         db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO AIAgents 
             (id, name, type, description, personality, workflow, task, identity, speech_style, restrictions_json, variables_json, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             agent_id,
             name,
@@ -188,10 +262,11 @@ def update_ai_agent(agent_id: str):
         data = request.get_json()
         
         db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
         cursor = db.conn.cursor()
         
         # Проверяем существование агента
-        cursor.execute("SELECT id FROM AIAgents WHERE id = ?", (agent_id,))
+        cursor.execute("SELECT id FROM AIAgents WHERE id = %s", (agent_id,))
         if not cursor.fetchone():
             db.close()
             return jsonify({"error": "Агент не найден"}), 404
@@ -201,19 +276,19 @@ def update_ai_agent(agent_id: str):
         update_values = []
         
         if 'name' in data:
-            update_fields.append('name = ?')
+            update_fields.append('name = %s')
             update_values.append(data['name'])
         
         if 'description' in data:
-            update_fields.append('description = ?')
+            update_fields.append('description = %s')
             update_values.append(data['description'])
         
         if 'personality' in data:
-            update_fields.append('personality = ?')
+            update_fields.append('personality = %s')
             update_values.append(data['personality'])
         
         if 'workflow' in data:
-            update_fields.append('workflow = ?')
+            update_fields.append('workflow = %s')
             # Workflow всегда сохраняем как строку (YAML текст)
             if isinstance(data['workflow'], str):
                 update_values.append(data['workflow'])
@@ -222,27 +297,27 @@ def update_ai_agent(agent_id: str):
                 update_values.append(json.dumps(data['workflow'], ensure_ascii=False))
         
         if 'task' in data:
-            update_fields.append('task = ?')
+            update_fields.append('task = %s')
             update_values.append(data['task'])
         
         if 'identity' in data:
-            update_fields.append('identity = ?')
+            update_fields.append('identity = %s')
             update_values.append(data['identity'])
         
         if 'speech_style' in data:
-            update_fields.append('speech_style = ?')
+            update_fields.append('speech_style = %s')
             update_values.append(data['speech_style'])
         
         if 'restrictions' in data:
-            update_fields.append('restrictions_json = ?')
+            update_fields.append('restrictions_json = %s')
             update_values.append(json.dumps(data['restrictions'], ensure_ascii=False))
         
         if 'variables' in data:
-            update_fields.append('variables_json = ?')
+            update_fields.append('variables_json = %s')
             update_values.append(json.dumps(data['variables'], ensure_ascii=False))
         
         if 'is_active' in data:
-            update_fields.append('is_active = ?')
+            update_fields.append('is_active = %s')
             update_values.append(1 if data['is_active'] else 0)
         
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
@@ -252,7 +327,7 @@ def update_ai_agent(agent_id: str):
             cursor.execute(f"""
                 UPDATE AIAgents 
                 SET {', '.join(update_fields)}
-                WHERE id = ?
+                WHERE id = %s
             """, update_values)
             db.conn.commit()
         
@@ -278,11 +353,13 @@ def delete_ai_agent(agent_id: str):
             return jsonify({"error": "Требуются права суперадмина"}), 403
         
         db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
         cursor = db.conn.cursor()
         
         # Проверяем, используется ли агент
-        cursor.execute("SELECT COUNT(*) FROM Businesses WHERE ai_agent_id = ?", (agent_id,))
-        usage_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) AS usage_count FROM Businesses WHERE ai_agent_id = %s", (agent_id,))
+        usage_row = cursor.fetchone() or {}
+        usage_count = int(_row_get(usage_row, "usage_count", 0) or 0)
         
         if usage_count > 0:
             db.close()
@@ -290,7 +367,7 @@ def delete_ai_agent(agent_id: str):
                 "error": f"Агент используется {usage_count} бизнесами. Сначала отвяжите агента от бизнесов."
             }), 400
         
-        cursor.execute("DELETE FROM AIAgents WHERE id = ?", (agent_id,))
+        cursor.execute("DELETE FROM AIAgents WHERE id = %s", (agent_id,))
         db.conn.commit()
         db.close()
         
@@ -314,12 +391,13 @@ def get_ai_agent(agent_id: str):
             return jsonify({"error": "Требуются права суперадмина"}), 403
         
         db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
         cursor = db.conn.cursor()
         cursor.execute("""
             SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
                    restrictions_json, variables_json, is_active, created_at, updated_at
             FROM AIAgents
-            WHERE id = ?
+            WHERE id = %s
         """, (agent_id,))
         
         row = cursor.fetchone()
@@ -329,23 +407,23 @@ def get_ai_agent(agent_id: str):
             return jsonify({"error": "Агент не найден"}), 404
         
         # Workflow всегда возвращаем как строку (YAML), чтобы сохранить форматирование
-        workflow_raw = row[5] or ''
+        workflow_raw = _row_get(row, "workflow", "") or ''
         
         return jsonify({
-            'id': row[0],
-            'name': row[1],
-            'type': row[2],
-            'description': row[3],
-            'personality': row[4] or '',
+            'id': _row_get(row, "id"),
+            'name': _row_get(row, "name"),
+            'type': _row_get(row, "type"),
+            'description': _row_get(row, "description"),
+            'personality': _row_get(row, "personality", "") or '',
             'workflow': workflow_raw,  # Всегда строка (YAML), не парсим JSON
-            'task': row[6] or '',
-            'identity': row[7] or '',
-            'speech_style': row[8] or '',
-            'restrictions': json.loads(row[9]) if row[9] else {},
-            'variables': json.loads(row[10]) if row[10] else {},
-            'is_active': row[11] == 1,
-            'created_at': row[12],
-            'updated_at': row[13]
+            'task': _row_get(row, "task", "") or '',
+            'identity': _row_get(row, "identity", "") or '',
+            'speech_style': _row_get(row, "speech_style", "") or '',
+            'restrictions': _json_loads_safe(_row_get(row, "restrictions_json")),
+            'variables': _json_loads_safe(_row_get(row, "variables_json")),
+            'is_active': _bool_safe(_row_get(row, "is_active"), default=True),
+            'created_at': _row_get(row, "created_at"),
+            'updated_at': _row_get(row, "updated_at")
         }), 200
         
     except Exception as e:
@@ -353,4 +431,3 @@ def get_ai_agent(agent_id: str):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

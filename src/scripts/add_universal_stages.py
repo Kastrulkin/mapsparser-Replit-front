@@ -214,7 +214,7 @@ def add_universal_stages():
             # Check if stages already exist for this type
             cursor.execute("""
                 SELECT COUNT(*) FROM GrowthStages 
-                WHERE business_type_id = ? AND stage_number BETWEEN 1 AND 6
+                WHERE business_type_id = %s AND stage_number BETWEEN 1 AND 6
             """, (bt_id,))
             
             existing_count = cursor.fetchone()[0]
@@ -230,7 +230,7 @@ def add_universal_stages():
                 cursor.execute("""
                     INSERT OR REPLACE INTO GrowthStages 
                     (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
                 """, (
                     stage_id,
                     bt_id,
@@ -248,7 +248,7 @@ def add_universal_stages():
                     cursor.execute("""
                         INSERT OR REPLACE INTO GrowthTasks 
                         (id, stage_id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, is_auto_verifiable)
-                        VALUES (?, ?, ?, ?, ?, ?, 'time_saved', ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'time_saved', %s, %s)
                     """, (
                         task_id,
                         stage_id,

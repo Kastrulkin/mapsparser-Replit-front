@@ -19,33 +19,33 @@ def fix_networks_final():
     
     # 1. Transfer Big Network ownership to SuperAdmin
     print(f"1️⃣ Transferring Big Network ({BIG_NET_ID}) to SuperAdmin...")
-    cursor.execute("UPDATE Networks SET owner_id = ? WHERE id = ?", (SUPERADMIN_ID, BIG_NET_ID))
+    cursor.execute("UPDATE Networks SET owner_id = %s WHERE id = %s", (SUPERADMIN_ID, BIG_NET_ID))
     
     # 2. Move businesses from Small Network to Big Network
     print(f"2️⃣ Moving businesses from Small Network ({SMALL_NET_ID}) to Big Network...")
-    cursor.execute("UPDATE Businesses SET network_id = ? WHERE network_id = ?", (BIG_NET_ID, SMALL_NET_ID))
+    cursor.execute("UPDATE Businesses SET network_id = %s WHERE network_id = %s", (BIG_NET_ID, SMALL_NET_ID))
     
     # 3. Delete Small Network
     print(f"3️⃣ Deleting Small Network ({SMALL_NET_ID})...")
-    cursor.execute("DELETE FROM Networks WHERE id = ?", (SMALL_NET_ID,))
+    cursor.execute("DELETE FROM Networks WHERE id = %s", (SMALL_NET_ID,))
     
     # 4. Rename Big Network to "Сеть Мастер Кебаб" (optional, looks better)
     print("4️⃣ Renaming Big Network to 'Сеть Мастер Кебаб'...")
-    cursor.execute("UPDATE Networks SET name = 'Сеть Мастер Кебаб' WHERE id = ?", (BIG_NET_ID,))
+    cursor.execute("UPDATE Networks SET name = 'Сеть Мастер Кебаб' WHERE id = %s", (BIG_NET_ID,))
     
     db.conn.commit()
     print("\n✅ Verification:")
     
-    cursor.execute("SELECT name, owner_id FROM Networks WHERE id = ?", (BIG_NET_ID,))
+    cursor.execute("SELECT name, owner_id FROM Networks WHERE id = %s", (BIG_NET_ID,))
     row = cursor.fetchone()
     if row:
         print(f"   Network '{row['name']}' owner: {row['owner_id']}")
     
-    cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = ?", (BIG_NET_ID,))
+    cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = %s", (BIG_NET_ID,))
     count = cursor.fetchone()['c']
     print(f"   Total businesses in network: {count}")
     
-    cursor.execute("SELECT COUNT(*) as c FROM Networks WHERE id = ?", (SMALL_NET_ID,))
+    cursor.execute("SELECT COUNT(*) as c FROM Networks WHERE id = %s", (SMALL_NET_ID,))
     small_exists = cursor.fetchone()['c']
     print(f"   Small network exists: {small_exists > 0}")
 

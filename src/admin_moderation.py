@@ -100,7 +100,7 @@ def moderate_business(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что бизнес существует
-        cursor.execute("SELECT id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -112,10 +112,10 @@ def moderate_business(business_id):
         
         cursor.execute("""
             UPDATE Businesses 
-            SET moderation_status = ?,
-                moderation_notes = ?,
+            SET moderation_status = %s,
+                moderation_notes = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (moderation_status, notes if notes else None, business_id))
         
         # Если одобрен, активируем ChatGPT (если пользователь уже оплатил)
@@ -123,7 +123,7 @@ def moderate_business(business_id):
             cursor.execute("""
                 UPDATE Businesses 
                 SET chatgpt_enabled = 1
-                WHERE id = ? AND subscription_status = 'active'
+                WHERE id = %s AND subscription_status = 'active'
             """, (business_id,))
         
         db.conn.commit()

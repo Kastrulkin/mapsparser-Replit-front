@@ -744,7 +744,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(`https://beautybot.pro/api/users/queue/${queueId}`, {
+      const response = await fetch(`http://localhost:8000/api/users/queue/${queueId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
@@ -961,7 +961,7 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8 pt-24">
         {/* Приветственный блок + шкала заполненности */}
         <div className="mb-6 bg-gradient-to-br from-white via-gray-50/50 to-white rounded-lg border-2 border-gray-200 shadow-md p-4">
-          <p className="text-gray-800 mb-2">👋 Добро пожаловать в <span className="font-semibold">BeautyBot.pro</span>!</p>
+          <p className="text-gray-800 mb-2">👋 Добро пожаловать в <span className="font-semibold">LocalOS.pro</span>!</p>
           {currentBusiness && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">

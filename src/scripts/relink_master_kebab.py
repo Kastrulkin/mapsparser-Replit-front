@@ -40,7 +40,7 @@ def relink_mother_account():
             print("✅ Бизнес уже привязан к правильной сети.")
         else:
             print(f"🛠 Привязываю бизнес к сети {network_id}...")
-            cursor.execute("UPDATE Businesses SET network_id = ? WHERE id = ?", (network_id, b_id))
+            cursor.execute("UPDATE Businesses SET network_id = %s WHERE id = %s", (network_id, b_id))
             conn.commit()
             print("✅ Успешно привязан.")
 

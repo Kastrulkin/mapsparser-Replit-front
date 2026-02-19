@@ -558,7 +558,7 @@ def populate():
         # Clear UserStageProgress (to avoid FK error)
         cursor.execute("""
             DELETE FROM UserStageProgress WHERE stage_id IN (
-                SELECT id FROM GrowthStages WHERE business_type_id = ?
+                SELECT id FROM GrowthStages WHERE business_type_id = %s
             )
         """, (business_type_id,))
         
@@ -566,11 +566,11 @@ def populate():
         cursor.execute("""
             DELETE FROM GrowthTasks 
             WHERE stage_id IN (
-                SELECT id FROM GrowthStages WHERE business_type_id = ?
+                SELECT id FROM GrowthStages WHERE business_type_id = %s
             )
         """, (business_type_id,))
         
-        cursor.execute("DELETE FROM GrowthStages WHERE business_type_id = ?", (business_type_id,))
+        cursor.execute("DELETE FROM GrowthStages WHERE business_type_id = %s", (business_type_id,))
         print(f"🗑️ Cleared old stages and tasks for type: {business_type_id}")
         
         # Insert new stages
@@ -578,7 +578,7 @@ def populate():
             stage_id = f"stage_{business_type_id}_{stage['number']}"
             cursor.execute("""
                 INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
             """, (
                 stage_id,
                 business_type_id,
@@ -595,7 +595,7 @@ def populate():
                 task_id = f"task_{stage_id}_{i}"
                 cursor.execute("""
                     INSERT INTO GrowthTasks (id, stage_id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, is_auto_verifiable)
-                    VALUES (?, ?, ?, ?, ?, ?, 'time_saved', ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'time_saved', %s, %s)
                 """, (
                     task_id,
                     stage_id,

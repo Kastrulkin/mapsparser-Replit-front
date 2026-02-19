@@ -298,7 +298,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                     </span>
                   ) : (
                     <span className={cn("text-3xl font-bold", isElite ? "text-white" : "text-gray-900")}>
-                      {tier.currency}{tier.price}
+                      {tier.period.startsWith(tier.currency) ? tier.price : `${tier.currency}${tier.price}`}
                     </span>
                   )}
                   {isElite ? (

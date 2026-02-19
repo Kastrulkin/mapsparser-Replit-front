@@ -32,7 +32,7 @@ def notify_operator(business_id: str, message: str, conversation_id: str = None,
         cursor.execute("""
             SELECT owner_id, name, phone, email, telegram_bot_token
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         business_row = cursor.fetchone()
         
@@ -50,7 +50,7 @@ def notify_operator(business_id: str, message: str, conversation_id: str = None,
         cursor.execute("""
             SELECT email, telegram_id
             FROM Users
-            WHERE id = ?
+            WHERE id = %s
         """, (owner_id,))
         user_row = cursor.fetchone()
         
@@ -90,7 +90,7 @@ def notify_operator(business_id: str, message: str, conversation_id: str = None,
         cursor.execute("""
             INSERT INTO OperatorNotifications 
             (id, business_id, conversation_id, client_phone, client_name, message, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
         """, (notification_id, business_id, conversation_id, client_phone, client_name, notification_text))
         
         db.conn.commit()
@@ -136,7 +136,7 @@ def create_booking(business_id: str, client_phone: str, client_name: str, servic
         cursor.execute("""
             SELECT crm_type, crm_api_key, crm_api_url
             FROM CRMIntegrations
-            WHERE business_id = ? AND is_active = 1
+            WHERE business_id = %s AND is_active = 1
             LIMIT 1
         """, (business_id,))
         crm_row = cursor.fetchone()
@@ -167,7 +167,7 @@ def create_booking(business_id: str, client_phone: str, client_name: str, servic
         cursor.execute("""
             INSERT INTO Bookings 
             (id, business_id, client_phone, client_name, service_id, service_name, booking_date, booking_time, notes, conversation_id, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
         """, (booking_id, business_id, client_phone, client_name, service_id, service_name, booking_date, booking_time, notes, conversation_id))
         
         # Если подключена CRM, отправляем туда
@@ -219,7 +219,7 @@ def send_message_to_client(business_id: str, client_phone: str, message: str, ch
         cursor.execute("""
             SELECT waba_phone_id, waba_access_token, telegram_bot_token
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         business_row = cursor.fetchone()
         
@@ -283,7 +283,7 @@ def get_client_info(business_id: str, client_phone: str) -> dict:
         cursor.execute("""
             SELECT id, current_state, last_message_at, created_at
             FROM AIAgentConversations
-            WHERE business_id = ? AND client_phone = ?
+            WHERE business_id = %s AND client_phone = %s
             ORDER BY last_message_at DESC
             LIMIT 5
         """, (business_id, client_phone))
@@ -293,7 +293,7 @@ def get_client_info(business_id: str, client_phone: str) -> dict:
         cursor.execute("""
             SELECT id, service_name, booking_date, booking_time, status, created_at
             FROM Bookings
-            WHERE business_id = ? AND client_phone = ?
+            WHERE business_id = %s AND client_phone = %s
             ORDER BY created_at DESC
             LIMIT 10
         """, (business_id, client_phone))
@@ -337,7 +337,7 @@ def get_services(business_id: str) -> dict:
         cursor.execute("""
             SELECT id, name, description, price, duration
             FROM UserServices
-            WHERE business_id = ?
+            WHERE business_id = %s
             ORDER BY name
         """, (business_id,))
         services = cursor.fetchall()
@@ -381,7 +381,7 @@ def check_availability(business_id: str, date: str, service_duration: int = None
         cursor.execute("""
             SELECT booking_time, service_id
             FROM Bookings
-            WHERE business_id = ? AND booking_date = ? AND status IN ('pending', 'confirmed')
+            WHERE business_id = %s AND booking_date = %s AND status IN ('pending', 'confirmed')
         """, (business_id, date))
         existing_bookings = cursor.fetchall()
         

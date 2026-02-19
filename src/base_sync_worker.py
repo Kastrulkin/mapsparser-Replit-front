@@ -14,7 +14,7 @@ class BaseSyncWorker(ABC):
             """
             SELECT *
             FROM ExternalBusinessAccounts
-            WHERE source = ? AND is_active = 1
+            WHERE source = %s AND is_active = 1
             """,
             (self.source,),
         )
@@ -28,8 +28,8 @@ class BaseSyncWorker(ABC):
             cursor.execute(
                 """
                 UPDATE ExternalBusinessAccounts
-                SET last_error = ?
-                WHERE id = ?
+                SET last_error = %s
+                WHERE id = %s
                 """,
                 (str(error), account_id),
             )
@@ -38,7 +38,7 @@ class BaseSyncWorker(ABC):
                 """
                 UPDATE ExternalBusinessAccounts
                 SET last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
-                WHERE id = ?
+                WHERE id = %s
                 """,
                 (account_id,),
             )

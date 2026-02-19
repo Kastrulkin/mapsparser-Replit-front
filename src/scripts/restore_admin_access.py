@@ -34,7 +34,7 @@ def restore_access():
     target_email = 'demyanovap@yandex.ru'
     print(f"\n🔍 Checking {target_email}...")
     
-    cursor.execute("SELECT id FROM Users WHERE email = ?", (target_email,))
+    cursor.execute("SELECT id FROM Users WHERE email = %s", (target_email,))
     user = cursor.fetchone()
     
     demyanovap_id = None
@@ -42,7 +42,7 @@ def restore_access():
     if user:
         print("   ✅ User exists. Ensuring superadmin status...")
         demyanovap_id = user['id']
-        cursor.execute("UPDATE Users SET is_superadmin = 1 WHERE id = ?", (demyanovap_id,))
+        cursor.execute("UPDATE Users SET is_superadmin = 1 WHERE id = %s", (demyanovap_id,))
     else:
         print("   ❌ User MISSING. Creating new superadmin account...")
         demyanovap_id = str(uuid.uuid4())
@@ -51,7 +51,7 @@ def restore_access():
         
         cursor.execute("""
             INSERT INTO Users (id, email, password_hash, name, is_superadmin, is_active, created_at)
-            VALUES (?, ?, ?, ?, 1, 1, ?)
+            VALUES (%s, %s, %s, %s, 1, 1, %s)
         """, (demyanovap_id, target_email, pwd_hash, "SuperAdmin", datetime.now().isoformat()))
         print(f"   ✨ Created user {target_email} with password: {default_pass}")
 
@@ -59,18 +59,18 @@ def restore_access():
     tislitskaya_email = 'tislitskaya@yandex.ru'
     print(f"\n🔍 Checking {tislitskaya_email}...")
     
-    cursor.execute("SELECT id FROM Users WHERE email = ?", (tislitskaya_email,))
+    cursor.execute("SELECT id FROM Users WHERE email = %s", (tislitskaya_email,))
     tis = cursor.fetchone()
     
     if tis:
         print("   ⚠️  Demoting from superadmin...")
-        cursor.execute("UPDATE Users SET is_superadmin = 0 WHERE id = ?", (tis['id'],))
+        cursor.execute("UPDATE Users SET is_superadmin = 0 WHERE id = %s", (tis['id'],))
         tislitskaya_id = tis['id']
         
         # --- 3. Transfer Businesses ---
         if demyanovap_id:
             print("\n📦 Transferring businesses...")
-            cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = ?", (tislitskaya_id,))
+            cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = %s", (tislitskaya_id,))
             businesses = cursor.fetchall()
             
             to_transfer = []
@@ -84,10 +84,10 @@ def restore_access():
                     to_transfer.append(b['id'])
             
             if to_transfer:
-                placeholders = ','.join('?' * len(to_transfer))
+                placeholders = ','.join(['%s'] * len(to_transfer))
                 cursor.execute(f"""
                     UPDATE Businesses 
-                    SET owner_id = ? 
+                    SET owner_id = %s 
                     WHERE id IN ({placeholders})
                 """, [demyanovap_id] + to_transfer)
                 print(f"   🚀 Transferred {len(to_transfer)} businesses to {target_email}")

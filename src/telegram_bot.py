@@ -38,7 +38,7 @@ def get_user_id_from_telegram(telegram_id: str):
     """Получить user_id из telegram_id"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM Users WHERE telegram_id = ?", (telegram_id,))
+    cursor.execute("SELECT id FROM Users WHERE telegram_id = %s", (telegram_id,))
     user_row = cursor.fetchone()
     conn.close()
     return user_row[0] if user_row else None
@@ -210,7 +210,7 @@ async def show_business_selection(update: Update, context: ContextTypes.DEFAULT_
     """Показать выбор бизнеса"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = ?", (db_user_id,))
+    cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = %s", (db_user_id,))
     businesses = cursor.fetchall()
     conn.close()
     
@@ -245,7 +245,7 @@ async def show_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     """Показать меню настроек компании"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT name, address, working_hours FROM Businesses WHERE id = ?", (business_id,))
+    cursor.execute("SELECT name, address, working_hours FROM Businesses WHERE id = %s", (business_id,))
     business = cursor.fetchone()
     conn.close()
     
@@ -337,9 +337,16 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Проверяем наличие полей
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие полей (PG: information_schema)
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+            """)
+            columns = [row[0] for row in cursor.fetchall()]
+        except Exception:
+            cursor.execute("PRAGMA table_info(FinancialTransactions)")
+            columns = [row[1] for row in cursor.fetchall()]
         has_master_id = 'master_id' in columns
         has_business_id = 'business_id' in columns
         
@@ -349,7 +356,7 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
             
             master_id = None
             if trans.get('master_name') and has_master_id:
-                cursor.execute("SELECT id FROM Masters WHERE name = ? AND business_id = ? LIMIT 1", 
+                cursor.execute("SELECT id FROM Masters WHERE name = %s AND business_id = %s LIMIT 1", 
                              (trans['master_name'], business_id))
                 master_row = cursor.fetchone()
                 if master_row:
@@ -359,7 +366,7 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id, db_user_id, business_id,
                     trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
@@ -371,7 +378,7 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id, db_user_id,
                     trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
@@ -383,7 +390,7 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id, db_user_id,
                     trans.get('transaction_date', datetime.now().strftime('%Y-%m-%d')),
@@ -395,9 +402,16 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
             # Добавляем услуги из транзакции в UserServices, если их там еще нет
             services_list = trans.get('services', [])
             if services_list and business_id:
-                # Проверяем наличие поля business_id в UserServices
-                cursor.execute("PRAGMA table_info(UserServices)")
-                service_columns = [row[1] for row in cursor.fetchall()]
+                # Проверяем наличие поля business_id в UserServices (PG: information_schema)
+                try:
+                    cursor.execute("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'userservices'
+                    """)
+                    service_columns = [row[0] for row in cursor.fetchall()]
+                except Exception:
+                    cursor.execute("PRAGMA table_info(UserServices)")
+                    service_columns = [row[1] for row in cursor.fetchall()]
                 has_business_id_in_services = 'business_id' in service_columns
                 
                 for service_name in services_list:
@@ -408,13 +422,13 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                     if has_business_id_in_services:
                         cursor.execute("""
                             SELECT id FROM UserServices 
-                            WHERE business_id = ? AND name = ? AND user_id = ?
+                            WHERE business_id = %s AND name = %s AND user_id = %s
                             LIMIT 1
                         """, (business_id, service_name.strip(), db_user_id))
                     else:
                         cursor.execute("""
                             SELECT id FROM UserServices 
-                            WHERE name = ? AND user_id = ?
+                            WHERE name = %s AND user_id = %s
                             LIMIT 1
                         """, (service_name.strip(), db_user_id))
                     
@@ -427,13 +441,13 @@ async def handle_transaction_photo(update: Update, context: ContextTypes.DEFAULT
                             cursor.execute("""
                                 INSERT INTO UserServices 
                                 (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                             """, (service_id, db_user_id, business_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
                         else:
                             cursor.execute("""
                                 INSERT INTO UserServices 
                                 (id, user_id, category, name, description, keywords, price, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                             """, (service_id, db_user_id, 'Общие услуги', service_name.strip(), '', '[]', ''))
         
         conn.commit()
@@ -614,9 +628,16 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Проверяем наличие полей
-    cursor.execute("PRAGMA table_info(FinancialTransactions)")
-    columns = [row[1] for row in cursor.fetchall()]
+    # Проверяем наличие полей (PG: information_schema)
+    try:
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
+        """)
+        columns = [row[0] for row in cursor.fetchall()]
+    except Exception:
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
     columns_set = set(columns)
     has_master_id = 'master_id' in columns_set
     has_business_id = 'business_id' in columns_set
@@ -632,7 +653,7 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
     
     master_id = None
     if transaction_data.get('master_name') and has_master_id:
-        cursor.execute("SELECT id FROM Masters WHERE name = ? AND business_id = ? LIMIT 1", 
+        cursor.execute("SELECT id FROM Masters WHERE name = %s AND business_id = %s LIMIT 1", 
                      (transaction_data['master_name'], business_id))
         master_row = cursor.fetchone()
         if master_row:
@@ -691,7 +712,7 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
         insert_columns.append('master_id')
         insert_values.append(master_id)
     
-    placeholders = ",".join(["?"] * len(insert_columns))
+    placeholders = ",".join(["%s"] * len(insert_columns))
     sql = f"INSERT INTO FinancialTransactions ({', '.join(insert_columns)}) VALUES ({placeholders})"
     cursor.execute(sql, insert_values)
     
@@ -700,9 +721,16 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
     added_services_count = 0
     
     if services_list and business_id:
-        # Проверяем наличие поля business_id в UserServices
-        cursor.execute("PRAGMA table_info(UserServices)")
-        service_columns = [row[1] for row in cursor.fetchall()]
+        # Проверяем наличие поля business_id в UserServices (PG: information_schema)
+        try:
+            cursor.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'userservices'
+            """)
+            service_columns = [row[0] for row in cursor.fetchall()]
+        except Exception:
+            cursor.execute("PRAGMA table_info(UserServices)")
+            service_columns = [row[1] for row in cursor.fetchall()]
         has_business_id_in_services = 'business_id' in service_columns
         
         print(f"[DEBUG] Adding services: {services_list}, business_id={business_id}, has_business_id_in_services={has_business_id_in_services}")
@@ -719,13 +747,13 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
             if has_business_id_in_services:
                 cursor.execute("""
                     SELECT id FROM UserServices 
-                    WHERE business_id = ? AND name = ? AND user_id = ?
+                    WHERE business_id = %s AND name = %s AND user_id = %s
                     LIMIT 1
                 """, (business_id, service_name_clean, db_user_id))
             else:
                 cursor.execute("""
                     SELECT id FROM UserServices 
-                    WHERE name = ? AND user_id = ?
+                    WHERE name = %s AND user_id = %s
                     LIMIT 1
                 """, (service_name_clean, db_user_id))
             
@@ -738,14 +766,14 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
                     cursor.execute("""
                         INSERT INTO UserServices 
                         (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """, (service_id, db_user_id, business_id, 'Общие услуги', service_name_clean, '', '[]', ''))
                     print(f"[DEBUG] Added service: {service_name_clean} for business_id={business_id}")
                 else:
                     cursor.execute("""
                         INSERT INTO UserServices 
                         (id, user_id, category, name, description, keywords, price, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """, (service_id, db_user_id, 'Общие услуги', service_name_clean, '', '[]', ''))
                     print(f"[DEBUG] Added service: {service_name_clean} (no business_id)")
                 added_services_count += 1
@@ -855,7 +883,7 @@ async def handle_setting_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             }
             field = field_map.get(setting_type)
             if field:
-                cursor.execute(f"UPDATE Businesses SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+                cursor.execute(f"UPDATE Businesses SET {field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s", 
                              (text, business_id))
                 conn.commit()
         

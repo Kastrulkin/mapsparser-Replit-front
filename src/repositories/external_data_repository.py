@@ -20,7 +20,7 @@ class ExternalDataRepository:
                     rating, author_name, text, response_text, response_at,
                     published_at, raw_payload, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     rating=excluded.rating,
                     author_name=excluded.author_name,
@@ -59,9 +59,8 @@ class ExternalDataRepository:
                     views_total, clicks_total, actions_total,
                     rating, reviews_total, unanswered_reviews_count, raw_payload,
                     created_at, updated_at
-                    created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     views_total=excluded.views_total,
                     clicks_total=excluded.clicks_total,
@@ -100,7 +99,7 @@ class ExternalDataRepository:
                     title, text, published_at, image_url, raw_payload,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     title=excluded.title,
                     text=excluded.text,
@@ -135,7 +134,7 @@ class ExternalDataRepository:
                     url, thumbnail_url, uploaded_at, raw_payload,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     url=excluded.url,
                     thumbnail_url=excluded.thumbnail_url,

@@ -104,12 +104,12 @@ GET /api/wordstat/status
 
 ```bash
 # Добавьте в crontab для еженедельного обновления
-0 2 * * 1 cd /path/to/beautybot && python3 src/update_wordstat_data.py
+0 2 * * 1 cd /path/to/local && python3 src/update_wordstat_data.py
 ```
 
 ### Через systemd (Linux)
 
-Создайте файл `/etc/systemd/system/beautybot-wordstat.service`:
+Создайте файл `/etc/systemd/system/local-wordstat.service`:
 
 ```ini
 [Unit]
@@ -118,8 +118,8 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=beautybot
-WorkingDirectory=/path/to/beautybot
+User=local
+WorkingDirectory=/path/to/local
 ExecStart=/usr/bin/python3 src/update_wordstat_data.py
 Environment=YANDEX_WORDSTAT_OAUTH_TOKEN=your_token_here
 
@@ -127,12 +127,12 @@ Environment=YANDEX_WORDSTAT_OAUTH_TOKEN=your_token_here
 WantedBy=multi-user.target
 ```
 
-И таймер `/etc/systemd/system/beautybot-wordstat.timer`:
+И таймер `/etc/systemd/system/local-wordstat.timer`:
 
 ```ini
 [Unit]
 Description=BeautyBot Wordstat Data Updater Timer
-Requires=beautybot-wordstat.service
+Requires=local-wordstat.service
 
 [Timer]
 OnCalendar=weekly
@@ -144,8 +144,8 @@ WantedBy=timers.target
 
 Активация:
 ```bash
-sudo systemctl enable beautybot-wordstat.timer
-sudo systemctl start beautybot-wordstat.timer
+sudo systemctl enable local-wordstat.timer
+sudo systemctl start local-wordstat.timer
 ```
 
 ## 📈 Ограничения API

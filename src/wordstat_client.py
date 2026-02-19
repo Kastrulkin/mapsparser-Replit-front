@@ -35,20 +35,20 @@ class WordstatClient:
         self.access_token = token
         self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
     
-    def _make_request(self, endpoint: str, params: Dict = None) -> Dict:
+    def _make_request(self, endpoint: str, payload: Dict = None):
         """Выполнение запроса к API"""
         if not self.access_token:
             raise Exception("Необходимо получить access token")
             
         headers = {
             'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json;charset=utf-8'
         }
         
         url = f"{self.base_url}/{endpoint}"
         
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response = requests.post(url, headers=headers, json=(payload or {}), timeout=30)
             
             if response.status_code == 429:
                 retry_after = int(response.headers.get('Retry-After', 60))
@@ -74,12 +74,14 @@ class WordstatClient:
             keywords: Список ключевых слов для анализа
             region: ID региона (225 - Россия)
         """
-        params = {
-            'phrases': keywords,
-            'geo': region
+        # Wordstat API v1/topRequests принимает phrases (до 128 штук) и regions.
+        payload = {
+            'phrases': keywords[:128],
+            'regions': [region],
+            'devices': ['all'],
+            'numPhrases': 50,
         }
-        
-        return self._make_request('phrases', params)
+        return self._make_request('v1/topRequests', payload)
     
     def get_similar_queries(self, keyword: str, region: int = 225) -> Dict:
         """
@@ -89,12 +91,13 @@ class WordstatClient:
             keyword: Ключевое слово
             region: ID региона
         """
-        params = {
+        payload = {
             'phrase': keyword,
-            'geo': region
+            'regions': [region],
+            'devices': ['all'],
+            'numPhrases': 50,
         }
-        
-        return self._make_request('phrases', params)
+        return self._make_request('v1/topRequests', payload)
     
     def get_queries_statistics(self, phrases: List[str], region: int = 225) -> Dict:
         """
@@ -104,12 +107,19 @@ class WordstatClient:
             phrases: Список фраз для анализа
             region: ID региона
         """
-        params = {
-            'phrases': phrases,
-            'geo': region
-        }
-        
-        return self._make_request('stat', params)
+        # Для статистики используем актуальный метод dynamics по одной фразе.
+        results = []
+        for phrase in phrases[:20]:
+            payload = {
+                'phrase': phrase,
+                'period': 'monthly',
+                'regions': [region],
+                'devices': ['all'],
+            }
+            data = self._make_request('v1/dynamics', payload)
+            if data:
+                results.append({'phrase': phrase, 'dynamics': data.get('dynamics', [])})
+        return {'data': results}
 
 class WordstatDataProcessor:
     """Обработчик данных от API Вордстата"""

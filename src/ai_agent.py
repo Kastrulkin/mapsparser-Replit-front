@@ -19,7 +19,7 @@ def get_agent_config(business_id: str) -> dict:
         cursor.execute("""
             SELECT ai_agent_type, ai_agent_id, ai_agent_tone, ai_agent_restrictions, ai_agent_language
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         row = cursor.fetchone()
         
@@ -41,7 +41,7 @@ def get_agent_config(business_id: str) -> dict:
             cursor.execute("""
                 SELECT workflow, task, identity, speech_style, restrictions_json
                 FROM AIAgents
-                WHERE id = ? AND is_active = 1
+                WHERE id = %s AND is_active = 1
             """, (agent_id,))
             agent_row = cursor.fetchone()
             
@@ -77,7 +77,7 @@ def get_agent_config(business_id: str) -> dict:
         cursor.execute("""
             SELECT workflow, task, identity, speech_style, restrictions_json
             FROM AIAgents
-            WHERE type = ? AND is_active = 1
+            WHERE type = %s AND is_active = 1
             ORDER BY created_at DESC
             LIMIT 1
         """, (agent_type,))
@@ -129,16 +129,19 @@ def get_business_services(business_id: str) -> list:
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        # Проверяем наличие колонки duration
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+        # Проверяем наличие колонки duration (PostgreSQL)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+        """)
+        columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
         has_duration = 'duration' in columns
         
         if has_duration:
             cursor.execute("""
                 SELECT id, name, price, duration, description
                 FROM UserServices
-                WHERE business_id = ? AND is_active = 1
+                WHERE business_id = %s AND is_active = 1
                 ORDER BY name
             """, (business_id,))
             rows = cursor.fetchall()
@@ -167,7 +170,7 @@ def get_business_services(business_id: str) -> list:
             cursor.execute("""
                 SELECT id, name, price, description
                 FROM UserServices
-                WHERE business_id = ? AND is_active = 1
+                WHERE business_id = %s AND is_active = 1
                 ORDER BY name
             """, (business_id,))
             rows = cursor.fetchall()
@@ -204,7 +207,7 @@ def get_business_info(business_id: str) -> dict:
         cursor.execute("""
             SELECT name, address, city, phone, email, ai_agent_type, ai_agent_tone, ai_agent_restrictions, ai_agent_language
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         row = cursor.fetchone()
         if not row:
@@ -241,7 +244,7 @@ def get_or_create_conversation(business_id: str, client_phone: str, client_name:
         cursor.execute("""
             SELECT id, current_state, conversation_history
             FROM AIAgentConversations
-            WHERE business_id = ? AND client_phone = ?
+            WHERE business_id = %s AND client_phone = %s
             ORDER BY last_message_at DESC
             LIMIT 1
         """, (business_id, client_phone))
@@ -254,7 +257,7 @@ def get_or_create_conversation(business_id: str, client_phone: str, client_name:
             cursor.execute("""
                 UPDATE AIAgentConversations
                 SET last_message_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (conversation_id,))
             db.conn.commit()
             return conversation_id
@@ -264,7 +267,7 @@ def get_or_create_conversation(business_id: str, client_phone: str, client_name:
             cursor.execute("""
                 INSERT INTO AIAgentConversations 
                 (id, business_id, client_phone, client_name, current_state, conversation_history)
-                VALUES (?, ?, ?, ?, 'greeting', ?)
+                VALUES (%s, %s, %s, %s, 'greeting', %s)
             """, (conversation_id, business_id, client_phone, client_name, json.dumps([])))
             db.conn.commit()
             return conversation_id
@@ -280,7 +283,7 @@ def save_message(conversation_id: str, message_type: str, content: str, sender: 
         cursor.execute("""
             INSERT INTO AIAgentMessages 
             (id, conversation_id, message_type, content, sender)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (message_id, conversation_id, message_type, content, sender))
         db.conn.commit()
     finally:
@@ -293,8 +296,8 @@ def update_conversation_state(conversation_id: str, new_state: str):
         cursor = db.conn.cursor()
         cursor.execute("""
             UPDATE AIAgentConversations
-            SET current_state = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET current_state = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (new_state, conversation_id))
         db.conn.commit()
     finally:
@@ -482,7 +485,7 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         cursor.execute("""
             SELECT current_state, conversation_history, COALESCE(is_agent_paused, 0)
             FROM AIAgentConversations
-            WHERE id = ?
+            WHERE id = %s
         """, (conversation_id,))
         row = cursor.fetchone()
         db.close()
@@ -661,8 +664,8 @@ def process_message(business_id: str, client_phone: str, client_name: str, messa
         cursor = db.conn.cursor()
         cursor.execute("""
             UPDATE AIAgentConversations
-            SET conversation_history = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET conversation_history = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (json.dumps(conversation_history), conversation_id))
         db.conn.commit()
         db.close()

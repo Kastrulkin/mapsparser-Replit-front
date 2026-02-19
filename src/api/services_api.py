@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
+import re
 
 services_bp = Blueprint('services', __name__)
 
@@ -155,6 +156,22 @@ def get_services():
         col_names = [d[0] for d in cursor.description] if cursor.description else select_fields
         db.close()
 
+        def _parse_price_text(raw_price):
+            if raw_price is None:
+                return None
+            s = str(raw_price).strip()
+            if not s:
+                return None
+            numbers = re.findall(r"\d+", s)
+            if not numbers:
+                return None
+            try:
+                if len(numbers) >= 2 and not re.search(r"[-–—]", s) and " до " not in s.lower():
+                    return float(int("".join(numbers[:2])))
+                return float(int(numbers[0]))
+            except (TypeError, ValueError):
+                return None
+
         services = []
         for service in services_rows:
             if hasattr(service, 'keys'):
@@ -200,6 +217,22 @@ def get_services():
             for svc in services:
                 source = str(svc.get('source') or '').strip().lower()
                 is_parsed = source in ('yandex_maps', 'yandex_business') or svc.get('raw') is not None
+                if is_parsed:
+                    raw_obj = svc.get('raw')
+                    if isinstance(raw_obj, str):
+                        try:
+                            import json
+                            raw_obj = json.loads(raw_obj)
+                        except Exception:
+                            raw_obj = None
+                    if isinstance(raw_obj, dict):
+                        parsed_price = _parse_price_text(raw_obj.get('price'))
+                        if parsed_price is not None:
+                            svc['price'] = parsed_price
+                            if svc.get('price_from') is None:
+                                svc['price_from'] = parsed_price
+                            if svc.get('price_to') is None:
+                                svc['price_to'] = parsed_price
                 if is_parsed:
                     parsed_services.append(svc)
                 else:

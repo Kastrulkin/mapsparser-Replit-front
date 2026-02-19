@@ -1,6 +1,6 @@
 export const th = {
   // Page title
-  pageTitle: "BeautyBot.pro - การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
+  pageTitle: "LocalOS.pro - การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
 
   common: {
     success: "สำเร็จ",
@@ -22,13 +22,14 @@ export const th = {
     login: "เข้าสู่ระบบ"
   },
   footer: {
-    title: "BeautyBot",
-    description: "การโปรโมตเชิงพื้นที่สำหรับธุรกิจท้องถิ่น",
-    madeWithLove: "ทำด้วยความรักเพื่ออุตสาหกรรมความงาม",
+    title: "Local OS",
+    description: "ปลดปล่อยธุรกิจท้องถิ่นจากงานประจำ",
+    madeWithLovePrefix: "ทำด้วยความรักเพื่อ ",
+    madeWithLoveIndustries: ["ร้านเสริมสวย", "ช่างฝีมือ", "เวิร์กช็อป", "ร้านค้า", "โรงเรียน", "อู่ซ่อมรถ", "คลินิก", "ร้านกาแฟ", "ปั๊มน้ำมัน"],
     company: "บริษัท",
     whoWeAre: "เราเป็นใคร?",
     contacts: "ติดต่อ",
-    copyright: "© 2025 BeautyBot. สงวนลิขสิทธิ์ทั้งหมด."
+    copyright: "© 2025 Local. สงวนลิขสิทธิ์ทั้งหมด."
   },
   stats: {
     title: "เราไม่ได้แค่ให้เครื่องมือ —",
@@ -988,7 +989,7 @@ export const th = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",

@@ -78,15 +78,15 @@ def register_with_business():
             update_values = []
             
             if timezone_result.get('timezone') and not timezone_result.get('error'):
-                update_fields.append('timezone = ?')
+                update_fields.append('timezone = %s')
                 update_values.append(timezone_result['timezone'])
             
             if timezone_result.get('latitude'):
-                update_fields.append('latitude = ?')
+                update_fields.append('latitude = %s')
                 update_values.append(timezone_result['latitude'])
             
             if timezone_result.get('longitude'):
-                update_fields.append('longitude = ?')
+                update_fields.append('longitude = %s')
                 update_values.append(timezone_result['longitude'])
             
             if update_fields:
@@ -94,7 +94,7 @@ def register_with_business():
                 cursor.execute(f"""
                     UPDATE Businesses 
                     SET {', '.join(update_fields)}
-                    WHERE id = ?
+                    WHERE id = %s
                 """, update_values)
             
             db.conn.commit()
@@ -149,7 +149,7 @@ def update_business_profile():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -165,21 +165,21 @@ def update_business_profile():
         update_values = []
         
         if 'address' in data:
-            update_fields.append('address = ?')
+            update_fields.append('address = %s')
             update_values.append(data['address'])
         
         if 'city' in data:
-            update_fields.append('city = ?')
+            update_fields.append('city = %s')
             update_values.append(data['city'])
         
         if 'country' in data:
-            update_fields.append('country = ?')
+            update_fields.append('country = %s')
             update_values.append(data['country'])
         
         if 'working_hours_json' in data:
             # Сохраняем рабочие часы как JSON
             working_hours = json.dumps(data['working_hours_json'])
-            update_fields.append('working_hours_json = ?')
+            update_fields.append('working_hours_json = %s')
             update_values.append(working_hours)
         
         # Если изменился адрес или город, определяем часовой пояс заново
@@ -189,69 +189,69 @@ def update_business_profile():
             if address and city:
                 timezone_result = get_timezone_from_address(address, city)
                 if timezone_result.get('timezone'):
-                    update_fields.append('timezone = ?')
+                    update_fields.append('timezone = %s')
                     update_values.append(timezone_result['timezone'])
                 if timezone_result.get('latitude'):
-                    update_fields.append('latitude = ?')
+                    update_fields.append('latitude = %s')
                     update_values.append(timezone_result['latitude'])
                 if timezone_result.get('longitude'):
-                    update_fields.append('longitude = ?')
+                    update_fields.append('longitude = %s')
                     update_values.append(timezone_result['longitude'])
         
         if 'phone' in data:
-            update_fields.append('phone = ?')
+            update_fields.append('phone = %s')
             update_values.append(data['phone'])
         
         if 'email' in data:
-            update_fields.append('email = ?')
+            update_fields.append('email = %s')
             update_values.append(data['email'])
         
         if 'website' in data:
-            update_fields.append('website = ?')
+            update_fields.append('website = %s')
             update_values.append(data['website'])
         
         # WABA credentials
         if 'waba_phone_id' in data:
-            update_fields.append('waba_phone_id = ?')
+            update_fields.append('waba_phone_id = %s')
             update_values.append(data['waba_phone_id'])
         
         if 'waba_access_token' in data:
-            update_fields.append('waba_access_token = ?')
+            update_fields.append('waba_access_token = %s')
             update_values.append(data['waba_access_token'])
         
         # Telegram bot token
         if 'telegram_bot_token' in data:
-            update_fields.append('telegram_bot_token = ?')
+            update_fields.append('telegram_bot_token = %s')
             update_values.append(data['telegram_bot_token'])
         
         # AI Agent settings
         if 'ai_agent_enabled' in data:
-            update_fields.append('ai_agent_enabled = ?')
+            update_fields.append('ai_agent_enabled = %s')
             update_values.append(data['ai_agent_enabled'])
         
         if 'ai_agent_type' in data:
-            update_fields.append('ai_agent_type = ?')
+            update_fields.append('ai_agent_type = %s')
             update_values.append(data['ai_agent_type'])
         
         if 'ai_agent_id' in data:
-            update_fields.append('ai_agent_id = ?')
+            update_fields.append('ai_agent_id = %s')
             update_values.append(data['ai_agent_id'] if data['ai_agent_id'] else None)
         
         if 'ai_agent_tone' in data:
-            update_fields.append('ai_agent_tone = ?')
+            update_fields.append('ai_agent_tone = %s')
             update_values.append(data['ai_agent_tone'])
         
         if 'ai_agent_restrictions' in data:
-            update_fields.append('ai_agent_restrictions = ?')
+            update_fields.append('ai_agent_restrictions = %s')
             update_values.append(data['ai_agent_restrictions'])
         
         if 'ai_agent_language' in data:
-            update_fields.append('ai_agent_language = ?')
+            update_fields.append('ai_agent_language = %s')
             update_values.append(data['ai_agent_language'])
         
         # Multi-agent configuration (new format)
         if 'ai_agents_config' in data:
-            update_fields.append('ai_agents_config = ?')
+            update_fields.append('ai_agents_config = %s')
             update_values.append(data['ai_agents_config'])
         
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
@@ -261,7 +261,7 @@ def update_business_profile():
             cursor.execute(f"""
                 UPDATE Businesses 
                 SET {', '.join(update_fields)}
-                WHERE id = ?
+                WHERE id = %s
             """, update_values)
             db.conn.commit()
         
@@ -296,7 +296,7 @@ def connect_telegram():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -344,7 +344,7 @@ def verify_whatsapp():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -362,8 +362,8 @@ def verify_whatsapp():
             # В реальности здесь будет вызов WABA API
             cursor.execute("""
                 UPDATE Businesses 
-                SET whatsapp_phone = ?, whatsapp_verified = 0
-                WHERE id = ?
+                SET whatsapp_phone = %s, whatsapp_verified = 0
+                WHERE id = %s
             """, (phone, business_id))
             db.conn.commit()
             db.close()
@@ -380,7 +380,7 @@ def verify_whatsapp():
             cursor.execute("""
                 UPDATE Businesses 
                 SET whatsapp_verified = 1
-                WHERE id = ?
+                WHERE id = %s
             """, (business_id,))
             db.conn.commit()
             db.close()

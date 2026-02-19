@@ -40,7 +40,7 @@ const Hero = () => {
           <div className="relative animate-in fade-in slide-in-from-left-8 duration-1000 delay-200">
             <img
               src={heroImage}
-              alt="BeautyBot Hero"
+              alt="Local Hero"
               className="w-full h-auto rounded-2xl shadow-2xl"
             />
           </div>

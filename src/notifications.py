@@ -181,7 +181,7 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
         cursor.execute("""
             SELECT name, telegram_username, whatsapp_phone, whatsapp_verified, owner_id
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         
         business = cursor.fetchone()
@@ -196,7 +196,7 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
             SELECT client_name, client_phone, client_email, service_name,
                    booking_time, booking_time_local, notes
             FROM Bookings
-            WHERE id = ?
+            WHERE id = %s
         """, (booking_id,))
         
         booking = cursor.fetchone()
@@ -224,7 +224,7 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
         
         # Telegram уведомление
         # Получаем telegram_id владельца из Users
-        cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (owner_id,))
+        cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (owner_id,))
         user = cursor.fetchone()
         if user and user[0]:
             telegram_id = user[0]
@@ -244,8 +244,8 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
         if notification_channel:
             cursor.execute("""
                 UPDATE Bookings 
-                SET notification_sent = 1, notification_channel = ?
-                WHERE id = ?
+                SET notification_sent = 1, notification_channel = %s
+                WHERE id = %s
             """, (','.join(notification_channel), booking_id))
             db.conn.commit()
         

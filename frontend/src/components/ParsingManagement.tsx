@@ -74,19 +74,28 @@ export const ParsingManagement: React.FC = () => {
       }
 
       const [tasksData, statsData] = await Promise.all([
-        tasksRes.json(),
-        statsRes.json()
+        tasksRes.json().catch(() => ({})),
+        statsRes.json().catch(() => ({}))
       ]);
 
+      if (!tasksRes.ok) {
+        console.error('Parsing tasks failed:', tasksRes.status, tasksRes.url, tasksData);
+        throw new Error((tasksData as { error?: string })?.error || `HTTP ${tasksRes.status}`);
+      }
+      if (!statsRes.ok) {
+        console.error('Parsing stats failed:', statsRes.status, statsRes.url, statsData);
+        throw new Error((statsData as { error?: string })?.error || `HTTP ${statsRes.status}`);
+      }
+
       if (tasksData.tasks) setTasks(tasksData.tasks);
-      else if (tasksData.error) throw new Error(tasksData.error);
+      else if ((tasksData as { error?: string }).error) throw new Error((tasksData as { error?: string }).error);
 
       if (statsData.success) setStats(statsData.stats);
 
       setError(null);
     } catch (e: any) {
-      console.error('Ошибка загрузки данных:', e);
-      setError(e.message || 'Ошибка загрузки данных');
+      console.error('Ошибка загрузки данных:', e?.message, e);
+      setError(e?.message || 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }

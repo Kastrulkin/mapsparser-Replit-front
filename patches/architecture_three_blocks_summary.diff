@@ -1,0 +1,104 @@
+# Unified diff — ровно три блока (архитектор)
+
+## БЛОК 1 — parse_yandex_card: **session_kwargs + белый список (parser_interception.py)
+
+--- a/src/parser_interception.py
++++ b/src/parser_interception.py
+@@ -14,6 +14,27 @@ from urllib.parse import urlparse, parse_qs
+ 
+ from browser_session import BrowserSession, BrowserSessionManager
+ 
++DEBUG_DIR = os.getenv("DEBUG_DIR", "/app/debug_data")
++
++ALLOWED_SESSION_KWARGS = {
++    "proxy",
++    "timeout",
++    "retries",
++    "trace",
++    "headless",
++    "cookies",
++    "user_agent",
++    "viewport",
++    "locale",
++    "timezone_id",
++    "launch_args",
++    "init_scripts",
++}
++
+ def parse_yandex_card(
+     url: str,
+     keep_open_on_captcha: bool = False,
+     session_registry: Optional[Dict[str, BrowserSession]] = None,
+     session_id: Optional[str] = None,
+-    **kwargs: Any,
++    debug_bundle_id: Optional[str] = None,
++    **session_kwargs: Any,
+ ) -> Dict[str, Any]:
+     manager = BrowserSessionManager()
+     session: Optional[BrowserSession] = None
++
++    unknown = set(session_kwargs.keys()) - ALLOWED_SESSION_KWARGS
++    if unknown:
++        msg = f"Unknown session kwargs in parse_yandex_card: {unknown}"
++        env = os.getenv("FLASK_ENV", "").lower()
++        is_debug_env = env in ("development", "dev", "debug", "test", "testing")
++        if is_debug_env:
++            raise ValueError(msg)
++        else:
++            print(f"⚠️ {msg}")
++            for k in list(unknown):
++                session_kwargs.pop(k, None)
++
+     ...
+-        session = manager.open_session(
+-            headless=kwargs.get("headless", True),
+-            cookies=kwargs.get("cookies"),
++        session = manager.open_session(
++            headless=session_kwargs.get("headless", True),
++            cookies=session_kwargs.get("cookies"),
+             ...
+-            init_scripts=kwargs.get("init_scripts"),
++            init_scripts=session_kwargs.get("init_scripts"),
+             keep_open=keep_open_on_captcha,
+         )
+-    parser = YandexMapsInterceptionParser()
++    parser = YandexMapsInterceptionParser(debug_bundle_id=debug_bundle_id)
+
+
+## БЛОК 2 — Fallback только UndefinedColumn (worker.py)
+
+--- a/src/worker.py
++++ b/src/worker.py
+             try:
+                 cursor.execute(
+                     "UPDATE parsequeue SET status = %s, error_message = NULL, warnings = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                     (STATUS_COMPLETED, warning_msg, queue_dict["id"]),
+                 )
+             except Exception as upd_err:
+-                err_str = str(upd_err).lower()
+-                if "warnings" in err_str or "column" in err_str or (hasattr(upd_err, "pgcode") and getattr(upd_err, "pgcode") == "42703"):
+-                    # Колонка warnings отсутствует (UndefinedColumn) — обновляем без неё
++                # Fallback только для PostgreSQL UndefinedColumn (pgcode 42703).
++                if getattr(upd_err, "pgcode", None) == "42703":
+                     cursor.execute(
+                         "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                         (STATUS_COMPLETED, queue_dict["id"]),
+                     )
+                 else:
+                     raise
+
+
+## БЛОК 3 — Debug bundle: обязательные файлы, только при debug_bundle_dir (parser_interception.py)
+
+- __init__: self.debug_bundle_dir = os.path.join(DEBUG_DIR, debug_bundle_id) if debug_bundle_id else None
+- В начале parse_yandex_card: initial_url = url, main_http_status = None
+- После page.goto: main_response = page.goto(...); main_http_status = main_response.status if main_response else None
+- Канонический блок: только если self.debug_bundle_dir:
+  - request_url.txt (initial_url)
+  - final_url.txt (page.url)
+  - http_status.txt (main_http_status)
+  - page.html
+  - payload.json (если есть data)
+- exception.txt при крэше — в worker.py (уже есть)
+
+Файлы бандла: request_url.txt, final_url.txt, http_status.txt, page.html, payload.json, exception.txt (при падении).

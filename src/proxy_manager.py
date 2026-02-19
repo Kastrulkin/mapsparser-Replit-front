@@ -57,7 +57,7 @@ class ProxyManager:
                 UPDATE ProxyServers 
                 SET last_used_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (proxy_id,))
             conn.commit()
             
@@ -92,7 +92,7 @@ class ProxyManager:
                 SET success_count = success_count + 1,
                     is_working = 1,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (proxy_id,))
             conn.commit()
         finally:
@@ -113,7 +113,7 @@ class ProxyManager:
                 SET failure_count = failure_count + 1,
                     is_working = 0,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (proxy_id,))
             conn.commit()
             

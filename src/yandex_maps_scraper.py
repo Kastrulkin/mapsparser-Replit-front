@@ -1624,64 +1624,61 @@ def parse_products(page):
         return []
 
 def parse_competitors(page):
-    """Парсинг конкурентов из секции 'Похожие места рядом'"""
+    """Парсит конкурентов из HTML секции 'Похожие места'."""
     try:
-        competitors = []
-
-        # Ищем секцию с похожими местами - добавляю актуальный селектор
-        similar_selectors = [
+        selectors = [
             "div.card-similar-carousel",
             "div.card-similar-carousel-wide",
-            "div[class*='carousel']",
-            "div[role='presentation'][class*='carousel']"
+            "div[class*='similar']",
+            "div[class*='related']",
+            "section[class*='related']",
+            "div.orgpage-similar-items-view",
         ]
+        containers = []
+        for selector in selectors:
+            containers.extend(page.query_selector_all(selector))
 
-        similar_section = None
-        for selector in similar_selectors:
-            similar_section = page.query_selector(selector)
-            if similar_section:
-                break
-
-        if not similar_section:
-            print("Секция конкурентов не найдена!")
+        if not containers:
             return []
 
-        # Ищем ссылки на конкурентов
-        competitor_links = similar_section.query_selector_all("a.link-wrapper")
-        for link in competitor_links:
-            try:
-                url = link.get_attribute('href')
-                if url and not url.startswith('http'):
-                    url = 'https://yandex.ru' + url
+        competitors = []
+        seen = set()
+        for container in containers:
+            cards = container.query_selector_all("a[href*='/org/'], a.link-wrapper, div.orgpage-similar-item")
+            for card in cards:
+                try:
+                    href = card.get_attribute("href")
+                    if href and href.startswith("/"):
+                        href = f"https://yandex.ru{href}"
 
-                # Название конкурента
-                title_el = link.query_selector("div.orgpage-similar-item__title")
-                title = title_el.inner_text().strip() if title_el else ''
+                    name_el = card.query_selector(
+                        "[class*='name'], .title, .orgpage-similar-item__title, .search-business-snippet-view__title"
+                    )
+                    name = name_el.inner_text().strip() if name_el else None
+                    if not name:
+                        continue
+                    if name in seen:
+                        continue
+                    seen.add(name)
 
-                # Категория
-                category_el = link.query_selector("div.orgpage-similar-item__rubrics")
-                category = category_el.inner_text().strip() if category_el else ''
-
-                # Рейтинг
-                rating_el = link.query_selector("span.business-rating-badge-view__rating-text, div.business-rating-badge-view__rating-text")
-                rating = rating_el.inner_text().strip() if rating_el else ''
-
-                if title and url:
+                    rating_el = card.query_selector("[class*='rating'], .business-rating-badge-view__rating-text")
+                    category_el = card.query_selector("[class*='rubric'], [class*='category']")
                     competitors.append({
-                        'title': title,
-                        'url': url,
-                        'category': category,
-                        'rating': rating
+                        "name": name,
+                        "title": name,
+                        "url": href,
+                        "rating": rating_el.inner_text().strip() if rating_el else "",
+                        "category": category_el.inner_text().strip() if category_el else "",
+                        "source": "html_parsing",
                     })
-                    print(f"Найден конкурент: {title} - {rating}")
-            except Exception as e:
-                print(f"Ошибка при парсинге конкурента: {e}")
-                continue
+                except Exception:
+                    continue
 
-        print(f"Всего найдено конкурентов: {len(competitors)}")
-        return competitors[:5]  # Ограничиваем 5 конкурентами
+        if competitors:
+            print(f"[parse_competitors] Found {len(competitors)} competitors via HTML")
+        return competitors[:10]
     except Exception as e:
-        print(f"Ошибка при поиске конкурентов: {e}")
+        print(f"[parse_competitors] Error: {e}")
         return []
 
 # This code parses Yandex Maps public pages to extract information like title, address, phone, etc.

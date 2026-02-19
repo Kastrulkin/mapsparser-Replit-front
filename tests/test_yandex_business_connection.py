@@ -48,7 +48,7 @@ def test_business_connection(business_id: str):
         cursor = db.conn.cursor()
         
         # Проверяем, существует ли бизнес
-        cursor.execute("SELECT id, name FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT id, name FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         if not business:
             print(f"❌ Бизнес с ID {business_id} не найден в БД")

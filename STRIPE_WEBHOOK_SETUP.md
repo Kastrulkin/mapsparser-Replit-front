@@ -6,7 +6,7 @@
 2. Нажми **"Add endpoint"**
 3. Укажи **Endpoint URL**:
    ```
-   https://beautybot.pro/api/stripe/webhook
+   https://localhost/api/stripe/webhook
    ```
    (или `http://localhost:8000/api/stripe/webhook` для локальной разработки)
 
@@ -84,7 +84,7 @@
 
 - ⚠️ **Webhook secret должен быть разным для test и live режимов**
 - ⚠️ **Не коммить webhook secret в репозиторий** (он уже в `.gitignore`)
-- ⚠️ **Для прода используй HTTPS URL** (`https://beautybot.pro/api/stripe/webhook`)
+- ⚠️ **Для прода используй HTTPS URL** (`https://localhost/api/stripe/webhook`)
 - ⚠️ **Stripe проверяет подпись** - если webhook secret неверный, запросы будут отклоняться
 
 ## Troubleshooting

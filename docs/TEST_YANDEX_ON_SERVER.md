@@ -5,7 +5,7 @@
 ### Шаг 1: Подключитесь к серверу
 
 ```bash
-ssh root@beautybot.pro
+ssh root@local
 # или
 ssh root@<IP_СЕРВЕРА>
 ```
@@ -40,7 +40,7 @@ python3 scripts/test_oliver_yandex.py
 Если у вас настроен SSH доступ, можно запустить тест одной командой с локального компьютера:
 
 ```bash
-ssh root@beautybot.pro "cd /root/mapsparser-Replit-front && source venv/bin/activate && python3 scripts/test_oliver_yandex.py"
+ssh root@local "cd /root/mapsparser-Replit-front && source venv/bin/activate && python3 scripts/test_oliver_yandex.py"
 ```
 
 ## Что проверить в выводе

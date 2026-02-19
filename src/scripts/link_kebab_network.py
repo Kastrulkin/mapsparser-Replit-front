@@ -86,7 +86,7 @@ def link_kebab_network():
         # 4. Обновление
         print("\n🚀 Привязываем точки...")
         for b_id, b_name in to_update:
-            cursor.execute("UPDATE Businesses SET network_id = ? WHERE id = ?", (network_id, b_id))
+            cursor.execute("UPDATE Businesses SET network_id = %s WHERE id = %s", (network_id, b_id))
             print(f"  ✅ {b_name} -> привязан")
 
         conn.commit()

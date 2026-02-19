@@ -456,12 +456,10 @@ class GigaChatClient:
             db = DatabaseManager()
             cursor = db.conn.cursor()
             
-            # Проверяем, существует ли таблица
-            cursor.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='TokenUsage'
-            """)
-            if not cursor.fetchone():
+            # Проверяем, существует ли таблица (PostgreSQL: to_regclass)
+            cursor.execute("SELECT to_regclass('public.tokenusage')")
+            reg = cursor.fetchone()
+            if not reg or reg[0] is None:
                 db.close()
                 return  # Таблица еще не создана
             
@@ -469,7 +467,7 @@ class GigaChatClient:
             cursor.execute("""
                 INSERT INTO TokenUsage 
                 (id, business_id, user_id, task_type, model, prompt_tokens, completion_tokens, total_tokens, endpoint)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 usage_id,
                 business_id,

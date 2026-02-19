@@ -27,7 +27,7 @@ def fill_ids():
             # Находим все бизнесы сети + Мастер Кебаб сам по себе
             cursor.execute("""
                 SELECT id, name FROM Businesses 
-                WHERE network_id = ? 
+                WHERE network_id = %s 
                 OR name = 'Мастер Кебаб'
             """, (network_id,))
             businesses_to_check = cursor.fetchall()
@@ -41,11 +41,11 @@ def fill_ids():
 
         for b_id, name in businesses_to_check:
             # Ищем ссылки в BusinessMapLinks
-            cursor.execute("SELECT url FROM BusinessMapLinks WHERE business_id = ?", (b_id,))
+            cursor.execute("SELECT url FROM BusinessMapLinks WHERE business_id = %s", (b_id,))
             links = cursor.fetchall()
             
             # Также проверяем yandex_url в таблице Businesses
-            cursor.execute("SELECT yandex_url FROM Businesses WHERE id = ?", (b_id,))
+            cursor.execute("SELECT yandex_url FROM Businesses WHERE id = %s", (b_id,))
             biz_url = cursor.fetchone()
             if biz_url and biz_url[0]:
                 links.append((biz_url[0],))
@@ -67,8 +67,8 @@ def fill_ids():
                 print(f"✏️  {name}: Найден ID {found_id} из ссылки {found_url}")
                 cursor.execute("""
                     UPDATE Businesses 
-                    SET yandex_org_id = ?, yandex_url = ?
-                    WHERE id = ?
+                    SET yandex_org_id = %s, yandex_url = %s
+                    WHERE id = %s
                 """, (found_id, found_url, b_id))
                 conn.commit()
             else:

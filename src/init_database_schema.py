@@ -721,6 +721,10 @@ def init_database_schema():
 
 ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
 {frequent_queries}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
 
 Формат ответа СТРОГО В JSON:
 {{
@@ -758,14 +762,19 @@ Write all generated text in {language_name}.
 Контекст услуги (может отсутствовать): {service_context}
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info[:800]}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
              'Промпт для генерации новостей')
         ]
         
         for prompt_type, prompt_text, description in default_prompts:
             cursor.execute("""
-                INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO AIPrompts (id, prompt_type, prompt_text, description)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (prompt_type) DO NOTHING
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
         
         print("✅ Дефолтные промпты инициализированы")
@@ -808,7 +817,7 @@ Write all generated text in {language_name}.
         for agent in default_agents:
             cursor.execute("""
                 INSERT OR IGNORE INTO AIAgents (id, name, type, description, personality, is_active)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (agent['id'], agent['name'], agent['type'], agent['description'], agent['personality'], agent['is_active']))
             
         print("✅ Дефолтные AI агенты инициализированы")
@@ -879,7 +888,7 @@ Write all generated text in {language_name}.
         for type_key, label, description in default_business_types:
             cursor.execute("""
                 INSERT OR IGNORE INTO BusinessTypes (id, type_key, label, description)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (f"bt_{type_key}", type_key, label, description))
         
         print("✅ Дефолтные типы бизнеса инициализированы")
@@ -904,4 +913,3 @@ Write all generated text in {language_name}.
 
 if __name__ == "__main__":
     init_database_schema()
-

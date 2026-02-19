@@ -21,7 +21,7 @@ def add_to_queue(url: str, user_id: str):
     
     cursor.execute("""
         INSERT INTO ParseQueue (id, url, user_id, status, created_at)
-        VALUES (?, ?, ?, 'pending', ?)
+        VALUES (%s, %s, %s, 'pending', %s)
     """, (queue_id, url, user_id, datetime.now().isoformat()))
     
     conn.commit()

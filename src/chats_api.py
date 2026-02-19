@@ -35,7 +35,7 @@ def get_business_ai_agents(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -50,7 +50,7 @@ def get_business_ai_agents(business_id):
         cursor.execute("""
             SELECT ai_agents_config 
             FROM Businesses 
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         business_data = cursor.fetchone()
         
@@ -72,7 +72,7 @@ def get_business_ai_agents(business_id):
                             cursor.execute("""
                                 SELECT id, name, type, description
                                 FROM AIAgents
-                                WHERE id = ?
+                                WHERE id = %s
                             """, (config['agent_id'],))
                             agent = cursor.fetchone()
                             
@@ -88,7 +88,7 @@ def get_business_ai_agents(business_id):
                             cursor.execute("""
                                 SELECT id, name, type, description
                                 FROM AIAgents
-                                WHERE type = ? AND is_active = 1
+                                WHERE type = %s AND is_active = 1
                                 ORDER BY id
                                 LIMIT 1
                             """, (agent_type,))
@@ -129,7 +129,7 @@ def get_business_conversations(business_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -161,7 +161,7 @@ def get_business_conversations(business_id):
                  )
                 ) as unread_count
             FROM AIAgentConversations c
-            WHERE c.business_id = ?
+            WHERE c.business_id = %s
             ORDER BY c.last_message_at DESC
         """, (business_id,))
         
@@ -201,7 +201,7 @@ def get_conversation_messages(conversation_id):
             SELECT c.business_id, b.owner_id
             FROM AIAgentConversations c
             JOIN Businesses b ON c.business_id = b.id
-            WHERE c.id = ?
+            WHERE c.id = %s
         """, (conversation_id,))
         
         conv = cursor.fetchone()
@@ -217,7 +217,7 @@ def get_conversation_messages(conversation_id):
         cursor.execute("""
             SELECT id, content, sender, message_type, created_at
             FROM AIAgentMessages
-            WHERE conversation_id = ?
+            WHERE conversation_id = %s
             ORDER BY created_at ASC
         """, (conversation_id,))
         
@@ -262,7 +262,7 @@ def send_operator_message(conversation_id):
             SELECT c.business_id, c.client_phone, c.client_name, b.owner_id
             FROM AIAgentConversations c
             JOIN Businesses b ON c.business_id = b.id
-            WHERE c.id = ?
+            WHERE c.id = %s
         """, (conversation_id,))
         
         conv = cursor.fetchone()
@@ -280,14 +280,14 @@ def send_operator_message(conversation_id):
         cursor.execute("""
             INSERT INTO AIAgentMessages 
             (id, conversation_id, message_type, content, sender)
-            VALUES (?, ?, 'text', ?, ?)
+            VALUES (%s, %s, 'text', %s, %s)
         """, (message_id, conversation_id, message, sender))
         
         # Обновляем время последнего сообщения
         cursor.execute("""
             UPDATE AIAgentConversations
             SET last_message_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (conversation_id,))
         
         # Отправляем сообщение клиенту через WhatsApp или Telegram
@@ -299,7 +299,7 @@ def send_operator_message(conversation_id):
             SELECT whatsapp_phone_id, whatsapp_access_token, 
                    telegram_bot_token, telegram_chat_id
             FROM Businesses
-            WHERE id = ?
+            WHERE id = %s
         """, (business_id,))
         
         business_settings = cursor.fetchone()
@@ -354,7 +354,7 @@ def toggle_agent(conversation_id):
             SELECT c.business_id, b.owner_id
             FROM AIAgentConversations c
             JOIN Businesses b ON c.business_id = b.id
-            WHERE c.id = ?
+            WHERE c.id = %s
         """, (conversation_id,))
         
         conv = cursor.fetchone()
@@ -369,8 +369,8 @@ def toggle_agent(conversation_id):
         # Обновляем статус агента
         cursor.execute("""
             UPDATE AIAgentConversations
-            SET is_agent_paused = ?
-            WHERE id = ?
+            SET is_agent_paused = %s
+            WHERE id = %s
         """, (1 if pause else 0, conversation_id))
         
         db.conn.commit()
@@ -409,7 +409,7 @@ def test_ai_agent(agent_id):
         cursor.execute("""
             SELECT name, type, description, workflow, task, identity, speech_style, restrictions_json, variables_json
             FROM AIAgents
-            WHERE id = ?
+            WHERE id = %s
         """, (agent_id,))
         
         agent_row = cursor.fetchone()
@@ -419,7 +419,7 @@ def test_ai_agent(agent_id):
         
         # Если указан business_id, используем его данные, иначе создаём тестовые
         if business_id:
-            cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
             business_check = cursor.fetchone()
             if not business_check:
                 db.close()
@@ -541,7 +541,7 @@ def test_business_ai_agent(business_id, agent_id):
         # Проверяем доступ к бизнесу
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -554,7 +554,7 @@ def test_business_ai_agent(business_id, agent_id):
         
         # Проверяем, что агент принадлежит бизнесу или доступен
         cursor.execute("""
-            SELECT ai_agent_id FROM Businesses WHERE id = ?
+            SELECT ai_agent_id FROM Businesses WHERE id = %s
         """, (business_id,))
         business_agent = cursor.fetchone()
         
@@ -579,7 +579,7 @@ def test_business_ai_agent(business_id, agent_id):
         cursor.execute("""
             SELECT name, type, description, workflow, task, identity, speech_style, restrictions_json, variables_json
             FROM AIAgents
-            WHERE id = ?
+            WHERE id = %s
         """, (agent_id,))
         
         agent_row = cursor.fetchone()

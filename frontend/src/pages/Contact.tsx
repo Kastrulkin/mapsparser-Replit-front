@@ -83,7 +83,7 @@ const Contact = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">{t.contact.emailTitle}</h3>
-                    <p className="text-muted-foreground">info@beautybot.pro</p>
+                    <p className="text-muted-foreground">info@local</p>
                   </div>
                 </div>
               </div>

@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime, timedelta
 import signal
 import sys
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 
 from browser_session import BrowserSession, BrowserSessionManager
@@ -1556,23 +1556,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     if external_id is not None:
         external_id = str(external_id).strip() or None
     raw_price = item.get("price") or item.get("price_from") or ""
-    price_from = price_to = None
-    if raw_price is not None and str(raw_price).strip():
-        try:
-            # Ищем все числа в строке
-            numbers = re.findall(r"\d+", str(raw_price).replace(" ", "").replace(",", ""))
-            if len(numbers) >= 2:
-                n1, n2 = int(numbers[0]), int(numbers[1])
-                # Защита от выбросов: если разница >100x, вероятно это не диапазон
-                if max(n1, n2) / max(min(n1, n2), 1) <= 100:
-                    price_from = float(min(n1, n2))
-                    price_to = float(max(n1, n2))
-                else:
-                    price_from = price_to = float(n1)
-            elif len(numbers) == 1:
-                price_from = price_to = float(numbers[0])
-        except (ValueError, TypeError):
-            pass
+    price_from, price_to = _parse_service_price(raw_price)
     return {
         "business_id": business_id,
         "user_id": user_id,
@@ -1586,6 +1570,34 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "raw": (dict(item) if isinstance(item, dict) else {"_error": "not_a_dict", "_type": type(item).__name__}),
         "duration_minutes": item.get("duration_minutes") or item.get("duration"),
     }
+
+
+def _parse_service_price(raw_price: Any) -> tuple[Optional[float], Optional[float]]:
+    """Нормализует цену из строки Яндекс.Карт в рубли."""
+    if raw_price is None:
+        return None, None
+    s = str(raw_price).strip()
+    if not s:
+        return None, None
+    numbers = re.findall(r"\d+", s)
+    if not numbers:
+        return None, None
+    try:
+        # Явный диапазон: "1000-1500", "1000 – 1500", "от 1000 до 1500"
+        if len(numbers) >= 2 and (re.search(r"[-–—]", s) or " до " in s.lower()):
+            n1, n2 = int(numbers[0]), int(numbers[1])
+            return float(min(n1, n2)), float(max(n1, n2))
+
+        # Тысячные разделители: "1.650", "1,650", "1 650" => 1650
+        if len(numbers) >= 2:
+            compact = "".join(numbers[:2])
+            if compact.isdigit():
+                return float(int(compact)), float(int(compact))
+
+        n = int(numbers[0])
+        return float(n), float(n)
+    except (ValueError, TypeError):
+        return None, None
 
 
 def _sync_parsed_services_to_db(business_id: str, products: list, conn, owner_id: str):

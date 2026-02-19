@@ -45,12 +45,12 @@ def _get_google_account(cursor, business_id: str, account_id: str = None) -> dic
     if account_id:
         cursor.execute("""
             SELECT * FROM ExternalBusinessAccounts
-            WHERE id = ? AND business_id = ? AND source = 'google_business' AND is_active = 1
+            WHERE id = %s AND business_id = %s AND source = 'google_business' AND is_active = 1
         """, (account_id, business_id))
     else:
         cursor.execute("""
             SELECT * FROM ExternalBusinessAccounts
-            WHERE business_id = ? AND source = 'google_business' AND is_active = 1
+            WHERE business_id = %s AND source = 'google_business' AND is_active = 1
             LIMIT 1
         """, (business_id,))
     
@@ -163,7 +163,7 @@ def google_oauth_callback():
         # Проверяем, есть ли уже аккаунт для этого бизнеса
         cursor.execute("""
             SELECT id FROM ExternalBusinessAccounts
-            WHERE business_id = ? AND source = 'google_business'
+            WHERE business_id = %s AND source = 'google_business'
         """, (business_id,))
         existing = cursor.fetchone()
         
@@ -171,8 +171,8 @@ def google_oauth_callback():
             # Обновляем существующий аккаунт
             cursor.execute("""
                 UPDATE ExternalBusinessAccounts
-                SET auth_data = ?, is_active = 1, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
-                WHERE id = ?
+                SET auth_data = %s, is_active = 1, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
+                WHERE id = %s
             """, (encrypted_creds, existing[0]))
         else:
             # Создаем новый аккаунт
@@ -180,7 +180,7 @@ def google_oauth_callback():
             cursor.execute("""
                 INSERT INTO ExternalBusinessAccounts
                 (id, business_id, source, external_id, display_name, auth_data, is_active, created_at, updated_at)
-                VALUES (?, ?, 'google_business', ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, 'google_business', %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (account_id, business_id, None, 'Google Business', encrypted_creds))
         
         db.conn.commit()

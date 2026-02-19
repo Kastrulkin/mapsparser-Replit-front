@@ -33,7 +33,7 @@ def fix_network():
 
     # 2. Check/Create Network
     network_name = "Сеть Мастер Кебаб"
-    cursor.execute("SELECT id FROM Networks WHERE owner_id = ? AND name = ?", (owner_id, network_name))
+    cursor.execute("SELECT id FROM Networks WHERE owner_id = %s AND name = %s", (owner_id, network_name))
     network = cursor.fetchone()
 
     network_id = None
@@ -45,14 +45,14 @@ def fix_network():
         network_id = str(uuid.uuid4())
         cursor.execute("""
             INSERT INTO Networks (id, name, owner_id, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (network_id, network_name, owner_id, "Автоматически созданная сеть для Кебабов", 
               datetime.now().isoformat(), datetime.now().isoformat()))
         print(f"✨ Created network: {network_id}")
 
     # 3. Find businesses to link
     # We link ALL businesses owned by this user because they are all Kebabs based on previous context
-    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE owner_id = ?", (owner_id,))
+    cursor.execute("SELECT id, name, network_id FROM Businesses WHERE owner_id = %s", (owner_id,))
     businesses = cursor.fetchall()
     
     count_linked = 0
@@ -71,7 +71,7 @@ def fix_network():
             count_linked += 1
         else:
             # Update network_id
-            cursor.execute("UPDATE Businesses SET network_id = ? WHERE id = ?", (network_id, b['id']))
+            cursor.execute("UPDATE Businesses SET network_id = %s WHERE id = %s", (network_id, b['id']))
             count_updated += 1
             print(f"🔗 Linked: {b['name']}")
 

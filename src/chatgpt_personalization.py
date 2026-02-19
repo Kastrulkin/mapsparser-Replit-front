@@ -29,12 +29,11 @@ def get_or_create_session(chatgpt_user_id: str, business_id: str = None) -> dict
     cursor = db.conn.cursor()
     
     try:
-        # Проверяем, существует ли таблица
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='ChatGPTUserSessions'
-        """)
-        if not cursor.fetchone():
+        # Проверяем, существует ли таблица (PostgreSQL: to_regclass)
+        cursor.execute("SELECT to_regclass('public.chatgptusersessions')")
+        reg = cursor.fetchone()
+        table_exists = reg and reg[0] is not None
+        if not table_exists:
             # Таблица не существует, возвращаем пустую сессию
             return {
                 'id': None,
@@ -57,7 +56,7 @@ def get_or_create_session(chatgpt_user_id: str, business_id: str = None) -> dict
                    preferred_service_types, search_history, booking_history,
                    preferences_json
             FROM ChatGPTUserSessions
-            WHERE chatgpt_user_id = ?
+            WHERE chatgpt_user_id = %s
             ORDER BY last_interaction_at DESC
             LIMIT 1
         """, (chatgpt_user_id,))
@@ -73,7 +72,7 @@ def get_or_create_session(chatgpt_user_id: str, business_id: str = None) -> dict
                 UPDATE ChatGPTUserSessions
                 SET last_interaction_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (session_id,))
             db.conn.commit()
             
@@ -119,7 +118,7 @@ def get_or_create_session(chatgpt_user_id: str, business_id: str = None) -> dict
                 INSERT INTO ChatGPTUserSessions 
                 (id, chatgpt_user_id, business_id, session_started_at, 
                  last_interaction_at, total_interactions)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
             """, (session_id, chatgpt_user_id, business_id))
             db.conn.commit()
             
@@ -158,7 +157,7 @@ def record_search(chatgpt_user_id: str, city: str, service: str, results_count: 
         
         # Получаем текущую историю поиска
         cursor.execute("""
-            SELECT search_history FROM ChatGPTUserSessions WHERE id = ?
+            SELECT search_history FROM ChatGPTUserSessions WHERE id = %s
         """, (session_id,))
         row = cursor.fetchone()
         
@@ -189,13 +188,13 @@ def record_search(chatgpt_user_id: str, city: str, service: str, results_count: 
         # Обновляем сессию
         cursor.execute("""
             UPDATE ChatGPTUserSessions
-            SET search_history = ?,
-                preferred_city = ?,
-                preferred_service_types = ?,
+            SET search_history = %s,
+                preferred_city = %s,
+                preferred_service_types = %s,
                 total_interactions = total_interactions + 1,
                 last_interaction_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (json.dumps(search_history), preferred_city, preferred_service_types, session_id))
         
         db.conn.commit()
@@ -221,7 +220,7 @@ def record_booking(chatgpt_user_id: str, business_id: str, service_id: str = Non
         
         # Получаем текущую историю бронирований
         cursor.execute("""
-            SELECT booking_history FROM ChatGPTUserSessions WHERE id = ?
+            SELECT booking_history FROM ChatGPTUserSessions WHERE id = %s
         """, (session_id,))
         row = cursor.fetchone()
         
@@ -248,12 +247,12 @@ def record_booking(chatgpt_user_id: str, business_id: str, service_id: str = Non
         # Обновляем сессию
         cursor.execute("""
             UPDATE ChatGPTUserSessions
-            SET booking_history = ?,
-                business_id = ?,
+            SET booking_history = %s,
+                business_id = %s,
                 total_interactions = total_interactions + 1,
                 last_interaction_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (json.dumps(booking_history), business_id, session_id))
         
         db.conn.commit()

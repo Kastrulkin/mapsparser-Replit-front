@@ -52,7 +52,7 @@ def activate_kebabs():
     if ids_to_activate:
         print(f"\n⚡ Activating {len(ids_to_activate)} businesses...")
         for b_id in ids_to_activate:
-            cursor.execute("UPDATE Businesses SET is_active = 1 WHERE id = ?", (b_id,))
+            cursor.execute("UPDATE Businesses SET is_active = 1 WHERE id = %s", (b_id,))
         
         conn.commit()
         print("✅ Activation complete.")

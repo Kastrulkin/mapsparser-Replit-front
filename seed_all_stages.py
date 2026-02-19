@@ -33,7 +33,7 @@ def seed_stages():
     print(f"Found {len(stages_to_copy)} stages to copy.")
 
     # 2. Get all other business types
-    cursor.execute("SELECT id, type_key FROM BusinessTypes WHERE id != ?", (source_type_id,))
+    cursor.execute("SELECT id, type_key FROM BusinessTypes WHERE id != %s", (source_type_id,))
     target_types = cursor.fetchall()
 
     for type_id, type_key in target_types:

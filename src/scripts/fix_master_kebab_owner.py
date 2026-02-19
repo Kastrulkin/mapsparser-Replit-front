@@ -49,25 +49,25 @@ def fix_ownership():
         big_net_id = big_business['network_id']
         
         if small_net_id and big_net_id:
-             cursor.execute("UPDATE Businesses SET network_id = ? WHERE network_id = ?", (big_net_id, small_net_id))
+             cursor.execute("UPDATE Businesses SET network_id = %s WHERE network_id = %s", (big_net_id, small_net_id))
              print(f"🔄 Merged points from small network {small_net_id} to big {big_net_id}")
              
         # Delete the duplicate business listing itself
-        cursor.execute("DELETE FROM Businesses WHERE id = ?", (small_business['id'],))
+        cursor.execute("DELETE FROM Businesses WHERE id = %s", (small_business['id'],))
         print("🗑 Deleted duplicate business 'Сеть Мастер Кебаб'")
     
     # 4. Transfer ownership of the Big Business to SuperAdmin
     if big_business['owner_id'] != admin_id:
-        cursor.execute("UPDATE Businesses SET owner_id = ? WHERE id = ?", (admin_id, big_business['id']))
+        cursor.execute("UPDATE Businesses SET owner_id = %s WHERE id = %s", (admin_id, big_business['id']))
         print(f"👑 Transferred ownership of 'Мастер Кебаб' to SuperAdmin")
         
     db.conn.commit()
     print("\n✅ Verification:")
-    cursor.execute("SELECT name, owner_id FROM Businesses WHERE id = ?", (big_business['id'],))
+    cursor.execute("SELECT name, owner_id FROM Businesses WHERE id = %s", (big_business['id'],))
     res = cursor.fetchone()
     print(f"Business '{res['name']}' is now owned by {res['owner_id']}")
     
-    cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = ?", (big_business['network_id'],))
+    cursor.execute("SELECT COUNT(*) as c FROM Businesses WHERE network_id = %s", (big_business['network_id'],))
     count = cursor.fetchone()['count']
     print(f"Total points in network: {count}")
 

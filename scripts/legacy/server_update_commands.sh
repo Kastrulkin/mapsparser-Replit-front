@@ -60,5 +60,5 @@ echo "📊 Проверка статуса сервисов:"
 systemctl status nginx --no-pager -l | head -5
 systemctl status seo-api --no-pager -l | head -5 2>/dev/null || echo "⚠️  seo-api не найден"
 echo ""
-echo "🌐 Сайт должен быть доступен на beautybot.pro"
+echo "🌐 Сайт должен быть доступен на local"
 

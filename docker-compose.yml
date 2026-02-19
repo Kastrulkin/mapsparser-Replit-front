@@ -5,13 +5,13 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beautybot}
-      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+      POSTGRES_USER: ${POSTGRES_USER:-local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local}
+      POSTGRES_DB: ${POSTGRES_DB:-local}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beautybot} -d ${POSTGRES_DB:-beautybot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-local} -d ${POSTGRES_DB:-local}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,16 +19,32 @@ services:
   app:
     build: .
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
+      DEBUG_DIR: /app/debug_data
+      DATABASE_URL: postgresql://${POSTGRES_USER:-local}:${POSTGRES_PASSWORD:-local}@postgres:5432/${POSTGRES_DB:-local}
       FLASK_APP: src.main:app
-      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
-      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+      POSTGRES_USER: ${POSTGRES_USER:-local}
+      POSTGRES_DB: ${POSTGRES_DB:-local}
       PYTHONPATH: /app:/app/src
       DOCKER_HOST: unix:///var/run/docker.sock
       TESTCONTAINERS_RYUK_DISABLED: "true"
       TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+      GIGACHAT_KEYS: ${GIGACHAT_KEYS:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-}
+      GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
+      GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      YANDEX_WORDSTAT_CLIENT_ID: ${YANDEX_WORDSTAT_CLIENT_ID:-}
+      YANDEX_WORDSTAT_CLIENT_SECRET: ${YANDEX_WORDSTAT_CLIENT_SECRET:-}
+      YANDEX_WORDSTAT_OAUTH_TOKEN: ${YANDEX_WORDSTAT_OAUTH_TOKEN:-}
+      WORDSTAT_UPDATE_INTERVAL: ${WORDSTAT_UPDATE_INTERVAL:-604800}
+      WORDSTAT_DEFAULT_REGION: ${WORDSTAT_DEFAULT_REGION:-225}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/legacy.sqlite:/app/legacy.sqlite:ro
+      - ./data/server_reports.db:/app/server_reports.db:ro
+      - ./debug_data:/app/debug_data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -41,11 +57,26 @@ services:
   worker:
     build: .
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
+      DEBUG_DIR: /app/debug_data
+      DATABASE_URL: postgresql://${POSTGRES_USER:-local}:${POSTGRES_PASSWORD:-local}@postgres:5432/${POSTGRES_DB:-local}
       FLASK_APP: src.main:app
-      POSTGRES_USER: ${POSTGRES_USER:-beautybot}
-      POSTGRES_DB: ${POSTGRES_DB:-beautybot}
+      POSTGRES_USER: ${POSTGRES_USER:-local}
+      POSTGRES_DB: ${POSTGRES_DB:-local}
       PYTHONPATH: /app:/app/src
+      GIGACHAT_KEYS: ${GIGACHAT_KEYS:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-}
+      GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
+      GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      YANDEX_WORDSTAT_CLIENT_ID: ${YANDEX_WORDSTAT_CLIENT_ID:-}
+      YANDEX_WORDSTAT_CLIENT_SECRET: ${YANDEX_WORDSTAT_CLIENT_SECRET:-}
+      YANDEX_WORDSTAT_OAUTH_TOKEN: ${YANDEX_WORDSTAT_OAUTH_TOKEN:-}
+      WORDSTAT_UPDATE_INTERVAL: ${WORDSTAT_UPDATE_INTERVAL:-604800}
+      WORDSTAT_DEFAULT_REGION: ${WORDSTAT_DEFAULT_REGION:-225}
+    volumes:
+      - ./debug_data:/app/debug_data
     depends_on:
       postgres:
         condition: service_healthy

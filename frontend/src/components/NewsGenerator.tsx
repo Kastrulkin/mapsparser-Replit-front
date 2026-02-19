@@ -201,7 +201,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
             <Newspaper className="w-6 h-6 text-primary" />
             {t.dashboard.card.newsGenerator.title}
           </h3>
-          <p className="text-gray-600 mt-1">Generate engaging news posts for social media based on your services.</p>
+          <p className="text-gray-600 mt-1">{t.dashboard.card.newsGenerator.subtitle}</p>
         </div>
       </div>
 

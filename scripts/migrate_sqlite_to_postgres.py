@@ -2,13 +2,26 @@
 """
 Одноразовый перенос данных SQLite → PostgreSQL.
 Идемпотентен: ON CONFLICT (id) DO NOTHING. Порядок по FK: users → businesses → остальные.
-Источники: SQLITE_PATH или SQLITE_URL (SQLite), DATABASE_URL (Postgres).
 
-Пример запуска в Docker:
-  docker compose exec -e SQLITE_PATH=/app/legacy.sqlite app python scripts/migrate_sqlite_to_postgres.py
+Источники (два варианта):
 
-Локально:
-  SQLITE_PATH=./src/reports.db DATABASE_URL=postgresql://user:pass@localhost/db python scripts/migrate_sqlite_to_postgres.py
+1) Один файл — всё в одном:
+   SQLITE_PATH=/path/to/db  (users, businesses, MapParseResults и т.д.)
+
+2) Два файла — пользователи/бизнесы отдельно от парсингов:
+   SQLITE_PATH_MAIN=/path/to/main.db     — Users, Businesses, Networks, ParseQueue, BusinessMapLinks, UserServices
+   SQLITE_PATH_PARSING=/path/to/parsing.db — MapParseResults → cards
+
+   Если задан только SQLITE_PATH — используется для всех таблиц.
+
+Пример запуска в Docker (всё из одного файла):
+  docker compose run --rm -v "$(pwd)/scripts:/app/scripts" -v "$(pwd)/src:/app/src" \\
+    -e SQLITE_PATH=/app/server_reports.db app python scripts/migrate_sqlite_to_postgres.py
+
+Пример с двумя источниками (users/businesses из main, парсинги из parsing):
+  docker compose run --rm -v "$(pwd)/scripts:/app/scripts" -v "$(pwd)/src:/app/src" -v "$(pwd)/data:/app/data" \\
+    -e SQLITE_PATH_MAIN=/app/data/server_reports.db -e SQLITE_PATH_PARSING=/app/data/legacy.sqlite \\
+    app python scripts/migrate_sqlite_to_postgres.py
 
 Режимы:
   --dry-run          только счётчики, без INSERT
@@ -31,6 +44,7 @@ if str(SRC_DIR) not in sys.path:
 # Порядок таблиц по FK (Postgres lowercase). Только те, что есть в Alembic/архитектуре.
 MIGRATION_ORDER = [
     "users",
+    "networks",
     "businesses",
     "parsequeue",
     "businessmaplinks",
@@ -44,6 +58,7 @@ MIGRATION_ORDER = [
 # SQLite имя (как в sqlite_master) → Postgres имя
 SQLITE_TO_PG = {
     "Users": "users",
+    "Networks": "networks",
     "Businesses": "businesses",
     "ParseQueue": "parsequeue",
     "BusinessMapLinks": "businessmaplinks",
@@ -60,22 +75,41 @@ COLUMN_ALIASES = {
     "financialtransactions": {"date": "transaction_date"},
 }
 
+# Значения по умолчанию для NULL (Postgres NOT NULL без default)
+DEFAULT_NULL_VALUES = {
+    ("users", "is_verified"): True,
+    ("users", "is_superadmin"): False,
+}
 
-def get_sqlite_path() -> str:
-    path = os.getenv("SQLITE_PATH") or os.getenv("SQLITE_URL")
+
+def _normalize_path(path: str) -> str:
+    if path.startswith("file:"):
+        path = re.sub(r"^file:(?://)?", "", path)
+    return path.strip()
+
+
+def get_sqlite_path_main() -> str:
+    """Путь к основной БД: Users, Businesses, Networks, ParseQueue, BusinessMapLinks, UserServices."""
+    path = os.getenv("SQLITE_PATH_MAIN") or os.getenv("SQLITE_PATH") or os.getenv("SQLITE_URL")
     if path:
-        if path.startswith("file:"):
-            path = re.sub(r"^file:(?://)?", "", path)
-        return path.strip()
+        return _normalize_path(path)
     return str(SRC_DIR / "reports.db")
 
 
-def get_sqlite_connection():
+def get_sqlite_path_parsing() -> str:
+    """Путь к БД с парсингами: MapParseResults → cards."""
+    path = os.getenv("SQLITE_PATH_PARSING") or os.getenv("SQLITE_PATH_MAIN") or os.getenv("SQLITE_PATH") or os.getenv("SQLITE_URL")
+    if path:
+        return _normalize_path(path)
+    return str(SRC_DIR / "reports.db")
+
+
+def get_sqlite_connection(path: str | None = None):
     import sqlite3
-    path = get_sqlite_path()
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"SQLite DB not found: {path}")
-    conn = sqlite3.connect(path)
+    p = path or get_sqlite_path_main()
+    if not os.path.isfile(p):
+        raise FileNotFoundError(f"SQLite DB not found: {p}")
+    conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -154,17 +188,25 @@ def pg_column_types(conn, table: str) -> dict[str, str]:
     return out
 
 
-def pg_existing_ids(conn, table: str, id_column: str = "id") -> set:
+def pg_existing_ids(conn, table: str, id_column: str = "id") -> set[str]:
+    """Возвращает множество ID как строк для корректного сравнения с SQLite (UUID vs string)."""
     cur = conn.cursor()
     cur.execute(f'SELECT "{id_column}" FROM "{table}"')
-    return {r[id_column] for r in cur.fetchall()}
+    out = set()
+    for r in cur.fetchall():
+        v = r[id_column]
+        if v is not None:
+            s = str(v).strip()
+            if s:
+                out.add(s)
+    return out
 
 
 def pg_user_id_by_email(conn) -> dict[str, str]:
-    """Возвращает { email: id } для существующих users в Postgres."""
+    """Возвращает { email: id } для существующих users в Postgres (id как строка)."""
     cur = conn.cursor()
     cur.execute("SELECT id, email FROM users WHERE email IS NOT NULL AND email != ''")
-    return {r["email"]: r["id"] for r in cur.fetchall()}
+    return {r["email"]: str(r["id"]) for r in cur.fetchall()}
 
 
 def _normalize_json_for_pg(val) -> tuple[object, bool]:
@@ -264,6 +306,7 @@ def migrate_table(
     owner_id_map: dict | None,
     pg_business_ids: set | None,
     pg_user_ids: set | None,
+    pg_network_ids: set | None = None,
 ) -> tuple[int, int, int, int, int]:
     """
     Возвращает (found, inserted, skipped, json_fixed_count, null_fixed_count).
@@ -304,6 +347,9 @@ def migrate_table(
     for sq, pg in aliases.items():
         pg_to_sqlite_col[pg] = sq
     pg_common = [c for c in pg_cols if c.lower() in {x.lower() for x in sqlite_cols} or c in aliases.values()]
+    # cards: is_latest может отсутствовать в SQLite — добавляем явно (DEFAULT TRUE даёт нарушение uq)
+    if pg_table == "cards" and "is_latest" in pg_cols and "is_latest" not in [c.lower() for c in pg_common]:
+        pg_common = list(pg_common) + ["is_latest"]
     if not pg_common or "id" not in [c.lower() for c in pg_common]:
         return found, 0, found, 0, 0
 
@@ -316,6 +362,27 @@ def migrate_table(
 
     existing_pg_ids = set() if dry_run else pg_existing_ids(pg_conn, pg_table)
     to_insert = []
+
+    latest_card_ids = set()
+    if pg_table == "cards":
+        pg_latest_business_ids = set()
+        try:
+            cur = pg_conn.cursor()
+            cur.execute('SELECT business_id FROM cards WHERE is_latest IS TRUE')
+            pg_latest_business_ids = {str(r.get("business_id") or "") for r in cur.fetchall() if r.get("business_id")}
+        except Exception:
+            pass
+        latest_per_business = {}
+        for row in rows:
+            d = dict(row)
+            bid = str(d.get("business_id") or d.get("business_Id") or "")
+            if bid in pg_latest_business_ids:
+                continue
+            created = str(d.get("created_at") or d.get("id") or "")
+            cid = str(d.get("id") or d.get("ID") or "")
+            if bid and (bid not in latest_per_business or created > latest_per_business[bid][0]):
+                latest_per_business[bid] = (created, cid)
+        latest_card_ids = {v[1] for v in latest_per_business.values()}
 
     for row in rows:
         row_dict = _row_dict_with_aliases(dict(row), pg_table)
@@ -346,6 +413,17 @@ def migrate_table(
                 row_dict = dict(row_dict)
                 row_dict["owner_id"] = owner_id_map[owner_str]
 
+        if pg_table == "businesses" and pg_network_ids is not None:
+            nid = row_dict.get("network_id") or row_dict.get("network_Id")
+            if nid is not None and str(nid).strip() not in pg_network_ids:
+                row_dict = dict(row_dict)
+                row_dict["network_id"] = None
+
+        # cards: всегда вставляем с is_latest=false, потом UPDATE для latest (избегаем uq_cards_latest_per_business)
+        if pg_table == "cards":
+            row_dict = dict(row_dict)
+            row_dict["is_latest"] = False
+
         if pg_table != "users" and pg_table != "businesses":
             if business_id is not None and pg_business_ids is not None:
                 if str(business_id).strip() not in pg_business_ids:
@@ -371,9 +449,14 @@ def migrate_table(
         row_null_fixed = 0
         for col in pg_common:
             val = row_dict.get(col) or row_dict.get(col.replace("_", ""))
+            # cards: принудительно is_latest=false при вставке (UPDATE — после)
+            if pg_table == "cards" and col == "is_latest":
+                val = False
             pg_type = pg_col_types.get(col, "text")
             if col in bool_cols:
                 val = normalize_bool(val)
+                if val is None and (pg_table, col) in DEFAULT_NULL_VALUES:
+                    val = DEFAULT_NULL_VALUES[(pg_table, col)]
             elif pg_type == "json":
                 val, jf = _normalize_json_for_pg(val)
                 if jf:
@@ -422,7 +505,20 @@ def migrate_table(
             insert_fail += 1
             err_msg = str(e).split("\n")[0]
             print(f"   ⚠️ Row insert error table={pg_table} id={pk_str}: {err_msg}")
-    pg_conn.commit()
+    # cards: после вставки всех с is_latest=false — обновить latest на true
+    if pg_table == "cards" and latest_card_ids and not dry_run:
+        try:
+            cur = pg_conn.cursor()
+            cur.execute(
+                "UPDATE cards SET is_latest = TRUE WHERE id IN %s",
+                (tuple(latest_card_ids),),
+            )
+            pg_conn.commit()
+        except Exception as e:
+            pg_conn.rollback()
+            print(f"   ⚠️ Cards is_latest UPDATE error: {e}")
+    else:
+        pg_conn.commit()
     if insert_fail:
         print(f"   ℹ️ {pg_table}: inserted={insert_ok}, failed={insert_fail} (errors isolated by SAVEPOINT)")
     return found, insert_ok, skipped + insert_fail, json_fixed_count, null_fixed_count
@@ -444,14 +540,22 @@ def main():
     print("=" * 60)
     print("SQLite → PostgreSQL migration")
     print("=" * 60)
-    sqlite_path = get_sqlite_path()
-    print(f"SQLite: {sqlite_path}")
-    print(f"Postgres: from DATABASE_URL")
+    main_path = get_sqlite_path_main()
+    parsing_path = get_sqlite_path_parsing()
+    if main_path == parsing_path:
+        print(f"SQLite: {main_path} (один источник)")
+    else:
+        print(f"SQLite main (users/businesses): {main_path}")
+        print(f"SQLite parsing (cards): {parsing_path}")
+    print("Postgres: from DATABASE_URL")
 
     try:
-        sqlite_conn = get_sqlite_connection()
-        sqlite_conn.execute("SELECT 1")
-        print("✅ SQLite connection OK")
+        main_conn = get_sqlite_connection(main_path)
+        main_conn.execute("SELECT 1")
+        parsing_conn = get_sqlite_connection(parsing_path) if parsing_path != main_path else main_conn
+        if parsing_conn is not main_conn:
+            parsing_conn.execute("SELECT 1")
+        print("✅ SQLite connection(s) OK")
     except Exception as e:
         print(f"❌ SQLite: {e}")
         sys.exit(1)
@@ -464,20 +568,29 @@ def main():
         print(f"❌ Postgres: {e}")
         sys.exit(1)
 
-    sqlite_tables = sqlite_table_list(sqlite_conn)
-    sqlite_lower = {t.lower(): t for t in sqlite_tables}
+    main_tables = sqlite_table_list(main_conn)
+    parsing_tables = sqlite_table_list(parsing_conn) if parsing_conn is not main_conn else main_tables
+    main_lower = {t.lower(): t for t in main_tables}
+    parsing_lower = {t.lower(): t for t in parsing_tables}
     pg_tables_in_order = [t for t in MIGRATION_ORDER if (tables_filter is None or t in tables_filter)]
 
     reverse_map = {}
     for sqlite_name, pg_name in SQLITE_TO_PG.items():
-        if sqlite_name in sqlite_tables or sqlite_name.lower() in sqlite_lower:
-            reverse_map[pg_name] = sqlite_lower.get(sqlite_name.lower()) or sqlite_name
+        tables = parsing_tables if pg_name == "cards" else main_tables
+        lower = parsing_lower if pg_name == "cards" else main_lower
+        if sqlite_name in tables or sqlite_name.lower() in lower:
+            reverse_map[pg_name] = lower.get(sqlite_name.lower()) or sqlite_name
 
-    if not reverse_map and not sqlite_tables:
+    if not reverse_map and not main_tables and not parsing_tables:
         print("⚠️ No tables in SQLite")
-        sqlite_conn.close()
+        main_conn.close()
+        if parsing_conn is not main_conn:
+            parsing_conn.close()
         pg_conn.close()
         return
+
+    def conn_for_table(pg_t: str):
+        return parsing_conn if pg_t == "cards" else main_conn
 
     email_to_pg_id = pg_user_id_by_email(pg_conn)
     pg_user_ids = pg_existing_ids(pg_conn, "users")
@@ -487,9 +600,10 @@ def main():
     for pg_table in pg_tables_in_order:
         sqlite_table = reverse_map.get(pg_table)
         if not sqlite_table:
+            tbl, low = (parsing_tables, parsing_lower) if pg_table == "cards" else (main_tables, main_lower)
             for sq_name, pg_name in SQLITE_TO_PG.items():
-                if pg_name == pg_table and (sq_name in sqlite_tables or sq_name.lower() in sqlite_lower):
-                    sqlite_table = sqlite_lower.get(sq_name.lower()) or sq_name
+                if pg_name == pg_table and (sq_name in tbl or sq_name.lower() in low):
+                    sqlite_table = low.get(sq_name.lower()) or sq_name
                     break
         if not sqlite_table:
             print(f"  {pg_table}: — (no source in SQLite)")
@@ -498,8 +612,12 @@ def main():
         if pg_table == "businesses":
             pg_business_ids = pg_existing_ids(pg_conn, "businesses")
 
+        pg_network_ids = None
+        if pg_table == "businesses" and pg_table_exists(pg_conn, "networks"):
+            pg_network_ids = pg_existing_ids(pg_conn, "networks")
+
         found, inserted, skipped, json_fixed, null_fixed = migrate_table(
-            sqlite_conn,
+            conn_for_table(pg_table),
             pg_conn,
             sqlite_table,
             pg_table,
@@ -507,6 +625,7 @@ def main():
             owner_id_map=owner_id_map if pg_table == "businesses" else None,
             pg_business_ids=pg_business_ids if pg_table not in ("users", "businesses") else None,
             pg_user_ids=pg_user_ids,
+            pg_network_ids=pg_network_ids,
         )
         line = f"  {pg_table}: found={found}, inserted={inserted}, skipped={skipped}"
         if json_fixed or null_fixed:
@@ -515,7 +634,7 @@ def main():
 
         if pg_table == "users" and not args.dry_run:
             pg_user_ids = pg_existing_ids(pg_conn, "users")
-            cur = sqlite_conn.cursor()
+            cur = main_conn.cursor()
             try:
                 cur.execute(f'SELECT id, email FROM "{sqlite_table}"')
                 for r in cur.fetchall():
@@ -529,7 +648,9 @@ def main():
 
     print("=" * 60)
     print("Done." if not args.dry_run else "Dry-run done (no data written).")
-    sqlite_conn.close()
+    main_conn.close()
+    if parsing_conn is not main_conn:
+        parsing_conn.close()
     pg_conn.close()
 
 

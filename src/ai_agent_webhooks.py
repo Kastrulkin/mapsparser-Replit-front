@@ -62,7 +62,7 @@ def find_business_by_waba_phone_id(phone_id: str) -> dict:
         cursor.execute("""
             SELECT id, waba_phone_id, waba_access_token, ai_agent_enabled
             FROM Businesses
-            WHERE waba_phone_id = ?
+            WHERE waba_phone_id = %s
             AND ai_agent_enabled = 1
             LIMIT 1
         """, (phone_id,))
@@ -89,7 +89,7 @@ def whatsapp_webhook():
             token = request.args.get('hub.verify_token')
             challenge = request.args.get('hub.challenge')
             
-            verify_token = os.getenv('WHATSAPP_VERIFY_TOKEN', 'beautybot_verify_token')
+            verify_token = os.getenv('WHATSAPP_VERIFY_TOKEN', 'local_verify_token')
             
             if mode == 'subscribe' and token == verify_token:
                 print("✅ WhatsApp webhook верифицирован")
@@ -203,7 +203,7 @@ def telegram_webhook():
         cursor.execute("""
             SELECT id, telegram_bot_token, ai_agent_enabled
             FROM Businesses
-            WHERE telegram_bot_token = ?
+            WHERE telegram_bot_token = %s
             AND ai_agent_enabled = 1
             LIMIT 1
         """, (bot_token,))

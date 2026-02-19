@@ -31,7 +31,7 @@ def import_growth_stages(cursor):
             type_key = bt['type_key']
             
             # Находим ID типа бизнеса
-            cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ?", (type_key,))
+            cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = %s", (type_key,))
             row = cursor.fetchone()
             
             if not row:
@@ -40,7 +40,7 @@ def import_growth_stages(cursor):
                 print(f"➕ Создание типа бизнеса: {bt['label']} ({bt_id})")
                 cursor.execute("""
                     INSERT INTO BusinessTypes (id, type_key, label, description)
-                    VALUES (?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s)
                 """, (bt_id, type_key, bt['label'], bt.get('description', '')))
             else:
                 bt_id = row[0]
@@ -51,7 +51,7 @@ def import_growth_stages(cursor):
                 
                 cursor.execute("""
                     INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     stage_id, 
                     bt_id, 
@@ -68,7 +68,7 @@ def import_growth_stages(cursor):
                     task_id = f"{stage_id}_t{task['task_number']}"
                     cursor.execute("""
                         INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s)
                     """, (task_id, stage_id, task['task_number'], task['text']))
                     
         print("✅ Импорт успешно завершен")

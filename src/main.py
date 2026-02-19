@@ -8,6 +8,7 @@ import sqlite3
 import uuid
 import base64
 import random
+import re
 from datetime import datetime, timedelta
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
@@ -2450,6 +2451,155 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
     # Fallback на русский, если ничего не найдено
     return 'ru'
 
+
+def _seo_extract_terms(text: str):
+    stop_words = {
+        "и", "в", "на", "с", "по", "для", "или", "от", "до", "под", "при", "за", "к", "из", "о",
+        "the", "and", "for", "with", "from", "to", "of", "a", "an",
+        "услуга", "услуги", "service", "services",
+    }
+    terms = re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]+", (text or "").lower())
+    out = []
+    for t in terms:
+        if len(t) < 3 or t in stop_words or t.isdigit():
+            continue
+        out.append(t)
+    return out
+
+
+def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | None, limit: int = 120) -> tuple[str, str]:
+    """
+    Возвращает:
+    - seo_keywords: список ключей для вставки в промпт (много строк)
+    - seo_keywords_top10: короткий список top-10 через запятую
+    """
+    try:
+        cursor.execute("SELECT to_regclass('public.wordstatkeywords')")
+        reg = cursor.fetchone()
+        reg_val = None
+        if isinstance(reg, tuple):
+            reg_val = reg[0]
+        elif isinstance(reg, dict):
+            reg_val = reg.get("to_regclass")
+        elif hasattr(reg, "keys"):
+            reg_val = reg.get("to_regclass")
+        if not reg_val:
+            return "SEO keywords are unavailable", "SEO keywords are unavailable"
+    except Exception:
+        return "SEO keywords are unavailable", "SEO keywords are unavailable"
+
+    terms = set()
+    city = ""
+    business_type = ""
+    try:
+        if business_id:
+            cursor.execute("SELECT city, business_type FROM businesses WHERE id = %s", (business_id,))
+            b_row = cursor.fetchone()
+            if b_row:
+                if isinstance(b_row, tuple):
+                    city, business_type = (b_row[0] or "", b_row[1] or "")
+                elif hasattr(b_row, "keys"):
+                    city = b_row.get("city") or ""
+                    business_type = b_row.get("business_type") or ""
+
+        if business_id:
+            cursor.execute(
+                """
+                SELECT name, description
+                FROM userservices
+                WHERE business_id = %s
+                  AND (is_active IS TRUE OR is_active IS NULL)
+                ORDER BY updated_at DESC NULLS LAST
+                LIMIT 600
+                """,
+                (business_id,),
+            )
+        elif user_id:
+            cursor.execute(
+                """
+                SELECT name, description
+                FROM userservices
+                WHERE user_id = %s
+                ORDER BY updated_at DESC NULLS LAST
+                LIMIT 600
+                """,
+                (user_id,),
+            )
+        else:
+            cursor.execute("SELECT '' AS name, '' AS description WHERE FALSE")
+
+        for row in cursor.fetchall() or []:
+            if isinstance(row, tuple):
+                name, desc = (row[0] or "", row[1] or "")
+            elif hasattr(row, "keys"):
+                name = row.get("name") or ""
+                desc = row.get("description") or ""
+            else:
+                name, desc = "", ""
+            terms.update(_seo_extract_terms(name))
+            terms.update(_seo_extract_terms(desc))
+    except Exception:
+        pass
+
+    if business_type:
+        terms.update(_seo_extract_terms(business_type))
+    city = (city or "").strip().lower()
+    terms_list = list(terms)[:120]
+
+    try:
+        cursor.execute(
+            """
+            SELECT keyword, views
+            FROM wordstatkeywords
+            ORDER BY views DESC NULLS LAST
+            LIMIT 5000
+            """
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return "SEO keywords are unavailable", "SEO keywords are unavailable"
+
+    ranked = []
+    for row in rows:
+        if isinstance(row, tuple):
+            kw = (row[0] or "").strip()
+            views = int(row[1] or 0)
+        elif hasattr(row, "keys"):
+            kw = (row.get("keyword") or "").strip()
+            views = int(row.get("views") or 0)
+        else:
+            continue
+        if not kw:
+            continue
+        kw_l = kw.lower()
+        score = 0
+        for t in terms_list:
+            if t in kw_l:
+                score += 2 if len(t) >= 6 else 1
+        if city and city in kw_l:
+            score += 2
+        if score > 0:
+            ranked.append((score, views, kw))
+
+    if not ranked:
+        return "No matched SEO keywords found", "No matched SEO keywords found"
+
+    ranked.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    unique = []
+    seen = set()
+    for _, views, kw in ranked:
+        key = kw.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((kw, views))
+        if len(unique) >= limit:
+            break
+
+    seo_keywords = "\n".join([f"- {kw} ({views})" for kw, views in unique])
+    seo_keywords_top10 = ", ".join([kw for kw, _ in unique[:10]])
+    return seo_keywords, seo_keywords_top10
+
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
 def services_optimize():
@@ -2489,6 +2639,12 @@ def services_optimize():
             'zh': 'Chinese'
         }
         language_name = language_names.get(language, 'Russian')
+        requested_business_id = None
+        if request.is_json:
+            requested_business_id = request.json.get('business_id')
+        if not requested_business_id:
+            requested_business_id = request.args.get('business_id')
+        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
 
         # Источник: файл или текст
         file = request.files.get('file') if 'file' in request.files else None
@@ -2574,7 +2730,6 @@ def services_optimize():
 }"""
                 
                 print(f"🔍 Анализ скриншота, размер base64: {len(image_base64)} символов")
-                business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
                 result = analyze_screenshot_with_gigachat(
                     image_base64, 
                     screenshot_prompt,
@@ -2606,6 +2761,16 @@ def services_optimize():
                     frequent_queries = f.read()
             except FileNotFoundError:
                 frequent_queries = "Частотные запросы не найдены"
+
+            seo_keywords = "SEO keywords are unavailable"
+            seo_keywords_top10 = "SEO keywords are unavailable"
+            try:
+                db_kw = DatabaseManager()
+                cur_kw = db_kw.conn.cursor()
+                seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur_kw, business_id, user_data['user_id'])
+                db_kw.close()
+            except Exception:
+                pass
 
             # Проверяем наличие косметологических терминов в услугах
             cosmetic_terms = [
@@ -2686,6 +2851,8 @@ def services_optimize():
                 user_prompt = user_prompt.replace('{length}', str(length or 150))
                 user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
                 user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
+                user_prompt = user_prompt.replace('{seo_keywords}', str(seo_keywords))
+                user_prompt = user_prompt.replace('{seo_keywords_top10}', str(seo_keywords_top10))
                 user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
                 user_prompt = user_prompt.replace('{content}', str(content[:4000]))
                 
@@ -2706,6 +2873,14 @@ def services_optimize():
 
 ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
 {frequent_queries}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
 
 Формат ответа СТРОГО В JSON:
 {{
@@ -2737,10 +2912,11 @@ def services_optimize():
                     .replace('{length}', str(length or 150))
                     .replace('{instructions}', str(instructions or '-'))
                     .replace('{frequent_queries}', str(frequent_queries))
+                    .replace('{seo_keywords}', str(seo_keywords))
+                    .replace('{seo_keywords_top10}', str(seo_keywords_top10))
                     .replace('{content}', str(content[:4000]))
                 )
 
-            business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
             result = analyze_text_with_gigachat(
                 prompt, 
                 task_type="service_optimization",
@@ -2975,6 +3151,10 @@ def news_generate():
             'zh': 'Chinese'
         }
         language_name = language_names.get(language, 'Russian')
+        business_id = get_business_id_from_user(
+            user_data['user_id'],
+            data.get('business_id') or request.args.get('business_id')
+        )
 
         db = DatabaseManager()
         cur = db.conn.cursor()
@@ -3072,6 +3252,8 @@ def news_generate():
         except Exception:
             news_examples = ""
 
+        seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur, business_id, user_data['user_id'])
+
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
         default_prompt = """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
@@ -3082,6 +3264,10 @@ Write all generated text in {language_name}.
 Контекст услуги (может отсутствовать): {service_context}
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
 {news_examples}"""
         
@@ -3126,6 +3312,8 @@ Write all generated text in {language_name}.
                 service_context=str(service_context),
                 transaction_context=str(transaction_context),
                 raw_info=str(raw_info[:800]),
+                seo_keywords=str(seo_keywords),
+                seo_keywords_top10=str(seo_keywords_top10),
                 news_examples=str(news_examples)
             )
         except (KeyError, AttributeError, ValueError, TypeError) as e:
@@ -3138,10 +3326,10 @@ Write all generated text in {language_name}.
                 service_context=str(service_context),
                 transaction_context=str(transaction_context),
                 raw_info=str(raw_info[:800]),
+                seo_keywords=str(seo_keywords),
+                seo_keywords_top10=str(seo_keywords_top10),
                 news_examples=str(news_examples)
         )
-
-        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result = analyze_text_with_gigachat(
             prompt, 
             task_type="news_generation",
@@ -8141,14 +8329,19 @@ Write all generated text in {language_name}.
 Контекст услуги (может отсутствовать): {service_context}
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info[:800]}
+SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
+{seo_keywords}
+Короткий TOP-10 SEO ключей:
+{seo_keywords_top10}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
                  'Промпт для генерации новостей')
             ]
             
             for prompt_type, prompt_text, description in default_prompts:
                 cursor.execute("""
-                    INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
+                    INSERT INTO AIPrompts (id, prompt_type, prompt_text, description)
                     VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (prompt_type) DO NOTHING
                 """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
             
             db.conn.commit()
@@ -8158,12 +8351,30 @@ Write all generated text in {language_name}.
         
         prompts = []
         for row in rows:
+            if hasattr(row, 'keys'):
+                row_type = row.get('prompt_type')
+                row_text = row.get('prompt_text')
+                row_desc = row.get('description')
+                row_updated_at = row.get('updated_at')
+                row_updated_by = row.get('updated_by')
+            elif isinstance(row, dict):
+                row_type = row.get('prompt_type')
+                row_text = row.get('prompt_text')
+                row_desc = row.get('description')
+                row_updated_at = row.get('updated_at')
+                row_updated_by = row.get('updated_by')
+            else:
+                row_type = row[0]
+                row_text = row[1]
+                row_desc = row[2]
+                row_updated_at = row[3]
+                row_updated_by = row[4]
             prompts.append({
-                'type': row[0],
-                'text': row[1],
-                'description': row[2],
-                'updated_at': row[3],
-                'updated_by': row[4]
+                'type': row_type,
+                'text': row_text,
+                'description': row_desc,
+                'updated_at': row_updated_at,
+                'updated_by': row_updated_by
             })
         
         db.close()

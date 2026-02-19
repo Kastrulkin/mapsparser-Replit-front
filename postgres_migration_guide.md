@@ -51,19 +51,19 @@ sudo -u postgres psql
 
 Inside SQL shell:
 ```sql
-CREATE DATABASE beautybot;
-CREATE USER beautybot_user WITH ENCRYPTED PASSWORD 'YOUR_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON DATABASE beautybot TO beautybot_user;
+CREATE DATABASE local;
+CREATE USER local_user WITH ENCRYPTED PASSWORD 'YOUR_STRONG_PASSWORD';
+GRANT ALL PRIVILEGES ON DATABASE local TO local_user;
 -- Grant schema usage
-\c beautybot
-GRANT ALL ON SCHEMA public TO beautybot_user;
+\c local
+GRANT ALL ON SCHEMA public TO local_user;
 \q
 ```
 
 ## 4. Run Migration
 1. **Stop the Worker** (Prevent new data writing):
    ```bash
-   sudo systemctl stop beautybot-worker
+   sudo systemctl stop local-worker
    ```
 
 2. **Backup SQLite** (Just in case):
@@ -74,7 +74,7 @@ GRANT ALL ON SCHEMA public TO beautybot_user;
 3. **Run Migration Script**:
    Set the env var locally for the script (replace password):
    ```bash
-   export DATABASE_URL="postgresql://beautybot_user:YOUR_STRONG_PASSWORD@localhost:5432/beautybot"
+   export DATABASE_URL="postgresql://local_user:YOUR_STRONG_PASSWORD@localhost:5432/local"
    pip install psycopg2-binary || sudo apt install python3-psycopg2
    
    python3 scripts/migrate_to_postgres.py
@@ -89,13 +89,13 @@ nano .env
 Add/Change:
 ```ini
 DB_TYPE=postgres
-DATABASE_URL=postgresql://beautybot_user:YOUR_STRONG_PASSWORD@localhost:5432/beautybot
+DATABASE_URL=postgresql://local_user:YOUR_STRONG_PASSWORD@localhost:5432/local
 ```
 
 ## 6. Restart Services
 ```bash
-sudo systemctl restart beautybot-backend
-sudo systemctl start beautybot-worker
+sudo systemctl restart local-backend
+sudo systemctl start local-worker
 ```
 
 ## 7. Verification

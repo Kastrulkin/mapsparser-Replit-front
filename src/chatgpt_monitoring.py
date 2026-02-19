@@ -58,7 +58,7 @@ def log_request(
             (id, chatgpt_user_id, endpoint, method, request_params,
              response_status, response_time_ms, error_message,
              business_id, service_id, booking_id, ip_address, user_agent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request_id,
             chatgpt_user_id,
@@ -121,17 +121,17 @@ def get_statistics(
                 COUNT(CASE WHEN endpoint = '/api/chatgpt/book' THEN 1 END) as booking_count,
                 COUNT(CASE WHEN endpoint = '/api/chatgpt/salon/{salonId}' THEN 1 END) as salon_details_count
             FROM ChatGPTRequests
-            WHERE created_at >= ? AND created_at <= ?
+            WHERE created_at >= %s AND created_at <= %s
         """
         
         params = [start_date.isoformat(), end_date.isoformat()]
         
         if business_id:
-            query += " AND business_id = ?"
+            query += " AND business_id = %s"
             params.append(business_id)
         
         if endpoint:
-            query += " AND endpoint = ?"
+            query += " AND endpoint = %s"
             params.append(endpoint)
         
         cursor.execute(query, params)
@@ -210,10 +210,10 @@ def get_top_businesses(limit: int = 10, days: int = 30) -> list:
                 COUNT(CASE WHEN cr.endpoint = '/api/chatgpt/book' THEN 1 END) as booking_count
             FROM ChatGPTRequests cr
             JOIN Businesses b ON cr.business_id = b.id
-            WHERE cr.created_at >= ? AND cr.business_id IS NOT NULL
+            WHERE cr.created_at >= %s AND cr.business_id IS NOT NULL
             GROUP BY b.id, b.name
             ORDER BY request_count DESC
-            LIMIT ?
+            LIMIT %s
         """, (start_date.isoformat(), limit))
         
         results = []

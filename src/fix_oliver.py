@@ -33,7 +33,7 @@ def fix_oliver():
     try:
         # 1. Find user Oliver
         print("--- Finding User: tislitskaya@yandex.ru ---")
-        cursor.execute("SELECT id, email FROM Users WHERE email = ?", ('tislitskaya@yandex.ru',))
+        cursor.execute("SELECT id, email FROM Users WHERE email = %s", ('tislitskaya@yandex.ru',))
         oliver = cursor.fetchone()
         
         if not oliver:
@@ -44,7 +44,7 @@ def fix_oliver():
         print(f"User Found: {oliver_id}")
 
         # 2. Find Business
-        cursor.execute("SELECT id, name, network_id FROM Businesses WHERE owner_id = ?", (oliver_id,))
+        cursor.execute("SELECT id, name, network_id FROM Businesses WHERE owner_id = %s", (oliver_id,))
         businesses = cursor.fetchall()
         
         for b in businesses:
@@ -53,7 +53,7 @@ def fix_oliver():
             
             if b['network_id'] is not None:
                 print(f"⚠️ FIXED: Removing from network...")
-                cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = ?", (b['id'],))
+                cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = %s", (b['id'],))
                 conn.commit()
                 print("✅ Successfully unlinked from network.")
             else:

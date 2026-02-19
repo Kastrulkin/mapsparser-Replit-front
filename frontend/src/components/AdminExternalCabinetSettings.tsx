@@ -232,7 +232,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       const hasNewCookies = formData.auth_data && formData.auth_data.trim().length > 0;
       const savedCookies = hasNewCookies ? formData.auth_data.trim() : null;
 
-      // Если cookies пустые, но аккаунт уже существует - не отправляем auth_data (чтобы не перезаписать существующие)
+      // Cookies опциональны: при создании и при обновлении. Если пустые и аккаунт уже есть — не перезаписываем auth_data.
       let authDataJson = undefined;
       if (hasNewCookies) {
         // Формируем JSON для auth_data (cookies или токен)

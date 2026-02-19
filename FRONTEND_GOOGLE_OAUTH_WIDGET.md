@@ -266,7 +266,7 @@ const handleGoogleAuth = async () => {
 
 Backend редиректит на фронтенд с параметром:
 ```
-https://beautybot.pro/dashboard/profile?google_auth=success
+https://localhost/dashboard/profile?google_auth=success
 ```
 
 Фронтенд проверяет параметр при загрузке:

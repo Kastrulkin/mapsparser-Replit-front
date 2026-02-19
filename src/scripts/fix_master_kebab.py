@@ -28,7 +28,7 @@ def fix_mother_account():
         if net_id:
             print("⚠️ У материнского аккаунта установлен network_id! Это ошибка.")
             print("🛠 Очищаю network_id...")
-            cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = ?", (b_id,))
+            cursor.execute("UPDATE Businesses SET network_id = NULL WHERE id = %s", (b_id,))
             conn.commit()
             print("✅ network_id очищен. Теперь бизнес должен появиться в списке.")
         else:

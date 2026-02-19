@@ -35,7 +35,7 @@ def get_bookings():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -51,12 +51,12 @@ def get_bookings():
             SELECT id, client_name, client_phone, client_email, service_name, 
                    booking_time, booking_time_local, source, status, notes, created_at
             FROM Bookings
-            WHERE business_id = ?
+            WHERE business_id = %s
         """
         params = [business_id]
         
         if status != 'all':
-            query += " AND status = ?"
+            query += " AND status = %s"
             params.append(status)
         
         query += " ORDER BY booking_time DESC"
@@ -107,7 +107,7 @@ def update_booking(booking_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        cursor.execute("SELECT business_id FROM Bookings WHERE id = ?", (booking_id,))
+        cursor.execute("SELECT business_id FROM Bookings WHERE id = %s", (booking_id,))
         booking = cursor.fetchone()
         
         if not booking:
@@ -117,7 +117,7 @@ def update_booking(booking_id):
         business_id = booking[0]
         
         # Проверяем доступ к бизнесу
-        cursor.execute("SELECT owner_id FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -131,8 +131,8 @@ def update_booking(booking_id):
         # Обновляем статус
         cursor.execute("""
             UPDATE Bookings 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET status = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (new_status, booking_id))
         
         db.conn.commit()
