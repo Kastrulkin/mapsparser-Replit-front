@@ -388,7 +388,10 @@ def process_queue():
             SELECT *
             FROM parsequeue
             WHERE 
-                status = %s
+                (
+                    status = %s
+                    AND (retry_after IS NULL OR retry_after <= %s)
+                )
                 OR (
                     status = %s
                     AND (
@@ -406,7 +409,15 @@ def process_queue():
                 created_at ASC 
             LIMIT 1
             """,
-            (STATUS_PENDING, STATUS_CAPTCHA, now_iso, ttl_cutoff_iso, STATUS_PENDING, STATUS_CAPTCHA),
+            (
+                STATUS_PENDING,
+                now_iso,
+                STATUS_CAPTCHA,
+                now_iso,
+                ttl_cutoff_iso,
+                STATUS_PENDING,
+                STATUS_CAPTCHA,
+            ),
         )
         queue_item = cursor.fetchone()
         

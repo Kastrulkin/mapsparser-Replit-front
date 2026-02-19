@@ -104,7 +104,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           )}
 
-          {currentBusiness?.network_id && onBusinessChange && (
+          {currentBusinessId && onBusinessChange && (
             <NetworkLocationsSwitcher
               currentBusinessId={currentBusinessId || undefined}
               onLocationChange={onBusinessChange}
@@ -211,4 +211,3 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     </header>
   );
 };
-

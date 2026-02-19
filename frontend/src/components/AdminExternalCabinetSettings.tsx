@@ -31,6 +31,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   const [testingCookies, setTestingCookies] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [parseStatus, setParseStatus] = useState<'idle' | 'processing'>('idle');
+  const [networkLocationsCount, setNetworkLocationsCount] = useState(0);
   const { toast } = useToast();
 
   // Ключи для sessionStorage
@@ -59,7 +60,10 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     }
   }, [businessId]);
 
-  const handleRunParser = async (source: 'yandex' | '2gis' = 'yandex') => {
+  const handleRunParser = async (
+    source: 'yandex' | '2gis' = 'yandex',
+    scope: 'single' | 'network' = 'single',
+  ) => {
     if (!businessId) return;
 
     setParseStatus('processing');
@@ -68,8 +72,17 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         ? `/admin/yandex/sync/business/${businessId}`
         : `/admin/2gis/sync/business/${businessId}`;
 
+      const requestBody =
+        source === 'yandex'
+          ? {
+            scope,
+            delay_seconds: scope === 'network' ? 20 : 0,
+          }
+          : {};
+
       const data = await newAuth.makeRequest(endpoint, {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify(requestBody),
       });
 
       toast({
@@ -151,6 +164,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             auth_data: savedCookies || prev.auth_data || '', // Сохраняем введенные cookies
           };
         });
+      }
+
+      // Доступность сетевого запуска (для материнского аккаунта сети)
+      try {
+        const networkData = await newAuth.makeRequest(`/business/${businessId}/network-locations`);
+        setNetworkLocationsCount((networkData.locations || []).length);
+      } catch {
+        setNetworkLocationsCount(0);
       }
     } catch (error: any) {
       console.error('Ошибка загрузки аккаунтов:', error);
@@ -442,13 +463,24 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
               </Button>
               <Button
-                onClick={() => handleRunParser('yandex')}
+                onClick={() => handleRunParser('yandex', 'single')}
                 disabled={parseStatus === 'processing' || !businessId || !yandexAccount}
                 variant="default"
                 className="ml-auto"
               >
                 {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
               </Button>
+              {networkLocationsCount > 1 && (
+                <Button
+                  onClick={() => handleRunParser('yandex', 'network')}
+                  disabled={parseStatus === 'processing' || !businessId}
+                  variant="outline"
+                >
+                  {parseStatus === 'processing'
+                    ? 'Постановка в очередь...'
+                    : `Запустить парсинг сети (${networkLocationsCount})`}
+                </Button>
+              )}
             </div>
           </div>
         </div>

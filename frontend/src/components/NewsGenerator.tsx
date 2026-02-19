@@ -19,15 +19,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Calendar
+  Calendar,
+  Search
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 type ServiceLite = { id: string; name: string };
+type SeoKeywordLite = { keyword: string; views?: number };
 
 export default function NewsGenerator({ services, businessId, externalPosts }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[] }) {
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
+  const [useSeoKeywords, setUseSeoKeywords] = useState(false);
+  const [selectedSeoKeyword, setSelectedSeoKeyword] = useState('');
+  const [seoKeywords, setSeoKeywords] = useState<SeoKeywordLite[]>([]);
+  const [loadingSeoKeywords, setLoadingSeoKeywords] = useState(false);
   const [serviceId, setServiceId] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -105,6 +111,33 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     }
   }, [useTransaction, businessId]);
 
+  const loadSeoKeywords = async () => {
+    if (!businessId) return;
+    setLoadingSeoKeywords(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/wordstat/keywords?business_id=${encodeURIComponent(businessId)}&use_city=1`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSeoKeywords((data.items || []).slice(0, 50));
+      } else {
+        setSeoKeywords([]);
+      }
+    } catch {
+      setSeoKeywords([]);
+    } finally {
+      setLoadingSeoKeywords(false);
+    }
+  };
+
+  useEffect(() => {
+    if (useSeoKeywords && businessId) {
+      loadSeoKeywords();
+    }
+  }, [useSeoKeywords, businessId]);
+
   const generate = async () => {
     setLoading(true);
     try {
@@ -115,10 +148,13 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         body: JSON.stringify({
           use_service: useService,
           use_transaction: useTransaction,
+          use_seo_keywords: useSeoKeywords,
+          selected_seo_keyword: selectedSeoKeyword || undefined,
           service_id: serviceId || undefined,
           transaction_id: transactionId || undefined,
           raw_info: rawInfo,
-          language
+          language,
+          business_id: businessId || undefined,
         })
       });
       const data = await res.json();
@@ -217,7 +253,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               {/* Service Selection */}
               <div className={cn("p-4 rounded-xl border transition-all cursor-pointer", useService ? "bg-white border-blue-500 shadow-md ring-1 ring-blue-500/20" : "bg-white/50 border-gray-200 hover:bg-white")}>
                 <label className="flex items-center gap-3 text-sm font-semibold text-gray-700 cursor-pointer mb-2">
-                  <input type="checkbox" className="rounded text-blue-600 w-4 h-4 focus:ring-blue-500" checked={useService} onChange={(e) => { setUseService(e.target.checked); if (e.target.checked) setUseTransaction(false); }} />
+                  <input type="checkbox" className="rounded text-blue-600 w-4 h-4 focus:ring-blue-500" checked={useService} onChange={(e) => { setUseService(e.target.checked); if (e.target.checked) { setUseTransaction(false); setUseSeoKeywords(false); } }} />
                   <Briefcase className="w-4 h-4 text-blue-500" />
                   {t.dashboard.card.newsGenerator.generateFromService}
                 </label>
@@ -234,7 +270,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               {/* Transaction Selection */}
               <div className={cn("p-4 rounded-xl border transition-all cursor-pointer", useTransaction ? "bg-white border-blue-500 shadow-md ring-1 ring-blue-500/20" : "bg-white/50 border-gray-200 hover:bg-white")}>
                 <label className="flex items-center gap-3 text-sm font-semibold text-gray-700 cursor-pointer mb-2">
-                  <input type="checkbox" className="rounded text-blue-600 w-4 h-4 focus:ring-blue-500" checked={useTransaction} onChange={(e) => { setUseTransaction(e.target.checked); if (e.target.checked) setUseService(false); }} />
+                  <input type="checkbox" className="rounded text-blue-600 w-4 h-4 focus:ring-blue-500" checked={useTransaction} onChange={(e) => { setUseTransaction(e.target.checked); if (e.target.checked) { setUseService(false); setUseSeoKeywords(false); } }} />
                   <CreditCard className="w-4 h-4 text-blue-500" />
                   {t.dashboard.card.newsGenerator.generateFromTransaction}
                 </label>
@@ -257,6 +293,50 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
                         ))}
                       </select>
                     )}
+                  </div>
+                )}
+              </div>
+
+              <div className={cn("p-4 rounded-xl border transition-all cursor-pointer", useSeoKeywords ? "bg-white border-blue-500 shadow-md ring-1 ring-blue-500/20" : "bg-white/50 border-gray-200 hover:bg-white")}>
+                <label className="flex items-center gap-3 text-sm font-semibold text-gray-700 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    className="rounded text-blue-600 w-4 h-4 focus:ring-blue-500"
+                    checked={useSeoKeywords}
+                    onChange={(e) => {
+                      setUseSeoKeywords(e.target.checked);
+                      if (e.target.checked) {
+                        setUseService(false);
+                        setUseTransaction(false);
+                      }
+                    }}
+                  />
+                  <Search className="w-4 h-4 text-blue-500" />
+                  Генерировать на основе популярных SEO ключей
+                </label>
+                {useSeoKeywords && (
+                  <div className="pl-7 animate-in fade-in slide-in-from-top-1 space-y-2">
+                    {loadingSeoKeywords ? (
+                      <div className="text-xs text-gray-500">Загружаем SEO-ключи...</div>
+                    ) : seoKeywords.length === 0 ? (
+                      <div className="text-xs text-gray-500">SEO-ключи не найдены</div>
+                    ) : (
+                      <select
+                        className="w-full rounded-lg border-gray-200 text-sm focus:ring-blue-500/20"
+                        value={selectedSeoKeyword}
+                        onChange={(e) => setSelectedSeoKeyword(e.target.value)}
+                      >
+                        <option value="">— Выберите SEO-ключ —</option>
+                        {seoKeywords.map((k) => (
+                          <option key={k.keyword} value={k.keyword}>
+                            {k.keyword}{typeof k.views === 'number' ? ` (${k.views})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="text-xs text-gray-500">
+                      Будут использованы популярные запросы и привязка к вашим услугам.
+                    </div>
                   </div>
                 )}
               </div>

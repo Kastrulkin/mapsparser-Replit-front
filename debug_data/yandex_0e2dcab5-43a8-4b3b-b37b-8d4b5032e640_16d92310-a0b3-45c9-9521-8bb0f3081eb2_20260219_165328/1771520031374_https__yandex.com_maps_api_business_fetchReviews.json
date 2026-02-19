@@ -1,0 +1,696 @@
+{
+  "data": {
+    "reviews": [
+      {
+        "reviewId": "n0XX0NK5DI3i2vu8lCY1bx4LHqUQw6",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Марина Белова",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/25358/0d-5/{size}",
+          "professionLevel": "Знаток города 5 уровня",
+          "publicId": "jv7k4bhhjgvyeqduxn3fmtqz04",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Недорого и вкусно",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2023-07-08T17:25:59.058Z",
+        "reactions": {
+          "likes": 2,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "jcdHO2DpQnEljEE_9nETk5fuP72wuF",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Кирилл",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/26311/0s-1/{size}",
+          "professionLevel": "Дегустатор 4 уровня",
+          "publicId": "9y6fjrddz95mty4zx4up56rv9w",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Неплохая местная рыг",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Kötü bir yerel rıg değil"
+        },
+        "rating": 4,
+        "updatedTime": "2025-09-09T17:57:41.257Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "GMDlOsO3h2YpQjittmFDxjWpmBRSIZ",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Dupst",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/49368/oLRqR28Cqe3xEovrj0v52g1FlU-1/{size}",
+          "professionLevel": "Дегустатор 4 уровня",
+          "publicId": "rze50v7mecxxfhuv51zduy0yk0",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Азиатская кухня,шаверма из говядины.Зашел из интереса. Ну так..",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 3,
+        "updatedTime": "2022-10-15T17:56:55.213Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "PVEuu9c8Eb561wOaqsUqsSP6VX-WR-r",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Акбарали Ибрагимов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/25817/0o-2/{size}",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "acwzj5xk1a6xu32wchnr4ej1uw",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Шурпа вкусная и обслуживание хорошее",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2022-11-05T18:47:55.473Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "4YBGrQeP_QBEVQ0HBoRrCd_UgxqO710c",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Антон Г.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/49368/HcyyqQE8t9CrMYcDeQZOKjAegs-1/{size}",
+          "professionLevel": "Дегустатор 4 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Шаверма ужасная. Пересушенная старая говядина. Цена завышена. Альтернатив нет, но это не выход) ",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2021-10-27T18:00:22.870Z",
+        "reactions": {
+          "likes": 8,
+          "dislikes": 6,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "LFyanmjOc6J98xi2DuETo2lKCeKF-O-Qf",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Odintsov Andrey",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/59871/0g-6/{size}",
+          "professionLevel": "Дегустатор 3 уровня",
+          "publicId": "aje799dyunjf0hv1v144rzyjz4",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Отвратительное место, пожар у них уже не первый раз. Никому не советую.",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-08-14T12:23:59.482Z",
+        "reactions": {
+          "likes": 2,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "dXtzHdxX6IhJYQ__hpNMnLNG_VJItC5h",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Вадим Муртузаев",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/35885/ZcA8zF4W6jSe9HLYmquVoTzJr0-1/{size}",
+          "professionLevel": "Дегустатор 5 уровня",
+          "publicId": "7zxdn5enwt067hdhaak0g5n7rg",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Всё отлично и выбор есть",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2023-03-12T07:56:12.564Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "3QyMhrr1mYjnDKCFEvfzXYfm1j1aeeJAG",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Павел Матасов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/65952/yhFuGH3gIO922wkAiM2aiVZQE-1/{size}",
+          "professionLevel": "Дегустатор 5 уровня",
+          "publicId": "8432wycq8ru6p5dvh45p0f5rjm",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Еда не плохая , рекомендую. Выбор не богатый.",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 4,
+        "updatedTime": "2022-02-12T21:15:35.113Z",
+        "reactions": {
+          "likes": 4,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "YaO03oRIDCybevZBQhutYdz9JO89zS",
+        "businessId": "201904931156",
+        "author": {
+          "name": "дтм д.",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 4 уровня",
+          "publicId": "9kbv9c7qmjb62fw68yauurjdp4",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Заведение для любителей топлёного жира в каждом \"блюде\"...",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-10-12T10:39:15.080Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "xfNtcHwle0Olwfiq74-qhm0lDPBVVS95",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Павлов А.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/59871/0y-5/{size}",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "zz52t3avu7pzrf59tne5m9z9qc",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Проверяйте заказы, сегодня самсу не доложили",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2021-10-28T14:22:14.408Z",
+        "reactions": {
+          "likes": 6,
+          "dislikes": 5,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "LDOftEoW5D2aZ2iVoJKil-Lo5TIS5n6K",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Пользователь У.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45131/0y-4/{size}",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "3jhjpa2kj4xtkcwzguqy6cmm8r",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Фигня, вместо кебаба с говядиной XL, сделали обычный с курицей. Вкус так себе пересолена. ",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-09-11T11:55:37.068Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "_8_1vuiOLi6bb195SwCyu4jJkMJytZr",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Konstantin",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45131/2Jpq5dsxGHzWDpkUFGgQKADSHw-1/{size}",
+          "professionLevel": "Дегустатор 6 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Не очень тут шаверма ",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2024-08-21T09:17:58.261Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "vRyW6Tn-ggOGT_oCbwTbgwHkp0Gig3Z3",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Игорь Верб",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/50595/0t-8/{size}",
+          "professionLevel": "Знаток города 5 уровня",
+          "publicId": "y2zk4vz54jqnq57khy7jdhtt5r",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Это не шаверма а забегаловка с пьяным и не адекватным персоналом!",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-11-04T16:24:11.509Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "FJ5zi7HTVkNrDnaQj7sqIoXwK5GLLKx",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Летучева Ольга",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/24700/enc-6744166cc530cc57cb6099fe334cf2ed98eee9008467e0d4eb455d6405be2647/{size}",
+          "professionLevel": "Дегустатор 3 уровня",
+          "publicId": "a36cjqcv82z3wn2tcvat40wbnc",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Заведение сделано не для жильцов квартала, а для строителей.  Из принципа холить туда  не буду, вообще не внушает доверия.",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-04-25T16:34:52.596Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 2,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "mOmXI7cibmvdEH5yJ7zjDfs8CdVi5Xm",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Вал",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45566/4OvqNVOUWikMDmvF5B0n5eTaU5k-1/{size}",
+          "professionLevel": "Знаток города 4 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Очень вкусная шаверма!  Была... Где теперь такую искать",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2024-04-27T13:48:33.182Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "ga9F3LDSqVJN37TWmO7tNin5EYhXNx",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Г Па",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/65952/0h-5/{size}",
+          "professionLevel": "Дегустатор 3 уровня",
+          "publicId": "gfhdnttxegxzj3d7bxzjrac5u4",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Просто Супер",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2023-04-15T11:42:16.777Z",
+        "reactions": {
+          "likes": 3,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "d723L8k9NjZfdo4yWdDHb4Yw8qcsFJ",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Лилия Портяная",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/44850/B8GpHSsy9HKlJJX2KUrsuKmqX6g-1/{size}",
+          "professionLevel": "Знаток города 5 уровня",
+          "publicId": "23f0hgr2d4n0pmy6hjmzhnxuqc",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Отличная работа персонала",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2022-06-30T19:34:44.400Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "tA9XWQE4hU9TqdV2C-WuM-_NUqzh5K",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Светлана Л.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45566/enc-82f3be1d66e605d9472b0b184722165973df9f411778ee43852ac6a565b46201/{size}",
+          "professionLevel": "Дегустатор 5 уровня",
+          "publicId": "8e5bhtxcm5r1f1b3m3ajp3e6aw",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Контингент покупателей - рабочие со стройки. Отзывы не очень",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 2,
+        "updatedTime": "2022-10-30T16:55:44.098Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "zUAPRXzT1IdZtTwHUOINFRxXCPGmRj",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Алексей Сергеев",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "m4b6uxrx9bj0c0455dzrvqhy1w",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Ожидал большего",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2021-12-26T12:03:11.596Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 4,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "5Pwo9353p57nHGe8qIzOZHOKu5N_dH5ko",
+        "businessId": "201904931156",
+        "author": {
+          "name": "GGG ‘",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/36777/0r-6/{size}",
+          "professionLevel": "Знаток города 6 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Если мыть подносы в целом все будет хорошо ",
+        "textLanguage": "ru",
+        "textTranslations": {
+          "tr": "Tepsileri bir bütün olarak yıkarsanız, her şey yoluna girecek "
+        },
+        "rating": 4,
+        "updatedTime": "2024-12-24T15:01:57.595Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "_aFuE-BA8inX2krHsbjEghjG_dF1u9D6",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Вячеслав Соколов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/29310/enc-bececf5a680082d76685d1f6d67989003032fe15b015fc17390dc43a7387ca4e/{size}",
+          "professionLevel": "Знаток города 11 уровня",
+          "publicId": "cj4m7yc2nmy63vx84bxv0110em",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Ценник постоянно ростёт",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-04-21T18:30:15.738Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "-cARdpAR_s63sx9_3VQTGDxiQ-kt0r4",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Каюмджон Салойдинов",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/45131/0l-6/{size}",
+          "professionLevel": "Знаток города 9 уровня",
+          "publicId": "h6mrwu7bm2x0t10m4gtzmbxbdw",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Халял👍🖐️🖐️🖐️",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2023-04-19T11:39:10.147Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "xu-sFuusLYyRNdcUPkTocY2D_YteLJlI",
+        "businessId": "201904931156",
+        "author": {
+          "name": "фаррух ибрагимов",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 6 уровня",
+          "publicId": "50w7wg56v6jwayukggfaz6tff8",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Класс",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2021-12-31T09:17:24.502Z",
+        "reactions": {
+          "likes": 7,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "vrraKJnkPSuPrU_1u4GPm_2CRmuyiA2",
+        "businessId": "201904931156",
+        "author": {
+          "name": "vlad g.",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/31804/0m-7/{size}",
+          "professionLevel": "Знаток города 4 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Норм шава в 2 яаса ночи",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 5,
+        "updatedTime": "2024-05-13T21:33:13.133Z",
+        "reactions": {
+          "likes": 1,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "LkhZFwLec1KA8fGWPjjui6aQc2Q-bIXJ",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Вадим Юрьевич",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/36777/0r-6/{size}",
+          "professionLevel": "Дегустатор 3 уровня",
+          "publicId": "qemmxzxm6ta6wz28hpr42pg89w",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "НЕ ходите НЕ заходите НЕ пробуйте",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2022-11-25T06:26:34.979Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 1,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "VroZh29r4SEUUo277CxhrHDyzDDExtShm",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Дмитрий Б.",
+          "avatarUrl": "",
+          "professionLevel": "Знаток города 7 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Вкус отвратительный. Крайне не рекомендую ",
+        "textLanguage": "unknown",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2021-10-26T15:54:34.077Z",
+        "reactions": {
+          "likes": 9,
+          "dislikes": 8,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      },
+      {
+        "reviewId": "zbQhDwx-VXrb_ssllgutd_WUQRthCb",
+        "businessId": "201904931156",
+        "author": {
+          "name": "Оксана",
+          "avatarUrl": "https://avatars.mds.yandex.net/get-yapic/63032/0d-9/{size}",
+          "professionLevel": "Знаток города 5 уровня",
+          "publicId": "",
+          "achievements": [],
+          "professions": [],
+          "isSubscribed": false
+        },
+        "text": "Грязь, тараканы\n",
+        "textLanguage": "ru",
+        "textTranslations": {},
+        "rating": 1,
+        "updatedTime": "2023-05-16T17:06:53.216Z",
+        "reactions": {
+          "likes": 0,
+          "dislikes": 0,
+          "userReaction": "NONE"
+        },
+        "photos": [],
+        "videos": []
+      }
+    ],
+    "params": {
+      "offset": 150,
+      "limit": 50,
+      "count": 177,
+      "loadedReviewsCount": 177,
+      "page": 4,
+      "totalPages": 4,
+      "reviewsRemained": 0
+    },
+    "tags": [],
+    "aspects": []
+  }
+}

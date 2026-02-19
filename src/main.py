@@ -2559,6 +2559,30 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
     except Exception:
         return "SEO keywords are unavailable", "SEO keywords are unavailable"
 
+    excluded_keywords = set()
+    if business_id:
+        try:
+            cursor.execute(
+                """
+                SELECT keyword
+                FROM wordstatkeywordsexcluded
+                WHERE business_id = %s
+                """,
+                (business_id,),
+            )
+            for row in cursor.fetchall() or []:
+                if isinstance(row, tuple):
+                    kw = (row[0] or "").strip().lower()
+                elif hasattr(row, "keys"):
+                    kw = (row.get("keyword") or "").strip().lower()
+                else:
+                    kw = ""
+                if kw:
+                    excluded_keywords.add(kw)
+        except Exception:
+            # Таблица может отсутствовать в старых БД до первого удаления ключа.
+            pass
+
     ranked = []
     for row in rows:
         if isinstance(row, tuple):
@@ -2570,6 +2594,8 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
         else:
             continue
         if not kw:
+            continue
+        if excluded_keywords and kw.lower() in excluded_keywords:
             continue
         kw_l = kw.lower()
         score = 0
@@ -2619,14 +2645,15 @@ def services_optimize():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        tone = request.form.get('tone') or request.json.get('tone') if request.is_json else None
-        instructions = request.form.get('instructions') or (request.json.get('instructions') if request.is_json else None)
-        region = request.form.get('region') or (request.json.get('region') if request.is_json else None)
-        business_name = request.form.get('business_name') or (request.json.get('business_name') if request.is_json else None)
-        length = request.form.get('description_length') or (request.json.get('description_length') if request.is_json else 150)
+        payload = request.get_json(silent=True) or {}
+        tone = request.form.get('tone') or payload.get('tone')
+        instructions = request.form.get('instructions') or payload.get('instructions')
+        region = request.form.get('region') or payload.get('region')
+        business_name = request.form.get('business_name') or payload.get('business_name')
+        length = request.form.get('description_length') or payload.get('description_length') or 150
 
         # Язык результата: получаем из запроса или из профиля пользователя
-        requested_language = request.form.get('language') or (request.json.get('language') if request.is_json else None)
+        requested_language = request.form.get('language') or payload.get('language')
         language = get_user_language(user_data['user_id'], requested_language)
         language_names = {
             'ru': 'Russian',
@@ -2641,7 +2668,7 @@ def services_optimize():
         language_name = language_names.get(language, 'Russian')
         requested_business_id = None
         if request.is_json:
-            requested_business_id = request.json.get('business_id')
+            requested_business_id = payload.get('business_id')
         if not requested_business_id:
             requested_business_id = request.args.get('business_id')
         business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
@@ -2742,8 +2769,7 @@ def services_optimize():
                 # Для документов - анализ текста
                 content = file.read().decode('utf-8', errors='ignore')
         else:
-            data = request.get_json(silent=True) or {}
-            content = (data.get('text') or '').strip()
+            content = (payload.get('text') or '').strip()
 
         # Если файл - изображение, результат уже получен выше
         if file and file.content_type.startswith('image/'):
@@ -3133,6 +3159,8 @@ def news_generate():
         data = request.get_json(silent=True) or {}
         use_service = bool(data.get('use_service'))
         use_transaction = bool(data.get('use_transaction'))
+        use_seo_keywords = bool(data.get('use_seo_keywords'))
+        selected_seo_keyword = (data.get('selected_seo_keyword') or '').strip()
         selected_service_id = data.get('service_id')
         selected_transaction_id = data.get('transaction_id')
         raw_info = (data.get('raw_info') or '').strip()
@@ -3253,6 +3281,62 @@ def news_generate():
             news_examples = ""
 
         seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur, business_id, user_data['user_id'])
+        seo_service_context = ""
+        if use_seo_keywords:
+            try:
+                if business_id:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT name
+                        FROM userservices
+                        WHERE business_id = %s
+                          AND (is_active IS TRUE OR is_active IS NULL)
+                          AND name IS NOT NULL
+                          AND TRIM(name) <> ''
+                        ORDER BY name ASC
+                        LIMIT 30
+                        """,
+                        (business_id,),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT name
+                        FROM userservices
+                        WHERE user_id = %s
+                          AND (is_active IS TRUE OR is_active IS NULL)
+                          AND name IS NOT NULL
+                          AND TRIM(name) <> ''
+                        ORDER BY name ASC
+                        LIMIT 30
+                        """,
+                        (user_data['user_id'],),
+                    )
+                rows = cur.fetchall() or []
+                service_names = []
+                for row in rows:
+                    if isinstance(row, tuple):
+                        name = (row[0] or "").strip()
+                    elif hasattr(row, "keys"):
+                        name = (row.get("name") or "").strip()
+                    else:
+                        name = ""
+                    if name:
+                        service_names.append(name)
+                if service_names:
+                    seo_service_context = ", ".join(service_names)
+            except Exception:
+                seo_service_context = ""
+
+        seo_generation_hint = ""
+        if use_seo_keywords:
+            seo_generation_hint = (
+                "Режим генерации: SEO-first. Сначала выбери 1-2 самых частотных SEO-запроса из блока WORDSTAT, "
+                "затем естественно свяжи их с реальными услугами бизнеса. "
+                f"Доступные услуги бизнеса: {seo_service_context or 'не указаны'}."
+            )
+            if selected_seo_keyword:
+                seo_generation_hint += f" Приоритетный ключ для этой новости: {selected_seo_keyword}."
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
@@ -3268,6 +3352,8 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
 {seo_keywords}
 Короткий TOP-10 SEO ключей:
 {seo_keywords_top10}
+Спец-режим (может отсутствовать):
+{seo_generation_hint}
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
 {news_examples}"""
         
@@ -3314,6 +3400,7 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
                 raw_info=str(raw_info[:800]),
                 seo_keywords=str(seo_keywords),
                 seo_keywords_top10=str(seo_keywords_top10),
+                seo_generation_hint=str(seo_generation_hint),
                 news_examples=str(news_examples)
             )
         except (KeyError, AttributeError, ValueError, TypeError) as e:
@@ -3328,6 +3415,7 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
                 raw_info=str(raw_info[:800]),
                 seo_keywords=str(seo_keywords),
                 seo_keywords_top10=str(seo_keywords_top10),
+                seo_generation_hint=str(seo_generation_hint),
                 news_examples=str(news_examples)
         )
         result = analyze_text_with_gigachat(
@@ -6842,8 +6930,10 @@ def admin_sync_network_yandex(network_id):
 @app.route('/api/admin/yandex/sync/business/<string:business_id>', methods=['POST'])
 def admin_sync_business_yandex(business_id):
     """
-    Ручной запуск синхронизации Яндекс-данных для одного бизнеса.
-    Требует действующей сессии и прав суперадмина или владельца бизнеса.
+    Ручной запуск парсинга/синхронизации Яндекс для одного бизнеса или всей сети.
+    scope:
+      - single (default): только текущий бизнес
+      - network: все точки сети с постановкой в очередь (с задержкой через retry_after)
     """
     import traceback
     print(f"🔄 Запрос на синхронизацию бизнеса {business_id}")
@@ -6857,10 +6947,24 @@ def admin_sync_business_yandex(business_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
+        payload = request.get_json(silent=True) or {}
+        scope = str(payload.get("scope") or "single").strip().lower()
+        if scope not in ("single", "network"):
+            scope = "single"
+
+        try:
+            delay_seconds = int(payload.get("delay_seconds", 15))
+        except (TypeError, ValueError):
+            delay_seconds = 15
+        delay_seconds = max(0, min(delay_seconds, 300))
+
+        user_id = user_data.get("user_id") or user_data.get("id")
+        is_superadmin = bool(user_data.get("is_superadmin"))
+
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id, name FROM businesses WHERE id = %s", (business_id,))
+        cursor.execute("SELECT id, owner_id, name, network_id FROM businesses WHERE id = %s", (business_id,))
         raw_business = cursor.fetchone()
         business = _row_to_dict(cursor, raw_business) if raw_business else None
 
@@ -6871,72 +6975,223 @@ def admin_sync_business_yandex(business_id):
         business_owner_id = business.get("owner_id")
         business_name = (business.get("name") or "").strip() or "Unknown"
 
-        if business_owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if business_owner_id != user_id and not is_superadmin:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Аккаунт Яндекс.Бизнес (таблица externalbusinessaccounts — Postgres)
-        cursor.execute("""
-            SELECT id, auth_data_encrypted, external_id
-            FROM externalbusinessaccounts
-            WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
-            ORDER BY created_at DESC
-            LIMIT 1
-        """, (business_id,))
-        raw_account = cursor.fetchone()
-        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
-        account_id = account_row.get("id") if account_row else None
+        # Собираем целевые бизнесы
+        target_businesses = [business]
+        resolved_network_id = business.get("network_id")
 
-        if account_id:
-            print(f"✅ Найден аккаунт: {account_id}")
-        else:
-            print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
+        if scope == "network":
+            # Для материнского аккаунта сеть может быть не в business.network_id
+            if not resolved_network_id:
+                cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
+                row = cursor.fetchone()
+                if row:
+                    resolved_network_id = row[0] if not hasattr(row, "keys") else row.get("id")
 
-        cursor.execute("SELECT url FROM businessmaplinks WHERE business_id = %s AND map_type = 'yandex' LIMIT 1", (business_id,))
-        raw_map = cursor.fetchone()
-        map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
-        map_url = map_link_row.get("url") if map_link_row else None
+            if not resolved_network_id:
+                cursor.execute(
+                    """
+                    SELECT n.id
+                    FROM networks n
+                    WHERE n.owner_id = %s
+                    ORDER BY (
+                        SELECT COUNT(*) FROM businesses b WHERE b.network_id = n.id
+                    ) DESC, n.created_at DESC
+                    LIMIT 1
+                    """,
+                    (business_owner_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    resolved_network_id = row[0] if not hasattr(row, "keys") else row.get("id")
 
-        if not account_id and not map_url:
-            db.close()
-            return jsonify({
-                "success": False,
-                "error": "Не найден источник данных",
-                "message": "Для запуска парсинга добавьте ссылку на Яндекс.Карты или подключите аккаунт Яндекс.Бизнес"
-            }), 400
+            if not resolved_network_id:
+                db.close()
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "Сеть не найдена",
+                        "message": "Для выбранного бизнеса не найдена сеть с точками",
+                    }
+                ), 400
 
-        task_id = str(uuid.uuid4())
-        user_id = user_data["user_id"]
+            if is_superadmin:
+                cursor.execute(
+                    """
+                    SELECT id, owner_id, name, network_id
+                    FROM businesses
+                    WHERE network_id = %s AND (is_active = TRUE OR is_active IS NULL)
+                    ORDER BY created_at ASC
+                    """,
+                    (resolved_network_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, owner_id, name, network_id
+                    FROM businesses
+                    WHERE network_id = %s
+                      AND owner_id = %s
+                      AND (is_active = TRUE OR is_active IS NULL)
+                    ORDER BY created_at ASC
+                    """,
+                    (resolved_network_id, user_id),
+                )
 
-        if map_url:
-            task_type = 'parse_card'
-            source = 'yandex_maps'
-            target_url = map_url
-            message = "Запущен парсинг карт"
-        else:
-            task_type = 'sync_yandex_business'
-            source = 'yandex_business'
-            target_url = ''
-            message = "Запущена синхронизация (без парсинга)"
+            target_businesses = []
+            for row in cursor.fetchall():
+                item = _row_to_dict(cursor, row)
+                if item:
+                    target_businesses.append(item)
 
-        cursor.execute("""
-            INSERT INTO parsequeue (
-                id, business_id, account_id, task_type, source,
-                status, user_id, url, created_at, updated_at
+            if not target_businesses:
+                db.close()
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "Нет точек сети",
+                        "message": "В выбранной сети не найдено активных точек",
+                    }
+                ), 400
+
+        # Формируем и ставим задачи в очередь
+        enqueued = []
+        skipped_no_source = []
+        skipped_has_active = []
+        now = datetime.now()
+
+        for idx, biz in enumerate(target_businesses):
+            target_business_id = biz.get("id")
+            target_business_name = (biz.get("name") or "").strip() or target_business_id
+
+            cursor.execute(
+                """
+                SELECT id
+                FROM externalbusinessaccounts
+                WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (target_business_id,),
             )
-            VALUES (%s, %s, %s, %s, %s,
-                    'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
+            raw_account = cursor.fetchone()
+            account_row = _row_to_dict(cursor, raw_account) if raw_account else None
+            account_id = account_row.get("id") if account_row else None
+
+            cursor.execute(
+                """
+                SELECT url
+                FROM businessmaplinks
+                WHERE business_id = %s
+                  AND map_type IN ('yandex', 'yandex_maps')
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (target_business_id,),
+            )
+            raw_map = cursor.fetchone()
+            map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
+            map_url = map_link_row.get("url") if map_link_row else None
+
+            if not account_id and not map_url:
+                skipped_no_source.append(target_business_name)
+                continue
+
+            cursor.execute(
+                """
+                SELECT id
+                FROM parsequeue
+                WHERE business_id = %s
+                  AND task_type IN ('parse_card', 'sync_yandex_business')
+                  AND status IN ('pending', 'processing', 'captcha')
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (target_business_id,),
+            )
+            if cursor.fetchone():
+                skipped_has_active.append(target_business_name)
+                continue
+
+            if map_url:
+                task_type = "parse_card"
+                source = "yandex_maps"
+                target_url = map_url
+            else:
+                task_type = "sync_yandex_business"
+                source = "yandex_business"
+                target_url = ""
+
+            task_id = str(uuid.uuid4())
+            delay = delay_seconds * len(enqueued) if scope == "network" else 0
+            retry_after = (now + timedelta(seconds=delay)).isoformat() if delay > 0 else None
+
+            cursor.execute(
+                """
+                INSERT INTO parsequeue (
+                    id, business_id, account_id, task_type, source,
+                    status, user_id, url, retry_after, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s,
+                        'pending', %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (task_id, target_business_id, account_id, task_type, source, user_id, target_url, retry_after),
+            )
+            enqueued.append(
+                {
+                    "task_id": task_id,
+                    "business_id": target_business_id,
+                    "business_name": target_business_name,
+                    "task_type": task_type,
+                    "retry_after": retry_after,
+                }
+            )
+
         db.conn.commit()
         db.close()
-        print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
 
-        return jsonify({
-            "success": True,
-            "message": message,
-            "sync_id": task_id,
-            "task_type": task_type
-        })
+        if not enqueued:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Нет задач для запуска",
+                    "message": "Все точки уже в очереди или у точек отсутствует источник данных",
+                    "details": {
+                        "scope": scope,
+                        "skipped_no_source": skipped_no_source,
+                        "skipped_has_active": skipped_has_active,
+                    },
+                }
+            ), 400
+
+        # Backward compatibility для одиночного запуска
+        if scope == "single":
+            item = enqueued[0]
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Запущен парсинг карт" if item["task_type"] == "parse_card" else "Запущена синхронизация (без парсинга)",
+                    "sync_id": item["task_id"],
+                    "task_type": item["task_type"],
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Поставлено в очередь: {len(enqueued)} точек сети. Капча, если появится, будет в статусе задачи.",
+                "network_id": resolved_network_id,
+                "scope": scope,
+                "delay_seconds": delay_seconds,
+                "enqueued_count": len(enqueued),
+                "skipped_no_source_count": len(skipped_no_source),
+                "skipped_has_active_count": len(skipped_has_active),
+                "enqueued": enqueued[:25],
+            }
+        )
 
     except Exception as e:
         error_details = traceback.format_exc()
@@ -9461,25 +9716,58 @@ def get_network_locations(business_id):
             return jsonify({"error": "Недействительный токен"}), 401
         
         db = DatabaseManager()
-        
+        cursor = db.conn.cursor()
+
         # Получаем бизнес
         business = db.get_business_by_id(business_id)
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        
-        # ! FIX: Получаем только точки ТОЙ ЖЕ сети, к которой принадлежит бизнес
+        business_owner_id = business.get("owner_id")
+
+        # Проверяем доступ (владелец бизнеса или суперадмин)
+        user_id = user_data.get('user_id') or user_data.get('id')
+        if business_owner_id != user_id and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        # Резолвим сеть:
+        # 1) бизнес уже в сети
+        # 2) business_id совпадает с id сети (legacy кейс)
+        # 3) fallback: сеть, которой владеет владелец бизнеса (для материнского аккаунта с network_id=NULL)
         network_id = business.get('network_id')
-        print(f"🔍 API DEBUG: Business {business_id} ({business.get('name')}) -> Network {network_id}")
-        
+
         if not network_id:
-            print("🔍 API DEBUG: No network_id, returning []")
+            cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
+            row = cursor.fetchone()
+            if row:
+                network_id = row[0] if not hasattr(row, "keys") else row.get("id")
+
+        if not network_id:
+            cursor.execute(
+                """
+                SELECT n.id
+                FROM networks n
+                WHERE n.owner_id = %s
+                ORDER BY (
+                    SELECT COUNT(*)
+                    FROM businesses b
+                    WHERE b.network_id = n.id AND (b.is_active = TRUE OR b.is_active IS NULL)
+                ) DESC, n.created_at DESC
+                LIMIT 1
+                """,
+                (business_owner_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                network_id = row[0] if not hasattr(row, "keys") else row.get("id")
+
+        if not network_id:
             db.close()
             return jsonify({"success": True, "is_network": False, "locations": []})
-            
+
         locations = db.get_businesses_by_network(network_id)
-        print(f"🔍 API DEBUG: Found {len(locations)} locations for network {network_id}")
-        
+
         # Нормализация: алиас website = site для фронта, пустые строки вместо NULL
         def _norm_loc(loc):
             if not loc or not isinstance(loc, dict):
@@ -9493,11 +9781,14 @@ def get_network_locations(business_id):
         normalized_locations = [_norm_loc(loc) for loc in locations]
         db.close()
 
-        return jsonify({
-            "success": True,
-            "is_network": (business_id == network_id),
-            "locations": normalized_locations
-        })
+        return jsonify(
+            {
+                "success": True,
+                "is_network": bool(normalized_locations),
+                "network_id": network_id,
+                "locations": normalized_locations,
+            }
+        )
         
     except Exception as e:
         print(f"❌ Ошибка получения точек сети: {e}")

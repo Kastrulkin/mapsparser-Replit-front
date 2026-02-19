@@ -1,0 +1,733 @@
+{
+  "data": [
+    {
+      "id": "urn:yandex:sprav:photo:16503558-2a000001993560f62e11eba7796ed0746f00",
+      "tags": [
+        {
+          "id": "Enter",
+          "name": "Вход"
+        },
+        {
+          "id": "Accessibility",
+          "name": "Доступность"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16503558/2a000001993560f62e11eba7796ed0746f00/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-10T12:32:46Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:_V1GiuVAYnaYWgpb2RkyX1vSv3ltoR",
+      "tags": [
+        {
+          "id": "Interior",
+          "name": "Внутри"
+        }
+      ],
+      "width": 1280,
+      "height": 960,
+      "url": "https://avatars.mds.yandex.net/get-altay/4971637/2a0000017cc8436405d9760bfc96f417ef1d/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Olga Trusovskaya",
+        "updateTime": "2021-10-28T18:57:13Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/23134/8Uhq9xe2NoArA2S6NknJdJYcETs-1/{size}",
+        "publicId": "hdnaxuzb5mmwh2qhrfrb7vekjg"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15352901_2a000001965e1da8042805c9b8ff34608aea",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15352901/2a000001965e1da8042805c9b8ff34608aea/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Zagornova",
+        "updateTime": "2025-04-22T15:28:45Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/45566/0t-6/{size}",
+        "publicId": "hf6q0mung97fgm7nageuvhc8vw"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:14297579_2a00000196877356d27327980a97f0852603",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/14297579/2a00000196877356d27327980a97f0852603/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Полина Патракеева",
+        "updateTime": "2025-04-30T16:06:47Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/47747/0l-1/{size}",
+        "publicId": "6f68dr8qxf20b089wcm6wwe31m"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16749408-2a00000197dc6849524257c9a3a3247b15b9",
+      "tags": [
+        {
+          "id": "Exterior",
+          "name": "Снаружи"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16749408/2a00000197dc6849524257c9a3a3247b15b9/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-06-30T17:28:23Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16430504-2a000001993553958b358622eea883aad830",
+      "tags": [
+        {
+          "id": "Menu",
+          "name": "Меню"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16430504/2a000001993553958b358622eea883aad830/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-10T12:32:46Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:13207207_2a00000191482a171b4976db1f6be3fc42ff",
+      "tags": [],
+      "width": 1080,
+      "height": 1080,
+      "url": "https://avatars.mds.yandex.net/get-altay/13207207/2a00000191482a171b4976db1f6be3fc42ff/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вик  Куш",
+        "updateTime": "2024-08-12T19:56:44Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/59871/0y-2/{size}",
+        "publicId": "06y15e5bh2t6y6zqwm61d4h8vg"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11003990_2a0000018c105608e88f9b85eb059184859e",
+      "tags": [
+        {
+          "id": "Exterior",
+          "name": "Снаружи"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11003990/2a0000018c105608e88f9b85eb059184859e/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "alexsandrnemec",
+        "updateTime": "2023-11-27T10:32:05Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/53031/DeYeWyKx2xigXulK84MAUieTLA-1/{size}",
+        "publicId": "g7rzwm5tjb6cma9tx6jw4dxmvg"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11047134_2a0000018e3dc39770e8d8ae89ce92981f5e",
+      "tags": [
+        {
+          "id": "Accessibility",
+          "name": "Доступность"
+        }
+      ],
+      "width": 1280,
+      "height": 964,
+      "url": "https://avatars.mds.yandex.net/get-altay/11047134/2a0000018e3dc39770e8d8ae89ce92981f5e/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Александр Соколов",
+        "updateTime": "2024-03-14T16:20:14Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26311/0m-9/{size}",
+        "publicId": "vr4d1ndcffzmmdvwdrdc4729u4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:5IkU9k9vAKEry1i-9sujxtxt6y1w90",
+      "tags": [],
+      "width": 1280,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/5257938/2a000001813972eb12ec5234979000541079/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "фаррух ибрагимов",
+        "updateTime": "2022-06-06T14:37:23Z",
+        "hasUserIcon": true,
+        "publicId": "50w7wg56v6jwayukggfaz6tff8"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16431464-2a00000197dc65a4e42ebf3605926be5051e",
+      "tags": [
+        {
+          "id": "Menu",
+          "name": "Меню"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16431464/2a00000197dc65a4e42ebf3605926be5051e/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-06-30T17:28:23Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11411122_2a0000018e65dc7a939e1f08709266abe83c",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11411122/2a0000018e65dc7a939e1f08709266abe83c/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Диман",
+        "updateTime": "2024-03-22T11:12:14Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/27232/Oxcuu6oaoNaUxdSPBzVAfYM3ZU-1/{size}",
+        "publicId": "gkjgvcctq48m7j1g35ce5dm5um"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:zQAGi5FeUaylhJ7cS12bh4x1vAk0r4",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 576,
+      "height": 768,
+      "url": "https://avatars.mds.yandex.net/get-altay/5587495/2a0000017cd0d9c1dac32a680d423e6b730d/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Шах Дажанов",
+        "updateTime": "2021-10-30T10:58:25Z",
+        "hasUserIcon": true,
+        "publicId": "xmgy5z04j006ykz88hhz28ba4w"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16287657_2a00000199931b336b7c38e6b04fcdab8087",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/16287657/2a00000199931b336b7c38e6b04fcdab8087/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Катерина Меньшикова",
+        "updateTime": "2025-09-29T01:34:19Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/25358/0d-8/{size}",
+        "publicId": "z5xe4cn5jnrcwjz4d2vdftargr"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15586709_2a00000199931b2369b397ccc9c9d5c749d0",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15586709/2a00000199931b2369b397ccc9c9d5c749d0/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Катерина Меньшикова",
+        "updateTime": "2025-09-29T01:34:15Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/25358/0d-8/{size}",
+        "publicId": "z5xe4cn5jnrcwjz4d2vdftargr"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16430504_2a00000199a0abc2438acb276f4e925213fd",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/16430504/2a00000199a0abc2438acb276f4e925213fd/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Миша Алексеев",
+        "updateTime": "2025-10-01T16:47:17Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/29310/4mYmDYsiW46JOQQWACVdjiGvKPY-1/{size}",
+        "publicId": "mhpteta81pdtwp9h5cqj7gc6u4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11420721_2a0000018e65dc92bd270a6d3d7350da4bb5",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11420721/2a0000018e65dc92bd270a6d3d7350da4bb5/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Диман",
+        "updateTime": "2024-03-22T11:12:20Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/27232/Oxcuu6oaoNaUxdSPBzVAfYM3ZU-1/{size}",
+        "publicId": "gkjgvcctq48m7j1g35ce5dm5um"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16399547-2a000001993565022d686cbd231ae8d4de7b",
+      "tags": [
+        {
+          "id": "Menu",
+          "name": "Меню"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16399547/2a000001993565022d686cbd231ae8d4de7b/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-10T12:32:46Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:htE6bKx-dlrNggZfWLSaR3uGRY9bOi",
+      "tags": [
+        {
+          "id": "Interior",
+          "name": "Внутри"
+        },
+        {
+          "id": "Accessibility",
+          "name": "Доступность"
+        }
+      ],
+      "width": 1280,
+      "height": 960,
+      "url": "https://avatars.mds.yandex.net/get-altay/5533948/2a0000017cc84364ca157ea5576fca10ece6/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Olga Trusovskaya",
+        "updateTime": "2021-10-28T18:57:13Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/23134/8Uhq9xe2NoArA2S6NknJdJYcETs-1/{size}",
+        "publicId": "hdnaxuzb5mmwh2qhrfrb7vekjg"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:9776062_2a0000018b850041a1b55aeb333322b0feae",
+      "tags": [
+        {
+          "id": "Exterior",
+          "name": "Снаружи"
+        }
+      ],
+      "width": 1280,
+      "height": 960,
+      "url": "https://avatars.mds.yandex.net/get-altay/9776062/2a0000018b850041a1b55aeb333322b0feae/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Amrou Geba",
+        "updateTime": "2023-10-31T09:11:10Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/47747/zioOvvdYoa3APBtlZ5om7xv5Wc-1/{size}",
+        "publicId": "b7y3cxny30hmff9d942hpr5jyr"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16609617_2a00000199a0abb5403fa998590f192a49bc",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/16609617/2a00000199a0abb5403fa998590f192a49bc/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Миша Алексеев",
+        "updateTime": "2025-10-01T16:47:14Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/29310/4mYmDYsiW46JOQQWACVdjiGvKPY-1/{size}",
+        "publicId": "mhpteta81pdtwp9h5cqj7gc6u4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:14272474_2a00000194ec4f29c79a81c41843924fa872",
+      "tags": [],
+      "width": 576,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/14272474/2a00000194ec4f29c79a81c41843924fa872/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:03:20Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:13530753_2a000001915c8bd54aa0ae151be3e0fbefae",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/13530753/2a000001915c8bd54aa0ae151be3e0fbefae/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Михаил Шкильнюк",
+        "updateTime": "2024-08-16T18:55:56Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/36689/enc-9cbb0a503bc1719b7371321c029b8ca71f51608585d6c56762e937081495f4fd/{size}",
+        "publicId": "m8bphvbjjw3ungn1513b91tbuw"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15042938_2a00000197ee04c270ea282d2406152e1335",
+      "tags": [
+        {
+          "id": "Exterior",
+          "name": "Снаружи"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15042938/2a00000197ee04c270ea282d2406152e1335/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Андрей Чистяков",
+        "updateTime": "2025-07-09T07:09:42Z",
+        "hasUserIcon": true,
+        "publicId": "h8pgt639wxt55ezethhewa402r"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:13091609_2a0000018e85a7efa934bc4e635b921c611d",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/13091609/2a0000018e85a7efa934bc4e635b921c611d/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Илья Касаткин",
+        "updateTime": "2024-03-28T15:22:42Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/57243/0b-2/{size}",
+        "publicId": "70ceyzreqfbbj3urym3y3bqwj8"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:9829646_2a00000191482a171a5dcc4440df263fa94a",
+      "tags": [],
+      "width": 1080,
+      "height": 1080,
+      "url": "https://avatars.mds.yandex.net/get-altay/9829646/2a00000191482a171a5dcc4440df263fa94a/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вик  Куш",
+        "updateTime": "2024-08-12T19:56:44Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/59871/0y-2/{size}",
+        "publicId": "06y15e5bh2t6y6zqwm61d4h8vg"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:10247017_2a00000190828a82cadd7c416a8137661aa1",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/10247017/2a00000190828a82cadd7c416a8137661aa1/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Виктор Арзамасцев",
+        "updateTime": "2024-07-05T10:57:16Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/31804/0s-3/{size}",
+        "publicId": "dn5zqb82kp3h1fnqwh9mrrrv4w"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:13786585_2a00000194ec4f3ed7708120cdf07ea526c9",
+      "tags": [],
+      "width": 576,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/13786585/2a00000194ec4f3ed7708120cdf07ea526c9/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:03:26Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16390227-2a00000197dc6ec3b9d0a52edf3e6442034d",
+      "tags": [
+        {
+          "id": "Enter",
+          "name": "Вход"
+        },
+        {
+          "id": "Accessibility",
+          "name": "Доступность"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16390227/2a00000197dc6ec3b9d0a52edf3e6442034d/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-06-30T17:28:23Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15043309_2a0000019a9b4b070f274ab303484cf0ab43",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15043309/2a0000019a9b4b070f274ab303484cf0ab43/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Rifat Zainutdinov",
+        "updateTime": "2025-11-19T08:46:20Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/27274/O6LrOCCSNnggRI4rXhFsUWf7Mg-1/{size}",
+        "publicId": "f6qqthqfuurcb3u92qy8hjeuf8"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15153151_2a00000194ec4ecb9d52655d6c3543ea7e9e",
+      "tags": [],
+      "width": 1280,
+      "height": 576,
+      "url": "https://avatars.mds.yandex.net/get-altay/15153151/2a00000194ec4ecb9d52655d6c3543ea7e9e/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:02:57Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15232272_2a00000194ec4ef7ddcaa03c2fae0163f795",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 576,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15232272/2a00000194ec4ef7ddcaa03c2fae0163f795/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:03:08Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15267123_2a00000196877367c017209c94444363b686",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15267123/2a00000196877367c017209c94444363b686/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Полина Патракеева",
+        "updateTime": "2025-04-30T16:06:53Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/47747/0l-1/{size}",
+        "publicId": "6f68dr8qxf20b089wcm6wwe31m"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16823151-2a000001993560fe05e1df731c2cd4390413",
+      "tags": [
+        {
+          "id": "Menu",
+          "name": "Меню"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16823151/2a000001993560fe05e1df731c2cd4390413/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-10T12:32:46Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:14922087_2a00000194ec4f146bd5382a5b8c182c358b",
+      "tags": [],
+      "width": 576,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/14922087/2a00000194ec4f146bd5382a5b8c182c358b/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:03:15Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15401366_2a00000194ec4f5ce03e26ceaf84d81875e6",
+      "tags": [],
+      "width": 576,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/15401366/2a00000194ec4f5ce03e26ceaf84d81875e6/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Вадим Демен",
+        "updateTime": "2025-02-09T20:03:33Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/26057/YcFRDo3F5xGCfPBVRnhJl95So-1/{size}",
+        "publicId": "fvyca3zrxpjbjzj4gy21u0q6k4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16634215-2a000001993558fb00d811f4aa19ec02c121",
+      "tags": [
+        {
+          "id": "Menu",
+          "name": "Меню"
+        }
+      ],
+      "width": 960,
+      "height": 720,
+      "url": "https://avatars.mds.yandex.net/get-altay/16634215/2a000001993558fb00d811f4aa19ec02c121/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-10T12:32:46Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16443419_2a0000019a7f1b73070c7b10f7fd9e1483ad",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/16443419/2a0000019a7f1b73070c7b10f7fd9e1483ad/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Даша Б.",
+        "updateTime": "2025-11-13T21:25:00Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/65952/0h-5/{size}",
+        "publicId": "v1twhnkeynwnxjb4cb1028fpwr"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:10095165_2a000001915c8bd91ae14e3559733df02c1a",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/10095165/2a000001915c8bd91ae14e3559733df02c1a/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Михаил Шкильнюк",
+        "updateTime": "2024-08-16T18:55:57Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/36689/enc-9cbb0a503bc1719b7371321c029b8ca71f51608585d6c56762e937081495f4fd/{size}",
+        "publicId": "m8bphvbjjw3ungn1513b91tbuw"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:16390227_2a0000019962fe4e6f2bd322e4be55a5ecf3",
+      "tags": [
+        {
+          "id": "Panorama",
+          "name": "Панорама"
+        }
+      ],
+      "width": 1280,
+      "height": 750,
+      "url": "https://avatars.mds.yandex.net/get-altay/16390227/2a0000019962fe4e6f2bd322e4be55a5ecf3/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-09-19T17:20:58Z"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:13220791_2a0000019498244fec45e6f11a4b16e9d92d",
+      "tags": [
+        {
+          "id": "Panorama",
+          "name": "Панорама"
+        }
+      ],
+      "width": 1280,
+      "height": 750,
+      "url": "https://avatars.mds.yandex.net/get-altay/13220791/2a0000019498244fec45e6f11a4b16e9d92d/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-01-24T11:48:25Z"
+      }
+    }
+  ]
+}

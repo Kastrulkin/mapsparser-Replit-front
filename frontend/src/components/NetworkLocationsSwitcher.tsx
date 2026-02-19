@@ -73,9 +73,9 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
         );
     }
 
-    // if (locations.length === 0) {
-    //     return null; // Не показываем dropdown если нет точек сети
-    // }
+    if (locations.length === 0) {
+        return null; // Не показываем dropdown если нет точек сети
+    }
 
     return (
         <div className="relative">

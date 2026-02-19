@@ -10,6 +10,6 @@
   <!-- Круглый фон -->
   <circle cx="16" cy="16" r="15" fill="url(#bg)" stroke="#c2410c" stroke-width="1"/>
   
-  <!-- Буквы BB -->
-  <text x="16" y="22" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="white">BB</text>
-</svg> 
+  <!-- Буквы LOS -->
+  <text x="16" y="21.5" font-family="Arial, sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="white">LOS</text>
+</svg>

@@ -44,11 +44,16 @@ if str(SRC_DIR) not in sys.path:
 # Порядок таблиц по FK (Postgres lowercase). Только те, что есть в Alembic/архитектуре.
 MIGRATION_ORDER = [
     "users",
+    "usersessions",
     "networks",
     "businesses",
+    "businessprofiles",
     "parsequeue",
     "businessmaplinks",
     "userservices",
+    "externalbusinessaccounts",
+    "externalbusinessreviews",
+    "externalbusinessstats",
     "financialtransactions",
     "financialmetrics",
     "cards",
@@ -58,11 +63,16 @@ MIGRATION_ORDER = [
 # SQLite имя (как в sqlite_master) → Postgres имя
 SQLITE_TO_PG = {
     "Users": "users",
+    "UserSessions": "usersessions",
     "Networks": "networks",
     "Businesses": "businesses",
+    "BusinessProfiles": "businessprofiles",
     "ParseQueue": "parsequeue",
     "BusinessMapLinks": "businessmaplinks",
     "UserServices": "userservices",
+    "ExternalBusinessAccounts": "externalbusinessaccounts",
+    "ExternalBusinessReviews": "externalbusinessreviews",
+    "ExternalBusinessStats": "externalbusinessstats",
     "FinancialTransactions": "financialtransactions",
     "FinancialMetrics": "financialmetrics",
     "Cards": "cards",

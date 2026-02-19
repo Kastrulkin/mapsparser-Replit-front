@@ -1067,8 +1067,12 @@ class DatabaseManager:
             WHERE network_id = %s
             ORDER BY created_at DESC
         """, (network_id,))
-        cols = [d[0] for d in cursor.description] if cursor.description else []
         rows = cursor.fetchall()
+
+        if rows and hasattr(rows[0], "keys"):
+            return [{k: row[k] for k in row.keys()} for row in rows]
+
+        cols = [d[0] for d in cursor.description] if cursor.description else []
         return [dict(zip(cols, row)) for row in rows]
     
     def get_all_users_with_businesses(self) -> List[Dict[str, Any]]:
@@ -1292,7 +1296,10 @@ class DatabaseManager:
         row = cursor.fetchone()
         if not row:
             return None
-        
+
+        if hasattr(row, "keys"):
+            return {k: row[k] for k in row.keys()}
+
         columns = [desc[0] for desc in cursor.description]
         return dict(zip(columns, row))
     
@@ -1339,21 +1346,37 @@ class DatabaseManager:
         biz_name = business.get('name') if hasattr(business, 'get') else (business[1] if len(business) > 1 else 'N/A')
         print(f"🔍 Удаление бизнеса: ID={business_id}, name={biz_name}")
         
-        # Удаляем связанные данные
-        cursor.execute("DELETE FROM userservices WHERE business_id = %s", (business_id,))
-        deleted_services = cursor.rowcount
-        cursor.execute("DELETE FROM financialtransactions WHERE business_id = %s", (business_id,))
-        deleted_transactions = cursor.rowcount
-        cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
-        deleted_links = cursor.rowcount
-        cursor.execute("DELETE FROM cards WHERE business_id = %s", (business_id,))
-        deleted_results = cursor.rowcount
-        cursor.execute("DELETE FROM parsequeue WHERE business_id = %s", (business_id,))
-        deleted_queue = cursor.rowcount
-        cursor.execute("DELETE FROM telegrambindtokens WHERE business_id = %s", (business_id,))
-        deleted_tokens = cursor.rowcount
+        # Удаляем связанные данные. Некоторые таблицы могут отсутствовать в отдельных окружениях.
+        deleted_counts = {}
+        related_tables = [
+            "userservices",
+            "financialtransactions",
+            "businessmaplinks",
+            "cards",
+            "parsequeue",
+            "telegrambindtokens",
+        ]
+
+        for table_name in related_tables:
+            cursor.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+            table_reg = cursor.fetchone()
+            table_exists = (table_reg[0] if table_reg and not hasattr(table_reg, "get") else table_reg.get("to_regclass")) if table_reg else None
+            if not table_exists:
+                deleted_counts[table_name] = 0
+                continue
+
+            cursor.execute(f"DELETE FROM {table_name} WHERE business_id = %s", (business_id,))
+            deleted_counts[table_name] = cursor.rowcount
         
-        print(f"🔍 Удалено связанных данных: services={deleted_services}, transactions={deleted_transactions}, links={deleted_links}, results={deleted_results}, queue={deleted_queue}, tokens={deleted_tokens}")
+        print(
+            "🔍 Удалено связанных данных: "
+            f"services={deleted_counts.get('userservices', 0)}, "
+            f"transactions={deleted_counts.get('financialtransactions', 0)}, "
+            f"links={deleted_counts.get('businessmaplinks', 0)}, "
+            f"results={deleted_counts.get('cards', 0)}, "
+            f"queue={deleted_counts.get('parsequeue', 0)}, "
+            f"tokens={deleted_counts.get('telegrambindtokens', 0)}"
+        )
         
         # Удаляем сам бизнес
         cursor.execute("DELETE FROM businesses WHERE id = %s", (business_id,))

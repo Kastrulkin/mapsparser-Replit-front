@@ -1,0 +1,348 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            149,
+            73,
+            8
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 4
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149585,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Приозерск",
+          "HotspotMetaData": {
+            "id": 53149585,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      78.37210384253558,
+                      18.715788147170315
+                    ],
+                    [
+                      134.37789615740803,
+                      18.715788147170315
+                    ],
+                    [
+                      134.37789615740803,
+                      8.748485694854025
+                    ],
+                    [
+                      78.37210384253558,
+                      8.748485694854025
+                    ],
+                    [
+                      78.37210384253558,
+                      18.715788147170315
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      103.8749999999718,
+                      24.093750000030923
+                    ],
+                    [
+                      108.8749999999718,
+                      24.093750000030923
+                    ],
+                    [
+                      108.8749999999718,
+                      18.715788147170315
+                    ],
+                    [
+                      103.8749999999718,
+                      18.715788147170315
+                    ],
+                    [
+                      103.8749999999718,
+                      24.093750000030923
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTU4NRJL0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0J_RgNC40L7Qt9C10YDRgdC6IgoNuuzwQRXYJHRC"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            61.03595459785224,
+            30.115585327148278
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152400,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Сосново",
+          "HotspotMetaData": {
+            "id": 53152400,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      109.66348752020713,
+                      196.0231791553433
+                    ],
+                    [
+                      153.33651247973648,
+                      196.0231791553433
+                    ],
+                    [
+                      153.33651247973648,
+                      187.8160946866774
+                    ],
+                    [
+                      109.66348752020713,
+                      187.8160946866774
+                    ],
+                    [
+                      109.66348752020713,
+                      196.0231791553433
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      128.9999999999718,
+                      202.28125000002728
+                    ],
+                    [
+                      133.9999999999718,
+                      202.28125000002728
+                    ],
+                    [
+                      133.9999999999718,
+                      196.0231791553433
+                    ],
+                    [
+                      128.9999999999718,
+                      196.0231791553433
+                    ],
+                    [
+                      128.9999999999718,
+                      202.28125000002728
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjQwMBJ50KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0J_RgNC40L7Qt9C10YDRgdC60LjQuSDRgNCw0LnQvtC9LCDQv9C-0YHRkdC70L7QuiDQodC-0YHQvdC-0LLQviIKDW4H8kEVFztyQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.55762738330669,
+            30.25360107421859
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152246,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Сапёрное",
+          "HotspotMetaData": {
+            "id": 53152246,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      53.4521454933556,
+                      139.404905994581
+                    ],
+                    [
+                      103.54785450658801,
+                      139.404905994581
+                    ],
+                    [
+                      103.54785450658801,
+                      129.24686784743972
+                    ],
+                    [
+                      53.4521454933556,
+                      129.24686784743972
+                    ],
+                    [
+                      53.4521454933556,
+                      139.404905994581
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      75.9999999999718,
+                      144.68750000002547
+                    ],
+                    [
+                      80.9999999999718,
+                      144.68750000002547
+                    ],
+                    [
+                      80.9999999999718,
+                      139.404905994581
+                    ],
+                    [
+                      75.9999999999718,
+                      139.404905994581
+                    ],
+                    [
+                      75.9999999999718,
+                      144.68750000002547
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjI0NhK5AdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCf0YDQuNC-0LfQtdGA0YHQutC40Lkg0YDQsNC50L7QvSwg0KDQvtC80LDRiNC60LjQvdGB0LrQvtC1INGB0LXQu9GM0YHQutC-0LUg0L_QvtGB0LXQu9C10L3QuNC1LCDQv9C-0YHRkdC70L7QuiDQodCw0L_RkdGA0L3QvtC1IgoNarPvQRUl2nJC"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.713016659343545,
+            29.96246337890609
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152375,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Мельниково",
+          "HotspotMetaData": {
+            "id": 53152375,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      10.162294810971616,
+                      60.28390803817638
+                    ],
+                    [
+                      73.71270518897109,
+                      60.28390803817638
+                    ],
+                    [
+                      73.71270518897109,
+                      52.180365803844325
+                    ],
+                    [
+                      10.162294810971616,
+                      52.180365803844325
+                    ],
+                    [
+                      10.162294810971616,
+                      60.28390803817638
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      39.437499999971806,
+                      66.59375000003092
+                    ],
+                    [
+                      44.437499999971806,
+                      66.59375000003092
+                    ],
+                    [
+                      44.437499999971806,
+                      60.28390803817638
+                    ],
+                    [
+                      39.437499999971806,
+                      60.28390803817638
+                    ],
+                    [
+                      39.437499999971806,
+                      66.59375000003092
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjM3NRK_AdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCf0YDQuNC-0LfQtdGA0YHQutC40Lkg0YDQsNC50L7QvSwg0JzQtdC70YzQvdC40LrQvtCy0YHQutC-0LUg0YHQtdC70YzRgdC60L7QtSDQv9C-0YHQtdC70LXQvdC40LUsINC_0L7RgdGR0LvQvtC6INCc0LXQu9GM0L3QuNC60L7QstC-IgoN5BfuQRWrsHNC"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.922517708427534,
+            29.761619567870934
+          ]
+        }
+      }
+    ]
+  }
+}

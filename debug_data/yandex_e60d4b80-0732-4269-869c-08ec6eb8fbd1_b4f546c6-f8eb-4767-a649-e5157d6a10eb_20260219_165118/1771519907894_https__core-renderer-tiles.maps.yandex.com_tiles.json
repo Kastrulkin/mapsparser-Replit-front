@@ -1,0 +1,83 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            4787,
+            2388,
+            13
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 1
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "indoor_covered": false,
+          "selection_id": 53081815617802,
+          "source_id": 1658613531,
+          "tags": [
+            "poi",
+            "major_landmark"
+          ],
+          "name": "Смольный собор",
+          "HotspotMetaData": {
+            "id": 1658613531,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      142.42773437403957,
+                      172.15703125094296
+                    ],
+                    [
+                      198.42773437403957,
+                      172.15703125094296
+                    ],
+                    [
+                      198.42773437403957,
+                      228.15703125094296
+                    ],
+                    [
+                      142.42773437403957,
+                      228.15703125094296
+                    ],
+                    [
+                      142.42773437403957,
+                      172.15703125094296
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://org?oid=1015445831"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.948850090070366,
+            30.395466797053654
+          ]
+        }
+      }
+    ]
+  }
+}

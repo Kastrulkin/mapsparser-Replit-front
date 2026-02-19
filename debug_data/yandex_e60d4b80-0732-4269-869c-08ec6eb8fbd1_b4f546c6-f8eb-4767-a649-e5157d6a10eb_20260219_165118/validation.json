@@ -1,0 +1,31 @@
+{
+  "is_successful": true,
+  "reason": "success",
+  "quality_score": 0.6,
+  "hard_missing": [],
+  "missing_fields": [
+    "address",
+    "categories",
+    "news",
+    "phone",
+    "site",
+    "hours",
+    "hours_full",
+    "description",
+    "rubric"
+  ],
+  "found_fields": [
+    "title_or_name",
+    "rating",
+    "reviews_count",
+    "reviews",
+    "products",
+    "photos"
+  ],
+  "warnings": [
+    "missing_in_source:address",
+    "missing_in_source:categories",
+    "location_info_rejected_not_org_bound",
+    "identity_weak_sources_only"
+  ]
+}

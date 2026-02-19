@@ -1,0 +1,186 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            4786,
+            2398,
+            13
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 2
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 100118337,
+          "tags": [
+            "transit",
+            "transit_location"
+          ],
+          "name": "Александровская",
+          "HotspotMetaData": {
+            "id": 100118337,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      55.505017405579565,
+                      186.43315493111731
+                    ],
+                    [
+                      146.4988888425287,
+                      186.43315493111731
+                    ],
+                    [
+                      146.4988888425287,
+                      176.46585247881012
+                    ],
+                    [
+                      55.505017405579565,
+                      176.46585247881012
+                    ],
+                    [
+                      55.505017405579565,
+                      186.43315493111731
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      95.00195312401047,
+                      176.46585247881012
+                    ],
+                    [
+                      107.00195312401047,
+                      176.46585247881012
+                    ],
+                    [
+                      107.00195312401047,
+                      164.08789062598953
+                    ],
+                    [
+                      95.00195312401047,
+                      164.08789062598953
+                    ],
+                    [
+                      95.00195312401047,
+                      176.46585247881012
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://transit/stop?id=station__lh_9603882"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.73173796156096,
+            30.339603759348236
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53166383,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Александровская",
+          "HotspotMetaData": {
+            "id": 53166383,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      59.71203385989065,
+                      158.44954609539127
+                    ],
+                    [
+                      169.6629661381594,
+                      158.44954609539127
+                    ],
+                    [
+                      169.6629661381594,
+                      146.405722298834
+                    ],
+                    [
+                      59.71203385989065,
+                      146.405722298834
+                    ],
+                    [
+                      59.71203385989065,
+                      158.44954609539127
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      114.18749999901047,
+                      152.92763419711264
+                    ],
+                    [
+                      115.18749999901047,
+                      152.92763419711264
+                    ],
+                    [
+                      115.18749999901047,
+                      151.92763419711264
+                    ],
+                    [
+                      114.18749999901047,
+                      151.92763419711264
+                    ],
+                    [
+                      114.18749999901047,
+                      152.92763419711264
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE2NjM4MxJ70KDQvtGB0YHQuNGPLCDQodCw0L3QutGCLdCf0LXRgtC10YDQsdGD0YDQsywg0J_Rg9GI0LrQuNC90YHQutC40Lkg0YDQsNC50L7QvSwg0L_QvtGB0ZHQu9C-0Log0JDQu9C10LrRgdCw0L3QtNGA0L7QstGB0LrQsNGPIgoNU7zyQRVL7m5C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.733268610591445,
+            30.34195303916915
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "data": [
+    {
+      "id": "urn:yandex:sprav:photo:10830675_2a0000018d92c0012004926394cdbba5e562",
+      "tags": [],
+      "width": 562,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/10830675/2a0000018d92c0012004926394cdbba5e562/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Muhammadrasul Muhammedov",
+        "updateTime": "2024-02-10T11:21:16Z",
+        "hasUserIcon": true,
+        "publicId": "ax4tb9w6g9tza4dcapeannpvm4"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11564583_2a0000018dca934d4f6a05a08df75db7040b",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 562,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11564583/2a0000018dca934d4f6a05a08df75db7040b/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Мухаммадрасул Мухаммедов",
+        "updateTime": "2024-02-21T07:31:10Z",
+        "hasUserIcon": true,
+        "publicId": "n4z6a3erk57tpe7pvhybqtyf4w"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11421964_2a0000018bd98d9f3e69403338401453071e",
+      "tags": [],
+      "width": 960,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11421964/2a0000018bd98d9f3e69403338401453071e/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "андрей медгоров",
+        "updateTime": "2023-11-16T19:13:49Z",
+        "hasUserIcon": true,
+        "imageUrlTemplate": "https://avatars.mds.yandex.net/get-yapic/47747/0l-7/{size}",
+        "publicId": "yw3v253mmfccywwugybj9gdd7g"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:11886651_2a0000018dca92d8799d814f30cd774baa07",
+      "tags": [
+        {
+          "id": "Food",
+          "name": "Еда"
+        }
+      ],
+      "width": 562,
+      "height": 1280,
+      "url": "https://avatars.mds.yandex.net/get-altay/11886651/2a0000018dca92d8799d814f30cd774baa07/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Мухаммадрасул Мухаммедов",
+        "updateTime": "2024-02-21T07:30:41Z",
+        "hasUserIcon": true,
+        "publicId": "n4z6a3erk57tpe7pvhybqtyf4w"
+      }
+    },
+    {
+      "id": "urn:yandex:sprav:photo:15416005_2a0000019a0995e8aa99d53630484b8eb2b9",
+      "tags": [
+        {
+          "id": "Panorama",
+          "name": "Панорама"
+        }
+      ],
+      "width": 1280,
+      "height": 750,
+      "url": "https://avatars.mds.yandex.net/get-altay/15416005/2a0000019a0995e8aa99d53630484b8eb2b9/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2025-10-22T01:43:31Z"
+      }
+    }
+  ]
+}
