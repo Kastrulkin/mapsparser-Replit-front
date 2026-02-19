@@ -18,10 +18,16 @@ node_modules/
 
 # Other
 *.sqlite3
+*.sqlite
 *.db
 *.db-shm
 *.db-wal
 data/backups/
+debug_data/
+legacy.sqlite
+data/legacy.sqlite
+seo-images.tar
+seo-images.tar.gz
 
 # Frontend Build
 frontend/dist/

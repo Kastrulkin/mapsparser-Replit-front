@@ -10,10 +10,10 @@ RUN npm run build
 
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 (Debian); Playwright плохо дружит с Alpine.
-FROM python:3.11-slim
+FROM python:3.11-bookworm
 
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
     postgresql-client \
@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
-RUN apt-get update \
+RUN apt-get -o Acquire::Retries=5 update \
     && python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 

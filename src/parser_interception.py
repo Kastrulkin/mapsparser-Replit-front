@@ -598,6 +598,10 @@ class YandexMapsInterceptionParser:
                 or "запросы отправляли вы" in t
             )
 
+        def _is_captcha_url(page_url: str) -> bool:
+            u = (page_url or "").lower()
+            return "showcaptcha" in u or "/captcha" in u
+
         # Инициализируем bundle-директорию для этого прогона (если ещё не задана в __init__)
         if not self.debug_bundle_id:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -745,7 +749,7 @@ class YandexMapsInterceptionParser:
 
         # Double check if we are still stuck on Captcha
         title = page.title()
-        if _is_captcha_page(title):
+        if _is_captcha_page(title) or _is_captcha_url(page.url):
             print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
             # Возвращаем специальную ошибку, чтобы воркер знал о капче
             return {"error": "captcha_detected", "captcha_url": page.url}
@@ -766,6 +770,10 @@ class YandexMapsInterceptionParser:
         current_url = page.url
         title = page.title()
         print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+
+        if _is_captcha_url(current_url) or _is_captcha_page(title):
+            print("❌ Обнаружен редирект на капчу после загрузки карточки.")
+            return {"error": "captcha_detected", "captcha_url": current_url}
 
         # org-centric: world-view (z<=3) — карта сломалась, возвращаемся на overview
         if _is_world_view(current_url):
@@ -1106,6 +1114,11 @@ class YandexMapsInterceptionParser:
             data.get("address") or data.get("rating")
             or (data.get("categories") and len(data.get("categories", [])) > 0)
         )
+
+        if _is_captcha_url(page.url):
+            print("❌ Финальная страница капчи, возвращаем captcha_detected.")
+            return {"error": "captcha_detected", "captcha_url": page.url}
+
         if not has_org_api and not has_critical:
             print("❌ Org API не перехвачен, критичных полей нет. Возвращаем org_api_not_loaded.")
             return {"error": "org_api_not_loaded", "url": page.url}
