@@ -1,0 +1,429 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            596,
+            299,
+            10
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 5
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152594,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Оржицы",
+          "HotspotMetaData": {
+            "id": 53152594,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      109.77486327496808,
+                      182.92380926442274
+                    ],
+                    [
+                      153.22513672480272,
+                      182.92380926442274
+                    ],
+                    [
+                      153.22513672480272,
+                      172.8529645777744
+                    ],
+                    [
+                      109.77486327496808,
+                      172.8529645777744
+                    ],
+                    [
+                      109.77486327496808,
+                      182.92380926442274
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      130.99999999988722,
+                      178.38838692109857
+                    ],
+                    [
+                      131.99999999988722,
+                      178.38838692109857
+                    ],
+                    [
+                      131.99999999988722,
+                      177.38838692109857
+                    ],
+                    [
+                      130.99999999988722,
+                      177.38838692109857
+                    ],
+                    [
+                      130.99999999988722,
+                      178.38838692109857
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjU5NBKxAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCe0YDQttC40YbQutC-0LUg0YHQtdC70YzRgdC60L7QtSDQv9C-0YHQtdC70LXQvdC40LUsINC00LXRgNC10LLQvdGPINCe0YDQttC40YbRiyIKDeCx7UEVnQJvQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.75625600031802,
+            29.711837768554528
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152570,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Гостилицы",
+          "HotspotMetaData": {
+            "id": 53152570,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      40.6398154499293,
+                      191.680025204485
+                    ],
+                    [
+                      95.48518454984878,
+                      191.680025204485
+                    ],
+                    [
+                      95.48518454984878,
+                      182.0342486377267
+                    ],
+                    [
+                      40.6398154499293,
+                      182.0342486377267
+                    ],
+                    [
+                      40.6398154499293,
+                      191.680025204485
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      67.56249999988358,
+                      187.35713692110585
+                    ],
+                    [
+                      68.56249999988358,
+                      187.35713692110585
+                    ],
+                    [
+                      68.56249999988358,
+                      186.35713692110585
+                    ],
+                    [
+                      67.56249999988358,
+                      186.35713692110585
+                    ],
+                    [
+                      67.56249999988358,
+                      187.35713692110585
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjU3MBKBAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINC00LXRgNC10LLQvdGPINCT0L7RgdGC0LjQu9C40YbRiyIKDXL_7EEVPfxuQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.75004114039027,
+            29.62471961975082
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152615,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Ропша",
+          "HotspotMetaData": {
+            "id": 53152615,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      224.97070813607934,
+                      215.31515803826915
+                    ],
+                    [
+                      257.27929186369147,
+                      215.31515803826915
+                    ],
+                    [
+                      257.27929186369147,
+                      207.21161580393527
+                    ],
+                    [
+                      224.97070813607934,
+                      207.21161580393527
+                    ],
+                    [
+                      224.97070813607934,
+                      215.31515803826915
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      240.62499999988722,
+                      211.76338692109857
+                    ],
+                    [
+                      241.62499999988358,
+                      211.76338692109857
+                    ],
+                    [
+                      241.62499999988358,
+                      210.76338692109857
+                    ],
+                    [
+                      240.62499999988722,
+                      210.76338692109857
+                    ],
+                    [
+                      240.62499999988722,
+                      211.76338692109857
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjYxNRKzAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCg0L7Qv9GI0LjQvdGB0LrQvtC1INGB0LXQu9GM0YHQutC-0LUg0L_QvtGB0LXQu9C10L3QuNC1LCDQv9C-0YHRkdC70L7QuiDQoNC-0L_RiNCwIgoNK-buQRXr6m5C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.73312305142588,
+            29.86238479614242
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152632,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Низино",
+          "HotspotMetaData": {
+            "id": 53152632,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      231.5473426276876,
+                      65.25265803827642
+                    ],
+                    [
+                      269.95265737208683,
+                      65.25265803827642
+                    ],
+                    [
+                      269.95265737208683,
+                      57.14911580394255
+                    ],
+                    [
+                      231.5473426276876,
+                      57.14911580394255
+                    ],
+                    [
+                      231.5473426276876,
+                      65.25265803827642
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      250.24999999988722,
+                      61.70088692110585
+                    ],
+                    [
+                      251.24999999988722,
+                      61.70088692110585
+                    ],
+                    [
+                      251.24999999988722,
+                      60.70088692110585
+                    ],
+                    [
+                      250.24999999988722,
+                      60.70088692110585
+                    ],
+                    [
+                      250.24999999988722,
+                      61.70088692110585
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjYzMhJ70KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0JvQvtC80L7QvdC-0YHQvtCy0YHQutC40Lkg0YDQsNC50L7QvSwg0LTQtdGA0LXQstC90Y8g0J3QuNC30LjQvdC-IgoNUAHvQRVQVW9C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.837008475962904,
+            29.875602722167812
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152569,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Русско-Высоцкое",
+          "HotspotMetaData": {
+            "id": 53152569,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      254.02009391411048,
+                      262.5230088557073
+                    ],
+                    [
+                      344.1049060856567,
+                      262.5230088557073
+                    ],
+                    [
+                      344.1049060856567,
+                      252.44126498649712
+                    ],
+                    [
+                      254.02009391411048,
+                      252.44126498649712
+                    ],
+                    [
+                      254.02009391411048,
+                      262.5230088557073
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      298.5624999998836,
+                      257.98213692110585
+                    ],
+                    [
+                      299.5624999998836,
+                      257.98213692110585
+                    ],
+                    [
+                      299.5624999998836,
+                      256.98213692110585
+                    ],
+                    [
+                      298.5624999998836,
+                      256.98213692110585
+                    ],
+                    [
+                      298.5624999998836,
+                      257.98213692110585
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjU2ORLJAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCg0YPRgdGB0LrQvi3QktGL0YHQvtGG0LrQvtC1INGB0LXQu9GM0YHQutC-0LUg0L_QvtGB0LXQu9C10L3QuNC1LCDRgdC10LvQviDQoNGD0YHRgdC60L4t0JLRi9GB0L7RhtC60L7QtSIKDS6J70EVFMpuQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.7010612776061,
+            29.94194984436019
+          ]
+        }
+      }
+    ]
+  }
+}

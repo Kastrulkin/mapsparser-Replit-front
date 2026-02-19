@@ -1,0 +1,104 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            9582,
+            4788,
+            14
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 1
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 1494459740,
+          "tags": [
+            "admin"
+          ],
+          "name": "Усть-Славянка",
+          "HotspotMetaData": {
+            "id": 1494459740,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      -25.515412973996717,
+                      126.40309945680201
+                    ],
+                    [
+                      55.765412970329635,
+                      126.40309945680201
+                    ],
+                    [
+                      55.765412970329635,
+                      119.22190054669045
+                    ],
+                    [
+                      -25.515412973996717,
+                      119.22190054669045
+                    ],
+                    [
+                      -25.515412973996717,
+                      126.40309945680201
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      14.624999998137355,
+                      123.31250000186265
+                    ],
+                    [
+                      15.624999998137355,
+                      123.31250000186265
+                    ],
+                    [
+                      15.624999998137355,
+                      122.31250000186265
+                    ],
+                    [
+                      14.624999998137355,
+                      122.31250000186265
+                    ],
+                    [
+                      14.624999998137355,
+                      123.31250000186265
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=CgoxNDk0NDU5NzQwElvQoNC-0YHRgdC40Y8sINCh0LDQvdC60YIt0J_QtdGC0LXRgNCx0YPRgNCzLCDRgtC10YDRgNC40YLQvtGA0LjRjyDQo9GB0YLRjC3QodC70LDQstGP0L3QutCwIgoNqVj0QRWvUW9C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.82976743839845,
+            30.54329037666305
+          ]
+        }
+      }
+    ]
+  }
+}

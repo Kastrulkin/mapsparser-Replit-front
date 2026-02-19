@@ -1,0 +1,105 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            4790,
+            2394,
+            13
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 1
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 100118722,
+          "tags": [
+            "transit",
+            "transit_location"
+          ],
+          "name": "Рыбацкое",
+          "HotspotMetaData": {
+            "id": 100118722,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      -12.47005468729185,
+                      65.7058635482681
+                    ],
+                    [
+                      38.927085935371,
+                      65.7058635482681
+                    ],
+                    [
+                      38.927085935371,
+                      55.635018861619756
+                    ],
+                    [
+                      -12.47005468729185,
+                      55.635018861619756
+                    ],
+                    [
+                      -12.47005468729185,
+                      65.7058635482681
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      5.228515624039574,
+                      55.635018861619756
+                    ],
+                    [
+                      21.228515624068677,
+                      55.635018861619756
+                    ],
+                    [
+                      21.228515624068677,
+                      42.298828125873115
+                    ],
+                    [
+                      5.228515624039574,
+                      42.298828125873115
+                    ],
+                    [
+                      5.228515624039574,
+                      55.635018861619756
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://transit/stop?id=station__9805905"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.830856939554685,
+            30.500317700207074
+          ]
+        }
+      }
+    ]
+  }
+}

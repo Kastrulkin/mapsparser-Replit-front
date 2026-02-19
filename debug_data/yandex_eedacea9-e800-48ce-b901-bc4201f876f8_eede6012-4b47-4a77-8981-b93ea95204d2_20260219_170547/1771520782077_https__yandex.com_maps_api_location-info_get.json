@@ -1,0 +1,459 @@
+{
+  "data": {
+    "categoryIcons": {
+      "bounds": [
+        [
+          32.157095500000004,
+          59.96422798390402
+        ],
+        [
+          33.3950365,
+          60.62943809807526
+        ]
+      ],
+      "items": [
+        {
+          "id": "goodplace",
+          "type": "special",
+          "image": {
+            "urlTemplate": "https://mobile-maps-common.s3.yandex.net/v1/main_screen_icon/pin_award_v2.png"
+          },
+          "displayText": "Хорошие \nместа",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "{\"text\":\"Хорошее место\",\"what\":[{\"attr_name\":\"feature\",\"attr_values\":[\"good_place:1\"]}]}"
+          },
+          "category": {
+            "name": "{\"text\":\"Хорошее место\",\"what\":[{\"attr_name\":\"feature\",\"attr_values\":[\"good_place:1\"]}]}"
+          },
+          "pixelLinks": {
+            "load": [],
+            "impression": [],
+            "mrc50": [],
+            "mrc100": []
+          }
+        },
+        {
+          "id": "food",
+          "type": "regular",
+          "icon": "restaurants",
+          "color": "rgb(255, 161, 94)",
+          "displayText": "Где поесть",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Где поесть"
+          },
+          "category": {
+            "name": "Где поесть"
+          }
+        },
+        {
+          "id": "hotels",
+          "type": "regular",
+          "icon": "hotels",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Отели",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "category_id:184106408"
+          },
+          "category": {
+            "name": "category_id:184106408"
+          }
+        },
+        {
+          "id": "grocery-store",
+          "type": "regular",
+          "icon": "supermarket",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Продукты",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Продукты"
+          },
+          "category": {
+            "name": "Продукты"
+          }
+        },
+        {
+          "id": "drugstore",
+          "type": "regular",
+          "icon": "drugstores",
+          "color": "rgb(141, 194, 87)",
+          "displayText": "Аптеки",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "category_id:184105932"
+          },
+          "category": {
+            "name": "category_id:184105932"
+          }
+        },
+        {
+          "id": "malls",
+          "type": "regular",
+          "icon": "malls",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Торговые центры",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Торговые центры"
+          },
+          "category": {
+            "name": "Торговые центры"
+          }
+        },
+        {
+          "id": "gasoline",
+          "type": "regular",
+          "icon": "gasstation",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "АЗС",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "АЗС"
+          },
+          "category": {
+            "name": "АЗС"
+          }
+        },
+        {
+          "id": "cafe",
+          "type": "regular",
+          "icon": "cafe",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Кафе",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Кафе"
+          },
+          "category": {
+            "name": "Кафе"
+          }
+        },
+        {
+          "id": "museum",
+          "type": "regular",
+          "icon": "museum",
+          "color": "rgb(105, 191, 170)",
+          "displayText": "Музеи",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Музеи"
+          },
+          "category": {
+            "name": "Музеи"
+          }
+        },
+        {
+          "id": "auto-repair",
+          "type": "regular",
+          "icon": "auto-repair",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Автосервисы",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Автосервисы"
+          },
+          "category": {
+            "name": "Автосервисы"
+          }
+        },
+        {
+          "id": "government",
+          "type": "regular",
+          "icon": "government",
+          "color": "rgb(171,174,178)",
+          "displayText": "Госуслуги",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Госуслуги"
+          },
+          "category": {
+            "name": "Госуслуги"
+          }
+        },
+        {
+          "id": "atm",
+          "type": "regular",
+          "icon": "currency-exchange",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Банкоматы",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Банкоматы"
+          },
+          "category": {
+            "name": "Банкоматы"
+          }
+        },
+        {
+          "id": "clinic",
+          "type": "regular",
+          "icon": "medicine",
+          "color": "rgb(245,140,182)",
+          "displayText": "Больницы",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Больницы"
+          },
+          "category": {
+            "name": "Больницы"
+          }
+        },
+        {
+          "id": "beauty",
+          "type": "regular",
+          "icon": "hairdressers",
+          "color": "rgb(245, 140, 182)",
+          "displayText": "Салоны красоты",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Салоны красоты"
+          },
+          "category": {
+            "name": "Салоны красоты"
+          }
+        },
+        {
+          "id": "sport",
+          "type": "regular",
+          "icon": "fitness",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Спорт",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Спорт"
+          },
+          "category": {
+            "name": "Спорт"
+          }
+        },
+        {
+          "id": "groceries-delivery",
+          "type": "regular",
+          "icon": "malls",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Доставка продуктов",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Доставка продуктов"
+          },
+          "category": {
+            "name": "Доставка продуктов"
+          }
+        },
+        {
+          "id": "bars",
+          "type": "regular",
+          "icon": "bars",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Бары и пабы",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Бары и пабы"
+          },
+          "category": {
+            "name": "Бары и пабы"
+          }
+        },
+        {
+          "id": "construction-shop",
+          "type": "regular",
+          "icon": "construction-tool",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Строительные магазины",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Строительные магазины"
+          },
+          "category": {
+            "name": "Строительные магазины"
+          }
+        },
+        {
+          "id": "pet-clinic",
+          "type": "regular",
+          "icon": "veterinary",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Ветеринарные клиники",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Ветеринарные клиники"
+          },
+          "category": {
+            "name": "Ветеринарные клиники"
+          }
+        },
+        {
+          "id": "fitness",
+          "type": "regular",
+          "icon": "fitness",
+          "color": "rgb(156, 137, 250)",
+          "displayText": "Фитнес",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Фитнес-клубы"
+          },
+          "category": {
+            "name": "Фитнес-клубы"
+          }
+        },
+        {
+          "id": "fast-food",
+          "type": "regular",
+          "icon": "fast-food",
+          "color": "rgb(245, 140, 182)",
+          "displayText": "Быстрое питание",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Быстрое питание"
+          },
+          "category": {
+            "name": "Быстрое питание"
+          }
+        },
+        {
+          "id": "flower-shop",
+          "type": "regular",
+          "icon": "flower-shop",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Магазины цветов",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Магазины цветов"
+          },
+          "category": {
+            "name": "Магазины цветов"
+          }
+        },
+        {
+          "id": "post-office",
+          "type": "regular",
+          "icon": "post-office",
+          "color": "rgb(171,174,178)",
+          "displayText": "Почта",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Почта"
+          },
+          "category": {
+            "name": "Почта"
+          }
+        },
+        {
+          "id": "sushi",
+          "type": "regular",
+          "icon": "sushi",
+          "color": "rgb(211, 141, 224)",
+          "displayText": "Суши и роллы",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Суши и роллы"
+          },
+          "category": {
+            "name": "Суши и роллы"
+          }
+        },
+        {
+          "id": "cinemas",
+          "type": "regular",
+          "icon": "cinemas",
+          "color": "rgb(211, 141, 224)",
+          "displayText": "Кинотеатры",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Кинотеатры"
+          },
+          "category": {
+            "name": "Кинотеатры"
+          }
+        },
+        {
+          "id": "pizza",
+          "type": "regular",
+          "icon": "pizzeria",
+          "color": "rgb(171,174,178)",
+          "displayText": "Пицца",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Пицца"
+          },
+          "category": {
+            "name": "Пицца"
+          }
+        },
+        {
+          "id": "housewares",
+          "type": "regular",
+          "icon": "malls",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Товары для дома",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Товары для дома"
+          },
+          "category": {
+            "name": "Товары для дома"
+          }
+        },
+        {
+          "id": "entertainment",
+          "type": "regular",
+          "icon": "entertainments",
+          "color": "rgb(117, 165, 189)",
+          "displayText": "Развлечения",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Развлечения"
+          },
+          "category": {
+            "name": "Развлечения"
+          }
+        },
+        {
+          "id": "coffee",
+          "type": "regular",
+          "icon": "cafe",
+          "color": "rgb(105, 191, 170)",
+          "displayText": "Кофе",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Кофе"
+          },
+          "category": {
+            "name": "Кофе"
+          }
+        },
+        {
+          "id": "burgers",
+          "type": "regular",
+          "icon": "fast-food",
+          "color": "rgb(96, 168, 240)",
+          "displayText": "Бургеры",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Бургеры"
+          },
+          "category": {
+            "name": "Бургеры"
+          }
+        },
+        {
+          "id": "hookah",
+          "type": "regular",
+          "icon": "fire-station",
+          "color": "rgb(141, 194, 87)",
+          "displayText": "Кальянные",
+          "action": {
+            "type": "search_query",
+            "searchQuery": "Кальянные"
+          },
+          "category": {
+            "name": "Кальянные"
+          }
+        }
+      ]
+    }
+  }
+}

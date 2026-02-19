@@ -1,0 +1,429 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            297,
+            149,
+            9
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 5
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152510,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Копорье",
+          "HotspotMetaData": {
+            "id": 53152510,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      58.93102819247906,
+                      251.59078814720124
+                    ],
+                    [
+                      101.69397180739179,
+                      251.59078814720124
+                    ],
+                    [
+                      101.69397180739179,
+                      241.62348569488313
+                    ],
+                    [
+                      58.93102819247906,
+                      241.62348569488313
+                    ],
+                    [
+                      58.93102819247906,
+                      251.59078814720124
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      77.81249999993452,
+                      256.96875000006185
+                    ],
+                    [
+                      82.81249999993634,
+                      256.96875000006185
+                    ],
+                    [
+                      82.81249999993634,
+                      251.59078814720124
+                    ],
+                    [
+                      77.81249999993452,
+                      251.59078814720124
+                    ],
+                    [
+                      77.81249999993452,
+                      256.96875000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjUxMBKvAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCa0L7Qv9C-0YDRgdC60L7QtSDRgdC10LvRjNGB0LrQvtC1INC_0L7RgdC10LvQtdC90LjQtSwg0YHQtdC70L4g0JrQvtC_0L7RgNGM0LUiCg3NY-hBFSPRbkI,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.70421524199034,
+            29.048709869384606
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152544,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Лопухинка",
+          "HotspotMetaData": {
+            "id": 53152544,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      184.63044885133422,
+                      232.83550885564546
+                    ],
+                    [
+                      240.11955114853663,
+                      232.83550885564546
+                    ],
+                    [
+                      240.11955114853663,
+                      222.75376498643527
+                    ],
+                    [
+                      184.63044885133422,
+                      222.75376498643527
+                    ],
+                    [
+                      184.63044885133422,
+                      232.83550885564546
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      209.87499999993634,
+                      238.15625000006185
+                    ],
+                    [
+                      214.87499999993634,
+                      238.15625000006185
+                    ],
+                    [
+                      214.87499999993634,
+                      232.83550885564546
+                    ],
+                    [
+                      209.87499999993634,
+                      232.83550885564546
+                    ],
+                    [
+                      209.87499999993634,
+                      238.15625000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjU0NBK9AdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCb0L7Qv9GD0YXQuNC90YHQutC-0LUg0YHQtdC70YzRgdC60L7QtSDQv9C-0YHQtdC70LXQvdC40LUsINC00LXRgNC10LLQvdGPINCb0L7Qv9GD0YXQuNC90LrQsCIKDcZK60EV3-tuQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.730315428850965,
+            29.41143035888656
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149615,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Сосновый Бор",
+          "HotspotMetaData": {
+            "id": 53149615,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      48.858758598189524,
+                      112.41428542240101
+                    ],
+                    [
+                      132.26624140168133,
+                      112.41428542240101
+                    ],
+                    [
+                      132.26624140168133,
+                      101.08458514992526
+                    ],
+                    [
+                      48.858758598189524,
+                      101.08458514992526
+                    ],
+                    [
+                      48.858758598189524,
+                      112.41428542240101
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      88.06249999993634,
+                      117.78125000006185
+                    ],
+                    [
+                      93.06249999993634,
+                      117.78125000006185
+                    ],
+                    [
+                      93.06249999993634,
+                      112.41428542240101
+                    ],
+                    [
+                      88.06249999993634,
+                      112.41428542240101
+                    ],
+                    [
+                      88.06249999993634,
+                      117.78125000006185
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTYxNRJQ0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0KHQvtGB0L3QvtCy0YvQuSDQkdC-0YAiCg1-nehBFWWWb0I,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.89683892370626,
+            29.07686233520492
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152149,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Лебяжье",
+          "HotspotMetaData": {
+            "id": 53152149,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      192.36307802952433,
+                      64.86744005455694
+                    ],
+                    [
+                      237.63692197034834,
+                      64.86744005455694
+                    ],
+                    [
+                      237.63692197034834,
+                      56.28433378752743
+                    ],
+                    [
+                      192.36307802952433,
+                      56.28433378752743
+                    ],
+                    [
+                      192.36307802952433,
+                      64.86744005455694
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      212.49999999993452,
+                      70.93750000005821
+                    ],
+                    [
+                      217.49999999993634,
+                      70.93750000005821
+                    ],
+                    [
+                      217.49999999993634,
+                      64.86744005455694
+                    ],
+                    [
+                      212.49999999993452,
+                      64.86744005455694
+                    ],
+                    [
+                      212.49999999993452,
+                      70.93750000005821
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjE0ORLOAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCb0LXQsdGP0LbQtdC90YHQutC-0LUg0LPQvtGA0L7QtNGB0LrQvtC1INC_0L7RgdC10LvQtdC90LjQtSwg0LPQvtGA0L7QtNGB0LrQvtC5INC_0L7RgdGR0LvQvtC6INCb0LXQsdGP0LbRjNC1IgoNelnrQRWH2G9C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.961415863476766,
+            29.418640136718594
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152572,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Большая Ижора",
+          "HotspotMetaData": {
+            "id": 53152572,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      183.68407056524666,
+                      92.75151430523692
+                    ],
+                    [
+                      265.63536709841173,
+                      92.75151430523692
+                    ],
+                    [
+                      265.63536709841173,
+                      82.78421185292245
+                    ],
+                    [
+                      183.68407056524666,
+                      82.78421185292245
+                    ],
+                    [
+                      183.68407056524666,
+                      92.75151430523692
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      267.37499999993634,
+                      82.40625000005821
+                    ],
+                    [
+                      272.37499999993634,
+                      82.40625000005821
+                    ],
+                    [
+                      272.37499999993634,
+                      77.40625000006185
+                    ],
+                    [
+                      267.37499999993634,
+                      77.40625000006185
+                    ],
+                    [
+                      267.37499999993634,
+                      82.40625000005821
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjU3MhKbAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCb0L7QvNC-0L3QvtGB0L7QstGB0LrQuNC5INGA0LDQudC-0L0sINCz0L7RgNC-0LTRgdC60L7QuSDQv9C-0YHRkdC70L7QuiDQkdC-0LvRjNGI0LDRjyDQmNC20L7RgNCwIgoNEo7sQRVayG9C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.94561715729457,
+            29.569358825683434
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "data": {
+    "time": 202,
+    "waitingTime": 4,
+    "priceText": "199 ₽",
+    "isSurge": true,
+    "link": "//taxi.yandex.com/order?gfrom=,&gto=60.007415,30.450907&tariff=econom&lang=en"
+  }
+}

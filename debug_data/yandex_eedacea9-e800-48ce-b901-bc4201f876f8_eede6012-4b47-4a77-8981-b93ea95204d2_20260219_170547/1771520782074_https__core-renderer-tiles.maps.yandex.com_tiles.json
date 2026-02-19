@@ -1,0 +1,348 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            148,
+            74,
+            8
+          ],
+          "lang": "ru_001"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 4
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149581,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Приморск",
+          "HotspotMetaData": {
+            "id": 53149581,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      62.63095966774563,
+                      11.559538147172134
+                    ],
+                    [
+                      115.24404033219616,
+                      11.559538147172134
+                    ],
+                    [
+                      115.24404033219616,
+                      1.5922356948558445
+                    ],
+                    [
+                      62.63095966774563,
+                      1.5922356948558445
+                    ],
+                    [
+                      62.63095966774563,
+                      11.559538147172134
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      86.4374999999709,
+                      16.937500000032742
+                    ],
+                    [
+                      91.43749999996999,
+                      16.937500000032742
+                    ],
+                    [
+                      91.43749999996999,
+                      11.559538147172134
+                    ],
+                    [
+                      86.4374999999709,
+                      11.559538147172134
+                    ],
+                    [
+                      86.4374999999709,
+                      16.937500000032742
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTU4MRJq0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0JLRi9Cx0L7RgNCz0YHQutC40Lkg0YDQsNC50L7QvSwg0J_RgNC40LzQvtGA0YHQuiIKDZHo5EEVzXZxQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.365966825683664,
+            28.613548278808437
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53149615,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Сосновый Бор",
+          "HotspotMetaData": {
+            "id": 53149615,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      136.2112560236783,
+                      182.83005926433543
+                    ],
+                    [
+                      210.3512439762635,
+                      182.83005926433543
+                    ],
+                    [
+                      210.3512439762635,
+                      172.75921457768527
+                    ],
+                    [
+                      136.2112560236783,
+                      172.75921457768527
+                    ],
+                    [
+                      136.2112560236783,
+                      182.83005926433543
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      170.7812499999709,
+                      188.15625000003092
+                    ],
+                    [
+                      175.7812499999709,
+                      188.15625000003092
+                    ],
+                    [
+                      175.7812499999709,
+                      182.83005926433543
+                    ],
+                    [
+                      170.7812499999709,
+                      182.83005926433543
+                    ],
+                    [
+                      170.7812499999709,
+                      188.15625000003092
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE0OTYxNRJQ0KDQvtGB0YHQuNGPLCDQm9C10L3QuNC90LPRgNCw0LTRgdC60LDRjyDQvtCx0LvQsNGB0YLRjCwg0KHQvtGB0L3QvtCy0YvQuSDQkdC-0YAiCg1-nehBFWWWb0I,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.89679580158441,
+            29.07686233520492
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53166392,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Зеленогорск",
+          "HotspotMetaData": {
+            "id": 53166392,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      253.95342226189314,
+                      74.98630926433725
+                    ],
+                    [
+                      319.98407773804956,
+                      74.98630926433725
+                    ],
+                    [
+                      319.98407773804956,
+                      64.91546457768891
+                    ],
+                    [
+                      253.95342226189314,
+                      64.91546457768891
+                    ],
+                    [
+                      253.95342226189314,
+                      74.98630926433725
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      284.46874999997,
+                      80.31250000003274
+                    ],
+                    [
+                      289.46874999997,
+                      80.31250000003274
+                    ],
+                    [
+                      289.46874999997,
+                      74.98630926433725
+                    ],
+                    [
+                      284.46874999997,
+                      74.98630926433725
+                    ],
+                    [
+                      284.46874999997,
+                      80.31250000003274
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE2NjM5MhJD0KDQvtGB0YHQuNGPLCDQodCw0L3QutGCLdCf0LXRgtC10YDQsdGD0YDQsywg0JfQtdC70LXQvdC-0LPQvtGA0YHQuiIKDbuc7UEVysVwQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.19308969926759,
+            29.701366424560387
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152805,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Рощино",
+          "HotspotMetaData": {
+            "id": 53152805,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      248.96134150371654,
+                      51.586275204390404
+                    ],
+                    [
+                      289.16365849622434,
+                      51.586275204390404
+                    ],
+                    [
+                      289.16365849622434,
+                      41.94049863763394
+                    ],
+                    [
+                      248.96134150371654,
+                      41.94049863763394
+                    ],
+                    [
+                      248.96134150371654,
+                      51.586275204390404
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      266.56249999997,
+                      57.12500000003274
+                    ],
+                    [
+                      271.56249999997,
+                      57.12500000003274
+                    ],
+                    [
+                      271.56249999997,
+                      51.586275204390404
+                    ],
+                    [
+                      266.56249999997,
+                      51.586275204390404
+                    ],
+                    [
+                      266.56249999997,
+                      57.12500000003274
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjgwNRKIAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCS0YvQsdC-0YDQs9GB0LrQuNC5INGA0LDQudC-0L0sINCz0L7RgNC-0LTRgdC60L7QuSDQv9C-0YHRkdC70L7QuiDQoNC-0YnQuNC90L4iCg0m0-xBFasGcUI,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            60.256447953230214,
+            29.603004455566246
+          ]
+        }
+      }
+    ]
+  }
+}

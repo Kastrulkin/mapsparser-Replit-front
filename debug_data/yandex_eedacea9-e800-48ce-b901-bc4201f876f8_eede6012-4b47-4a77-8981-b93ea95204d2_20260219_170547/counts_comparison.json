@@ -1,0 +1,10 @@
+{
+  "extracted": {
+    "services": 25,
+    "reviews": 0,
+    "photos": 0
+  },
+  "raw_before_dedup": {
+    "services": 50
+  }
+}

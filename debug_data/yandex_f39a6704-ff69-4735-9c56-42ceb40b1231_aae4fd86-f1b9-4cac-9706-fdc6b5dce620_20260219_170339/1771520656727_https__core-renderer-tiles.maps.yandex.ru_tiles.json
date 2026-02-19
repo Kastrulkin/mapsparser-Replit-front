@@ -1,0 +1,291 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            1198,
+            598,
+            11
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 3
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53166364,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Металлострой",
+          "HotspotMetaData": {
+            "id": 53166364,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      -68.94356580729072,
+                      205.72400136262877
+                    ],
+                    [
+                      33.38106580682506,
+                      205.72400136262877
+                    ],
+                    [
+                      33.38106580682506,
+                      191.9065626705269
+                    ],
+                    [
+                      -68.94356580729072,
+                      191.9065626705269
+                    ],
+                    [
+                      -68.94356580729072,
+                      205.72400136262877
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      -18.28125000023283,
+                      199.31528201658512
+                    ],
+                    [
+                      -17.28125000023283,
+                      199.31528201658512
+                    ],
+                    [
+                      -17.28125000023283,
+                      198.31528201658512
+                    ],
+                    [
+                      -18.28125000023283,
+                      198.31528201658512
+                    ],
+                    [
+                      -18.28125000023283,
+                      199.31528201658512
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE2NjM2NBJ10KDQvtGB0YHQuNGPLCDQodCw0L3QutGCLdCf0LXRgtC10YDQsdGD0YDQsywg0JrQvtC70L_QuNC90YHQutC40Lkg0YDQsNC50L7QvSwg0L_QvtGB0ZHQu9C-0Log0JzQtdGC0LDQu9C70L7RgdGC0YDQvtC5IgoN_5b0QRVxO29C"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.81058945501117,
+            30.573728084564053
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152787,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "пос. им. Свердлова",
+          "HotspotMetaData": {
+            "id": 53152787,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      47.17317403481866,
+                      249.0621873299242
+                    ],
+                    [
+                      101.30349490205117,
+                      249.0621873299242
+                    ],
+                    [
+                      101.30349490205117,
+                      236.74338624000666
+                    ],
+                    [
+                      47.17317403481866,
+                      236.74338624000666
+                    ],
+                    [
+                      47.17317403481866,
+                      249.0621873299242
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      35.348689787737385,
+                      262.90959877407295
+                    ],
+                    [
+                      112.21381021180423,
+                      262.90959877407295
+                    ],
+                    [
+                      112.21381021180423,
+                      249.0621873299242
+                    ],
+                    [
+                      35.348689787737385,
+                      249.0621873299242
+                    ],
+                    [
+                      35.348689787737385,
+                      262.90959877407295
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      73.28124999976717,
+                      250.3264925070398
+                    ],
+                    [
+                      74.28124999976717,
+                      250.3264925070398
+                    ],
+                    [
+                      74.28124999976717,
+                      249.3264925070398
+                    ],
+                    [
+                      73.28124999976717,
+                      249.3264925070398
+                    ],
+                    [
+                      73.28124999976717,
+                      250.3264925070398
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1Mjc4NxKdAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCS0YHQtdCy0L7Qu9C-0LbRgdC60LjQuSDRgNCw0LnQvtC9LCDQs9C-0YDQvtC00YHQutC-0Lkg0L_QvtGB0ZHQu9C-0Log0LjQvNC10L3QuCDQodCy0LXRgNC00LvQvtCy0LAiCg3BF_VBFU4xb0I,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.7929412595993,
+            30.63659906387313
+          ]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "source_id": 53152667,
+          "tags": [
+            "admin",
+            "locality"
+          ],
+          "name": "Карьер-Мяглово",
+          "HotspotMetaData": {
+            "id": 53152667,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      82.05418797332823,
+                      54.0359155315673
+                    ],
+                    [
+                      173.00831202619156,
+                      54.0359155315673
+                    ],
+                    [
+                      173.00831202619156,
+                      43.44565667597635
+                    ],
+                    [
+                      82.05418797332823,
+                      43.44565667597635
+                    ],
+                    [
+                      82.05418797332823,
+                      54.0359155315673
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      127.03124999976717,
+                      49.2407861037791
+                    ],
+                    [
+                      128.03124999976717,
+                      49.2407861037791
+                    ],
+                    [
+                      128.03124999976717,
+                      48.2407861037791
+                    ],
+                    [
+                      127.03124999976717,
+                      48.2407861037791
+                    ],
+                    [
+                      127.03124999976717,
+                      49.2407861037791
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://geo?data=Cgg1MzE1MjY2NxLGAdCg0L7RgdGB0LjRjywg0JvQtdC90LjQvdCz0YDQsNC00YHQutCw0Y8g0L7QsdC70LDRgdGC0YwsINCS0YHQtdCy0L7Qu9C-0LbRgdC60LjQuSDRgNCw0LnQvtC9LCDQmtC-0LvRgtGD0YjRgdC60L7QtSDQs9C-0YDQvtC00YHQutC-0LUg0L_QvtGB0LXQu9C10L3QuNC1LCDQvNC10YHRgtC10YfQutC-INCa0LDRgNGM0LXRgC3QnNGP0LPQu9C-0LLQviIKDWJj9UEVJHFvQg,,"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.862455952944785,
+            30.673506259918053
+          ]
+        }
+      }
+    ]
+  }
+}

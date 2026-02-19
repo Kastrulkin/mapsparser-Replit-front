@@ -1,0 +1,107 @@
+{
+  "data": {
+    "type": "FeatureCollection",
+    "properties": {
+      "HotspotSearchMetaData": {
+        "HotspotSearchRequest": {
+          "layer": "mapj",
+          "tile": [
+            76658,
+            38309,
+            17
+          ],
+          "lang": "ru_RU"
+        },
+        "HotspotSearchResponse": {
+          "layer": "mapj",
+          "found": 1
+        }
+      }
+    },
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "indoor_covered": false,
+          "source_id": 1541254008,
+          "tags": [
+            "poi",
+            "commercial_services",
+            "fuel_station"
+          ],
+          "name": "Роснефть",
+          "HotspotMetaData": {
+            "id": 1541254008,
+            "RenderedGeometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [
+                  [
+                    [
+                      8.607543197926134,
+                      34.47498502768576
+                    ],
+                    [
+                      58.079956773202866,
+                      34.47498502768576
+                    ],
+                    [
+                      58.079956773202866,
+                      24.39324115868658
+                    ],
+                    [
+                      8.607543197926134,
+                      24.39324115868658
+                    ],
+                    [
+                      8.607543197926134,
+                      34.47498502768576
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    [
+                      21.34374998509884,
+                      24.39324115868658
+                    ],
+                    [
+                      45.34374998509884,
+                      24.39324115868658
+                    ],
+                    [
+                      45.34374998509884,
+                      0.0625000149011612
+                    ],
+                    [
+                      21.34374998509884,
+                      0.0625000149011612
+                    ],
+                    [
+                      21.34374998509884,
+                      24.39324115868658
+                    ]
+                  ]
+                ]
+              ]
+            }
+          },
+          "URIMetaData": {
+            "URIs": [
+              {
+                "uri": "ymapsbm1://org?oid=1069125307"
+              }
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            59.82809539387552,
+            30.547843091189705
+          ]
+        }
+      }
+    ]
+  }
+}

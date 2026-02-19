@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "urn:yandex:sprav:photo:9827107_2a0000018b35a38d1affdec45bca43c81146",
+      "tags": [
+        {
+          "id": "Panorama",
+          "name": "Панорама"
+        }
+      ],
+      "width": 1280,
+      "height": 750,
+      "url": "https://avatars.mds.yandex.net/get-altay/9827107/2a0000018b35a38d1affdec45bca43c81146/XXXL",
+      "showReactions": true,
+      "copyright": {
+        "name": "Яндекс",
+        "url": "https://ya.ru/",
+        "updateTime": "2023-10-15T23:19:53Z"
+      }
+    }
+  ]
+}
