@@ -417,6 +417,8 @@ CREATE TABLE ExternalBusinessStats (
     actions_total INTEGER,
     rating DOUBLE PRECISION,
     reviews_total INTEGER,
+    photos_count INTEGER DEFAULT 0,
+    news_count INTEGER DEFAULT 0,
     unanswered_reviews_count INTEGER, -- Missing from initial schema
     raw_payload TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

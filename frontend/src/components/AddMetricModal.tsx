@@ -37,7 +37,7 @@ export const AddMetricModal: React.FC<AddMetricModalProps> = ({
         setLoading(true);
 
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
             const response = await fetch(`/api/business/${businessId}/metrics-history`, {
                 method: 'POST',
                 headers: {

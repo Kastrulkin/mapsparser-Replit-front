@@ -130,7 +130,7 @@ Employees or specialists working at a business.
 ### External Data Tables (PostgreSQL: имена в нижнем регистре)
 - **externalbusinessaccounts**: Внешние аккаунты (Яндекс.Бизнес, Google, 2ГИС); `auth_data_encrypted` не отдаётся в API. Уникальность по паре (business_id, source) в runtime (без жёсткого UNIQUE в миграции).
 - **externalbusinessreviews**: Отзывы из внешних источников; `account_id`, `response_text`, `published_at`.
-- **externalbusinessstats**: Агрегированная статистика по дням (rating, reviews_total, date, source).
+- **externalbusinessstats**: Агрегированная статистика по дням (`rating`, `reviews_total`, `photos_count`, `news_count`, `unanswered_reviews_count`, `date`, `source`).
 - **externalbusinessposts**, **externalbusinessphotos**: Публикации и фото из кабинетов.
 
 ### Financial Tables

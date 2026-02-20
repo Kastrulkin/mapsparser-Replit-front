@@ -535,6 +535,8 @@ def init_database_schema():
                 actions_total INTEGER,
                 rating REAL,
                 reviews_total INTEGER,
+                photos_count INTEGER DEFAULT 0,
+                news_count INTEGER DEFAULT 0,
                 unanswered_reviews_count INTEGER,
                 raw_payload TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -545,10 +547,16 @@ def init_database_schema():
         """)
         print("✅ Таблица ExternalBusinessStats создана/проверена")
         
-        # Миграция для ExternalBusinessStats: проверка наличия поля unanswered_reviews_count
+        # Миграция для ExternalBusinessStats: проверка наличия счетчиков
         try:
             cursor.execute("PRAGMA table_info(ExternalBusinessStats)")
             columns = [row[1] for row in cursor.fetchall()]
+            if 'photos_count' not in columns:
+                cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN photos_count INTEGER DEFAULT 0")
+                print("✅ Добавлено поле photos_count в ExternalBusinessStats")
+            if 'news_count' not in columns:
+                cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN news_count INTEGER DEFAULT 0")
+                print("✅ Добавлено поле news_count в ExternalBusinessStats")
             if 'unanswered_reviews_count' not in columns:
                 cursor.execute("ALTER TABLE ExternalBusinessStats ADD COLUMN unanswered_reviews_count INTEGER")
                 print("✅ Добавлено поле unanswered_reviews_count в ExternalBusinessStats")

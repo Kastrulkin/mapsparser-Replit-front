@@ -9732,35 +9732,20 @@ def get_network_locations(business_id):
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
         # Резолвим сеть:
-        # 1) бизнес уже в сети
-        # 2) business_id совпадает с id сети (legacy кейс)
-        # 3) fallback: сеть, которой владеет владелец бизнеса (для материнского аккаунта с network_id=NULL)
-        network_id = business.get('network_id')
+        # 1) бизнес уже привязан к сети через businesses.network_id (обычная точка сети)
+        # 2) business_id совпадает с id сети (legacy кейс "мастер-аккаунт")
+        # ВАЖНО: не используем fallback по owner_id -> "самая большая сеть",
+        # иначе отдельные бизнесы владельца ошибочно становятся "сетевыми".
+        direct_network_id = business.get('network_id')
+        network_id = direct_network_id
+        is_network_master = False
 
         if not network_id:
             cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
             row = cursor.fetchone()
             if row:
                 network_id = row[0] if not hasattr(row, "keys") else row.get("id")
-
-        if not network_id:
-            cursor.execute(
-                """
-                SELECT n.id
-                FROM networks n
-                WHERE n.owner_id = %s
-                ORDER BY (
-                    SELECT COUNT(*)
-                    FROM businesses b
-                    WHERE b.network_id = n.id AND (b.is_active = TRUE OR b.is_active IS NULL)
-                ) DESC, n.created_at DESC
-                LIMIT 1
-                """,
-                (business_owner_id,),
-            )
-            row = cursor.fetchone()
-            if row:
-                network_id = row[0] if not hasattr(row, "keys") else row.get("id")
+                is_network_master = True
 
         if not network_id:
             db.close()
@@ -9784,7 +9769,11 @@ def get_network_locations(business_id):
         return jsonify(
             {
                 "success": True,
-                "is_network": bool(normalized_locations),
+                # Признак "сетевой аккаунт" для UI-блокировок:
+                # только legacy-мастер сети (business_id == network_id), а не обычная точка.
+                "is_network": bool(is_network_master),
+                "is_network_master": bool(is_network_master),
+                "is_network_member": bool(direct_network_id),
                 "network_id": network_id,
                 "locations": normalized_locations,
             }

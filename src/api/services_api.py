@@ -313,8 +313,8 @@ def update_service(service_id):
             db.close()
             return jsonify({"error": "Услуга не найдена"}), 404
         
-        service_user_id = row[0]
-        service_business_id = row[1]
+        service_user_id = row.get('user_id') if isinstance(row, dict) else row[0]
+        service_business_id = row.get('business_id') if isinstance(row, dict) else row[1]
         
         if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
@@ -416,6 +416,7 @@ def update_service(service_id):
         
         db.conn.commit()
         db.close()
+        return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}")
         import traceback
@@ -448,7 +449,7 @@ def delete_service(service_id):
             db.close()
             return jsonify({"error": "Услуга не найдена"}), 404
         
-        service_user_id = row[0]
+        service_user_id = row.get('user_id') if isinstance(row, dict) else row[0]
         if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
