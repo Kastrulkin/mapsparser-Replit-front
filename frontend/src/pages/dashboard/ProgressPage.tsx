@@ -25,6 +25,9 @@ export const ProgressPage = () => {
   const [loadingWizard, setLoadingWizard] = useState(false);
 
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
+  const [isNetworkMember, setIsNetworkMember] = useState(false);
+  const [resolvedNetworkId, setResolvedNetworkId] = useState<string | null>(null);
+  const [networkStatusLoading, setNetworkStatusLoading] = useState(true);
   const { t } = useLanguage();
   const navigate = useNavigate();
 
@@ -37,11 +40,15 @@ export const ProgressPage = () => {
     const checkNetwork = async () => {
       if (!currentBusinessId) {
         setIsNetworkMaster(false);
+        setIsNetworkMember(false);
+        setResolvedNetworkId(null);
+        setNetworkStatusLoading(false);
         return;
       }
 
       try {
-        const token = localStorage.getItem('auth_token');
+        setNetworkStatusLoading(true);
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
         const response = await fetch(`/api/business/${currentBusinessId}/network-locations`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -51,16 +58,35 @@ export const ProgressPage = () => {
 
         if (response.ok) {
           const data = await response.json();
-          setIsNetworkMaster(data.is_network || false);
+          setIsNetworkMaster(Boolean(data.is_network_master ?? data.is_network));
+          setIsNetworkMember(Boolean(data.is_network_member));
+          setResolvedNetworkId(data.network_id || null);
+        } else {
+          setIsNetworkMaster(false);
+          setIsNetworkMember(false);
+          setResolvedNetworkId(null);
         }
       } catch (error) {
         console.error('Error checking network status:', error);
         setIsNetworkMaster(false);
+        setIsNetworkMember(false);
+        setResolvedNetworkId(null);
+      } finally {
+        setNetworkStatusLoading(false);
       }
     };
 
     checkNetwork();
   }, [currentBusinessId]);
+
+  if (networkStatusLoading && currentBusinessId) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-56 bg-gray-100 animate-pulse rounded-md" />
+        <div className="h-40 w-full bg-gray-100 animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
   // Load wizard data
   useEffect(() => {
@@ -100,8 +126,8 @@ export const ProgressPage = () => {
           <h2 className="text-3xl font-bold tracking-tight">📊 {t.networkHealth?.title || "Состояние сети"}</h2>
         </div>
         <NetworkHealthDashboard
-          networkId={currentBusinessId}
-          businessId={currentBusinessId}
+          networkId={resolvedNetworkId || currentBusinessId}
+          businessId={null}
         />
         <FinancialMetrics />
       </div>
@@ -122,6 +148,12 @@ export const ProgressPage = () => {
       </div>
 
       <BusinessHealthWidget businessId={currentBusinessId} className="mb-6" />
+      {isNetworkMember && (
+        <NetworkHealthDashboard
+          networkId={resolvedNetworkId}
+          businessId={null}
+        />
+      )}
       <BusinessGrowthPlan businessId={currentBusinessId} />
 
       <div className="mt-8 mb-4">

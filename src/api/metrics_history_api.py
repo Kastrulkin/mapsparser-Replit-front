@@ -62,62 +62,71 @@ def get_metrics_history(business_id):
         history_by_date = {}
 
         # 1) История из cards (даёт фото/новости/unanswered).
-        # В ряде инсталляций колонки cards.reviews нет — учитываем это динамически.
-        cursor.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'cards'
-              AND column_name = 'reviews'
-            LIMIT 1
-            """
-        )
-        has_cards_reviews = cursor.fetchone() is not None
-        cards_select = "id, created_at, rating, reviews_count, overview, photos, news"
-        if has_cards_reviews:
-            cards_select += ", reviews"
-        cursor.execute(
-            f"""
-            SELECT {cards_select}
-            FROM cards
-            WHERE business_id = %s
-            ORDER BY created_at DESC
-            LIMIT 365
-            """,
-            (business_id,),
-        )
-        for row in cursor.fetchall():
-            rd = _as_dict(row) or {}
-            created_at = rd.get("created_at")
-            if not created_at:
-                continue
-            date_key = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
-            overview = _parse_json(rd.get("overview")) or {}
-            photos = _parse_json(rd.get("photos"))
-            news = _parse_json(rd.get("news"))
-            reviews = _parse_json(rd.get("reviews")) if has_cards_reviews else None
-            photos_count = max(
-                len(photos) if isinstance(photos, list) else 0,
-                int(overview.get("photos_count") or 0),
+        cursor.execute("SELECT to_regclass('public.cards') IS NOT NULL AS exists_flag")
+        cards_exists_row = cursor.fetchone() or {}
+        has_cards_table = bool(cards_exists_row.get("exists_flag")) if isinstance(cards_exists_row, dict) else bool(cards_exists_row[0])
+        if has_cards_table:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'cards'
+                """
             )
-            news_count = max(
-                len(news) if isinstance(news, list) else 0,
-                int(overview.get("news_count") or 0),
-            )
-            item = {
-                "id": rd.get("id"),
-                "date": date_key,
-                "rating": float(rd["rating"]) if rd.get("rating") not in (None, "") else None,
-                "reviews_count": int(rd.get("reviews_count") or 0),
-                "photos_count": int(photos_count or 0),
-                "news_count": int(news_count or 0),
-                "unanswered_reviews_count": _count_unanswered_from_reviews(reviews),
-                "source": "parsing",
-                "created_at": created_at,
+            cards_cols = {
+                (r.get("column_name") if isinstance(r, dict) else r[0])
+                for r in (cursor.fetchall() or [])
             }
-            if date_key not in history_by_date or (history_by_date[date_key].get("created_at") or created_at) < created_at:
-                history_by_date[date_key] = item
+            required_cols = {"id", "created_at"}
+            has_required = required_cols.issubset(cards_cols)
+            if has_required:
+                cards_select = ["id", "created_at"]
+                for col in ("rating", "reviews_count", "overview", "photos", "news", "reviews"):
+                    if col in cards_cols:
+                        cards_select.append(col)
+
+                cursor.execute(
+                    f"""
+                    SELECT {", ".join(cards_select)}
+                    FROM cards
+                    WHERE business_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 365
+                    """,
+                    (business_id,),
+                )
+                for row in cursor.fetchall():
+                    rd = _as_dict(row) or {}
+                    created_at = rd.get("created_at")
+                    if not created_at:
+                        continue
+                    date_key = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
+                    overview = _parse_json(rd.get("overview")) or {}
+                    photos = _parse_json(rd.get("photos"))
+                    news = _parse_json(rd.get("news"))
+                    reviews = _parse_json(rd.get("reviews")) if "reviews" in cards_cols else None
+                    photos_count = max(
+                        len(photos) if isinstance(photos, list) else 0,
+                        int(overview.get("photos_count") or 0),
+                    )
+                    news_count = max(
+                        len(news) if isinstance(news, list) else 0,
+                        int(overview.get("news_count") or 0),
+                    )
+                    item = {
+                        "id": rd.get("id"),
+                        "date": date_key,
+                        "rating": float(rd["rating"]) if rd.get("rating") not in (None, "") else None,
+                        "reviews_count": int(rd.get("reviews_count") or 0),
+                        "photos_count": int(photos_count or 0),
+                        "news_count": int(news_count or 0),
+                        "unanswered_reviews_count": _count_unanswered_from_reviews(reviews),
+                        "source": "parsing",
+                        "created_at": created_at,
+                    }
+                    if date_key not in history_by_date or (history_by_date[date_key].get("created_at") or created_at) < created_at:
+                        history_by_date[date_key] = item
 
         # 2) История из externalbusinessstats (подмешиваем rating/reviews)
         cursor.execute(
@@ -157,6 +166,152 @@ def get_metrics_history(business_id):
                 current["source"] = rd.get("source") or "external"
             history_by_date[date_key] = current
 
+        # 2.1) История из businessmetricshistory (ручные/исторические записи)
+        cursor.execute("SELECT to_regclass('public.businessmetricshistory') IS NOT NULL AS exists_flag")
+        bm_exists_row = cursor.fetchone() or {}
+        has_business_metrics_history = bool(
+            bm_exists_row.get("exists_flag") if isinstance(bm_exists_row, dict) else bm_exists_row[0]
+        )
+        if has_business_metrics_history:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'businessmetricshistory'
+                """
+            )
+            bm_cols = {
+                (r.get("column_name") if isinstance(r, dict) else r[0])
+                for r in (cursor.fetchall() or [])
+            }
+            if "metric_date" in bm_cols:
+                select_cols = [
+                    "id",
+                    "metric_date",
+                    "rating",
+                    "reviews_count",
+                    "photos_count",
+                    "news_count",
+                    "source",
+                    "created_at",
+                ]
+                if "unanswered_reviews_count" in bm_cols:
+                    select_cols.insert(6, "unanswered_reviews_count")
+
+                cursor.execute(
+                    f"""
+                    SELECT {", ".join(select_cols)}
+                    FROM businessmetricshistory
+                    WHERE business_id = %s
+                    ORDER BY metric_date DESC, created_at DESC
+                    LIMIT 365
+                    """,
+                    (business_id,),
+                )
+                for row in cursor.fetchall():
+                    rd = _as_dict(row) or {}
+                    date_raw = str(rd.get("metric_date") or "").strip()
+                    if not date_raw:
+                        continue
+                    date_key = date_raw[:10]
+                    current = history_by_date.get(date_key) or {
+                        "id": rd.get("id"),
+                        "date": date_key,
+                        "rating": None,
+                        "reviews_count": 0,
+                        "photos_count": 0,
+                        "news_count": 0,
+                        "unanswered_reviews_count": 0,
+                        "source": rd.get("source") or "manual",
+                        "created_at": rd.get("created_at"),
+                    }
+
+                    if rd.get("rating") not in (None, "") and current.get("rating") in (None, ""):
+                        current["rating"] = float(rd.get("rating"))
+                    if rd.get("reviews_count") not in (None, ""):
+                        current["reviews_count"] = max(int(current.get("reviews_count") or 0), int(rd.get("reviews_count") or 0))
+                    if rd.get("photos_count") not in (None, ""):
+                        current["photos_count"] = max(int(current.get("photos_count") or 0), int(rd.get("photos_count") or 0))
+                    if rd.get("news_count") not in (None, ""):
+                        current["news_count"] = max(int(current.get("news_count") or 0), int(rd.get("news_count") or 0))
+                    if "unanswered_reviews_count" in bm_cols and rd.get("unanswered_reviews_count") not in (None, ""):
+                        current["unanswered_reviews_count"] = max(
+                            int(current.get("unanswered_reviews_count") or 0),
+                            int(rd.get("unanswered_reviews_count") or 0),
+                        )
+                    if not current.get("source"):
+                        current["source"] = rd.get("source") or "manual"
+                    history_by_date[date_key] = current
+
+        # 2.2) Fallback: MapParseResults (если есть, а в истории мало данных)
+        cursor.execute("SELECT to_regclass('public.mapparseresults') IS NOT NULL AS exists_flag")
+        mpr_exists_row = cursor.fetchone() or {}
+        has_map_parse_results = bool(
+            mpr_exists_row.get("exists_flag") if isinstance(mpr_exists_row, dict) else mpr_exists_row[0]
+        )
+        if has_map_parse_results and len(history_by_date) < 3:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'mapparseresults'
+                """
+            )
+            mpr_cols = {
+                (r.get("column_name") if isinstance(r, dict) else r[0])
+                for r in (cursor.fetchall() or [])
+            }
+            select_cols = ["id", "created_at", "rating", "reviews_count"]
+            if "photos_count" in mpr_cols:
+                select_cols.append("photos_count")
+            if "news_count" in mpr_cols:
+                select_cols.append("news_count")
+            if "unanswered_reviews_count" in mpr_cols:
+                select_cols.append("unanswered_reviews_count")
+            cursor.execute(
+                f"""
+                SELECT {", ".join(select_cols)}
+                FROM mapparseresults
+                WHERE business_id = %s
+                ORDER BY created_at DESC
+                LIMIT 180
+                """,
+                (business_id,),
+            )
+            for row in cursor.fetchall():
+                rd = _as_dict(row) or {}
+                created_at = rd.get("created_at")
+                if not created_at:
+                    continue
+                date_key = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
+                current = history_by_date.get(date_key) or {
+                    "id": rd.get("id"),
+                    "date": date_key,
+                    "rating": None,
+                    "reviews_count": 0,
+                    "photos_count": 0,
+                    "news_count": 0,
+                    "unanswered_reviews_count": 0,
+                    "source": "parsing",
+                    "created_at": created_at,
+                }
+                if rd.get("rating") not in (None, "") and current.get("rating") in (None, ""):
+                    current["rating"] = float(rd.get("rating"))
+                if rd.get("reviews_count") not in (None, ""):
+                    current["reviews_count"] = max(int(current.get("reviews_count") or 0), int(rd.get("reviews_count") or 0))
+                if "photos_count" in mpr_cols and rd.get("photos_count") not in (None, ""):
+                    current["photos_count"] = max(int(current.get("photos_count") or 0), int(rd.get("photos_count") or 0))
+                if "news_count" in mpr_cols and rd.get("news_count") not in (None, ""):
+                    current["news_count"] = max(int(current.get("news_count") or 0), int(rd.get("news_count") or 0))
+                if "unanswered_reviews_count" in mpr_cols and rd.get("unanswered_reviews_count") not in (None, ""):
+                    current["unanswered_reviews_count"] = max(
+                        int(current.get("unanswered_reviews_count") or 0),
+                        int(rd.get("unanswered_reviews_count") or 0),
+                    )
+                history_by_date[date_key] = current
+
         # 3) Текущее количество неотвеченных отзывов — в последнюю дату
         unanswered_now = 0
         cursor.execute(
@@ -176,6 +331,36 @@ def get_metrics_history(business_id):
         history.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
         if history and (history[0].get("unanswered_reviews_count") or 0) == 0:
             history[0]["unanswered_reviews_count"] = unanswered_now
+
+        # 4) Последний fallback: текущие поля из businesses
+        if not history:
+            cursor.execute(
+                """
+                SELECT id, rating, reviews_count, updated_at, created_at
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+            b_row = _as_dict(cursor.fetchone()) or {}
+            if b_row:
+                dt = b_row.get("updated_at") or b_row.get("created_at") or datetime.utcnow()
+                date_key = dt.date().isoformat() if hasattr(dt, "date") else str(dt)[:10]
+                history.append(
+                    {
+                        "id": b_row.get("id"),
+                        "date": date_key,
+                        "rating": float(b_row.get("rating")) if b_row.get("rating") not in (None, "") else None,
+                        "reviews_count": int(b_row.get("reviews_count") or 0),
+                        "photos_count": 0,
+                        "news_count": 0,
+                        "unanswered_reviews_count": unanswered_now,
+                        "source": "businesses",
+                        "created_at": dt,
+                    }
+                )
+
         history = history[:100]
 
         db.close()

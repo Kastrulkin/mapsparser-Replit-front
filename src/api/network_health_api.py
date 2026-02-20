@@ -86,6 +86,7 @@ def get_network_health(current_user):
         user_id = current_user['id']
         network_id = request.args.get('network_id')
         business_id = request.args.get('business_id')
+        requested_business_id = business_id
         
         # Build WHERE clause
         where_clauses = ["b.owner_id = %s"]
@@ -111,20 +112,22 @@ def get_network_health(current_user):
             if owner_id != user_id and not current_user.get('is_superadmin'):
                 return jsonify({"error": "Access denied"}), 403
                 
-            # 400 Bad Request (Isolation policy)
-            # If business is part of a network, client should use network endpoints or network_id filter?
-            # The requirement: "If business_id is part of network -> 400 with message 'Use network_id for network entities'"
             if biz_network_id:
-                 return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
-
-            where_clauses.append("b.id = %s")
-            params.append(business_id)
+                # Backward-compatible behavior for old frontend:
+                # if member business_id is passed, return network aggregate instead of 400.
+                network_id = network_id or biz_network_id
+                business_id = None
+                where_clauses.append("b.network_id = %s")
+                params.append(network_id)
+            else:
+                where_clauses.append("b.id = %s")
+                params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
         has_map_parse_results = _table_exists(cursor, "mapparseresults")
 
         # Для одного бизнеса — используем унифицированные метрики (external → cards → MapParseResults)
-        if business_id:
+        if requested_business_id and not network_id:
             metrics = _get_map_metrics(cursor, business_id)
             avg_rating = round(metrics["rating"] or 0, 1)
             total_reviews = metrics["reviews_count"] or 0
@@ -265,10 +268,14 @@ def get_location_alerts(current_user):
                 return jsonify({"error": "Access denied"}), 403
             
             if biz_network_id:
-                 return jsonify({"error": "This business is part of a network. Use network endpoints."}), 400
-
-            where_clauses.append("b.id = %s")
-            params.append(business_id)
+                # Backward-compatible behavior for old frontend:
+                # if member business_id is passed, return alerts for whole network.
+                network_id = network_id or biz_network_id
+                where_clauses.append("b.network_id = %s")
+                params.append(network_id)
+            else:
+                where_clauses.append("b.id = %s")
+                params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
         has_map_parse_results = _table_exists(cursor, "mapparseresults")

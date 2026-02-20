@@ -2434,17 +2434,18 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
         cursor = db.conn.cursor()
         # Получаем первый активный бизнес пользователя
         cursor.execute("""
-            SELECT ai_agent_language 
-            FROM Businesses 
-            WHERE owner_id = %s AND (is_active = 1 OR is_active IS NULL)
+            SELECT ai_agent_language
+            FROM businesses
+            WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL)
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
         db.close()
         
-        if row and row[0]:
-            return row[0].lower()
+        lang = row.get('ai_agent_language') if isinstance(row, dict) else (row[0] if row else None)
+        if lang:
+            return str(lang).lower()
     except Exception as e:
         print(f"⚠️ Ошибка получения языка пользователя: {e}")
     

@@ -341,6 +341,14 @@ def update_service(service_id):
         
         optimized_description = data.get('optimized_description', '')
         optimized_name = data.get('optimized_name', '')
+        raw_price = data.get('price', None)
+        if isinstance(raw_price, str):
+            raw_price = raw_price.strip()
+            price_value = None if raw_price == '' else raw_price
+        elif raw_price in ({}, [], ()):
+            price_value = None
+        else:
+            price_value = raw_price
         
         print(f"🔍 DEBUG services_api.update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
         print(f"🔍 DEBUG services_api.update_service: optimized_name = '{optimized_name}' (length: {len(optimized_name) if optimized_name else 0})", flush=True)
@@ -360,7 +368,7 @@ def update_service(service_id):
                 data.get('description', ''),
                 optimized_description,
                 keywords_str,
-                data.get('price', 0),
+                price_value,
                 service_id
             ))
             print(f"✅ DEBUG services_api.update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
@@ -369,7 +377,9 @@ def update_service(service_id):
             cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = %s", (service_id,))
             check_row = cursor.fetchone()
             if check_row:
-                print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
+                check_name = check_row.get('optimized_name') if isinstance(check_row, dict) else check_row[0]
+                check_desc = check_row.get('optimized_description') if isinstance(check_row, dict) else check_row[1]
+                print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_name}', optimized_description = '{check_desc[:50] if check_desc else ''}...'", flush=True)
             else:
                 print(f"❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
         elif has_optimized_description:
@@ -383,7 +393,7 @@ def update_service(service_id):
                 data.get('description', ''),
                 optimized_description,
                 keywords_str,
-                data.get('price', 0),
+                price_value,
                 service_id
             ))
         elif has_optimized_name:
@@ -397,7 +407,7 @@ def update_service(service_id):
                 optimized_name,
                 data.get('description', ''),
                 keywords_str,
-                data.get('price', 0),
+                price_value,
                 service_id
             ))
         else:
@@ -410,7 +420,7 @@ def update_service(service_id):
                 data.get('name', ''),
                 data.get('description', ''),
                 keywords_str,
-                data.get('price', 0),
+                price_value,
                 service_id
             ))
         

@@ -46,15 +46,21 @@ interface NetworkHealthDashboardProps {
 
 const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ networkId, businessId }) => {
     const { t } = useLanguage();
+    const healthEndpoint = networkId
+        ? `/api/network/health?network_id=${encodeURIComponent(networkId)}`
+        : (businessId ? `/api/network/health?business_id=${encodeURIComponent(businessId)}` : null);
+    const alertsEndpoint = networkId
+        ? `/api/network/locations-alerts?network_id=${encodeURIComponent(networkId)}`
+        : (businessId ? `/api/network/locations-alerts?business_id=${encodeURIComponent(businessId)}` : null);
 
     // Fetch network health metrics
     const { data: healthResponse, loading: loadingHealth, error: errorHealth } = useApiData<{ data: NetworkHealthData }>(
-        '/api/network/health'
+        healthEndpoint
     );
 
     // Fetch locations with alerts
     const { data: alertsResponse, loading: loadingAlerts, error: errorAlerts } = useApiData<{ data: { locations: LocationWithAlerts[] } }>(
-        '/api/network/locations-alerts'
+        alertsEndpoint
     );
 
     const health = healthResponse?.data || {
@@ -128,7 +134,7 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
         }
     };
 
-    if (loadingHealth && !health) {
+    if (loadingHealth && !healthResponse) {
         return (
             <Card>
                 <CardHeader>
@@ -164,6 +170,10 @@ const NetworkHealthDashboard: React.FC<NetworkHealthDashboardProps> = ({ network
                 </CardContent>
             </Card>
         );
+    }
+
+    if (!healthEndpoint) {
+        return null;
     }
 
     return (
