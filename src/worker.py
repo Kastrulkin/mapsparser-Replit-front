@@ -1509,12 +1509,13 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
         if isinstance(cat_block, list):
             # Плоский список items без обёртки категории
             items = cat_block
-            category_name = "Разное"
             for item in items:
                 if isinstance(item, dict) and item.get("name"):
                     row = _one_service_row(item, business_id, user_id, source)
                     if row:
-                        row["category"] = category_name
+                        item_category = _extract_service_category(item)
+                        if item_category:
+                            row["category"] = item_category
                         key = (
                             (row.get("source") or "").lower(),
                             (row.get("name") or "").strip().lower(),
@@ -1532,8 +1533,24 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
             # Примитивы и неизвестные типы — пропускаем
             continue
 
-        # Стандартная структура: dict с category и items
-        category_name = (cat_block.get("category") or "Разное").strip() or "Разное"
+        # Вариант: в products пришел плоский список услуг (без items)
+        if cat_block.get("name") and not (cat_block.get("items") or cat_block.get("products")):
+            row = _one_service_row(cat_block, business_id, user_id, source)
+            if row:
+                key = (
+                    (row.get("source") or "").lower(),
+                    (row.get("name") or "").strip().lower(),
+                    (row.get("category") or "").strip().lower(),
+                    str(row.get("price_from") or ""),
+                    str(row.get("price_to") or ""),
+                )
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
+            continue
+
+        # Стандартная структура: dict с category/group/name и items
+        category_name = _extract_service_category(cat_block) or "Общие услуги"
         items = cat_block.get("items") or cat_block.get("products") or []
         if not isinstance(items, list):
             continue
@@ -1543,7 +1560,8 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
                 continue
             row = _one_service_row(item, business_id, user_id, source)
             if row:
-                row["category"] = category_name
+                item_category = _extract_service_category(item)
+                row["category"] = item_category or category_name
                 key = (
                     (row.get("source") or "").lower(),
                     (row.get("name") or "").strip().lower(),
@@ -1573,7 +1591,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "user_id": user_id,
         "name": name,
         "description": (item.get("description") or "").strip() or None,
-        "category": (item.get("category") or "Разное").strip() or "Разное",
+        "category": _extract_service_category(item) or "Общие услуги",
         "source": source,
         "external_id": external_id,
         "price_from": price_from,
@@ -1581,6 +1599,35 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "raw": (dict(item) if isinstance(item, dict) else {"_error": "not_a_dict", "_type": type(item).__name__}),
         "duration_minutes": item.get("duration_minutes") or item.get("duration"),
     }
+
+
+def _extract_service_category(payload: Dict[str, Any]) -> str:
+    """Извлекает категорию услуги из разных форматов ответа парсера."""
+    if not isinstance(payload, dict):
+        return ""
+    raw = (
+        payload.get("category")
+        or payload.get("category_name")
+        or payload.get("categoryName")
+        or payload.get("group")
+        or payload.get("group_name")
+        or payload.get("groupName")
+        or payload.get("section")
+        or payload.get("section_name")
+        or payload.get("sectionName")
+        or payload.get("name")  # для контейнеров категории
+        or payload.get("title")
+    )
+    if isinstance(raw, dict):
+        raw = raw.get("name") or raw.get("title") or raw.get("value")
+    if raw is None:
+        return ""
+    category = str(raw).strip()
+    if not category:
+        return ""
+    if category.lower() in {"другое", "разное", "other", "общие услуги", "без категории"}:
+        return ""
+    return category
 
 
 def _parse_service_price(raw_price: Any) -> tuple[Optional[float], Optional[float]]:

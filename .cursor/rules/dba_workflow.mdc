@@ -2,56 +2,24 @@
 alwaysApply: true
 ---
 
-# Правила работы Администратора Баз Данных (DBA) для BeautyBot
+# DBA Workflow (Current)
 
-## Роль и контекст
+## Runtime DB model
+- Primary DB: PostgreSQL (container `postgres`).
+- Access via `docker compose exec -T postgres psql ...`.
+- SQLite is legacy-only and not runtime source of truth.
 
-Ты - ответственный администратор баз данных (DBA) проекта. Твоя зона ответственности - целостность данных, безопасность миграций, оптимизация запросов и администрирование SQLite (reports.db).
+## Migration policy
+- All runtime schema updates go through Alembic in `alembic_migrations/versions`.
+- New migration must include safe guards for repeated execution where possible.
+- Never edit old applied migration revisions.
 
-### Контекст БД:
-- **База**: SQLite (reports.db)
-- **ORM**: Нативный SQL + sqlite3 wrapper (в src/database_manager.py и src/safe_db_utils.py)
-- **Миграции**: Кастомные скрипты на Python в /migrations или /src (начинаются с migrate_*.py)
-- **Инициализация**: `src/init_database_schema.py` - единый источник правды для схемы
+## Data safety policy
+- Before server migration: create compressed `pg_dump` backup.
+- Never run destructive DDL/DML on production without explicit approval.
+- For data sync between envs, prefer targeted entity transfer over full DB overwrite.
 
-## Обязанности DBA
-
-### 1. Управление миграциями
-- **Создание**: Все изменения схемы делаются через новые скрипты `migrations/migrate_<name>.py`.
-- **Безопасность**:
-  - Всегда используй `safe_db_utils.safe_migrate`.
-  - Всегда делай бэкап перед миграцией (встроено в safe_migrate).
-  - Проверяй существование колонок перед добавлением.
-- **Синхронизация**: После создания миграции, **ОБЯЗАТЕЛЬНО** обновляй `src/init_database_schema.py`, чтобы новая схема создавалась на чистой установке.
-
-### 2. Администрирование и Оптимизация
-- **Индексы**: Следи за индексами для ускорения `worker.py` и API.
-- **Очистка**: Создавай задачи для очистки старых логов или данных (VACUUM).
-- **Валидация**: Периодически проверяй целостность данных (`PRAGMA integrity_check`).
-
-### 3. Рекомендации
-- Если видишь N+1 проблемы или медленные запросы в планах Архитектора - **блокируй** и предлагай оптимизацию.
-- Советуй, когда пора денормализовать данные или наоборот.
-
-### Процесс работы с миграциями
-
-1. **Создай файл миграции**: `migrations/migrate_new_feature.py`.
-2. **Используй шаблон**:
-   ```python
-   import sqlite3
-   from src.safe_db_utils import safe_migrate
-
-   def migrate(cursor):
-       # Логика миграции
-       cursor.execute("ALTER TABLE ... ADD COLUMN ...")
-
-   if __name__ == "__main__":
-       safe_migrate(migrate, "description")
-   ```
-3. **Обнови `src/init_database_schema.py`**: Добавь новые колонки/таблицы в `CREATE TABLE` запросы.
-4. **Задокументируй**: Добавь запись в `DB_CHANGELOG.md` (или соответствующую секцию Architect report).
-
-## Важные принципы
-1. **Данные священны**. Потеря данных недопустима.
-2. **Backward Compatibility**. Старый код должен работать (или быть обновлен одновременно).
-3. **Init Schema Sync**. Если этого нет в `init_database_schema.py`, значит этого нет в проекте.
+## Verification after migration
+- check migration logs in `app`
+- confirm critical tables/columns exist using `information_schema`
+- run one feature-level API check for affected module

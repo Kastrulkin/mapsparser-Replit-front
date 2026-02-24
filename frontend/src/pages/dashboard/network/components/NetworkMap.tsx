@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { YMaps, Map, Clusterer, Placemark } from '@pbe/react-yandex-maps';
 import { SalonData } from '../data/mockData';
 
 interface NetworkMapProps {
@@ -8,20 +7,19 @@ interface NetworkMapProps {
 }
 
 export const NetworkMap: React.FC<NetworkMapProps> = ({ locations }) => {
-    const hasGeo = locations.some((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon));
-    const centerLoc = locations.find((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon));
-    const defaultState = centerLoc
-        ? { center: [centerLoc.lat, centerLoc.lon], zoom: 10 }
-        : { center: [59.9343, 30.3351], zoom: 10 };
+    const validLocations = locations.filter((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon));
+    const hasGeo = validLocations.length > 0;
+    const centerLoc = validLocations[0];
+    const center: [number, number] = centerLoc
+        ? [centerLoc.lat, centerLoc.lon]
+        : [59.9343, 30.3351];
 
-    const getPreset = (status: 'active' | 'problem' | 'offline') => {
-        switch (status) {
-            case 'active': return 'islands#darkGreenDotIcon';
-            case 'problem': return 'islands#yellowDotIcon';
-            case 'offline': return 'islands#greyDotIcon'; // or red
-            default: return 'islands#blueDotIcon';
-        }
-    };
+    const delta = 0.08;
+    const left = center[1] - delta;
+    const right = center[1] + delta;
+    const top = center[0] + delta;
+    const bottom = center[0] - delta;
+    const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${center[0]}%2C${center[1]}`;
 
     return (
         <Card className="col-span-3">
@@ -34,33 +32,30 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ locations }) => {
                         Нет координат для отображения карты
                     </div>
                 )}
-                <YMaps>
-                    <Map defaultState={defaultState} width="100%" height="100%">
-                        <Clusterer
-                            options={{
-                                preset: 'islands#invertedVioletClusterIcons',
-                                groupByCoordinates: false,
-                            }}
-                        >
-                            {locations
-                                .filter((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon))
-                                .map((loc) => (
-                                <Placemark
+                <iframe
+                    title="OpenStreetMap"
+                    src={mapUrl}
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                />
+                {hasGeo && (
+                    <div className="absolute right-2 top-2 z-10 max-w-[260px] rounded-lg bg-white/90 p-2 text-xs shadow">
+                        <div className="font-semibold mb-1">Точки на карте</div>
+                        <div className="max-h-32 overflow-auto space-y-1">
+                            {validLocations.map((loc) => (
+                                <a
                                     key={loc.id}
-                                    geometry={[loc.lat, loc.lon]}
-                                    properties={{
-                                        balloonContentHeader: loc.name,
-                                        balloonContentBody: `Rating: ${loc.rating} ⭐<br/>Reviews: ${loc.reviews}`,
-                                        hintContent: loc.name
-                                    }}
-                                    options={{
-                                        preset: getPreset(loc.status)
-                                    }}
-                                />
+                                    href={`https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lon}#map=16/${loc.lat}/${loc.lon}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block hover:underline"
+                                >
+                                    {loc.name} • {loc.rating}⭐
+                                </a>
                             ))}
-                        </Clusterer>
-                    </Map>
-                </YMaps>
+                        </div>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

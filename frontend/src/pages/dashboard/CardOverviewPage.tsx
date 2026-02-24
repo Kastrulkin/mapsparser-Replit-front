@@ -220,7 +220,10 @@ export const CardOverviewPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setIsNetworkMaster(data.is_network || false);
+        const masterFlag = Boolean(data.is_network_master ?? data.is_network);
+        const memberFlag = Boolean(data.is_network_member ?? currentBusiness?.network_id);
+        const isLegacyMasterById = String(data.network_id || '') === String(currentBusinessId);
+        setIsNetworkMaster(masterFlag && !memberFlag && isLegacyMasterById);
       }
     } catch (error) {
       console.error('Ошибка проверки сети:', error);

@@ -80,15 +80,6 @@ export const ProgressPage = () => {
     checkNetwork();
   }, [currentBusinessId]);
 
-  if (networkStatusLoading && currentBusinessId) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 w-56 bg-gray-100 animate-pulse rounded-md" />
-        <div className="h-40 w-full bg-gray-100 animate-pulse rounded-xl" />
-      </div>
-    );
-  }
-
   // Load wizard data
   useEffect(() => {
     const loadWizardData = async () => {
@@ -118,6 +109,15 @@ export const ProgressPage = () => {
     };
     loadWizardData();
   }, [showWizard, currentBusinessId]);
+
+  if (networkStatusLoading && currentBusinessId) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-56 bg-gray-100 animate-pulse rounded-md" />
+        <div className="h-40 w-full bg-gray-100 animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
   // NETWORK VIEW
   if (isNetworkMaster) {

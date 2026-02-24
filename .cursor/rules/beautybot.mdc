@@ -2,207 +2,36 @@
 alwaysApply: true
 ---
 
-# Правила ведения проекта BeautyBot
+# BeautyBot Global Project Rules (Current)
 
-## 🔒 Работа с базой данных
+## Stack reality
+- Runtime: Docker Compose + PostgreSQL.
+- Services: `app`, `worker`, `postgres`.
+- Main server path: `/opt/seo-app`.
 
-### Критически важно:
-- **НИКОГДА НЕ ИЗМЕНЯЙТЕ ДАННЫЕ В ГОТОВОЙ БАЗЕ ДАННЫХ БЕЗ ЯВНОГО РАЗРЕШЕНИЯ ПОЛЬЗОВАТЕЛЯ**
-  - Не обновляйте пароли пользователей
-  - Не изменяйте существующие записи
-  - Не удаляйте данные
-  - Всегда спрашивайте разрешение перед любыми изменениями данных
-  - Исключение: только если пользователь ЯВНО попросил изменить данные
+## Non-negotiable safety
+- Do not change production data without explicit user approval.
+- Before DB migration on server, create a backup.
+- Avoid destructive commands (`DROP`, mass `DELETE`) unless explicitly requested.
 
-### Обязательные требования:
-- Всегда используйте `safe_db_utils.get_db_connection()` для всех подключений к БД
-- Все миграции должны использовать `safe_migrate()` с автоматическими бэкапами
-- Перед изменениями БД: создать бэкап, проверить количество записей ДО и ПОСЛЕ
-- НЕ выполняйте `DROP TABLE` без бэкапа
-- НЕ выполняйте `DELETE` без проверки количества записей
-- НЕ изменяйте структуру таблиц без миграции через `safe_migrate()`
+## Change strategy
+- Prefer minimal-scope updates:
+  - frontend only -> sync `frontend/dist`
+  - backend only -> sync `src/` (+ migrations if needed)
+  - restart only impacted services
+- Do not force full stack rebuild for small fixes.
 
-### Структура базы данных:
-- `src/reports.db` - единственная база данных проекта
-- Старая база `reports.db` (корень) была объединена и удалена
+## Debug strategy
+- First check app health and restart loops:
+  - `docker compose ps`
+  - `docker compose logs --since 5m app`
+  - `curl -I http://localhost:8000`
+- If backend logs are clean but UI fails, treat as frontend runtime issue.
 
-## 🔄 Процесс обновления проекта
+## DB and migrations
+- Runtime schema changes via Alembic only (`alembic_migrations/versions`).
+- Keep migration SQL robust for mixed states (`IF EXISTS`/`IF NOT EXISTS`).
 
-### 1️⃣ Изменения в Frontend (React/TypeScript)
-
-#### Шаг 1: Пересобрать фронтенд
-```bash
-cd frontend
-rm -rf dist
-npm run build
-```
-
-#### Шаг 2: Проверить сборку
-```bash
-ls -lh dist/assets/index-*.js
-# Должен быть свежий файл с текущей датой
-```
-
-#### Шаг 3: Перезапустить Flask сервер
-```bash
-# Остановить старый процесс
-PID=$(lsof -tiTCP:8000 -sTCP:LISTEN -P)
-kill -9 $PID
-
-# Запустить новый
-cd ..
-source venv/bin/activate
-python src/main.py &
-```
-
-#### Шаг 4: Проверить сервер
-```bash
-lsof -iTCP:8000 -sTCP:LISTEN
-# Должен показать процесс на порту 8000
-```
-
-#### Шаг 5: Очистить кеш браузера
-- Жесткая перезагрузка: **Cmd+Shift+R** (Mac) или **Ctrl+Shift+R** (Windows/Linux)
-- Или режим инкогнито: **Cmd+Shift+N**
-
-### 2️⃣ Изменения в Backend (Python/Flask)
-
-#### Шаг 1: Остановить старый процесс
-```bash
-PID=$(lsof -tiTCP:8000 -sTCP:LISTEN -P)
-kill -9 $PID
-sleep 2
-```
-
-#### Шаг 2: Проверить, что процесс остановлен
-```bash
-lsof -iTCP:8000 -sTCP:LISTEN
-# Не должно быть вывода
-```
-
-#### Шаг 3: Запустить новый процесс
-```bash
-source venv/bin/activate
-python src/main.py >/tmp/seo_main.out 2>&1 &
-sleep 3
-```
-
-#### Шаг 4: Проверить запуск
-```bash
-# Проверка порта
-lsof -iTCP:8000 -sTCP:LISTEN
-
-# Проверка логов
-tail -10 /tmp/seo_main.out
-```
-
-#### Шаг 5: Если изменялась БД - очистить старые сессии
-```bash
-sqlite3 src/reports.db "DELETE FROM UserSessions WHERE user_id = (SELECT id FROM Users WHERE email='ВАШ_EMAIL');"
-```
-
-#### Шаг 6: Выйти и войти заново в браузере
-- Старые сессии могут содержать устаревшие данные
-
-### 3️⃣ Изменения в Базу данных
-
-#### Шаг 1: Создать бэкап
-```bash
-python src/safe_db_utils.py
-# Или вручную:
-cp src/reports.db db_backups/reports_$(date +%Y%m%d_%H%M%S).db.backup
-```
-
-#### Шаг 2: Применить миграцию
-```bash
-python src/migrate_wizard_data_safe.py
-# Или другую миграцию
-```
-
-#### Шаг 3: Проверить данные
-```bash
-sqlite3 src/reports.db "SELECT COUNT(*) FROM Businesses;"
-```
-
-#### Шаг 4: Если изменялась структура - перезапустить сервер
-```bash
-# См. раздел "Изменения в Backend"
-```
-
-### 4️⃣ Комбинированные изменения (Frontend + Backend)
-
-#### Полная последовательность:
-```bash
-# 1. Остановить все процессы
-pkill -f "python.*main.py"
-pkill -f "python.*user_api.py"
-pkill -f "python.*worker.py"
-
-# 2. Пересобрать фронтенд
-cd frontend
-rm -rf dist
-npm run build
-cd ..
-
-# 3. Проверить сборку
-ls -lh frontend/dist/assets/index-*.js
-
-# 4. Запустить сервер
-source venv/bin/activate
-python src/main.py >/tmp/seo_main.out 2>&1 &
-sleep 3
-
-# 5. Проверить запуск
-lsof -iTCP:8000 -sTCP:LISTEN
-
-# 6. Очистить старые сессии (если изменялась логика авторизации)
-sqlite3 src/reports.db "DELETE FROM UserSessions;"
-
-# 7. Проверить логи
-tail -20 /tmp/seo_main.out
-```
-
-## 🏗️ Архитектурные принципы
-
-### Иерархия сущностей:
-- Users → Businesses → Services/FinancialTransactions/Cards
-- Все данные привязаны к `business_id` (не к `user_id`)
-- `user_id` используется только для авторизации
-- `business_id` - основной ключ для изоляции данных
-- Суперадмин видит все бизнесы, обычные пользователи - только свои
-
-## ✅ Чеклист перед деплоем
-
-- [ ] Фронтенд пересобран (`npm run build`)
-- [ ] Проверен новый JS файл в `dist/assets/`
-- [ ] Старый процесс Flask остановлен
-- [ ] Новый процесс Flask запущен
-- [ ] Проверен порт 8000 (процесс слушает)
-- [ ] Проверены логи сервера (нет ошибок)
-- [ ] Очищены старые сессии (если нужно)
-- [ ] Протестирован вход заново
-- [ ] Проверена консоль браузера (нет ошибок)
-
-## ⚠️ Частые проблемы и решения
-
-### Проблема: Изменения не видны
-
-**Причина 1: Кеш браузера**
-- Решение: Жесткая перезагрузка (Cmd+Shift+R) или режим инкогнито
-
-**Причина 2: Старый процесс Flask**
-- Решение: Явно убить процесс и запустить заново
-
-**Причина 3: Старая сессия в БД**
-- Решение: Удалить старые сессии и войти заново
-
-**Причина 4: Фронтенд не пересобран**
-- Решение: Убедиться, что `dist/` пересобран (`rm -rf dist && npm run build`)
-
-## 📚 Соблюдение документации
-
-### Обязательные источники истины:
-- **`README.md`**: Основная информация о проекте, траблшутинг (IPv6, CORS), структура.
-- **`PORTS_AND_SERVICES.md`**: Актуальная схема портов (3000 vs 8000) и проверка статусов.
-- Вы должны сверяться с этими файлами перед диагностикой проблем с подключением или запуском сервисов.
-- При обновлении архитектуры или добавлении сервисов — обновляйте эти файлы.
+## Documentation discipline
+- Keep `README.md` aligned with actual runbook.
+- Treat legacy SQLite/systemd instructions as archival unless explicitly needed.
