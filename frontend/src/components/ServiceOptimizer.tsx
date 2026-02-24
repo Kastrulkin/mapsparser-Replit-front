@@ -30,7 +30,8 @@ export default function ServiceOptimizer({
   region: externalRegion,
   descriptionLength: externalLength,
   instructions: externalInstructions,
-  hideTextInput = false
+  hideTextInput = false,
+  onServicesImported
 }: { 
   businessName?: string; 
   businessId?: string;
@@ -39,6 +40,7 @@ export default function ServiceOptimizer({
   descriptionLength?: number;
   instructions?: string;
   hideTextInput?: boolean;
+  onServicesImported?: () => Promise<void> | void;
 }) {
   const [mode, setMode] = useState<'text' | 'file'>(hideTextInput ? 'file' : 'text');
   const [text, setText] = useState('');
@@ -56,6 +58,7 @@ export default function ServiceOptimizer({
     if (externalInstructions !== undefined) setInstructions(externalInstructions);
   }, [externalTone, externalRegion, externalLength, externalInstructions]);
   const [loading, setLoading] = useState(false);
+  const [savingRecognized, setSavingRecognized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizeResultService[] | null>(null);
   const [recs, setRecs] = useState<string[] | null>(null);
@@ -211,7 +214,7 @@ export default function ServiceOptimizer({
     });
   };
 
-  const addServiceToList = async (serviceIndex: number) => {
+  const addServiceToList = async (serviceIndex: number, preferOriginal: boolean = false) => {
     if (!result) return;
     const service = result[serviceIndex];
     const accepted = acceptedOptimizations.get(serviceIndex) || {};
@@ -222,14 +225,18 @@ export default function ServiceOptimizer({
       // Получаем business_id из пропсов или из localStorage
       const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
       
-      // Используем принятые оптимизированные значения или оригинальные
-      const finalName = accepted.name 
-        ? (editable.name !== undefined ? editable.name : service.optimized_name)
-        : service.original_name;
-      
-      const finalDescription = accepted.description
-        ? (editable.description !== undefined ? editable.description : service.seo_description)
-        : (service.original_description || service.seo_description);
+      // Шаг "Распознать -> записать": сохраняем оригинальные названия.
+      const finalName = preferOriginal
+        ? (service.original_name || service.optimized_name || '').trim()
+        : (accepted.name
+          ? (editable.name !== undefined ? editable.name : service.optimized_name)
+          : service.original_name);
+
+      const finalDescription = preferOriginal
+        ? ((service.original_description || service.seo_description || '').trim())
+        : (accepted.description
+          ? (editable.description !== undefined ? editable.description : service.seo_description)
+          : (service.original_description || service.seo_description));
       
       const response = await fetch(`${window.location.origin}/api/services/add`, {
         method: 'POST',
@@ -251,12 +258,41 @@ export default function ServiceOptimizer({
       if (response.ok && data.success) {
         setAddedServices(prev => new Set([...prev, serviceIndex]));
         setError(null);
-        // Можно добавить уведомление об успехе
       } else {
         setError(data.error || 'Ошибка добавления услуги');
       }
     } catch (e: any) {
       setError('Ошибка добавления услуги: ' + e.message);
+    }
+  };
+
+  const saveRecognizedServices = async () => {
+    if (!result || result.length === 0) {
+      setError('Сначала распознайте услуги из файла');
+      return;
+    }
+
+    setSavingRecognized(true);
+    setError(null);
+    try {
+      let savedCount = 0;
+      for (let i = 0; i < result.length; i += 1) {
+        if (addedServices.has(i)) continue;
+        await addServiceToList(i, true);
+        savedCount += 1;
+      }
+
+      if (onServicesImported) {
+        await onServicesImported();
+      }
+      setError(null);
+      if (savedCount === 0) {
+        setError('Новых услуг для записи нет');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка записи распознанных услуг');
+    } finally {
+      setSavingRecognized(false);
     }
   };
 
@@ -328,6 +364,21 @@ export default function ServiceOptimizer({
         </Button>
         {result && <Button variant="outline" onClick={exportCSV}>Экспорт CSV</Button>}
       </div>
+      )}
+
+      {hideTextInput && (
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={callOptimize} disabled={loading || !file}>
+            {loading ? 'Распознаем…' : 'Распознать из файла'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={saveRecognizedServices}
+            disabled={savingRecognized || !result || result.length === 0}
+          >
+            {savingRecognized ? 'Записываем…' : 'Записать в услуги'}
+          </Button>
+        </div>
       )}
 
       {result && (
@@ -469,5 +520,4 @@ export default function ServiceOptimizer({
     </div>
   );
 }
-
 

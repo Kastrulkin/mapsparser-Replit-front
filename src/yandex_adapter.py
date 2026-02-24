@@ -33,7 +33,11 @@ class YandexAdapter:
     - метод fetch_business_stats() возвращает None.
     """
 
-    ORG_ID_REGEX = re.compile(r"/org/(\\d+)", re.IGNORECASE)
+    ORG_ID_PATTERNS = (
+        re.compile(r"/org/[^/]+/(\d+)", re.IGNORECASE),
+        re.compile(r"/org/(\d+)", re.IGNORECASE),
+        re.compile(r"/sprav/(\d+)", re.IGNORECASE),
+    )
 
     def parse_org_id_from_url(self, yandex_url: str) -> Optional[str]:
         """
@@ -44,8 +48,11 @@ class YandexAdapter:
         """
         if not yandex_url:
             return None
-        match = self.ORG_ID_REGEX.search(yandex_url)
-        return match.group(1) if match else None
+        for pattern in self.ORG_ID_PATTERNS:
+            match = pattern.search(yandex_url)
+            if match:
+                return match.group(1)
+        return None
 
     def fetch_business_stats(self, yandex_org_id: str) -> Optional[YandexBusinessStatsPayload]:
         """
@@ -61,6 +68,5 @@ class YandexAdapter:
         # Здесь сознательно не делаем сетевые вызовы, чтобы
         # не ломать локальную разработку и прод-окружение.
         return None
-
 
 

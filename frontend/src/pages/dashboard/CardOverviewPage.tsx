@@ -48,6 +48,13 @@ export const CardOverviewPage = () => {
   const servicesItemsPerPage = 1000;
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<string | null>(null);
+  const [editServiceForm, setEditServiceForm] = useState({
+    category: '',
+    name: '',
+    description: '',
+    keywords: '',
+    price: ''
+  });
   const [newService, setNewService] = useState({
     category: '',
     name: '',
@@ -391,6 +398,38 @@ export const CardOverviewPage = () => {
     } catch (e: any) {
       setError((t.common.error || "Error") + ': ' + e.message);
     }
+  };
+
+  const openEditService = (service: any) => {
+    setEditingService(service.id);
+    setEditServiceForm({
+      category: service.category || '',
+      name: service.name || '',
+      description: service.description || '',
+      keywords: Array.isArray(service.keywords)
+        ? service.keywords.join(', ')
+        : (service.keywords || ''),
+      price: service.price ? String(service.price) : ''
+    });
+  };
+
+  const saveEditedService = async () => {
+    if (!editingService) return;
+    const original = userServices.find((s) => s.id === editingService);
+    if (!original) return;
+    await updateService(editingService, {
+      category: editServiceForm.category || '',
+      name: editServiceForm.name || '',
+      description: editServiceForm.description || '',
+      keywords: editServiceForm.keywords
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean),
+      price: editServiceForm.price || '',
+      optimized_name: original.optimized_name || '',
+      optimized_description: original.optimized_description || ''
+    });
+    setEditingService(null);
   };
 
   return (
@@ -739,6 +778,7 @@ export const CardOverviewPage = () => {
                       descriptionLength={wizardLength}
                       instructions={wizardInstructions}
                       hideTextInput={true}
+                      onServicesImported={loadUserServices}
                     />
                     {userServices.length > 0 && (
                       <Button
@@ -964,6 +1004,15 @@ export const CardOverviewPage = () => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  onClick={() => openEditService(service)}
+                                  className="h-8 w-8 text-gray-500 hover:text-blue-700 hover:bg-blue-50"
+                                  title={t.dashboard.card.edit || "Редактировать"}
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   onClick={() => deleteService(service.id)}
                                   className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
                                 >
@@ -1002,6 +1051,76 @@ export const CardOverviewPage = () => {
             <SEOKeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
+        {editingService && (
+              <div className="fixed inset-0 z-[80] bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-5">
+                    {t.dashboard.card.edit || 'Редактирование услуги'}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.category}</label>
+                      <input
+                        type="text"
+                        value={editServiceForm.category}
+                        onChange={(e) => setEditServiceForm({ ...editServiceForm, category: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.serviceName}</label>
+                      <input
+                        type="text"
+                        value={editServiceForm.name}
+                        onChange={(e) => setEditServiceForm({ ...editServiceForm, name: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.description}</label>
+                      <textarea
+                        value={editServiceForm.description}
+                        onChange={(e) => setEditServiceForm({ ...editServiceForm, description: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[120px]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.keywords}</label>
+                      <input
+                        type="text"
+                        value={editServiceForm.keywords}
+                        onChange={(e) => setEditServiceForm({ ...editServiceForm, keywords: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{t.dashboard.card.price}</label>
+                      <input
+                        type="text"
+                        value={editServiceForm.price}
+                        onChange={(e) => setEditServiceForm({ ...editServiceForm, price: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      className="border-gray-200 text-gray-600 hover:bg-gray-100"
+                      onClick={() => setEditingService(null)}
+                    >
+                      {t.dashboard.card.cancel}
+                    </Button>
+                    <Button
+                      className="bg-primary text-white"
+                      onClick={saveEditedService}
+                    >
+                      {t.dashboard.card.save || t.dashboard.card.add}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+        )}
       </div>
     </div>
   );

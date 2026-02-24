@@ -292,7 +292,7 @@ def save_card_to_db(card: dict) -> None:
 
     cur.execute(
         """
-        INSERT OR REPLACE INTO Cards (
+        INSERT INTO Cards (
             id, url, title, address, phone, site, rating, reviews_count,
             categories, overview, products, news, photos, features_full,
             competitors, hours, hours_full, report_path, user_id, seo_score,
@@ -300,6 +300,28 @@ def save_card_to_db(card: dict) -> None:
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
+        ON CONFLICT (id) DO UPDATE SET
+            url = EXCLUDED.url,
+            title = EXCLUDED.title,
+            address = EXCLUDED.address,
+            phone = EXCLUDED.phone,
+            site = EXCLUDED.site,
+            rating = EXCLUDED.rating,
+            reviews_count = EXCLUDED.reviews_count,
+            categories = EXCLUDED.categories,
+            overview = EXCLUDED.overview,
+            products = EXCLUDED.products,
+            news = EXCLUDED.news,
+            photos = EXCLUDED.photos,
+            features_full = EXCLUDED.features_full,
+            competitors = EXCLUDED.competitors,
+            hours = EXCLUDED.hours,
+            hours_full = EXCLUDED.hours_full,
+            report_path = EXCLUDED.report_path,
+            user_id = EXCLUDED.user_id,
+            seo_score = EXCLUDED.seo_score,
+            ai_analysis = EXCLUDED.ai_analysis,
+            recommendations = EXCLUDED.recommendations
         """,
         (
             card_id,
@@ -2622,6 +2644,66 @@ def parse_ll_from_maps_url(maps_url: str):
         return None, None
 
 
+def extract_yandex_org_id_from_url(yandex_url: str):
+    """Извлечь ID организации Яндекс из URL (/org/.../<id> или /sprav/<id>)."""
+    if not yandex_url or not isinstance(yandex_url, str):
+        return None
+    url = yandex_url.strip()
+    if not url:
+        return None
+    patterns = (
+        r"/org/[^/]+/(\d+)",
+        r"/org/(\d+)",
+        r"/sprav/(\d+)",
+    )
+    for pattern in patterns:
+        m = re.search(pattern, url, flags=re.IGNORECASE)
+        if m:
+            return m.group(1)
+    return None
+
+
+def get_business_map_links(cursor, business_id: str, yandex_url: str = None):
+    """
+    Вернуть mapLinks для API.
+    Канонический источник: businesses.yandex_url.
+    Legacy fallback: businessmaplinks (только если yandex_url пуст).
+    """
+    canonical_url = (yandex_url or "").strip()
+    if canonical_url:
+        return [
+            {
+                "id": f"business:{business_id}:yandex",
+                "url": canonical_url,
+                "mapType": "yandex",
+                "createdAt": None,
+            }
+        ]
+
+    links = []
+    cursor.execute(
+        """
+        SELECT id, url, map_type, created_at
+        FROM businessmaplinks
+        WHERE business_id = %s
+        ORDER BY created_at DESC
+        """,
+        (business_id,),
+    )
+    for row in cursor.fetchall():
+        rd = _row_to_dict(cursor, row)
+        if rd and (rd.get("url") or "").strip():
+            links.append(
+                {
+                    "id": rd.get("id"),
+                    "url": rd.get("url") or "",
+                    "mapType": rd.get("map_type") or "other",
+                    "createdAt": rd.get("created_at"),
+                }
+            )
+    return links
+
+
 def get_user_language(user_id: str, requested_language: str = None) -> str:
     """
     Получить язык пользователя из профиля бизнеса или использовать запрошенный язык.
@@ -2976,8 +3058,35 @@ def services_optimize():
                 )
                 print(f"🔍 Результат анализа скриншота: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
             else:
-                # Для документов - анализ текста
-                content = file.read().decode('utf-8', errors='ignore')
+                # Для документов - извлекаем текст по типу/расширению.
+                raw_bytes = file.read()
+                filename = (file.filename or "").lower()
+                content = ""
+
+                # TXT / CSV
+                if file.content_type in ("text/plain", "text/csv") or filename.endswith((".txt", ".csv")):
+                    content = raw_bytes.decode("utf-8", errors="ignore")
+
+                # DOCX (zip + word/document.xml)
+                elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or filename.endswith(".docx"):
+                    try:
+                        import io
+                        import zipfile
+                        import xml.etree.ElementTree as ET
+
+                        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+                            xml_data = zf.read("word/document.xml")
+                        root = ET.fromstring(xml_data)
+                        text_parts = [node.text.strip() for node in root.iter() if node.tag.endswith("}t") and node.text and node.text.strip()]
+                        content = "\n".join(text_parts)
+                    except Exception as docx_err:
+                        print(f"⚠️ Не удалось извлечь текст из DOCX: {docx_err}")
+                        content = ""
+
+                # Для PDF/DOC/XLS/XLSX без надежного парсера оставляем мягкий fallback.
+                # Нужна непустая строка, иначе вернем понятную ошибку ниже.
+                else:
+                    content = raw_bytes.decode("utf-8", errors="ignore")
         else:
             content = (payload.get('text') or '').strip()
 
@@ -2988,8 +3097,10 @@ def services_optimize():
             content = ""
         else:
             # Для текста и документов - проверяем наличие контента
-            if not content:
-                return jsonify({"error": "Не передан текст услуг или файл"}), 400
+            if not content or not content.strip():
+                return jsonify({
+                    "error": "Не удалось извлечь текст из файла. Для документов используйте TXT/CSV или DOCX с текстом."
+                }), 400
 
             # Загружаем частотные запросы
             try:
@@ -4269,9 +4380,12 @@ def review_replies_update():
         
         # Обновляем или создаем запись
         cursor.execute("""
-            INSERT OR REPLACE INTO UserReviewReplies 
-            (id, user_id, reply_text, updated_at)
+            INSERT INTO UserReviewReplies (id, user_id, reply_text, updated_at)
             VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                reply_text = EXCLUDED.reply_text,
+                updated_at = CURRENT_TIMESTAMP
         """, (reply_id, user_data['user_id'], reply_text))
         
         db.conn.commit()
@@ -4719,8 +4833,9 @@ def client_info():
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Postgres-only: данные профиля из businesses, userservices, businessprofiles, users;
-        # ссылки на карты — только из businessmaplinks. Таблица ClientInfo не используется.
+        # Postgres-only: данные профиля из businesses, userservices, businessprofiles, users.
+        # Каноническая ссылка на карты хранится в businesses.yandex_url.
+        # businessmaplinks используется только как legacy fallback на чтение.
 
         if request.method == 'GET':
             current_business_id = request.args.get('business_id')
@@ -4730,7 +4845,7 @@ def client_info():
             if current_business_id:
                 print(f"🔍 GET /api/client-info: Ищу бизнес в таблице businesses, business_id={current_business_id}")
                 cursor.execute(
-                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, yandex_url FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                     (current_business_id,),
                 )
                 business_row = cursor.fetchone()
@@ -4749,23 +4864,7 @@ def client_info():
                     print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, name={business_name!r}, is_active={is_active_val}")
                     if owner_id == user_id or user_data.get("is_superadmin"):
                         print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из businesses")
-                        links = []
-                        cursor.execute("""
-                            SELECT id, url, map_type, created_at 
-                            FROM businessmaplinks 
-                            WHERE business_id = %s 
-                            ORDER BY created_at DESC
-                        """, (current_business_id,))
-                        link_rows = cursor.fetchall()
-                        for r in link_rows:
-                            rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
-                            if rd:
-                                links.append({
-                                    "id": rd.get("id"),
-                                    "url": rd.get("url") or "",
-                                    "mapType": rd.get("map_type") or "other",
-                                    "createdAt": rd.get("created_at"),
-                                })
+                        links = get_business_map_links(cursor, current_business_id, row_dict.get("yandex_url"))
 
                         cursor.execute("""
                             SELECT name, description, category, price 
@@ -4870,7 +4969,7 @@ def client_info():
                 db.close()
                 return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "services": [], "mapLinks": [], "owner": None})
             cursor.execute(
-                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, yandex_url FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                 (current_business_id,),
             )
             business_row = cursor.fetchone()
@@ -4884,19 +4983,7 @@ def client_info():
             city = (row_dict.get("city") or "").strip() or None
             geo_lat, geo_lon = row_dict.get("geo_lat"), row_dict.get("geo_lon")
             city_suggestion = suggest_city_from_address(address) if not city and address else None
-            links = []
-            cursor.execute("""
-                SELECT id, url, map_type, created_at FROM businessmaplinks WHERE business_id = %s ORDER BY created_at DESC
-            """, (current_business_id,))
-            for r in cursor.fetchall():
-                rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
-                if rd:
-                    links.append({
-                        "id": rd.get("id"),
-                        "url": rd.get("url") or "",
-                        "mapType": rd.get("map_type") or "other",
-                        "createdAt": rd.get("created_at"),
-                    })
+            links = get_business_map_links(cursor, current_business_id, row_dict.get("yandex_url"))
             cursor.execute("SELECT name, description, category, price FROM userservices WHERE business_id = %s ORDER BY created_at DESC", (current_business_id,))
             services_list = []
             for r in cursor.fetchall():
@@ -4960,7 +5047,7 @@ def client_info():
                 # Если бизнеса нет, используем user_id как business_id для обратной совместимости
                 business_id = user_id
         
-        # Сохраняем ссылки на карты в businessmaplinks (Postgres-only, ClientInfo не используется)
+        # Принимаем mapLinks, но сохраняем только каноническую yandex_url в businesses.
         map_links = None
         if 'mapLinks' in data:
             map_links = data.get('mapLinks')
@@ -4981,7 +5068,9 @@ def client_info():
         # Парсер больше не запускается автоматически при сохранении ссылок
         # Он запускается только вручную через кнопку "Запустить парсер" на странице "Обзор карточки"
 
-        # mapLinks: обновляем только если в теле явно передан ключ mapLinks/map_links. Если ключа нет — существующие ссылки не трогаем. Пустой список [] = удалить все.
+        # mapLinks: обновляем только если в теле явно передан ключ mapLinks/map_links.
+        # Ключ отсутствует -> yandex_url не трогаем.
+        # mapLinks=[] -> очистить yandex_url.
         if business_id and ("mapLinks" in data or "map_links" in data) and isinstance(map_links, list):
             print(f"📝 SAVE mapLinks: business_id={business_id}, user_id={user_id}, map_links={map_links}")
             valid_links = []
@@ -4991,61 +5080,45 @@ def client_info():
                     valid_links.append(url.strip())
             print(f"📝 SAVE mapLinks: valid_links={valid_links}, count={len(valid_links)}")
 
-            cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
-            deleted_count = cursor.rowcount
-            print(f"📝 DELETE mapLinks: business_id={business_id}, deleted_count={deleted_count}")
-
-            inserted_count = 0
+            canonical_yandex_url = None
             for url in valid_links:
-                map_type = detect_map_type(url)
-                link_id = str(uuid.uuid4())
-                cursor.execute("""
-                    INSERT INTO businessmaplinks (id, user_id, business_id, url, map_type, created_at)
-                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                """, (link_id, user_id, business_id, url, map_type))
-                inserted_count += cursor.rowcount
-                print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}")
-
-            db.conn.commit()
-            print(f"📝 mapLinks: commit() выполнен (DELETE + {inserted_count} INSERT)")
-
-            # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
-            for url in valid_links:
-                if "yandex" in (url or "").lower() and "ll=" in (url or ""):
-                    geo_lon, geo_lat = parse_ll_from_maps_url(url)
-                    if geo_lon is not None and geo_lat is not None:
-                        cursor.execute(
-                            "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                            (geo_lon, geo_lat, business_id),
-                        )
-                        db.conn.commit()
-                        print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
+                if detect_map_type(url) == "yandex":
+                    canonical_yandex_url = url
                     break
 
-            cursor.execute("SELECT COUNT(*) FROM businessmaplinks WHERE business_id = %s", (business_id,))
-            count_row = cursor.fetchone()
-            saved_count = count_row['count'] if isinstance(count_row, dict) else count_row[0]
-            print(f"📝 VERIFY mapLinks: business_id={business_id}, saved_count={saved_count}")
+            cursor.execute(
+                "UPDATE businesses SET yandex_url = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (canonical_yandex_url, business_id),
+            )
+            db.conn.commit()
+            print(f"📝 SAVE yandex_url: business_id={business_id}, yandex_url={canonical_yandex_url}")
+
+            # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
+            if canonical_yandex_url and "ll=" in canonical_yandex_url:
+                geo_lon, geo_lat = parse_ll_from_maps_url(canonical_yandex_url)
+                if geo_lon is not None and geo_lat is not None:
+                    cursor.execute(
+                        "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                        (geo_lon, geo_lat, business_id),
+                    )
+                    db.conn.commit()
+                    print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
+            elif not canonical_yandex_url:
+                print(f"📝 yandex_url очищен для business_id={business_id}")
+
+            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
+            raw_saved = cursor.fetchone()
+            saved = _row_to_dict(cursor, raw_saved) if raw_saved else {}
+            print(f"📝 VERIFY yandex_url: business_id={business_id}, saved={saved.get('yandex_url') if saved else None}")
 
         # Всегда возвращаем текущие ссылки для бизнеса
         current_links = []
         if business_id:
             print(f"📖 GET mapLinks: business_id={business_id}")
-            cursor.execute("""
-                SELECT id, url, map_type, created_at 
-                FROM businessmaplinks 
-                WHERE business_id = %s 
-                ORDER BY created_at DESC
-            """, (business_id,))
-            link_rows = cursor.fetchall()
-            current_links = [
-                {
-                    "id": r['id'] if isinstance(r, dict) else r[0],
-                    "url": r['url'] if isinstance(r, dict) else r[1],
-                    "mapType": r['map_type'] if isinstance(r, dict) else r[2],
-                    "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
-                } for r in link_rows
-            ]
+            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
+            raw_biz = cursor.fetchone()
+            biz_row = _row_to_dict(cursor, raw_biz) if raw_biz else {}
+            current_links = get_business_map_links(cursor, business_id, (biz_row or {}).get("yandex_url"))
             print(f"📖 GET mapLinks: business_id={business_id}, found_count={len(current_links)}, links={[l['url'] for l in current_links]}")
 
         # Синхронизация с Businesses: обновляем существующий бизнес
@@ -7300,7 +7373,9 @@ def admin_sync_business_yandex(business_id):
                 """
                 SELECT id
                 FROM externalbusinessaccounts
-                WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
+                WHERE business_id = %s
+                  AND source IN ('yandex_business', 'yandex')
+                  AND is_active = TRUE
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
@@ -7310,20 +7385,26 @@ def admin_sync_business_yandex(business_id):
             account_row = _row_to_dict(cursor, raw_account) if raw_account else None
             account_id = account_row.get("id") if account_row else None
 
-            cursor.execute(
-                """
-                SELECT url
-                FROM businessmaplinks
-                WHERE business_id = %s
-                  AND map_type IN ('yandex', 'yandex_maps')
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (target_business_id,),
-            )
-            raw_map = cursor.fetchone()
-            map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
-            map_url = map_link_row.get("url") if map_link_row else None
+            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (target_business_id,))
+            raw_biz_map = cursor.fetchone()
+            biz_map_row = _row_to_dict(cursor, raw_biz_map) if raw_biz_map else None
+            map_url = (biz_map_row.get("yandex_url") or "").strip() if biz_map_row else ""
+            if not map_url:
+                # legacy fallback
+                cursor.execute(
+                    """
+                    SELECT url
+                    FROM businessmaplinks
+                    WHERE business_id = %s
+                      AND map_type IN ('yandex', 'yandex_maps')
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (target_business_id,),
+                )
+                raw_map = cursor.fetchone()
+                map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
+                map_url = map_link_row.get("url") if map_link_row else None
 
             if not account_id and not map_url:
                 skipped_no_source.append(target_business_name)
@@ -10229,12 +10310,26 @@ def business_sprint(business_id):
                         'status': 'pending'
                     })
             
-            # Сохраняем спринт
-            sprint_id = str(uuid.uuid4())
+            # Сохраняем спринт (обновляем существующий спринт недели, если есть)
             cursor.execute("""
-                INSERT OR REPLACE INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
+                SELECT id FROM BusinessSprints
+                WHERE business_id = %s AND week_start = %s
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """, (business_id, week_start.isoformat()))
+            existing = cursor.fetchone()
+            sprint_id = (existing[0] if isinstance(existing, (list, tuple)) else existing.get("id")) if existing else str(uuid.uuid4())
+            if existing:
+                cursor.execute("""
+                    UPDATE BusinessSprints
+                    SET tasks = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (json.dumps(tasks, ensure_ascii=False), sprint_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
             
             db.conn.commit()
             db.close()
@@ -10436,20 +10531,55 @@ def update_business_yandex_link(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Обновляем ссылку и, при возможности, yandex_org_id
-        from yandex_adapter import YandexAdapter
-
-        adapter = YandexAdapter()
-        org_id = adapter.parse_org_id_from_url(yandex_url)
+        # Обновляем каноническую ссылку в businesses + org_id в externalbusinessaccounts.external_id
+        org_id = extract_yandex_org_id_from_url(yandex_url)
 
         cursor.execute(
             """
-            UPDATE Businesses
-            SET yandex_url = %s, yandex_org_id = %s
+            UPDATE businesses
+            SET yandex_url = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             """,
-            (yandex_url, org_id, business_id),
+            (yandex_url, business_id),
         )
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND source IN ('yandex_business', 'yandex')
+            ORDER BY created_at ASC
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (business_id,),
+        )
+        existing_account = cursor.fetchone()
+        existing_account_dict = _row_to_dict(cursor, existing_account) if existing_account else None
+        account_id = existing_account_dict.get("id") if existing_account_dict else None
+
+        if account_id:
+            cursor.execute(
+                """
+                UPDATE externalbusinessaccounts
+                SET external_id = %s,
+                    is_active = TRUE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (org_id, account_id),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO externalbusinessaccounts (
+                    id, business_id, source, external_id, display_name, is_active, created_at, updated_at
+                )
+                VALUES (%s, %s, 'yandex_business', %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (str(uuid.uuid4()), business_id, org_id, "Yandex Business"),
+            )
 
         db.conn.commit()
         db.close()
@@ -10514,9 +10644,15 @@ def update_business_profile(business_id):
         # Обновляем или создаем профиль бизнеса
         profile_id = f"profile_{business_id}"
         cursor.execute("""
-            INSERT OR REPLACE INTO BusinessProfiles 
+            INSERT INTO BusinessProfiles
             (id, business_id, contact_name, contact_phone, contact_email, updated_at)
             VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+                business_id = EXCLUDED.business_id,
+                contact_name = EXCLUDED.contact_name,
+                contact_phone = EXCLUDED.contact_phone,
+                contact_email = EXCLUDED.contact_email,
+                updated_at = CURRENT_TIMESTAMP
         """, (
             profile_id,
             business_id,
