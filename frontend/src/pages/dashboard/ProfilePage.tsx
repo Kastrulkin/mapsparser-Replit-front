@@ -7,6 +7,8 @@ import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldChec
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
+import { SubscriptionManagement } from '@/components/SubscriptionManagement';
+import { UserTokenUsageSummary } from '@/components/UserTokenUsageSummary';
 
 export const ProfilePage = () => {
   const navigate = useNavigate();
@@ -847,6 +849,14 @@ export const ProfilePage = () => {
           </div>
         )}
       </div>
+
+      {/* Тарифы */}
+      <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
+        <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
+      </div>
+
+      {/* Счётчик токенов */}
+      <UserTokenUsageSummary businessId={currentBusinessId} />
     </div>
   );
 };

@@ -75,8 +75,7 @@ def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dic
             SELECT
                 rating,
                 reviews_count,
-                COALESCE((overview->>'photos_count')::int, 0) AS photos_count,
-                COALESCE((overview->>'news_count')::int, 0) AS news_count
+                overview
             FROM cards
             WHERE business_id = %s
             ORDER BY created_at DESC
@@ -86,11 +85,23 @@ def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dic
         )
         row = cursor.fetchone()
         if row:
+            overview_raw = _row_val(row, "overview") if isinstance(row, dict) else _row_val(row, 2)
+            overview_obj = {}
+            if isinstance(overview_raw, dict):
+                overview_obj = overview_raw
+            elif isinstance(overview_raw, str) and overview_raw.strip():
+                try:
+                    parsed = json.loads(overview_raw)
+                    if isinstance(parsed, dict):
+                        overview_obj = parsed
+                except Exception:
+                    overview_obj = {}
+
             out = {
                 "rating": _row_val(row, "rating") if isinstance(row, dict) else _row_val(row, 0),
                 "reviews_count": int((_row_val(row, "reviews_count") if isinstance(row, dict) else _row_val(row, 1)) or 0),
-                "photos_count": int((_row_val(row, "photos_count") if isinstance(row, dict) else _row_val(row, 2)) or 0),
-                "news_count": int((_row_val(row, "news_count") if isinstance(row, dict) else _row_val(row, 3)) or 0),
+                "photos_count": int(overview_obj.get("photos_count") or 0),
+                "news_count": int(overview_obj.get("news_count") or 0),
                 "unanswered_reviews_count": 0,
                 "source": "cards",
             }
@@ -120,6 +131,10 @@ def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dic
         return out
     except Exception as e:
         print(f"⚠️ _get_map_metrics error: {e}")
+        try:
+            cursor.connection.rollback()
+        except Exception:
+            pass
         return fallback
 
 

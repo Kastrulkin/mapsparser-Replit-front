@@ -10,6 +10,7 @@ import { MetricsHistoryCharts } from '@/components/MetricsHistoryCharts';
 import NetworkHealthDashboard from '@/components/NetworkHealthDashboard';
 import FinancialMetrics from '@/components/FinancialMetrics';
 import { useLanguage } from '@/i18n/LanguageContext';
+import { NetworkDashboardPage } from './network/NetworkDashboardPage';
 
 export const ProgressPage = () => {
   const { currentBusinessId } = useOutletContext<any>();
@@ -122,6 +123,10 @@ export const ProgressPage = () => {
   if (isNetworkMaster) {
     return (
       <div className="space-y-6">
+        <div className="rounded-xl border bg-white p-4 md:p-6">
+          <NetworkDashboardPage embedded businessId={currentBusinessId} />
+        </div>
+
         <div className="flex justify-between items-center">
           <h2 className="text-3xl font-bold tracking-tight">📊 {t.networkHealth?.title || "Состояние сети"}</h2>
         </div>
@@ -137,6 +142,10 @@ export const ProgressPage = () => {
   // STANDARD VIEW (Single Location)
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border bg-white p-4 md:p-6">
+        <NetworkDashboardPage embedded businessId={currentBusinessId} />
+      </div>
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.dashboard?.progress?.title || "Прогресс"}</h1>

@@ -19,11 +19,15 @@ import {
     ChevronRight,
     Search
 } from "lucide-react";
-import { SalonData, mockSalons } from '../data/mockData';
+import { SalonData } from '../data/mockData';
 import { SalonMiniDashboard } from './SalonMiniDashboard';
 import { Input } from "@/components/ui/input";
 
-export const SalonTable: React.FC = () => {
+interface SalonTableProps {
+    salons: SalonData[];
+}
+
+export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [sortConfig, setSortConfig] = useState<{ key: keyof SalonData; direction: 'asc' | 'desc' } | null>(null);
     const [filter, setFilter] = useState("");
@@ -46,7 +50,7 @@ export const SalonTable: React.FC = () => {
         setSortConfig({ key, direction });
     };
 
-    const sortedData = [...mockSalons].sort((a, b) => {
+    const sortedData = [...salons].sort((a, b) => {
         if (!sortConfig) return 0;
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
@@ -82,6 +86,9 @@ export const SalonTable: React.FC = () => {
             </div>
 
             <div className="rounded-md border">
+                {sortedData.length === 0 && (
+                    <div className="p-6 text-sm text-muted-foreground">Нет данных по точкам</div>
+                )}
                 <Table>
                     <TableHeader>
                         <TableRow>

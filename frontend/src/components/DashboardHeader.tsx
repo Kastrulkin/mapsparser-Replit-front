@@ -104,7 +104,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
           )}
 
-          {currentBusinessId && onBusinessChange && (
+          {currentBusiness?.network_id && onBusinessChange && (
             <NetworkLocationsSwitcher
               currentBusinessId={currentBusinessId || undefined}
               onLocationChange={onBusinessChange}
@@ -194,10 +194,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               Для получения доступа к системе обратитесь к нам по электронной почте:
               <br />
               <a
-                href="mailto:info@local"
+                href="mailto:info@beautybot.pro"
                 className="text-blue-600 hover:text-blue-800 underline font-medium"
               >
-                info@local
+                info@beautybot.pro
               </a>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -211,3 +211,4 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     </header>
   );
 };
+

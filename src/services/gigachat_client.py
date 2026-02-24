@@ -459,7 +459,10 @@ class GigaChatClient:
             # Проверяем, существует ли таблица (PostgreSQL: to_regclass)
             cursor.execute("SELECT to_regclass('public.tokenusage')")
             reg = cursor.fetchone()
-            if not reg or reg[0] is None:
+            reg_value = None
+            if reg:
+                reg_value = reg.get("to_regclass") if isinstance(reg, dict) else reg[0]
+            if not reg_value:
                 db.close()
                 return  # Таблица еще не создана
             
@@ -667,4 +670,3 @@ def analyze_screenshot_with_gigachat(image_base64: str, prompt: str, task_type: 
         business_id=business_id,
         user_id=user_id
     )
-

@@ -23,6 +23,22 @@ def _table_exists(cursor, table_name: str) -> bool:
     row = cursor.fetchone() or {}
     return bool(row.get("exists_flag")) if isinstance(row, dict) else bool(row[0])
 
+def _table_has_column(cursor, table_name: str, column_name: str) -> bool:
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND lower(table_name) = lower(%s)
+              AND lower(column_name) = lower(%s)
+        ) AS has_column
+        """,
+        (table_name, column_name),
+    )
+    row = cursor.fetchone() or {}
+    return bool(row.get("has_column")) if isinstance(row, dict) else bool(row[0])
+
 
 def require_auth(f):
     """Decorator to require authentication for API endpoints."""
@@ -98,7 +114,7 @@ def get_network_health(current_user):
         
         if business_id:
             # Phase 0.1: Security & Validation
-            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = %s", (business_id,))
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
             biz_row = cursor.fetchone()
             
             if not biz_row:
@@ -106,22 +122,13 @@ def get_network_health(current_user):
                 return jsonify({"error": "Business not found"}), 404
             
             owner_id = biz_row.get('owner_id') if isinstance(biz_row, dict) else biz_row[0]
-            biz_network_id = biz_row.get('network_id') if isinstance(biz_row, dict) else biz_row[1]
             
             # 403 Forbidden
             if owner_id != user_id and not current_user.get('is_superadmin'):
                 return jsonify({"error": "Access denied"}), 403
-                
-            if biz_network_id:
-                # Backward-compatible behavior for old frontend:
-                # if member business_id is passed, return network aggregate instead of 400.
-                network_id = network_id or biz_network_id
-                business_id = None
-                where_clauses.append("b.network_id = %s")
-                params.append(network_id)
-            else:
-                where_clauses.append("b.id = %s")
-                params.append(business_id)
+
+            where_clauses.append("b.id = %s")
+            params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
         has_map_parse_results = _table_exists(cursor, "mapparseresults")
@@ -254,7 +261,7 @@ def get_location_alerts(current_user):
 
         if business_id:
             # Phase 0.1: Security & Validation
-            cursor.execute("SELECT owner_id, network_id FROM Businesses WHERE id = %s", (business_id,))
+            cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
             biz_row = cursor.fetchone()
             
             if not biz_row:
@@ -262,23 +269,16 @@ def get_location_alerts(current_user):
                 return jsonify({"error": "Business not found"}), 404
             
             owner_id = biz_row.get('owner_id') if isinstance(biz_row, dict) else biz_row[0]
-            biz_network_id = biz_row.get('network_id') if isinstance(biz_row, dict) else biz_row[1]
             
             if owner_id != user_id and not current_user.get('is_superadmin'):
                 return jsonify({"error": "Access denied"}), 403
-            
-            if biz_network_id:
-                # Backward-compatible behavior for old frontend:
-                # if member business_id is passed, return alerts for whole network.
-                network_id = network_id or biz_network_id
-                where_clauses.append("b.network_id = %s")
-                params.append(network_id)
-            else:
-                where_clauses.append("b.id = %s")
-                params.append(business_id)
+
+            where_clauses.append("b.id = %s")
+            params.append(business_id)
         
         where_sql = " AND ".join(where_clauses)
         has_map_parse_results = _table_exists(cursor, "mapparseresults")
+        has_usernews_business_id = _table_has_column(cursor, "usernews", "business_id")
         
         # Get all businesses with their thresholds and latest activity
         if has_map_parse_results:
@@ -336,17 +336,28 @@ def get_location_alerts(current_user):
             alerts = []
             
             # Check for stale news
-            cursor.execute("""
-                SELECT MAX(created_at) as last_news
-                FROM UserNews
-                WHERE business_id = %s
-            """, (business_id,))
-            news_row = cursor.fetchone()
-            
-            if news_row and news_row['last_news']:
-                last_news = datetime.fromisoformat(news_row['last_news'])
+            news_row = None
+            if has_usernews_business_id:
+                cursor.execute("""
+                    SELECT MAX(created_at) as last_news
+                    FROM UserNews
+                    WHERE business_id = %s
+                """, (business_id,))
+                news_row = cursor.fetchone()
+
+            last_news_value = None
+            if isinstance(news_row, dict):
+                last_news_value = news_row.get('last_news')
+            elif isinstance(news_row, (list, tuple)) and news_row:
+                last_news_value = news_row[0]
+
+            if last_news_value:
+                if isinstance(last_news_value, str):
+                    last_news = datetime.fromisoformat(last_news_value)
+                else:
+                    last_news = last_news_value
                 days_since_news = (datetime.now() - last_news).days
-                
+
                 if days_since_news > threshold_news:
                     if not alert_type or alert_type == 'stale_news':
                         alerts.append({
@@ -356,7 +367,7 @@ def get_location_alerts(current_user):
                             "threshold": threshold_news,
                             "message": f"Новости не обновлялись {days_since_news} дней (порог: {threshold_news})"
                         })
-            else:
+            elif has_usernews_business_id:
                 # No news at all
                 if not alert_type or alert_type == 'stale_news':
                     alerts.append({

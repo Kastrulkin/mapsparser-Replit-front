@@ -890,8 +890,8 @@ class DatabaseManager:
         business_id = str(uuid.uuid4())
         cursor = self.conn.cursor()
         try:
-            # Для Postgres предполагаем, что все необходимые поля уже существуют (schema_postgres.sql).
-            fields = [
+            # Формируем payload и вставляем только в реально существующие колонки таблицы businesses.
+            requested_fields = [
                 "id",
                 "name",
                 "description",
@@ -908,7 +908,7 @@ class DatabaseManager:
                 "country",
                 "moderation_status",
             ]
-            values = [
+            requested_values = [
                 business_id,
                 name,
                 description,
@@ -925,6 +925,33 @@ class DatabaseManager:
                 country,
                 moderation_status,
             ]
+
+            # Получаем список колонок businesses с учётом текущей СУБД/схемы.
+            existing_columns = set()
+            try:
+                if self.db_type == 'postgresql':
+                    cursor.execute("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND lower(table_name) = 'businesses'
+                    """)
+                    existing_columns = {
+                        (r.get('column_name') if hasattr(r, 'keys') else r[0])
+                        for r in (cursor.fetchall() or [])
+                    }
+                else:
+                    cursor.execute("PRAGMA table_info(Businesses)")
+                    existing_columns = {r[1] for r in (cursor.fetchall() or [])}
+            except Exception:
+                # Если introspection не сработал, вставляем только безопасный минимум.
+                existing_columns = {"id", "name", "owner_id"}
+
+            fields = []
+            values = []
+            for f, v in zip(requested_fields, requested_values):
+                if f in existing_columns:
+                    fields.append(f)
+                    values.append(v)
 
             fields_str = ", ".join(fields)
             placeholders = ", ".join(["%s"] * len(fields))

@@ -54,7 +54,24 @@ export const BusinessHealthView: React.FC<BusinessHealthViewProps> = ({
     }
 
     if (error) {
-        return null; // Graceful degradation: render nothing on error (or minimal fallback)
+        return (
+            <Card className={className}>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                        Здоровье бизнеса
+                    </CardTitle>
+                    <CardDescription>
+                        Не удалось загрузить дашборд, но остальные блоки страницы доступны.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        {error.message || 'Ошибка загрузки данных'}
+                    </div>
+                </CardContent>
+            </Card>
+        );
     }
 
     const alerts = locationAlerts?.alerts || [];

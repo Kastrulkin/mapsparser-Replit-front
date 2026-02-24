@@ -6,11 +6,10 @@ import { WABACredentials } from '@/components/WABACredentials';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { NetworkManagement } from '@/components/NetworkManagement';
-import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import { cn } from '@/lib/utils';
 import { DESIGN_TOKENS } from '@/lib/design-tokens';
-import { Settings, Sparkles, MessageSquare, Share2, Network } from 'lucide-react';
+import { Settings, MessageSquare, Share2, Network } from 'lucide-react';
 
 export const SettingsPage = () => {
   const { user, currentBusinessId, currentBusiness } = useOutletContext<any>();
@@ -35,13 +34,7 @@ export const SettingsPage = () => {
         <p className="text-gray-500 text-lg ml-11">{t.dashboard.settings.subtitle}</p>
       </div>
 
-      {/* Блок 1: Текущая подписка */}
-      <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
-        <SectionHeader icon={Sparkles} title={t.dashboard.subscription.manage} />
-        <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
-      </div>
-
-      {/* Блок 2: Мессенджеры */}
+      {/* Блок 1: Мессенджеры */}
       <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
         <SectionHeader icon={MessageSquare} title={t.dashboard.settings.messengers} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -54,13 +47,13 @@ export const SettingsPage = () => {
         </div>
       </div>
 
-      {/* Блок 3: Интеграции */}
+      {/* Блок 2: Интеграции */}
       <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
         <SectionHeader icon={Share2} title="Integrations" />
         <ExternalIntegrations currentBusinessId={currentBusinessId} />
       </div>
 
-      {/* Блок 4: AI Agent */}
+      {/* Блок 3: AI Agent */}
       <div className="relative group">
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
         <div className={cn(DESIGN_TOKENS.glass.default, "relative rounded-2xl p-1")}>
@@ -68,7 +61,7 @@ export const SettingsPage = () => {
         </div>
       </div>
 
-      {/* Блок 5: Управление сетью */}
+      {/* Блок 4: Управление сетью */}
       <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-8 hover:shadow-2xl transition-all duration-500")}>
         <SectionHeader icon={Network} title="Network Management" />
         <NetworkManagement />
@@ -76,4 +69,3 @@ export const SettingsPage = () => {
     </div>
   );
 };
-

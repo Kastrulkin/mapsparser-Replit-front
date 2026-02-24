@@ -1,11 +1,18 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YMaps, Map, Clusterer, Placemark } from '@pbe/react-yandex-maps';
-import { mockMapLocations } from '../data/mockData';
+import { SalonData } from '../data/mockData';
 
-export const NetworkMap: React.FC = () => {
-    // Center roughly on SPB
-    const defaultState = { center: [59.9343, 30.3351], zoom: 10 };
+interface NetworkMapProps {
+    locations: SalonData[];
+}
+
+export const NetworkMap: React.FC<NetworkMapProps> = ({ locations }) => {
+    const hasGeo = locations.some((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon));
+    const centerLoc = locations.find((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon));
+    const defaultState = centerLoc
+        ? { center: [centerLoc.lat, centerLoc.lon], zoom: 10 }
+        : { center: [59.9343, 30.3351], zoom: 10 };
 
     const getPreset = (status: 'active' | 'problem' | 'offline') => {
         switch (status) {
@@ -22,6 +29,11 @@ export const NetworkMap: React.FC = () => {
                 <CardTitle>Salon Locations</CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-hidden h-[400px] relative">
+                {!hasGeo && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-muted-foreground">
+                        Нет координат для отображения карты
+                    </div>
+                )}
                 <YMaps>
                     <Map defaultState={defaultState} width="100%" height="100%">
                         <Clusterer
@@ -30,7 +42,9 @@ export const NetworkMap: React.FC = () => {
                                 groupByCoordinates: false,
                             }}
                         >
-                            {mockMapLocations.map((loc) => (
+                            {locations
+                                .filter((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lon))
+                                .map((loc) => (
                                 <Placemark
                                     key={loc.id}
                                     geometry={[loc.lat, loc.lon]}

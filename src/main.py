@@ -428,9 +428,20 @@ def get_token_usage_stats():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
+        def _cell(row, key: str, idx: int, default=0):
+            if row is None:
+                return default
+            if isinstance(row, dict):
+                return row.get(key, default)
+            try:
+                return row[idx]
+            except Exception:
+                return default
+
         # Проверяем, существует ли таблица tokenusage (Postgres)
-        cursor.execute("SELECT to_regclass('public.tokenusage')")
-        if not cursor.fetchone():
+        cursor.execute("SELECT to_regclass('public.tokenusage') AS reg")
+        reg_row = cursor.fetchone()
+        if not _cell(reg_row, "reg", 0, None):
             db.close()
             return jsonify({
                 "success": True,
@@ -475,13 +486,13 @@ def get_token_usage_stats():
         users_stats = []
         for row in cursor.fetchall():
             users_stats.append({
-                "user_id": row[0],
-                "email": row[1],
-                "name": row[2],
-                "total_tokens": row[3] or 0,
-                "prompt_tokens": row[4] or 0,
-                "completion_tokens": row[5] or 0,
-                "requests_count": row[6] or 0
+                "user_id": _cell(row, "id", 0),
+                "email": _cell(row, "email", 1),
+                "name": _cell(row, "name", 2),
+                "total_tokens": _cell(row, "total_tokens", 3, 0) or 0,
+                "prompt_tokens": _cell(row, "prompt_tokens", 4, 0) or 0,
+                "completion_tokens": _cell(row, "completion_tokens", 5, 0) or 0,
+                "requests_count": _cell(row, "requests_count", 6, 0) or 0
             })
         
         # По бизнесам
@@ -505,14 +516,14 @@ def get_token_usage_stats():
         businesses_stats = []
         for row in cursor.fetchall():
             businesses_stats.append({
-                "business_id": row[0],
-                "business_name": row[1],
-                "owner_id": row[2],
-                "owner_email": row[3],
-                "total_tokens": row[4] or 0,
-                "prompt_tokens": row[5] or 0,
-                "completion_tokens": row[6] or 0,
-                "requests_count": row[7] or 0
+                "business_id": _cell(row, "id", 0),
+                "business_name": _cell(row, "name", 1),
+                "owner_id": _cell(row, "owner_id", 2),
+                "owner_email": _cell(row, "owner_email", 3),
+                "total_tokens": _cell(row, "total_tokens", 4, 0) or 0,
+                "prompt_tokens": _cell(row, "prompt_tokens", 5, 0) or 0,
+                "completion_tokens": _cell(row, "completion_tokens", 6, 0) or 0,
+                "requests_count": _cell(row, "requests_count", 7, 0) or 0
             })
         
         # По типам задач
@@ -530,11 +541,11 @@ def get_token_usage_stats():
         task_types_stats = []
         for row in cursor.fetchall():
             task_types_stats.append({
-                "task_type": row[0] or "unknown",
-                "total_tokens": row[1] or 0,
-                "prompt_tokens": row[2] or 0,
-                "completion_tokens": row[3] or 0,
-                "requests_count": row[4] or 0
+                "task_type": _cell(row, "task_type", 0, "unknown") or "unknown",
+                "total_tokens": _cell(row, "total_tokens", 1, 0) or 0,
+                "prompt_tokens": _cell(row, "prompt_tokens", 2, 0) or 0,
+                "completion_tokens": _cell(row, "completion_tokens", 3, 0) or 0,
+                "requests_count": _cell(row, "requests_count", 4, 0) or 0
             })
         
         db.close()
@@ -542,10 +553,10 @@ def get_token_usage_stats():
         return jsonify({
             "success": True,
             "total": {
-                "total_tokens": total_stats[0] or 0,
-                "prompt_tokens": total_stats[1] or 0,
-                "completion_tokens": total_stats[2] or 0,
-                "requests_count": total_stats[3] or 0
+                "total_tokens": _cell(total_stats, "total", 0, 0) or 0,
+                "prompt_tokens": _cell(total_stats, "prompt_total", 1, 0) or 0,
+                "completion_tokens": _cell(total_stats, "completion_total", 2, 0) or 0,
+                "requests_count": _cell(total_stats, "requests_count", 3, 0) or 0
             },
             "by_user": users_stats,
             "by_business": businesses_stats,
@@ -554,6 +565,204 @@ def get_token_usage_stats():
         
     except Exception as e:
         print(f"❌ Ошибка получения статистики токенов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/token-usage', methods=['GET'])
+def get_user_token_usage():
+    """Пользовательская статистика токенов по бизнесу с разбивкой по категориям и периодам."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        user_id = user_data.get('user_id') or user_data.get('id')
+        business_id = request.args.get('business_id')
+        months_raw = request.args.get('months', '1')
+        try:
+            months = int(months_raw)
+        except Exception:
+            months = 1
+        if months < 1:
+            months = 1
+        if months > 24:
+            months = 24
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Проверяем наличие таблицы
+        cursor.execute("SELECT to_regclass('public.tokenusage') AS reg")
+        reg_row = cursor.fetchone()
+        reg_val = (reg_row.get('reg') if isinstance(reg_row, dict) else reg_row[0]) if reg_row else None
+        if not reg_val:
+            db.close()
+            return jsonify({
+                "success": True,
+                "period_months": months,
+                "month_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
+                "period_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
+                "by_category": [],
+                "timeline": []
+            })
+
+        scope_col = "user_id"
+        scope_value = user_id
+        scope_sql = f"{scope_col} = %s"
+        scope_params = [scope_value]
+
+        if business_id:
+            cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
+            b_row = cursor.fetchone()
+            if not b_row:
+                db.close()
+                return jsonify({"error": "Бизнес не найден"}), 404
+            owner_id = b_row.get('owner_id') if isinstance(b_row, dict) else b_row[0]
+            if owner_id != user_id and not user_data.get('is_superadmin'):
+                db.close()
+                return jsonify({"error": "Нет доступа"}), 403
+            # Часть старых записей TokenUsage может не иметь business_id.
+            # Для выбранного бизнеса учитываем:
+            # 1) прямые записи по business_id
+            # 2) записи владельца без business_id (legacy)
+            scope_sql = "(business_id = %s OR (business_id IS NULL AND user_id = %s))"
+            scope_params = [business_id, owner_id]
+
+        # Общая сумма за текущий календарный месяц
+        cursor.execute(
+            f"""
+            SELECT
+                COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                COUNT(*) AS requests_count
+            FROM tokenusage
+            WHERE {scope_sql}
+              AND created_at >= date_trunc('month', NOW())
+            """,
+            tuple(scope_params),
+        )
+        month_row = cursor.fetchone() or {}
+        month_total = {
+            "total_tokens": int((month_row.get('total_tokens') if isinstance(month_row, dict) else month_row[0]) or 0),
+            "prompt_tokens": int((month_row.get('prompt_tokens') if isinstance(month_row, dict) else month_row[1]) or 0),
+            "completion_tokens": int((month_row.get('completion_tokens') if isinstance(month_row, dict) else month_row[2]) or 0),
+            "requests_count": int((month_row.get('requests_count') if isinstance(month_row, dict) else month_row[3]) or 0),
+        }
+
+        # Период: N последних месяцев
+        cursor.execute(
+            f"""
+            SELECT
+                COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                COUNT(*) AS requests_count
+            FROM tokenusage
+            WHERE {scope_sql}
+              AND created_at >= (NOW() - ((%s || ' months')::interval))
+            """,
+            tuple(scope_params + [months]),
+        )
+        period_row = cursor.fetchone() or {}
+        period_total = {
+            "total_tokens": int((period_row.get('total_tokens') if isinstance(period_row, dict) else period_row[0]) or 0),
+            "prompt_tokens": int((period_row.get('prompt_tokens') if isinstance(period_row, dict) else period_row[1]) or 0),
+            "completion_tokens": int((period_row.get('completion_tokens') if isinstance(period_row, dict) else period_row[2]) or 0),
+            "requests_count": int((period_row.get('requests_count') if isinstance(period_row, dict) else period_row[3]) or 0),
+        }
+
+        # Разбивка по функциональным блокам
+        cursor.execute(
+            f"""
+            SELECT
+                CASE
+                    WHEN task_type = 'service_optimization' THEN 'services_optimization'
+                    WHEN task_type = 'news_generation' THEN 'news_generation'
+                    WHEN task_type LIKE 'ai_agent%%' THEN 'ai_agents'
+                    WHEN task_type IN ('review_reply', 'review_response', 'reviews_reply', 'reviews') THEN 'reviews'
+                    ELSE 'other'
+                END AS category,
+                COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                COUNT(*) AS requests_count
+            FROM tokenusage
+            WHERE {scope_sql}
+              AND created_at >= (NOW() - ((%s || ' months')::interval))
+            GROUP BY category
+            ORDER BY total_tokens DESC
+            """,
+            tuple(scope_params + [months]),
+        )
+        by_category = []
+        for row in cursor.fetchall() or []:
+            if isinstance(row, dict):
+                category = row.get('category') or 'other'
+                total_tokens = row.get('total_tokens') or 0
+                prompt_tokens = row.get('prompt_tokens') or 0
+                completion_tokens = row.get('completion_tokens') or 0
+                requests_count = row.get('requests_count') or 0
+            else:
+                category = row[0] or 'other'
+                total_tokens = row[1] or 0
+                prompt_tokens = row[2] or 0
+                completion_tokens = row[3] or 0
+                requests_count = row[4] or 0
+            by_category.append({
+                "category": category,
+                "total_tokens": int(total_tokens),
+                "prompt_tokens": int(prompt_tokens),
+                "completion_tokens": int(completion_tokens),
+                "requests_count": int(requests_count),
+            })
+
+        # Таймлайн по месяцам для прошлых периодов
+        cursor.execute(
+            f"""
+            SELECT
+                to_char(date_trunc('month', created_at), 'YYYY-MM') AS month_key,
+                COALESCE(SUM(total_tokens), 0) AS total_tokens
+            FROM tokenusage
+            WHERE {scope_sql}
+              AND created_at >= (NOW() - ((%s || ' months')::interval))
+            GROUP BY month_key
+            ORDER BY month_key DESC
+            """,
+            tuple(scope_params + [months]),
+        )
+        timeline = []
+        for row in cursor.fetchall() or []:
+            if isinstance(row, dict):
+                timeline.append({
+                    "month": row.get('month_key'),
+                    "total_tokens": int(row.get('total_tokens') or 0)
+                })
+            else:
+                timeline.append({
+                    "month": row[0],
+                    "total_tokens": int(row[1] or 0)
+                })
+
+        db.close()
+        return jsonify({
+            "success": True,
+            "period_months": months,
+            "scope": {"business_id": business_id, "user_id": None if business_id else user_id},
+            "month_total": month_total,
+            "period_total": period_total,
+            "by_category": by_category,
+            "timeline": timeline,
+        })
+    except Exception as e:
+        print(f"❌ Ошибка пользовательской статистики токенов: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -6251,6 +6460,15 @@ def get_transactions():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
+        # Проверяем наличие client_type в схеме (для совместимости старых БД)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND lower(table_name) = 'financialtransactions'
+        """)
+        tx_columns = {r.get('column_name') if isinstance(r, dict) else r[0] for r in (cursor.fetchall() or [])}
+        has_client_type = 'client_type' in tx_columns
+        client_type_select = "client_type" if has_client_type else "'new'::text AS client_type"
+
         # Строим запрос с явными полями (без SELECT *)
         query = """
             SELECT 
@@ -6258,7 +6476,7 @@ def get_transactions():
                 business_id,
                 transaction_date,
                 amount,
-                client_type,
+                """ + client_type_select + """,
                 services,
                 notes,
                 created_at
@@ -6393,14 +6611,24 @@ def get_financial_metrics():
             where_clause = f"user_id = %s AND {where_clause}"
             where_params = [user_data['user_id']] + where_params
         
+        # Проверяем наличие client_type в схеме (для совместимости старых БД)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND lower(table_name) = 'financialtransactions'
+        """)
+        tx_columns = {r.get('column_name') if isinstance(r, dict) else r[0] for r in (cursor.fetchall() or [])}
+        has_client_type = 'client_type' in tx_columns
+        new_clients_expr = "SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END)" if has_client_type else "0"
+        returning_clients_expr = "SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END)" if has_client_type else "0"
+
         # Получаем агрегированные данные
         cursor.execute(f"""
             SELECT 
                 COUNT(*) as total_orders,
                 SUM(amount) as total_revenue,
                 AVG(amount) as average_check,
-                SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END) as new_clients,
-                SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END) as returning_clients
+                {new_clients_expr} as new_clients,
+                {returning_clients_expr} as returning_clients
             FROM FinancialTransactions 
             WHERE {where_clause}
         """, tuple(where_params))
@@ -7749,15 +7977,17 @@ def get_roi_data():
         
         # Получаем последние данные ROI
         cursor.execute("""
-            SELECT * FROM ROIData 
-            WHERE user_id = %s 
-            ORDER BY created_at DESC 
+            SELECT investment_amount, returns_amount, roi_percentage, period_start, period_end
+            FROM roidata
+            WHERE user_id = %s
+            ORDER BY created_at DESC NULLS LAST
             LIMIT 1
         """, (user_data['user_id'],))
         
         roi_data = cursor.fetchone()
         
         if not roi_data:
+            db.close()
             # Если данных нет, возвращаем базовую структуру
             return jsonify({
                 "success": True,
@@ -7776,11 +8006,11 @@ def get_roi_data():
         return jsonify({
             "success": True,
             "roi": {
-                "investment_amount": float(roi_data[2]),
-                "returns_amount": float(roi_data[3]),
-                "roi_percentage": float(roi_data[4]),
-                "period_start": roi_data[5],
-                "period_end": roi_data[6]
+                "investment_amount": float(roi_data[0] or 0),
+                "returns_amount": float(roi_data[1] or 0),
+                "roi_percentage": float(roi_data[2] or 0),
+                "period_start": roi_data[3],
+                "period_end": roi_data[4]
             }
         })
         
@@ -7825,9 +8055,9 @@ def calculate_roi():
         period_end = data.get('period_end', datetime.now().strftime('%Y-%m-%d'))
         
         cursor.execute("""
-            INSERT OR REPLACE INTO ROIData 
-            (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO roidata
+            (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (roi_id, user_data['user_id'], investment, returns, roi_percentage, period_start, period_end))
         
         db.conn.commit()

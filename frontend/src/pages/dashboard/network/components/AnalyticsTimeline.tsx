@@ -1,9 +1,21 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
-import { mockTimelineData } from '../data/mockData';
+interface TimelinePoint {
+    date: string;
+    rating: number;
+    reviews: number;
+}
 
-export const AnalyticsTimeline: React.FC = () => {
+interface AnalyticsTimelineProps {
+    data: TimelinePoint[];
+}
+
+export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) => {
+    const timelineData = data.length > 0
+        ? data
+        : [{ date: '—', rating: 0, reviews: 0 }];
+
     return (
         <Card className="col-span-4">
             <CardHeader>
@@ -15,7 +27,7 @@ export const AnalyticsTimeline: React.FC = () => {
             <CardContent className="pl-2">
                 <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={mockTimelineData}>
+                        <ComposedChart data={timelineData}>
                             <defs>
                                 <linearGradient id="colorRating" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
