@@ -529,7 +529,7 @@ class ActionOrchestrator:
     def resolve_human_decision(self, action_id: str, decision: str, user_data: Dict[str, Any], decision_reason: str = "") -> Dict[str, Any]:
         decision = str(decision or "").strip().lower()
         if decision not in {"approved", "rejected", "expired"}:
-            return {"success": False, "error": "decision must be approved|rejected|expired"}
+            return {"success": False, "error": "decision must be approved|rejected|expired", "http_code": 400}
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -537,25 +537,30 @@ class ActionOrchestrator:
             self.ensure_tables(cursor)
             cursor.execute(
                 """
-                SELECT action_id, tenant_id, capability, payload_json, actor_json, approval_json, billing_json, trace_id, status
-                FROM action_requests
-                WHERE action_id = %s
+                SELECT ar.action_id, ar.tenant_id, ar.capability, ar.payload_json, ar.actor_json, ar.approval_json, ar.billing_json, ar.trace_id, ar.status, b.owner_id
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                WHERE ar.action_id = %s
                 LIMIT 1
                 """,
                 (action_id,),
             )
             row = cursor.fetchone()
             if not row:
-                return {"success": False, "error": "action not found"}
+                return {"success": False, "error": "action not found", "http_code": 404}
+
+            owner_id = self._row_value(row, 9, "owner_id")
+            if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+                return {"success": False, "error": "forbidden", "http_code": 403}
 
             status = self._row_value(row, 8, "status")
             if status != "pending_human":
-                return {"success": False, "error": f"action is not pending_human (status={status})"}
+                return {"success": False, "error": f"action is not pending_human (status={status})", "http_code": 400}
 
             cursor.execute("SELECT status, expires_at, callback_url FROM action_approvals WHERE action_id=%s", (action_id,))
             appr = cursor.fetchone()
             if not appr:
-                return {"success": False, "error": "approval record not found"}
+                return {"success": False, "error": "approval record not found", "http_code": 404}
 
             expires_at = self._row_value(appr, 1, "expires_at")
             callback_url = self._row_value(appr, 2, "callback_url")

@@ -19,6 +19,7 @@
 7. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 8. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 9. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
+10. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -40,6 +41,11 @@
 - заголовок `X-OpenClaw-Token` обязателен
 - `tenant_id` обязателен как query-параметр
 - при несовпадении tenant/action возвращается ошибка (`TENANT_MISMATCH`/`TENANT_NOT_FOUND`)
+
+Для M2M decision endpoint:
+- заголовок `X-OpenClaw-Token` обязателен
+- `tenant_id` обязателен (JSON body или query)
+- `decision`: `approved` | `rejected` | `expired`
 
 ## Статусы action-machine
 

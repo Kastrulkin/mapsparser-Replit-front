@@ -3307,6 +3307,36 @@ def openclaw_capabilities_actions_list():
     return jsonify(result), 200
 
 
+@app.route('/api/openclaw/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
+def openclaw_capabilities_action_decision(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    data = request.get_json(silent=True) or {}
+    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    status_check = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, service_user)
+    if not status_check.get("success"):
+        return jsonify(status_check), int(status_check.pop("http_code", 400))
+    if str(status_check.get("tenant_id") or "") != tenant_id:
+        return jsonify({"success": False, "error": "tenant mismatch"}), 403
+
+    decision = str(data.get("decision") or "").strip().lower()
+    reason_text = str(data.get("reason") or "").strip()
+    result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, service_user, reason_text)
+    return jsonify(result), int(result.pop("http_code", 200 if result.get("success") else 400))
+
+
 @app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
 def capabilities_action_decision(action_id):
     if request.method == 'OPTIONS':
@@ -3323,7 +3353,7 @@ def capabilities_action_decision(action_id):
     decision = str(data.get("decision") or "").strip().lower()
     reason = str(data.get("reason") or "").strip()
     result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, user_data, reason)
-    return jsonify(result), (200 if result.get("success") else 400)
+    return jsonify(result), int(result.pop("http_code", 200 if result.get("success") else 400))
 
 
 @app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])
