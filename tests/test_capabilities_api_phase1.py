@@ -67,11 +67,11 @@ def capabilities_client(postgres_container, run_migrations):
     main_mod.verify_session = original_verify
 
 
-def _pending_request_body(business_id: str, idempotency_key: str | None = None) -> dict:
+def _pending_request_body(business_id: str, actor_id: str, idempotency_key: str | None = None) -> dict:
     return {
         "tenant_id": business_id,
         "actor": {
-            "id": "test-actor",
+            "id": actor_id,
             "type": "user",
             "role": "owner",
             "channel": "api",
@@ -94,7 +94,7 @@ def test_capabilities_execute_returns_pending_human(capabilities_client):
     info = capabilities_client
     r = info["client"].post(
         "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"]),
+        json=_pending_request_body(info["business_id"], info["user_id"]),
         headers=_auth_headers(),
     )
     assert r.status_code == 200
@@ -108,7 +108,7 @@ def test_capabilities_execute_returns_pending_human(capabilities_client):
 def test_capabilities_execute_is_idempotent_for_same_key(capabilities_client):
     info = capabilities_client
     idem = str(uuid.uuid4())
-    body = _pending_request_body(info["business_id"], idempotency_key=idem)
+    body = _pending_request_body(info["business_id"], info["user_id"], idempotency_key=idem)
     r1 = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
     r2 = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
     assert r1.status_code == 200
@@ -123,7 +123,7 @@ def test_capabilities_decision_rejected_and_status_endpoint(capabilities_client)
     info = capabilities_client
     r1 = info["client"].post(
         "/api/capabilities/execute",
-        json=_pending_request_body(info["business_id"]),
+        json=_pending_request_body(info["business_id"], info["user_id"]),
         headers=_auth_headers(),
     )
     assert r1.status_code == 200
@@ -151,7 +151,7 @@ def test_capabilities_decision_rejected_and_status_endpoint(capabilities_client)
 
 def test_capabilities_execute_rejects_tenant_mismatch(capabilities_client):
     info = capabilities_client
-    body = _pending_request_body(info["foreign_business_id"])
+    body = _pending_request_body(info["foreign_business_id"], info["user_id"])
     r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
     assert r.status_code == 400
     resp = r.get_json()
