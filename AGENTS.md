@@ -47,3 +47,13 @@ This file is the canonical instruction set for AI agents in this repository.
 ## 8. Legacy Cleanup Note
 Older SQLite/systemd-first instructions were superseded by Docker/Postgres workflow.
 Legacy details remain in git history and must not be used as default runbook.
+
+## 9. Terminal Sessions (tmux)
+- Use `tmux` for all long-running operations on server and local machine.
+- Run builds, dependency installs, log tailing, and deployment commands inside a named `tmux` session.
+- Default flow:
+  1) `tmux new -s deploy`
+  2) run long commands inside the session
+  3) detach with `Ctrl+b` then `d`
+  4) reattach with `tmux attach -t deploy`
+- Do not run long operations in a plain SSH shell if connection drops are possible.

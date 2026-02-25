@@ -762,40 +762,40 @@ export const CardOverviewPage = () => {
 
               {/* Service Optimizer Wizard Block */}
               {!showAddService && (
-                <div className="mb-8 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-5 h-5 text-indigo-600" />
-                      <h3 className="font-semibold text-indigo-900">{t.dashboard.card.seo.title}</h3>
+                <div className="mb-8 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl p-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-5 h-5 text-indigo-600" />
+                        <h3 className="font-semibold text-indigo-900">{t.dashboard.card.seo.title}</h3>
+                      </div>
+                      <p className="text-indigo-700/80 text-sm leading-relaxed max-w-2xl">
+                        {t.dashboard.card.seo.desc1} {t.dashboard.card.seo.desc2}
+                      </p>
                     </div>
-                    <p className="text-indigo-700/80 text-sm leading-relaxed max-w-2xl">
-                      {t.dashboard.card.seo.desc1} {t.dashboard.card.seo.desc2}
-                    </p>
-                  </div>
-                  <div className="flex gap-3 shrink-0">
-                    <ServiceOptimizer
-                      businessName={currentBusiness?.name}
-                      businessId={currentBusinessId}
-                      tone={wizardTone}
-                      region={wizardRegion}
-                      descriptionLength={wizardLength}
-                      instructions={wizardInstructions}
-                      hideTextInput={true}
-                      onServicesImported={loadUserServices}
-                    />
                     {userServices.length > 0 && (
                       <Button
                         variant="outline"
                         onClick={() => {
                           userServices.forEach(s => optimizeService(s.id));
                         }}
-                        className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                        className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0"
                       >
                         <Wand2 className="w-4 h-4 mr-2" />
                         {t.dashboard.card.optimizeAll}
                       </Button>
                     )}
                   </div>
+                  <ServiceOptimizer
+                    businessName={currentBusiness?.name}
+                    businessId={currentBusinessId}
+                    tone={wizardTone}
+                    region={wizardRegion}
+                    descriptionLength={wizardLength}
+                    instructions={wizardInstructions}
+                    hideTextInput={true}
+                    onServicesImported={loadUserServices}
+                  />
                 </div>
               )}
 

@@ -391,7 +391,12 @@ export default function ServiceOptimizer({
               </ul>
             </div>
           )}
-          <div className="overflow-auto">
+          {result.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded text-sm">
+              Не удалось распознать услуги из файла. Попробуйте другой формат или файл с более чёткой структурой.
+            </div>
+          ) : (
+          <div className="overflow-x-auto w-full">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-600">
@@ -515,9 +520,9 @@ export default function ServiceOptimizer({
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-

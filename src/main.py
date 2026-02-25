@@ -2918,6 +2918,139 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
     seo_keywords_top10 = ", ".join([kw for kw, _ in unique[:10]])
     return seo_keywords, seo_keywords_top10
 
+
+def build_seo_keywords_context_for_service(
+    cursor,
+    business_id: str | None,
+    user_id: str | None,
+    service_name: str,
+    service_description: str,
+    limit: int = 120,
+) -> tuple[str, str]:
+    """
+    SEO-контекст, сфокусированный на конкретной услуге.
+    В отличие от общего контекста по бизнесу не смешивает ключи по всем услугам.
+    """
+    try:
+        cursor.execute("SELECT to_regclass('public.wordstatkeywords')")
+        reg = cursor.fetchone()
+        reg_val = None
+        if isinstance(reg, tuple):
+            reg_val = reg[0]
+        elif isinstance(reg, dict):
+            reg_val = reg.get("to_regclass")
+        elif hasattr(reg, "keys"):
+            reg_val = reg.get("to_regclass")
+        if not reg_val:
+            return "SEO keywords are unavailable", "SEO keywords are unavailable"
+    except Exception:
+        return "SEO keywords are unavailable", "SEO keywords are unavailable"
+
+    city = ""
+    business_type = ""
+    try:
+        if business_id:
+            cursor.execute("SELECT city, business_type FROM businesses WHERE id = %s", (business_id,))
+            b_row = cursor.fetchone()
+            if b_row:
+                if isinstance(b_row, tuple):
+                    city, business_type = (b_row[0] or "", b_row[1] or "")
+                elif hasattr(b_row, "keys"):
+                    city = b_row.get("city") or ""
+                    business_type = b_row.get("business_type") or ""
+    except Exception:
+        pass
+
+    terms = set()
+    terms.update(_seo_extract_terms(service_name or ""))
+    terms.update(_seo_extract_terms(service_description or ""))
+    if business_type:
+        terms.update(_seo_extract_terms(business_type))
+
+    city = (city or "").strip().lower()
+    terms_list = list(terms)[:120]
+    if not terms_list:
+        return "No matched SEO keywords found", "No matched SEO keywords found"
+
+    excluded_keywords = set()
+    if business_id:
+        try:
+            cursor.execute(
+                """
+                SELECT keyword
+                FROM wordstatkeywordsexcluded
+                WHERE business_id = %s
+                """,
+                (business_id,),
+            )
+            for row in cursor.fetchall() or []:
+                if isinstance(row, tuple):
+                    kw = (row[0] or "").strip().lower()
+                elif hasattr(row, "keys"):
+                    kw = (row.get("keyword") or "").strip().lower()
+                else:
+                    kw = ""
+                if kw:
+                    excluded_keywords.add(kw)
+        except Exception:
+            pass
+
+    try:
+        cursor.execute(
+            """
+            SELECT keyword, views
+            FROM wordstatkeywords
+            ORDER BY views DESC NULLS LAST
+            LIMIT 5000
+            """
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return "SEO keywords are unavailable", "SEO keywords are unavailable"
+
+    ranked = []
+    for row in rows:
+        if isinstance(row, tuple):
+            kw = (row[0] or "").strip()
+            views = int(row[1] or 0)
+        elif hasattr(row, "keys"):
+            kw = (row.get("keyword") or "").strip()
+            views = int(row.get("views") or 0)
+        else:
+            continue
+        if not kw:
+            continue
+        if excluded_keywords and kw.lower() in excluded_keywords:
+            continue
+        kw_l = kw.lower()
+        score = 0
+        for t in terms_list:
+            if t in kw_l:
+                score += 3 if len(t) >= 6 else 2
+        if city and city in kw_l:
+            score += 1
+        if score > 0:
+            ranked.append((score, views, kw))
+
+    if not ranked:
+        return "No matched SEO keywords found", "No matched SEO keywords found"
+
+    ranked.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    unique = []
+    seen = set()
+    for _, views, kw in ranked:
+        key = kw.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((kw, views))
+        if len(unique) >= limit:
+            break
+
+    seo_keywords = "\n".join([f"- {kw} ({views})" for kw, views in unique])
+    seo_keywords_top10 = ", ".join([kw for kw, _ in unique[:10]])
+    return seo_keywords, seo_keywords_top10
+
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
 def services_optimize():
@@ -3525,6 +3658,8 @@ def news_generate():
         )
 
         service_context = ''
+        selected_service_name = ''
+        selected_service_description = ''
         transaction_context = ''
         
         if use_service:
@@ -3533,6 +3668,8 @@ def news_generate():
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
+                    selected_service_name = name or ''
+                    selected_service_description = desc or ''
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
             else:
                 # выбрать случайную услугу пользователя
@@ -3540,6 +3677,8 @@ def news_generate():
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
+                    selected_service_name = name or ''
+                    selected_service_description = desc or ''
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
         
         if use_transaction:
@@ -3601,7 +3740,16 @@ def news_generate():
         except Exception:
             news_examples = ""
 
-        seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur, business_id, user_data['user_id'])
+        if use_service and selected_service_name:
+            seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
+                cur,
+                business_id,
+                user_data['user_id'],
+                selected_service_name,
+                selected_service_description,
+            )
+        else:
+            seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur, business_id, user_data['user_id'])
         seo_service_context = ""
         if use_seo_keywords:
             try:
@@ -3658,6 +3806,11 @@ def news_generate():
             )
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ для этой новости: {selected_seo_keyword}."
+        if use_service and selected_service_name:
+            seo_generation_hint += (
+                f" Жесткое ограничение темы: новость должна быть только про услугу '{selected_service_name}'. "
+                "Нельзя подменять услугу на другую, даже если у другой услуги частотность выше."
+            )
 
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
@@ -3667,6 +3820,7 @@ Write all generated text in {language_name}.
 Верни СТРОГО JSON: {{"news": "текст новости"}}
 
 Контекст услуги (может отсутствовать): {service_context}
+Если контекст услуги задан, тема новости должна строго соответствовать этой услуге и не может быть заменена на другую услугу.
 Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
 Свободная информация (может отсутствовать): {raw_info}
 SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
