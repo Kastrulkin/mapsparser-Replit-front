@@ -1,0 +1,29 @@
+{
+  "tenant_id": "97f44bd2-5f24-45b7-b7c3-dfd14d494eba",
+  "actor": {
+    "id": "user-123",
+    "type": "user",
+    "role": "owner",
+    "channel": "telegram"
+  },
+  "trace_id": "trace-b1f1c7fa-8f53-44fe-96f9-ec9f57f42991",
+  "idempotency_key": "idem-6d2d7f0c-a958-4e88-9323-4f4f0dd6f0d8",
+  "capability": "services.optimize",
+  "approval": {
+    "mode": "required",
+    "ttl_sec": 1800,
+    "callback_url": "https://localos.pro/api/openclaw/callback"
+  },
+  "billing": {
+    "tariff_id": "starter-2026-02",
+    "reserve_tokens": 2000
+  },
+  "payload": {
+    "name": "Робототехника",
+    "description": "Курс для детей 7-12 лет",
+    "language": "ru",
+    "tone": "professional",
+    "bulk": true,
+    "source": "file"
+  }
+}

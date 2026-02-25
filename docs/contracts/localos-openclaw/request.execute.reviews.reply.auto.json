@@ -1,0 +1,26 @@
+{
+  "tenant_id": "97f44bd2-5f24-45b7-b7c3-dfd14d494eba",
+  "actor": {
+    "id": "user-123",
+    "type": "user",
+    "role": "owner",
+    "channel": "telegram"
+  },
+  "trace_id": "trace-a037be4c-59f8-4538-8a4c-0a9ff8dfaf3f",
+  "idempotency_key": "idem-52d720da-94a7-4f12-947b-008d7396d2d8",
+  "capability": "reviews.reply",
+  "approval": {
+    "mode": "auto",
+    "ttl_sec": 1800
+  },
+  "billing": {
+    "tariff_id": "starter-2026-02",
+    "reserve_tokens": 1500
+  },
+  "payload": {
+    "review": "Отличная школа, ребенку очень нравится!",
+    "tone": "professional",
+    "language": "ru",
+    "publish": false
+  }
+}

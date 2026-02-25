@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "status": "pending_human",
+  "action_id": "0a97da6f-513f-4d3c-b7c4-af6d9a5bfd7b",
+  "trace_id": "trace-b1f1c7fa-8f53-44fe-96f9-ec9f57f42991",
+  "approval": {
+    "status": "pending_human",
+    "reason": "approval.mode=required",
+    "expires_at": "2026-02-25T17:54:06.681519+00:00"
+  }
+}

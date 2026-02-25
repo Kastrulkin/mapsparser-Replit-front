@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "action_id": "0a97da6f-513f-4d3c-b7c4-af6d9a5bfd7b",
+  "tenant_id": "97f44bd2-5f24-45b7-b7c3-dfd14d494eba",
+  "capability": "services.optimize",
+  "status": "rejected",
+  "result": null,
+  "error_code": null,
+  "error": null,
+  "billing": {
+    "tariff_id": "starter-2026-02",
+    "reserve_tokens": 2000
+  },
+  "trace_id": "trace-b1f1c7fa-8f53-44fe-96f9-ec9f57f42991"
+}

@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "status": "completed",
+  "action_id": "d129858b-0699-488d-a02c-5c7a3f4e3b53",
+  "trace_id": "trace-a037be4c-59f8-4538-8a4c-0a9ff8dfaf3f",
+  "result": {
+    "reply": "Спасибо за отзыв! Рады, что занятия полезны и интересны."
+  },
+  "billing": {
+    "total_tokens": 314,
+    "cost": 0.11,
+    "tool_calls": 1,
+    "tariff_id": "starter-2026-02"
+  }
+}
