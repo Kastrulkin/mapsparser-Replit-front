@@ -347,3 +347,92 @@ def test_openclaw_execute_pending_human_with_valid_token(capabilities_client):
             os.environ.pop(token_name, None)
         else:
             os.environ[token_name] = previous
+
+
+def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        r_status = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_status.status_code == 200, r_status.get_json()
+        status_body = r_status.get_json()
+        assert status_body["success"] is True
+        assert status_body["action_id"] == action_id
+        assert status_body["tenant_id"] == info["business_id"]
+
+        r_billing = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/billing?tenant_id={info['business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_billing.status_code == 200, r_billing.get_json()
+        billing_body = r_billing.get_json()
+        assert billing_body["success"] is True
+        assert billing_body["action_id"] == action_id
+        assert billing_body["tenant_id"] == info["business_id"]
+        assert "summary" in billing_body
+        assert "entries" in billing_body
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_action_read_requires_tenant_and_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        r_no_token = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['business_id']}"
+        )
+        assert r_no_token.status_code == 401
+        assert r_no_token.get_json()["success"] is False
+
+        r_no_tenant = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_no_tenant.status_code == 400
+        assert r_no_tenant.get_json()["success"] is False
+
+        r_wrong_tenant = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}?tenant_id={info['foreign_business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_wrong_tenant.status_code in {400, 403, 404}
+        wrong_body = r_wrong_tenant.get_json()
+        assert wrong_body["success"] is False
+        if wrong_body.get("error_code") is not None:
+            assert wrong_body.get("error_code") in {"TENANT_MISMATCH", "TENANT_NOT_FOUND", "ACTION_NOT_FOUND"}
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous

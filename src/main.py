@@ -3134,6 +3134,19 @@ def _authenticate_openclaw_request():
     return True, ""
 
 
+def _openclaw_service_user(tenant_id: str):
+    owner_id = _resolve_tenant_owner_id(tenant_id)
+    if not owner_id:
+        return None
+    return {
+        "user_id": str(owner_id),
+        "id": str(owner_id),
+        "is_superadmin": False,
+        "email": "openclaw@system.local",
+        "name": "OpenClaw Service",
+    }
+
+
 @app.route('/api/capabilities/execute', methods=['POST', 'OPTIONS'])
 def capabilities_execute():
     if request.method == 'OPTIONS':
@@ -3194,8 +3207,8 @@ def openclaw_capabilities_execute():
     if not tenant_id:
         return jsonify({"success": False, "error": "tenant_id is required"}), 400
 
-    owner_id = _resolve_tenant_owner_id(tenant_id)
-    if not owner_id:
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
         return jsonify({"success": False, "error": "tenant_id not found"}), 404
 
     if not envelope.get("trace_id"):
@@ -3204,7 +3217,7 @@ def openclaw_capabilities_execute():
         envelope["idempotency_key"] = str(uuid.uuid4())
     if not envelope.get("actor") or not isinstance(envelope.get("actor"), dict):
         envelope["actor"] = {}
-    envelope["actor"].setdefault("id", str(owner_id))
+    envelope["actor"].setdefault("id", service_user["user_id"])
     envelope["actor"].setdefault("type", "system")
     envelope["actor"].setdefault("role", "openclaw")
     envelope["actor"].setdefault("channel", "openclaw")
@@ -3213,15 +3226,54 @@ def openclaw_capabilities_execute():
     envelope.setdefault("payload", {})
     envelope["tenant_id"] = tenant_id
 
-    service_user = {
-        "user_id": str(owner_id),
-        "id": str(owner_id),
-        "is_superadmin": False,
-        "email": "openclaw@system.local",
-        "name": "OpenClaw Service",
-    }
     result = PHASE1_ACTION_ORCHESTRATOR.execute(envelope, service_user)
     return jsonify(result), (200 if result.get("status") != "failed" else 400)
+
+
+@app.route('/api/openclaw/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_action_status(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, service_user)
+    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
+        return jsonify({"success": False, "error": "tenant mismatch"}), 403
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/openclaw/capabilities/actions/<action_id>/billing', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_action_billing(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action_billing(action_id, service_user)
+    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
+        return jsonify({"success": False, "error": "tenant mismatch"}), 403
+    return jsonify(result), int(result.pop("http_code", 200))
 
 
 @app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])

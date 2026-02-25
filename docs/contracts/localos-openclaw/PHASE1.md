@@ -16,6 +16,8 @@
 4. `GET /api/capabilities/actions?tenant_id=&status=&limit=&offset=`
 5. `GET /api/capabilities/actions/{action_id}/billing`
 6. `POST /api/openclaw/capabilities/execute` (M2M ingress from OpenClaw)
+7. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
+8. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -32,6 +34,11 @@
 - заголовок `X-OpenClaw-Token`
 - backend проверяет совпадение с `OPENCLAW_LOCALOS_TOKEN`
 - `actor.id` может не приходить: backend проставит `owner_id` tenant
+
+Для M2M read endpoints:
+- заголовок `X-OpenClaw-Token` обязателен
+- `tenant_id` обязателен как query-параметр
+- при несовпадении tenant/action возвращается ошибка (`TENANT_MISMATCH`/`TENANT_NOT_FOUND`)
 
 ## Статусы action-machine
 
