@@ -9,6 +9,7 @@ import uuid
 import base64
 import random
 import re
+import secrets
 from datetime import datetime, timedelta
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
@@ -3104,6 +3105,35 @@ PHASE1_ACTION_ORCHESTRATOR = ActionOrchestrator(
 )
 
 
+def _resolve_tenant_owner_id(tenant_id: str):
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s LIMIT 1", (tenant_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        if hasattr(row, "get"):
+            return row.get("owner_id")
+        if isinstance(row, (tuple, list)):
+            return row[0] if len(row) > 0 else None
+        return None
+    finally:
+        db.close()
+
+
+def _authenticate_openclaw_request():
+    expected = os.getenv("OPENCLAW_LOCALOS_TOKEN", "").strip()
+    provided = request.headers.get("X-OpenClaw-Token", "").strip()
+    if not expected:
+        return False, "OPENCLAW_LOCALOS_TOKEN is not configured"
+    if not provided:
+        return False, "X-OpenClaw-Token header is required"
+    if not secrets.compare_digest(expected, provided):
+        return False, "invalid integration token"
+    return True, ""
+
+
 @app.route('/api/capabilities/execute', methods=['POST', 'OPTIONS'])
 def capabilities_execute():
     if request.method == 'OPTIONS':
@@ -3145,6 +3175,53 @@ def capabilities_execute():
     if status == "failed":
         http_code = 400
     return jsonify(result), http_code
+
+
+@app.route('/api/openclaw/capabilities/execute', methods=['POST', 'OPTIONS'])
+def openclaw_capabilities_execute():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    envelope = request.get_json(silent=True) or {}
+    if not isinstance(envelope, dict):
+        return jsonify({"success": False, "error": "Invalid JSON body"}), 400
+
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    owner_id = _resolve_tenant_owner_id(tenant_id)
+    if not owner_id:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    if not envelope.get("trace_id"):
+        envelope["trace_id"] = str(uuid.uuid4())
+    if not envelope.get("idempotency_key"):
+        envelope["idempotency_key"] = str(uuid.uuid4())
+    if not envelope.get("actor") or not isinstance(envelope.get("actor"), dict):
+        envelope["actor"] = {}
+    envelope["actor"].setdefault("id", str(owner_id))
+    envelope["actor"].setdefault("type", "system")
+    envelope["actor"].setdefault("role", "openclaw")
+    envelope["actor"].setdefault("channel", "openclaw")
+    envelope.setdefault("approval", {"mode": "auto", "ttl_sec": 1800})
+    envelope.setdefault("billing", {"tariff_id": "openclaw-default", "reserve_tokens": 2000})
+    envelope.setdefault("payload", {})
+    envelope["tenant_id"] = tenant_id
+
+    service_user = {
+        "user_id": str(owner_id),
+        "id": str(owner_id),
+        "is_superadmin": False,
+        "email": "openclaw@system.local",
+        "name": "OpenClaw Service",
+    }
+    result = PHASE1_ACTION_ORCHESTRATOR.execute(envelope, service_user)
+    return jsonify(result), (200 if result.get("status") != "failed" else 400)
 
 
 @app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])

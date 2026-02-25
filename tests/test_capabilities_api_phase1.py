@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 
 import pytest
@@ -311,3 +312,38 @@ def test_capabilities_action_billing_completed_rejected_expired(capabilities_cli
     finally:
         if original_review_handler is not None:
             main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_review_handler
+
+
+def test_openclaw_execute_requires_token(capabilities_client):
+    info = capabilities_client
+    body = _pending_request_body(info["business_id"], info["user_id"])
+    r = info["client"].post("/api/openclaw/capabilities/execute", json=body)
+    assert r.status_code == 401
+    resp = r.get_json()
+    assert resp["success"] is False
+
+
+def test_openclaw_execute_pending_human_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        # Для OpenClaw actor может не содержать id local user — backend проставит owner_id tenant.
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        r = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        resp = r.get_json()
+        assert resp["success"] is True
+        assert resp["status"] == "pending_human"
+        assert resp.get("action_id")
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous

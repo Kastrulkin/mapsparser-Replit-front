@@ -15,6 +15,7 @@
 3. `GET /api/capabilities/actions/{action_id}`
 4. `GET /api/capabilities/actions?tenant_id=&status=&limit=&offset=`
 5. `GET /api/capabilities/actions/{action_id}/billing`
+6. `POST /api/openclaw/capabilities/execute` (M2M ingress from OpenClaw)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -26,6 +27,11 @@
 - `approval` — политика human-in-the-loop
 - `billing` — billing настройки
 - `payload` — бизнес-данные действия
+
+Для M2M ingress (`/api/openclaw/capabilities/execute`) дополнительно:
+- заголовок `X-OpenClaw-Token`
+- backend проверяет совпадение с `OPENCLAW_LOCALOS_TOKEN`
+- `actor.id` может не приходить: backend проставит `owner_id` tenant
 
 ## Статусы action-machine
 
