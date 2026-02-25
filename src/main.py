@@ -53,6 +53,7 @@ from api.admin_prospecting import admin_prospecting_bp
 from core.default_ai_prompts import get_default_ai_prompts
 from core.default_business_types import get_default_business_types
 from core.seo_keywords import collect_ranked_keywords
+from core.action_orchestrator import ActionOrchestrator
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -2872,6 +2873,363 @@ def build_seo_keywords_context_for_service(
     seo_keywords = "\n".join([f"- {(item.get('keyword') or '').strip()} ({int(item.get('views') or 0)})" for item in items])
     seo_keywords_top10 = ", ".join([(item.get('keyword') or '').strip() for item in items[:10] if (item.get('keyword') or '').strip()])
     return seo_keywords, seo_keywords_top10
+
+
+def _extract_json_candidate(raw_text: str):
+    if not isinstance(raw_text, str):
+        return None
+    txt = raw_text.strip()
+    if not txt:
+        return None
+    try:
+        direct = json.loads(txt)
+        if isinstance(direct, (dict, list)):
+            return direct
+    except Exception:
+        pass
+
+    start = txt.find("{")
+    end = txt.rfind("}") + 1
+    if start != -1 and end > start:
+        try:
+            return json.loads(txt[start:end])
+        except Exception:
+            return None
+    return None
+
+
+def _format_prompt_with_replacements(template: str, mapping: dict) -> str:
+    prompt = str(template or "")
+    for key, value in (mapping or {}).items():
+        prompt = prompt.replace("{" + str(key) + "}", str(value or ""))
+    return prompt
+
+
+def _capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    review_text = str(payload.get("review") or "").strip()
+    tone = str(payload.get("tone") or "профессиональный").strip()
+    language = str(payload.get("language") or "ru").strip()
+    examples = payload.get("examples") or []
+    if not review_text:
+        raise ValueError("review is required for reviews.reply")
+
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    language_name = language_names.get(language, "Russian")
+
+    examples_text = ""
+    if isinstance(examples, list) and examples:
+        examples_text = "\n".join([str(x) for x in examples[:5] if str(x).strip()])
+
+    prompt_template = get_prompt_from_db("review_reply", None)
+    if not prompt_template:
+        raise ValueError("Промпт review_reply не настроен в админ-панели.")
+
+    prompt = _format_prompt_with_replacements(
+        prompt_template,
+        {
+            "tone": tone,
+            "language_name": language_name,
+            "examples_text": examples_text,
+            "review_text": review_text[:1000],
+        },
+    )
+
+    tenant_id = envelope.get("tenant_id")
+    result_text = analyze_text_with_gigachat(
+        prompt,
+        task_type="review_reply",
+        business_id=tenant_id,
+        user_id=user_data["user_id"],
+    )
+    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
+    if isinstance(parsed, dict) and parsed.get("error"):
+        raise ValueError(str(parsed.get("error")))
+
+    reply_text = ""
+    if isinstance(parsed, dict):
+        reply_text = str(parsed.get("reply") or parsed.get("text") or "").strip()
+    if not reply_text:
+        reply_text = str(result_text or "").strip()
+
+    return {
+        "result": {"reply": reply_text},
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
+def _capability_services_optimize(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    language = str(payload.get("language") or "ru").strip()
+    tone = str(payload.get("tone") or "профессиональный").strip()
+    length = int(payload.get("description_length") or 150)
+    instructions = str(payload.get("instructions") or "").strip()
+    business_name = str(payload.get("business_name") or "бизнес").strip()
+    region = str(payload.get("region") or "").strip()
+
+    original_name = str(payload.get("name") or payload.get("original_name") or "").strip()
+    original_description = str(payload.get("description") or payload.get("original_description") or "").strip()
+    content = (original_name + ("\n" + original_description if original_description else "")).strip()
+    if not content:
+        raise ValueError("service name/description is required for services.optimize")
+
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    language_name = language_names.get(language, "Russian")
+
+    tenant_id = envelope.get("tenant_id")
+    prompt_template = get_prompt_from_db("service_optimization", None)
+    if not prompt_template:
+        raise ValueError("Промпт service_optimization не настроен в админ-панели.")
+
+    seo_keywords = "No matched SEO keywords found"
+    seo_keywords_top10 = "No matched SEO keywords found"
+    try:
+        db_kw = DatabaseManager()
+        cur_kw = db_kw.conn.cursor()
+        seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
+            cur_kw,
+            tenant_id,
+            user_data["user_id"],
+            original_name,
+            original_description,
+        )
+        db_kw.close()
+    except Exception:
+        pass
+
+    prompt = _format_prompt_with_replacements(
+        prompt_template,
+        {
+            "region": region or "не указан",
+            "business_name": business_name,
+            "industry": str(payload.get("industry") or "-"),
+            "business_type": str(payload.get("business_type") or "-"),
+            "tone": tone,
+            "language_name": language_name,
+            "length": length,
+            "instructions": instructions or "-",
+            "frequent_queries": "",
+            "seo_keywords": seo_keywords,
+            "seo_keywords_top10": seo_keywords_top10,
+            "good_examples": "",
+            "content": content[:4000],
+        },
+    )
+
+    result_text = analyze_text_with_gigachat(
+        prompt,
+        task_type="service_optimization",
+        business_id=tenant_id,
+        user_id=user_data["user_id"],
+    )
+    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
+    if isinstance(parsed, dict) and parsed.get("error"):
+        raise ValueError(str(parsed.get("error")))
+
+    services = []
+    if isinstance(parsed, dict):
+        raw_services = parsed.get("services")
+        if isinstance(raw_services, list):
+            services = raw_services
+    elif isinstance(parsed, list):
+        services = parsed
+
+    if not services:
+        services = [{
+            "original_name": original_name,
+            "optimized_name": original_name,
+            "original_description": original_description,
+            "seo_description": original_description,
+            "keywords": [],
+            "price": payload.get("price"),
+            "category": payload.get("category") or "other",
+        }]
+
+    normalized_services = []
+    for svc in services:
+        if not isinstance(svc, dict):
+            continue
+        normalized_services.append({
+            "original_name": str(svc.get("original_name") or original_name or "").strip(),
+            "optimized_name": str(svc.get("optimized_name") or svc.get("name") or original_name or "").strip(),
+            "original_description": str(svc.get("original_description") or original_description or "").strip(),
+            "seo_description": str(svc.get("seo_description") or svc.get("description") or original_description or "").strip(),
+            "keywords": svc.get("keywords") if isinstance(svc.get("keywords"), list) else [],
+            "price": svc.get("price"),
+            "category": str(svc.get("category") or payload.get("category") or "other"),
+        })
+
+    return {
+        "result": {
+            "services": normalized_services,
+            "general_recommendations": [],
+        },
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
+PHASE1_ACTION_ORCHESTRATOR = ActionOrchestrator(
+    handlers={
+        "reviews.reply": _capability_reviews_reply,
+        "services.optimize": _capability_services_optimize,
+    }
+)
+
+
+@app.route('/api/capabilities/execute', methods=['POST', 'OPTIONS'])
+def capabilities_execute():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    envelope = request.get_json(silent=True) or {}
+    if not isinstance(envelope, dict):
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    # business_id == tenant_id в текущей tenant-модели
+    if not envelope.get("tenant_id"):
+        requested_business_id = envelope.get("business_id") or request.args.get("business_id")
+        envelope["tenant_id"] = get_business_id_from_user(user_data["user_id"], requested_business_id)
+
+    if not envelope.get("trace_id"):
+        envelope["trace_id"] = str(uuid.uuid4())
+    if not envelope.get("idempotency_key"):
+        envelope["idempotency_key"] = str(uuid.uuid4())
+    if not envelope.get("actor") or not isinstance(envelope.get("actor"), dict):
+        envelope["actor"] = {}
+    envelope["actor"].setdefault("id", user_data.get("user_id"))
+    envelope["actor"].setdefault("type", "user")
+    envelope["actor"].setdefault("role", "owner")
+    envelope["actor"].setdefault("channel", "api")
+    envelope.setdefault("approval", {"mode": "auto", "ttl_sec": 1800})
+    envelope.setdefault("billing", {"tariff_id": "", "reserve_tokens": 2000})
+    envelope.setdefault("payload", {})
+
+    result = PHASE1_ACTION_ORCHESTRATOR.execute(envelope, user_data)
+    status = result.get("status")
+    http_code = 200
+    if status == "failed":
+        http_code = 400
+    return jsonify(result), http_code
+
+
+@app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
+def capabilities_action_decision(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision") or "").strip().lower()
+    reason = str(data.get("reason") or "").strip()
+    result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, user_data, reason)
+    return jsonify(result), (200 if result.get("success") else 400)
+
+
+@app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])
+def capabilities_action_status(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        def _row_value(row_obj, index, key, default=None):
+            if row_obj is None:
+                return default
+            if isinstance(row_obj, (tuple, list)):
+                try:
+                    return row_obj[index]
+                except Exception:
+                    return default
+            if hasattr(row_obj, "get"):
+                try:
+                    return row_obj.get(key, default)
+                except Exception:
+                    return default
+            return default
+
+        cursor.execute(
+            """
+            SELECT ar.action_id, ar.tenant_id, ar.capability, ar.status, ar.result_json, ar.error_code, ar.error_text,
+                   ar.billing_json, ar.trace_id, b.owner_id
+            FROM action_requests ar
+            LEFT JOIN businesses b ON b.id = ar.tenant_id
+            WHERE ar.action_id = %s
+            LIMIT 1
+            """,
+            (action_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "action not found"}), 404
+
+        owner_id = _row_value(row, 9, "owner_id")
+        if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+            return jsonify({"success": False, "error": "forbidden"}), 403
+
+        return jsonify({
+            "success": True,
+            "action_id": _row_value(row, 0, "action_id"),
+            "tenant_id": _row_value(row, 1, "tenant_id"),
+            "capability": _row_value(row, 2, "capability"),
+            "status": _row_value(row, 3, "status"),
+            "result": _row_value(row, 4, "result_json"),
+            "error_code": _row_value(row, 5, "error_code"),
+            "error": _row_value(row, 6, "error_text"),
+            "billing": _row_value(row, 7, "billing_json"),
+            "trace_id": _row_value(row, 8, "trace_id"),
+        })
+    finally:
+        db.close()
+
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
