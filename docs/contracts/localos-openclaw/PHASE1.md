@@ -53,6 +53,11 @@
 - `POST /api/openclaw/callbacks/dispatch` запускает отправку batch callback-событий
 - `GET /api/openclaw/callbacks/outbox` возвращает состояние очереди по tenant
 - token-auth тот же (`X-OpenClaw-Token`)
+- автоматический фоновый dispatch выполняется в `worker` по таймеру
+- env-параметры фонового dispatch:
+  - `OPENCLAW_CALLBACK_DISPATCH_ENABLED` (default `true`)
+  - `OPENCLAW_CALLBACK_DISPATCH_INTERVAL_SEC` (default `15`)
+  - `OPENCLAW_CALLBACK_DISPATCH_BATCH_SIZE` (default `50`)
 
 ## Статусы action-machine
 

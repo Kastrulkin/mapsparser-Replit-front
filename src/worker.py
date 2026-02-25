@@ -32,11 +32,44 @@ from parsed_payload_validation import (
     FIELDS_CRITICAL,
     SOURCE_YANDEX_BUSINESS,
 )
+from core.action_orchestrator import ActionOrchestrator
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
 BROWSER_SESSION_MANAGER = BrowserSessionManager()
 CAPTCHA_TTL_MINUTES = 30
+CALLBACK_DISPATCH_ORCHESTRATOR = ActionOrchestrator(handlers={})
+_LAST_CALLBACK_DISPATCH_AT = 0.0
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _dispatch_openclaw_callback_outbox_if_due() -> None:
+    global _LAST_CALLBACK_DISPATCH_AT
+    if not _env_bool("OPENCLAW_CALLBACK_DISPATCH_ENABLED", True):
+        return
+
+    now = time.time()
+    interval_sec = max(1, int(os.getenv("OPENCLAW_CALLBACK_DISPATCH_INTERVAL_SEC", "15")))
+    if now - _LAST_CALLBACK_DISPATCH_AT < interval_sec:
+        return
+
+    batch_size = max(1, min(int(os.getenv("OPENCLAW_CALLBACK_DISPATCH_BATCH_SIZE", "50")), 500))
+    _LAST_CALLBACK_DISPATCH_AT = now
+    try:
+        result = CALLBACK_DISPATCH_ORCHESTRATOR.dispatch_callback_outbox(batch_size=batch_size)
+        if int(result.get("picked") or 0) > 0 or int(result.get("retried") or 0) > 0 or int(result.get("dlq") or 0) > 0:
+            print(
+                f"[CALLBACK_DISPATCH] picked={result.get('picked')} sent={result.get('sent')} retried={result.get('retried')} dlq={result.get('dlq')}",
+                flush=True,
+            )
+    except Exception as e:
+        print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
 def get_db_connection():
@@ -2311,6 +2344,7 @@ if __name__ == "__main__":
     while True:
         try:
             process_queue()
+            _dispatch_openclaw_callback_outbox_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)
