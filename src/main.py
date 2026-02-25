@@ -3525,6 +3525,74 @@ def services_optimize():
                 return parsed
             return None
 
+        def _extract_service_from_markdown(raw_text: str):
+            """Fallback: вытаскивает название/описание из markdown-текста модели."""
+            if not isinstance(raw_text, str):
+                return None
+            txt = raw_text.strip()
+            if not txt:
+                return None
+            try:
+                import re as _re
+
+                # Исходные значения из content (что пришло на оптимизацию)
+                original_name = ""
+                original_description = ""
+                content_lines = [ln.strip(" -*\t") for ln in str(content or "").splitlines() if ln.strip()]
+                if content_lines:
+                    original_name = content_lines[0]
+                if len(content_lines) > 1:
+                    original_description = " ".join(content_lines[1:]).strip()
+
+                patterns_name = [
+                    r"(?:Новое\s+)?Название\s+услуги[:\s]*\*{0,2}\s*([^\n\r*]+)",
+                    r"###\s*Название\s+услуги[:\s]*([^\n\r]+)",
+                ]
+                patterns_desc = [
+                    r"(?:Новое\s+)?Описание\s+услуги[:\s]*\*{0,2}\s*([^\n\r]+(?:\n(?!\s*(?:-|\*|###|##|\*\*|Название|Описание)).+)*)",
+                    r"###\s*Описание\s+услуги[:\s]*([^\n\r]+(?:\n(?!\s*(?:-|\*|###|##|\*\*|Название|Описание)).+)*)",
+                ]
+
+                extracted_name = ""
+                extracted_desc = ""
+                for p in patterns_name:
+                    m = _re.search(p, txt, flags=_re.IGNORECASE)
+                    if m:
+                        extracted_name = " ".join(m.group(1).split()).strip(" -*_")
+                        if extracted_name:
+                            break
+                for p in patterns_desc:
+                    m = _re.search(p, txt, flags=_re.IGNORECASE | _re.DOTALL)
+                    if m:
+                        extracted_desc = " ".join(m.group(1).split()).strip(" -*_")
+                        if extracted_desc:
+                            break
+
+                if not extracted_name and not extracted_desc:
+                    return None
+
+                if not original_name:
+                    original_name = extracted_name
+                if not original_description:
+                    original_description = extracted_desc
+
+                return {
+                    "services": [
+                        {
+                            "original_name": str(original_name or "").strip(),
+                            "optimized_name": str(extracted_name or original_name or "").strip(),
+                            "original_description": str(original_description or "").strip(),
+                            "seo_description": str(extracted_desc or original_description or "").strip(),
+                            "keywords": [],
+                            "price": None,
+                            "category": "other"
+                        }
+                    ],
+                    "general_recommendations": []
+                }
+            except Exception:
+                return None
+
         if isinstance(result, dict):
             if 'error' in result:
                 error_msg = str(result.get('error') or 'Ошибка оптимизации')
@@ -3553,13 +3621,15 @@ def services_optimize():
 
             parsed_result = _try_parse_json_payload(result)
             if parsed_result is None:
-                print(f"❌ Не удалось распарсить JSON из результата")
-                print(f"❌ Полный результат: {result[:500]}")
-                return jsonify({
-                    "success": False,
-                    "error": "Не удалось распарсить результат оптимизации",
-                    "raw": result
-                }), 502
+                parsed_result = _extract_service_from_markdown(result)
+                if parsed_result is None:
+                    print(f"❌ Не удалось распарсить JSON из результата")
+                    print(f"❌ Полный результат: {result[:500]}")
+                    return jsonify({
+                        "success": False,
+                        "error": "Не удалось распарсить результат оптимизации",
+                        "raw": result
+                    }), 502
         else:
             print(f"❌ Неожиданный тип результата: {type(result)}")
             return jsonify({
