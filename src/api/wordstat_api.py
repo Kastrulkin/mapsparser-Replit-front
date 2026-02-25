@@ -29,7 +29,22 @@ BUSINESS_TYPE_HINTS = {
     "massage": ["массаж", "релакс", "лечебный массаж"],
     "cosmetology": ["косметология", "чистка лица", "пилинг", "уход за лицом"],
     "brows_lashes": ["брови", "ресницы", "ламинирование ресниц"],
+    "auto_service": ["автосервис", "сто", "ремонт авто", "диагностика авто", "техобслуживание"],
+    "gas_station": ["азс", "заправка", "бензин", "дизель", "топливо"],
+    "cafe": ["кафе", "кофе", "обед", "завтрак", "доставка еды"],
+    "school": ["школа", "обучение", "курсы", "уроки", "дети"],
+    "workshop": ["мастерская", "ремонт", "изготовление", "срочный ремонт"],
+    "shoe_repair": ["ремонт обуви", "обувная мастерская", "набoйки", "растяжка обуви"],
+    "gym": ["спортзал", "фитнес", "тренировки", "тренажерный зал"],
+    "shawarma": ["шаверма", "шаурма", "быстрое питание", "фастфуд"],
+    "theater": ["театр", "спектакль", "сцена", "билеты"],
 }
+
+BEAUTY_BUSINESS_TYPES = {
+    "beauty_salon", "barbershop", "nail_studio", "spa", "massage", "cosmetology", "brows_lashes", "makeup", "tanning"
+}
+BEAUTY_CATEGORIES = {"barber", "cosmetology", "eyebrows", "nails", "spa", "beauty", "hair", "makeup", "lashes"}
+BEAUTY_TERMS = {"маникюр", "педикюр", "ногти", "барбер", "косметолог", "ресниц", "бров", "спа", "стрижк", "окрашив"}
 
 
 def _extract_terms(text: str):
@@ -42,6 +57,21 @@ def _extract_terms(text: str):
     return result
 
 
+def _row_get(row, key: str, idx: int = 0, default=None):
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    if hasattr(row, "keys"):
+        try:
+            return row[key]
+        except Exception:
+            pass
+    if isinstance(row, (tuple, list)):
+        return row[idx] if len(row) > idx else default
+    return default
+
+
 def _score_keyword(keyword_text: str, terms):
     text = (keyword_text or "").lower()
     score = 0
@@ -49,6 +79,14 @@ def _score_keyword(keyword_text: str, terms):
         if t in text:
             score += 2 if len(t) >= 6 else 1
     return score
+
+
+def _is_beauty_keyword(keyword_text: str, category: str) -> bool:
+    category_l = (category or "").strip().lower()
+    if category_l in BEAUTY_CATEGORIES:
+        return True
+    text = (keyword_text or "").lower()
+    return any(term in text for term in BEAUTY_TERMS)
 
 
 def _require_auth():
@@ -157,6 +195,7 @@ def get_keywords():
 
         terms = []
         city = None
+        business_type = ''
 
         if business_id:
             access_error = _ensure_business_access(cursor, user_data, business_id)
@@ -167,9 +206,22 @@ def get_keywords():
                 "SELECT business_type, city FROM businesses WHERE id = %s",
                 (business_id,)
             )
-            b_row = cursor.fetchone() or {}
-            business_type = (b_row.get('business_type') if isinstance(b_row, dict) else None) or ''
-            city = (b_row.get('city') if isinstance(b_row, dict) else None) or ''
+            b_row = cursor.fetchone()
+            business_type = (_row_get(b_row, 'business_type', 0, '') or '').strip()
+            city = (_row_get(b_row, 'city', 1, '') or '').strip()
+            business_type = str(business_type).strip()
+
+            if business_type:
+                cursor.execute(
+                    "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
+                    (business_type, business_type),
+                )
+                bt_row = cursor.fetchone()
+                if bt_row:
+                    bt_label = (_row_get(bt_row, 'label', 0, '') or '').strip()
+                    bt_description = (_row_get(bt_row, 'description', 1, '') or '').strip()
+                    terms.extend(_extract_terms(str(bt_label)))
+                    terms.extend(_extract_terms(str(bt_description)))
 
             # Берем услуги последнего снапшота парсинга (или активные как fallback)
             cursor.execute(
@@ -193,9 +245,8 @@ def get_keywords():
                 (business_id, business_id),
             )
             for row in cursor.fetchall() or []:
-                r = row if isinstance(row, dict) else {}
-                terms.extend(_extract_terms((r.get('name') or '')))
-                terms.extend(_extract_terms((r.get('description') or '')))
+                terms.extend(_extract_terms(_row_get(row, 'name', 0, '') or ''))
+                terms.extend(_extract_terms(_row_get(row, 'description', 1, '') or ''))
 
             for hint in BUSINESS_TYPE_HINTS.get(str(business_type), []):
                 terms.extend(_extract_terms(hint))
@@ -219,12 +270,7 @@ def get_keywords():
                 (business_id,),
             )
             for row in cursor.fetchall() or []:
-                if isinstance(row, dict):
-                    kw = (row.get('keyword') or '').strip().lower()
-                elif isinstance(row, tuple):
-                    kw = (row[0] or '').strip().lower()
-                else:
-                    kw = ''
+                kw = str(_row_get(row, 'keyword', 0, '') or '').strip().lower()
                 if kw:
                     excluded_keywords.add(kw)
 
@@ -254,6 +300,13 @@ def get_keywords():
                     keywords.append(item)
                     existing.add(kw)
 
+        business_type_l = str(business_type).strip().lower() if business_id else ""
+        if business_type_l and business_type_l not in BEAUTY_BUSINESS_TYPES:
+            keywords = [
+                k for k in keywords
+                if not _is_beauty_keyword(k.get('keyword') or '', k.get('category') or '')
+            ]
+
         # Контекстный отбор по услугам/типу бизнеса
         if terms:
             uniq_terms = list(dict.fromkeys(terms))[:80]
@@ -266,7 +319,7 @@ def get_keywords():
             filtered.sort(key=lambda x: (int(x.get('views') or 0), x.get('match_score', 0)), reverse=True)
             keywords = filtered[:600]
         else:
-            keywords = keywords[:600]
+            keywords = [] if business_id else keywords[:600]
         keywords.sort(key=lambda x: int(x.get('views') or 0), reverse=True)
 
         if use_city and city:
@@ -335,7 +388,7 @@ def search_keywords():
             (business_id,),
         )
         excluded = {
-            ((r.get('keyword') if isinstance(r, dict) else r[0]) or '').strip().lower()
+            str(_row_get(r, 'keyword', 0, '') or '').strip().lower()
             for r in (cursor.fetchall() or [])
         }
 
@@ -348,7 +401,7 @@ def search_keywords():
             (business_id,),
         )
         custom_existing = {
-            ((r.get('keyword') if isinstance(r, dict) else r[0]) or '').strip().lower()
+            str(_row_get(r, 'keyword', 0, '') or '').strip().lower()
             for r in (cursor.fetchall() or [])
         }
 

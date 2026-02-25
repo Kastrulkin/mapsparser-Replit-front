@@ -6,6 +6,7 @@
 from safe_db_utils import get_db_connection, get_db_path
 import os
 from core.default_ai_prompts import get_default_ai_prompts
+from core.default_business_types import get_default_business_types
 
 def init_database_schema():
     """Инициализировать все таблицы базы данных"""
@@ -820,18 +821,7 @@ def init_database_schema():
         print("✅ Таблица GrowthTasks создана/проверена")
         
         # Инициализируем дефолтные типы бизнеса, если их нет
-        default_business_types = [
-            ('beauty_salon', 'Салон красоты', 'Салон красоты с полным спектром услуг'),
-            ('barbershop', 'Барбершоп', 'Мужской барбершоп'),
-            ('spa', 'SPA/Wellness', 'SPA и wellness центр'),
-            ('nail_studio', 'Ногтевая студия', 'Студия маникюра и педикюра'),
-            ('cosmetology', 'Косметология', 'Косметологический кабинет'),
-            ('massage', 'Массаж', 'Массажный салон'),
-            ('brows_lashes', 'Брови и ресницы', 'Студия бровей и ресниц'),
-            ('makeup', 'Макияж', 'Студия макияжа'),
-            ('tanning', 'Солярий', 'Студия загара'),
-            ('other', 'Другое', 'Другой тип бизнеса')
-        ]
+        default_business_types = get_default_business_types()
         
         for type_key, label, description in default_business_types:
             cursor.execute("""

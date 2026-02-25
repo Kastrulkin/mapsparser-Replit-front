@@ -19,6 +19,8 @@ export const ProfilePage = () => {
 
   // Функция для преобразования значения типа бизнеса в читаемый текст
   const getBusinessTypeLabel = (type: string): string => {
+    const apiType = businessTypes.find((x) => x.type_key === type);
+    if (apiType?.label) return apiType.label;
     const typeKey = type as keyof typeof t.dashboard.profile.businessTypes;
     return t.dashboard.profile.businessTypes[typeKey] || type || '';
   };
@@ -107,7 +109,17 @@ export const ProfilePage = () => {
   };
 
   useEffect(() => {
-    // Загружаем типы бизнеса (теперь используем локализацию, но API может вернуть список)
+    const loadBusinessTypes = async () => {
+      try {
+        const data = await newAuth.makeRequest('/business-types');
+        if (Array.isArray(data.types)) {
+          setBusinessTypes(data.types);
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки типов бизнеса:', e);
+      }
+    };
+    loadBusinessTypes();
   }, []);
 
   useEffect(() => {
@@ -401,7 +413,12 @@ export const ProfilePage = () => {
     return Math.round((filled / fieldsTotal) * 100);
   })();
 
-  const businessTypeOptions = Object.keys(t.dashboard.profile.businessTypes);
+  const businessTypeOptions = businessTypes.length > 0
+    ? businessTypes
+    : Object.keys(t.dashboard.profile.businessTypes).map((type_key) => ({
+      type_key,
+      label: t.dashboard.profile.businessTypes[type_key as keyof typeof t.dashboard.profile.businessTypes] || type_key
+    }));
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
@@ -660,16 +677,16 @@ export const ProfilePage = () => {
             </label>
             {editClientInfo ? (
               <Select
-                value={clientInfo.businessType || "beauty_salon"}
+                value={clientInfo.businessType || "other"}
                 onValueChange={(v) => setClientInfo({ ...clientInfo, businessType: v })}
               >
                 <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder={t.dashboard.profile.selectType} />
                 </SelectTrigger>
                 <SelectContent>
-                  {businessTypeOptions.map(typeKey => (
-                    <SelectItem key={typeKey} value={typeKey}>
-                      {t.dashboard.profile.businessTypes[typeKey as keyof typeof t.dashboard.profile.businessTypes]}
+                  {businessTypeOptions.map((bt) => (
+                    <SelectItem key={bt.type_key} value={bt.type_key}>
+                      {bt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

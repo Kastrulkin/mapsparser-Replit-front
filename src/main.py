@@ -51,6 +51,7 @@ from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
 from core.default_ai_prompts import get_default_ai_prompts
+from core.default_business_types import get_default_business_types
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -2760,6 +2761,21 @@ def _seo_extract_terms(text: str):
     return out
 
 
+SEO_BEAUTY_BUSINESS_TYPES = {
+    "beauty_salon", "barbershop", "nail_studio", "spa", "massage", "cosmetology", "brows_lashes", "makeup", "tanning"
+}
+SEO_BEAUTY_TERMS = {"маникюр", "педикюр", "ногти", "барбер", "косметолог", "ресниц", "бров", "спа", "стрижк", "окрашив"}
+SEO_BEAUTY_CATEGORIES = {"barber", "cosmetology", "eyebrows", "nails", "spa", "beauty", "hair", "makeup", "lashes"}
+
+
+def _seo_is_beauty_keyword(keyword_text: str, category: str = "") -> bool:
+    category_l = (category or "").strip().lower()
+    if category_l in SEO_BEAUTY_CATEGORIES:
+        return True
+    kw = (keyword_text or "").lower()
+    return any(t in kw for t in SEO_BEAUTY_TERMS)
+
+
 def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | None, limit: int = 120) -> tuple[str, str]:
     """
     Возвращает:
@@ -2794,6 +2810,22 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
                 elif hasattr(b_row, "keys"):
                     city = b_row.get("city") or ""
                     business_type = b_row.get("business_type") or ""
+        if business_type:
+            cursor.execute(
+                "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
+                (business_type, business_type),
+            )
+            bt_row = cursor.fetchone()
+            if bt_row:
+                if isinstance(bt_row, tuple):
+                    bt_label, bt_desc = (bt_row[0] or "", bt_row[1] or "")
+                elif hasattr(bt_row, "keys"):
+                    bt_label = bt_row.get("label") or ""
+                    bt_desc = bt_row.get("description") or ""
+                else:
+                    bt_label, bt_desc = "", ""
+                terms.update(_seo_extract_terms(bt_label))
+                terms.update(_seo_extract_terms(bt_desc))
 
         if business_id:
             cursor.execute(
@@ -2842,7 +2874,7 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
     try:
         cursor.execute(
             """
-            SELECT keyword, views
+            SELECT keyword, views, category
             FROM wordstatkeywords
             ORDER BY views DESC NULLS LAST
             LIMIT 5000
@@ -2881,15 +2913,20 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
         if isinstance(row, tuple):
             kw = (row[0] or "").strip()
             views = int(row[1] or 0)
+            category = (row[2] or "").strip()
         elif hasattr(row, "keys"):
             kw = (row.get("keyword") or "").strip()
             views = int(row.get("views") or 0)
+            category = (row.get("category") or "").strip()
         else:
             continue
         if not kw:
             continue
         if excluded_keywords and kw.lower() in excluded_keywords:
             continue
+        if business_type and str(business_type).strip().lower() not in SEO_BEAUTY_BUSINESS_TYPES:
+            if _seo_is_beauty_keyword(kw, category):
+                continue
         kw_l = kw.lower()
         score = 0
         for t in terms_list:
@@ -2959,6 +2996,22 @@ def build_seo_keywords_context_for_service(
                 elif hasattr(b_row, "keys"):
                     city = b_row.get("city") or ""
                     business_type = b_row.get("business_type") or ""
+        if business_type:
+            cursor.execute(
+                "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
+                (business_type, business_type),
+            )
+            bt_row = cursor.fetchone()
+            if bt_row:
+                if isinstance(bt_row, tuple):
+                    bt_label, bt_desc = (bt_row[0] or "", bt_row[1] or "")
+                elif hasattr(bt_row, "keys"):
+                    bt_label = bt_row.get("label") or ""
+                    bt_desc = bt_row.get("description") or ""
+                else:
+                    bt_label, bt_desc = "", ""
+                terms.update(_seo_extract_terms(bt_label))
+                terms.update(_seo_extract_terms(bt_desc))
     except Exception:
         pass
 
@@ -2999,7 +3052,7 @@ def build_seo_keywords_context_for_service(
     try:
         cursor.execute(
             """
-            SELECT keyword, views
+            SELECT keyword, views, category
             FROM wordstatkeywords
             ORDER BY views DESC NULLS LAST
             LIMIT 5000
@@ -3014,15 +3067,20 @@ def build_seo_keywords_context_for_service(
         if isinstance(row, tuple):
             kw = (row[0] or "").strip()
             views = int(row[1] or 0)
+            category = (row[2] or "").strip()
         elif hasattr(row, "keys"):
             kw = (row.get("keyword") or "").strip()
             views = int(row.get("views") or 0)
+            category = (row.get("category") or "").strip()
         else:
             continue
         if not kw:
             continue
         if excluded_keywords and kw.lower() in excluded_keywords:
             continue
+        if business_type and str(business_type).strip().lower() not in SEO_BEAUTY_BUSINESS_TYPES:
+            if _seo_is_beauty_keyword(kw, category):
+                continue
         kw_l = kw.lower()
         score = 0
         for t in terms_list:
@@ -9424,6 +9482,21 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
         return fallback or ""
 
 # ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
+def _ensure_default_business_types(cursor):
+    for type_key, label, description in get_default_business_types():
+        cursor.execute(
+            """
+            INSERT INTO BusinessTypes (id, type_key, label, description)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (type_key) DO UPDATE
+            SET label = EXCLUDED.label,
+                description = COALESCE(BusinessTypes.description, EXCLUDED.description),
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (f"bt_{type_key}", type_key, label, description),
+        )
+
+
 @app.route('/api/business-types', methods=['GET'])
 def get_business_types_public():
     """Получить все активные типы бизнеса (для всех пользователей)"""
@@ -9439,6 +9512,8 @@ def get_business_types_public():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        _ensure_default_business_types(cursor)
+        db.conn.commit()
         cursor.execute("SELECT type_key, label FROM businesstypes WHERE is_active = TRUE ORDER BY label")
         rows = cursor.fetchall()
         
@@ -9478,6 +9553,8 @@ def get_business_types():
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
+        _ensure_default_business_types(cursor)
+        db.conn.commit()
         cursor.execute("SELECT id, type_key, label, description, is_active FROM BusinessTypes ORDER BY label")
         rows = cursor.fetchall()
         

@@ -89,7 +89,7 @@ const Dashboard = () => {
       // Обновляем информацию о бизнесе
       setClientInfo({
         businessName: business.name || "",
-        businessType: business.business_type || "beauty_salon",
+        businessType: business.business_type || "other",
         address: business.address || "",
         workingHours: business.working_hours || ""
       });
@@ -1075,7 +1075,7 @@ const Dashboard = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Тип бизнеса</label>
               {editClientInfo ? (
                 <Select
-                  value={clientInfo.businessType || "beauty_salon"}
+                  value={clientInfo.businessType || "other"}
                   onValueChange={(v) => setClientInfo({ ...clientInfo, businessType: v })}
                 >
                   <SelectTrigger>
@@ -1091,6 +1091,15 @@ const Dashboard = () => {
                     <SelectItem value="brows_lashes">Брови и ресницы</SelectItem>
                     <SelectItem value="makeup">Макияж</SelectItem>
                     <SelectItem value="tanning">Солярий</SelectItem>
+                    <SelectItem value="auto_service">СТО (Автосервис)</SelectItem>
+                    <SelectItem value="gas_station">АЗС (Автозаправка)</SelectItem>
+                    <SelectItem value="cafe">Кафе</SelectItem>
+                    <SelectItem value="school">Школа</SelectItem>
+                    <SelectItem value="workshop">Мастерская</SelectItem>
+                    <SelectItem value="shoe_repair">Ремонт обуви</SelectItem>
+                    <SelectItem value="gym">Спортзал</SelectItem>
+                    <SelectItem value="shawarma">Шаверма</SelectItem>
+                    <SelectItem value="theater">Театр</SelectItem>
                     <SelectItem value="other">Другое</SelectItem>
                   </SelectContent>
                 </Select>
