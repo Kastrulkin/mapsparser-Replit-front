@@ -20,6 +20,8 @@
 8. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 9. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
 10. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
+11. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
+12. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -46,6 +48,11 @@
 - заголовок `X-OpenClaw-Token` обязателен
 - `tenant_id` обязателен (JSON body или query)
 - `decision`: `approved` | `rejected` | `expired`
+
+Для callback outbox endpoints:
+- `POST /api/openclaw/callbacks/dispatch` запускает отправку batch callback-событий
+- `GET /api/openclaw/callbacks/outbox` возвращает состояние очереди по tenant
+- token-auth тот же (`X-OpenClaw-Token`)
 
 ## Статусы action-machine
 
@@ -90,6 +97,19 @@ Billing-summary endpoint:
 - `released_tokens`
 - `inflight_reserved_tokens`
 - `total_cost`
+
+## Callback Outbox / Retry / DLQ
+
+- callback события пишутся в `action_callback_outbox`
+- поддерживаемые события: `pending_human`, `approved`, `rejected`, `expired`, `completed`
+- статусы outbox:
+  - `pending`
+  - `retry`
+  - `sending`
+  - `sent`
+  - `dlq`
+- retry-политика: bounded exponential backoff (до 300 сек)
+- после `max_attempts` запись переходит в `dlq`
 
 ## Примеры
 

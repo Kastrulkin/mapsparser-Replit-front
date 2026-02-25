@@ -563,3 +563,217 @@ def test_openclaw_action_decision_requires_token_and_tenant(capabilities_client)
             os.environ.pop(token_name, None)
         else:
             os.environ[token_name] = previous
+
+
+def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypatch):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    import core.action_orchestrator as orchestrator_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    class _FailingResponse:
+        status_code = 500
+
+    def _always_fail_post(*_args, **_kwargs):
+        return _FailingResponse()
+
+    class _OkResponse:
+        status_code = 200
+
+    def _always_ok_post(*_args, **_kwargs):
+        return _OkResponse()
+
+    try:
+        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_fail_post)
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        body["approval"] = {
+            "mode": "required",
+            "ttl_sec": 1200,
+            "callback_url": "https://openclaw.local/callback",
+        }
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT status, attempts
+                FROM action_callback_outbox
+                WHERE action_id = %s AND event_type = 'pending_human'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            row = cur.fetchone()
+        conn.close()
+        assert row is not None
+        status_val = row["status"] if hasattr(row, "get") else row[0]
+        attempts_val = int((row["attempts"] if hasattr(row, "get") else row[1]) or 0)
+        assert status_val in {"retry", "dlq"}
+        assert attempts_val >= 1
+
+        conn_force = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn_force.cursor() as cur_force:
+            cur_force.execute(
+                """
+                UPDATE action_callback_outbox
+                SET next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                WHERE action_id = %s AND event_type = 'pending_human' AND status = 'retry'
+                """,
+                (action_id,),
+            )
+        conn_force.commit()
+        conn_force.close()
+
+        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_ok_post)
+        r_dispatch = info["client"].post(
+            "/api/openclaw/callbacks/dispatch",
+            json={"batch_size": 20},
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_dispatch.status_code == 200
+
+        conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn2.cursor() as cur2:
+            cur2.execute(
+                """
+                SELECT status
+                FROM action_callback_outbox
+                WHERE action_id = %s AND event_type = 'pending_human'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            row2 = cur2.fetchone()
+        conn2.close()
+        assert row2 is not None
+        status_after = row2["status"] if hasattr(row2, "get") else row2[0]
+        assert status_after == "sent"
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_callback_outbox_goes_to_dlq(capabilities_client, monkeypatch):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    import core.action_orchestrator as orchestrator_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    class _FailingResponse:
+        status_code = 500
+
+    def _always_fail_post(*_args, **_kwargs):
+        return _FailingResponse()
+
+    try:
+        monkeypatch.setattr(orchestrator_mod.requests, "post", _always_fail_post)
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        body["approval"] = {
+            "mode": "required",
+            "ttl_sec": 1200,
+            "callback_url": "https://openclaw.local/callback",
+        }
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE action_callback_outbox
+                SET status = 'retry',
+                    attempts = max_attempts - 1,
+                    next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                WHERE action_id = %s AND event_type = 'pending_human'
+                """,
+                (action_id,),
+            )
+        conn.commit()
+        conn.close()
+
+        r_dispatch = info["client"].post(
+            "/api/openclaw/callbacks/dispatch",
+            json={"batch_size": 20},
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_dispatch.status_code == 200
+        dispatch_body = r_dispatch.get_json()
+        assert dispatch_body["dlq"] >= 1
+
+        conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn2.cursor() as cur2:
+            cur2.execute(
+                """
+                SELECT status
+                FROM action_callback_outbox
+                WHERE action_id = %s AND event_type = 'pending_human'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            row2 = cur2.fetchone()
+        conn2.close()
+        assert row2 is not None
+        status_after = row2["status"] if hasattr(row2, "get") else row2[0]
+        assert status_after == "dlq"
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_callbacks_outbox_requires_tenant_and_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r_no_token = info["client"].get(
+            f"/api/openclaw/callbacks/outbox?tenant_id={info['business_id']}"
+        )
+        assert r_no_token.status_code == 401
+        assert r_no_token.get_json()["success"] is False
+
+        r_no_tenant = info["client"].get(
+            "/api/openclaw/callbacks/outbox",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_no_tenant.status_code == 400
+        assert r_no_tenant.get_json()["success"] is False
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_callbacks_dispatch_requires_token(capabilities_client):
+    info = capabilities_client
+    r_no_token = info["client"].post("/api/openclaw/callbacks/dispatch", json={"batch_size": 10})
+    assert r_no_token.status_code == 401
+    body = r_no_token.get_json()
+    assert body["success"] is False

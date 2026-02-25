@@ -91,6 +91,34 @@ class ActionOrchestrator:
         )
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_approvals_status ON action_approvals(status)")
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS action_callback_outbox (
+                id TEXT PRIMARY KEY,
+                action_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                callback_url TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload_json JSONB NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 5,
+                next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_error TEXT,
+                locked_at TIMESTAMP,
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_status_next ON action_callback_outbox(status, next_attempt_at)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_action_id ON action_callback_outbox(action_id)"
+        )
+
         ensure_ledger_tables(cursor)
 
     def _transition(self, cursor, action_id: str, from_status: Optional[str], to_status: str, reason: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
@@ -184,14 +212,179 @@ class ActionOrchestrator:
             )
         return pending_release
 
-    def _send_callback(self, callback_url: str, payload: Dict[str, Any]) -> None:
+    def _retry_delay_seconds(self, attempts: int) -> int:
+        # bounded exponential backoff: 5s, 10s, 20s, ... max 300s
+        safe_attempts = max(1, int(attempts or 1))
+        return min(300, 5 * (2 ** (safe_attempts - 1)))
+
+    def _enqueue_callback(
+        self,
+        cursor,
+        *,
+        action_id: str,
+        tenant_id: str,
+        callback_url: str,
+        event_type: str,
+        payload: Dict[str, Any],
+        max_attempts: int = 5,
+    ) -> Optional[str]:
+        callback_url = str(callback_url or "").strip()
+        if not callback_url:
+            return None
+        outbox_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO action_callback_outbox
+                (id, action_id, tenant_id, callback_url, event_type, payload_json, status, attempts, max_attempts, next_attempt_at)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending', 0, %s, CURRENT_TIMESTAMP)
+            """,
+            (
+                outbox_id,
+                action_id,
+                tenant_id,
+                callback_url,
+                event_type,
+                json.dumps(payload or {}, ensure_ascii=False),
+                max(1, int(max_attempts or 5)),
+            ),
+        )
+        return outbox_id
+
+    def _send_callback(
+        self,
+        callback_url: str,
+        payload: Dict[str, Any],
+        *,
+        action_id: str,
+        tenant_id: str,
+        event_type: str,
+    ) -> None:
         if not callback_url:
             return
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
         try:
-            requests.post(callback_url, json=payload, timeout=5)
+            self.ensure_tables(cursor)
+            self._enqueue_callback(
+                cursor,
+                action_id=action_id,
+                tenant_id=tenant_id,
+                callback_url=callback_url,
+                event_type=event_type,
+                payload=payload,
+            )
+            db.conn.commit()
         except Exception:
-            # Callback ошибки не должны ломать основной workflow.
-            return
+            db.conn.rollback()
+        finally:
+            db.close()
+        # best-effort immediate dispatch; failures stay in outbox with retries
+        try:
+            self.dispatch_callback_outbox(batch_size=10)
+        except Exception:
+            pass
+
+    def dispatch_callback_outbox(self, batch_size: int = 50) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            batch_size = max(1, min(int(batch_size or 50), 500))
+
+            cursor.execute(
+                """
+                WITH picked AS (
+                    SELECT id
+                    FROM action_callback_outbox
+                    WHERE status IN ('pending', 'retry')
+                      AND next_attempt_at <= CURRENT_TIMESTAMP
+                    ORDER BY created_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE action_callback_outbox o
+                SET status='sending', locked_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+                FROM picked
+                WHERE o.id = picked.id
+                RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts
+                """,
+                (batch_size,),
+            )
+            rows = cursor.fetchall() or []
+            db.conn.commit()
+
+            sent = 0
+            retried = 0
+            dlq = 0
+            for row in rows:
+                outbox_id = self._row_value(row, 0, "id")
+                callback_url = self._row_value(row, 3, "callback_url")
+                payload = self._row_value(row, 5, "payload_json") or {}
+                attempts = int(self._row_value(row, 6, "attempts", 0) or 0)
+                max_attempts = int(self._row_value(row, 7, "max_attempts", 5) or 5)
+
+                ok = True
+                error_text = ""
+                try:
+                    response = requests.post(callback_url, json=payload, timeout=5)
+                    if int(getattr(response, "status_code", 500)) >= 400:
+                        ok = False
+                        error_text = f"http_{int(response.status_code)}"
+                except Exception as exc:
+                    ok = False
+                    error_text = str(exc)
+
+                db2 = DatabaseManager()
+                cur2 = db2.conn.cursor()
+                try:
+                    if ok:
+                        cur2.execute(
+                            """
+                            UPDATE action_callback_outbox
+                            SET status='sent', sent_at=CURRENT_TIMESTAMP, locked_at=NULL, updated_at=CURRENT_TIMESTAMP
+                            WHERE id=%s
+                            """,
+                            (outbox_id,),
+                        )
+                        sent += 1
+                    else:
+                        new_attempts = attempts + 1
+                        if new_attempts >= max_attempts:
+                            cur2.execute(
+                                """
+                                UPDATE action_callback_outbox
+                                SET status='dlq', attempts=%s, last_error=%s, locked_at=NULL, updated_at=CURRENT_TIMESTAMP
+                                WHERE id=%s
+                                """,
+                                (new_attempts, (error_text or "")[:1000], outbox_id),
+                            )
+                            dlq += 1
+                        else:
+                            backoff_sec = self._retry_delay_seconds(new_attempts)
+                            cur2.execute(
+                                """
+                                UPDATE action_callback_outbox
+                                SET status='retry', attempts=%s, last_error=%s,
+                                    next_attempt_at=(CURRENT_TIMESTAMP + (%s || ' seconds')::interval),
+                                    locked_at=NULL, updated_at=CURRENT_TIMESTAMP
+                                WHERE id=%s
+                                """,
+                                (new_attempts, (error_text or "")[:1000], backoff_sec, outbox_id),
+                            )
+                            retried += 1
+                    db2.conn.commit()
+                finally:
+                    db2.close()
+
+            return {
+                "success": True,
+                "picked": len(rows),
+                "sent": sent,
+                "retried": retried,
+                "dlq": dlq,
+            }
+        finally:
+            db.close()
 
     def _is_expired(self, expires_at: Any) -> bool:
         if not expires_at:
@@ -230,6 +423,22 @@ class ActionOrchestrator:
             ("ttl expired", action_id),
         )
         self._transition(cursor, action_id, "pending_human", "expired", "ttl expired")
+        cursor.execute("SELECT callback_url FROM action_approvals WHERE action_id=%s", (action_id,))
+        callback_row = cursor.fetchone()
+        callback_url = self._row_value(callback_row, 0, "callback_url")
+        self._enqueue_callback(
+            cursor,
+            action_id=action_id,
+            tenant_id=tenant_id,
+            callback_url=callback_url,
+            event_type="expired",
+            payload={
+                "action_id": action_id,
+                "tenant_id": tenant_id,
+                "status": "expired",
+                "decision_reason": "ttl expired",
+            },
+        )
         billing_obj = self._as_dict(billing_json)
         self._release_action_reserve(cursor, action_id, tenant_id, billing_obj.get("tariff_id"))
         return "expired"
@@ -360,15 +569,36 @@ class ActionOrchestrator:
                 ttl_sec = int((approval or {}).get("ttl_sec") or 1800)
                 requested_at = utcnow()
                 expires_at = requested_at + timedelta(seconds=ttl_sec)
+                callback_url = (approval or {}).get("callback_url")
                 cursor.execute(
                     """
                     INSERT INTO action_approvals (action_id, status, requested_at, expires_at, callback_url)
                     VALUES (%s, 'pending_human', %s, %s, %s)
                     """,
-                    (action_id, requested_at, expires_at, (approval or {}).get("callback_url")),
+                    (action_id, requested_at, expires_at, callback_url),
                 )
                 self._transition(cursor, action_id, "policy_checked", "pending_human", risk.get("reason", "approval required"))
+                self._enqueue_callback(
+                    cursor,
+                    action_id=action_id,
+                    tenant_id=tenant_id,
+                    callback_url=callback_url,
+                    event_type="pending_human",
+                    payload={
+                        "action_id": action_id,
+                        "tenant_id": tenant_id,
+                        "status": "pending_human",
+                        "trace_id": trace_id,
+                        "capability": capability,
+                        "reason": risk.get("reason"),
+                        "expires_at": expires_at.isoformat(),
+                    },
+                )
                 db.conn.commit()
+                try:
+                    self.dispatch_callback_outbox(batch_size=10)
+                except Exception:
+                    pass
                 return {
                     "success": True,
                     "status": "pending_human",
@@ -482,8 +712,29 @@ class ActionOrchestrator:
                     action_id,
                 ),
             )
+            callback_url = self._as_dict(approval).get("callback_url")
+            self._enqueue_callback(
+                cur2,
+                action_id=action_id,
+                tenant_id=tenant_id,
+                callback_url=callback_url,
+                event_type="completed",
+                payload={
+                    "action_id": action_id,
+                    "tenant_id": tenant_id,
+                    "status": "completed",
+                    "trace_id": trace_id,
+                    "capability": capability,
+                    "result": handler_result.get("result") or {},
+                    "billing": out_billing,
+                },
+            )
             db2.conn.commit()
             db2.close()
+            try:
+                self.dispatch_callback_outbox(batch_size=10)
+            except Exception:
+                pass
 
             return {
                 "success": True,
@@ -596,17 +847,28 @@ class ActionOrchestrator:
                     self._row_value(row, 1, "tenant_id"),
                     billing_json.get("tariff_id"),
                 )
-            db.conn.commit()
-
-            if decision != "approved":
-                self._send_callback(
-                    callback_url,
-                    {
+                self._enqueue_callback(
+                    cursor,
+                    action_id=action_id,
+                    tenant_id=self._row_value(row, 1, "tenant_id"),
+                    callback_url=callback_url,
+                    event_type=decision,
+                    payload={
                         "action_id": action_id,
+                        "tenant_id": self._row_value(row, 1, "tenant_id"),
                         "status": decision,
                         "decision_reason": decision_reason,
+                        "trace_id": self._row_value(row, 7, "trace_id"),
+                        "capability": self._row_value(row, 2, "capability"),
                     },
                 )
+            db.conn.commit()
+            try:
+                self.dispatch_callback_outbox(batch_size=10)
+            except Exception:
+                pass
+
+            if decision != "approved":
                 return {
                     "success": True,
                     "status": decision,
@@ -634,11 +896,15 @@ class ActionOrchestrator:
                 callback_url,
                 {
                     "action_id": action_id,
+                    "tenant_id": self._row_value(row, 1, "tenant_id"),
                     "status": exec_result.get("status"),
                     "success": exec_result.get("success"),
                     "trace_id": exec_result.get("trace_id"),
                     "error": exec_result.get("error"),
                 },
+                action_id=action_id,
+                tenant_id=self._row_value(row, 1, "tenant_id"),
+                event_type="approved",
             )
             return exec_result
         finally:
@@ -866,6 +1132,79 @@ class ActionOrchestrator:
                     "total_cost": round(cost_total, 6),
                 },
                 "entries": entries,
+            }
+        finally:
+            db.close()
+
+    def list_callback_outbox(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        status: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            where = ["o.tenant_id = %s"]
+            params = [str(tenant_id)]
+            if not is_superadmin:
+                where.append("b.owner_id = %s")
+                params.append(current_user)
+            if status:
+                where.append("o.status = %s")
+                params.append(str(status))
+
+            where_clause = "WHERE " + " AND ".join(where)
+            limit = max(1, min(int(limit or 50), 200))
+            offset = max(0, int(offset or 0))
+
+            cursor.execute(
+                f"""
+                SELECT o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.status,
+                       o.attempts, o.max_attempts, o.next_attempt_at, o.last_error, o.sent_at, o.created_at, o.updated_at
+                FROM action_callback_outbox o
+                LEFT JOIN businesses b ON b.id = o.tenant_id
+                {where_clause}
+                ORDER BY o.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
+            rows = cursor.fetchall() or []
+            items = []
+            for row in rows:
+                items.append(
+                    {
+                        "id": self._row_value(row, 0, "id"),
+                        "action_id": self._row_value(row, 1, "action_id"),
+                        "tenant_id": self._row_value(row, 2, "tenant_id"),
+                        "callback_url": self._row_value(row, 3, "callback_url"),
+                        "event_type": self._row_value(row, 4, "event_type"),
+                        "status": self._row_value(row, 5, "status"),
+                        "attempts": int(self._row_value(row, 6, "attempts", 0) or 0),
+                        "max_attempts": int(self._row_value(row, 7, "max_attempts", 0) or 0),
+                        "next_attempt_at": str(self._row_value(row, 8, "next_attempt_at") or ""),
+                        "last_error": self._row_value(row, 9, "last_error"),
+                        "sent_at": str(self._row_value(row, 10, "sent_at") or ""),
+                        "created_at": str(self._row_value(row, 11, "created_at") or ""),
+                        "updated_at": str(self._row_value(row, 12, "updated_at") or ""),
+                    }
+                )
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "items": items,
+                "count": len(items),
+                "limit": limit,
+                "offset": offset,
             }
         finally:
             db.close()
