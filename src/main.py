@@ -3454,40 +3454,105 @@ def services_optimize():
         print(f"🔍 DEBUG services_optimize: result type = {type(result)}")
         print(f"🔍 DEBUG services_optimize: result = {result[:200] if isinstance(result, str) else result}")
         
-        # Парсим JSON из ответа GigaChat
+        # Парсим JSON из ответа GigaChat (устойчиво: fenced-json / шум вокруг JSON / plain-text ошибки)
         parsed_result = None
+
+        def _extract_balanced_json_block(text: str, open_ch: str, close_ch: str):
+            start = text.find(open_ch)
+            if start < 0:
+                return None
+            depth = 0
+            in_str = False
+            escape = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if in_str:
+                    if escape:
+                        escape = False
+                    elif ch == '\\':
+                        escape = True
+                    elif ch == '"':
+                        in_str = False
+                    continue
+                if ch == '"':
+                    in_str = True
+                    continue
+                if ch == open_ch:
+                    depth += 1
+                elif ch == close_ch:
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i + 1]
+            return None
+
+        def _try_parse_json_payload(raw_text: str):
+            if not isinstance(raw_text, str):
+                return None
+            txt = raw_text.strip()
+            if not txt:
+                return None
+
+            candidates = [txt]
+            try:
+                import re as _re
+                fenced = _re.findall(r"```json\s*(.*?)\s*```", txt, flags=_re.IGNORECASE | _re.DOTALL)
+                fenced += _re.findall(r"```\s*(.*?)\s*```", txt, flags=_re.DOTALL)
+                candidates.extend([c.strip() for c in fenced if c and c.strip()])
+            except Exception:
+                pass
+
+            obj_block = _extract_balanced_json_block(txt, '{', '}')
+            arr_block = _extract_balanced_json_block(txt, '[', ']')
+            if obj_block:
+                candidates.append(obj_block)
+            if arr_block:
+                candidates.append(arr_block)
+
+            seen = set()
+            for candidate in candidates:
+                if not candidate or candidate in seen:
+                    continue
+                seen.add(candidate)
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    continue
+                if isinstance(parsed, str):
+                    nested = _try_parse_json_payload(parsed)
+                    if nested is not None:
+                        return nested
+                    continue
+                return parsed
+            return None
+
         if isinstance(result, dict):
-            # Если словарь (на всякий случай), проверяем наличие ошибки
             if 'error' in result:
-                error_msg = result.get('error', 'Ошибка оптимизации')
+                error_msg = str(result.get('error') or 'Ошибка оптимизации')
                 print(f"❌ Ошибка в результате: {error_msg}")
+                status_code = 429 if '429' in error_msg else 502
                 return jsonify({
                     "success": False,
                     "error": error_msg,
                     "raw": result.get('raw_response')
-                    }), 502
+                }), status_code
             parsed_result = result
         elif isinstance(result, str):
-            # Если строка, пробуем распарсить как JSON
-            try:
-                # Ищем JSON объект в строке
-                start_idx = result.find('{')
-                end_idx = result.rfind('}') + 1
-                if start_idx != -1 and end_idx != 0:
-                    json_str = result[start_idx:end_idx]
-                    parsed_result = json.loads(json_str)
-                    if isinstance(parsed_result, dict) and 'error' in parsed_result:
-                        error_msg = parsed_result.get('error', 'Ошибка оптимизации')
-                        print(f"❌ Ошибка в результате: {error_msg}")
-                        return jsonify({
-                            "success": False,
-                            "error": error_msg,
-                            "raw": result
-                        }), 502
-                else:
-                    # JSON не найден, пробуем распарсить всю строку
-                    parsed_result = json.loads(result)
-            except json.JSONDecodeError:
+            # Если провайдер вернул текстовую ошибку — пробрасываем её как есть.
+            text_result = result.strip()
+            if (
+                "Запрос к GigaChat не удался" in text_result
+                or "HTTP 429" in text_result
+                or text_result.lower().startswith("error")
+            ):
+                status_code = 429 if "429" in text_result else 502
+                return jsonify({
+                    "success": False,
+                    "error": text_result,
+                    "raw": result
+                }), status_code
+
+            parsed_result = _try_parse_json_payload(result)
+            if parsed_result is None:
                 print(f"❌ Не удалось распарсить JSON из результата")
                 print(f"❌ Полный результат: {result[:500]}")
                 return jsonify({
@@ -3502,6 +3567,14 @@ def services_optimize():
                 "error": "Неожиданный формат результата",
                 "raw": str(result)
             }), 502
+
+        # Нормализуем тип результата
+        if isinstance(parsed_result, list):
+            parsed_result = {"services": parsed_result}
+        elif isinstance(parsed_result, dict):
+            nested_result = parsed_result.get("result")
+            if isinstance(nested_result, dict) and "services" in nested_result and "services" not in parsed_result:
+                parsed_result = nested_result
 
         # Проверяем, что parsed_result - это словарь
         if not isinstance(parsed_result, dict):
