@@ -72,14 +72,7 @@ export const CardOverviewPage = () => {
   // Общие состояния
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showWizard, setShowWizard] = useState(false);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
-
-  // Wizard settings
-  const [wizardTone, setWizardTone] = useState<'friendly' | 'professional' | 'premium' | 'youth' | 'business'>('professional');
-  const [wizardRegion, setWizardRegion] = useState('');
-  const [wizardLength, setWizardLength] = useState(150);
-  const [wizardInstructions, setWizardInstructions] = useState('');
 
   // Загрузка сводки (рейтинг, количество отзывов)
   const loadSummary = async () => {
@@ -544,13 +537,6 @@ export const CardOverviewPage = () => {
               <TrendingUp className="w-4 h-4" />
               <span>{t.dashboard.card.progressTab}</span>
             </a>
-            <Button
-              onClick={() => setShowWizard(true)}
-              className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg hover:shadow-xl hover:from-amber-600 hover:to-orange-700 transition-all"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              {t.dashboard.card.optimizationWizard}
-            </Button>
           </div>
         </div>
 
@@ -852,11 +838,7 @@ export const CardOverviewPage = () => {
                   <ServiceOptimizer
                     businessName={currentBusiness?.name}
                     businessId={currentBusinessId}
-                    tone={wizardTone}
                     language={language === 'ru' ? 'ru' : 'en'}
-                    region={wizardRegion}
-                    descriptionLength={wizardLength}
-                    instructions={wizardInstructions}
                     hideTextInput={true}
                     onServicesImported={loadUserServices}
                   />
@@ -1118,80 +1100,6 @@ export const CardOverviewPage = () => {
             <SEOKeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
-        {showWizard && (
-          <div className="fixed inset-0 z-[90] bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-semibold text-gray-900">Мастер оптимизации</h3>
-                <Button variant="outline" size="sm" onClick={() => setShowWizard(false)}>✕</Button>
-              </div>
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Тон</label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      ['friendly', 'Дружелюбный'],
-                      ['professional', 'Профессиональный'],
-                      ['premium', 'Премиум'],
-                      ['youth', 'Молодёжный'],
-                      ['business', 'Деловой'],
-                    ].map(([value, label]) => (
-                      <Button
-                        key={value}
-                        type="button"
-                        variant={wizardTone === value ? 'default' : 'outline'}
-                        onClick={() => setWizardTone(value as typeof wizardTone)}
-                        size="sm"
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Регион</label>
-                    <input
-                      type="text"
-                      value={wizardRegion}
-                      onChange={(e) => setWizardRegion(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                      placeholder="Например: Москва"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Длина описания (симв.)</label>
-                    <input
-                      type="number"
-                      min={60}
-                      max={500}
-                      value={wizardLength}
-                      onChange={(e) => setWizardLength(Number(e.target.value) || 150)}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Дополнительные инструкции</label>
-                  <textarea
-                    value={wizardInstructions}
-                    onChange={(e) => setWizardInstructions(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[110px]"
-                    placeholder="Что важно сохранить в формулировках"
-                  />
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setShowWizard(false)}>
-                  Закрыть
-                </Button>
-                <Button onClick={() => setShowWizard(false)}>
-                  Применить
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
         {editingService && (
               <div className="fixed inset-0 z-[80] bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100 p-6">
