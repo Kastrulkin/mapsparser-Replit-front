@@ -5,6 +5,7 @@
 """
 from safe_db_utils import get_db_connection, get_db_path
 import os
+from core.default_ai_prompts import get_default_ai_prompts
 
 def init_database_schema():
     """Инициализировать все таблицы базы данных"""
@@ -715,70 +716,7 @@ def init_database_schema():
         print("✅ Таблица AIPrompts создана/проверена")
         
         # Инициализируем дефолтные промпты, если их нет
-        default_prompts = [
-            ('service_optimization', 
-             """Ты — SEO-специалист по локальному бизнесу. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
-Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
-
-Регион: {region}
-Название бизнеса: {business_name}
-Индустрия: {industry}
-Тип бизнеса: {business_type}
-Тон: {tone}
-Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
-Длина описания: {length} символов
-Дополнительные инструкции: {instructions}
-
-ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
-{frequent_queries}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-
-Формат ответа СТРОГО В JSON:
-{{
-  "services": [
-    {{
-      "original_name": "...",
-      "optimized_name": "...",              
-      "seo_description": "...",             
-      "keywords": ["...", "...", "..."], 
-      "price": null,
-      "category": "hair|nails|spa|barber|massage|other"
-    }}
-  ],
-  "general_recommendations": ["...", "..."]
-}}
-
-Исходные услуги/контент:
-{content}""",
-             'Промпт для оптимизации услуг и прайс-листа'),
-            ('review_reply',
-             """Ты — вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
-Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
-Write the reply in {language_name}.
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
-Верни СТРОГО JSON: {{"reply": "текст ответа"}}
-
-Отзыв клиента: {review_text[:1000]}""",
-             'Промпт для генерации ответов на отзывы'),
-            ('news_generation',
-             """Ты — маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль — информативный и дружелюбный.
-Write all generated text in {language_name}.
-Верни СТРОГО JSON: {{"news": "текст новости"}}
-
-Контекст услуги (может отсутствовать): {service_context}
-Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
-Свободная информация (может отсутствовать): {raw_info[:800]}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
-             'Промпт для генерации новостей')
-        ]
+        default_prompts = get_default_ai_prompts()
         
         for prompt_type, prompt_text, description in default_prompts:
             cursor.execute("""

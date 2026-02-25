@@ -50,6 +50,7 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
+from core.default_ai_prompts import get_default_ai_prompts
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -4175,63 +4176,14 @@ def news_generate():
                 "Нельзя подменять услугу на другую, даже если у другой услуги частотность выше."
             )
 
-        # Получаем промпт из БД или используем дефолтный
-        # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt = """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
-Write all generated text in {language_name}.
-Верни СТРОГО JSON: {{"news": "текст новости"}}
-
-Контекст услуги (может отсутствовать): {service_context}
-Если контекст услуги задан, тема новости должна строго соответствовать этой услуге и не может быть заменена на другую услугу.
-Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
-Свободная информация (может отсутствовать): {raw_info}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-Спец-режим (может отсутствовать):
-{seo_generation_hint}
-Если уместно, ориентируйся на стиль этих примеров (если они есть):
-{news_examples}"""
-        
-        prompt_template = get_prompt_from_db('news_generation', default_prompt)
-        
-        # Логируем тип и значение prompt_template
-        print(f"🔍 DEBUG news_generate: prompt_template type = {type(prompt_template)}", flush=True)
-        print(f"🔍 DEBUG news_generate: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
-        
-        # Убеждаемся, что prompt_template - это строка
-        if not isinstance(prompt_template, str):
-            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
-            prompt_template = default_prompt
-        else:
-            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
-            try:
-                prompt_template = str(prompt_template)
-            except Exception as conv_err:
-                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
-                prompt_template = default_prompt
-        
-        # Финальная проверка
-        if not isinstance(prompt_template, str):
-            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
-            prompt_template = default_prompt
-        
-        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
+        prompt_template = get_prompt_from_db('news_generation', None)
+        if not prompt_template:
+            db.close()
+            return jsonify({
+                "error": "Промпт news_generation не настроен в админ-панели."
+            }), 500
         try:
-            if isinstance(prompt_template, bytes):
-                prompt_template = prompt_template.decode('utf-8')
-            else:
-                prompt_template = str(prompt_template)
-        except Exception as conv_err:
-            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
-            prompt_template = default_prompt
-        
-        # Форматируем промпт с обработкой ошибок
-        try:
-            # Преобразуем все аргументы в строки для безопасности
-            prompt = prompt_template.format(
+            prompt = str(prompt_template).format(
                 language_name=str(language_name),
                 service_context=str(service_context),
                 transaction_context=str(transaction_context),
@@ -4241,21 +4193,11 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
                 seo_generation_hint=str(seo_generation_hint),
                 news_examples=str(news_examples)
             )
-        except (KeyError, AttributeError, ValueError, TypeError) as e:
-            print(f"⚠️ Ошибка форматирования промпта: {e}. Используем default_prompt", flush=True)
-            import traceback
-            traceback.print_exc()
-            # Используем default_prompt как fallback
-            prompt = default_prompt.format(
-                language_name=str(language_name),
-                service_context=str(service_context),
-                transaction_context=str(transaction_context),
-                raw_info=str(raw_info[:800]),
-                seo_keywords=str(seo_keywords),
-                seo_keywords_top10=str(seo_keywords_top10),
-                seo_generation_hint=str(seo_generation_hint),
-                news_examples=str(news_examples)
-        )
+        except (KeyError, ValueError, TypeError) as format_err:
+            db.close()
+            return jsonify({
+                "error": f"Ошибка шаблона news_generation в админ-панели: {format_err}"
+            }), 500
         result = analyze_text_with_gigachat(
             prompt, 
             task_type="news_generation",
@@ -4704,89 +4646,28 @@ def reviews_reply():
             except Exception:
                 examples_text = ""
 
-        # Получаем промпт из БД или используем дефолтный
-        # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
-        default_prompt_template = """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
-Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
-Write the reply in {language_name}.
-Если уместно, ориентируйся на стиль этих примеров (если они есть):
-{examples_text}
-Верни СТРОГО JSON: {{"reply": "текст ответа"}}
+        prompt_template = get_prompt_from_db('review_reply', None)
+        if not prompt_template:
+            return jsonify({
+                "error": "Промпт review_reply не настроен в админ-панели."
+            }), 500
 
-Отзыв клиента: {review_text}"""
-        
-        prompt_template = get_prompt_from_db('review_reply', default_prompt_template)
-        
-        # Логируем тип и значение prompt_template
-        print(f"🔍 DEBUG reviews_reply: prompt_template type = {type(prompt_template)}", flush=True)
-        print(f"🔍 DEBUG reviews_reply: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
-        
-        # Убеждаемся, что prompt_template - это строка
-        if not isinstance(prompt_template, str):
-            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
-            prompt_template = default_prompt
-        else:
-            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
-            try:
-                prompt_template = str(prompt_template)
-            except Exception as conv_err:
-                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
-                prompt_template = default_prompt
-        
-        # Финальная проверка
-        if not isinstance(prompt_template, str):
-            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
-            prompt_template = default_prompt_template
-        
-        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
-        try:
-            if isinstance(prompt_template, bytes):
-                prompt_template = prompt_template.decode('utf-8')
-            else:
-                prompt_template = str(prompt_template)
-        except Exception as conv_err:
-            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
-            prompt_template = default_prompt_template
-        
-        # Убеждаемся, что это действительно строка
-        if not isinstance(prompt_template, str):
-            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: prompt_template не строка: {type(prompt_template)}", flush=True)
-            prompt_template = default_prompt_template
-        
-        # Логируем все аргументы перед format
-        print(f"🔍 DEBUG reviews_reply: tone type = {type(tone)}, value = {tone}", flush=True)
-        print(f"🔍 DEBUG reviews_reply: language_name type = {type(language_name)}, value = {language_name}", flush=True)
-        print(f"🔍 DEBUG reviews_reply: examples_text type = {type(examples_text)}, value (первые 100) = {str(examples_text)[:100] if examples_text else 'None'}", flush=True)
-        print(f"🔍 DEBUG reviews_reply: review_text type = {type(review_text)}, value (первые 100) = {str(review_text)[:100] if review_text else 'None'}", flush=True)
-        
-        # Принудительно преобразуем все аргументы в строки
         tone_str = str(tone) if tone else ''
         language_name_str = str(language_name) if language_name else 'Russian'
         examples_text_str = str(examples_text) if examples_text else ''
         review_text_str = str(review_text[:1000]) if review_text else ''
-        
+
         try:
-            prompt = prompt_template.format(
+            prompt = str(prompt_template).format(
                 tone=tone_str,
                 language_name=language_name_str,
                 examples_text=examples_text_str,
                 review_text=review_text_str
             )
         except (KeyError, ValueError, TypeError) as format_err:
-            print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
-            import traceback
-            traceback.print_exc()
-            # Используем default_prompt_template как fallback
-            prompt = default_prompt_template.format(
-                tone=tone_str,
-                language_name=language_name_str,
-                examples_text=examples_text_str,
-                review_text=review_text_str
-            )
-        # Логируем промпт для отладки
-        print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
-        print(f"🔍 DEBUG reviews_reply: review_text = {review_text[:200] if review_text else 'ПУСТО'}")
-        print(f"🔍 DEBUG reviews_reply: examples_text (первые 200 символов) = {examples_text[:200] if examples_text else 'ПУСТО'}")
+            return jsonify({
+                "error": f"Ошибка шаблона review_reply в админ-панели: {format_err}"
+            }), 500
         
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
@@ -9385,66 +9266,7 @@ def get_prompts():
         
         # Если таблица пустая, инициализируем дефолтные промпты
         if not rows:
-            default_prompts = [
-                ('service_optimization', 
-                 """Ты - SEO-специалист по локальному бизнесу. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
-Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
-
-Регион: {region}
-Название бизнеса: {business_name}
-Индустрия: {industry}
-Тип бизнеса: {business_type}
-Тон: {tone}
-Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
-Длина описания: {length} символов
-Дополнительные инструкции: {instructions}
-
-ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
-{frequent_queries}
-
-Формат ответа СТРОГО В JSON:
-{{
-  "services": [
-    {{
-      "original_name": "...",
-      "optimized_name": "...",              
-      "seo_description": "...",             
-      "keywords": ["...", "...", "..."], 
-      "price": null,
-      "category": "hair|nails|spa|barber|massage|other"
-    }}
-  ],
-  "general_recommendations": ["...", "..."]
-}}
-
-Исходные услуги/контент:
-{content}""",
-                 'Промпт для оптимизации услуг и прайс-листа'),
-                ('review_reply',
-                 """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
-Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
-Write the reply in {language_name}.
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
-Верни СТРОГО JSON: {{"reply": "текст ответа"}}
-
-Отзыв клиента: {review_text[:1000]}""",
-                 'Промпт для генерации ответов на отзывы'),
-                ('news_generation',
-                 """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
-Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
-Write all generated text in {language_name}.
-Верни СТРОГО JSON: {{"news": "текст новости"}}
-
-Контекст услуги (может отсутствовать): {service_context}
-Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
-Свободная информация (может отсутствовать): {raw_info[:800]}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
-                 'Промпт для генерации новостей')
-            ]
+            default_prompts = get_default_ai_prompts()
             
             for prompt_type, prompt_text, description in default_prompts:
                 cursor.execute("""

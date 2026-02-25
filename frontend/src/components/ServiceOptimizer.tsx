@@ -23,10 +23,22 @@ const tonePresets: { key: Tone; label: string; example: string }[] = [
   { key: 'business', label: 'Деловой', example: "Экспресс-стрижка для занятых. Без ожидания" },
 ];
 
+const languageOptions = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'pt', label: 'Português' },
+  { value: 'zh', label: '中文' },
+] as const;
+
 export default function ServiceOptimizer({ 
   businessName, 
   businessId,
   tone: externalTone,
+  language: externalLanguage,
   region: externalRegion,
   descriptionLength: externalLength,
   instructions: externalInstructions,
@@ -36,6 +48,7 @@ export default function ServiceOptimizer({
   businessName?: string; 
   businessId?: string;
   tone?: Tone;
+  language?: 'ru' | 'en' | 'es' | 'de' | 'fr' | 'it' | 'pt' | 'zh';
   region?: string;
   descriptionLength?: number;
   instructions?: string;
@@ -46,6 +59,7 @@ export default function ServiceOptimizer({
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [tone, setTone] = useState<Tone>(externalTone || 'professional');
+  const [language, setLanguage] = useState<'ru' | 'en' | 'es' | 'de' | 'fr' | 'it' | 'pt' | 'zh'>(externalLanguage || 'ru');
   const [instructions, setInstructions] = useState(externalInstructions || '');
   const [region, setRegion] = useState(externalRegion || '');
   const [length, setLength] = useState(externalLength || 150);
@@ -53,10 +67,11 @@ export default function ServiceOptimizer({
   // Обновляем значения при изменении пропсов
   useEffect(() => {
     if (externalTone) setTone(externalTone);
+    if (externalLanguage) setLanguage(externalLanguage);
     if (externalRegion !== undefined) setRegion(externalRegion);
     if (externalLength !== undefined) setLength(externalLength);
     if (externalInstructions !== undefined) setInstructions(externalInstructions);
-  }, [externalTone, externalRegion, externalLength, externalInstructions]);
+  }, [externalTone, externalLanguage, externalRegion, externalLength, externalInstructions]);
   const [loading, setLoading] = useState(false);
   const [savingRecognized, setSavingRecognized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +158,7 @@ export default function ServiceOptimizer({
         const formData = new FormData();
         formData.append('file', file);
         formData.append('tone', tone);
+        formData.append('language', language);
         if (instructions) formData.append('instructions', instructions);
         if (region) formData.append('region', region);
         formData.append('description_length', String(length));
@@ -159,7 +175,15 @@ export default function ServiceOptimizer({
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ text, tone, instructions, region, description_length: length, business_name: businessName || '' })
+          body: JSON.stringify({
+            text,
+            tone,
+            language,
+            instructions,
+            region,
+            description_length: length,
+            business_name: businessName || ''
+          })
         });
       }
       const data = await response.json();
@@ -338,6 +362,78 @@ export default function ServiceOptimizer({
         <Button variant={mode==='file' ? undefined : 'outline'} onClick={() => setMode('file')}>Загрузка файла</Button>
       </div>
       )}
+
+      <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 space-y-4">
+        <div className="text-sm font-semibold text-indigo-900">Параметры оптимизации</div>
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-gray-700">Тон</div>
+          <div className="flex flex-wrap gap-2">
+            {tonePresets.map((preset) => (
+              <Button
+                key={preset.key}
+                type="button"
+                variant={tone === preset.key ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTone(preset.key)}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-gray-700">Язык результата</div>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as typeof language)}
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+            >
+              {languageOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-gray-700">Регион (опционально)</div>
+            <Input
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              placeholder="Например: Москва"
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs font-medium text-gray-700">Дополнительные пожелания</div>
+          <Textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            rows={3}
+            placeholder="Что важно сохранить: стиль, ограничения, акценты."
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-gray-700">Примеры формулировок (до 5)</div>
+          <div className="flex gap-2">
+            <Input
+              value={exampleInput}
+              onChange={(e) => setExampleInput(e.target.value)}
+              placeholder="Пример формулировки услуги"
+            />
+            <Button type="button" variant="outline" onClick={addExample}>Добавить</Button>
+          </div>
+          {examples.length > 0 && (
+            <div className="space-y-1">
+              {examples.map((example) => (
+                <div key={example.id} className="flex items-start justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <div className="break-words">{example.text}</div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => deleteExample(example.id)}>Удалить</Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {!hideTextInput && mode === 'text' && (
         <Textarea
