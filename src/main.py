@@ -9700,6 +9700,15 @@ def _ensure_default_business_types(cursor):
 def get_business_types_public():
     """Получить все активные типы бизнеса (для всех пользователей)"""
     try:
+        def _row_get(row_obj, index, key, default=None):
+            if row_obj is None:
+                return default
+            if hasattr(row_obj, "get"):
+                return row_obj.get(key, default)
+            if isinstance(row_obj, (tuple, list)):
+                return row_obj[index] if len(row_obj) > index else default
+            return default
+
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({"error": "Требуется авторизация"}), 401
@@ -9713,14 +9722,19 @@ def get_business_types_public():
         cursor = db.conn.cursor()
         _ensure_default_business_types(cursor)
         db.conn.commit()
-        cursor.execute("SELECT type_key, label FROM businesstypes WHERE is_active = TRUE ORDER BY label")
+        cursor.execute("""
+            SELECT type_key, label
+            FROM businesstypes
+            WHERE COALESCE(LOWER(TRIM(is_active::text)), '1') IN ('1', 'true', 't', 'yes', 'on')
+            ORDER BY label
+        """)
         rows = cursor.fetchall()
         
         types = []
         for row in rows:
             types.append({
-                'type_key': row[0],
-                'label': row[1]
+                'type_key': _row_get(row, 0, 'type_key'),
+                'label': _row_get(row, 1, 'label')
             })
         
         db.close()
