@@ -18,6 +18,7 @@
 6. `POST /api/openclaw/capabilities/execute` (M2M ingress from OpenClaw)
 7. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 8. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
+9. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
 
 ## Обязательные поля envelope (`execute`)
 

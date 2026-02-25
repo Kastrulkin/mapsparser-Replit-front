@@ -436,3 +436,60 @@ def test_openclaw_action_read_requires_tenant_and_token(capabilities_client):
             os.environ.pop(token_name, None)
         else:
             os.environ[token_name] = previous
+
+
+def test_openclaw_actions_list_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        r_list = info["client"].get(
+            f"/api/openclaw/capabilities/actions?tenant_id={info['business_id']}&limit=20&offset=0",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_list.status_code == 200, r_list.get_json()
+        body_list = r_list.get_json()
+        assert body_list["success"] is True
+        assert body_list["count"] >= 1
+        assert any(item.get("action_id") == action_id for item in body_list.get("items", []))
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_actions_list_requires_token_and_tenant(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r_no_token = info["client"].get(
+            f"/api/openclaw/capabilities/actions?tenant_id={info['business_id']}"
+        )
+        assert r_no_token.status_code == 401
+        assert r_no_token.get_json()["success"] is False
+
+        r_no_tenant = info["client"].get(
+            "/api/openclaw/capabilities/actions",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_no_tenant.status_code == 400
+        assert r_no_tenant.get_json()["success"] is False
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous

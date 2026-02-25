@@ -3276,6 +3276,37 @@ def openclaw_capabilities_action_billing(action_id):
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/capabilities/actions', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_actions_list():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    status = request.args.get("status")
+    limit = request.args.get("limit", 50)
+    offset = request.args.get("offset", 0)
+
+    result = PHASE1_ACTION_ORCHESTRATOR.list_actions(
+        service_user,
+        tenant_id=tenant_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return jsonify(result), 200
+
+
 @app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
 def capabilities_action_decision(action_id):
     if request.method == 'OPTIONS':
