@@ -63,6 +63,7 @@ export const CardOverviewPage = () => {
     price: ''
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
+  const [optimizingAll, setOptimizingAll] = useState(false);
 
   // Состояния для парсера
   // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
@@ -282,13 +283,20 @@ export const CardOverviewPage = () => {
     }
   };
 
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   // Оптимизация услуги
-  const optimizeService = async (serviceId: string) => {
+  const optimizeService = async (
+    serviceId: string,
+    options?: { silent?: boolean }
+  ): Promise<'ok' | 'rate_limited' | 'error'> => {
     const service = userServices.find(s => s.id === serviceId);
-    if (!service) return;
+    if (!service) return 'error';
 
     setOptimizingServiceId(serviceId);
-    setError(null);
+    if (!options?.silent) {
+      setError(null);
+    }
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`${window.location.origin}/api/services/optimize`, {
@@ -304,6 +312,11 @@ export const CardOverviewPage = () => {
       });
 
       const data = await response.json();
+      const errorText = String(data?.error || '');
+      const isRateLimited =
+        response.status === 429 ||
+        errorText.includes('429') ||
+        errorText.toLowerCase().includes('rate limit');
 
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
@@ -338,19 +351,70 @@ export const CardOverviewPage = () => {
 
         try {
           await updateService(serviceId, updateData);
-          setSuccess(t.common.success || "Success");
+          if (!options?.silent) {
+            setSuccess(t.common.success || "Success");
+          }
           await loadUserServices();
+          return 'ok';
         } catch (updateError: any) {
-          setError(t.common.error || "Error");
+          if (!options?.silent) {
+            setError(t.common.error || "Error");
+          }
+          return 'error';
         }
       } else {
-        setError(data.error || t.common.error || "Error");
+        if (!options?.silent) {
+          setError(data.error || t.common.error || "Error");
+        }
+        return isRateLimited ? 'rate_limited' : 'error';
       }
     } catch (e: any) {
-      setError((t.common.error || "Error") + ': ' + e.message);
+      const text = String(e?.message || '');
+      const isRateLimited = text.includes('429') || text.toLowerCase().includes('rate limit');
+      if (!options?.silent) {
+        setError((t.common.error || "Error") + ': ' + text);
+      }
+      return isRateLimited ? 'rate_limited' : 'error';
     } finally {
       setOptimizingServiceId(null);
     }
+  };
+
+  const optimizeAllServices = async () => {
+    if (!userServices.length) return;
+    setOptimizingAll(true);
+    setError(null);
+    setSuccess(null);
+
+    let okCount = 0;
+    let errorCount = 0;
+    let rateLimitedCount = 0;
+
+    for (const service of userServices) {
+      const result = await optimizeService(service.id, { silent: true });
+      if (result === 'ok') {
+        okCount += 1;
+        await sleep(1200);
+        continue;
+      }
+      if (result === 'rate_limited') {
+        rateLimitedCount += 1;
+        await sleep(20000);
+      } else {
+        errorCount += 1;
+        await sleep(1200);
+      }
+    }
+
+    if (okCount > 0 && rateLimitedCount === 0 && errorCount === 0) {
+      setSuccess(`Оптимизировано услуг: ${okCount}`);
+    } else if (okCount > 0) {
+      setError(`Оптимизировано: ${okCount}. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
+    } else {
+      setError(`Оптимизация не выполнена. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
+    }
+
+    setOptimizingAll(false);
   };
 
   // Обновление услуги
@@ -776,13 +840,12 @@ export const CardOverviewPage = () => {
                     {userServices.length > 0 && (
                       <Button
                         variant="outline"
-                        onClick={() => {
-                          userServices.forEach(s => optimizeService(s.id));
-                        }}
+                        onClick={optimizeAllServices}
+                        disabled={optimizingAll || optimizingServiceId !== null}
                         className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0"
                       >
                         <Wand2 className="w-4 h-4 mr-2" />
-                        {t.dashboard.card.optimizeAll}
+                        {optimizingAll ? 'Оптимизируем…' : t.dashboard.card.optimizeAll}
                       </Button>
                     )}
                   </div>
