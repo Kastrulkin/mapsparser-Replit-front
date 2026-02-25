@@ -188,6 +188,47 @@ class ActionOrchestrator:
             # Callback ошибки не должны ломать основной workflow.
             return
 
+    def _is_expired(self, expires_at: Any) -> bool:
+        if not expires_at:
+            return False
+        now_naive = utcnow().replace(tzinfo=None)
+        try:
+            dt = expires_at.replace(tzinfo=None) if getattr(expires_at, "tzinfo", None) else expires_at
+            return now_naive > dt
+        except Exception:
+            return False
+
+    def _expire_pending_if_needed(
+        self,
+        cursor,
+        *,
+        action_id: str,
+        action_status: str,
+        approval_status: str,
+        expires_at: Any,
+        tenant_id: str,
+        billing_json: Any,
+    ) -> str:
+        if action_status != "pending_human":
+            return action_status
+        if approval_status != "pending_human":
+            return action_status
+        if not self._is_expired(expires_at):
+            return action_status
+
+        cursor.execute(
+            """
+            UPDATE action_approvals
+            SET status='expired', decision_reason=%s, resolved_at=CURRENT_TIMESTAMP
+            WHERE action_id=%s
+            """,
+            ("ttl expired", action_id),
+        )
+        self._transition(cursor, action_id, "pending_human", "expired", "ttl expired")
+        billing_obj = self._as_dict(billing_json)
+        self._release_action_reserve(cursor, action_id, tenant_id, billing_obj.get("tariff_id"))
+        return "expired"
+
     def execute(self, envelope: Dict[str, Any], user_data: Dict[str, Any], *, allow_execute_when_approved: bool = False) -> Dict[str, Any]:
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -590,5 +631,135 @@ class ActionOrchestrator:
                 },
             )
             return exec_result
+        finally:
+            db.close()
+
+    def get_action(self, action_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            cursor.execute(
+                """
+                SELECT ar.action_id, ar.tenant_id, ar.capability, ar.status, ar.result_json, ar.error_code, ar.error_text,
+                       ar.billing_json, ar.trace_id, b.owner_id, aa.status AS approval_status, aa.expires_at
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                LEFT JOIN action_approvals aa ON aa.action_id = ar.action_id
+                WHERE ar.action_id = %s
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "error": "action not found", "http_code": 404}
+
+            owner_id = self._row_value(row, 9, "owner_id")
+            if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            status = self._row_value(row, 3, "status")
+            status = self._expire_pending_if_needed(
+                cursor,
+                action_id=self._row_value(row, 0, "action_id"),
+                action_status=status,
+                approval_status=self._row_value(row, 10, "approval_status"),
+                expires_at=self._row_value(row, 11, "expires_at"),
+                tenant_id=self._row_value(row, 1, "tenant_id"),
+                billing_json=self._row_value(row, 7, "billing_json"),
+            )
+            db.conn.commit()
+
+            return {
+                "success": True,
+                "action_id": self._row_value(row, 0, "action_id"),
+                "tenant_id": self._row_value(row, 1, "tenant_id"),
+                "capability": self._row_value(row, 2, "capability"),
+                "status": status,
+                "result": self._row_value(row, 4, "result_json"),
+                "error_code": self._row_value(row, 5, "error_code"),
+                "error": self._row_value(row, 6, "error_text"),
+                "billing": self._row_value(row, 7, "billing_json"),
+                "trace_id": self._row_value(row, 8, "trace_id"),
+            }
+        finally:
+            db.close()
+
+    def list_actions(self, user_data: Dict[str, Any], tenant_id: Optional[str] = None, status: Optional[str] = None, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            where = []
+            params = []
+            if not is_superadmin:
+                where.append("b.owner_id = %s")
+                params.append(current_user)
+            if tenant_id:
+                where.append("ar.tenant_id = %s")
+                params.append(str(tenant_id))
+            if status:
+                where.append("ar.status = %s")
+                params.append(str(status))
+            where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+
+            limit = max(1, min(int(limit or 50), 200))
+            offset = max(0, int(offset or 0))
+
+            cursor.execute(
+                f"""
+                SELECT ar.action_id, ar.tenant_id, ar.capability, ar.status, ar.result_json, ar.error_code, ar.error_text,
+                       ar.billing_json, ar.trace_id, ar.created_at, ar.updated_at, aa.status AS approval_status, aa.expires_at
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                LEFT JOIN action_approvals aa ON aa.action_id = ar.action_id
+                {where_clause}
+                ORDER BY ar.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
+            rows = cursor.fetchall() or []
+
+            items = []
+            for row in rows:
+                item_status = self._row_value(row, 3, "status")
+                item_status = self._expire_pending_if_needed(
+                    cursor,
+                    action_id=self._row_value(row, 0, "action_id"),
+                    action_status=item_status,
+                    approval_status=self._row_value(row, 11, "approval_status"),
+                    expires_at=self._row_value(row, 12, "expires_at"),
+                    tenant_id=self._row_value(row, 1, "tenant_id"),
+                    billing_json=self._row_value(row, 7, "billing_json"),
+                )
+                items.append(
+                    {
+                        "action_id": self._row_value(row, 0, "action_id"),
+                        "tenant_id": self._row_value(row, 1, "tenant_id"),
+                        "capability": self._row_value(row, 2, "capability"),
+                        "status": item_status,
+                        "result": self._row_value(row, 4, "result_json"),
+                        "error_code": self._row_value(row, 5, "error_code"),
+                        "error": self._row_value(row, 6, "error_text"),
+                        "billing": self._row_value(row, 7, "billing_json"),
+                        "trace_id": self._row_value(row, 8, "trace_id"),
+                        "created_at": str(self._row_value(row, 9, "created_at") or ""),
+                        "updated_at": str(self._row_value(row, 10, "updated_at") or ""),
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "items": items,
+                "limit": limit,
+                "offset": offset,
+                "count": len(items),
+            }
         finally:
             db.close()

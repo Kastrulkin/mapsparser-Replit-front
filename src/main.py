@@ -3178,57 +3178,34 @@ def capabilities_action_status(action_id):
     if not user_data:
         return jsonify({"error": "Недействительный токен"}), 401
 
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
-    try:
-        def _row_value(row_obj, index, key, default=None):
-            if row_obj is None:
-                return default
-            if isinstance(row_obj, (tuple, list)):
-                try:
-                    return row_obj[index]
-                except Exception:
-                    return default
-            if hasattr(row_obj, "get"):
-                try:
-                    return row_obj.get(key, default)
-                except Exception:
-                    return default
-            return default
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, user_data)
+    return jsonify(result), int(result.pop("http_code", 200))
 
-        cursor.execute(
-            """
-            SELECT ar.action_id, ar.tenant_id, ar.capability, ar.status, ar.result_json, ar.error_code, ar.error_text,
-                   ar.billing_json, ar.trace_id, b.owner_id
-            FROM action_requests ar
-            LEFT JOIN businesses b ON b.id = ar.tenant_id
-            WHERE ar.action_id = %s
-            LIMIT 1
-            """,
-            (action_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"success": False, "error": "action not found"}), 404
 
-        owner_id = _row_value(row, 9, "owner_id")
-        if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
-            return jsonify({"success": False, "error": "forbidden"}), 403
+@app.route('/api/capabilities/actions', methods=['GET', 'OPTIONS'])
+def capabilities_actions_list():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
 
-        return jsonify({
-            "success": True,
-            "action_id": _row_value(row, 0, "action_id"),
-            "tenant_id": _row_value(row, 1, "tenant_id"),
-            "capability": _row_value(row, 2, "capability"),
-            "status": _row_value(row, 3, "status"),
-            "result": _row_value(row, 4, "result_json"),
-            "error_code": _row_value(row, 5, "error_code"),
-            "error": _row_value(row, 6, "error_text"),
-            "billing": _row_value(row, 7, "billing_json"),
-            "trace_id": _row_value(row, 8, "trace_id"),
-        })
-    finally:
-        db.close()
+    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
+    status = request.args.get("status")
+    limit = request.args.get("limit", 50)
+    offset = request.args.get("offset", 0)
+    result = PHASE1_ACTION_ORCHESTRATOR.list_actions(
+        user_data,
+        tenant_id=tenant_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return jsonify(result), 200
 
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================

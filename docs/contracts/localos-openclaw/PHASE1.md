@@ -13,6 +13,7 @@
 1. `POST /api/capabilities/execute`
 2. `POST /api/capabilities/actions/{action_id}/decision`
 3. `GET /api/capabilities/actions/{action_id}`
+4. `GET /api/capabilities/actions?tenant_id=&status=&limit=&offset=`
 
 ## Обязательные поля envelope (`execute`)
 
@@ -47,6 +48,7 @@
   - `rejected`
   - `expired`
 - после решения актуальный статус доступен через `/actions/{action_id}`
+- если действие в `pending_human` просрочено по `expires_at`, при чтении статуса/списка оно автоматически переходит в `expired`
 
 ## Billing / Ledger (Phase 1)
 

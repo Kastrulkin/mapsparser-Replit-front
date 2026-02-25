@@ -158,3 +158,53 @@ def test_capabilities_execute_rejects_tenant_mismatch(capabilities_client):
     assert resp["success"] is False
     assert resp["status"] == "failed"
     assert resp["error_code"] in {"TENANT_MISMATCH", "TENANT_NOT_FOUND"}
+
+
+def test_capabilities_action_auto_expires_by_ttl(capabilities_client):
+    info = capabilities_client
+    r1 = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert r1.status_code == 200
+    action_id = r1.get_json()["action_id"]
+
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE action_approvals SET expires_at = CURRENT_TIMESTAMP - INTERVAL '2 minutes' WHERE action_id = %s",
+            (action_id,),
+        )
+    conn.commit()
+    conn.close()
+
+    r2 = info["client"].get(f"/api/capabilities/actions/{action_id}", headers=_auth_headers())
+    assert r2.status_code == 200
+    body = r2.get_json()
+    assert body["success"] is True
+    assert body["status"] == "expired"
+
+
+def test_capabilities_actions_list_returns_items(capabilities_client):
+    info = capabilities_client
+    r_create = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert r_create.status_code == 200
+    created_action_id = r_create.get_json()["action_id"]
+
+    r_list = info["client"].get(
+        f"/api/capabilities/actions?tenant_id={info['business_id']}&limit=20&offset=0",
+        headers=_auth_headers(),
+    )
+    assert r_list.status_code == 200
+    body = r_list.get_json()
+    assert body["success"] is True
+    assert body["count"] >= 1
+    assert isinstance(body["items"], list)
+    assert any(item.get("action_id") == created_action_id for item in body["items"])
