@@ -14,6 +14,7 @@
 2. `POST /api/capabilities/actions/{action_id}/decision`
 3. `GET /api/capabilities/actions/{action_id}`
 4. `GET /api/capabilities/actions?tenant_id=&status=&limit=&offset=`
+5. `GET /api/capabilities/actions/{action_id}/billing`
 
 ## Обязательные поля envelope (`execute`)
 
@@ -62,6 +63,13 @@
 - `cost`
 - `tool_calls`
 - `tariff_id`
+
+Billing-summary endpoint:
+- `reserved_tokens`
+- `settled_tokens`
+- `released_tokens`
+- `inflight_reserved_tokens`
+- `total_cost`
 
 ## Примеры
 

@@ -3182,6 +3182,22 @@ def capabilities_action_status(action_id):
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/capabilities/actions/<action_id>/billing', methods=['GET', 'OPTIONS'])
+def capabilities_action_billing(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action_billing(action_id, user_data)
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/capabilities/actions', methods=['GET', 'OPTIONS'])
 def capabilities_actions_list():
     if request.method == 'OPTIONS':

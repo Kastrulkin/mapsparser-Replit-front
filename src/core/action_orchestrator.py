@@ -124,6 +124,11 @@ class ActionOrchestrator:
 
     def _read_tokenusage_total(self, cursor, tenant_id: str, user_id: str) -> int:
         try:
+            cursor.execute("SELECT to_regclass('tokenusage') AS reg")
+            reg_row = cursor.fetchone()
+            reg_val = self._row_value(reg_row, 0, "reg")
+            if not reg_val:
+                return 0
             cursor.execute(
                 """
                 SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens
@@ -760,6 +765,102 @@ class ActionOrchestrator:
                 "limit": limit,
                 "offset": offset,
                 "count": len(items),
+            }
+        finally:
+            db.close()
+
+    def get_action_billing(self, action_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+
+            cursor.execute(
+                """
+                SELECT ar.action_id, ar.tenant_id, ar.status, ar.billing_json, b.owner_id, aa.status AS approval_status, aa.expires_at
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                LEFT JOIN action_approvals aa ON aa.action_id = ar.action_id
+                WHERE ar.action_id = %s
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            action_row = cursor.fetchone()
+            if not action_row:
+                return {"success": False, "error": "action not found", "http_code": 404}
+
+            owner_id = self._row_value(action_row, 4, "owner_id")
+            if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            action_status = self._expire_pending_if_needed(
+                cursor,
+                action_id=self._row_value(action_row, 0, "action_id"),
+                action_status=self._row_value(action_row, 2, "status"),
+                approval_status=self._row_value(action_row, 5, "approval_status"),
+                expires_at=self._row_value(action_row, 6, "expires_at"),
+                tenant_id=self._row_value(action_row, 1, "tenant_id"),
+                billing_json=self._row_value(action_row, 3, "billing_json"),
+            )
+
+            cursor.execute(
+                """
+                SELECT id, entry_type, tokens_in, tokens_out, cost, tariff_id, month_key, meta_json, created_at
+                FROM billing_ledger
+                WHERE action_id = %s
+                ORDER BY created_at ASC
+                """,
+                (action_id,),
+            )
+            rows = cursor.fetchall() or []
+
+            entries = []
+            reserve_total = 0
+            settle_total = 0
+            release_total = 0
+            cost_total = 0.0
+
+            for row in rows:
+                entry_type = str(self._row_value(row, 1, "entry_type") or "")
+                tokens_out = int(self._row_value(row, 3, "tokens_out", 0) or 0)
+                cost = float(self._row_value(row, 4, "cost", 0.0) or 0.0)
+                if entry_type == "reserve":
+                    reserve_total += tokens_out
+                elif entry_type == "settle":
+                    settle_total += tokens_out
+                elif entry_type == "release":
+                    release_total += tokens_out
+                cost_total += cost
+
+                entries.append(
+                    {
+                        "id": self._row_value(row, 0, "id"),
+                        "entry_type": entry_type,
+                        "tokens_in": int(self._row_value(row, 2, "tokens_in", 0) or 0),
+                        "tokens_out": tokens_out,
+                        "cost": cost,
+                        "tariff_id": self._row_value(row, 5, "tariff_id"),
+                        "month_key": self._row_value(row, 6, "month_key"),
+                        "meta": self._row_value(row, 7, "meta_json"),
+                        "created_at": str(self._row_value(row, 8, "created_at") or ""),
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "action_id": self._row_value(action_row, 0, "action_id"),
+                "tenant_id": self._row_value(action_row, 1, "tenant_id"),
+                "status": action_status,
+                "summary": {
+                    "reserved_tokens": reserve_total,
+                    "settled_tokens": settle_total,
+                    "released_tokens": release_total,
+                    "inflight_reserved_tokens": max(reserve_total - settle_total - release_total, 0),
+                    "total_cost": round(cost_total, 6),
+                },
+                "entries": entries,
             }
         finally:
             db.close()

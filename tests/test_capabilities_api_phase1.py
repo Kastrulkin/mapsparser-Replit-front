@@ -208,3 +208,106 @@ def test_capabilities_actions_list_returns_items(capabilities_client):
     assert body["count"] >= 1
     assert isinstance(body["items"], list)
     assert any(item.get("action_id") == created_action_id for item in body["items"])
+
+
+def test_capabilities_action_billing_completed_rejected_expired(capabilities_client):
+    info = capabilities_client
+    import main as main_mod
+
+    original_review_handler = main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers.get("reviews.reply")
+    main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = (
+        lambda env, user: {
+            "result": {"reply": "ok"},
+            "billing": {
+                "total_tokens": 300,
+                "cost": 0.12,
+                "tool_calls": 1,
+                "tariff_id": "phase1-test",
+            },
+        }
+    )
+
+    try:
+        completed_body = {
+            "tenant_id": info["business_id"],
+            "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+            "trace_id": str(uuid.uuid4()),
+            "idempotency_key": str(uuid.uuid4()),
+            "capability": "reviews.reply",
+            "approval": {"mode": "auto", "ttl_sec": 1200},
+            "billing": {"tariff_id": "phase1-test", "reserve_tokens": 1000},
+            "payload": {"review": "great", "publish": False},
+        }
+        r_completed = info["client"].post("/api/capabilities/execute", json=completed_body, headers=_auth_headers())
+        assert r_completed.status_code == 200, r_completed.get_json()
+        completed_action_id = r_completed.get_json()["action_id"]
+        assert completed_action_id, r_completed.get_json()
+
+        rs_completed = info["client"].get(f"/api/capabilities/actions/{completed_action_id}", headers=_auth_headers())
+        assert rs_completed.status_code == 200, rs_completed.get_json()
+
+        rb_completed = info["client"].get(f"/api/capabilities/actions/{completed_action_id}/billing", headers=_auth_headers())
+        assert rb_completed.status_code == 200, rb_completed.get_json()
+        b_completed = rb_completed.get_json()
+        assert b_completed["success"] is True
+        assert b_completed["summary"]["reserved_tokens"] == 1000
+        assert b_completed["summary"]["settled_tokens"] == 300
+        assert b_completed["summary"]["released_tokens"] == 700
+        assert b_completed["summary"]["inflight_reserved_tokens"] == 0
+        assert any(e["entry_type"] == "reserve" for e in b_completed["entries"])
+        assert any(e["entry_type"] == "settle" for e in b_completed["entries"])
+        assert any(e["entry_type"] == "release" for e in b_completed["entries"])
+
+        r_rej_create = info["client"].post(
+            "/api/capabilities/execute",
+            json=_pending_request_body(info["business_id"], info["user_id"]),
+            headers=_auth_headers(),
+        )
+        assert r_rej_create.status_code == 200
+        rej_action_id = r_rej_create.get_json()["action_id"]
+        r_rej_decision = info["client"].post(
+            f"/api/capabilities/actions/{rej_action_id}/decision",
+            json={"decision": "rejected", "reason": "manual reject"},
+            headers=_auth_headers(),
+        )
+        assert r_rej_decision.status_code == 200
+
+        rb_rejected = info["client"].get(f"/api/capabilities/actions/{rej_action_id}/billing", headers=_auth_headers())
+        assert rb_rejected.status_code == 200
+        b_rejected = rb_rejected.get_json()
+        assert b_rejected["success"] is True
+        assert b_rejected["status"] == "rejected"
+        assert b_rejected["summary"]["reserved_tokens"] == 0
+        assert b_rejected["summary"]["settled_tokens"] == 0
+        assert b_rejected["summary"]["released_tokens"] == 0
+
+        r_exp_create = info["client"].post(
+            "/api/capabilities/execute",
+            json=_pending_request_body(info["business_id"], info["user_id"]),
+            headers=_auth_headers(),
+        )
+        assert r_exp_create.status_code == 200
+        exp_action_id = r_exp_create.get_json()["action_id"]
+
+        from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE action_approvals SET expires_at = CURRENT_TIMESTAMP - INTERVAL '2 minutes' WHERE action_id = %s",
+                (exp_action_id,),
+            )
+        conn.commit()
+        conn.close()
+
+        rb_expired = info["client"].get(f"/api/capabilities/actions/{exp_action_id}/billing", headers=_auth_headers())
+        assert rb_expired.status_code == 200
+        b_expired = rb_expired.get_json()
+        assert b_expired["success"] is True
+        assert b_expired["status"] == "expired"
+        assert b_expired["summary"]["reserved_tokens"] == 0
+        assert b_expired["summary"]["settled_tokens"] == 0
+        assert b_expired["summary"]["released_tokens"] == 0
+    finally:
+        if original_review_handler is not None:
+            main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_review_handler
