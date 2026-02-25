@@ -415,10 +415,7 @@ export const ProfilePage = () => {
 
   const businessTypeOptions = businessTypes.length > 0
     ? businessTypes
-    : Object.keys(t.dashboard.profile.businessTypes).map((type_key) => ({
-      type_key,
-      label: t.dashboard.profile.businessTypes[type_key as keyof typeof t.dashboard.profile.businessTypes] || type_key
-    }));
+    : defaultBusinessTypeOptions;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
@@ -880,3 +877,24 @@ export const ProfilePage = () => {
 
 // Import Plus and Trash2 which were missing in imports and used in the code
 import { Plus, Trash2 } from 'lucide-react';
+  const defaultBusinessTypeOptions: Array<{ type_key: string; label: string }> = [
+    { type_key: 'beauty_salon', label: 'Салон красоты' },
+    { type_key: 'barbershop', label: 'Барбершоп' },
+    { type_key: 'spa', label: 'SPA/Wellness' },
+    { type_key: 'nail_studio', label: 'Ногтевая студия' },
+    { type_key: 'cosmetology', label: 'Косметология' },
+    { type_key: 'massage', label: 'Массаж' },
+    { type_key: 'brows_lashes', label: 'Брови и ресницы' },
+    { type_key: 'makeup', label: 'Макияж' },
+    { type_key: 'tanning', label: 'Солярий' },
+    { type_key: 'auto_service', label: 'СТО (Автосервис)' },
+    { type_key: 'gas_station', label: 'АЗС (Автозаправка)' },
+    { type_key: 'cafe', label: 'Кафе' },
+    { type_key: 'school', label: 'Школа' },
+    { type_key: 'workshop', label: 'Мастерская' },
+    { type_key: 'shoe_repair', label: 'Ремонт обуви' },
+    { type_key: 'gym', label: 'Спортзал' },
+    { type_key: 'shawarma', label: 'Шаверма' },
+    { type_key: 'theater', label: 'Театр' },
+    { type_key: 'other', label: 'Другое' },
+  ];

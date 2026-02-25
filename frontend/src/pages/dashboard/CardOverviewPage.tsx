@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import ServiceOptimizer from '@/components/ServiceOptimizer';
@@ -64,6 +64,9 @@ export const CardOverviewPage = () => {
   });
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
   const [optimizingAll, setOptimizingAll] = useState(false);
+  const [servicesSearch, setServicesSearch] = useState('');
+  const [servicesCategoryFilter, setServicesCategoryFilter] = useState('all');
+  const [servicesSort, setServicesSort] = useState<'default' | 'name_asc' | 'name_desc' | 'updated_desc' | 'updated_asc' | 'price_asc' | 'price_desc'>('default');
 
   // Состояния для парсера
   // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
@@ -196,6 +199,76 @@ export const CardOverviewPage = () => {
       checkIfNetworkMaster();
     }
   }, [currentBusinessId, context]);
+
+  useEffect(() => {
+    setServicesCurrentPage(1);
+  }, [servicesSearch, servicesCategoryFilter, servicesSort, currentBusinessId]);
+
+  const serviceCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const service of userServices) {
+      const category = (service?.category || '').toString().trim();
+      if (category) set.add(category);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, language === 'ru' ? 'ru' : 'en'));
+  }, [userServices, language]);
+
+  const filteredServices = useMemo(() => {
+    const query = servicesSearch.trim().toLowerCase();
+    const list = userServices.filter((service) => {
+      if (servicesCategoryFilter !== 'all' && (service?.category || '') !== servicesCategoryFilter) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = [
+        service?.name,
+        service?.optimized_name,
+        service?.description,
+        service?.optimized_description,
+        service?.category,
+        Array.isArray(service?.keywords) ? service.keywords.join(' ') : (service?.keywords || ''),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+
+    if (servicesSort === 'default') {
+      return list;
+    }
+
+    const normalizePrice = (value: any): number => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+    };
+
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (servicesSort) {
+        case 'name_asc':
+          return String(a?.name || '').localeCompare(String(b?.name || ''), language === 'ru' ? 'ru' : 'en');
+        case 'name_desc':
+          return String(b?.name || '').localeCompare(String(a?.name || ''), language === 'ru' ? 'ru' : 'en');
+        case 'updated_asc':
+          return new Date(a?.updated_at || 0).getTime() - new Date(b?.updated_at || 0).getTime();
+        case 'updated_desc':
+          return new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime();
+        case 'price_asc':
+          return normalizePrice(a?.price) - normalizePrice(b?.price);
+        case 'price_desc':
+          return normalizePrice(b?.price) - normalizePrice(a?.price);
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [userServices, servicesSearch, servicesCategoryFilter, servicesSort, language]);
+
+  const pagedServices = useMemo(
+    () => filteredServices.slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage),
+    [filteredServices, servicesCurrentPage, servicesItemsPerPage]
+  );
 
   const checkIfNetworkMaster = async () => {
     if (!currentBusinessId) {
@@ -845,6 +918,47 @@ export const CardOverviewPage = () => {
                 </div>
               )}
 
+              <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={servicesSearch}
+                    onChange={(e) => setServicesSearch(e.target.value)}
+                    placeholder={t.dashboard.card.search || 'Найти услугу'}
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                  />
+                </div>
+                <div className="relative">
+                  <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <select
+                    value={servicesCategoryFilter}
+                    onChange={(e) => setServicesCategoryFilter(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm appearance-none"
+                  >
+                    <option value="all">Все категории</option>
+                    {serviceCategories.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <select
+                    value={servicesSort}
+                    onChange={(e) => setServicesSort(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                  >
+                    <option value="default">Порядок по умолчанию</option>
+                    <option value="name_asc">Название: А-Я</option>
+                    <option value="name_desc">Название: Я-А</option>
+                    <option value="updated_desc">Обновлено: новые</option>
+                    <option value="updated_asc">Обновлено: старые</option>
+                    <option value="price_asc">Цена: по возрастанию</option>
+                    <option value="price_desc">Цена: по убыванию</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Services List */}
               <div className="overflow-hidden rounded-xl border border-gray-100">
                 <table className="min-w-full divide-y divide-gray-100">
@@ -880,20 +994,19 @@ export const CardOverviewPage = () => {
                           </div>
                         </td>
                       </tr>
-                    ) : userServices.length === 0 ? (
+                    ) : filteredServices.length === 0 ? (
                       <tr>
-                        <td className="px-6 py-12 text-center text-gray-500" colSpan={5}>
+                        <td className="px-6 py-12 text-center text-gray-500" colSpan={6}>
                           <div className="flex flex-col items-center justify-center gap-3">
                             <div className="p-3 bg-gray-50 rounded-full">
                               <Search className="w-8 h-8 text-gray-300" />
                             </div>
-                            <p>{t.dashboard.network.noData}</p>
+                            <p>{servicesSearch || servicesCategoryFilter !== 'all' ? 'Ничего не найдено по выбранным фильтрам' : t.dashboard.network.noData}</p>
                           </div>
                         </td>
                       </tr>
                     ) : (
-                      userServices
-                        .slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage)
+                      pagedServices
                         .map((service, index) => (
                           <tr key={service.id || index} className="group hover:bg-gray-50/50 transition-colors">
                             <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap align-top">

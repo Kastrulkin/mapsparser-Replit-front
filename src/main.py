@@ -52,6 +52,7 @@ from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
 from core.default_ai_prompts import get_default_ai_prompts
 from core.default_business_types import get_default_business_types
+from core.seo_keywords import collect_ranked_keywords
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -1922,6 +1923,50 @@ def get_external_summary(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        def _normalize_rating(value):
+            """Нормализовать рейтинг в float [0..5], поддерживая формат с запятой."""
+            if value is None:
+                return None
+            if isinstance(value, (int, float)):
+                candidate = float(value)
+            else:
+                try:
+                    raw = str(value).strip().replace(",", ".")
+                except Exception:
+                    return None
+                if not raw:
+                    return None
+                m = re.search(r"(\d+(?:\.\d+)?)", raw)
+                if not m:
+                    return None
+                try:
+                    candidate = float(m.group(1))
+                except (TypeError, ValueError):
+                    return None
+            if 0.0 <= candidate <= 5.0:
+                return candidate
+            return None
+
+        def _overview_rating(card_row):
+            if not card_row:
+                return None
+            overview = card_row.get("overview")
+            if isinstance(overview, str):
+                raw = overview.strip()
+                if raw:
+                    try:
+                        overview = json.loads(raw)
+                    except Exception:
+                        overview = {}
+            if isinstance(overview, dict):
+                return _normalize_rating(overview.get("rating"))
+            return None
+
+        cursor.execute("SELECT rating FROM businesses WHERE id = %s", (business_id,))
+        raw_business = cursor.fetchone()
+        business_row = _row_to_dict(cursor, raw_business) if raw_business else None
+        yandex_rating_cached = _normalize_rating((business_row or {}).get("rating"))
+
         # Проверяем, существуют ли таблицы (Postgres)
         cursor.execute("""
             SELECT table_name FROM information_schema.tables 
@@ -1932,7 +1977,7 @@ def get_external_summary(business_id):
         if 'externalbusinessstats' not in tables or 'externalbusinessreviews' not in tables:
             # Таблицы не существуют — отдаём хотя бы данные из cards (парсинг)
             cursor.execute("""
-                SELECT created_at, rating, reviews_count, competitors
+                SELECT created_at, rating, reviews_count, competitors, overview
                 FROM cards WHERE business_id = %s ORDER BY created_at DESC LIMIT 1
             """, (business_id,))
             raw = cursor.fetchone()
@@ -1943,10 +1988,11 @@ def get_external_summary(business_id):
             last_parse_date = None
             competitors = None
             if card_row:
-                try:
-                    rating = float(card_row.get("rating")) if card_row.get("rating") is not None else None
-                except (TypeError, ValueError):
-                    pass
+                rating = _normalize_rating(card_row.get("rating"))
+                if rating is None:
+                    rating = _overview_rating(card_row)
+                if rating is None:
+                    rating = yandex_rating_cached
                 reviews_total = int(card_row.get("reviews_count") or 0)
                 last_parse_date = card_row.get("created_at")
                 competitors = card_row.get("competitors")
@@ -2067,7 +2113,7 @@ def get_external_summary(business_id):
         db.close()
 
         # Метрики: сначала внешние источники, затем cards (metrics_card / chosen_card)
-        rating = stats_row.get("rating") if stats_row else None
+        rating = _normalize_rating(stats_row.get("rating")) if stats_row else None
         reviews_total = (reviews_row.get("total") or 0) if reviews_row else 0
         reviews_with_response = (reviews_row.get("with_response") or 0) if reviews_row else 0
         reviews_without_response = (reviews_row.get("without_response") or 0) if reviews_row else 0
@@ -2076,16 +2122,12 @@ def get_external_summary(business_id):
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
         if rating is None:
-            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
-                try:
-                    rating = float(metrics_card.get("rating"))
-                except (TypeError, ValueError):
-                    rating = None
-            elif parse_row and parse_row.get("rating") is not None:
-                try:
-                    rating = float(parse_row.get("rating"))
-                except (TypeError, ValueError):
-                    rating = None
+            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update":
+                rating = _overview_rating(metrics_card) or _normalize_rating(metrics_card.get("rating"))
+            if rating is None and parse_row:
+                rating = _overview_rating(parse_row) or _normalize_rating(parse_row.get("rating"))
+            if rating is None:
+                rating = yandex_rating_cached
 
         if reviews_total == 0:
             if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
@@ -2782,178 +2824,21 @@ def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | N
     - seo_keywords: список ключей для вставки в промпт (много строк)
     - seo_keywords_top10: короткий список top-10 через запятую
     """
-    try:
-        cursor.execute("SELECT to_regclass('public.wordstatkeywords')")
-        reg = cursor.fetchone()
-        reg_val = None
-        if isinstance(reg, tuple):
-            reg_val = reg[0]
-        elif isinstance(reg, dict):
-            reg_val = reg.get("to_regclass")
-        elif hasattr(reg, "keys"):
-            reg_val = reg.get("to_regclass")
-        if not reg_val:
-            return "SEO keywords are unavailable", "SEO keywords are unavailable"
-    except Exception:
-        return "SEO keywords are unavailable", "SEO keywords are unavailable"
-
-    terms = set()
-    city = ""
-    business_type = ""
-    try:
-        if business_id:
-            cursor.execute("SELECT city, business_type FROM businesses WHERE id = %s", (business_id,))
-            b_row = cursor.fetchone()
-            if b_row:
-                if isinstance(b_row, tuple):
-                    city, business_type = (b_row[0] or "", b_row[1] or "")
-                elif hasattr(b_row, "keys"):
-                    city = b_row.get("city") or ""
-                    business_type = b_row.get("business_type") or ""
-        if business_type:
-            cursor.execute(
-                "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
-                (business_type, business_type),
-            )
-            bt_row = cursor.fetchone()
-            if bt_row:
-                if isinstance(bt_row, tuple):
-                    bt_label, bt_desc = (bt_row[0] or "", bt_row[1] or "")
-                elif hasattr(bt_row, "keys"):
-                    bt_label = bt_row.get("label") or ""
-                    bt_desc = bt_row.get("description") or ""
-                else:
-                    bt_label, bt_desc = "", ""
-                terms.update(_seo_extract_terms(bt_label))
-                terms.update(_seo_extract_terms(bt_desc))
-
-        if business_id:
-            cursor.execute(
-                """
-                SELECT name, description
-                FROM userservices
-                WHERE business_id = %s
-                  AND (is_active IS TRUE OR is_active IS NULL)
-                ORDER BY updated_at DESC NULLS LAST
-                LIMIT 600
-                """,
-                (business_id,),
-            )
-        elif user_id:
-            cursor.execute(
-                """
-                SELECT name, description
-                FROM userservices
-                WHERE user_id = %s
-                ORDER BY updated_at DESC NULLS LAST
-                LIMIT 600
-                """,
-                (user_id,),
-            )
-        else:
-            cursor.execute("SELECT '' AS name, '' AS description WHERE FALSE")
-
-        for row in cursor.fetchall() or []:
-            if isinstance(row, tuple):
-                name, desc = (row[0] or "", row[1] or "")
-            elif hasattr(row, "keys"):
-                name = row.get("name") or ""
-                desc = row.get("description") or ""
-            else:
-                name, desc = "", ""
-            terms.update(_seo_extract_terms(name))
-            terms.update(_seo_extract_terms(desc))
-    except Exception:
-        pass
-
-    if business_type:
-        terms.update(_seo_extract_terms(business_type))
-    city = (city or "").strip().lower()
-    terms_list = list(terms)[:120]
-
-    try:
-        cursor.execute(
-            """
-            SELECT keyword, views, category
-            FROM wordstatkeywords
-            ORDER BY views DESC NULLS LAST
-            LIMIT 5000
-            """
-        )
-        rows = cursor.fetchall() or []
-    except Exception:
-        return "SEO keywords are unavailable", "SEO keywords are unavailable"
-
-    excluded_keywords = set()
-    if business_id:
-        try:
-            cursor.execute(
-                """
-                SELECT keyword
-                FROM wordstatkeywordsexcluded
-                WHERE business_id = %s
-                """,
-                (business_id,),
-            )
-            for row in cursor.fetchall() or []:
-                if isinstance(row, tuple):
-                    kw = (row[0] or "").strip().lower()
-                elif hasattr(row, "keys"):
-                    kw = (row.get("keyword") or "").strip().lower()
-                else:
-                    kw = ""
-                if kw:
-                    excluded_keywords.add(kw)
-        except Exception:
-            # Таблица может отсутствовать в старых БД до первого удаления ключа.
-            pass
-
-    ranked = []
-    for row in rows:
-        if isinstance(row, tuple):
-            kw = (row[0] or "").strip()
-            views = int(row[1] or 0)
-            category = (row[2] or "").strip()
-        elif hasattr(row, "keys"):
-            kw = (row.get("keyword") or "").strip()
-            views = int(row.get("views") or 0)
-            category = (row.get("category") or "").strip()
-        else:
-            continue
-        if not kw:
-            continue
-        if excluded_keywords and kw.lower() in excluded_keywords:
-            continue
-        if business_type and str(business_type).strip().lower() not in SEO_BEAUTY_BUSINESS_TYPES:
-            if _seo_is_beauty_keyword(kw, category):
-                continue
-        kw_l = kw.lower()
-        score = 0
-        for t in terms_list:
-            if t in kw_l:
-                score += 2 if len(t) >= 6 else 1
-        if city and city in kw_l:
-            score += 2
-        if score > 0:
-            ranked.append((score, views, kw))
-
-    if not ranked:
+    payload = collect_ranked_keywords(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        limit=limit,
+        add_city_suffix=False,
+        fallback_global_when_empty_terms=False,
+        long_weight=2,
+        short_weight=1,
+    )
+    items = payload.get("items", [])
+    if not items:
         return "No matched SEO keywords found", "No matched SEO keywords found"
-
-    ranked.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    unique = []
-    seen = set()
-    for _, views, kw in ranked:
-        key = kw.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append((kw, views))
-        if len(unique) >= limit:
-            break
-
-    seo_keywords = "\n".join([f"- {kw} ({views})" for kw, views in unique])
-    seo_keywords_top10 = ", ".join([kw for kw, _ in unique[:10]])
+    seo_keywords = "\n".join([f"- {(item.get('keyword') or '').strip()} ({int(item.get('views') or 0)})" for item in items])
+    seo_keywords_top10 = ", ".join([(item.get('keyword') or '').strip() for item in items[:10] if (item.get('keyword') or '').strip()])
     return seo_keywords, seo_keywords_top10
 
 
@@ -2969,145 +2854,23 @@ def build_seo_keywords_context_for_service(
     SEO-контекст, сфокусированный на конкретной услуге.
     В отличие от общего контекста по бизнесу не смешивает ключи по всем услугам.
     """
-    try:
-        cursor.execute("SELECT to_regclass('public.wordstatkeywords')")
-        reg = cursor.fetchone()
-        reg_val = None
-        if isinstance(reg, tuple):
-            reg_val = reg[0]
-        elif isinstance(reg, dict):
-            reg_val = reg.get("to_regclass")
-        elif hasattr(reg, "keys"):
-            reg_val = reg.get("to_regclass")
-        if not reg_val:
-            return "SEO keywords are unavailable", "SEO keywords are unavailable"
-    except Exception:
-        return "SEO keywords are unavailable", "SEO keywords are unavailable"
-
-    city = ""
-    business_type = ""
-    try:
-        if business_id:
-            cursor.execute("SELECT city, business_type FROM businesses WHERE id = %s", (business_id,))
-            b_row = cursor.fetchone()
-            if b_row:
-                if isinstance(b_row, tuple):
-                    city, business_type = (b_row[0] or "", b_row[1] or "")
-                elif hasattr(b_row, "keys"):
-                    city = b_row.get("city") or ""
-                    business_type = b_row.get("business_type") or ""
-        if business_type:
-            cursor.execute(
-                "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
-                (business_type, business_type),
-            )
-            bt_row = cursor.fetchone()
-            if bt_row:
-                if isinstance(bt_row, tuple):
-                    bt_label, bt_desc = (bt_row[0] or "", bt_row[1] or "")
-                elif hasattr(bt_row, "keys"):
-                    bt_label = bt_row.get("label") or ""
-                    bt_desc = bt_row.get("description") or ""
-                else:
-                    bt_label, bt_desc = "", ""
-                terms.update(_seo_extract_terms(bt_label))
-                terms.update(_seo_extract_terms(bt_desc))
-    except Exception:
-        pass
-
-    terms = set()
-    terms.update(_seo_extract_terms(service_name or ""))
-    terms.update(_seo_extract_terms(service_description or ""))
-    if business_type:
-        terms.update(_seo_extract_terms(business_type))
-
-    city = (city or "").strip().lower()
-    terms_list = list(terms)[:120]
-    if not terms_list:
+    payload = collect_ranked_keywords(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        service_name=service_name,
+        service_description=service_description,
+        limit=limit,
+        add_city_suffix=False,
+        fallback_global_when_empty_terms=False,
+        long_weight=3,
+        short_weight=2,
+    )
+    items = payload.get("items", [])
+    if not items:
         return "No matched SEO keywords found", "No matched SEO keywords found"
-
-    excluded_keywords = set()
-    if business_id:
-        try:
-            cursor.execute(
-                """
-                SELECT keyword
-                FROM wordstatkeywordsexcluded
-                WHERE business_id = %s
-                """,
-                (business_id,),
-            )
-            for row in cursor.fetchall() or []:
-                if isinstance(row, tuple):
-                    kw = (row[0] or "").strip().lower()
-                elif hasattr(row, "keys"):
-                    kw = (row.get("keyword") or "").strip().lower()
-                else:
-                    kw = ""
-                if kw:
-                    excluded_keywords.add(kw)
-        except Exception:
-            pass
-
-    try:
-        cursor.execute(
-            """
-            SELECT keyword, views, category
-            FROM wordstatkeywords
-            ORDER BY views DESC NULLS LAST
-            LIMIT 5000
-            """
-        )
-        rows = cursor.fetchall() or []
-    except Exception:
-        return "SEO keywords are unavailable", "SEO keywords are unavailable"
-
-    ranked = []
-    for row in rows:
-        if isinstance(row, tuple):
-            kw = (row[0] or "").strip()
-            views = int(row[1] or 0)
-            category = (row[2] or "").strip()
-        elif hasattr(row, "keys"):
-            kw = (row.get("keyword") or "").strip()
-            views = int(row.get("views") or 0)
-            category = (row.get("category") or "").strip()
-        else:
-            continue
-        if not kw:
-            continue
-        if excluded_keywords and kw.lower() in excluded_keywords:
-            continue
-        if business_type and str(business_type).strip().lower() not in SEO_BEAUTY_BUSINESS_TYPES:
-            if _seo_is_beauty_keyword(kw, category):
-                continue
-        kw_l = kw.lower()
-        score = 0
-        for t in terms_list:
-            if t in kw_l:
-                score += 3 if len(t) >= 6 else 2
-        if city and city in kw_l:
-            score += 1
-        if score > 0:
-            ranked.append((score, views, kw))
-
-    if not ranked:
-        return "No matched SEO keywords found", "No matched SEO keywords found"
-
-    ranked.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    unique = []
-    seen = set()
-    for _, views, kw in ranked:
-        key = kw.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append((kw, views))
-        if len(unique) >= limit:
-            break
-
-    seo_keywords = "\n".join([f"- {kw} ({views})" for kw, views in unique])
-    seo_keywords_top10 = ", ".join([kw for kw, _ in unique[:10]])
+    seo_keywords = "\n".join([f"- {(item.get('keyword') or '').strip()} ({int(item.get('views') or 0)})" for item in items])
+    seo_keywords_top10 = ", ".join([(item.get('keyword') or '').strip() for item in items[:10] if (item.get('keyword') or '').strip()])
     return seo_keywords, seo_keywords_top10
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
@@ -3594,6 +3357,31 @@ def services_optimize():
                 return parsed
             return None
 
+        def _extract_identity_service_from_content():
+            """Fail-safe: вернуть исходную услугу из входного текста без оптимизации."""
+            try:
+                source_lines = [ln.strip(" -*\t") for ln in str(content or "").splitlines() if ln.strip()]
+                original_name = source_lines[0] if source_lines else ""
+                original_description = " ".join(source_lines[1:]).strip() if len(source_lines) > 1 else ""
+                if not original_name:
+                    return None
+                return {
+                    "services": [
+                        {
+                            "original_name": str(original_name).strip(),
+                            "optimized_name": str(original_name).strip(),
+                            "original_description": str(original_description).strip(),
+                            "seo_description": str(original_description).strip(),
+                            "keywords": [],
+                            "price": None,
+                            "category": "other"
+                        }
+                    ],
+                    "general_recommendations": []
+                }
+            except Exception:
+                return None
+
         def _extract_service_from_markdown(raw_text: str):
             """Fallback: вытаскивает название/описание из markdown-текста модели."""
             if not isinstance(raw_text, str):
@@ -3692,13 +3480,24 @@ def services_optimize():
             if parsed_result is None:
                 parsed_result = _extract_service_from_markdown(result)
                 if parsed_result is None:
-                    print(f"❌ Не удалось распарсить JSON из результата")
-                    print(f"❌ Полный результат: {result[:500]}")
-                    return jsonify({
-                        "success": False,
-                        "error": "Не удалось распарсить результат оптимизации",
-                        "raw": result
-                    }), 502
+                    fallback_result = None
+                    # Для одиночной оптимизации из UI не роняем запрос:
+                    # возвращаем исходную услугу, если модель прислала "грязный" текст.
+                    if not recognize_only and not file:
+                        fallback_result = _extract_identity_service_from_content()
+                    if fallback_result is not None:
+                        fallback_name = fallback_result["services"][0].get("original_name") if fallback_result.get("services") else ""
+                        print(f"⚠️ Не удалось распарсить результат оптимизации, применён fallback для услуги: {fallback_name}")
+                        print(f"⚠️ Сырой ответ модели (первые 500): {result[:500]}")
+                        parsed_result = fallback_result
+                    else:
+                        print(f"❌ Не удалось распарсить JSON из результата")
+                        print(f"❌ Полный результат: {result[:500]}")
+                        return jsonify({
+                            "success": False,
+                            "error": "Не удалось распарсить результат оптимизации",
+                            "raw": result
+                        }), 502
         else:
             print(f"❌ Неожиданный тип результата: {type(result)}")
             return jsonify({
@@ -3769,6 +3568,27 @@ def services_optimize():
             services_block[0]["original_name"] = input_original_name
             if input_original_description:
                 services_block[0]["original_description"] = input_original_description
+
+        # Fail-safe для одиночной оптимизации из UI:
+        # если модель вернула пустой список, сохраняем исходную услугу вместо ошибки на фронте.
+        if (
+            not recognize_only
+            and not file
+            and input_original_name
+            and isinstance(services_block, list)
+            and len(services_block) == 0
+        ):
+            print(f"⚠️ Пустой services[] от модели, применён fallback для услуги: {input_original_name}")
+            services_block = [{
+                "original_name": input_original_name,
+                "optimized_name": input_original_name,
+                "original_description": input_original_description,
+                "seo_description": input_original_description,
+                "keywords": [],
+                "price": None,
+                "category": "other"
+            }]
+            parsed_result["services"] = services_block
 
         sanitized_services = []
         for svc in services_block:
@@ -4241,17 +4061,19 @@ def news_generate():
                 "error": "Промпт news_generation не настроен в админ-панели."
             }), 500
         try:
-            prompt = str(prompt_template).format(
-                language_name=str(language_name),
-                service_context=str(service_context),
-                transaction_context=str(transaction_context),
-                raw_info=str(raw_info[:800]),
-                seo_keywords=str(seo_keywords),
-                seo_keywords_top10=str(seo_keywords_top10),
-                seo_generation_hint=str(seo_generation_hint),
-                news_examples=str(news_examples)
-            )
-        except (KeyError, ValueError, TypeError) as format_err:
+            # Безопасная подстановка только известных плейсхолдеров.
+            # В админ-шаблонах могут быть JSON-блоки с фигурными скобками,
+            # которые нельзя пропускать через str.format/format_map.
+            prompt = str(prompt_template)
+            prompt = prompt.replace("{language_name}", str(language_name))
+            prompt = prompt.replace("{service_context}", str(service_context))
+            prompt = prompt.replace("{transaction_context}", str(transaction_context))
+            prompt = prompt.replace("{raw_info}", str(raw_info[:800]))
+            prompt = prompt.replace("{seo_keywords}", str(seo_keywords))
+            prompt = prompt.replace("{seo_keywords_top10}", str(seo_keywords_top10))
+            prompt = prompt.replace("{seo_generation_hint}", str(seo_generation_hint))
+            prompt = prompt.replace("{news_examples}", str(news_examples))
+        except Exception as format_err:
             db.close()
             return jsonify({
                 "error": f"Ошибка шаблона news_generation в админ-панели: {format_err}"
@@ -4318,6 +4140,32 @@ def news_generate():
                     generated_text = parsed_result['text']
                 else:
                     # Если ключей нет, но это словарь - странно, но оставим result или json dump
+                    pass
+
+            # Последний fail-safe: если в текст попала обёртка {"news": "..."},
+            # вытаскиваем только содержимое новости.
+            if isinstance(generated_text, str):
+                gt = generated_text.strip()
+                try:
+                    import re
+                    # Валидный JSON-объект с полем news
+                    m_json = re.match(r'^\s*\{\s*"news"\s*:\s*"(.*)"\s*\}\s*$', gt, flags=re.DOTALL)
+                    if m_json:
+                        gt = m_json.group(1)
+                    else:
+                        # Невалидный, но типичный формат: {"news": "...}
+                        m_broken = re.match(r'^\s*\{\s*"news"\s*:\s*"(.*)\}\s*$', gt, flags=re.DOTALL)
+                        if m_broken:
+                            gt = m_broken.group(1)
+                        else:
+                            # Без кавычек вокруг значения: {"news": text}
+                            m_unquoted = re.match(r'^\s*\{\s*"news"\s*:\s*(.*?)\s*\}\s*$', gt, flags=re.DOTALL)
+                            if m_unquoted:
+                                gt = m_unquoted.group(1).strip().strip('"')
+                    # Декодируем частые экранирования
+                    gt = gt.replace('\\"', '"').replace("\\n", "\n").strip()
+                    generated_text = gt
+                except Exception:
                     pass
         
         # Проверяем, что generated_text не пустой

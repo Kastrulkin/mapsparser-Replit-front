@@ -40,6 +40,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [rawInfo, setRawInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [generated, setGenerated] = useState<string>('');
   const [news, setNews] = useState<any[]>([]);
   const [exampleInput, setExampleInput] = useState('');
@@ -139,6 +140,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   }, [useSeoKeywords, businessId]);
 
   const generate = async () => {
+    setError('');
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
@@ -158,10 +160,14 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setGenerated(data.generated_text || '');
         await loadNews();
+      } else {
+        setError(data?.error || 'Не удалось сгенерировать новость');
       }
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка сети при генерации новости');
     } finally {
       setLoading(false);
     }
@@ -434,6 +440,12 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
             )}
           </Button>
         </div>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {generated && (
           <div className="mt-8 bg-white border border-blue-200 rounded-2xl p-6 shadow-md animate-in fade-in slide-in-from-top-4 ring-4 ring-blue-500/5">

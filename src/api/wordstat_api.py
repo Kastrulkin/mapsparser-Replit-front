@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database_manager import get_db_connection
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
+from core.seo_keywords import collect_ranked_keywords
 
 wordstat_bp = Blueprint('wordstat_api', __name__, url_prefix='/api/wordstat')
 
@@ -193,151 +194,22 @@ def get_keywords():
                 'grouped': {}
             })
 
-        terms = []
-        city = None
-        business_type = ''
-
         if business_id:
             access_error = _ensure_business_access(cursor, user_data, business_id)
             if access_error:
                 return access_error
-
-            cursor.execute(
-                "SELECT business_type, city FROM businesses WHERE id = %s",
-                (business_id,)
-            )
-            b_row = cursor.fetchone()
-            business_type = (_row_get(b_row, 'business_type', 0, '') or '').strip()
-            city = (_row_get(b_row, 'city', 1, '') or '').strip()
-            business_type = str(business_type).strip()
-
-            if business_type:
-                cursor.execute(
-                    "SELECT label, description FROM businesstypes WHERE type_key = %s OR id = %s LIMIT 1",
-                    (business_type, business_type),
-                )
-                bt_row = cursor.fetchone()
-                if bt_row:
-                    bt_label = (_row_get(bt_row, 'label', 0, '') or '').strip()
-                    bt_description = (_row_get(bt_row, 'description', 1, '') or '').strip()
-                    terms.extend(_extract_terms(str(bt_label)))
-                    terms.extend(_extract_terms(str(bt_description)))
-
-            # Берем услуги последнего снапшота парсинга (или активные как fallback)
-            cursor.execute(
-                """
-                WITH latest_ts AS (
-                    SELECT MAX(updated_at) AS ts
-                    FROM userservices
-                    WHERE business_id = %s
-                      AND source IN ('yandex_maps', 'yandex_business')
-                      AND (is_active IS TRUE OR is_active IS NULL)
-                )
-                SELECT name, description
-                FROM userservices
-                WHERE business_id = %s
-                  AND (is_active IS TRUE OR is_active IS NULL)
-                  AND (
-                      updated_at = (SELECT ts FROM latest_ts)
-                      OR source IS NULL
-                  )
-                """,
-                (business_id, business_id),
-            )
-            for row in cursor.fetchall() or []:
-                terms.extend(_extract_terms(_row_get(row, 'name', 0, '') or ''))
-                terms.extend(_extract_terms(_row_get(row, 'description', 1, '') or ''))
-
-            for hint in BUSINESS_TYPE_HINTS.get(str(business_type), []):
-                terms.extend(_extract_terms(hint))
-
-        # Get top keywords from Wordstat pool
-        cursor.execute("""
-            SELECT keyword, views, category, updated_at 
-            FROM wordstatkeywords
-            ORDER BY views DESC
-            LIMIT 5000
-        """)
-        
-        rows = cursor.fetchall() or []
-        keywords = [dict(row) if not isinstance(row, dict) else row for row in rows]
-
-        excluded_keywords = set()
-        if business_id:
-            _ensure_excluded_table(cursor)
-            cursor.execute(
-                "SELECT keyword FROM wordstatkeywordsexcluded WHERE business_id = %s",
-                (business_id,),
-            )
-            for row in cursor.fetchall() or []:
-                kw = str(_row_get(row, 'keyword', 0, '') or '').strip().lower()
-                if kw:
-                    excluded_keywords.add(kw)
-
-        if excluded_keywords:
-            keywords = [k for k in keywords if (k.get('keyword') or '').strip().lower() not in excluded_keywords]
-
-        if business_id:
-            _ensure_custom_table(cursor)
-            cursor.execute(
-                """
-                SELECT keyword, views, category, updated_at
-                FROM wordstatkeywordscustom
-                WHERE business_id = %s
-                ORDER BY views DESC, updated_at DESC
-                """,
-                (business_id,),
-            )
-            custom_rows = cursor.fetchall() or []
-            custom_items = [dict(row) if not isinstance(row, dict) else row for row in custom_rows]
-            if excluded_keywords:
-                custom_items = [k for k in custom_items if (k.get('keyword') or '').strip().lower() not in excluded_keywords]
-
-            existing = {(k.get('keyword') or '').strip().lower() for k in keywords}
-            for item in custom_items:
-                kw = (item.get('keyword') or '').strip().lower()
-                if kw and kw not in existing:
-                    keywords.append(item)
-                    existing.add(kw)
-
-        business_type_l = str(business_type).strip().lower() if business_id else ""
-        if business_type_l and business_type_l not in BEAUTY_BUSINESS_TYPES:
-            keywords = [
-                k for k in keywords
-                if not _is_beauty_keyword(k.get('keyword') or '', k.get('category') or '')
-            ]
-
-        # Контекстный отбор по услугам/типу бизнеса
-        if terms:
-            uniq_terms = list(dict.fromkeys(terms))[:80]
-            filtered = []
-            for k in keywords:
-                score = _score_keyword(k.get('keyword') or '', uniq_terms)
-                if score > 0:
-                    k['match_score'] = score
-                    filtered.append(k)
-            filtered.sort(key=lambda x: (int(x.get('views') or 0), x.get('match_score', 0)), reverse=True)
-            keywords = filtered[:600]
-        else:
-            keywords = [] if business_id else keywords[:600]
-        keywords.sort(key=lambda x: int(x.get('views') or 0), reverse=True)
-
-        if use_city and city:
-            city_clean = str(city).strip()
-            for k in keywords:
-                kw = (k.get('keyword') or '').strip()
-                if city_clean and city_clean.lower() not in kw.lower():
-                    k['keyword_with_city'] = f"{kw} {city_clean}"
-                else:
-                    k['keyword_with_city'] = kw
-        
-        # Group by category
-        by_category = {}
-        for k in keywords:
-            cat = k['category'] or 'other'
-            if cat not in by_category:
-                by_category[cat] = []
-            by_category[cat].append(k)
+        keywords_payload = collect_ranked_keywords(
+            cursor,
+            business_id=business_id or None,
+            user_id=(user_data.get('user_id') or user_data.get('id')),
+            limit=600,
+            add_city_suffix=use_city,
+            fallback_global_when_empty_terms=False,
+            long_weight=2,
+            short_weight=1,
+        )
+        keywords = keywords_payload.get('items', [])
+        by_category = keywords_payload.get('grouped', {})
             
         return jsonify({
             'success': True,

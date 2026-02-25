@@ -165,10 +165,9 @@ def get_services():
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-            order_by = "ORDER BY category NULLS LAST, name NULLS LAST"
-            if has_price_from:
-                order_by += ", price_from NULLS LAST"
-            order_by += ", updated_at DESC NULLS LAST"
+            # Важно: базовый порядок должен быть стабильным и не зависеть от изменения name/category,
+            # чтобы после принятия SEO-формулировки услуга не "прыгала" в таблице.
+            order_by = "ORDER BY created_at ASC NULLS LAST, id ASC"
 
             select_sql = (
                 f"SELECT {', '.join(select_fields)} FROM userservices "

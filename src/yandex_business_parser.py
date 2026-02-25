@@ -790,6 +790,28 @@ class YandexBusinessParser:
                 print(f"✅ Получены данные организации с {org_url}")
                 break
         
+        def _normalize_rating_value(value: Any) -> Optional[float]:
+            """Нормализовать рейтинг в диапазон [0..5], поддерживая значения с запятой."""
+            if value is None:
+                return None
+            if isinstance(value, (int, float)):
+                normalized = float(value)
+                return normalized if 0.0 <= normalized <= 5.0 else None
+            try:
+                text = str(value).strip().replace(",", ".")
+            except Exception:
+                return None
+            if not text:
+                return None
+            match = re.search(r"(\d+(?:\.\d+)?)", text)
+            if not match:
+                return None
+            try:
+                normalized = float(match.group(1))
+            except (TypeError, ValueError):
+                return None
+            return normalized if 0.0 <= normalized <= 5.0 else None
+
         # Также пробуем получить рейтинг со страницы отзывов (более точный)
         reviews_page_url = f"https://yandex.ru/sprav/{external_id}/p/edit/reviews"
         try:
@@ -812,26 +834,23 @@ class YandexBusinessParser:
                 # Ищем рейтинг в HTML - ищем паттерн типа "4.7" рядом с классом RatingCard
                 # Селектор: RatingCard-TopSection > span
                 rating_patterns = [
-                    r'RatingCard-TopSection[^>]*>.*?<span[^>]*>(\d+\.\d+)',  # Рейтинг в RatingCard-TopSection > span
-                    r'RatingCard[^>]*>.*?(\d+\.\d+)\s*★',  # Рейтинг в RatingCard с звездами
-                    r'rating["\']?\s*[:=]\s*["\']?(\d+\.\d+)',  # rating: "4.7"
-                    r'<span[^>]*class[^>]*RatingCard[^>]*>(\d+\.\d+)',  # <span class="RatingCard...">4.7
-                    r'(\d+\.\d+)\s*★',  # 4.7 ★
+                    r'RatingCard-TopSection[^>]*>.*?<span[^>]*>(\d+[.,]\d+)',  # Рейтинг в RatingCard-TopSection > span
+                    r'RatingCard[^>]*>.*?(\d+[.,]\d+)\s*★',  # Рейтинг в RatingCard с звездами
+                    r'rating["\']?\s*[:=]\s*["\']?(\d+[.,]\d+)',  # rating: "4.7"/"4,7"
+                    r'<span[^>]*class[^>]*RatingCard[^>]*>(\d+[.,]\d+)',  # <span class="RatingCard...">4.7
+                    r'(\d+[.,]\d+)\s*★',  # 4.7 ★ / 4,7 ★
                 ]
                 
                 for pattern in rating_patterns:
                     match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
                     if match:
-                        try:
-                            rating_value = float(match.group(1))
-                            if 0 <= rating_value <= 5:  # Валидный рейтинг
-                                print(f"   📊 Рейтинг со страницы отзывов: {rating_value}")
-                                if not result:
-                                    result = {}
-                                result["rating"] = rating_value
-                                break
-                        except (ValueError, IndexError):
-                            continue
+                        rating_value = _normalize_rating_value(match.group(1))
+                        if rating_value is not None:
+                            print(f"   📊 Рейтинг со страницы отзывов: {rating_value}")
+                            if not result:
+                                result = {}
+                            result["rating"] = rating_value
+                            break
         except Exception as e:
             print(f"   ⚠️ Не удалось получить рейтинг со страницы отзывов: {e}")
         
@@ -845,13 +864,10 @@ class YandexBusinessParser:
         if result:
             # Парсим рейтинг (приоритет: реальный рейтинг из API, затем вычисленный)
             api_rating = result.get("rating") or result.get("average_rating") or result.get("score")
-            if api_rating:
-                try:
-                    info["rating"] = float(api_rating)
-                    if info["rating"] > 0:
-                        print(f"   📊 Рейтинг из API: {info['rating']}")
-                except (ValueError, TypeError):
-                    pass
+            normalized_api_rating = _normalize_rating_value(api_rating)
+            if normalized_api_rating is not None:
+                info["rating"] = normalized_api_rating
+                print(f"   📊 Рейтинг из API: {info['rating']}")
             
             # Парсим количество отзывов
             info["reviews_count"] = result.get("reviews_count") or result.get("reviews_total") or result.get("total_reviews") or 0
