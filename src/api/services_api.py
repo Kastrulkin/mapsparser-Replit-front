@@ -6,8 +6,38 @@ from database_manager import DatabaseManager
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
 import re
+import json
 
 services_bp = Blueprint('services', __name__)
+
+
+def _keywords_to_jsonb_payload(raw_keywords):
+    """Normalize keywords payload for jsonb column."""
+    if isinstance(raw_keywords, list):
+        cleaned = [str(v).strip() for v in raw_keywords if str(v).strip()]
+        return json.dumps(cleaned, ensure_ascii=False)
+
+    if isinstance(raw_keywords, str):
+        text = raw_keywords.strip()
+        if not text:
+            return json.dumps([], ensure_ascii=False)
+
+        # Already JSON?
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                cleaned = [str(v).strip() for v in parsed if str(v).strip()]
+                return json.dumps(cleaned, ensure_ascii=False)
+            if isinstance(parsed, str):
+                return json.dumps([parsed.strip()] if parsed.strip() else [], ensure_ascii=False)
+        except Exception:
+            pass
+
+        # Fallback: split plain text list
+        cleaned = [p.strip() for p in re.split(r"[,\n;]+", text) if p.strip()]
+        return json.dumps(cleaned, ensure_ascii=False)
+
+    return json.dumps([], ensure_ascii=False)
 
 @services_bp.route('/api/services/add', methods=['POST', 'OPTIONS'])
 def add_service():
@@ -49,6 +79,7 @@ def add_service():
         # Добавляем услугу
         import uuid
         service_id = str(uuid.uuid4())
+        keywords_json = _keywords_to_jsonb_payload(data.get('keywords', []))
         cursor.execute("""
             INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
@@ -59,7 +90,7 @@ def add_service():
             data.get('category', ''),
             data.get('name', ''),
             data.get('description', ''),
-            data.get('keywords', ''),
+            keywords_json,
             data.get('price', 0)
         ))
         
@@ -328,14 +359,8 @@ def update_service(service_id):
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Преобразуем keywords в строку JSON, если это массив
-        import json
         keywords = data.get('keywords', [])
-        if isinstance(keywords, list):
-            keywords_str = json.dumps(keywords, ensure_ascii=False)
-        elif isinstance(keywords, str):
-            keywords_str = keywords
-        else:
-            keywords_str = json.dumps([])
+        keywords_str = _keywords_to_jsonb_payload(keywords)
         
         # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
         cursor.execute("""

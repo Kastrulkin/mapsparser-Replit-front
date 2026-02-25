@@ -3076,6 +3076,10 @@ def services_optimize():
         region = request.form.get('region') or payload.get('region')
         business_name = request.form.get('business_name') or payload.get('business_name')
         length = request.form.get('description_length') or payload.get('description_length') or 150
+        recognize_only_raw = request.form.get('recognize_only')
+        if recognize_only_raw is None:
+            recognize_only_raw = payload.get('recognize_only')
+        recognize_only = str(recognize_only_raw).strip().lower() in ('1', 'true', 'yes', 'on')
 
         # Язык результата: получаем из запроса или из профиля пользователя
         requested_language = request.form.get('language') or payload.get('language')
@@ -3097,10 +3101,32 @@ def services_optimize():
         if not requested_business_id:
             requested_business_id = request.args.get('business_id')
         business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
+        business_industry = ""
+        business_type_value = ""
+        try:
+            db_meta = DatabaseManager()
+            cursor_meta = db_meta.conn.cursor()
+            cursor_meta.execute("SELECT industry, business_type FROM businesses WHERE id = %s", (business_id,))
+            row_meta = cursor_meta.fetchone()
+            if row_meta:
+                if hasattr(row_meta, "keys"):
+                    business_industry = (row_meta.get("industry") or "").strip()
+                    business_type_value = (row_meta.get("business_type") or "").strip()
+                elif isinstance(row_meta, (tuple, list)):
+                    business_industry = (row_meta[0] or "").strip() if len(row_meta) > 0 else ""
+                    business_type_value = (row_meta[1] or "").strip() if len(row_meta) > 1 else ""
+            db_meta.close()
+        except Exception:
+            business_industry = ""
+            business_type_value = ""
 
         # Источник: файл или текст
         file = request.files.get('file') if 'file' in request.files else None
         if file:
+            # Для файлов всегда выполняем шаг распознавания (без SEO-оптимизации).
+            # SEO-оптимизация должна выполняться отдельным явным действием.
+            recognize_only = True
+
             # Проверяем тип файла (прайс-листы + скриншоты)
             allowed_types = [
                 'application/pdf', 
@@ -3126,57 +3152,77 @@ def services_optimize():
                 
                 # Используем упрощенный промпт для анализа скриншота прайс-листа
                 try:
-                    with open('prompts/screenshot-analysis-prompt.txt', 'r', encoding='utf-8') as f:
-                        prompt_content = f.read()
-                    
-                    # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
-                    system_prompt = ""
-                    user_prompt_template = ""
-                    
-                    lines = prompt_content.split('\n')
-                    current_section = None
-                    
-                    for line in lines:
-                        if line.strip().startswith('SYSTEM_PROMPT'):
-                            current_section = 'system'
-                            continue
-                        elif line.strip().startswith('USER_PROMPT_TEMPLATE'):
-                            current_section = 'user'
-                            continue
-                        elif line.strip().startswith('"""') and current_section:
-                            if current_section == 'system':
-                                system_prompt = line.replace('"""', '').strip()
+                    if recognize_only:
+                        screenshot_prompt = """Ты анализируешь изображение прайс-листа/услуг.
+Верни СТРОГО валидный JSON без markdown:
+{
+  "services": [
+    {
+      "original_name": "точный текст названия услуги из изображения",
+      "original_description": "краткое описание из изображения или пустая строка",
+      "price": "цена как в изображении или null",
+      "keywords": [],
+      "category": "other"
+    }
+  ]
+}
+ПРАВИЛА:
+- НИЧЕГО не оптимизируй и не переписывай.
+- Не подменяй тематику услуг.
+- Если услуги не найдены, верни {"services": []}.
+"""
+                    else:
+                        with open('prompts/screenshot-analysis-prompt.txt', 'r', encoding='utf-8') as f:
+                            prompt_content = f.read()
+                        
+                        # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
+                        system_prompt = ""
+                        user_prompt_template = ""
+                        
+                        lines = prompt_content.split('\n')
+                        current_section = None
+                        
+                        for line in lines:
+                            if line.strip().startswith('SYSTEM_PROMPT'):
+                                current_section = 'system'
+                                continue
+                            elif line.strip().startswith('USER_PROMPT_TEMPLATE'):
+                                current_section = 'user'
+                                continue
+                            elif line.strip().startswith('"""') and current_section:
+                                if current_section == 'system':
+                                    system_prompt = line.replace('"""', '').strip()
+                                elif current_section == 'user':
+                                    user_prompt_template = line.replace('"""', '').strip()
+                                current_section = None
+                                continue
+                            elif current_section == 'system':
+                                system_prompt += line + '\n'
                             elif current_section == 'user':
-                                user_prompt_template = line.replace('"""', '').strip()
-                            current_section = None
-                            continue
-                        elif current_section == 'system':
-                            system_prompt += line + '\n'
-                        elif current_section == 'user':
-                            user_prompt_template += line + '\n'
-                    
-                    # Формируем финальный промпт
-                    formatted_user_prompt = user_prompt_template.format(
-                        region=region or 'Санкт-Петербург',
-                        business_name=business_name or 'Салон красоты',
-                        tone=tone or 'Профессиональный',
-                        length=length or 150,
-                        instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
-                    )
-                    screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
+                                user_prompt_template += line + '\n'
+                        
+                        # Формируем финальный промпт
+                        formatted_user_prompt = user_prompt_template.format(
+                            region=region or 'Санкт-Петербург',
+                            business_name=business_name or 'Салон красоты',
+                            tone=tone or 'Профессиональный',
+                            length=length or 150,
+                            instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
+                        )
+                        screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
                     
                 except FileNotFoundError:
-                    screenshot_prompt = """Проанализируй скриншот прайс-листа салона красоты и найди все услуги.
+                    screenshot_prompt = """Проанализируй скриншот прайс-листа и найди все услуги.
 
 ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
 {
   "services": [
     {
       "original_name": "исходное название с скриншота",
-      "optimized_name": "SEO-оптимизированное название",
-      "seo_description": "детальное описание с ключевыми словами",
-      "keywords": ["ключ1", "ключ2", "ключ3"],
-      "category": "hair|nails|spa|barber|massage|makeup|brows|lashes|other"
+      "original_description": "описание услуги или пустая строка",
+      "price": null,
+      "keywords": [],
+      "category": "other"
     }
   ]
 }"""
@@ -3216,10 +3262,75 @@ def services_optimize():
                         print(f"⚠️ Не удалось извлечь текст из DOCX: {docx_err}")
                         content = ""
 
-                # Для PDF/DOC/XLS/XLSX без надежного парсера оставляем мягкий fallback.
-                # Нужна непустая строка, иначе вернем понятную ошибку ниже.
+                # XLSX (zip + xl/worksheets + sharedStrings)
+                elif file.content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" or filename.endswith(".xlsx"):
+                    try:
+                        import io
+                        import zipfile
+                        import xml.etree.ElementTree as ET
+                        import re as _re
+
+                        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+                            shared_strings = []
+                            if "xl/sharedStrings.xml" in zf.namelist():
+                                ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+                                for si in ss_root.iter():
+                                    if si.tag.endswith("}si"):
+                                        parts = [t.text for t in si.iter() if t.tag.endswith("}t") and t.text]
+                                        shared_strings.append("".join(parts).strip())
+
+                            sheet_names = [n for n in zf.namelist() if n.startswith("xl/worksheets/") and n.endswith(".xml")]
+                            cells = []
+                            for sheet_name in sheet_names:
+                                root = ET.fromstring(zf.read(sheet_name))
+                                for cell in root.iter():
+                                    if not cell.tag.endswith("}c"):
+                                        continue
+                                    cell_type = cell.attrib.get("t")
+                                    v_node = None
+                                    for ch in cell:
+                                        if ch.tag.endswith("}v"):
+                                            v_node = ch
+                                            break
+                                        if ch.tag.endswith("}is"):
+                                            t_nodes = [t.text for t in ch.iter() if t.tag.endswith("}t") and t.text]
+                                            txt = "".join(t_nodes).strip()
+                                            if txt:
+                                                cells.append(txt)
+                                    if v_node is None or v_node.text is None:
+                                        continue
+                                    raw_val = v_node.text.strip()
+                                    if not raw_val:
+                                        continue
+                                    if cell_type == "s":
+                                        if raw_val.isdigit():
+                                            idx = int(raw_val)
+                                            if 0 <= idx < len(shared_strings):
+                                                txt = shared_strings[idx].strip()
+                                                if txt:
+                                                    cells.append(txt)
+                                    else:
+                                        # Берем только значения с буквами, чтобы отсечь служебные/пустые числа.
+                                        if _re.search(r"[A-Za-zА-Яа-яЁё]", raw_val):
+                                            cells.append(raw_val)
+
+                            # Убираем дубли, сохраняя порядок
+                            seen_cells = set()
+                            normalized_cells = []
+                            for c in cells:
+                                key = c.strip().lower()
+                                if not key or key in seen_cells:
+                                    continue
+                                seen_cells.add(key)
+                                normalized_cells.append(c.strip())
+                            content = "\n".join(normalized_cells)
+                    except Exception as xlsx_err:
+                        print(f"⚠️ Не удалось извлечь текст из XLSX: {xlsx_err}")
+                        content = ""
+
+                # Для PDF/DOC/XLS без парсера не пытаемся декодировать бинарь как текст.
                 else:
-                    content = raw_bytes.decode("utf-8", errors="ignore")
+                    content = ""
         else:
             content = (payload.get('text') or '').strip()
 
@@ -3235,158 +3346,76 @@ def services_optimize():
                     "error": "Не удалось извлечь текст из файла. Для документов используйте TXT/CSV или DOCX с текстом."
                 }), 400
 
-            # Загружаем частотные запросы
-            try:
-                with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
-                    frequent_queries = f.read()
-            except FileNotFoundError:
-                frequent_queries = "Частотные запросы не найдены"
-
-            seo_keywords = "SEO keywords are unavailable"
-            seo_keywords_top10 = "SEO keywords are unavailable"
-            try:
-                db_kw = DatabaseManager()
-                cur_kw = db_kw.conn.cursor()
-                seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur_kw, business_id, user_data['user_id'])
-                db_kw.close()
-            except Exception:
-                pass
-
-            # Проверяем наличие косметологических терминов в услугах
-            cosmetic_terms = [
-                'косметология', 'косметолог', 'чистка лица', 'пилинг лица',
-                'ботокс', 'диспорт', 'контурная пластика', 'филлеры',
-                'гиалуроновая кислота', 'биоревитализация', 'мезотерапия',
-                'плазмолифтинг', 'rf-лифтинг', 'smas-лифтинг', 'ультразвуковой smas',
-                'лазерная эпиляция', 'фотоэпиляция', 'лазерное омоложение',
-                'лазерная шлифовка', 'нитевой лифтинг', 'липолитики',
-                'микротоки', 'аппаратная косметология', 'дермапен', 'микронидлинг',
-                'антивозрастные процедуры', 'лечение акне', 'постакне', 'купероз',
-                'уход за кожей', 'омоложение лица', 'маска для лица'
-            ]
-
-            lower_content = content.lower()
-            lower_frequent = frequent_queries.lower() if frequent_queries else ""
-            missing_cosmetic_terms = [
-                term for term in cosmetic_terms
-                if term in lower_content and term not in lower_frequent
-            ]
-
-            if missing_cosmetic_terms:
-                print(f"⚠️ Найдены косметологические термины без частоток: {missing_cosmetic_terms}")
-                # Пытаемся инициировать обновление Wordstat
-                try:
-                    from update_wordstat_data import main as update_wordstat_main
-                    update_wordstat_main()
-                except Exception as e:
-                    print(f"⚠️ Не удалось запустить обновление Wordstat: {e}")
-                # Отправляем уведомление
-                try:
-                    send_email(
-                        "demyanovap@yandex.ru",
-                        "Нужны новые Wordstat-ключи (косметология)",
-                        "При анализе услуг найдены термины без частотных запросов:\n"
-                        + "\n".join(missing_cosmetic_terms)
-                    )
-                except Exception as e:
-                    print(f"⚠️ Не удалось отправить уведомление: {e}")
-
-            # Загружаем новый промпт из файла
-            try:
-                with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
-                    prompt_file = f.read()
-                
-                # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
-                system_prompt = ""
-                user_template = ""
-                
-                if "SYSTEM_PROMPT = " in prompt_file:
-                    system_start = prompt_file.find('SYSTEM_PROMPT = """') + len('SYSTEM_PROMPT = """')
-                    system_end = prompt_file.find('"""', system_start)
-                    system_prompt = prompt_file[system_start:system_end]
-                
-                if "USER_PROMPT_TEMPLATE = " in prompt_file:
-                    user_start = prompt_file.find('USER_PROMPT_TEMPLATE = """') + len('USER_PROMPT_TEMPLATE = """')
-                    user_end = prompt_file.find('"""', user_start)
-                    user_template = prompt_file[user_start:user_end]
-                
-                # Загружаем примеры хороших формулировок из БД пользователя
-                try:
-                    db = DatabaseManager()
-                    cur = db.conn.cursor()
-                    from core.db_helpers import ensure_user_examples_table
-                    ensure_user_examples_table(cur)
-                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
-                    rows = cur.fetchall()
-                    db.close()
-                    examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
-                    good_examples = "\n".join(examples_list) if examples_list else ""
-                except Exception:
-                    good_examples = ""
-                
-                # Формируем финальный промпт
-                user_prompt = user_template.replace('{region}', str(region or 'не указан'))
-                user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
-                user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
-                user_prompt = user_prompt.replace('{length}', str(length or 150))
-                user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
-                user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
-                user_prompt = user_prompt.replace('{seo_keywords}', str(seo_keywords))
-                user_prompt = user_prompt.replace('{seo_keywords_top10}', str(seo_keywords_top10))
-                user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
-                user_prompt = user_prompt.replace('{content}', str(content[:4000]))
-                
-                # Объединяем system и user промпты
-                prompt = f"{system_prompt}\n\n{user_prompt}"
-                
-            except FileNotFoundError:
-                # Fallback на старый промпт
-                default_prompt_template = """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
-Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
-
-Регион: {region}
-Название бизнеса: {business_name}
-Тон: {tone}
-Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
-Длина описания: {length} символов
-Дополнительные инструкции: {instructions}
-
-ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
-{frequent_queries}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
-{seo_keywords}
-Короткий TOP-10 SEO ключей:
-{seo_keywords_top10}
-
-Формат ответа СТРОГО В JSON:
+            if recognize_only:
+                prompt = f"""Ты анализируешь файл с услугами и должен только извлечь услуги.
+Отвечай только валидным JSON без markdown:
 {{
   "services": [
     {{
-      "original_name": "...",
-      "optimized_name": "...",              
-      "seo_description": "...",             
-      "keywords": ["...", "...", "..."], 
-      "price": null,
-      "category": "hair|nails|spa|barber|massage|other"
+      "original_name": "точное название услуги из файла",
+      "original_description": "описание услуги из файла или пустая строка",
+      "price": "цена как в файле или null",
+      "keywords": [],
+      "category": "other"
     }}
-  ],
-  "general_recommendations": ["...", "..."]
+  ]
 }}
+ПРАВИЛА:
+- Ничего не оптимизируй, не переписывай и не заменяй тематику.
+- Используй только данные из исходного текста.
+- Если подходящих услуг нет, верни: {{"services":[]}}.
 
-Исходные услуги/контент:
-{content}"""
-                
-                # Пытаемся получить промпт из БД, если не получилось - используем дефолтный
-                prompt_template = get_prompt_from_db('service_optimization', default_prompt_template)
+Текст файла:
+{content[:4000]}"""
+            else:
+                # Загружаем частотные запросы
+                try:
+                    with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
+                        frequent_queries = f.read()
+                except FileNotFoundError:
+                    frequent_queries = "Частотные запросы не найдены"
+
+                seo_keywords = "SEO keywords are unavailable"
+                seo_keywords_top10 = "SEO keywords are unavailable"
+                try:
+                    db_kw = DatabaseManager()
+                    cur_kw = db_kw.conn.cursor()
+                    seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur_kw, business_id, user_data['user_id'])
+                    db_kw.close()
+                except Exception:
+                    pass
+
+                # Загружаем примеры хороших формулировок из профиля пользователя
+                try:
+                    db_examples = DatabaseManager()
+                    cur_examples = db_examples.conn.cursor()
+                    from core.db_helpers import ensure_user_examples_table
+                    ensure_user_examples_table(cur_examples)
+                    cur_examples.execute(
+                        "SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC LIMIT 5",
+                        (user_data['user_id'],)
+                    )
+                    rows = cur_examples.fetchall()
+                    db_examples.close()
+                    examples_list = [row[0] if isinstance(row, tuple) else row.get('example_text') for row in rows]
+                    good_examples = "\n".join([e for e in examples_list if e]) if examples_list else ""
+                except Exception:
+                    good_examples = ""
+
+                # Единственный источник промпта: админка (AIPrompts)
+                prompt_template_db = get_prompt_from_db('service_optimization', None)
+                if not prompt_template_db:
+                    return jsonify({
+                        "success": False,
+                        "error": "Промпт service_optimization не настроен в админ-панели."
+                    }), 500
 
                 prompt = (
-                    prompt_template
+                    prompt_template_db
                     .replace('{region}', str(region or 'не указан'))
-                    .replace('{business_name}', str(business_name or 'салон красоты'))
+                    .replace('{business_name}', str(business_name or 'бизнес'))
+                    .replace('{industry}', str(business_industry or '-'))
+                    .replace('{business_type}', str(business_type_value or '-'))
                     .replace('{tone}', str(tone or 'профессиональный'))
                     .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
@@ -3394,6 +3423,7 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
                     .replace('{frequent_queries}', str(frequent_queries))
                     .replace('{seo_keywords}', str(seo_keywords))
                     .replace('{seo_keywords_top10}', str(seo_keywords_top10))
+                    .replace('{good_examples}', str(good_examples))
                     .replace('{content}', str(content[:4000]))
                 )
 
@@ -3488,7 +3518,82 @@ SEO-КЛЮЧИ ИЗ WORDSTAT (актуальные, релевантные):
             f.write(content)
 
         result = parsed_result
+
+        if recognize_only and isinstance(result, dict):
+            raw_services = result.get('services', [])
+            normalized_services = []
+            if isinstance(raw_services, list):
+                for item in raw_services:
+                    if isinstance(item, str):
+                        name = item.strip()
+                        if not name:
+                            continue
+                        normalized_services.append({
+                            "original_name": name,
+                            "optimized_name": name,
+                            "original_description": "",
+                            "seo_description": "",
+                            "keywords": [],
+                            "price": None,
+                            "category": "other"
+                        })
+                        continue
+                    if not isinstance(item, dict):
+                        continue
+
+                    original_name = (
+                        item.get('original_name')
+                        or item.get('name')
+                        or item.get('service_name')
+                        or item.get('title')
+                        or ''
+                    )
+                    original_name = str(original_name).strip()
+                    if not original_name:
+                        continue
+
+                    original_description = (
+                        item.get('original_description')
+                        or item.get('description')
+                        or item.get('seo_description')
+                        or ''
+                    )
+                    original_description = str(original_description).strip()
+
+                    raw_keywords = item.get('keywords', [])
+                    if isinstance(raw_keywords, list):
+                        keywords = [str(v).strip() for v in raw_keywords if str(v).strip()]
+                    elif isinstance(raw_keywords, str):
+                        keywords = [v.strip() for v in re.split(r"[,\n;]+", raw_keywords) if v.strip()]
+                    else:
+                        keywords = []
+
+                    price = item.get('price')
+                    category = item.get('category') or 'other'
+
+                    normalized_services.append({
+                        "original_name": original_name,
+                        "optimized_name": original_name,
+                        "original_description": original_description,
+                        "seo_description": original_description,
+                        "keywords": keywords,
+                        "price": price,
+                        "category": category
+                    })
+
+            result = {
+                "services": normalized_services,
+                "general_recommendations": []
+            }
+
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
+
+        if file and services_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "В файле не найдены подходящие услуги. Проверьте содержание и формат файла."
+            }), 422
+
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -4593,16 +4698,39 @@ def add_service():
         """)
         columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         
+        def _keywords_to_jsonb_payload(raw_keywords):
+            if isinstance(raw_keywords, list):
+                cleaned = [str(v).strip() for v in raw_keywords if str(v).strip()]
+                return json.dumps(cleaned, ensure_ascii=False)
+            if isinstance(raw_keywords, str):
+                text = raw_keywords.strip()
+                if not text:
+                    return json.dumps([], ensure_ascii=False)
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, list):
+                        cleaned = [str(v).strip() for v in parsed if str(v).strip()]
+                        return json.dumps(cleaned, ensure_ascii=False)
+                    if isinstance(parsed, str):
+                        return json.dumps([parsed.strip()] if parsed.strip() else [], ensure_ascii=False)
+                except Exception:
+                    pass
+                cleaned = [p.strip() for p in re.split(r"[,\n;]+", text) if p.strip()]
+                return json.dumps(cleaned, ensure_ascii=False)
+            return json.dumps([], ensure_ascii=False)
+
+        keywords_json = _keywords_to_jsonb_payload(keywords)
+
         if 'business_id' in columns and business_id:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
+            """, (service_id, user_id, business_id, category, name, description, keywords_json, price))
         else:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
+            """, (service_id, user_id, category, name, description, keywords_json, price))
 
         db.conn.commit()
         db.close()
@@ -9001,11 +9129,13 @@ def get_prompts():
         if not rows:
             default_prompts = [
                 ('service_optimization', 
-                 """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                 """Ты - SEO-специалист по локальному бизнесу. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
 
 Регион: {region}
 Название бизнеса: {business_name}
+Индустрия: {industry}
+Тип бизнеса: {business_type}
 Тон: {tone}
 Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
 Длина описания: {length} символов

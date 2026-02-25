@@ -1,5 +1,12 @@
 # Project Agent Rules (Canonical)
 
+## 0. Mandatory Working Directory
+- On server, run **all commands** from `/opt/seo-app` unless explicitly stated otherwise.
+- Never assume current directory on server.
+- Always start every server command block with:
+  - `cd /opt/seo-app`
+- This rule applies to `docker compose`, `docker`, `curl`, `grep`, `psql`, `python`, and any other server command.
+
 This file is the canonical instruction set for AI agents in this repository.
 
 ## 1. Source of Truth

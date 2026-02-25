@@ -144,6 +144,7 @@ export default function ServiceOptimizer({
         if (instructions) formData.append('instructions', instructions);
         if (region) formData.append('region', region);
         formData.append('description_length', String(length));
+        formData.append('recognize_only', 'true');
         response = await fetch(`${window.location.origin}/api/services/optimize`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
@@ -163,8 +164,12 @@ export default function ServiceOptimizer({
       if (!response.ok || data.error) {
         setError(data.error || 'Ошибка оптимизации');
       } else {
-        setResult(Array.isArray(data.result?.services) ? data.result.services : []);
+        const services = Array.isArray(data.result?.services) ? data.result.services : [];
+        setResult(services);
         setRecs(Array.isArray(data.result?.general_recommendations) ? data.result.general_recommendations : []);
+        if (mode === 'file' && services.length === 0) {
+          setError('В файле не найдены подходящие услуги. Проверьте содержание и формат файла.');
+        }
       }
     } catch (e: any) {
       setError(e.message || 'Ошибка запроса');
@@ -214,8 +219,8 @@ export default function ServiceOptimizer({
     });
   };
 
-  const addServiceToList = async (serviceIndex: number, preferOriginal: boolean = false) => {
-    if (!result) return;
+  const addServiceToList = async (serviceIndex: number, preferOriginal: boolean = false): Promise<boolean> => {
+    if (!result) return false;
     const service = result[serviceIndex];
     const accepted = acceptedOptimizations.get(serviceIndex) || {};
     const editable = editableValues.get(serviceIndex) || {};
@@ -224,6 +229,10 @@ export default function ServiceOptimizer({
       const token = localStorage.getItem('auth_token');
       // Получаем business_id из пропсов или из localStorage
       const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
+      if (!currentBusinessId) {
+        setError('Не выбран бизнес для сохранения услуг');
+        return false;
+      }
       
       // Шаг "Распознать -> записать": сохраняем оригинальные названия.
       const finalName = preferOriginal
@@ -258,11 +267,14 @@ export default function ServiceOptimizer({
       if (response.ok && data.success) {
         setAddedServices(prev => new Set([...prev, serviceIndex]));
         setError(null);
+        return true;
       } else {
         setError(data.error || 'Ошибка добавления услуги');
+        return false;
       }
     } catch (e: any) {
       setError('Ошибка добавления услуги: ' + e.message);
+      return false;
     }
   };
 
@@ -276,18 +288,26 @@ export default function ServiceOptimizer({
     setError(null);
     try {
       let savedCount = 0;
+      let failedCount = 0;
       for (let i = 0; i < result.length; i += 1) {
         if (addedServices.has(i)) continue;
-        await addServiceToList(i, true);
-        savedCount += 1;
+        const ok = await addServiceToList(i, true);
+        if (ok) {
+          savedCount += 1;
+        } else {
+          failedCount += 1;
+        }
       }
 
-      if (onServicesImported) {
+      if (savedCount > 0 && onServicesImported) {
         await onServicesImported();
       }
-      setError(null);
-      if (savedCount === 0) {
+      if (savedCount === 0 && failedCount === 0) {
         setError('Новых услуг для записи нет');
+      } else if (failedCount > 0) {
+        setError(`Сохранено: ${savedCount}. Ошибок записи: ${failedCount}. Проверьте выбранный бизнес и логи.`);
+      } else {
+        setError(`Успешно сохранено услуг: ${savedCount}`);
       }
     } catch (e: any) {
       setError(e?.message || 'Ошибка записи распознанных услуг');
@@ -369,7 +389,7 @@ export default function ServiceOptimizer({
       {hideTextInput && (
         <div className="flex flex-wrap gap-2">
           <Button onClick={callOptimize} disabled={loading || !file}>
-            {loading ? 'Распознаем…' : 'Распознать из файла'}
+            {loading ? 'Распознаем…' : 'Распознать из файла (без SEO)'}
           </Button>
           <Button
             variant="outline"
@@ -397,7 +417,7 @@ export default function ServiceOptimizer({
             </div>
           ) : (
           <div className="overflow-x-auto w-full">
-            <table className="min-w-full text-sm">
+            <table className="w-full table-fixed text-sm">
               <thead>
                 <tr className="text-left text-gray-600">
                   <th className="p-2">Название</th>
@@ -422,9 +442,9 @@ export default function ServiceOptimizer({
                   
                   return (
                     <tr key={i} className="border-t">
-                      <td className="p-2 align-top">
+                      <td className="p-2 align-top min-w-0">
                         <div className="space-y-2">
-                          <div className="text-gray-800 font-medium">{s.original_name}</div>
+                          <div className="text-gray-800 font-medium break-words whitespace-normal">{s.original_name}</div>
                           {!accepted.name && (
                             <div className="space-y-1">
                               <div className="text-sm text-green-700 bg-green-50 p-2 rounded border border-green-200">
@@ -433,7 +453,7 @@ export default function ServiceOptimizer({
                                   value={editable.name !== undefined ? editable.name : s.optimized_name}
                                   onChange={(e) => updateEditableValue(i, 'name', e.target.value)}
                                   rows={2}
-                                  className="text-sm"
+                                  className="text-sm w-full max-w-full"
                                 />
                                 <Button
                                   size="sm"
@@ -453,16 +473,16 @@ export default function ServiceOptimizer({
                           )}
                         </div>
                       </td>
-                      <td className="p-2 align-top">
+                      <td className="p-2 align-top min-w-0">
                         {accepted.name ? (
                           <span className="text-green-600 text-sm">✓ Принято</span>
                         ) : (
                           <span className="text-gray-400 text-sm">Ожидает принятия</span>
                         )}
                       </td>
-                      <td className="p-2 align-top">
+                      <td className="p-2 align-top min-w-0">
                         <div className="space-y-2">
-                          <div className="text-gray-600 text-sm">{s.original_description || '-'}</div>
+                          <div className="text-gray-600 text-sm break-words whitespace-normal">{s.original_description || '-'}</div>
                           {!accepted.description && s.seo_description && (
                             <div className="space-y-1">
                               <div className="text-sm text-green-700 bg-green-50 p-2 rounded border border-green-200">
@@ -471,7 +491,7 @@ export default function ServiceOptimizer({
                                   value={editable.description !== undefined ? editable.description : s.seo_description}
                                   onChange={(e) => updateEditableValue(i, 'description', e.target.value)}
                                   rows={3}
-                                  className="text-sm"
+                                  className="text-sm w-full max-w-full"
                                 />
                                 <Button
                                   size="sm"
@@ -491,14 +511,14 @@ export default function ServiceOptimizer({
                           )}
                         </div>
                       </td>
-                      <td className="p-2 align-top">
+                      <td className="p-2 align-top min-w-0">
                         {accepted.description ? (
                           <span className="text-green-600 text-sm">✓ Принято</span>
                         ) : (
                           <span className="text-gray-400 text-sm">Ожидает принятия</span>
                         )}
                       </td>
-                      <td className="p-2 align-top text-gray-600">{(s.keywords||[]).join(', ')}</td>
+                      <td className="p-2 align-top text-gray-600 break-words whitespace-normal">{(s.keywords||[]).join(', ')}</td>
                       <td className="p-2 align-top text-gray-600">{s.price || ''}</td>
                       <td className="p-2 align-top">
                         {addedServices.has(i) ? (
