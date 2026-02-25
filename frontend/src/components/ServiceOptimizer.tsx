@@ -60,6 +60,7 @@ export default function ServiceOptimizer({
   const [loading, setLoading] = useState(false);
   const [savingRecognized, setSavingRecognized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizeResultService[] | null>(null);
   const [recs, setRecs] = useState<string[] | null>(null);
   const [addedServices, setAddedServices] = useState<Set<number>>(new Set());
@@ -128,6 +129,7 @@ export default function ServiceOptimizer({
   const callOptimize = async () => {
     setLoading(true);
     setError(null);
+    setSuccess(null);
     setResult(null);
     try {
       const token = localStorage.getItem('auth_token');
@@ -267,6 +269,7 @@ export default function ServiceOptimizer({
       if (response.ok && data.success) {
         setAddedServices(prev => new Set([...prev, serviceIndex]));
         setError(null);
+        setSuccess(null);
         return true;
       } else {
         setError(data.error || 'Ошибка добавления услуги');
@@ -286,6 +289,7 @@ export default function ServiceOptimizer({
 
     setSavingRecognized(true);
     setError(null);
+    setSuccess(null);
     try {
       let savedCount = 0;
       let failedCount = 0;
@@ -307,7 +311,7 @@ export default function ServiceOptimizer({
       } else if (failedCount > 0) {
         setError(`Сохранено: ${savedCount}. Ошибок записи: ${failedCount}. Проверьте выбранный бизнес и логи.`);
       } else {
-        setError(`Успешно сохранено услуг: ${savedCount}`);
+        setSuccess(`Успешно сохранено услуг: ${savedCount}`);
       }
     } catch (e: any) {
       setError(e?.message || 'Ошибка записи распознанных услуг');
@@ -376,13 +380,23 @@ export default function ServiceOptimizer({
 
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded">{success}</div>}
 
       {!hideTextInput && (
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={callOptimize} disabled={loading || (mode==='text' ? text.trim().length===0 : !file)}>
-          {loading ? 'Обрабатываем…' : 'Оптимизировать'}
+          {loading ? 'Обрабатываем…' : (mode === 'file' ? 'Распознать из файла (без SEO)' : 'Оптимизировать')}
         </Button>
-        {result && <Button variant="outline" onClick={exportCSV}>Экспорт CSV</Button>}
+        {mode === 'file' && (
+          <Button
+            variant="outline"
+            onClick={saveRecognizedServices}
+            disabled={savingRecognized || !result || result.length === 0}
+          >
+            {savingRecognized ? 'Записываем…' : 'Записать в услуги'}
+          </Button>
+        )}
+        {result && mode !== 'file' && <Button variant="outline" onClick={exportCSV}>Экспорт CSV</Button>}
       </div>
       )}
 
@@ -414,6 +428,41 @@ export default function ServiceOptimizer({
           {result.length === 0 ? (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded text-sm">
               Не удалось распознать услуги из файла. Попробуйте другой формат или файл с более чёткой структурой.
+            </div>
+          ) : (
+          (hideTextInput || mode === 'file') ? (
+            <div className="space-y-3">
+              {result.map((s, i) => (
+                <div key={i} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="font-semibold text-gray-900 break-words whitespace-normal">
+                    {s.original_name || s.optimized_name || '—'}
+                  </div>
+                  {(s.original_description || s.seo_description) && (
+                    <div className="mt-1 text-sm text-gray-600 break-words whitespace-normal">
+                      {s.original_description || s.seo_description}
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2 text-sm text-gray-700">
+                    <span className="font-medium">Цена:</span>
+                    <span>{s.price ? String(s.price) : '—'}</span>
+                    {Array.isArray(s.keywords) && s.keywords.length > 0 && (
+                      <>
+                        <span className="font-medium">Ключевые слова:</span>
+                        <span className="break-words whitespace-normal">{s.keywords.join(', ')}</span>
+                      </>
+                    )}
+                  </div>
+                  {!addedServices.has(i) ? (
+                    <div className="mt-3">
+                      <Button size="sm" variant="outline" onClick={() => addServiceToList(i, true)}>
+                        Добавить в список услуг
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm text-green-600">✓ Добавлено</div>
+                  )}
+                </div>
+              ))}
             </div>
           ) : (
           <div className="overflow-x-auto w-full">
@@ -540,6 +589,7 @@ export default function ServiceOptimizer({
               </tbody>
             </table>
           </div>
+          )
           )}
         </div>
       )}

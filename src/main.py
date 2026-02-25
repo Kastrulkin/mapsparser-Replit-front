@@ -3268,7 +3268,6 @@ def services_optimize():
                         import io
                         import zipfile
                         import xml.etree.ElementTree as ET
-                        import re as _re
 
                         with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
                             shared_strings = []
@@ -3280,50 +3279,67 @@ def services_optimize():
                                         shared_strings.append("".join(parts).strip())
 
                             sheet_names = [n for n in zf.namelist() if n.startswith("xl/worksheets/") and n.endswith(".xml")]
-                            cells = []
+                            rows_text = []
+
+                            def _cell_value(cell_node):
+                                cell_type = cell_node.attrib.get("t")
+
+                                # Inline string: <c t="inlineStr"><is><t>...</t></is></c>
+                                if cell_type == "inlineStr":
+                                    t_nodes = [t.text for t in cell_node.iter() if t.tag.endswith("}t") and t.text]
+                                    return "".join(t_nodes).strip()
+
+                                v_node = None
+                                for ch in cell_node:
+                                    if ch.tag.endswith("}v"):
+                                        v_node = ch
+                                        break
+
+                                if v_node is None or v_node.text is None:
+                                    return ""
+
+                                raw_val = v_node.text.strip()
+                                if not raw_val:
+                                    return ""
+
+                                if cell_type == "s" and raw_val.isdigit():
+                                    idx = int(raw_val)
+                                    if 0 <= idx < len(shared_strings):
+                                        return shared_strings[idx].strip()
+
+                                # Для чисел/текста возвращаем как есть — цены важны.
+                                return raw_val
+
                             for sheet_name in sheet_names:
                                 root = ET.fromstring(zf.read(sheet_name))
-                                for cell in root.iter():
-                                    if not cell.tag.endswith("}c"):
+                                for row in root.iter():
+                                    if not row.tag.endswith("}row"):
                                         continue
-                                    cell_type = cell.attrib.get("t")
-                                    v_node = None
-                                    for ch in cell:
-                                        if ch.tag.endswith("}v"):
-                                            v_node = ch
-                                            break
-                                        if ch.tag.endswith("}is"):
-                                            t_nodes = [t.text for t in ch.iter() if t.tag.endswith("}t") and t.text]
-                                            txt = "".join(t_nodes).strip()
-                                            if txt:
-                                                cells.append(txt)
-                                    if v_node is None or v_node.text is None:
-                                        continue
-                                    raw_val = v_node.text.strip()
-                                    if not raw_val:
-                                        continue
-                                    if cell_type == "s":
-                                        if raw_val.isdigit():
-                                            idx = int(raw_val)
-                                            if 0 <= idx < len(shared_strings):
-                                                txt = shared_strings[idx].strip()
-                                                if txt:
-                                                    cells.append(txt)
-                                    else:
-                                        # Берем только значения с буквами, чтобы отсечь служебные/пустые числа.
-                                        if _re.search(r"[A-Za-zА-Яа-яЁё]", raw_val):
-                                            cells.append(raw_val)
 
-                            # Убираем дубли, сохраняя порядок
-                            seen_cells = set()
-                            normalized_cells = []
-                            for c in cells:
-                                key = c.strip().lower()
-                                if not key or key in seen_cells:
+                                    row_values = []
+                                    for cell in row:
+                                        if not cell.tag.endswith("}c"):
+                                            continue
+                                        value = _cell_value(cell)
+                                        if value:
+                                            row_values.append(value)
+
+                                    if not row_values:
+                                        continue
+
+                                    # Строковый вид сохраняет связь "услуга + цена" в одной строке.
+                                    rows_text.append(" | ".join(row_values))
+
+                            # Убираем дубли строк, сохраняя порядок.
+                            seen_rows = set()
+                            normalized_rows = []
+                            for row_text in rows_text:
+                                key = row_text.strip().lower()
+                                if not key or key in seen_rows:
                                     continue
-                                seen_cells.add(key)
-                                normalized_cells.append(c.strip())
-                            content = "\n".join(normalized_cells)
+                                seen_rows.add(key)
+                                normalized_rows.append(row_text.strip())
+                            content = "\n".join(normalized_rows)
                     except Exception as xlsx_err:
                         print(f"⚠️ Не удалось извлечь текст из XLSX: {xlsx_err}")
                         content = ""

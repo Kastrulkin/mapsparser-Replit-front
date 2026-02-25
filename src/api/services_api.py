@@ -304,9 +304,12 @@ def get_services():
                         if cur_upd > prev_upd:
                             parsed_by_key[key] = svc
 
-                # Если есть распарсенные услуги, в UI отдаём только их:
-                # это гарантирует замену устаревшего ручного списка актуальными данными парсинга.
-                services = list(parsed_by_key.values())
+                # Возвращаем распарсенные + ручные без дублей по ключу.
+                # Это сохраняет видимость вручную добавленных услуг после refresh.
+                parsed_merged = list(parsed_by_key.values())
+                parsed_keys = {_svc_key(svc) for svc in parsed_merged}
+                manual_unique = [svc for svc in manual_services if _svc_key(svc) not in parsed_keys]
+                services = parsed_merged + manual_unique
 
             # Убираем служебные поля из ответа API
             for svc in services:
