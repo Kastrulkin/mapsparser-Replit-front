@@ -3651,6 +3651,95 @@ def services_optimize():
             print(f"❌ Ошибка: parsed_result не является словарём, тип: {type(parsed_result)}")
             parsed_result = {}
 
+        # Защита от "утечки примеров" из промпта в финальный ответ:
+        # если модель ушла в нерелевантную тему, не применяем такой SEO-текст.
+        def _tokenize_topic(text: str):
+            import re as _re
+            if not text:
+                return set()
+            return {
+                w.lower()
+                for w in _re.findall(r"[A-Za-zА-Яа-яЁё0-9]{4,}", str(text))
+                if len(w) >= 4
+            }
+
+        def _looks_like_prompt_leak(text: str) -> bool:
+            if not text:
+                return False
+            lower = str(text).lower()
+            markers = (
+                "пример",
+                "исходные данные",
+                "результат:",
+                "seo-ключи",
+                "название услуги:",
+                "описание услуги:",
+                "###",
+                "---",
+            )
+            return sum(1 for m in markers if m in lower) >= 2
+
+        source_lines = [ln.strip() for ln in str(content or "").splitlines() if ln.strip()]
+        input_original_name = source_lines[0] if source_lines else ""
+        input_original_description = " ".join(source_lines[1:]).strip() if len(source_lines) > 1 else ""
+
+        services_block = parsed_result.get("services")
+        if not isinstance(services_block, list):
+            services_block = []
+            parsed_result["services"] = services_block
+
+        # Для одиночной оптимизации из UI всегда фиксируем исходные поля из входного текста.
+        if (
+            not recognize_only
+            and not file
+            and isinstance(services_block, list)
+            and len(services_block) == 1
+            and input_original_name
+            and isinstance(services_block[0], dict)
+        ):
+            services_block[0]["original_name"] = input_original_name
+            if input_original_description:
+                services_block[0]["original_description"] = input_original_description
+
+        sanitized_services = []
+        for svc in services_block:
+            if not isinstance(svc, dict):
+                continue
+            original_name = str(svc.get("original_name") or input_original_name or "").strip()
+            original_description = str(svc.get("original_description") or input_original_description or "").strip()
+            optimized_name = str(svc.get("optimized_name") or "").strip()
+            seo_description = str(svc.get("seo_description") or "").strip()
+
+            # Если модель не дала optimized_* в ожидаемом JSON, но вернула "Название/Описание услуги" строками.
+            if not optimized_name and "Название услуги:" in seo_description:
+                import re as _re
+                m_name = _re.search(r"Название услуги:\s*\*{0,2}\s*([^\n\r*]+)", seo_description, flags=_re.IGNORECASE)
+                if m_name:
+                    optimized_name = " ".join(m_name.group(1).split()).strip(" -*_")
+                m_desc = _re.search(r"Описание услуги:\s*\*{0,2}\s*(.+)", seo_description, flags=_re.IGNORECASE | _re.DOTALL)
+                if m_desc:
+                    seo_description = " ".join(m_desc.group(1).split()).strip(" -*_")
+
+            # Анти-дрифт: проверяем пересечение темы исходника и оптимизации.
+            src_tokens = _tokenize_topic(f"{original_name} {original_description}")
+            out_tokens = _tokenize_topic(f"{optimized_name} {seo_description}")
+            overlap = len(src_tokens & out_tokens)
+            leaked = _looks_like_prompt_leak(seo_description) or _looks_like_prompt_leak(optimized_name)
+            topic_mismatch = bool(src_tokens) and overlap == 0
+
+            if (leaked or topic_mismatch) and not recognize_only:
+                print(f"⚠️ Нерелевантный SEO-ответ (leaked={leaked}, overlap={overlap}). Оставляем исходный текст.")
+                optimized_name = original_name or optimized_name
+                seo_description = original_description or seo_description
+
+            svc["original_name"] = original_name
+            svc["original_description"] = original_description
+            svc["optimized_name"] = optimized_name or original_name
+            svc["seo_description"] = seo_description or original_description
+            sanitized_services.append(svc)
+
+        parsed_result["services"] = sanitized_services
+
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
         cursor = db.conn.cursor()
