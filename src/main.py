@@ -3102,7 +3102,8 @@ def _load_table_columns(cursor, table_name: str) -> set[str]:
         """
         SELECT column_name
         FROM information_schema.columns
-        WHERE table_schema = 'public' AND lower(table_name) = lower(%s)
+        WHERE lower(table_name) = lower(%s)
+          AND table_schema = ANY (current_schemas(false))
         """,
         (table_name,),
     )
