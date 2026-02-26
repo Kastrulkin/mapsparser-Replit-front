@@ -15,9 +15,10 @@ FROM python:3.11-bookworm
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
 # Сеть на сервере может быть нестабильной, поэтому используем retry+backoff для apt update.
 RUN set -eux; \
-    printf 'Acquire::Retries "10";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
+    printf 'Acquire::Retries "10";\nAcquire::ForceIPv4 "true";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
     for n in 1 2 3 4 5; do \
-      apt-get update && break; \
+      timeout 120 apt-get update && break; \
+      [ "$n" -eq 5 ] && exit 1; \
       echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
       sleep "$((n*5))"; \
     done; \
@@ -38,7 +39,8 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
 RUN set -eux; \
     for n in 1 2 3 4 5; do \
-      apt-get update && break; \
+      timeout 120 apt-get update && break; \
+      [ "$n" -eq 5 ] && exit 1; \
       echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
       sleep "$((n*5))"; \
     done; \
