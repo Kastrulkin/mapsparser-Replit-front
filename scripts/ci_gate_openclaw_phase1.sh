@@ -18,7 +18,7 @@ bash -n scripts/smoke_openclaw_m2m_outbox.sh
 bash -n scripts/smoke_openclaw_m2m_reconciliation.sh
 bash -n scripts/check_openclaw_outbox_alerts.sh
 
-if [[ -n "${CI:-}" ]]; then
+if [[ -n "${CI:-}" && "${OPENCLAW_CI_STRICT:-1}" == "1" ]]; then
   echo "[CI gate] CI mode: M2M smoke is mandatory"
   : "${OPENCLAW_TOKEN:?OPENCLAW_TOKEN is required in CI}"
   : "${TENANT_ID:?TENANT_ID is required in CI}"
