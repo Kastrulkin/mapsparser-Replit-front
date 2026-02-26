@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
 import SEOKeywordsTab from "@/components/SEOKeywordsTab";
+import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 export const CardOverviewPage = () => {
@@ -1210,7 +1211,10 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="keywords">
-            <SEOKeywordsTab businessId={currentBusinessId} />
+            <div className="space-y-4">
+              <OpenClawOutboxMetrics businessId={currentBusinessId} />
+              <SEOKeywordsTab businessId={currentBusinessId} />
+            </div>
           </TabsContent>
         </Tabs>
         {editingService && (

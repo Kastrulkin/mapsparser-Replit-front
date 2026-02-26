@@ -3,6 +3,9 @@ import uuid
 from datetime import timedelta
 from typing import Any, Callable, Dict, Optional
 
+import hashlib
+import hmac
+import os
 import requests
 
 from database_manager import DatabaseManager
@@ -118,6 +121,12 @@ class ActionOrchestrator:
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_action_id ON action_callback_outbox(action_id)"
         )
+        cursor.execute(
+            "ALTER TABLE action_callback_outbox ADD COLUMN IF NOT EXISTS dedupe_key TEXT"
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_callback_outbox_dedupe_key ON action_callback_outbox(dedupe_key)"
+        )
 
         ensure_ledger_tables(cursor)
 
@@ -226,17 +235,21 @@ class ActionOrchestrator:
         callback_url: str,
         event_type: str,
         payload: Dict[str, Any],
+        dedupe_key: Optional[str] = None,
         max_attempts: int = 5,
     ) -> Optional[str]:
         callback_url = str(callback_url or "").strip()
         if not callback_url:
             return None
         outbox_id = str(uuid.uuid4())
+        effective_dedupe_key = str(dedupe_key or f"{action_id}:{event_type}")
         cursor.execute(
             """
             INSERT INTO action_callback_outbox
-                (id, action_id, tenant_id, callback_url, event_type, payload_json, status, attempts, max_attempts, next_attempt_at)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pending', 0, %s, CURRENT_TIMESTAMP)
+                (id, action_id, tenant_id, callback_url, event_type, payload_json, status, attempts, max_attempts, next_attempt_at, dedupe_key)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending', 0, %s, CURRENT_TIMESTAMP, %s)
+            ON CONFLICT (dedupe_key) DO NOTHING
+            RETURNING id
             """,
             (
                 outbox_id,
@@ -246,9 +259,28 @@ class ActionOrchestrator:
                 event_type,
                 json.dumps(payload or {}, ensure_ascii=False),
                 max(1, int(max_attempts or 5)),
+                effective_dedupe_key,
             ),
         )
-        return outbox_id
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return self._row_value(row, 0, "id", outbox_id)
+
+    def _callback_signature_secret(self) -> str:
+        # Use dedicated secret when provided; fallback to integration token for bootstrap.
+        return (
+            os.getenv("OPENCLAW_CALLBACK_SIGNING_SECRET", "").strip()
+            or os.getenv("OPENCLAW_LOCALOS_TOKEN", "").strip()
+        )
+
+    def _build_callback_signature(self, payload: Dict[str, Any], event_id: str, event_ts: str) -> str:
+        secret = self._callback_signature_secret()
+        if not secret:
+            return ""
+        body = json.dumps(payload or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        message = f"{event_id}.{event_ts}.{body}"
+        return hmac.new(secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
 
     def _send_callback(
         self,
@@ -326,7 +358,15 @@ class ActionOrchestrator:
                 ok = True
                 error_text = ""
                 try:
-                    response = requests.post(callback_url, json=payload, timeout=5)
+                    event_ts = utcnow().isoformat()
+                    signature = self._build_callback_signature(payload, outbox_id, event_ts)
+                    headers = {
+                        "X-LocalOS-Event-Id": str(outbox_id),
+                        "X-LocalOS-Event-Timestamp": event_ts,
+                    }
+                    if signature:
+                        headers["X-LocalOS-Signature"] = signature
+                    response = requests.post(callback_url, json=payload, timeout=5, headers=headers)
                     if int(getattr(response, "status_code", 500)) >= 400:
                         ok = False
                         error_text = f"http_{int(response.status_code)}"
@@ -436,8 +476,9 @@ class ActionOrchestrator:
                 "action_id": action_id,
                 "tenant_id": tenant_id,
                 "status": "expired",
-                "decision_reason": "ttl expired",
+                    "decision_reason": "ttl expired",
             },
+            dedupe_key=f"{action_id}:expired",
         )
         billing_obj = self._as_dict(billing_json)
         self._release_action_reserve(cursor, action_id, tenant_id, billing_obj.get("tariff_id"))
@@ -593,6 +634,7 @@ class ActionOrchestrator:
                         "reason": risk.get("reason"),
                         "expires_at": expires_at.isoformat(),
                     },
+                    dedupe_key=f"{action_id}:pending_human",
                 )
                 db.conn.commit()
                 try:
@@ -728,6 +770,7 @@ class ActionOrchestrator:
                     "result": handler_result.get("result") or {},
                     "billing": out_billing,
                 },
+                dedupe_key=f"{action_id}:completed",
             )
             db2.conn.commit()
             db2.close()
@@ -861,6 +904,7 @@ class ActionOrchestrator:
                         "trace_id": self._row_value(row, 7, "trace_id"),
                         "capability": self._row_value(row, 2, "capability"),
                     },
+                    dedupe_key=f"{action_id}:{decision}",
                 )
             db.conn.commit()
             try:
@@ -1205,6 +1249,122 @@ class ActionOrchestrator:
                 "count": len(items),
                 "limit": limit,
                 "offset": offset,
+            }
+        finally:
+            db.close()
+
+    def get_callback_metrics(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        window_minutes: int = 60,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            window_minutes = max(1, min(int(window_minutes or 60), 7 * 24 * 60))
+
+            cursor.execute(
+                """
+                SELECT status, COUNT(*) AS cnt
+                FROM action_callback_outbox
+                WHERE tenant_id = %s
+                  AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                GROUP BY status
+                """,
+                (str(tenant_id), window_minutes),
+            )
+            grouped = cursor.fetchall() or []
+            counts = {str(self._row_value(r, 0, "status") or ""): int(self._row_value(r, 1, "cnt", 0) or 0) for r in grouped}
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS stuck_retry
+                FROM action_callback_outbox
+                WHERE tenant_id = %s
+                  AND status = 'retry'
+                  AND next_attempt_at < (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                """,
+                (str(tenant_id), int(os.getenv("OPENCLAW_CALLBACK_RETRY_STUCK_MINUTES", "15"))),
+            )
+            stuck_row = cursor.fetchone()
+            stuck_retry_count = int(self._row_value(stuck_row, 0, "stuck_retry", 0) or 0)
+
+            sent = int(counts.get("sent", 0))
+            retry = int(counts.get("retry", 0))
+            dlq = int(counts.get("dlq", 0))
+            pending = int(counts.get("pending", 0))
+            sending = int(counts.get("sending", 0))
+            total_recent = sent + retry + dlq + pending + sending
+            delivery_success_rate = round((sent / total_recent) * 100, 2) if total_recent > 0 else 100.0
+
+            dlq_threshold = int(os.getenv("OPENCLAW_CALLBACK_DLQ_ALERT_THRESHOLD", "1"))
+            stuck_threshold = int(os.getenv("OPENCLAW_CALLBACK_STUCK_RETRY_ALERT_THRESHOLD", "1"))
+            low_success_threshold = float(os.getenv("OPENCLAW_CALLBACK_SUCCESS_RATE_MIN", "90"))
+
+            alerts = []
+            if dlq >= dlq_threshold:
+                alerts.append(
+                    {
+                        "code": "DLQ_THRESHOLD",
+                        "severity": "high",
+                        "message": f"DLQ count is {dlq} (threshold={dlq_threshold})",
+                    }
+                )
+            if stuck_retry_count >= stuck_threshold:
+                alerts.append(
+                    {
+                        "code": "STUCK_RETRY",
+                        "severity": "medium",
+                        "message": f"Stuck retries: {stuck_retry_count} (threshold={stuck_threshold})",
+                    }
+                )
+            if delivery_success_rate < low_success_threshold:
+                alerts.append(
+                    {
+                        "code": "LOW_SUCCESS_RATE",
+                        "severity": "medium",
+                        "message": f"Delivery success rate is {delivery_success_rate}% (min={low_success_threshold}%)",
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "window_minutes": window_minutes,
+                "metrics": {
+                    "sent": sent,
+                    "retry": retry,
+                    "dlq": dlq,
+                    "pending": pending,
+                    "sending": sending,
+                    "stuck_retry": stuck_retry_count,
+                    "total_recent": total_recent,
+                    "delivery_success_rate": delivery_success_rate,
+                },
+                "alerts": alerts,
             }
         finally:
             db.close()

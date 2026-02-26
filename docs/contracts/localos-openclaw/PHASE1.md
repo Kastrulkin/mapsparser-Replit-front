@@ -22,6 +22,8 @@
 10. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
 11. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
 12. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
+13. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
+14. `GET /api/capabilities/callbacks/metrics?tenant_id=&window_minutes=` (user dashboard metrics)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -52,6 +54,7 @@
 Для callback outbox endpoints:
 - `POST /api/openclaw/callbacks/dispatch` запускает отправку batch callback-событий
 - `GET /api/openclaw/callbacks/outbox` возвращает состояние очереди по tenant
+- `GET /api/openclaw/callbacks/metrics` возвращает метрики доставки (`sent/retry/dlq/pending/stuck_retry/success_rate`) + alerts
 - token-auth тот же (`X-OpenClaw-Token`)
 - автоматический фоновый dispatch выполняется в `worker` по таймеру
 - env-параметры фонового dispatch:
@@ -115,6 +118,14 @@ Billing-summary endpoint:
   - `dlq`
 - retry-политика: bounded exponential backoff (до 300 сек)
 - после `max_attempts` запись переходит в `dlq`
+- replay/idempotency delivery:
+  - каждый callback event получает `dedupe_key` (`{action_id}:{event_type}` по умолчанию)
+  - уникальный индекс `uq_action_callback_outbox_dedupe_key` блокирует повторную постановку одного и того же события
+- callback headers для верификации на стороне OpenClaw:
+  - `X-LocalOS-Event-Id`
+  - `X-LocalOS-Event-Timestamp`
+  - `X-LocalOS-Signature` (HMAC SHA256 от `event_id.timestamp.canonical_json(payload)`)
+  - секрет подписи: `OPENCLAW_CALLBACK_SIGNING_SECRET` (fallback: `OPENCLAW_LOCALOS_TOKEN`)
 
 ## Примеры
 

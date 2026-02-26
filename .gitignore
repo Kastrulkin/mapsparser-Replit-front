@@ -32,3 +32,13 @@ seo-images.tar.gz
 # Frontend Build
 frontend/dist/
 frontend/node_modules/
+
+# Sync conflict backups / duplicate suffix files
+.canon_backup_*/
+.cleanup_backup_*/
+Dockerfile ([0-9])
+docker-compose ([0-9]).yml
+README ([0-9]).md
+**/* ([0-9]).py
+**/* ([0-9]).ts
+**/* ([0-9]).tsx

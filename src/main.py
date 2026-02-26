@@ -3352,6 +3352,32 @@ def openclaw_callbacks_outbox():
     return jsonify(result), 200
 
 
+@app.route('/api/openclaw/callbacks/metrics', methods=['GET', 'OPTIONS'])
+def openclaw_callbacks_metrics():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    window_minutes = request.args.get("window_minutes", 60)
+    result = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
+        service_user,
+        tenant_id=tenant_id,
+        window_minutes=window_minutes,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/openclaw/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
 def openclaw_capabilities_action_decision(action_id):
     if request.method == 'OPTIONS':
@@ -3399,6 +3425,30 @@ def capabilities_action_decision(action_id):
     reason = str(data.get("reason") or "").strip()
     result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, user_data, reason)
     return jsonify(result), int(result.pop("http_code", 200 if result.get("success") else 400))
+
+
+@app.route('/api/capabilities/callbacks/metrics', methods=['GET', 'OPTIONS'])
+def capabilities_callbacks_metrics():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
+    if not tenant_id:
+        tenant_id = get_business_id_from_user(user_data["user_id"], None)
+    window_minutes = request.args.get("window_minutes", 60)
+    result = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=window_minutes,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
 
 
 @app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])

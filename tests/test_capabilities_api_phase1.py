@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 import uuid
+import json
+import hmac
+import hashlib
 
 import pytest
 
@@ -777,3 +780,170 @@ def test_openclaw_callbacks_dispatch_requires_token(capabilities_client):
     assert r_no_token.status_code == 401
     body = r_no_token.get_json()
     assert body["success"] is False
+
+
+def test_openclaw_callbacks_metrics_m2m_and_user(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    import main as main_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    try:
+        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn.cursor() as cur:
+            main_mod.PHASE1_ACTION_ORCHESTRATOR.ensure_tables(cur)
+            cur.execute(
+                """
+                INSERT INTO action_callback_outbox (id, action_id, tenant_id, callback_url, event_type, payload_json, status, attempts, max_attempts, next_attempt_at, dedupe_key)
+                VALUES
+                (%s, %s, %s, 'https://cb.local/sent', 'completed', %s, 'sent', 1, 5, CURRENT_TIMESTAMP, %s),
+                (%s, %s, %s, 'https://cb.local/retry', 'pending_human', %s, 'retry', 2, 5, CURRENT_TIMESTAMP - INTERVAL '20 minutes', %s),
+                (%s, %s, %s, 'https://cb.local/dlq', 'rejected', %s, 'dlq', 5, 5, CURRENT_TIMESTAMP, %s)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    str(uuid.uuid4()),
+                    info["business_id"],
+                    json.dumps({"ok": True}, ensure_ascii=False),
+                    f"{uuid.uuid4().hex}:sent",
+                    str(uuid.uuid4()),
+                    str(uuid.uuid4()),
+                    info["business_id"],
+                    json.dumps({"ok": False}, ensure_ascii=False),
+                    f"{uuid.uuid4().hex}:retry",
+                    str(uuid.uuid4()),
+                    str(uuid.uuid4()),
+                    info["business_id"],
+                    json.dumps({"ok": False}, ensure_ascii=False),
+                    f"{uuid.uuid4().hex}:dlq",
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+        r_m2m = info["client"].get(
+            f"/api/openclaw/callbacks/metrics?tenant_id={info['business_id']}&window_minutes=120",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m.status_code == 200, r_m2m.get_json()
+        body_m2m = r_m2m.get_json()
+        assert body_m2m["success"] is True
+        assert body_m2m["tenant_id"] == info["business_id"]
+        assert body_m2m["metrics"]["sent"] >= 1
+        assert body_m2m["metrics"]["retry"] >= 1
+        assert body_m2m["metrics"]["dlq"] >= 1
+        assert any(a.get("code") == "DLQ_THRESHOLD" for a in body_m2m.get("alerts", []))
+
+        r_user = info["client"].get(
+            f"/api/capabilities/callbacks/metrics?tenant_id={info['business_id']}&window_minutes=120",
+            headers=_auth_headers(),
+        )
+        assert r_user.status_code == 200, r_user.get_json()
+        body_user = r_user.get_json()
+        assert body_user["success"] is True
+        assert body_user["tenant_id"] == info["business_id"]
+        assert "metrics" in body_user
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    prev_token = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    secret_name = "OPENCLAW_CALLBACK_SIGNING_SECRET"
+    prev_secret = os.getenv(secret_name)
+    os.environ[secret_name] = "phase1-sign-secret"
+
+    import main as main_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    captured = {}
+
+    class _OkResponse:
+        status_code = 200
+
+    def _capture_post(url, json=None, timeout=None, headers=None):
+        captured["url"] = url
+        captured["json"] = json
+        captured["headers"] = headers or {}
+        return _OkResponse()
+
+    try:
+        orch = main_mod.PHASE1_ACTION_ORCHESTRATOR
+        conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+        with conn.cursor() as cur:
+            orch.ensure_tables(cur)
+            action_id = str(uuid.uuid4())
+            first_id = orch._enqueue_callback(
+                cur,
+                action_id=action_id,
+                tenant_id=info["business_id"],
+                callback_url="https://openclaw.local/callback",
+                event_type="completed",
+                payload={"hello": "world"},
+                dedupe_key=f"{action_id}:completed",
+            )
+            second_id = orch._enqueue_callback(
+                cur,
+                action_id=action_id,
+                tenant_id=info["business_id"],
+                callback_url="https://openclaw.local/callback",
+                event_type="completed",
+                payload={"hello": "world"},
+                dedupe_key=f"{action_id}:completed",
+            )
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM action_callback_outbox WHERE dedupe_key = %s",
+                (f"{action_id}:completed",),
+            )
+            count_row = cur.fetchone()
+        conn.commit()
+        conn.close()
+
+        assert first_id is not None
+        assert second_id is None
+        assert int((count_row["cnt"] if hasattr(count_row, "get") else count_row[0]) or 0) == 1
+
+        import core.action_orchestrator as orchestrator_mod
+
+        monkeypatch.setattr(orchestrator_mod.requests, "post", _capture_post)
+        r_dispatch = info["client"].post(
+            "/api/openclaw/callbacks/dispatch",
+            json={"batch_size": 10},
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_dispatch.status_code == 200, r_dispatch.get_json()
+        assert captured.get("url") == "https://openclaw.local/callback"
+
+        headers = captured.get("headers") or {}
+        event_id = headers.get("X-LocalOS-Event-Id")
+        event_ts = headers.get("X-LocalOS-Event-Timestamp")
+        signature = headers.get("X-LocalOS-Signature")
+        assert event_id
+        assert event_ts
+        assert signature
+
+        payload = captured.get("json") or {}
+        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        expected = hmac.new(
+            b"phase1-sign-secret",
+            f"{event_id}.{event_ts}.{canonical}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        assert signature == expected
+    finally:
+        if prev_token is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = prev_token
+        if prev_secret is None:
+            os.environ.pop(secret_name, None)
+        else:
+            os.environ[secret_name] = prev_secret
