@@ -123,6 +123,7 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=replay INCLUDE_RETRY=t
 
 ```bash
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=cleanup OLDER_THAN_MINUTES=1440 LIMIT=1000 ./scripts/manage_openclaw_outbox.sh
+```
 
 ## 9) One-Click Smoke + Recovery
 
@@ -136,4 +137,16 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_
 - `WINDOW_MINUTES` (default `60`) — окно метрик callback
 - `RECOVERY_ATTEMPTS` (default `2`) — число попыток replay+dispatch
 - `STRICT` (default `1`) — если алерты остались после recovery, скрипт завершится с `exit 2`
+
+## 10) Reproducible Server Deploy (Phase 2)
+
+Единый сценарий деплоя app/worker + верификация + OpenClaw smoke/recovery:
+
+```bash
+cd /opt/seo-app
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/deploy_openclaw_phase2.sh
+```
+
+Параметры:
+- `SKIP_BUILD=1` — пропустить сборку и выполнить только restart + verify
 ```
