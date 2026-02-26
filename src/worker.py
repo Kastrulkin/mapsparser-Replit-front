@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import signal
 import sys
 from typing import Dict, List, Any, Optional
+from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
 
 from browser_session import BrowserSession, BrowserSessionManager
@@ -41,6 +42,7 @@ CAPTCHA_TTL_MINUTES = 30
 CALLBACK_DISPATCH_ORCHESTRATOR = ActionOrchestrator(handlers={})
 _LAST_CALLBACK_DISPATCH_AT = 0.0
 _LAST_BILLING_RECONCILE_AT = 0.0
+_LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -73,6 +75,129 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
+def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
+    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    chat_id = str(chat_id or "").strip()
+    if not token or not chat_id:
+        return False
+    try:
+        payload = json.dumps(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "disable_web_page_preview": True,
+            }
+        ).encode("utf-8")
+        req = urllib_request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib_request.urlopen(req, timeout=10) as resp:
+            return 200 <= int(getattr(resp, "status", 500)) < 300
+    except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
+        print(f"[BILLING_RECONCILE] telegram send failed chat_id={chat_id}: {e}", flush=True)
+        return False
+    except Exception as e:
+        print(f"[BILLING_RECONCILE] telegram unexpected error chat_id={chat_id}: {e}", flush=True)
+        return False
+
+
+def _notify_superadmins_billing_reconcile(
+    tenant_id: str,
+    *,
+    actions_with_issues: int,
+    issue_count: int,
+    actions_checked: int,
+    sample_action_ids: List[str],
+) -> None:
+    if not _env_bool("OPENCLAW_BILLING_RECONCILE_ALERT_ENABLED", True):
+        return
+    interval_sec = max(60, int(os.getenv("OPENCLAW_BILLING_RECONCILE_ALERT_INTERVAL_SEC", "1800")))
+    now = time.time()
+    last_at = _LAST_BILLING_ALERT_BY_TENANT.get(str(tenant_id), 0.0)
+    if now - last_at < interval_sec:
+        return
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'users'
+            """
+        )
+        user_cols = {str(r[0]).lower() for r in (cursor.fetchall() or []) if r and r[0]}
+        if "telegram_id" not in user_cols:
+            return
+
+        cursor.execute(
+            """
+            SELECT COALESCE(name, ''), COALESCE(email, '')
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (str(tenant_id),),
+        )
+        business_row = cursor.fetchone()
+        business_name = str((business_row[0] if business_row else "") or "").strip()
+
+        cursor.execute(
+            """
+            SELECT telegram_id
+            FROM users
+            WHERE is_superadmin = TRUE
+              AND telegram_id IS NOT NULL
+              AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
+            ORDER BY created_at ASC
+            """
+        )
+        admin_rows = cursor.fetchall() or []
+        if not admin_rows:
+            return
+
+        sample = ", ".join([s for s in (sample_action_ids or []) if s][:5]) or "-"
+        lines = [
+            "🚨 OpenClaw billing reconcile alert",
+            f"Tenant: {tenant_id}",
+            f"Business: {business_name or '-'}",
+            f"Actions checked: {actions_checked}",
+            f"Actions with issues: {actions_with_issues}",
+            f"Issue count: {issue_count}",
+            f"Sample action_ids: {sample}",
+        ]
+        message = "\n".join(lines)
+        sent_any = False
+        for row in admin_rows:
+            telegram_id = str(row[0] or "").strip()
+            if not telegram_id:
+                continue
+            if _send_telegram_plain_message(telegram_id, message):
+                sent_any = True
+
+        if sent_any:
+            _LAST_BILLING_ALERT_BY_TENANT[str(tenant_id)] = now
+    except Exception as e:
+        print(f"[BILLING_RECONCILE] notify superadmin error tenant={tenant_id}: {e}", flush=True)
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
 def _reconcile_openclaw_billing_if_due() -> None:
     global _LAST_BILLING_RECONCILE_AT
     if not _env_bool("OPENCLAW_BILLING_RECONCILE_ENABLED", True):
@@ -87,6 +212,7 @@ def _reconcile_openclaw_billing_if_due() -> None:
     window_minutes = max(5, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES", "1440")), 30 * 24 * 60))
     limit = max(10, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_LIMIT", "200")), 1000))
     max_tenants = max(1, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_MAX_TENANTS", "100")), 1000))
+    min_alert_issues = max(1, int(os.getenv("OPENCLAW_BILLING_RECONCILE_ALERT_MIN_ISSUES", "1")))
 
     conn = None
     cursor = None
@@ -154,6 +280,16 @@ def _reconcile_openclaw_billing_if_due() -> None:
                     f"[BILLING_RECONCILE] ALERT tenant={tenant_id} actions_with_issues={actions_with_issues} issue_count={issue_count}",
                     flush=True,
                 )
+                if issue_count >= min_alert_issues:
+                    items = result.get("items") or []
+                    sample_action_ids = [str(it.get("action_id") or "") for it in items if it.get("issues")]
+                    _notify_superadmins_billing_reconcile(
+                        tenant_id,
+                        actions_with_issues=actions_with_issues,
+                        issue_count=issue_count,
+                        actions_checked=actions_checked,
+                        sample_action_ids=sample_action_ids,
+                    )
         except Exception as e:
             print(f"[BILLING_RECONCILE] tenant={tenant_id} exception: {e}", flush=True)
 
