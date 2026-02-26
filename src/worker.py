@@ -123,6 +123,16 @@ def _notify_superadmins_billing_reconcile(
     conn = None
     cursor = None
     try:
+        def _val(row: Any, idx: int, key: str, default: Any = None) -> Any:
+            if row is None:
+                return default
+            if isinstance(row, dict):
+                return row.get(key, default)
+            try:
+                return row[idx]
+            except Exception:
+                return default
+
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -146,7 +156,7 @@ def _notify_superadmins_billing_reconcile(
             (str(tenant_id),),
         )
         business_row = cursor.fetchone()
-        business_name = str((business_row[0] if business_row else "") or "").strip()
+        business_name = str((_val(business_row, 0, "name", "") or "")).strip()
 
         cursor.execute(
             """
@@ -175,7 +185,7 @@ def _notify_superadmins_billing_reconcile(
         message = "\n".join(lines)
         sent_any = False
         for row in admin_rows:
-            telegram_id = str(row[0] or "").strip()
+            telegram_id = str(_val(row, 0, "telegram_id", "") or "").strip()
             if not telegram_id:
                 continue
             if _send_telegram_plain_message(telegram_id, message):
