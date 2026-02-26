@@ -937,7 +937,6 @@ const Dashboard = () => {
                   Загрузка бизнесов...
                 </div>
               )}
-              <Button variant="outline" size="sm" onClick={() => setShowWizard(true)}>Мастер оптимизации</Button>
               <Button
                 variant="outline"
                 size="sm"

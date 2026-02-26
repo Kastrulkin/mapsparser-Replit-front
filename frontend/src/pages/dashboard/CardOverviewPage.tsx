@@ -40,6 +40,11 @@ export const CardOverviewPage = () => {
   const [reviewsTotal, setReviewsTotal] = useState<number>(0);
   const [lastParseDate, setLastParseDate] = useState<string | null>(null);
   const [competitors, setCompetitors] = useState<any[]>([]);
+  const [manualCompetitors, setManualCompetitors] = useState<any[]>([]);
+  const [manualCompetitorUrl, setManualCompetitorUrl] = useState('');
+  const [manualCompetitorName, setManualCompetitorName] = useState('');
+  const [addingManualCompetitor, setAddingManualCompetitor] = useState(false);
+  const [requestingAuditId, setRequestingAuditId] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Состояния для услуг
@@ -160,6 +165,82 @@ export const CardOverviewPage = () => {
     }
   };
 
+  const loadManualCompetitors = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/competitors/manual`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setManualCompetitors(Array.isArray(data.competitors) ? data.competitors : []);
+      }
+    } catch (e) {
+      console.error('Ошибка загрузки ручных конкурентов:', e);
+    }
+  };
+
+  const addManualCompetitor = async () => {
+    if (!currentBusinessId) return;
+    const url = manualCompetitorUrl.trim();
+    if (!url) {
+      setError('Укажите ссылку на конкурента');
+      return;
+    }
+    try {
+      setAddingManualCompetitor(true);
+      setError(null);
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/competitors/manual`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          url,
+          name: manualCompetitorName.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось добавить конкурента');
+      }
+      setManualCompetitorUrl('');
+      setManualCompetitorName('');
+      setSuccess('Конкурент добавлен');
+      await loadManualCompetitors();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось добавить конкурента');
+    } finally {
+      setAddingManualCompetitor(false);
+    }
+  };
+
+  const requestAudit = async (competitorId: string) => {
+    if (!currentBusinessId) return;
+    try {
+      setRequestingAuditId(competitorId);
+      setError(null);
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/competitors/manual/${competitorId}/audit`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось отправить запрос на аудит');
+      }
+      setSuccess('Запрос на аудит отправлен суперадмину');
+      await loadManualCompetitors();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось отправить запрос на аудит');
+    } finally {
+      setRequestingAuditId(null);
+    }
+  };
+
   // Map Sources Switcher Logic
   const [mapSources, setMapSources] = useState<string[]>([]);
   const [selectedSource, setSelectedSource] = useState<string>('all');
@@ -196,6 +277,7 @@ export const CardOverviewPage = () => {
       loadSummary();
       loadUserServices();
       loadExternalPosts();
+      loadManualCompetitors();
       loadMapSources();
       checkIfNetworkMaster();
     }
@@ -659,6 +741,8 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
+        <OpenClawOutboxMetrics businessId={currentBusinessId} />
+
         <Tabs defaultValue="services" className="space-y-8">
           <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
@@ -690,6 +774,79 @@ export const CardOverviewPage = () => {
                 <Trophy className="w-6 h-6 text-amber-500" />
                 <h2 className="text-2xl font-bold text-gray-900">Конкуренты</h2>
               </div>
+              <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                <p className="text-sm text-blue-900 mb-3">
+                  Добавьте конкурента, чтобы отслеживать его действия.
+                </p>
+                <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                  <input
+                    type="text"
+                    value={manualCompetitorUrl}
+                    onChange={(e) => setManualCompetitorUrl(e.target.value)}
+                    placeholder="Ссылка на конкурента (https://...)"
+                    className="w-full px-3 py-2 rounded-lg border border-blue-200 bg-white text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={manualCompetitorName}
+                    onChange={(e) => setManualCompetitorName(e.target.value)}
+                    placeholder="Название (необязательно)"
+                    className="w-full px-3 py-2 rounded-lg border border-blue-200 bg-white text-sm"
+                  />
+                  <Button
+                    onClick={addManualCompetitor}
+                    disabled={addingManualCompetitor}
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {addingManualCompetitor ? 'Добавляем…' : 'Добавить конкурента'}
+                  </Button>
+                </div>
+              </div>
+
+              {manualCompetitors.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Ручные конкуренты</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {manualCompetitors.map((comp: any) => (
+                      <div key={comp.id} className="bg-white border border-gray-200 p-4 rounded-xl">
+                        <div className="font-semibold text-gray-900 mb-1">{comp.name || 'Конкурент'}</div>
+                        <a
+                          href={comp.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-blue-600 break-all hover:underline"
+                        >
+                          {comp.url}
+                        </a>
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                            Аудит: {comp.audit_status === 'requested' ? 'запрошен' : comp.audit_status === 'ready' ? 'готов' : 'не запрошен'}
+                          </span>
+                          {comp.report_path && (
+                            <a
+                              href={comp.report_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                            >
+                              Открыть отчёт
+                            </a>
+                          )}
+                        </div>
+                        <Button
+                          onClick={() => requestAudit(comp.id)}
+                          disabled={requestingAuditId === comp.id}
+                          variant="outline"
+                          className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-50"
+                        >
+                          {requestingAuditId === comp.id ? 'Отправляем…' : 'Аудит'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {competitors.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {competitors.map((comp: any, idx: number) => (
@@ -1211,10 +1368,7 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="keywords">
-            <div className="space-y-4">
-              <OpenClawOutboxMetrics businessId={currentBusinessId} />
-              <SEOKeywordsTab businessId={currentBusinessId} />
-            </div>
+            <SEOKeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
         {editingService && (

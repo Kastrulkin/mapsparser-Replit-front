@@ -2158,6 +2158,230 @@ def get_external_summary(business_id):
         return jsonify(payload), 500
 
 
+def _ensure_manual_competitors_tables(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ManualCompetitors (
+            id TEXT PRIMARY KEY,
+            business_id TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            name TEXT,
+            url TEXT NOT NULL,
+            audit_status TEXT NOT NULL DEFAULT 'not_requested',
+            audit_requested_at TIMESTAMP NULL,
+            audit_requested_by TEXT NULL,
+            report_path TEXT NULL,
+            report_ready_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_manualcompetitors_business_url_unique
+        ON ManualCompetitors (business_id, url)
+        """
+    )
+
+
+@app.route("/api/business/<business_id>/competitors/manual", methods=["GET"])
+def list_manual_competitors(business_id):
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        _ensure_manual_competitors_tables(cursor)
+        cursor.execute(
+            """
+            SELECT id, name, url, audit_status, audit_requested_at, report_path, report_ready_at, created_at
+            FROM ManualCompetitors
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            """,
+            (business_id,),
+        )
+        rows = cursor.fetchall() or []
+        competitors = []
+        for row in rows:
+            rd = _row_to_dict(cursor, row)
+            competitors.append(
+                {
+                    "id": rd.get("id"),
+                    "name": rd.get("name") or "",
+                    "url": rd.get("url"),
+                    "audit_status": rd.get("audit_status") or "not_requested",
+                    "audit_requested_at": rd.get("audit_requested_at"),
+                    "report_path": rd.get("report_path"),
+                    "report_ready_at": rd.get("report_ready_at"),
+                    "created_at": rd.get("created_at"),
+                }
+            )
+
+        db.close()
+        return jsonify({"success": True, "competitors": competitors})
+    except Exception as e:
+        import traceback
+
+        err_tb = traceback.format_exc()
+        print(f"❌ list_manual_competitors: {e}\n{err_tb}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/business/<business_id>/competitors/manual", methods=["POST"])
+def add_manual_competitor(business_id):
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        competitor_url = str(data.get("url") or "").strip()
+        if not competitor_url:
+            return jsonify({"error": "Ссылка конкурента обязательна"}), 400
+
+        if not re.match(r"^https?://", competitor_url, re.IGNORECASE):
+            return jsonify({"error": "Укажите корректную ссылку (http/https)"}), 400
+
+        competitor_name = str(data.get("name") or "").strip()
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        _ensure_manual_competitors_tables(cursor)
+
+        existing_id = None
+        cursor.execute(
+            "SELECT id FROM ManualCompetitors WHERE business_id = %s AND url = %s LIMIT 1",
+            (business_id, competitor_url),
+        )
+        existing_row = cursor.fetchone()
+        if existing_row:
+            existing = _row_to_dict(cursor, existing_row)
+            existing_id = existing.get("id")
+
+        if existing_id:
+            cursor.execute(
+                """
+                UPDATE ManualCompetitors
+                SET name = COALESCE(NULLIF(%s, ''), name), updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (competitor_name, existing_id),
+            )
+            competitor_id = existing_id
+        else:
+            competitor_id = str(uuid.uuid4())
+            cursor.execute(
+                """
+                INSERT INTO ManualCompetitors (id, business_id, created_by, name, url)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (competitor_id, business_id, user_data["user_id"], competitor_name, competitor_url),
+            )
+
+        db.conn.commit()
+        db.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "competitor": {
+                    "id": competitor_id,
+                    "name": competitor_name,
+                    "url": competitor_url,
+                    "audit_status": "not_requested",
+                },
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        err_tb = traceback.format_exc()
+        print(f"❌ add_manual_competitor: {e}\n{err_tb}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/business/<business_id>/competitors/manual/<competitor_id>/audit", methods=["POST"])
+def request_manual_competitor_audit(business_id, competitor_id):
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        _ensure_manual_competitors_tables(cursor)
+        cursor.execute(
+            "SELECT id FROM ManualCompetitors WHERE id = %s AND business_id = %s LIMIT 1",
+            (competitor_id, business_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Конкурент не найден"}), 404
+
+        cursor.execute(
+            """
+            UPDATE ManualCompetitors
+            SET audit_status = 'requested',
+                audit_requested_at = CURRENT_TIMESTAMP,
+                audit_requested_by = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (user_data["user_id"], competitor_id),
+        )
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "message": "Запрос на аудит отправлен суперадмину"})
+    except Exception as e:
+        import traceback
+
+        err_tb = traceback.format_exc()
+        print(f"❌ request_manual_competitor_audit: {e}\n{err_tb}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/business/<business_id>/external/posts", methods=["GET"])
 def get_external_posts(business_id):
     """

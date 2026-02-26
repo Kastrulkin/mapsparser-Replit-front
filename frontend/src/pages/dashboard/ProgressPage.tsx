@@ -151,9 +151,7 @@ export const ProgressPage = () => {
           <h1 className="text-2xl font-bold text-gray-900">{t.dashboard?.progress?.title || "Прогресс"}</h1>
           <p className="text-gray-600 mt-1">{t.dashboard?.progress?.subtitle || "Отслеживайте развитие вашего бизнеса"}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowWizard(true)}>{t.dashboard?.progress?.wizard?.button || "Мастер оптимизации"}</Button>
-        </div>
+        <div className="flex gap-2" />
       </div>
 
       <BusinessHealthWidget businessId={currentBusinessId} className="mb-6" />
