@@ -123,4 +123,17 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=replay INCLUDE_RETRY=t
 
 ```bash
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=cleanup OLDER_THAN_MINUTES=1440 LIMIT=1000 ./scripts/manage_openclaw_outbox.sh
+
+## 9) One-Click Smoke + Recovery
+
+Для быстрого прогона и самовосстановления callback-контура (smoke + metrics + replay/re-dispatch + diagnose):
+
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_recover.sh
+```
+
+Параметры:
+- `WINDOW_MINUTES` (default `60`) — окно метрик callback
+- `RECOVERY_ATTEMPTS` (default `2`) — число попыток replay+dispatch
+- `STRICT` (default `1`) — если алерты остались после recovery, скрипт завершится с `exit 2`
 ```

@@ -17,6 +17,7 @@ bash -n scripts/smoke_openclaw_m2m_capabilities.sh
 bash -n scripts/smoke_openclaw_m2m_outbox.sh
 bash -n scripts/smoke_openclaw_m2m_reconciliation.sh
 bash -n scripts/check_openclaw_outbox_alerts.sh
+bash -n scripts/openclaw_ops_smoke_recover.sh
 
 if [[ -n "${CI:-}" && "${OPENCLAW_CI_STRICT:-1}" == "1" ]]; then
   echo "[CI gate] CI mode: M2M smoke is mandatory"
