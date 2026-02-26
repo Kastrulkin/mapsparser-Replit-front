@@ -148,8 +148,11 @@ def _notify_superadmins_billing_reconcile(
             for r in raw_cols
             if str(_val(r, 0, "column_name", "")).strip()
         }
-        if "telegram_id" not in user_cols:
-            return
+        env_ids = {
+            x.strip()
+            for x in str(os.getenv("OPENCLAW_SUPERADMIN_TELEGRAM_IDS", "")).split(",")
+            if x.strip()
+        }
 
         cursor.execute(
             """
@@ -163,18 +166,26 @@ def _notify_superadmins_billing_reconcile(
         business_row = cursor.fetchone()
         business_name = str((_val(business_row, 0, "name", "") or "")).strip()
 
-        cursor.execute(
-            """
-            SELECT telegram_id
-            FROM users
-            WHERE is_superadmin = TRUE
-              AND telegram_id IS NOT NULL
-              AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
-            ORDER BY created_at ASC
-            """
-        )
-        admin_rows = cursor.fetchall() or []
-        if not admin_rows:
+        db_ids: set[str] = set()
+        if "telegram_id" in user_cols:
+            cursor.execute(
+                """
+                SELECT telegram_id
+                FROM users
+                WHERE is_superadmin = TRUE
+                  AND telegram_id IS NOT NULL
+                  AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
+                ORDER BY created_at ASC
+                """
+            )
+            admin_rows = cursor.fetchall() or []
+            for row in admin_rows:
+                telegram_id = str(_val(row, 0, "telegram_id", "") or "").strip()
+                if telegram_id:
+                    db_ids.add(telegram_id)
+
+        target_ids = sorted(db_ids.union(env_ids))
+        if not target_ids:
             return
 
         sample = ", ".join([s for s in (sample_action_ids or []) if s][:5]) or "-"
@@ -189,10 +200,7 @@ def _notify_superadmins_billing_reconcile(
         ]
         message = "\n".join(lines)
         sent_any = False
-        for row in admin_rows:
-            telegram_id = str(_val(row, 0, "telegram_id", "") or "").strip()
-            if not telegram_id:
-                continue
+        for telegram_id in target_ids:
             if _send_telegram_plain_message(telegram_id, message):
                 sent_any = True
 

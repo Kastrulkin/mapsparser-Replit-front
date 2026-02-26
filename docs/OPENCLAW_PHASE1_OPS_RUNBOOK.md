@@ -84,6 +84,7 @@ curl -sS -X POST \
 - `OPENCLAW_BILLING_RECONCILE_ALERT_ENABLED` (default `true`)
 - `OPENCLAW_BILLING_RECONCILE_ALERT_INTERVAL_SEC` (default `1800`)
 - `OPENCLAW_BILLING_RECONCILE_ALERT_MIN_ISSUES` (default `1`)
+- `OPENCLAW_SUPERADMIN_TELEGRAM_IDS` (optional CSV of Telegram chat IDs, fallback if `users.telegram_id` is unavailable)
 
 ## 7) Failure triage
 
