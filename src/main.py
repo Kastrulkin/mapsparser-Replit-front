@@ -2217,29 +2217,45 @@ def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
 
 
 def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
+    env_ids = {
+        x.strip()
+        for x in str(os.getenv("OPENCLAW_SUPERADMIN_TELEGRAM_IDS", "")).split(",")
+        if x and x.strip()
+    }
+    target_ids = set(env_ids)
+
     users_cols = _load_table_columns(cursor, "users")
-    if "telegram_id" not in users_cols:
-        print("⚠️ users.telegram_id отсутствует, уведомление суперадминов пропущено")
+    rows = []
+    if "telegram_id" in users_cols:
+        cursor.execute(
+            """
+            SELECT id, name, email, telegram_id
+            FROM users
+            WHERE is_superadmin = TRUE
+              AND telegram_id IS NOT NULL
+              AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
+            ORDER BY created_at ASC
+            """
+        )
+        rows = cursor.fetchall() or []
+        for row in rows:
+            rd = _row_to_dict(cursor, row)
+            telegram_id = str(rd.get("telegram_id") or "").strip()
+            if telegram_id:
+                target_ids.add(telegram_id)
+    elif not target_ids:
+        print("⚠️ users.telegram_id отсутствует и OPENCLAW_SUPERADMIN_TELEGRAM_IDS пуст, уведомление суперадминов пропущено")
         return 0
 
-    cursor.execute(
-        """
-        SELECT id, name, email, telegram_id
-        FROM users
-        WHERE is_superadmin = TRUE
-          AND telegram_id IS NOT NULL
-          AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
-        ORDER BY created_at ASC
-        """
-    )
-    rows = cursor.fetchall() or []
     sent = 0
     for row in rows:
         rd = _row_to_dict(cursor, row)
         telegram_id = str(rd.get("telegram_id") or "").strip()
         if not telegram_id:
             continue
-        admin_name = str(rd.get("name") or rd.get("email") or "superadmin")
+        if telegram_id not in target_ids:
+            continue
+        admin_name = str(rd.get("name") or rd.get("email") or f"superadmin:{telegram_id}")
         lines = [
             "🧭 Запрошен аудит ручного конкурента",
             f"Бизнес: {business_name or business_id}",
@@ -2251,6 +2267,23 @@ def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, bus
         if queue_task_id:
             lines.append(f"Queue task: {queue_task_id}")
         lines.append(f"Админ: {admin_name}")
+        if _send_telegram_plain_message(telegram_id, "\n".join(lines)):
+            sent += 1
+        target_ids.discard(telegram_id)
+
+    # Fallback: ids from env that are not represented in users.telegram_id
+    for telegram_id in sorted(target_ids):
+        lines = [
+            "🧭 Запрошен аудит ручного конкурента",
+            f"Бизнес: {business_name or business_id}",
+            f"Business ID: {business_id}",
+            f"Конкурент: {competitor_name or 'Без названия'}",
+            f"Ссылка: {competitor_url}",
+            f"Запросил: {requester_name or requester_email or 'пользователь'}",
+        ]
+        if queue_task_id:
+            lines.append(f"Queue task: {queue_task_id}")
+        lines.append("Админ: superadmin_env")
         if _send_telegram_plain_message(telegram_id, "\n".join(lines)):
             sent += 1
     return sent
