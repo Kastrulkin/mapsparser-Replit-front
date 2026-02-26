@@ -1427,31 +1427,56 @@ class ActionOrchestrator:
                 return {"success": False, "error": "forbidden", "http_code": 403}
 
             limit = max(1, min(int(limit or 100), 2000))
-            statuses = ["dlq", "retry"] if include_retry else ["dlq"]
-            cursor.execute(
-                """
-                WITH picked AS (
-                    SELECT id
-                    FROM action_callback_outbox
-                    WHERE tenant_id = %s
-                      AND status = ANY(%s)
-                    ORDER BY created_at ASC
-                    LIMIT %s
-                    FOR UPDATE SKIP LOCKED
+            if include_retry:
+                cursor.execute(
+                    """
+                    WITH picked AS (
+                        SELECT id
+                        FROM action_callback_outbox
+                        WHERE tenant_id = %s
+                          AND status IN ('dlq', 'retry')
+                        ORDER BY created_at ASC
+                        LIMIT %s
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE action_callback_outbox o
+                    SET status='pending',
+                        attempts=0,
+                        last_error=NULL,
+                        next_attempt_at=CURRENT_TIMESTAMP,
+                        locked_at=NULL,
+                        updated_at=CURRENT_TIMESTAMP
+                    FROM picked
+                    WHERE o.id = picked.id
+                    RETURNING o.id, o.action_id, o.event_type
+                    """,
+                    (str(tenant_id), limit),
                 )
-                UPDATE action_callback_outbox o
-                SET status='pending',
-                    attempts=0,
-                    last_error=NULL,
-                    next_attempt_at=CURRENT_TIMESTAMP,
-                    locked_at=NULL,
-                    updated_at=CURRENT_TIMESTAMP
-                FROM picked
-                WHERE o.id = picked.id
-                RETURNING o.id, o.action_id, o.event_type
-                """,
-                (str(tenant_id), statuses, limit),
-            )
+            else:
+                cursor.execute(
+                    """
+                    WITH picked AS (
+                        SELECT id
+                        FROM action_callback_outbox
+                        WHERE tenant_id = %s
+                          AND status = 'dlq'
+                        ORDER BY created_at ASC
+                        LIMIT %s
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE action_callback_outbox o
+                    SET status='pending',
+                        attempts=0,
+                        last_error=NULL,
+                        next_attempt_at=CURRENT_TIMESTAMP,
+                        locked_at=NULL,
+                        updated_at=CURRENT_TIMESTAMP
+                    FROM picked
+                    WHERE o.id = picked.id
+                    RETURNING o.id, o.action_id, o.event_type
+                    """,
+                    (str(tenant_id), limit),
+                )
             rows = cursor.fetchall() or []
             replayed = [
                 {
@@ -1465,7 +1490,7 @@ class ActionOrchestrator:
             return {
                 "success": True,
                 "tenant_id": str(tenant_id),
-                "statuses": statuses,
+                "statuses": (["dlq", "retry"] if include_retry else ["dlq"]),
                 "replayed_count": len(replayed),
                 "replayed": replayed,
             }
