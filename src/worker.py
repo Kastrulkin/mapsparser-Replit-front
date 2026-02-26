@@ -43,6 +43,8 @@ CALLBACK_DISPATCH_ORCHESTRATOR = ActionOrchestrator(handlers={})
 _LAST_CALLBACK_DISPATCH_AT = 0.0
 _LAST_BILLING_RECONCILE_AT = 0.0
 _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
+_LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
+_LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -219,6 +221,205 @@ def _notify_superadmins_billing_reconcile(
                 conn.close()
         except Exception:
             pass
+
+
+def _notify_superadmins_callback_alerts(
+    tenant_id: str,
+    *,
+    metrics: Dict[str, Any],
+    alerts: List[Dict[str, Any]],
+    window_minutes: int,
+) -> None:
+    interval_sec = max(60, int(os.getenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_INTERVAL_SEC", "900")))
+    now = time.time()
+    last_at = _LAST_CALLBACK_ALERT_BY_TENANT.get(str(tenant_id), 0.0)
+    if now - last_at < interval_sec:
+        return
+
+    conn = None
+    cursor = None
+    try:
+        def _val(row: Any, idx: int, key: str, default: Any = None) -> Any:
+            if row is None:
+                return default
+            if isinstance(row, dict):
+                return row.get(key, default)
+            try:
+                return row[idx]
+            except Exception:
+                return default
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'users'
+            """
+        )
+        raw_cols = cursor.fetchall() or []
+        user_cols = {
+            str(_val(r, 0, "column_name", "")).lower()
+            for r in raw_cols
+            if str(_val(r, 0, "column_name", "")).strip()
+        }
+        env_ids = {
+            x.strip()
+            for x in str(os.getenv("OPENCLAW_SUPERADMIN_TELEGRAM_IDS", "")).split(",")
+            if x and x.strip()
+        }
+
+        cursor.execute(
+            """
+            SELECT COALESCE(name, '')
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (str(tenant_id),),
+        )
+        business_row = cursor.fetchone()
+        business_name = str((_val(business_row, 0, "name", "") or "")).strip()
+
+        db_ids: set[str] = set()
+        if "telegram_id" in user_cols:
+            cursor.execute(
+                """
+                SELECT telegram_id
+                FROM users
+                WHERE is_superadmin = TRUE
+                  AND telegram_id IS NOT NULL
+                  AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
+                ORDER BY created_at ASC
+                """
+            )
+            admin_rows = cursor.fetchall() or []
+            for row in admin_rows:
+                telegram_id = str(_val(row, 0, "telegram_id", "") or "").strip()
+                if telegram_id:
+                    db_ids.add(telegram_id)
+
+        target_ids = sorted(db_ids.union(env_ids))
+        if not target_ids:
+            return
+
+        alert_lines = [f"- {a.get('code')}: {a.get('message')}" for a in (alerts or []) if a.get("code")]
+        lines = [
+            "🚨 OpenClaw callback delivery alert",
+            f"Tenant: {tenant_id}",
+            f"Business: {business_name or '-'}",
+            f"Window (minutes): {window_minutes}",
+            f"Sent: {int(metrics.get('sent') or 0)}",
+            f"Retry: {int(metrics.get('retry') or 0)}",
+            f"DLQ: {int(metrics.get('dlq') or 0)}",
+            f"Stuck retry: {int(metrics.get('stuck_retry') or 0)}",
+            f"Success rate: {float(metrics.get('delivery_success_rate') or 0.0)}%",
+            "Alerts:",
+        ] + (alert_lines or ["- unknown"])
+        message = "\n".join(lines)
+
+        sent_any = False
+        for telegram_id in target_ids:
+            if _send_telegram_plain_message(telegram_id, message):
+                sent_any = True
+
+        if sent_any:
+            _LAST_CALLBACK_ALERT_BY_TENANT[str(tenant_id)] = now
+    except Exception as e:
+        print(f"[CALLBACK_ALERTS] notify superadmin error tenant={tenant_id}: {e}", flush=True)
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
+def _check_openclaw_callback_alerts_if_due() -> None:
+    global _LAST_CALLBACK_ALERT_SCAN_AT
+    if not _env_bool("OPENCLAW_CALLBACK_ALERT_NOTIFY_ENABLED", True):
+        return
+
+    now = time.time()
+    scan_interval_sec = max(30, int(os.getenv("OPENCLAW_CALLBACK_ALERT_SCAN_INTERVAL_SEC", "180")))
+    if now - _LAST_CALLBACK_ALERT_SCAN_AT < scan_interval_sec:
+        return
+    _LAST_CALLBACK_ALERT_SCAN_AT = now
+
+    window_minutes = max(5, min(int(os.getenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_WINDOW_MINUTES", "60")), 7 * 24 * 60))
+    max_tenants = max(1, min(int(os.getenv("OPENCLAW_CALLBACK_ALERT_NOTIFY_MAX_TENANTS", "100")), 1000))
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT tenant_id
+            FROM action_callback_outbox
+            WHERE tenant_id IS NOT NULL
+              AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+            ORDER BY tenant_id
+            LIMIT %s
+            """,
+            (window_minutes, max_tenants),
+        )
+        tenant_rows = cursor.fetchall() or []
+        tenant_ids = []
+        for row in tenant_rows:
+            if isinstance(row, dict):
+                value = row.get("tenant_id")
+            else:
+                value = row[0] if len(row) > 0 else None
+            if value:
+                tenant_ids.append(str(value))
+    except Exception as e:
+        print(f"[CALLBACK_ALERTS] tenant scan error: {e}", flush=True)
+        return
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+    for tenant_id in tenant_ids:
+        try:
+            metrics_payload = CALLBACK_DISPATCH_ORCHESTRATOR.get_callback_metrics(
+                {"user_id": "system-worker", "is_superadmin": True},
+                tenant_id=tenant_id,
+                window_minutes=window_minutes,
+            )
+            if not metrics_payload.get("success"):
+                continue
+            alerts = metrics_payload.get("alerts") or []
+            if not alerts:
+                continue
+            metrics = metrics_payload.get("metrics") or {}
+            print(
+                f"[CALLBACK_ALERTS] tenant={tenant_id} alerts={len(alerts)} dlq={metrics.get('dlq')} stuck_retry={metrics.get('stuck_retry')} success_rate={metrics.get('delivery_success_rate')}",
+                flush=True,
+            )
+            _notify_superadmins_callback_alerts(
+                tenant_id,
+                metrics=metrics,
+                alerts=alerts,
+                window_minutes=window_minutes,
+            )
+        except Exception as e:
+            print(f"[CALLBACK_ALERTS] tenant={tenant_id} exception: {e}", flush=True)
 
 
 def _reconcile_openclaw_billing_if_due() -> None:
@@ -2596,6 +2797,7 @@ if __name__ == "__main__":
         try:
             process_queue()
             _dispatch_openclaw_callback_outbox_if_due()
+            _check_openclaw_callback_alerts_if_due()
             _reconcile_openclaw_billing_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
