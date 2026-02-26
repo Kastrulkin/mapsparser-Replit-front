@@ -76,6 +76,11 @@ curl -sS -X POST \
 - `OPENCLAW_CALLBACK_DLQ_ALERT_THRESHOLD` (default `1`)
 - `OPENCLAW_CALLBACK_STUCK_RETRY_ALERT_THRESHOLD` (default `1`)
 - `OPENCLAW_CALLBACK_SUCCESS_RATE_MIN` (default `90`)
+- `OPENCLAW_BILLING_RECONCILE_ENABLED` (default `true`)
+- `OPENCLAW_BILLING_RECONCILE_INTERVAL_SEC` (default `900`)
+- `OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES` (default `1440`)
+- `OPENCLAW_BILLING_RECONCILE_LIMIT` (default `200`)
+- `OPENCLAW_BILLING_RECONCILE_MAX_TENANTS` (default `100`)
 
 ## 7) Failure triage
 
@@ -91,6 +96,11 @@ curl -sS -X POST \
 3. `delivery_success_rate` падает:
 - смотреть `action_callback_outbox.last_error`;
 - сверять по tenant/каналу проблемные callback URL.
+
+4. `billing_reconcile` сигналит расхождения:
+- проверить `GET /api/openclaw/capabilities/billing/reconcile`;
+- сверить `billing_ledger` vs `action_requests.billing_json` vs `tokenusage`;
+- после правок снова прогнать `./scripts/smoke_openclaw_m2m_reconciliation.sh`.
 
 ## 8) DLQ replay / outbox cleanup
 

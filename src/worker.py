@@ -40,6 +40,7 @@ BROWSER_SESSION_MANAGER = BrowserSessionManager()
 CAPTCHA_TTL_MINUTES = 30
 CALLBACK_DISPATCH_ORCHESTRATOR = ActionOrchestrator(handlers={})
 _LAST_CALLBACK_DISPATCH_AT = 0.0
+_LAST_BILLING_RECONCILE_AT = 0.0
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -70,6 +71,97 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
             )
     except Exception as e:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
+
+
+def _reconcile_openclaw_billing_if_due() -> None:
+    global _LAST_BILLING_RECONCILE_AT
+    if not _env_bool("OPENCLAW_BILLING_RECONCILE_ENABLED", True):
+        return
+
+    now = time.time()
+    interval_sec = max(30, int(os.getenv("OPENCLAW_BILLING_RECONCILE_INTERVAL_SEC", "900")))
+    if now - _LAST_BILLING_RECONCILE_AT < interval_sec:
+        return
+    _LAST_BILLING_RECONCILE_AT = now
+
+    window_minutes = max(5, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES", "1440")), 30 * 24 * 60))
+    limit = max(10, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_LIMIT", "200")), 1000))
+    max_tenants = max(1, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_MAX_TENANTS", "100")), 1000))
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT tenant_id
+            FROM action_requests
+            WHERE tenant_id IS NOT NULL
+              AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+            ORDER BY tenant_id
+            LIMIT %s
+            """,
+            (window_minutes, max_tenants),
+        )
+        tenant_rows = cursor.fetchall() or []
+        tenant_ids = [str(r[0]) if not isinstance(r, dict) else str(r.get("tenant_id")) for r in tenant_rows if (r[0] if not isinstance(r, dict) else r.get("tenant_id"))]
+    except Exception as e:
+        print(f"[BILLING_RECONCILE] tenant scan error: {e}", flush=True)
+        return
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+    if not tenant_ids:
+        return
+
+    total_actions_checked = 0
+    total_actions_with_issues = 0
+    total_issue_count = 0
+    for tenant_id in tenant_ids:
+        try:
+            result = CALLBACK_DISPATCH_ORCHESTRATOR.reconcile_billing(
+                {"user_id": "system-worker", "is_superadmin": True},
+                tenant_id=tenant_id,
+                window_minutes=window_minutes,
+                limit=limit,
+            )
+            if not result.get("success"):
+                print(
+                    f"[BILLING_RECONCILE] tenant={tenant_id} error={result.get('error')}",
+                    flush=True,
+                )
+                continue
+
+            summary = result.get("summary") or {}
+            actions_checked = int(summary.get("actions_checked") or 0)
+            actions_with_issues = int(summary.get("actions_with_issues") or 0)
+            issue_count = int(summary.get("issue_count") or 0)
+            total_actions_checked += actions_checked
+            total_actions_with_issues += actions_with_issues
+            total_issue_count += issue_count
+            if actions_with_issues > 0:
+                print(
+                    f"[BILLING_RECONCILE] ALERT tenant={tenant_id} actions_with_issues={actions_with_issues} issue_count={issue_count}",
+                    flush=True,
+                )
+        except Exception as e:
+            print(f"[BILLING_RECONCILE] tenant={tenant_id} exception: {e}", flush=True)
+
+    if total_actions_checked > 0:
+        print(
+            f"[BILLING_RECONCILE] checked={total_actions_checked} actions_with_issues={total_actions_with_issues} issue_count={total_issue_count} tenants={len(tenant_ids)}",
+            flush=True,
+        )
 
 
 def get_db_connection():
@@ -2345,6 +2437,7 @@ if __name__ == "__main__":
         try:
             process_queue()
             _dispatch_openclaw_callback_outbox_if_due()
+            _reconcile_openclaw_billing_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)
