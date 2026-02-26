@@ -13,10 +13,18 @@ RUN npm run build
 FROM python:3.11-bookworm
 
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
-RUN apt-get -o Acquire::Retries=5 update && apt-get install -y --no-install-recommends \
-    libpq-dev \
-    gcc \
-    postgresql-client \
+# Сеть на сервере может быть нестабильной, поэтому используем retry+backoff для apt update.
+RUN set -eux; \
+    printf 'Acquire::Retries "10";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
+    for n in 1 2 3 4 5; do \
+      apt-get update && break; \
+      echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
+      sleep "$((n*5))"; \
+    done; \
+    apt-get install -y --no-install-recommends \
+      libpq-dev \
+      gcc \
+      postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -28,8 +36,13 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
-RUN apt-get -o Acquire::Retries=5 update \
-    && python -m playwright install --with-deps chromium \
+RUN set -eux; \
+    for n in 1 2 3 4 5; do \
+      apt-get update && break; \
+      echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
+      sleep "$((n*5))"; \
+    done; \
+    python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Код проекта (src, scripts, tests и т.д.). Папка scripts/ не должна быть в .dockerignore (migrate_sqlite_to_postgres.py, smoke).
