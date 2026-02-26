@@ -75,7 +75,7 @@ export const TokenUsageStats: React.FC = () => {
         setStats(data);
       }
     } catch (error: any) {
-      console.error('Ошибка загрузки статистики токенов:', error);
+      console.error('Ошибка загрузки статистики кредитов:', error);
       toast({
         title: 'Ошибка',
         description: error.message || 'Не удалось загрузить статистику',
@@ -88,6 +88,10 @@ export const TokenUsageStats: React.FC = () => {
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('ru-RU').format(num);
+  };
+
+  const formatCredits = (tokens: number) => {
+    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(tokens / 1000);
   };
 
   if (loading) {
@@ -116,16 +120,16 @@ export const TokenUsageStats: React.FC = () => {
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Общая статистика</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Всего токенов</p>
-            <p className="text-2xl font-bold text-blue-600">{formatNumber(stats.total.total_tokens)}</p>
+            <p className="text-sm text-gray-600 mb-1">Всего кредитов</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCredits(stats.total.total_tokens)}</p>
           </div>
           <div className="bg-green-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Промпт токены</p>
-            <p className="text-2xl font-bold text-green-600">{formatNumber(stats.total.prompt_tokens)}</p>
+            <p className="text-sm text-gray-600 mb-1">Промпт (кредиты)</p>
+            <p className="text-2xl font-bold text-green-600">{formatCredits(stats.total.prompt_tokens)}</p>
           </div>
           <div className="bg-purple-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Completion токены</p>
-            <p className="text-2xl font-bold text-purple-600">{formatNumber(stats.total.completion_tokens)}</p>
+            <p className="text-sm text-gray-600 mb-1">Completion (кредиты)</p>
+            <p className="text-2xl font-bold text-purple-600">{formatCredits(stats.total.completion_tokens)}</p>
           </div>
           <div className="bg-orange-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-1">Запросов</p>
@@ -144,7 +148,7 @@ export const TokenUsageStats: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Пользователь</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего токенов</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего кредитов</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Промпт</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Completion</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Запросов</th>
@@ -167,13 +171,13 @@ export const TokenUsageStats: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                      {formatNumber(user.total_tokens)}
+                      {formatCredits(user.total_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(user.prompt_tokens)}
+                      {formatCredits(user.prompt_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(user.completion_tokens)}
+                      {formatCredits(user.completion_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
                       {formatNumber(user.requests_count)}
@@ -197,7 +201,7 @@ export const TokenUsageStats: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Бизнес</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Владелец</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего токенов</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего кредитов</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Промпт</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Completion</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Запросов</th>
@@ -220,13 +224,13 @@ export const TokenUsageStats: React.FC = () => {
                       <p className="text-sm text-gray-500">{business.owner_email}</p>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                      {formatNumber(business.total_tokens)}
+                      {formatCredits(business.total_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(business.prompt_tokens)}
+                      {formatCredits(business.prompt_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(business.completion_tokens)}
+                      {formatCredits(business.completion_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
                       {formatNumber(business.requests_count)}
@@ -249,7 +253,7 @@ export const TokenUsageStats: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип задачи</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего токенов</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Всего кредитов</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Промпт</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Completion</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Запросов</th>
@@ -269,13 +273,13 @@ export const TokenUsageStats: React.FC = () => {
                       <p className="text-sm font-medium text-gray-900">{task.task_type}</p>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                      {formatNumber(task.total_tokens)}
+                      {formatCredits(task.total_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(task.prompt_tokens)}
+                      {formatCredits(task.prompt_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                      {formatNumber(task.completion_tokens)}
+                      {formatCredits(task.completion_tokens)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
                       {formatNumber(task.requests_count)}
@@ -290,4 +294,3 @@ export const TokenUsageStats: React.FC = () => {
     </div>
   );
 };
-

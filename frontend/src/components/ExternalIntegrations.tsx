@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { newAuth } from "@/lib/auth_new";
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
+import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 
 interface ExternalAccount {
   id: string;
@@ -26,8 +27,10 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [accounts, setAccounts] = useState<ExternalAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [matonApiKey, setMatonApiKey] = useState('');
   const { toast } = useToast();
   const { t, language } = useLanguage();
+  const matonAccount = accounts.find((acc) => acc.source === 'maton');
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -238,13 +241,120 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
     }
   };
 
+  const handleSaveMaton = async () => {
+    if (!currentBusinessId) {
+      toast({
+        title: t.error,
+        description: t.dashboard.settings.external.selectBusiness,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!matonApiKey.trim()) {
+      toast({
+        title: t.error,
+        description: "Введите API-ключ Maton.ai",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+
+      const res = await fetch(`/api/business/${currentBusinessId}/external-accounts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source: "maton",
+          external_id: "maton",
+          display_name: "Maton.ai",
+          auth_data: { api_key: matonApiKey.trim() },
+          is_active: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Не удалось сохранить ключ Maton.ai");
+      }
+
+      setMatonApiKey('');
+      toast({
+        title: t.success,
+        description: "Ключ Maton.ai сохранён",
+      });
+      await loadAccounts();
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка сохранения ключа Maton.ai",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{t.dashboard.settings.external.title}</CardTitle>
-        <CardDescription>{t.dashboard.settings.external.description}</CardDescription>
+        <CardDescription>{t.dashboard.settings.external.title}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
+
+        {/* Maton.ai */}
+        <div className="border rounded-lg p-6 bg-gray-50 flex flex-col gap-4">
+          <div>
+            <h3 className="font-medium text-lg">Maton.ai</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Maton позволяет подключить множество сторонних сервисов через один API-ключ.
+              {' '}
+              <a
+                href="https://www.maton.ai/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 underline hover:text-blue-700"
+              >
+                https://www.maton.ai/
+              </a>
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
+              type="password"
+              placeholder="Введите API-ключ Maton.ai"
+              value={matonApiKey}
+              onChange={(e) => setMatonApiKey(e.target.value)}
+              disabled={saving || !currentBusinessId}
+            />
+            <Button
+              onClick={handleSaveMaton}
+              disabled={saving || !currentBusinessId || !matonApiKey.trim()}
+              className="sm:min-w-[180px]"
+            >
+              {saving ? t.dashboard.subscription.processing : "Сохранить ключ"}
+            </Button>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Ключ хранится в зашифрованном виде. После сохранения в интерфейсе не отображается.
+          </p>
+
+          {matonAccount ? (
+            <div className="text-sm text-emerald-700">Maton.ai подключён</div>
+          ) : (
+            <div className="text-sm text-gray-500">Maton.ai пока не подключён</div>
+          )}
+        </div>
 
         {/* Кнопка подключения Google */}
         <div className="border rounded-lg p-6 bg-gray-50 flex flex-col items-center text-center space-y-4">
@@ -309,6 +419,8 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                             ? "Google Business Profile"
                             : acc.source === "2gis"
                               ? "2ГИС"
+                              : acc.source === "maton"
+                                ? "Maton.ai"
                               : acc.source}
                       </div>
                       {acc.display_name && (

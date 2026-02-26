@@ -241,16 +241,17 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-amber-600 bg-clip-text text-transparent mb-2">
-                  {t.about.pricingStarterTitle}
+                  {isRu ? "Начальный" : t.about.pricingStarterTitle}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {t.about.pricingStarterPrice}
+                  {isRu ? "1200 ₽/месяц (240 кредитов)" : t.about.pricingStarterPrice}
                 </div>
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {t.about.pricingStarterPoint1}</div>
-                  <div>- {t.about.pricingStarterPoint2}</div>
-                  <div>- {t.about.pricingStarterPoint3}</div>
-                  <div>- {t.about.pricingStarterPoint4}</div>
+                  <div>- {isRu ? "настроить услуги на картах" : t.about.pricingStarterPoint1}</div>
+                  <div>- {isRu ? "ответить на отзывы" : t.about.pricingStarterPoint2}</div>
+                  <div>- {isRu ? "создать новости для публикации" : t.about.pricingStarterPoint3}</div>
+                  <div>- {isRu ? "проверить конкурента" : t.about.pricingStarterPoint4}</div>
                 </div>
                 <Button
                   variant="default"
@@ -271,17 +272,16 @@ const About = () => {
                   {isRu ? "Профессиональный" : t.about.pricingOption0Title}
                 </div>
                 <div className="text-sm text-gray-600 mb-4">
-                  {isRu ? "5000 ₽/месяц" : t.about.pricingOption0Price}
+                  {isRu ? "5000 ₽/месяц (1000 кредитов)" : t.about.pricingOption0Price}
                 </div>
+                {isRu ? <div className="text-sm text-gray-600 mb-3">Хватит чтобы:</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {t.about.pricingOption0Point1}</div>
-                  <div>- {t.about.pricingOption0Point2}</div>
-                  <div>- {t.about.pricingOption0Point3}</div>
-                  <div>- {t.about.pricingOption0Point4}</div>
-                  <div>- {t.about.pricingOption0Point5}</div>
-                  <div>- {t.about.pricingOption0Point6}</div>
-                  <div>- {t.about.pricingOption0Point7}</div>
-                  <div>- {t.about.pricingOption0Point8}</div>
+                  <div>- {isRu ? "постить новости" : t.about.pricingOption0Point1}</div>
+                  <div>- {isRu ? "отвечать на отзывы" : t.about.pricingOption0Point2}</div>
+                  <div>- {isRu ? "проверять конкурентов" : t.about.pricingOption0Point3}</div>
+                  <div>- {isRu ? "подключить ии агентов для общения с клиентами" : t.about.pricingOption0Point4}</div>
+                  <div>- {isRu ? "отслеживать финансовые показатели" : t.about.pricingOption0Point5}</div>
+                  <div>- {isRu ? "управлять компанией через Телеграм" : t.about.pricingOption0Point6}</div>
                 </div>
                 <Button
                   variant="default"
@@ -303,12 +303,13 @@ const About = () => {
                 <div className="text-sm text-gray-600 mb-4">
                   {isRu ? "25000 ₽/месяц" : t.about.pricingOption1Price}
                 </div>
+                {isRu ? <div className="text-sm text-gray-600 mb-3">(Мы всё делаем за вас)</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {t.about.pricingOption1Point1}</div>
-                  <div>- {t.about.pricingOption1Point2}</div>
-                  <div>- {t.about.pricingOption1Point3}</div>
-                  <div>- {t.about.pricingOption1Point4}</div>
-                  <div>- {t.about.pricingOption1Point5}</div>
+                  <div>- {isRu ? "Карточка компании на картах" : t.about.pricingOption1Point1}</div>
+                  <div>- {isRu ? "Коммуникация с клиентами" : t.about.pricingOption1Point2}</div>
+                  <div>- {isRu ? "Допродажи и кросс-продажи" : t.about.pricingOption1Point3}</div>
+                  <div>- {isRu ? "Оптимизация бизнес-процессов" : t.about.pricingOption1Point4}</div>
+                  <div>- {isRu ? "Выделенный менеджер" : t.about.pricingOption1Point5}</div>
                 </div>
                 <Button
                   variant="default"
@@ -325,18 +326,22 @@ const About = () => {
             <Card className="group p-8 flex flex-col h-full bg-white border-2 border-gray-200 hover:border-orange-300 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 rounded-2xl">
               <CardContent className="p-0 flex flex-col flex-1">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {isRu ? "Особый" : "Elite"}
+                  {isRu ? "Особый (Elite)" : "Elite"}
                 </div>
-                <div className="text-sm text-gray-600 mb-4">{t.about.pricingOption2Subtitle}</div>
+                <div className="text-sm text-gray-600 mb-4">{isRu ? "7% от оплат привлечённых клиентов" : t.about.pricingOption2Subtitle}</div>
+                {isRu ? <div className="text-sm text-gray-600 mb-3">(Мы делаем всё за вас и даже больше)</div> : null}
                 <div className="space-y-2 text-muted-foreground mb-6 flex-1">
-                  <div>- {t.about.pricingOption2Point1}</div>
-                  <div>- {t.about.pricingOption2Point2}</div>
-                  <div>- {t.about.pricingOption2Point3}</div>
-                  <div>- {t.about.pricingOption2Point4}</div>
+                  <div>- {isRu ? "Привлечение клиентов онлайн" : t.about.pricingOption2Point1}</div>
+                  <div>- {isRu ? "Коммуникация с клиентами" : t.about.pricingOption2Point2}</div>
+                  <div>- {isRu ? "Привлечение клиентов оффлайн" : t.about.pricingOption2Point3}</div>
+                  <div>- {isRu ? "Оптимизация бизнес-процессов" : t.about.pricingOption2Point4}</div>
+                  {isRu ? <div>- Выделенный менеджер</div> : null}
                 </div>
-                <div className="text-sm text-muted-foreground italic mt-4">
-                  {t.about.pricingOption2Note}
-                </div>
+                {!isRu ? (
+                  <div className="text-sm text-muted-foreground italic mt-4">
+                    {t.about.pricingOption2Note}
+                  </div>
+                ) : null}
                 <Button
                   variant="default"
                   size="lg"

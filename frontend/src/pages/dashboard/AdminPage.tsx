@@ -416,7 +416,7 @@ export const AdminPage: React.FC = () => {
   const tabs = [
     { id: 'businesses' as const, label: 'Пользователи и бизнесы', icon: User },
     { id: 'agents' as const, label: 'ИИ агенты', icon: Bot },
-    { id: 'tokens' as const, label: 'Статистика токенов', icon: BarChart3 },
+    { id: 'tokens' as const, label: 'Статистика кредитов', icon: BarChart3 },
     { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
     { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
     { id: 'proxies' as const, label: 'Прокси', icon: Network },

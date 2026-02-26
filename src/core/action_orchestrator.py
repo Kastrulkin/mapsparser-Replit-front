@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from datetime import timedelta
 from typing import Any, Callable, Dict, Optional
@@ -126,6 +127,26 @@ class ActionOrchestrator:
         )
         cursor.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_callback_outbox_dedupe_key ON action_callback_outbox(dedupe_key)"
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS openclaw_capability_health_history (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                ready BOOLEAN NOT NULL DEFAULT FALSE,
+                checks_json JSONB NOT NULL,
+                metrics_json JSONB NOT NULL,
+                alerts_json JSONB NOT NULL,
+                window_minutes INTEGER NOT NULL DEFAULT 60,
+                captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_openclaw_health_history_tenant_captured ON openclaw_capability_health_history(tenant_id, captured_at DESC)"
         )
 
         ensure_ledger_tables(cursor)
@@ -338,7 +359,7 @@ class ActionOrchestrator:
                 SET status='sending', locked_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
                 FROM picked
                 WHERE o.id = picked.id
-                RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts
+                RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts, o.dedupe_key
                 """,
                 (batch_size,),
             )
@@ -354,19 +375,24 @@ class ActionOrchestrator:
                 payload = self._row_value(row, 5, "payload_json") or {}
                 attempts = int(self._row_value(row, 6, "attempts", 0) or 0)
                 max_attempts = int(self._row_value(row, 7, "max_attempts", 5) or 5)
+                dedupe_key = self._row_value(row, 8, "dedupe_key") or f"{outbox_id}"
 
                 ok = True
                 error_text = ""
                 try:
-                    event_ts = utcnow().isoformat()
+                    # OpenClaw callback contract expects epoch-seconds string.
+                    event_ts = str(int(time.time()))
                     signature = self._build_callback_signature(payload, outbox_id, event_ts)
+                    canonical_body = json.dumps(payload or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
                     headers = {
+                        "Content-Type": "application/json",
                         "X-LocalOS-Event-Id": str(outbox_id),
                         "X-LocalOS-Event-Timestamp": event_ts,
+                        "X-LocalOS-Dedupe-Key": str(dedupe_key),
                     }
                     if signature:
                         headers["X-LocalOS-Signature"] = signature
-                    response = requests.post(callback_url, json=payload, timeout=5, headers=headers)
+                    response = requests.post(callback_url, data=canonical_body.encode("utf-8"), timeout=5, headers=headers)
                     if int(getattr(response, "status_code", 500)) >= 400:
                         ok = False
                         error_text = f"http_{int(response.status_code)}"
@@ -1365,6 +1391,147 @@ class ActionOrchestrator:
                     "delivery_success_rate": delivery_success_rate,
                 },
                 "alerts": alerts,
+            }
+        finally:
+            db.close()
+
+    def record_capability_health_snapshot(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        status: str,
+        ready: bool,
+        checks: Dict[str, Any],
+        metrics: Dict[str, Any],
+        alerts: Any,
+        window_minutes: int = 60,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            snapshot_id = str(uuid.uuid4())
+            cursor.execute(
+                """
+                INSERT INTO openclaw_capability_health_history
+                    (id, tenant_id, status, ready, checks_json, metrics_json, alerts_json, window_minutes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    snapshot_id,
+                    str(tenant_id),
+                    str(status or "degraded"),
+                    bool(ready),
+                    json.dumps(checks or {}, ensure_ascii=False),
+                    json.dumps(metrics or {}, ensure_ascii=False),
+                    json.dumps(alerts if isinstance(alerts, list) else [], ensure_ascii=False),
+                    max(1, min(int(window_minutes or 60), 7 * 24 * 60)),
+                ),
+            )
+            db.conn.commit()
+            return {"success": True, "snapshot_id": snapshot_id}
+        finally:
+            db.close()
+
+    def get_capability_health_trend(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        window_minutes: int = 24 * 60,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            window_minutes = max(1, min(int(window_minutes or (24 * 60)), 30 * 24 * 60))
+            limit = max(1, min(int(limit or 200), 1000))
+
+            cursor.execute(
+                """
+                SELECT id, tenant_id, status, ready, checks_json, metrics_json, alerts_json, window_minutes, captured_at
+                FROM openclaw_capability_health_history
+                WHERE tenant_id = %s
+                  AND captured_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                ORDER BY captured_at DESC
+                LIMIT %s
+                """,
+                (str(tenant_id), window_minutes, limit),
+            )
+            rows = cursor.fetchall() or []
+            items = []
+            for row in rows:
+                alerts_raw = self._row_value(row, 6, "alerts_json")
+                if isinstance(alerts_raw, list):
+                    alerts_list = alerts_raw
+                elif isinstance(alerts_raw, str):
+                    try:
+                        parsed_alerts = json.loads(alerts_raw)
+                        alerts_list = parsed_alerts if isinstance(parsed_alerts, list) else []
+                    except Exception:
+                        alerts_list = []
+                else:
+                    alerts_list = []
+                items.append(
+                    {
+                        "id": self._row_value(row, 0, "id"),
+                        "tenant_id": self._row_value(row, 1, "tenant_id"),
+                        "status": self._row_value(row, 2, "status"),
+                        "ready": bool(self._row_value(row, 3, "ready", False)),
+                        "checks": self._as_dict(self._row_value(row, 4, "checks_json")),
+                        "metrics": self._as_dict(self._row_value(row, 5, "metrics_json")),
+                        "alerts": alerts_list,
+                        "window_minutes": int(self._row_value(row, 7, "window_minutes", 60) or 60),
+                        "captured_at": str(self._row_value(row, 8, "captured_at") or ""),
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "window_minutes": window_minutes,
+                "limit": limit,
+                "items": items,
+                "count": len(items),
             }
         finally:
             db.close()

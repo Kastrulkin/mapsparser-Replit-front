@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ResponsiveContainer, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
+import { useLanguage } from '@/i18n/LanguageContext';
 interface TimelinePoint {
     date: string;
     rating: number;
@@ -12,6 +13,7 @@ interface AnalyticsTimelineProps {
 }
 
 export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) => {
+    const { t } = useLanguage();
     const timelineData = data.length > 0
         ? data
         : [{ date: '—', rating: 0, reviews: 0 }];
@@ -19,9 +21,9 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) =>
     return (
         <Card className="col-span-4">
             <CardHeader>
-                <CardTitle>Network Performance History</CardTitle>
+                <CardTitle>{t.networkOverview?.performanceHistory || 'История показателей сети'}</CardTitle>
                 <CardDescription>
-                    Tracking average rating vs review volume over the last 7 days.
+                    {t.networkOverview?.performanceHistorySubtitle || 'Динамика среднего рейтинга и количества отзывов за последние 7 дней.'}
                 </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
@@ -51,7 +53,7 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) =>
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
-                                label={{ value: 'Rating', angle: -90, position: 'insideLeft', style: { fill: '#888888' } }}
+                                label={{ value: t.networkOverview?.rating || 'Рейтинг', angle: -90, position: 'insideLeft', style: { fill: '#888888' } }}
                             />
                             <YAxis
                                 yAxisId="right"
@@ -60,7 +62,7 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) =>
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
-                                label={{ value: 'Reviews', angle: 90, position: 'insideRight', style: { fill: '#888888' } }}
+                                label={{ value: t.networkOverview?.reviews || 'Отзывы', angle: 90, position: 'insideRight', style: { fill: '#888888' } }}
                             />
 
                             {/* Risk Zones Background */}
@@ -76,7 +78,7 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) =>
                             <Bar
                                 yAxisId="right"
                                 dataKey="reviews"
-                                name="Review Volume"
+                                name={t.networkOverview?.reviewVolume || 'Объём отзывов'}
                                 fill="#94a3b8"
                                 barSize={20}
                                 radius={[4, 4, 0, 0]}
@@ -85,7 +87,7 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({ data }) =>
                                 yAxisId="left"
                                 type="monotone"
                                 dataKey="rating"
-                                name="Avg Rating"
+                                name={t.networkOverview?.avgRating || 'Средний рейтинг'}
                                 stroke="#10b981"
                                 strokeWidth={3}
                                 dot={{ r: 4, strokeWidth: 2 }}

@@ -60,14 +60,36 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
         user_id = str(uuid.uuid4())
         password_hash = hash_password(password) if password else None
         verification_token = secrets.token_urlsafe(32)
-        
+
+        # Runtime-схема может отличаться на старых окружениях:
+        # если verification_token отсутствует, создаём пользователя без него.
         cursor.execute(
-            f"""
-            INSERT INTO Users (id, email, password_hash, name, phone, verification_token, created_at)
-            VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
-        """,
-            (user_id, email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND column_name = 'verification_token'
+            """
         )
+        has_verification_token = bool(cursor.fetchone())
+
+        if has_verification_token:
+            cursor.execute(
+                f"""
+                INSERT INTO Users (id, email, password_hash, name, phone, verification_token, created_at)
+                VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+            """,
+                (user_id, email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
+            )
+        else:
+            cursor.execute(
+                f"""
+                INSERT INTO Users (id, email, password_hash, name, phone, created_at)
+                VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
+            """,
+                (user_id, email, password_hash, name, phone, datetime.now().isoformat()),
+            )
         
         conn.commit()
         

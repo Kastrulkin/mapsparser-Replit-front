@@ -1149,4 +1149,26 @@ export const ha = {
     },
   },
 
+  networkOverview: {
+    title: "Takaitaccen bayanin cibiyar",
+    subtitle: "Bibiyar aiki a dukkan rassa",
+    status: "Matsayi",
+    allLocations: "Dukkan rassa",
+    activeOnly: "Masu aiki kawai",
+    problems: "Masu matsala",
+    offline: "Ba a kan layi",
+    region: "Yanki",
+    allRegions: "Dukkan yankuna",
+    spb: "St. Petersburg",
+    moscow: "Moscow",
+    pickDate: "Zaɓi kwanan wata",
+    toggleTheme: "Canza jigo",
+    performanceHistory: "Tarihin aikin cibiyar",
+    performanceHistorySubtitle: "Bibiyar matsakaicin ƙima da yawan bita a cikin kwanaki 7 da suka wuce.",
+    rating: "Ƙima",
+    reviews: "Bita",
+    reviewVolume: "Yawan bita",
+    avgRating: "Matsakaicin ƙima"
+  }
+
 };

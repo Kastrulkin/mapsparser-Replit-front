@@ -1,12 +1,20 @@
 # LocalOS ↔ OpenClaw Contract (Phase 1)
 
-Версия: `1.0.0-phase1`
+Версия: `1.1.0-phase2`
 
-Этот документ фиксирует минимальный рабочий контракт для Phase 1:
+Этот документ фиксирует рабочий контракт LocalOS↔OpenClaw:
 - Action Orchestrator в LocalOS
 - policy + pre-check лимитов
 - ledger-биллинг
-- capabilities: `reviews.reply`, `services.optimize`
+- capabilities:
+  - `reviews.reply`
+  - `services.optimize`
+  - `appointments.create`
+  - `appointments.update`
+  - `appointments.cancel`
+  - `reminders.send`
+  - `news.generate`
+  - `sales.ingest`
 
 ## Endpoints (LocalOS)
 
@@ -19,11 +27,16 @@
 7. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 8. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 9. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
-10. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
-11. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
-12. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
-13. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
-14. `GET /api/capabilities/callbacks/metrics?tenant_id=&window_minutes=` (user dashboard metrics)
+10. `GET /api/openclaw/capabilities/catalog` (M2M capability discovery)
+11. `GET /api/openclaw/capabilities/health?tenant_id=&window_minutes=` (M2M integration readiness)
+12. `GET /api/openclaw/capabilities/health/trend?tenant_id=&window_minutes=&limit=` (M2M health trend/history)
+13. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
+14. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
+15. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
+16. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
+17. `GET /api/capabilities/callbacks/metrics?tenant_id=&window_minutes=` (user dashboard metrics)
+18. `GET /api/capabilities/health?tenant_id=&window_minutes=` (user health snapshot)
+19. `GET /api/capabilities/health/trend?tenant_id=&window_minutes=&limit=` (user health trend/history)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -45,6 +58,21 @@
 - заголовок `X-OpenClaw-Token` обязателен
 - `tenant_id` обязателен как query-параметр
 - при несовпадении tenant/action возвращается ошибка (`TENANT_MISMATCH`/`TENANT_NOT_FOUND`)
+
+Для M2M health endpoint:
+- `GET /api/openclaw/capabilities/health`
+- возвращает `status: ready|degraded`, `ready: bool`, блок `checks`:
+  - `token_configured`
+  - `callbacks_enabled`
+  - `dlq_count`
+  - `retry_backlog`
+  - `stuck_retry`
+- при вызове сохраняет snapshot в `openclaw_capability_health_history`
+
+Для M2M health trend endpoint:
+- `GET /api/openclaw/capabilities/health/trend`
+- возвращает историю snapshot по tenant за окно `window_minutes`
+- ограничение выдачи через `limit` (по умолчанию 200)
 
 Для M2M decision endpoint:
 - заголовок `X-OpenClaw-Token` обязателен
@@ -124,6 +152,7 @@ Billing-summary endpoint:
 - callback headers для верификации на стороне OpenClaw:
   - `X-LocalOS-Event-Id`
   - `X-LocalOS-Event-Timestamp`
+  - `X-LocalOS-Dedupe-Key` (stable event idempotency key, default `{action_id}:{event_type}`)
   - `X-LocalOS-Signature` (HMAC SHA256 от `event_id.timestamp.canonical_json(payload)`)
   - секрет подписи: `OPENCLAW_CALLBACK_SIGNING_SECRET` (fallback: `OPENCLAW_LOCALOS_TOKEN`)
 
@@ -135,3 +164,28 @@ Billing-summary endpoint:
 - `request.decision.rejected.json`
 - `response.decision.rejected.json`
 - `response.action.status.rejected.json`
+
+## Smoke Scripts
+
+- `scripts/smoke_openclaw_m2m_capabilities.sh`
+  - Проверяет M2M путь `health -> health_trend -> catalog -> execute -> status -> billing` (+ optional `decision`).
+  - Обязательные env: `OPENCLAW_TOKEN`, `TENANT_ID`.
+  - Опционально: `BASE_URL` (default `http://localhost:8000`).
+- `scripts/smoke_openclaw_m2m_outbox.sh`
+  - Проверяет outbox/dispatch/metrics callback-контура.
+- `scripts/diagnose_openclaw_integration.sh`
+  - One-click диагностика для support/ops:
+    - runtime (`docker compose ps`, logs, `curl -I`)
+    - M2M `health`, `health_trend`, `callbacks/metrics`, `callbacks/outbox`
+  - Код выхода:
+    - `0` — ready
+    - `2` — degraded (alerts/DLQ/stuck retry)
+
+## CI Gate (Phase 2.2)
+
+- `scripts/ci_gate_openclaw_phase1.sh`:
+  - duplicate suffix guard
+  - py_compile critical backend files
+  - `tests/test_capabilities_api_phase1.py`
+  - syntax-check smoke scripts
+  - в `CI` режиме M2M smoke обязателен (требует `OPENCLAW_TOKEN`, `TENANT_ID`)

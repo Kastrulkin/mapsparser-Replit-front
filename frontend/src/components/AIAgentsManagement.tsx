@@ -494,15 +494,26 @@ export const AIAgentsManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Управление ИИ агентами</h2>
-          <p className="text-gray-600 mt-1">{t.dashboard.settings.subtitle}</p>
+      <div className="relative overflow-hidden rounded-2xl border border-orange-200/80 bg-gradient-to-r from-orange-50 via-amber-50 to-yellow-50 p-6 shadow-sm">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-orange-300/20 blur-2xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-16 h-36 w-36 rounded-full bg-amber-300/20 blur-2xl" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-300/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700">
+              <Bot className="h-3.5 w-3.5" />
+              AI
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">{t.dashboard.settings.ai.title}</h2>
+            <p className="mt-1 text-slate-700">{t.dashboard.settings.ai.subtitle}</p>
+          </div>
+          <Button
+            onClick={handleCreate}
+            className="bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-400/30"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Создать агента
+          </Button>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Создать агента
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1012,4 +1023,3 @@ export const AIAgentsManagement = () => {
     </div>
   );
 };
-

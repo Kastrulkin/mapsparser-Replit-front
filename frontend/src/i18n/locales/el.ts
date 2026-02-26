@@ -1164,4 +1164,26 @@ export const el = {
     },
   },
 
+  networkOverview: {
+    title: "Επισκόπηση δικτύου",
+    subtitle: "Παρακολούθηση απόδοσης σε όλες τις τοποθεσίες",
+    status: "Κατάσταση",
+    allLocations: "Όλες οι τοποθεσίες",
+    activeOnly: "Μόνο ενεργές",
+    problems: "Με προβλήματα",
+    offline: "Εκτός σύνδεσης",
+    region: "Περιοχή",
+    allRegions: "Όλες οι περιοχές",
+    spb: "Αγία Πετρούπολη",
+    moscow: "Μόσχα",
+    pickDate: "Επιλέξτε ημερομηνία",
+    toggleTheme: "Εναλλαγή θέματος",
+    performanceHistory: "Ιστορικό απόδοσης δικτύου",
+    performanceHistorySubtitle: "Παρακολούθηση μέσης αξιολόγησης και όγκου κριτικών τις τελευταίες 7 ημέρες.",
+    rating: "Αξιολόγηση",
+    reviews: "Κριτικές",
+    reviewVolume: "Όγκος κριτικών",
+    avgRating: "Μέση αξιολόγηση"
+  }
+
 };

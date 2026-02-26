@@ -29,6 +29,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [success, setSuccess] = useState<string | null>(null);
     const [activeCategory, setActiveCategory] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [tableQuery, setTableQuery] = useState('');
+    const [viewsFilter, setViewsFilter] = useState<'all' | 'high' | 'mid' | 'low'>('all');
     const [searching, setSearching] = useState(false);
     const [suggestions, setSuggestions] = useState<Keyword[]>([]);
     const [rejectedSuggestions, setRejectedSuggestions] = useState<Set<string>>(new Set());
@@ -193,9 +195,21 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     }, [businessId]);
 
     const categories = ['all', ...Object.keys(grouped)];
-    const displayedKeywords = activeCategory === 'all'
+    const displayedKeywords = (activeCategory === 'all'
         ? keywords
-        : (grouped[activeCategory] || []);
+        : (grouped[activeCategory] || [])
+    ).filter((k) => {
+        const q = tableQuery.trim().toLowerCase();
+        if (q) {
+            const keywordText = `${(k as any).keyword_with_city || ''} ${k.keyword} ${k.category}`.toLowerCase();
+            if (!keywordText.includes(q)) return false;
+        }
+
+        if (viewsFilter === 'high') return k.views >= 10000;
+        if (viewsFilter === 'mid') return k.views >= 1000 && k.views < 10000;
+        if (viewsFilter === 'low') return k.views < 1000;
+        return true;
+    });
 
     return (
         <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6")}>
@@ -285,6 +299,29 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         ))}
                     </div>
                 )}
+            </div>
+
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex flex-col md:flex-row gap-3">
+                    <div className="flex-1">
+                        <input
+                            value={tableQuery}
+                            onChange={(e) => setTableQuery(e.target.value)}
+                            placeholder="Поиск по текущим SEO-запросам"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <select
+                        value={viewsFilter}
+                        onChange={(e) => setViewsFilter(e.target.value as 'all' | 'high' | 'mid' | 'low')}
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white min-w-[240px]"
+                    >
+                        <option value="all">Все запросы по частотности</option>
+                        <option value="high">Высокочастотные (от 10 000)</option>
+                        <option value="mid">Среднечастотные (1 000 - 9 999)</option>
+                        <option value="low">Низкочастотные (до 999)</option>
+                    </select>
+                </div>
             </div>
 
             {/* Keywords Table */}

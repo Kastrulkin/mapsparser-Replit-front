@@ -352,6 +352,135 @@ def test_openclaw_execute_pending_human_with_valid_token(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_openclaw_capabilities_catalog_requires_token(capabilities_client):
+    info = capabilities_client
+    r = info["client"].get("/api/openclaw/capabilities/catalog")
+    assert r.status_code == 401
+    body = r.get_json()
+    assert body["success"] is False
+
+
+def test_openclaw_capabilities_catalog_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r = info["client"].get(
+            "/api/openclaw/capabilities/catalog",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["success"] is True
+        assert "required_envelope_fields" in body
+        assert "capabilities" in body
+        capabilities = body["capabilities"]
+        assert "reviews.reply" in capabilities
+        assert "services.optimize" in capabilities
+        assert "news.generate" in capabilities
+        assert "sales.ingest" in capabilities
+        assert "appointments.create" in capabilities
+        assert "appointments.update" in capabilities
+        assert "appointments.cancel" in capabilities
+        assert "reminders.send" in capabilities
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_capabilities_health_requires_token(capabilities_client):
+    info = capabilities_client
+    r = info["client"].get(
+        f"/api/openclaw/capabilities/health?tenant_id={info['business_id']}"
+    )
+    assert r.status_code == 401
+    body = r.get_json()
+    assert body["success"] is False
+
+
+def test_openclaw_capabilities_health_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r = info["client"].get(
+            f"/api/openclaw/capabilities/health?tenant_id={info['business_id']}&window_minutes=120",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert body["status"] in {"ready", "degraded"}
+        assert "checks" in body
+        assert "metrics" in body
+        assert isinstance(body["checks"].get("token_configured"), bool)
+        assert isinstance(body["checks"].get("callbacks_enabled"), bool)
+        assert isinstance(body["checks"].get("dlq_count"), int)
+        assert isinstance(body["checks"].get("retry_backlog"), int)
+        assert isinstance(body["checks"].get("stuck_retry"), int)
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_capabilities_health_trend_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r_health = info["client"].get(
+            f"/api/openclaw/capabilities/health?tenant_id={info['business_id']}&window_minutes=30",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_health.status_code == 200, r_health.get_json()
+
+        r_trend = info["client"].get(
+            f"/api/openclaw/capabilities/health/trend?tenant_id={info['business_id']}&window_minutes=120&limit=50",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_trend.status_code == 200, r_trend.get_json()
+        trend_body = r_trend.get_json()
+        assert trend_body["success"] is True
+        assert trend_body["tenant_id"] == info["business_id"]
+        assert isinstance(trend_body.get("items"), list)
+        assert trend_body.get("count", 0) >= 1
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_user_capabilities_health_trend_authorized(capabilities_client):
+    info = capabilities_client
+    r_health = info["client"].get(
+        f"/api/capabilities/health?tenant_id={info['business_id']}&window_minutes=30",
+        headers=_auth_headers(),
+    )
+    assert r_health.status_code == 200, r_health.get_json()
+    health_body = r_health.get_json()
+    assert health_body["success"] is True
+
+    r_trend = info["client"].get(
+        f"/api/capabilities/health/trend?tenant_id={info['business_id']}&window_minutes=180&limit=50",
+        headers=_auth_headers(),
+    )
+    assert r_trend.status_code == 200, r_trend.get_json()
+    trend_body = r_trend.get_json()
+    assert trend_body["success"] is True
+    assert trend_body["tenant_id"] == info["business_id"]
+    assert isinstance(trend_body.get("items"), list)
+    assert trend_body.get("count", 0) >= 1
+
+
 def test_capabilities_news_generate_completed_and_persisted(capabilities_client, monkeypatch):
     info = capabilities_client
     import main as main_mod
@@ -392,6 +521,76 @@ def test_capabilities_news_generate_completed_and_persisted(capabilities_client,
     assert row is not None
     text = row["generated_text"] if hasattr(row, "get") else row[0]
     assert "Новая программа школы" in str(text)
+
+
+def test_capabilities_news_generate_service_guard_uses_selected_service(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    service_id = str(uuid.uuid4())
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND lower(table_name) = 'userservices'
+            """
+        )
+        cols = {str((r[0] if isinstance(r, tuple) else r.get("column_name")) or "").lower() for r in (cur.fetchall() or [])}
+        insert_cols = ["id", "business_id", "name", "description"]
+        insert_vals = [service_id, info["business_id"], "EMSculpt", "Неинвазивная аппаратная коррекция фигуры"]
+        if "is_active" in cols:
+            insert_cols.append("is_active")
+            insert_vals.append(True)
+        cur.execute(
+            f"INSERT INTO UserServices ({', '.join(insert_cols)}) VALUES ({', '.join(['%s'] * len(insert_cols))})",
+            tuple(insert_vals),
+        )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(main_mod, "get_prompt_from_db", lambda key, _uid=None: "Generate news JSON with key news from: {service_context}")
+    monkeypatch.setattr(
+        main_mod,
+        "analyze_text_with_gigachat",
+        lambda *args, **kwargs: '{"news":"Приглашаем на массаж и косметологию в нашем салоне"}',
+    )
+
+    body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "news.generate",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 500},
+        "payload": {
+            "language": "ru",
+            "use_service": True,
+            "service_id": service_id,
+            "use_transaction": False,
+            "use_seo_keywords": False,
+            "raw_info": "",
+        },
+    }
+    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert r.status_code == 200, r.get_json()
+    resp = r.get_json()
+    assert resp["success"] is True
+    assert resp["status"] == "completed"
+    news_id = str(resp["result"]["news_id"])
+
+    conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn2.cursor() as cur2:
+        cur2.execute("SELECT generated_text FROM UserNews WHERE id = %s", (news_id,))
+        row = cur2.fetchone()
+    conn2.close()
+    assert row is not None
+    text = row["generated_text"] if hasattr(row, "get") else row[0]
+    assert "EMSculpt" in str(text)
 
 
 def test_capabilities_sales_ingest_completed_and_persisted(capabilities_client):
@@ -442,6 +641,115 @@ def test_capabilities_sales_ingest_completed_and_persisted(capabilities_client):
     assert str(row_id) == tx_id
     assert str(row_business) == str(info["business_id"])
     assert str(row_user) == str(info["user_id"])
+
+
+def test_capabilities_appointments_create_and_cancel(capabilities_client):
+    info = capabilities_client
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    create_body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "appointments.create",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 300},
+        "payload": {
+            "client_name": "Тест Клиент",
+            "client_phone": "+79990001122",
+            "service_name": "Робототехника",
+            "appointment_time": "2026-03-01T10:30:00+03:00",
+            "notes": "Тестовая запись",
+        },
+    }
+    r_create = info["client"].post("/api/capabilities/execute", json=create_body, headers=_auth_headers())
+    assert r_create.status_code == 200, r_create.get_json()
+    create_resp = r_create.get_json()
+    assert create_resp["success"] is True
+    assert create_resp["status"] == "completed"
+    appointment_id = str(create_resp["result"]["appointment_id"])
+    assert appointment_id
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, business_id, status, service_name FROM Bookings WHERE id = %s", (appointment_id,))
+        row = cur.fetchone()
+    conn.close()
+    assert row is not None
+    row_status = row["status"] if hasattr(row, "get") else row[2]
+    assert str(row_status) == "pending"
+
+    cancel_body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "appointments.cancel",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 100},
+        "payload": {
+            "appointment_id": appointment_id,
+            "reason": "Клиент попросил перенести",
+        },
+    }
+    r_cancel = info["client"].post("/api/capabilities/execute", json=cancel_body, headers=_auth_headers())
+    assert r_cancel.status_code == 200, r_cancel.get_json()
+    cancel_resp = r_cancel.get_json()
+    assert cancel_resp["success"] is True
+    assert cancel_resp["status"] == "completed"
+    assert cancel_resp["result"]["status"] == "cancelled"
+
+    conn2 = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn2.cursor() as cur:
+        cur.execute("SELECT status, notes FROM Bookings WHERE id = %s", (appointment_id,))
+        row2 = cur.fetchone()
+    conn2.close()
+    assert row2 is not None
+    status2 = row2["status"] if hasattr(row2, "get") else row2[0]
+    notes2 = row2["notes"] if hasattr(row2, "get") else row2[1]
+    assert str(status2) == "cancelled"
+    assert "Причина отмены" in str(notes2 or "")
+
+
+def test_capabilities_reminders_send_completed(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import ai_agent_tools as tools_mod
+
+    monkeypatch.setattr(
+        tools_mod,
+        "send_message_to_client",
+        lambda business_id, client_phone, message, channel='whatsapp': {
+            "success": True,
+            "message": "sent",
+            "business_id": business_id,
+            "client_phone": client_phone,
+            "channel": channel,
+        },
+    )
+
+    body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "reminders.send",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 120},
+        "payload": {
+            "client_name": "Тест Клиент",
+            "client_phone": "+79990001122",
+            "channel": "whatsapp",
+            "message": "Напоминаем о вашей записи завтра в 10:30",
+        },
+    }
+    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert r.status_code == 200, r.get_json()
+    resp = r.get_json()
+    assert resp["success"] is True
+    assert resp["status"] == "completed"
+    assert resp["result"]["sent"] is True
+    assert resp["result"]["channel"] == "whatsapp"
 
 
 def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client):
@@ -1017,9 +1325,11 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
         headers = captured.get("headers") or {}
         event_id = headers.get("X-LocalOS-Event-Id")
         event_ts = headers.get("X-LocalOS-Event-Timestamp")
+        dedupe_key = headers.get("X-LocalOS-Dedupe-Key")
         signature = headers.get("X-LocalOS-Signature")
         assert event_id
         assert event_ts
+        assert dedupe_key == f"{action_id}:completed"
         assert signature
 
         payload = captured.get("json") or {}

@@ -1172,4 +1172,26 @@ export const de = {
     },
   },
 
+  networkOverview: {
+    title: "Netzwerkübersicht",
+    subtitle: "Leistungsüberwachung für alle Standorte",
+    status: "Status",
+    allLocations: "Alle Standorte",
+    activeOnly: "Nur aktive",
+    problems: "Mit Problemen",
+    offline: "Offline",
+    region: "Region",
+    allRegions: "Alle Regionen",
+    spb: "Sankt Petersburg",
+    moscow: "Moskau",
+    pickDate: "Datum wählen",
+    toggleTheme: "Design umschalten",
+    performanceHistory: "Verlauf der Netzwerkleistung",
+    performanceHistorySubtitle: "Entwicklung von Durchschnittsbewertung und Bewertungsvolumen in den letzten 7 Tagen.",
+    rating: "Bewertung",
+    reviews: "Bewertungen",
+    reviewVolume: "Bewertungsvolumen",
+    avgRating: "Durchschnittsbewertung"
+  }
+
 };

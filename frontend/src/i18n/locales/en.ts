@@ -724,7 +724,7 @@ export const en = {
       refresh: "Refresh",
       list: "Booking List",
       total: "Total:",
-      empty: "No bookings",
+      empty: "To see bookings, connect your CRM or online spreadsheet.",
       table: {
         client: "Client",
         service: "Service",
@@ -1383,5 +1383,28 @@ export const en = {
       unansweredReviews: "Unanswered reviews",
       lowRating: "Low rating"
     }
+  },
+
+  networkOverview: {
+    title: "Network Overview",
+    subtitle: "Monitor performance across all locations",
+    status: "Status",
+    allLocations: "All Locations",
+    activeOnly: "Active Only",
+    problems: "Problems",
+    offline: "Offline",
+    region: "Region",
+    allRegions: "All Regions",
+    spb: "St. Petersburg",
+    moscow: "Moscow",
+    pickDate: "Pick a date",
+    toggleTheme: "Toggle theme",
+    performanceHistory: "Network Performance History",
+    performanceHistorySubtitle: "Tracking average rating and review volume over the last 7 days.",
+    rating: "Rating",
+    reviews: "Reviews",
+    reviewVolume: "Review Volume",
+    avgRating: "Avg Rating"
   }
+
 };

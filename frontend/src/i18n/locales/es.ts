@@ -1164,4 +1164,26 @@ export const es = {
     },
   },
 
+  networkOverview: {
+    title: "Resumen de la red",
+    subtitle: "Supervisión del rendimiento en todas las ubicaciones",
+    status: "Estado",
+    allLocations: "Todas las ubicaciones",
+    activeOnly: "Solo activas",
+    problems: "Con problemas",
+    offline: "Sin conexión",
+    region: "Región",
+    allRegions: "Todas las regiones",
+    spb: "San Petersburgo",
+    moscow: "Moscú",
+    pickDate: "Seleccionar fecha",
+    toggleTheme: "Cambiar tema",
+    performanceHistory: "Historial de rendimiento de la red",
+    performanceHistorySubtitle: "Seguimiento de la calificación media y el volumen de reseñas en los últimos 7 días.",
+    rating: "Calificación",
+    reviews: "Reseñas",
+    reviewVolume: "Volumen de reseñas",
+    avgRating: "Calificación media"
+  }
+
 };

@@ -1149,4 +1149,26 @@ export const ar = {
     },
   },
 
+  networkOverview: {
+    title: "نظرة عامة على الشبكة",
+    subtitle: "مراقبة الأداء عبر جميع المواقع",
+    status: "الحالة",
+    allLocations: "كل المواقع",
+    activeOnly: "النشطة فقط",
+    problems: "توجد مشكلات",
+    offline: "غير متصل",
+    region: "المنطقة",
+    allRegions: "كل المناطق",
+    spb: "سانت بطرسبرغ",
+    moscow: "موسكو",
+    pickDate: "اختر تاريخًا",
+    toggleTheme: "تبديل المظهر",
+    performanceHistory: "سجل أداء الشبكة",
+    performanceHistorySubtitle: "تتبع متوسط التقييم وحجم المراجعات خلال آخر 7 أيام.",
+    rating: "التقييم",
+    reviews: "المراجعات",
+    reviewVolume: "حجم المراجعات",
+    avgRating: "متوسط التقييم"
+  }
+
 };

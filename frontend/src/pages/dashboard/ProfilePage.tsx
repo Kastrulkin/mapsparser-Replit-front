@@ -869,8 +869,13 @@ export const ProfilePage = () => {
         <SubscriptionManagement businessId={currentBusinessId} business={currentBusiness} />
       </div>
 
-      {/* Счётчик токенов */}
-      <UserTokenUsageSummary businessId={currentBusinessId} />
+      {/* Счётчик кредитов */}
+      <UserTokenUsageSummary
+        businessId={currentBusinessId}
+        subscriptionTier={currentBusiness?.subscription_tier}
+        subscriptionEndsAt={currentBusiness?.subscription_ends_at}
+        trialEndsAt={currentBusiness?.trial_ends_at}
+      />
     </div>
   );
 };

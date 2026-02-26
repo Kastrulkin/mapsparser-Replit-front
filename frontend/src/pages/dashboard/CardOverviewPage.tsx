@@ -27,7 +27,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
 import SEOKeywordsTab from "@/components/SEOKeywordsTab";
-import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 
 export const CardOverviewPage = () => {
@@ -45,6 +44,7 @@ export const CardOverviewPage = () => {
   const [manualCompetitorName, setManualCompetitorName] = useState('');
   const [addingManualCompetitor, setAddingManualCompetitor] = useState(false);
   const [requestingAuditId, setRequestingAuditId] = useState<string | null>(null);
+  const [deletingManualCompetitorId, setDeletingManualCompetitorId] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
   // Состояния для услуг
@@ -238,6 +238,30 @@ export const CardOverviewPage = () => {
       setError(e.message || 'Не удалось отправить запрос на аудит');
     } finally {
       setRequestingAuditId(null);
+    }
+  };
+
+  const deleteManualCompetitor = async (competitorId: string) => {
+    if (!currentBusinessId) return;
+    if (!window.confirm('Удалить этого конкурента из списка?')) return;
+    try {
+      setDeletingManualCompetitorId(competitorId);
+      setError(null);
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/competitors/manual/${competitorId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось удалить конкурента');
+      }
+      setSuccess('Конкурент удалён');
+      await loadManualCompetitors();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось удалить конкурента');
+    } finally {
+      setDeletingManualCompetitorId(null);
     }
   };
 
@@ -741,8 +765,6 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
-        <OpenClawOutboxMetrics businessId={currentBusinessId} />
-
         <Tabs defaultValue="services" className="space-y-8">
           <TabsList className="bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-gray-200/50 w-full md:w-auto overflow-x-auto flex-nowrap justify-start [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg px-6 py-2.5 gap-2">
@@ -805,7 +827,7 @@ export const CardOverviewPage = () => {
 
               {manualCompetitors.length > 0 && (
                 <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Ручные конкуренты</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Вручную добавленные конкуренты</h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     {manualCompetitors.map((comp: any) => (
                       <div key={comp.id} className="bg-white border border-gray-200 p-4 rounded-xl">
@@ -833,14 +855,25 @@ export const CardOverviewPage = () => {
                             </a>
                           )}
                         </div>
-                        <Button
-                          onClick={() => requestAudit(comp.id)}
-                          disabled={requestingAuditId === comp.id}
-                          variant="outline"
-                          className="mt-3 border-amber-300 text-amber-700 hover:bg-amber-50"
-                        >
-                          {requestingAuditId === comp.id ? 'Отправляем…' : 'Аудит'}
-                        </Button>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => requestAudit(comp.id)}
+                            disabled={requestingAuditId === comp.id}
+                            variant="outline"
+                            className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                          >
+                            {requestingAuditId === comp.id ? 'Отправляем…' : 'Аудит'}
+                          </Button>
+                          <Button
+                            onClick={() => deleteManualCompetitor(comp.id)}
+                            disabled={deletingManualCompetitorId === comp.id}
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50 inline-flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            {deletingManualCompetitorId === comp.id ? 'Удаляем…' : 'Удалить'}
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

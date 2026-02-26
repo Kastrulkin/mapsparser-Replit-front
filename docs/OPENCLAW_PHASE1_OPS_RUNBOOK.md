@@ -37,7 +37,24 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/check_openclaw_outb
 - `0` — критичных алертов нет
 - `2` — в метриках есть алерты (DLQ/stuck retry/low success)
 
-## 4) Ручной диспетч callback outbox
+## 4) One-click диагностика интеграции
+
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/diagnose_openclaw_integration.sh
+```
+
+Скрипт собирает:
+- runtime статус контейнеров и свежие логи `app/worker`
+- `capabilities/health`
+- `capabilities/health/trend`
+- `callbacks/metrics`
+- `callbacks/outbox`
+
+Коды возврата:
+- `0` — интеграция в норме
+- `2` — есть деградация (alerts/DLQ/stuck retry)
+
+## 5) Ручной диспетч callback outbox
 
 ```bash
 curl -sS -X POST \
@@ -47,7 +64,7 @@ curl -sS -X POST \
   "http://localhost:8000/api/openclaw/callbacks/dispatch"
 ```
 
-## 5) Основные env-параметры
+## 6) Основные env-параметры
 
 - `OPENCLAW_LOCALOS_TOKEN` — M2M auth token
 - `OPENCLAW_CALLBACK_SIGNING_SECRET` — подпись callback payload (HMAC SHA256)
@@ -59,7 +76,7 @@ curl -sS -X POST \
 - `OPENCLAW_CALLBACK_STUCK_RETRY_ALERT_THRESHOLD` (default `1`)
 - `OPENCLAW_CALLBACK_SUCCESS_RATE_MIN` (default `90`)
 
-## 6) Failure triage
+## 7) Failure triage
 
 1. `callbacks/dispatch` показывает рост `dlq`:
 - проверить доступность callback URL из контейнера `app`;
@@ -73,4 +90,3 @@ curl -sS -X POST \
 3. `delivery_success_rate` падает:
 - смотреть `action_callback_outbox.last_error`;
 - сверять по tenant/каналу проблемные callback URL.
-

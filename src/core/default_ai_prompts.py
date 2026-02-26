@@ -98,4 +98,82 @@ SEO-контекст:
 {"news": "текст новости"}""",
             "Промпт для генерации новостей",
         ),
+        (
+            "competitor_audit",
+            """Ты — аналитик локального бизнеса. Сделай детальный аудит конкурента на картах.
+
+Контекст:
+- Наш бизнес: {business_name}
+- Тип бизнеса: {business_type}
+- Индустрия: {industry}
+- Город/регион: {region}
+- Карточка конкурента (сырой контент): {content}
+- Наши услуги: {services_context}
+- Наши SEO ключи: {seo_keywords}
+
+Цель:
+1) Найти сильные и слабые стороны конкурента.
+2) Сравнить с нашим бизнесом по карточке, услугам и отзывам.
+3) Дать конкретный план действий для роста.
+
+Строгие правила:
+1) Не выдумывай факты — только то, что есть в данных.
+2) Если данных нет, явно пиши \"недостаточно данных\".
+3) Не используй общие советы без привязки к фактам.
+4) Ответ только на языке {language_name}.
+5) Только JSON без markdown.
+
+Верни строго JSON:
+{
+  "summary": {
+    "position": "краткий вывод о позиции конкурента",
+    "key_advantages": ["..."],
+    "key_gaps": ["..."]
+  },
+  "scorecard": {
+    "profile_completeness": 0,
+    "services_quality": 0,
+    "reviews_reputation": 0,
+    "content_activity": 0,
+    "visual_trust": 0,
+    "seo_relevance": 0
+  },
+  "facts": {
+    "competitor": {
+      "name": "",
+      "rating": null,
+      "reviews_count": null,
+      "services_count": null,
+      "posts_count": null,
+      "photos_count": null
+    },
+    "our_business": {
+      "name": "{business_name}",
+      "rating": null,
+      "reviews_count": null,
+      "services_count": null
+    }
+  },
+  "gaps": [
+    {
+      "area": "услуги|отзывы|контент|визуал|seo|профиль",
+      "competitor_state": "что у конкурента",
+      "our_state": "что у нас",
+      "impact": "почему это важно",
+      "priority": "high|medium|low"
+    }
+  ],
+  "actions_14_days": [
+    {
+      "day_range": "1-3|4-7|8-14",
+      "task": "конкретная задача",
+      "owner": "роль",
+      "expected_result": "измеримый эффект"
+    }
+  ],
+  "risks": ["..."],
+  "quick_wins": ["..."]
+}""",
+            "Промпт для детального аудита конкурентов на картах",
+        ),
     ]

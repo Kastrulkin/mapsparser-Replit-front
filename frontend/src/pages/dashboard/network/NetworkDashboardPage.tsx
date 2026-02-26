@@ -189,6 +189,14 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         };
     }, [health, salons, timeline]);
 
+    const isSingleBusinessView = useMemo(() => {
+        const locationsCount = Number(health?.locations_count || 0);
+        if (Number.isFinite(locationsCount) && locationsCount > 0) {
+            return locationsCount <= 1;
+        }
+        return salons.length <= 1;
+    }, [health?.locations_count, salons.length]);
+
     return (
         <div className={embedded ? "space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
             <DashboardHeader
@@ -196,6 +204,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 setDate={setDate}
                 viewMode={viewMode}
                 setViewMode={setViewMode}
+                isSingleBusiness={isSingleBusinessView}
             />
 
             <div className="space-y-4">

@@ -1164,4 +1164,26 @@ export const fr = {
     },
   },
 
+  networkOverview: {
+    title: "Vue d'ensemble du réseau",
+    subtitle: "Suivi des performances sur tous les points",
+    status: "Statut",
+    allLocations: "Tous les points",
+    activeOnly: "Actifs uniquement",
+    problems: "Avec problèmes",
+    offline: "Hors ligne",
+    region: "Région",
+    allRegions: "Toutes les régions",
+    spb: "Saint-Pétersbourg",
+    moscow: "Moscou",
+    pickDate: "Choisir une date",
+    toggleTheme: "Changer le thème",
+    performanceHistory: "Historique des performances du réseau",
+    performanceHistorySubtitle: "Évolution de la note moyenne et du volume d'avis sur les 7 derniers jours.",
+    rating: "Note",
+    reviews: "Avis",
+    reviewVolume: "Volume d'avis",
+    avgRating: "Note moyenne"
+  }
+
 };

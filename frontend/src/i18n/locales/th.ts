@@ -1169,4 +1169,26 @@ export const th = {
     },
   },
 
+  networkOverview: {
+    title: "ภาพรวมเครือข่าย",
+    subtitle: "ติดตามประสิทธิภาพของทุกสาขา",
+    status: "สถานะ",
+    allLocations: "ทุกสาขา",
+    activeOnly: "เฉพาะที่ใช้งาน",
+    problems: "มีปัญหา",
+    offline: "ออฟไลน์",
+    region: "ภูมิภาค",
+    allRegions: "ทุกภูมิภาค",
+    spb: "เซนต์ปีเตอร์สเบิร์ก",
+    moscow: "มอสโก",
+    pickDate: "เลือกวันที่",
+    toggleTheme: "สลับธีม",
+    performanceHistory: "ประวัติประสิทธิภาพเครือข่าย",
+    performanceHistorySubtitle: "ติดตามคะแนนเฉลี่ยและปริมาณรีวิวในช่วง 7 วันที่ผ่านมา",
+    rating: "คะแนน",
+    reviews: "รีวิว",
+    reviewVolume: "ปริมาณรีวิว",
+    avgRating: "คะแนนเฉลี่ย"
+  }
+
 };

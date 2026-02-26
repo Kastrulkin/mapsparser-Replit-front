@@ -8,29 +8,37 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useTheme } from "@/components/theme-provider";
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface DashboardHeaderProps {
     date: DateRange | undefined;
     setDate: (date: DateRange | undefined) => void;
     viewMode: 'list' | 'map' | 'grid';
     setViewMode: (mode: 'list' | 'map' | 'grid') => void;
+    isSingleBusiness?: boolean;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     date,
     setDate,
     viewMode,
-    setViewMode
+    setViewMode,
+    isSingleBusiness = false
 }) => {
     const { theme, setTheme } = useTheme();
+    const { t } = useLanguage();
 
     return (
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between space-y-0 pb-6 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 border-b">
 
             {/* Metrics & Title */}
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">Network Overview</h2>
-                <p className="text-muted-foreground">Monitor performance across all locations.</p>
+                <h2 className="text-3xl font-bold tracking-tight">
+                    {isSingleBusiness ? 'Обзор бизнеса' : (t.networkOverview?.title || 'Обзор сети')}
+                </h2>
+                <p className="text-muted-foreground">
+                    {isSingleBusiness ? 'Мониторинг показателей' : (t.networkOverview?.subtitle || 'Мониторинг показателей по всем точкам')}
+                </p>
             </div>
 
             {/* Filters & Controls */}
@@ -39,25 +47,25 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 {/* Status Filter */}
                 <Select defaultValue="all">
                     <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Status" />
+                        <SelectValue placeholder={t.networkOverview?.status || 'Статус'} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Salons</SelectItem>
-                        <SelectItem value="active">Active Only</SelectItem>
-                        <SelectItem value="problem">Problems</SelectItem>
-                        <SelectItem value="offline">Offline</SelectItem>
+                        <SelectItem value="all">{t.networkOverview?.allLocations || 'Все точки'}</SelectItem>
+                        <SelectItem value="active">{t.networkOverview?.activeOnly || 'Только активные'}</SelectItem>
+                        <SelectItem value="problem">{t.networkOverview?.problems || 'Проблемные'}</SelectItem>
+                        <SelectItem value="offline">{t.networkOverview?.offline || 'Оффлайн'}</SelectItem>
                     </SelectContent>
                 </Select>
 
                 {/* Region Filter */}
                 <Select defaultValue="all_regions">
                     <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Region" />
+                        <SelectValue placeholder={t.networkOverview?.region || 'Регион'} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all_regions">All Regions</SelectItem>
-                        <SelectItem value="spb">St. Petersburg</SelectItem>
-                        <SelectItem value="msk">Moscow</SelectItem>
+                        <SelectItem value="all_regions">{t.networkOverview?.allRegions || 'Все регионы'}</SelectItem>
+                        <SelectItem value="spb">{t.networkOverview?.spb || 'Санкт-Петербург'}</SelectItem>
+                        <SelectItem value="msk">{t.networkOverview?.moscow || 'Москва'}</SelectItem>
                     </SelectContent>
                 </Select>
 
@@ -84,7 +92,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                                     format(date.from, "LLL dd, y")
                                 )
                             ) : (
-                                <span>Pick a date</span>
+                                <span>{t.networkOverview?.pickDate || 'Выберите дату'}</span>
                             )}
                         </Button>
                     </PopoverTrigger>
@@ -136,7 +144,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 >
                     <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                     <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span className="sr-only">Toggle theme</span>
+                    <span className="sr-only">{t.networkOverview?.toggleTheme || 'Переключить тему'}</span>
                 </Button>
 
             </div>

@@ -14,6 +14,7 @@ interface SubscriptionTier {
   price: number;
   currency: string;
   period: string;
+  lead?: string;
   features: string[];
   stripe_price_id?: string;
   icon?: any;
@@ -47,43 +48,70 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         name: isRu ? 'Начальный' : 'Starter',
         price: isRu ? 1200 : 15,
         currency: isRu ? '₽' : '$',
-        period: t.dashboard.subscription.perMonth,
+        period: isRu ? '₽/месяц (240 кредитов)' : t.dashboard.subscription.perMonth,
+        lead: isRu ? 'Хватит чтобы:' : undefined,
         icon: Rocket,
-        features: [
-          t.dashboard.subscription.starterFeature1,
-          t.dashboard.subscription.starterFeature2,
-          t.dashboard.subscription.starterFeature3
-        ]
+        features: isRu
+          ? [
+              'настроить услуги на картах',
+              'ответить на отзывы',
+              'создать новости для публикации',
+              'проверить конкурента',
+            ]
+          : [
+              t.dashboard.subscription.starterFeature1,
+              t.dashboard.subscription.starterFeature2,
+              t.dashboard.subscription.starterFeature3,
+            ],
       },
       {
         id: 'professional',
         name: isRu ? 'Профессиональный' : 'Professional',
         price: isRu ? 5000 : 55,
         currency: isRu ? '₽' : '$',
-        period: t.dashboard.subscription.perMonth,
+        period: isRu ? '₽/месяц (1000 кредитов)' : t.dashboard.subscription.perMonth,
+        lead: isRu ? 'Хватит чтобы:' : undefined,
         popular: true,
         icon: Zap,
-        features: [
-          t.dashboard.subscription.profFeature1,
-          t.dashboard.subscription.profFeature2,
-          t.dashboard.subscription.profFeature3,
-          t.dashboard.subscription.profFeature4
-        ]
+        features: isRu
+          ? [
+              'постить новости',
+              'отвечать на отзывы',
+              'проверять конкурентов',
+              'подключить ии агентов для общения с клиентами',
+              'отслеживать финансовые показатели',
+              'управлять компанией через Телеграм',
+            ]
+          : [
+              t.dashboard.subscription.profFeature1,
+              t.dashboard.subscription.profFeature2,
+              t.dashboard.subscription.profFeature3,
+              t.dashboard.subscription.profFeature4,
+            ],
       },
       {
         id: 'concierge',
         name: isRu ? 'Консьерж' : 'Concierge',
         price: isRu ? 25000 : 310,
         currency: isRu ? '₽' : '$',
-        period: t.dashboard.subscription.perMonth,
+        period: isRu ? '₽/месяц' : t.dashboard.subscription.perMonth,
+        lead: isRu ? '(Мы всё делаем за вас)' : undefined,
         icon: Crown,
-        features: [
-          t.dashboard.subscription.conciergeFeature1,
-          t.dashboard.subscription.conciergeFeature2,
-          t.dashboard.subscription.conciergeFeature3,
-          t.dashboard.subscription.conciergeFeature4,
-          t.dashboard.subscription.conciergeFeature5
-        ]
+        features: isRu
+          ? [
+              'Карточка компании на картах',
+              'Коммуникация с клиентами',
+              'Допродажи и кросс-продажи',
+              'Оптимизация бизнес-процессов',
+              'Выделенный менеджер',
+            ]
+          : [
+              t.dashboard.subscription.conciergeFeature1,
+              t.dashboard.subscription.conciergeFeature2,
+              t.dashboard.subscription.conciergeFeature3,
+              t.dashboard.subscription.conciergeFeature4,
+              t.dashboard.subscription.conciergeFeature5,
+            ],
       },
       {
         id: 'elite',
@@ -91,15 +119,24 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         price: 0,
         currency: '',
         period: '',
+        lead: isRu ? '(Мы делаем всё за вас и даже больше)' : undefined,
         icon: Shield,
-        features: [
-          t.dashboard.subscription.eliteFeature1,
-          t.dashboard.subscription.eliteFeature2,
-          t.dashboard.subscription.eliteFeature3,
-          t.dashboard.subscription.eliteFeature4,
-          t.dashboard.subscription.eliteFeature5
-        ]
-      }
+        features: isRu
+          ? [
+              'Привлечение клиентов онлайн',
+              'Коммуникация с клиентами',
+              'Привлечение клиентов оффлайн',
+              'Оптимизация бизнес-процессов',
+              'Выделенный менеджер',
+            ]
+          : [
+              t.dashboard.subscription.eliteFeature1,
+              t.dashboard.subscription.eliteFeature2,
+              t.dashboard.subscription.eliteFeature3,
+              t.dashboard.subscription.eliteFeature4,
+              t.dashboard.subscription.eliteFeature5,
+            ],
+      },
     ];
   }, [language, t]);
 
@@ -224,6 +261,19 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
 
   const isModerationPending = subscription?.moderation_status === 'pending';
 
+  const getTierAccent = (tierId: string) => {
+    switch (tierId) {
+      case 'starter':
+        return "border-t-4 border-t-orange-400";
+      case 'professional':
+        return "border-t-4 border-t-violet-500";
+      case 'concierge':
+        return "border-t-4 border-t-indigo-500";
+      default:
+        return "";
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Current Subscription Status */}
@@ -268,10 +318,11 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
               key={tier.id}
               className={cn(
                 "relative flex flex-col h-full rounded-2xl p-6 transition-all duration-300 group",
+                !isElite && getTierAccent(tier.id),
                 isActive
-                  ? "bg-white/80 border-2 border-emerald-500 shadow-xl scale-[1.02]"
-                  : "bg-white/40 border border-white/50 hover:bg-white/60 hover:shadow-lg hover:-translate-y-1",
-                isElite && "bg-gradient-to-b from-slate-900 to-slate-800 border-slate-700 text-white"
+                  ? "bg-white border-2 border-emerald-500 shadow-xl scale-[1.02]"
+                  : "bg-white border border-slate-200/90 shadow-sm hover:shadow-lg hover:-translate-y-1",
+                isElite && "bg-gradient-to-b from-slate-900 to-slate-800 border border-slate-700 text-white shadow-xl"
               )}
             >
               {tier.popular && (
@@ -303,7 +354,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                   )}
                   {isElite ? (
                     <span className="text-xs text-gray-400 font-medium">
-                      {t.dashboard.subscription.fromReferrals}
+                      {language === 'ru' ? ' от оплат привлечённых клиентов' : t.dashboard.subscription.fromReferrals}
                     </span>
                   ) : (
                     <span className={cn("text-xs font-medium", isElite ? "text-gray-400" : "text-gray-500")}>
@@ -311,6 +362,11 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
                     </span>
                   )}
                 </div>
+                {tier.lead && (
+                  <div className={cn("mt-2 text-sm", isElite ? "text-gray-300" : "text-gray-600")}>
+                    {tier.lead}
+                  </div>
+                )}
               </div>
 
               <ul className="space-y-3 flex-1 mb-8">
