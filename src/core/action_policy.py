@@ -69,6 +69,27 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
         if bool(payload.get("publish")):
             return {"ok": True, "requires_human": True, "reason": "publishing replies requires review"}
 
+    if capability == "news.generate":
+        if bool(payload.get("publish")):
+            return {"ok": True, "requires_human": True, "reason": "publishing news requires review"}
+
+    if capability == "sales.ingest":
+        transactions = payload.get("transactions")
+        tx_list = transactions if isinstance(transactions, list) else []
+        source = str(payload.get("source") or "").strip().lower()
+        if source in {"ocr", "image", "photo", "scan"}:
+            return {"ok": True, "requires_human": True, "reason": "ocr/image sales ingest requires review"}
+        if len(tx_list) >= 20:
+            return {"ok": True, "requires_human": True, "reason": "bulk sales ingest requires review"}
+        for tx in tx_list:
+            if not isinstance(tx, dict):
+                continue
+            try:
+                if float(tx.get("amount") or 0) >= 50000:
+                    return {"ok": True, "requires_human": True, "reason": "high amount sales ingest requires review"}
+            except Exception:
+                continue
+
     return {"ok": True, "requires_human": False, "reason": ""}
 
 

@@ -3097,10 +3097,349 @@ def _capability_services_optimize(envelope: dict, user_data: dict) -> dict:
     }
 
 
+def _load_table_columns(cursor, table_name: str) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND lower(table_name) = lower(%s)
+        """,
+        (table_name,),
+    )
+    return {str((row[0] if isinstance(row, tuple) else row.get("column_name")) or "").lower() for row in (cursor.fetchall() or [])}
+
+
+def _normalize_news_text(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parsed = _extract_json_candidate(text)
+    if isinstance(parsed, dict):
+        text = str(parsed.get("news") or parsed.get("text") or text)
+    if text.startswith("{") and '"news"' in text:
+        try:
+            candidate = _extract_json_candidate(text)
+            if isinstance(candidate, dict) and candidate.get("news"):
+                text = str(candidate.get("news"))
+        except Exception:
+            pass
+    return text.replace('\\"', '"').replace("\\n", "\n").strip()
+
+
+def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    if not tenant_id:
+        raise ValueError("tenant_id is required for news.generate")
+
+    language = str(payload.get("language") or "ru").strip()
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    language_name = language_names.get(language, "Russian")
+
+    use_service = bool(payload.get("use_service"))
+    use_transaction = bool(payload.get("use_transaction"))
+    use_seo_keywords = bool(payload.get("use_seo_keywords"))
+    selected_seo_keyword = str(payload.get("selected_seo_keyword") or "").strip()
+    selected_service_id = payload.get("service_id")
+    selected_transaction_id = payload.get("transaction_id")
+    raw_info = str(payload.get("raw_info") or "").strip()
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        service_context = ""
+        selected_service_name = ""
+        selected_service_description = ""
+        transaction_context = ""
+
+        if use_service and selected_service_id:
+            cursor.execute(
+                """
+                SELECT name, description
+                FROM UserServices
+                WHERE id = %s
+                  AND (
+                    business_id = %s
+                    OR user_id = %s
+                  )
+                LIMIT 1
+                """,
+                (selected_service_id, tenant_id, user_data["user_id"]),
+            )
+            row = cursor.fetchone()
+            if row:
+                selected_service_name = str(row[0] if isinstance(row, tuple) else row.get("name") or "").strip()
+                selected_service_description = str(row[1] if isinstance(row, tuple) else row.get("description") or "").strip()
+                service_context = f"Услуга: {selected_service_name}. Описание: {selected_service_description}"
+
+        if use_transaction and selected_transaction_id:
+            cursor.execute(
+                """
+                SELECT transaction_date, amount, services, notes
+                FROM FinancialTransactions
+                WHERE id = %s
+                  AND (
+                    business_id = %s
+                    OR user_id = %s
+                  )
+                LIMIT 1
+                """,
+                (selected_transaction_id, tenant_id, user_data["user_id"]),
+            )
+            tx = cursor.fetchone()
+            if tx:
+                tx_date = tx[0] if isinstance(tx, tuple) else tx.get("transaction_date")
+                amount = tx[1] if isinstance(tx, tuple) else tx.get("amount")
+                services_raw = tx[2] if isinstance(tx, tuple) else tx.get("services")
+                notes = tx[3] if isinstance(tx, tuple) else tx.get("notes")
+                services_list = []
+                if isinstance(services_raw, list):
+                    services_list = services_raw
+                elif isinstance(services_raw, str) and services_raw.strip():
+                    try:
+                        parsed_services = json.loads(services_raw)
+                        if isinstance(parsed_services, list):
+                            services_list = parsed_services
+                    except Exception:
+                        services_list = [services_raw]
+                services_str = ", ".join([str(x).strip() for x in services_list if str(x).strip()]) or "Услуги"
+                transaction_context = f"Выполнена работа: {services_str}. Дата: {tx_date}. Сумма: {amount}₽. {notes or ''}"
+
+        news_examples = ""
+        try:
+            from core.db_helpers import ensure_user_examples_table
+
+            ensure_user_examples_table(cursor)
+            cursor.execute(
+                "SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5",
+                (user_data["user_id"],),
+            )
+            examples_rows = cursor.fetchall() or []
+            examples = []
+            for row in examples_rows:
+                if isinstance(row, tuple):
+                    examples.append(str(row[0] or ""))
+                elif hasattr(row, "keys"):
+                    examples.append(str(row.get("example_text") or ""))
+            news_examples = "\n".join([x for x in examples if x.strip()])
+        except Exception:
+            news_examples = ""
+
+        if use_service and selected_service_name:
+            seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
+                cursor,
+                tenant_id,
+                user_data["user_id"],
+                selected_service_name,
+                selected_service_description,
+            )
+        else:
+            seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cursor, tenant_id, user_data["user_id"])
+
+        seo_generation_hint = ""
+        if use_seo_keywords:
+            seo_generation_hint = (
+                "Режим генерации: SEO-first. Сначала выбери 1-2 самых частотных SEO-запроса из блока WORDSTAT, "
+                "затем естественно свяжи их с реальными услугами бизнеса."
+            )
+            if selected_seo_keyword:
+                seo_generation_hint += f" Приоритетный ключ: {selected_seo_keyword}."
+
+        prompt_template = get_prompt_from_db("news_generation", None)
+        if not prompt_template:
+            raise ValueError("Промпт news_generation не настроен в админ-панели.")
+
+        prompt = _format_prompt_with_replacements(
+            prompt_template,
+            {
+                "language_name": language_name,
+                "service_context": service_context,
+                "transaction_context": transaction_context,
+                "raw_info": raw_info[:800],
+                "seo_keywords": seo_keywords,
+                "seo_keywords_top10": seo_keywords_top10,
+                "seo_generation_hint": seo_generation_hint,
+                "news_examples": news_examples,
+            },
+        )
+
+        result_text = analyze_text_with_gigachat(
+            prompt,
+            task_type="news_generation",
+            business_id=tenant_id,
+            user_id=user_data["user_id"],
+        )
+        generated_text = _normalize_news_text(result_text if isinstance(result_text, str) else str(result_text))
+        if not generated_text:
+            raise ValueError("Пустой результат генерации")
+
+        news_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (news_id, user_data["user_id"], selected_service_id, raw_info, generated_text),
+        )
+        db.conn.commit()
+    finally:
+        db.close()
+
+    return {
+        "result": {
+            "news_id": news_id,
+            "generated_text": generated_text,
+        },
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
+def _capability_sales_ingest(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    if not tenant_id:
+        raise ValueError("tenant_id is required for sales.ingest")
+
+    transactions = payload.get("transactions")
+    if not isinstance(transactions, list):
+        single = payload.get("transaction")
+        transactions = [single] if isinstance(single, dict) else []
+    if not transactions:
+        raise ValueError("transactions payload is required for sales.ingest")
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    inserted = []
+    total_amount = 0.0
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS FinancialTransactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                business_id TEXT,
+                transaction_date DATE,
+                amount REAL,
+                client_type TEXT,
+                services TEXT,
+                notes TEXT,
+                master_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cols = _load_table_columns(cursor, "financialtransactions")
+        if not cols:
+            raise ValueError("FinancialTransactions table is unavailable")
+
+        for item in transactions:
+            if not isinstance(item, dict):
+                continue
+            tx_id = str(uuid.uuid4())
+            tx_date = str(item.get("transaction_date") or datetime.now().strftime("%Y-%m-%d"))
+            amount = float(item.get("amount") or 0.0)
+            client_type = str(item.get("client_type") or "new")
+            notes = str(item.get("notes") or "")
+            services = item.get("services")
+            if isinstance(services, str):
+                services_value = json.dumps([services], ensure_ascii=False)
+            elif isinstance(services, list):
+                services_value = json.dumps([str(x) for x in services], ensure_ascii=False)
+            else:
+                services_value = json.dumps([], ensure_ascii=False)
+            master_id = item.get("master_id")
+
+            insert_cols = ["id"]
+            params = [tx_id]
+            if "user_id" in cols:
+                insert_cols.append("user_id")
+                params.append(str(user_data["user_id"]))
+            if "business_id" in cols:
+                insert_cols.append("business_id")
+                params.append(tenant_id)
+            if "transaction_date" in cols:
+                insert_cols.append("transaction_date")
+                params.append(tx_date)
+            if "amount" in cols:
+                insert_cols.append("amount")
+                params.append(amount)
+            if "client_type" in cols:
+                insert_cols.append("client_type")
+                params.append(client_type)
+            if "services" in cols:
+                insert_cols.append("services")
+                params.append(services_value)
+            if "notes" in cols:
+                insert_cols.append("notes")
+                params.append(notes)
+            if "master_id" in cols and master_id:
+                insert_cols.append("master_id")
+                params.append(str(master_id))
+
+            placeholders = ", ".join(["%s"] * len(insert_cols))
+            cursor.execute(
+                f"INSERT INTO FinancialTransactions ({', '.join(insert_cols)}) VALUES ({placeholders})",
+                tuple(params),
+            )
+            inserted.append({"transaction_id": tx_id, "amount": amount, "transaction_date": tx_date})
+            total_amount += amount
+
+        if not inserted:
+            raise ValueError("No valid transactions to ingest")
+
+        db.conn.commit()
+    finally:
+        db.close()
+
+    return {
+        "result": {
+            "inserted_count": len(inserted),
+            "total_amount": round(total_amount, 2),
+            "transactions": inserted,
+        },
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
 PHASE1_ACTION_ORCHESTRATOR = ActionOrchestrator(
     handlers={
         "reviews.reply": _capability_reviews_reply,
         "services.optimize": _capability_services_optimize,
+        "news.generate": _capability_news_generate,
+        "sales.ingest": _capability_sales_ingest,
     }
 )
 

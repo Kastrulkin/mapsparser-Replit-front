@@ -352,6 +352,98 @@ def test_openclaw_execute_pending_human_with_valid_token(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_capabilities_news_generate_completed_and_persisted(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    monkeypatch.setattr(main_mod, "get_prompt_from_db", lambda key, _uid=None: "Generate news JSON with key news from: {raw_info}")
+    monkeypatch.setattr(main_mod, "analyze_text_with_gigachat", lambda *args, **kwargs: '{"news":"Новая программа школы открыта"}')
+
+    body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "news.generate",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 500},
+        "payload": {
+            "language": "ru",
+            "raw_info": "Открыли новый курс робототехники для детей",
+            "use_service": False,
+            "use_transaction": False,
+            "use_seo_keywords": False,
+        },
+    }
+    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert r.status_code == 200, r.get_json()
+    resp = r.get_json()
+    assert resp["success"] is True
+    assert resp["status"] == "completed"
+    news_id = str(resp["result"]["news_id"])
+    assert news_id
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, info["user_id"]))
+        row = cur.fetchone()
+    conn.close()
+    assert row is not None
+    text = row["generated_text"] if hasattr(row, "get") else row[0]
+    assert "Новая программа школы" in str(text)
+
+
+def test_capabilities_sales_ingest_completed_and_persisted(capabilities_client):
+    info = capabilities_client
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    body = {
+        "tenant_id": info["business_id"],
+        "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "capability": "sales.ingest",
+        "approval": {"mode": "auto", "ttl_sec": 1200},
+        "billing": {"tariff_id": "phase1-test", "reserve_tokens": 600},
+        "payload": {
+            "source": "manual",
+            "transactions": [
+                {
+                    "transaction_date": "2026-02-26",
+                    "amount": 3500,
+                    "client_type": "new",
+                    "services": ["Робототехника"],
+                    "notes": "Тестовая запись",
+                }
+            ],
+        },
+    }
+    r = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+    assert r.status_code == 200, r.get_json()
+    resp = r.get_json()
+    assert resp["success"] is True
+    assert resp["status"] == "completed"
+    assert resp["result"]["inserted_count"] == 1
+
+    tx_id = str(resp["result"]["transactions"][0]["transaction_id"])
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, business_id, user_id, amount FROM FinancialTransactions WHERE id = %s LIMIT 1",
+            (tx_id,),
+        )
+        row = cur.fetchone()
+    conn.close()
+    assert row is not None
+    row_id = row["id"] if hasattr(row, "get") else row[0]
+    row_business = row["business_id"] if hasattr(row, "get") else row[1]
+    row_user = row["user_id"] if hasattr(row, "get") else row[2]
+    assert str(row_id) == tx_id
+    assert str(row_business) == str(info["business_id"])
+    assert str(row_user) == str(info["user_id"])
+
+
 def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
