@@ -142,7 +142,12 @@ def _notify_superadmins_billing_reconcile(
             WHERE table_schema = 'public' AND table_name = 'users'
             """
         )
-        user_cols = {str(r[0]).lower() for r in (cursor.fetchall() or []) if r and r[0]}
+        raw_cols = cursor.fetchall() or []
+        user_cols = {
+            str(_val(r, 0, "column_name", "")).lower()
+            for r in raw_cols
+            if str(_val(r, 0, "column_name", "")).strip()
+        }
         if "telegram_id" not in user_cols:
             return
 
