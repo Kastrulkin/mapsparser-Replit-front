@@ -430,6 +430,48 @@ def test_openclaw_capabilities_health_with_valid_token(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_openclaw_callbacks_outbox_replay_requires_token(capabilities_client):
+    info = capabilities_client
+    r = info["client"].post("/api/openclaw/callbacks/outbox/replay", json={"tenant_id": info["business_id"]})
+    assert r.status_code == 401
+    body = r.get_json()
+    assert body["success"] is False
+
+
+def test_openclaw_callbacks_outbox_replay_and_cleanup_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        r_replay = info["client"].post(
+            "/api/openclaw/callbacks/outbox/replay",
+            json={"tenant_id": info["business_id"], "include_retry": True, "limit": 10},
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_replay.status_code == 200, r_replay.get_json()
+        p_replay = r_replay.get_json()
+        assert p_replay["success"] is True
+        assert p_replay["tenant_id"] == info["business_id"]
+        assert isinstance(p_replay.get("replayed_count"), int)
+
+        r_cleanup = info["client"].post(
+            "/api/openclaw/callbacks/outbox/cleanup",
+            json={"tenant_id": info["business_id"], "older_than_minutes": 1, "limit": 10},
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_cleanup.status_code == 200, r_cleanup.get_json()
+        p_cleanup = r_cleanup.get_json()
+        assert p_cleanup["success"] is True
+        assert p_cleanup["tenant_id"] == info["business_id"]
+        assert isinstance(p_cleanup.get("deleted_count"), int)
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
 def test_openclaw_capabilities_health_trend_with_valid_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
@@ -452,6 +494,50 @@ def test_openclaw_capabilities_health_trend_with_valid_token(capabilities_client
         assert trend_body["tenant_id"] == info["business_id"]
         assert isinstance(trend_body.get("items"), list)
         assert trend_body.get("count", 0) >= 1
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_billing_reconcile_requires_token(capabilities_client):
+    info = capabilities_client
+    r = info["client"].get(
+        f"/api/openclaw/capabilities/billing/reconcile?tenant_id={info['business_id']}"
+    )
+    assert r.status_code == 401
+    body = r.get_json()
+    assert body["success"] is False
+
+
+def test_openclaw_billing_reconcile_with_valid_token(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        body = _pending_request_body(info["business_id"], info["user_id"])
+        body["actor"] = {"type": "system", "role": "openclaw", "channel": "openclaw"}
+        r_exec = info["client"].post(
+            "/api/openclaw/capabilities/execute",
+            json=body,
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_exec.status_code == 200, r_exec.get_json()
+
+        r = info["client"].get(
+            f"/api/openclaw/capabilities/billing/reconcile?tenant_id={info['business_id']}&window_minutes=120&limit=50",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        payload = r.get_json()
+        assert payload["success"] is True
+        assert payload["tenant_id"] == info["business_id"]
+        assert isinstance(payload.get("items"), list)
+        assert isinstance(payload.get("summary"), dict)
+        assert "actions_checked" in payload["summary"]
+        assert "tokenusage_minus_settled" in payload["summary"]
     finally:
         if previous is None:
             os.environ.pop(token_name, None)

@@ -25,6 +25,7 @@ curl -I http://localhost:8000
 
 ```bash
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/smoke_openclaw_m2m_outbox.sh
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/smoke_openclaw_m2m_reconciliation.sh
 ```
 
 ## 3) Проверка outbox-метрик и алертов
@@ -90,3 +91,17 @@ curl -sS -X POST \
 3. `delivery_success_rate` падает:
 - смотреть `action_callback_outbox.last_error`;
 - сверять по tenant/каналу проблемные callback URL.
+
+## 8) DLQ replay / outbox cleanup
+
+Повторно отправить `dlq` (или `dlq+retry`) в очередь:
+
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=replay INCLUDE_RETRY=true ./scripts/manage_openclaw_outbox.sh
+```
+
+Удалить старые `sent` записи из outbox:
+
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION=cleanup OLDER_THAN_MINUTES=1440 LIMIT=1000 ./scripts/manage_openclaw_outbox.sh
+```

@@ -62,9 +62,11 @@ fetch_json "callbacks_metrics" "${base_url}/api/openclaw/callbacks/metrics?tenan
 echo
 fetch_json "outbox" "${base_url}/api/openclaw/callbacks/outbox?tenant_id=${TENANT_ID}&limit=${limit}&offset=0" || true
 echo
+fetch_json "billing_reconcile" "${base_url}/api/openclaw/capabilities/billing/reconcile?tenant_id=${TENANT_ID}&window_minutes=${window}&limit=${limit}" || true
+echo
 
 echo "== Result =="
-python3 - "${tmp_dir}/health.json" "${tmp_dir}/callbacks_metrics.json" <<'PY'
+python3 - "${tmp_dir}/health.json" "${tmp_dir}/callbacks_metrics.json" "${tmp_dir}/billing_reconcile.json" <<'PY'
 import json, sys
 
 def load(path):
@@ -76,14 +78,16 @@ def load(path):
 
 health = load(sys.argv[1])
 metrics = load(sys.argv[2])
+billing = load(sys.argv[3])
 status = health.get("status")
 alerts = metrics.get("alerts") or []
 dlq = int((metrics.get("metrics") or {}).get("dlq", 0) or 0)
 stuck = int((metrics.get("metrics") or {}).get("stuck_retry", 0) or 0)
-if status == "ready" and not alerts and dlq == 0 and stuck == 0:
+billing_issues = int((billing.get("summary") or {}).get("issue_count", 0) or 0)
+if status == "ready" and not alerts and dlq == 0 and stuck == 0 and billing_issues == 0:
     print("OK: integration ready")
     raise SystemExit(0)
 print("WARN: integration requires attention")
-print(f"status={status} alerts={len(alerts)} dlq={dlq} stuck_retry={stuck}")
+print(f"status={status} alerts={len(alerts)} dlq={dlq} stuck_retry={stuck} billing_issues={billing_issues}")
 raise SystemExit(2)
 PY

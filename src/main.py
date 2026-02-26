@@ -4521,6 +4521,34 @@ def openclaw_capabilities_action_billing(action_id):
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_billing_reconcile():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    window_minutes = request.args.get("window_minutes", 24 * 60)
+    limit = request.args.get("limit", 200)
+    result = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
+        service_user,
+        tenant_id=tenant_id,
+        window_minutes=window_minutes,
+        limit=limit,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/openclaw/capabilities/actions', methods=['GET', 'OPTIONS'])
 def openclaw_capabilities_actions_list():
     if request.method == 'OPTIONS':
@@ -4623,6 +4651,64 @@ def openclaw_callbacks_metrics():
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
+def openclaw_callbacks_outbox_replay():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    data = request.get_json(silent=True) or {}
+    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    include_retry = bool(data.get("include_retry", False))
+    limit = data.get("limit", 100)
+    result = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
+        service_user,
+        tenant_id=tenant_id,
+        include_retry=include_retry,
+        limit=limit,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/openclaw/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])
+def openclaw_callbacks_outbox_cleanup():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    data = request.get_json(silent=True) or {}
+    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    older_than_minutes = data.get("older_than_minutes", 24 * 60)
+    limit = data.get("limit", 500)
+    result = PHASE1_ACTION_ORCHESTRATOR.cleanup_callback_outbox(
+        service_user,
+        tenant_id=tenant_id,
+        older_than_minutes=older_than_minutes,
+        limit=limit,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/openclaw/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
 def openclaw_capabilities_action_decision(action_id):
     if request.method == 'OPTIONS':
@@ -4692,6 +4778,92 @@ def capabilities_callbacks_metrics():
         user_data,
         tenant_id=str(tenant_id),
         window_minutes=window_minutes,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
+def capabilities_callbacks_outbox_replay():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    include_retry = bool(data.get("include_retry", False))
+    limit = data.get("limit", 100)
+    result = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
+        user_data,
+        tenant_id=str(tenant_id),
+        include_retry=include_retry,
+        limit=limit,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])
+def capabilities_callbacks_outbox_cleanup():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    older_than_minutes = data.get("older_than_minutes", 24 * 60)
+    limit = data.get("limit", 500)
+    result = PHASE1_ACTION_ORCHESTRATOR.cleanup_callback_outbox(
+        user_data,
+        tenant_id=str(tenant_id),
+        older_than_minutes=older_than_minutes,
+        limit=limit,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
+def capabilities_billing_reconcile():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    window_minutes = request.args.get("window_minutes", 24 * 60)
+    limit = request.args.get("limit", 200)
+    result = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=window_minutes,
+        limit=limit,
     )
     return jsonify(result), int(result.pop("http_code", 200))
 

@@ -1395,6 +1395,321 @@ class ActionOrchestrator:
         finally:
             db.close()
 
+    def replay_callback_outbox(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        include_retry: bool = False,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            limit = max(1, min(int(limit or 100), 2000))
+            statuses = ["dlq", "retry"] if include_retry else ["dlq"]
+            cursor.execute(
+                """
+                WITH picked AS (
+                    SELECT id
+                    FROM action_callback_outbox
+                    WHERE tenant_id = %s
+                      AND status = ANY(%s)
+                    ORDER BY created_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                )
+                UPDATE action_callback_outbox o
+                SET status='pending',
+                    attempts=0,
+                    last_error=NULL,
+                    next_attempt_at=CURRENT_TIMESTAMP,
+                    locked_at=NULL,
+                    updated_at=CURRENT_TIMESTAMP
+                FROM picked
+                WHERE o.id = picked.id
+                RETURNING o.id, o.action_id, o.event_type
+                """,
+                (str(tenant_id), statuses, limit),
+            )
+            rows = cursor.fetchall() or []
+            replayed = [
+                {
+                    "id": self._row_value(r, 0, "id"),
+                    "action_id": self._row_value(r, 1, "action_id"),
+                    "event_type": self._row_value(r, 2, "event_type"),
+                }
+                for r in rows
+            ]
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "statuses": statuses,
+                "replayed_count": len(replayed),
+                "replayed": replayed,
+            }
+        finally:
+            db.close()
+
+    def cleanup_callback_outbox(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        older_than_minutes: int = 24 * 60,
+        limit: int = 500,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            older_than_minutes = max(1, min(int(older_than_minutes or (24 * 60)), 180 * 24 * 60))
+            limit = max(1, min(int(limit or 500), 5000))
+
+            cursor.execute(
+                """
+                WITH picked AS (
+                    SELECT id
+                    FROM action_callback_outbox
+                    WHERE tenant_id = %s
+                      AND status = 'sent'
+                      AND sent_at IS NOT NULL
+                      AND sent_at < (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                    ORDER BY sent_at ASC
+                    LIMIT %s
+                    FOR UPDATE SKIP LOCKED
+                )
+                DELETE FROM action_callback_outbox o
+                USING picked
+                WHERE o.id = picked.id
+                RETURNING o.id, o.action_id, o.event_type
+                """,
+                (str(tenant_id), older_than_minutes, limit),
+            )
+            rows = cursor.fetchall() or []
+            deleted = [
+                {
+                    "id": self._row_value(r, 0, "id"),
+                    "action_id": self._row_value(r, 1, "action_id"),
+                    "event_type": self._row_value(r, 2, "event_type"),
+                }
+                for r in rows
+            ]
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "deleted_count": len(deleted),
+                "deleted": deleted,
+                "older_than_minutes": older_than_minutes,
+            }
+        finally:
+            db.close()
+
+    def reconcile_billing(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        window_minutes: int = 24 * 60,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = str(self._row_value(owner_row, 0, "owner_id") or "")
+            if owner_id != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            window_minutes = max(1, min(int(window_minutes or (24 * 60)), 30 * 24 * 60))
+            limit = max(1, min(int(limit or 200), 1000))
+
+            cursor.execute(
+                """
+                SELECT
+                    ar.action_id,
+                    ar.status,
+                    ar.billing_json,
+                    ar.created_at,
+                    COALESCE(SUM(CASE WHEN bl.entry_type='reserve' THEN bl.tokens_out ELSE 0 END), 0) AS reserve_total,
+                    COALESCE(SUM(CASE WHEN bl.entry_type='settle' THEN bl.tokens_out ELSE 0 END), 0) AS settle_total,
+                    COALESCE(SUM(CASE WHEN bl.entry_type='release' THEN bl.tokens_out ELSE 0 END), 0) AS release_total,
+                    COALESCE(SUM(CASE WHEN bl.entry_type='settle' THEN bl.cost ELSE 0 END), 0.0) AS settle_cost_total
+                FROM action_requests ar
+                LEFT JOIN billing_ledger bl ON bl.action_id = ar.action_id
+                WHERE ar.tenant_id = %s
+                  AND ar.created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                GROUP BY ar.action_id, ar.status, ar.billing_json, ar.created_at
+                ORDER BY ar.created_at DESC
+                LIMIT %s
+                """,
+                (str(tenant_id), window_minutes, limit),
+            )
+            rows = cursor.fetchall() or []
+
+            items = []
+            total_issue_count = 0
+            actions_with_issues = 0
+            settled_sum = 0
+            reserve_sum = 0
+            release_sum = 0
+            expected_tokens_sum = 0
+            expected_cost_sum = 0.0
+
+            for row in rows:
+                action_id = str(self._row_value(row, 0, "action_id") or "")
+                status = str(self._row_value(row, 1, "status") or "")
+                billing_json = self._as_dict(self._row_value(row, 2, "billing_json"))
+                created_at = str(self._row_value(row, 3, "created_at") or "")
+                reserve_total = int(self._row_value(row, 4, "reserve_total", 0) or 0)
+                settle_total = int(self._row_value(row, 5, "settle_total", 0) or 0)
+                release_total = int(self._row_value(row, 6, "release_total", 0) or 0)
+                settle_cost_total = float(self._row_value(row, 7, "settle_cost_total", 0.0) or 0.0)
+
+                expected_tokens = int(billing_json.get("total_tokens") or 0)
+                expected_cost = float(billing_json.get("cost") or 0.0)
+                issue_codes = []
+
+                is_final = status in {"completed", "failed", "rejected", "expired"}
+                if is_final and reserve_total != (settle_total + release_total):
+                    issue_codes.append("reserve_balance_mismatch")
+                if status == "completed" and reserve_total > 0 and settle_total == 0:
+                    issue_codes.append("missing_settle")
+                if expected_tokens > 0 and settle_total != expected_tokens:
+                    issue_codes.append("settle_tokens_mismatch")
+                if abs(expected_cost - settle_cost_total) > 0.000001:
+                    issue_codes.append("settle_cost_mismatch")
+                if reserve_total > 0 and settle_total > reserve_total:
+                    issue_codes.append("settle_exceeds_reserve")
+
+                if issue_codes:
+                    actions_with_issues += 1
+                    total_issue_count += len(issue_codes)
+
+                items.append(
+                    {
+                        "action_id": action_id,
+                        "status": status,
+                        "created_at": created_at,
+                        "ledger": {
+                            "reserved_tokens": reserve_total,
+                            "settled_tokens": settle_total,
+                            "released_tokens": release_total,
+                            "settled_cost": round(settle_cost_total, 6),
+                        },
+                        "expected": {
+                            "total_tokens": expected_tokens,
+                            "cost": round(expected_cost, 6),
+                        },
+                        "issues": issue_codes,
+                    }
+                )
+
+                reserve_sum += reserve_total
+                settled_sum += settle_total
+                release_sum += release_total
+                expected_tokens_sum += expected_tokens
+                expected_cost_sum += expected_cost
+
+            cursor.execute("SELECT to_regclass('tokenusage') AS reg")
+            tokenusage_exists_row = cursor.fetchone()
+            tokenusage_exists = bool(self._row_value(tokenusage_exists_row, 0, "reg"))
+            tokenusage_total = 0
+            if tokenusage_exists:
+                cursor.execute(
+                    """
+                    SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens
+                    FROM tokenusage
+                    WHERE (business_id = %s OR (business_id IS NULL AND user_id = %s))
+                      AND created_at >= (CURRENT_TIMESTAMP - (%s || ' minutes')::interval)
+                    """,
+                    (str(tenant_id), owner_id, window_minutes),
+                )
+                tr = cursor.fetchone()
+                tokenusage_total = int(self._row_value(tr, 0, "total_tokens", 0) or 0)
+
+            aggregate_mismatch = max(tokenusage_total - settled_sum, 0)
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "window_minutes": window_minutes,
+                "limit": limit,
+                "summary": {
+                    "actions_checked": len(items),
+                    "actions_with_issues": actions_with_issues,
+                    "issue_count": total_issue_count,
+                    "reserved_tokens_total": reserve_sum,
+                    "settled_tokens_total": settled_sum,
+                    "released_tokens_total": release_sum,
+                    "expected_tokens_total": expected_tokens_sum,
+                    "expected_cost_total": round(expected_cost_sum, 6),
+                    "tokenusage_total": tokenusage_total,
+                    "tokenusage_minus_settled": aggregate_mismatch,
+                },
+                "items": items,
+                "count": len(items),
+            }
+        finally:
+            db.close()
+
     def record_capability_health_snapshot(
         self,
         user_data: Dict[str, Any],

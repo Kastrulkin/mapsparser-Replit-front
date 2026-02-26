@@ -34,9 +34,15 @@
 14. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
 15. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
 16. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
-17. `GET /api/capabilities/callbacks/metrics?tenant_id=&window_minutes=` (user dashboard metrics)
-18. `GET /api/capabilities/health?tenant_id=&window_minutes=` (user health snapshot)
-19. `GET /api/capabilities/health/trend?tenant_id=&window_minutes=&limit=` (user health trend/history)
+17. `GET /api/openclaw/capabilities/billing/reconcile?tenant_id=&window_minutes=&limit=` (M2M ledger/tokenusage reconciliation)
+18. `POST /api/openclaw/callbacks/outbox/replay` (M2M replay DLQ/retry to pending)
+19. `POST /api/openclaw/callbacks/outbox/cleanup` (M2M cleanup old sent callbacks)
+20. `GET /api/capabilities/callbacks/metrics?tenant_id=&window_minutes=` (user dashboard metrics)
+21. `GET /api/capabilities/health?tenant_id=&window_minutes=` (user health snapshot)
+22. `GET /api/capabilities/health/trend?tenant_id=&window_minutes=&limit=` (user health trend/history)
+23. `GET /api/capabilities/billing/reconcile?tenant_id=&window_minutes=&limit=` (user billing reconciliation)
+24. `POST /api/capabilities/callbacks/outbox/replay` (user replay DLQ/retry to pending)
+25. `POST /api/capabilities/callbacks/outbox/cleanup` (user cleanup old sent callbacks)
 
 ## Обязательные поля envelope (`execute`)
 
@@ -83,12 +89,20 @@
 - `POST /api/openclaw/callbacks/dispatch` запускает отправку batch callback-событий
 - `GET /api/openclaw/callbacks/outbox` возвращает состояние очереди по tenant
 - `GET /api/openclaw/callbacks/metrics` возвращает метрики доставки (`sent/retry/dlq/pending/stuck_retry/success_rate`) + alerts
+- `POST /api/openclaw/callbacks/outbox/replay` переводит `dlq` (и опционально `retry`) в `pending` для повторной доставки
+- `POST /api/openclaw/callbacks/outbox/cleanup` удаляет старые `sent` события из outbox (housekeeping)
 - token-auth тот же (`X-OpenClaw-Token`)
 - автоматический фоновый dispatch выполняется в `worker` по таймеру
 - env-параметры фонового dispatch:
   - `OPENCLAW_CALLBACK_DISPATCH_ENABLED` (default `true`)
   - `OPENCLAW_CALLBACK_DISPATCH_INTERVAL_SEC` (default `15`)
   - `OPENCLAW_CALLBACK_DISPATCH_BATCH_SIZE` (default `50`)
+
+Для billing reconciliation endpoints:
+- `GET /api/openclaw/capabilities/billing/reconcile` (M2M token-auth)
+- `GET /api/capabilities/billing/reconcile` (user session auth)
+- сверяет `billing_ledger` (`reserve/settle/release`) c `action_requests.billing_json` и агрегатом `tokenusage`
+- возвращает `summary.tokenusage_minus_settled` и список action-level issues
 
 ## Статусы action-machine
 
@@ -173,6 +187,8 @@ Billing-summary endpoint:
   - Опционально: `BASE_URL` (default `http://localhost:8000`).
 - `scripts/smoke_openclaw_m2m_outbox.sh`
   - Проверяет outbox/dispatch/metrics callback-контура.
+- `scripts/smoke_openclaw_m2m_reconciliation.sh`
+  - Проверяет M2M endpoint billing reconciliation.
 - `scripts/diagnose_openclaw_integration.sh`
   - One-click диагностика для support/ops:
     - runtime (`docker compose ps`, logs, `curl -I`)
@@ -189,3 +205,6 @@ Billing-summary endpoint:
   - `tests/test_capabilities_api_phase1.py`
   - syntax-check smoke scripts
   - в `CI` режиме M2M smoke обязателен (требует `OPENCLAW_TOKEN`, `TENANT_ID`)
+- `scripts/manage_openclaw_outbox.sh`
+  - `ACTION=replay` для requeue `dlq/retry`
+  - `ACTION=cleanup` для удаления старых `sent`
