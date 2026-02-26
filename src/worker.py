@@ -232,7 +232,7 @@ def _reconcile_openclaw_billing_if_due() -> None:
         return
     _LAST_BILLING_RECONCILE_AT = now
 
-    window_minutes = max(5, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES", "1440")), 30 * 24 * 60))
+    window_minutes = max(5, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_WINDOW_MINUTES", "120")), 30 * 24 * 60))
     limit = max(10, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_LIMIT", "200")), 1000))
     max_tenants = max(1, min(int(os.getenv("OPENCLAW_BILLING_RECONCILE_MAX_TENANTS", "100")), 1000))
     min_alert_issues = max(1, int(os.getenv("OPENCLAW_BILLING_RECONCILE_ALERT_MIN_ISSUES", "1")))
