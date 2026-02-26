@@ -3366,6 +3366,7 @@ def _capability_sales_ingest(envelope: dict, user_data: dict) -> dict:
             tx_id = str(uuid.uuid4())
             tx_date = str(item.get("transaction_date") or datetime.now().strftime("%Y-%m-%d"))
             amount = float(item.get("amount") or 0.0)
+            transaction_type = str(item.get("transaction_type") or ("income" if amount >= 0 else "expense")).strip().lower()
             client_type = str(item.get("client_type") or "new")
             notes = str(item.get("notes") or "")
             services = item.get("services")
@@ -3391,6 +3392,9 @@ def _capability_sales_ingest(envelope: dict, user_data: dict) -> dict:
             if "amount" in cols:
                 insert_cols.append("amount")
                 params.append(amount)
+            if "transaction_type" in cols:
+                insert_cols.append("transaction_type")
+                params.append(transaction_type)
             if "client_type" in cols:
                 insert_cols.append("client_type")
                 params.append(client_type)
