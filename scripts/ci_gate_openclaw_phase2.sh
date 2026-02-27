@@ -10,7 +10,14 @@ echo "[CI gate] py_compile"
 python3 -m py_compile src/main.py src/core/action_orchestrator.py src/worker.py
 
 echo "[CI gate] phase2 integration tests"
-python3 -m pytest -q tests/test_capabilities_api_phase1.py -ra
+if python3 -m pytest --version >/dev/null 2>&1; then
+  python3 -m pytest -q tests/test_capabilities_api_phase1.py -ra
+elif [[ -n "${CI:-}" && "${OPENCLAW_CI_STRICT:-1}" == "1" ]]; then
+  echo "[CI gate] ERROR: pytest is required in strict CI mode" >&2
+  exit 1
+else
+  echo "[CI gate] WARN: pytest not installed, skipping integration tests in non-CI mode"
+fi
 
 echo "[CI gate] smoke script syntax"
 bash -n scripts/smoke_openclaw_m2m_capabilities.sh
