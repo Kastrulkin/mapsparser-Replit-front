@@ -18,7 +18,7 @@ RUN set -eux; \
     printf 'Acquire::Retries "10";\nAcquire::ForceIPv4 "true";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
     if [ -f /etc/apt/sources.list ]; then cp /etc/apt/sources.list /etc/apt/sources.list.bak; fi; \
     if [ -f /etc/apt/sources.list.d/debian.sources ]; then cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian.sources.bak; fi; \
-    mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
+    mirrors='mirror.yandex.ru/debian ftp.debian.org deb.debian.org'; \
     updated=0; \
     for mirror in $mirrors; do \
       if [ -f /etc/apt/sources.list.bak ]; then cp /etc/apt/sources.list.bak /etc/apt/sources.list; fi; \
@@ -59,7 +59,7 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 RUN set -eux; \
     if [ -f /etc/apt/sources.list ]; then cp /etc/apt/sources.list /etc/apt/sources.list.bak; fi; \
     if [ -f /etc/apt/sources.list.d/debian.sources ]; then cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian.sources.bak; fi; \
-    mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
+    mirrors='mirror.yandex.ru/debian ftp.debian.org deb.debian.org'; \
     updated=0; \
     for mirror in $mirrors; do \
       if [ -f /etc/apt/sources.list.bak ]; then cp /etc/apt/sources.list.bak /etc/apt/sources.list; fi; \
