@@ -19,8 +19,8 @@ extract_asset() {
   grep -oE "${pattern}" "${index_file}" | head -n 1 | cut -d'"' -f2 || true
 }
 
-js_asset="$(extract_asset 'src="/assets/index-[^"]+\\.js"')"
-css_asset="$(extract_asset 'href="/assets/index-[^"]+\\.css"')"
+js_asset="$(extract_asset 'src="/assets/index-[^"]+\.js"')"
+css_asset="$(extract_asset 'href="/assets/index-[^"]+\.css"')"
 
 if [[ -z "${js_asset}" ]]; then
   echo "Missing JS asset reference in ${index_file}"
