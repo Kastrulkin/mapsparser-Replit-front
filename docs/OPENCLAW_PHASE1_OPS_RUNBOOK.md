@@ -44,7 +44,7 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/check_openclaw_outb
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/diagnose_openclaw_integration.sh
 ```
 
-Для детальной диагностики конкретного action (status + billing + timeline):
+Для детальной диагностики конкретного action (status + billing + timeline + support-package):
 ```bash
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scripts/diagnose_openclaw_integration.sh
 ```
@@ -55,6 +55,7 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scr
 - `capabilities/health/trend`
 - `callbacks/metrics`
 - `callbacks/outbox`
+- `capabilities/actions/{action_id}/support-package` (если задан `ACTION_ID`)
 
 Коды возврата:
 - `0` — интеграция в норме

@@ -1252,10 +1252,28 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
                 (action_id,),
             )
             row2 = cur2.fetchone()
+            cur2.execute(
+                """
+                SELECT COUNT(*) AS c,
+                       SUM(CASE WHEN success THEN 1 ELSE 0 END) AS ok_count,
+                       SUM(CASE WHEN success THEN 0 ELSE 1 END) AS fail_count
+                FROM action_callback_attempts
+                WHERE action_id = %s
+                """,
+                (action_id,),
+            )
+            attempt_row = cur2.fetchone()
         conn2.close()
         assert row2 is not None
         status_after = row2["status"] if hasattr(row2, "get") else row2[0]
         assert status_after == "sent"
+        assert attempt_row is not None
+        total_attempts = int((attempt_row["c"] if hasattr(attempt_row, "get") else attempt_row[0]) or 0)
+        ok_count = int((attempt_row["ok_count"] if hasattr(attempt_row, "get") else attempt_row[1]) or 0)
+        fail_count = int((attempt_row["fail_count"] if hasattr(attempt_row, "get") else attempt_row[2]) or 0)
+        assert total_attempts >= 2
+        assert ok_count >= 1
+        assert fail_count >= 1
     finally:
         if previous is None:
             os.environ.pop(token_name, None)

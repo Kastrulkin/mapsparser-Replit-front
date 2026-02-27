@@ -128,6 +128,30 @@ class ActionOrchestrator:
         cursor.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_callback_outbox_dedupe_key ON action_callback_outbox(dedupe_key)"
         )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS action_callback_attempts (
+                id TEXT PRIMARY KEY,
+                outbox_id TEXT NOT NULL,
+                action_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                attempt_no INTEGER NOT NULL,
+                success BOOLEAN NOT NULL DEFAULT FALSE,
+                http_status INTEGER,
+                duration_ms INTEGER,
+                error_text TEXT,
+                response_excerpt TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_action_id ON action_callback_attempts(action_id, created_at DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_outbox_id ON action_callback_attempts(outbox_id)"
+        )
 
         cursor.execute(
             """
@@ -374,7 +398,10 @@ class ActionOrchestrator:
             dlq = 0
             for row in rows:
                 outbox_id = self._row_value(row, 0, "id")
+                action_id = self._row_value(row, 1, "action_id")
+                tenant_id = self._row_value(row, 2, "tenant_id")
                 callback_url = self._row_value(row, 3, "callback_url")
+                event_type = self._row_value(row, 4, "event_type")
                 payload = self._row_value(row, 5, "payload_json") or {}
                 attempts = int(self._row_value(row, 6, "attempts", 0) or 0)
                 max_attempts = int(self._row_value(row, 7, "max_attempts", 5) or 5)
@@ -382,6 +409,10 @@ class ActionOrchestrator:
 
                 ok = True
                 error_text = ""
+                http_status: Optional[int] = None
+                response_excerpt = ""
+                duration_ms: Optional[int] = None
+                start_ts = time.monotonic()
                 try:
                     # OpenClaw callback contract expects epoch-seconds string.
                     event_ts = str(int(time.time()))
@@ -396,16 +427,40 @@ class ActionOrchestrator:
                     if signature:
                         headers["X-LocalOS-Signature"] = signature
                     response = requests.post(callback_url, data=canonical_body.encode("utf-8"), timeout=5, headers=headers)
-                    if int(getattr(response, "status_code", 500)) >= 400:
+                    duration_ms = int((time.monotonic() - start_ts) * 1000)
+                    http_status = int(getattr(response, "status_code", 500))
+                    response_excerpt = str(getattr(response, "text", "") or "")[:1000]
+                    if http_status >= 400:
                         ok = False
-                        error_text = f"http_{int(response.status_code)}"
+                        error_text = f"http_{http_status}"
                 except Exception as exc:
                     ok = False
                     error_text = str(exc)
+                    duration_ms = int((time.monotonic() - start_ts) * 1000)
 
                 db2 = DatabaseManager()
                 cur2 = db2.conn.cursor()
                 try:
+                    cur2.execute(
+                        """
+                        INSERT INTO action_callback_attempts
+                        (id, outbox_id, action_id, tenant_id, event_type, attempt_no, success, http_status, duration_ms, error_text, response_excerpt)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            str(uuid.uuid4()),
+                            str(outbox_id),
+                            str(action_id),
+                            str(tenant_id),
+                            str(event_type),
+                            attempts + 1,
+                            bool(ok),
+                            http_status,
+                            duration_ms,
+                            (error_text or "")[:1000] if not ok else None,
+                            response_excerpt,
+                        ),
+                    )
                     if ok:
                         cur2.execute(
                             """
@@ -1377,6 +1432,25 @@ class ActionOrchestrator:
                     UNION ALL
 
                     SELECT
+                        ca.created_at AS occurred_at,
+                        'callback_delivery'::text AS source,
+                        'attempt'::text AS event_type,
+                        CASE WHEN ca.success THEN 'sent' ELSE 'failed' END::text AS status,
+                        jsonb_build_object(
+                            'outbox_id', ca.outbox_id,
+                            'event_type', ca.event_type,
+                            'attempt_no', ca.attempt_no,
+                            'http_status', ca.http_status,
+                            'duration_ms', ca.duration_ms,
+                            'error_text', ca.error_text,
+                            'response_excerpt', ca.response_excerpt
+                        ) AS details_json
+                    FROM action_callback_attempts ca
+                    WHERE ca.action_id = %s
+
+                    UNION ALL
+
+                    SELECT
                         bl.created_at AS occurred_at,
                         'billing_ledger'::text AS source,
                         bl.entry_type::text AS event_type,
@@ -1398,6 +1472,7 @@ class ActionOrchestrator:
             cursor.execute(
                 timeline_query,
                 (
+                    action_id,
                     action_id,
                     action_id,
                     action_id,
