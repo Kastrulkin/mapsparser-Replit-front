@@ -170,6 +170,8 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/deploy_openclaw_pha
 
 Параметры:
 - `SKIP_BUILD=1` — пропустить сборку и выполнить только restart + verify
+- `BUILD_RETRIES` (default `3`) — число попыток сборки `app/worker`
+- `BUILD_RETRY_SLEEP_SEC` (default `20`) — пауза между попытками сборки
 
 Примечание по серверной сборке:
 - В Dockerfile включён fallback apt-зеркал с приоритетом `mirror.yandex.ru` для стабильной сборки в текущей сети.
