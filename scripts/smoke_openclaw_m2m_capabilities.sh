@@ -222,10 +222,42 @@ events = data.get("events")
 if not isinstance(events, list) or len(events) == 0:
     print("Timeline has no events")
     sys.exit(1)
+total = int(data.get("total_count") or 0)
+count = int(data.get("count") or 0)
+if total < count:
+    print("Timeline total_count < count")
+    sys.exit(1)
 print("Timeline OK: count=", data.get("count"))
 PY
 then
   cat "${tmp_dir}/timeline.json"
+  exit 1
+fi
+
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=20&offset=0&source=action_transition" > "${tmp_dir}/timeline_filtered.json"
+timeline_filtered_success="$(json_read "${tmp_dir}/timeline_filtered.json" "success")"
+if [[ "${timeline_filtered_success}" != "True" && "${timeline_filtered_success}" != "true" ]]; then
+  echo "Timeline filtered read failed"
+  cat "${tmp_dir}/timeline_filtered.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/timeline_filtered.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+events = data.get("events")
+if not isinstance(events, list):
+    print("Timeline filtered has no events list")
+    sys.exit(1)
+if any((e or {}).get("source") != "action_transition" for e in events):
+    print("Timeline filtered contains unexpected source")
+    sys.exit(1)
+print("Timeline filtered OK: count=", data.get("count"))
+PY
+then
+  cat "${tmp_dir}/timeline_filtered.json"
   exit 1
 fi
 
@@ -286,6 +318,94 @@ print("Support package OK")
 PY
 then
   cat "${tmp_dir}/support_package.json"
+  exit 1
+fi
+
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=200&source=action_transition" > "${tmp_dir}/support_package_filtered.json"
+support_filtered_success="$(json_read "${tmp_dir}/support_package_filtered.json" "success")"
+if [[ "${support_filtered_success}" != "True" && "${support_filtered_success}" != "true" ]]; then
+  echo "Support package filtered read failed"
+  cat "${tmp_dir}/support_package_filtered.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/support_package_filtered.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+timeline = data.get("timeline", {})
+events = timeline.get("events")
+if not isinstance(events, list):
+    print("Support package filtered has no events list")
+    sys.exit(1)
+if any((e or {}).get("source") != "action_transition" for e in events):
+    print("Support package filtered contains unexpected source")
+    sys.exit(1)
+print("Support package filtered OK: count=", timeline.get("count"))
+PY
+then
+  cat "${tmp_dir}/support_package_filtered.json"
+  exit 1
+fi
+
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=2&offset=0&full=true" > "${tmp_dir}/support_package_full.json"
+support_full_success="$(json_read "${tmp_dir}/support_package_full.json" "success")"
+if [[ "${support_full_success}" != "True" && "${support_full_success}" != "true" ]]; then
+  echo "Support package full read failed"
+  cat "${tmp_dir}/support_package_full.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/support_package_full.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+timeline = data.get("timeline", {})
+count = int(timeline.get("count") or 0)
+total = int(timeline.get("total_count") or 0)
+if count <= 0:
+    print("Support package full has empty timeline")
+    sys.exit(1)
+if total != count:
+    print("Support package full total_count mismatch", total, count)
+    sys.exit(1)
+print("Support package full OK: count=", count)
+PY
+then
+  cat "${tmp_dir}/support_package_full.json"
+  exit 1
+fi
+
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/diagnostics-bundle?tenant_id=${TENANT_ID}&limit=2&offset=0&full=true&attempts_full=true" > "${tmp_dir}/diagnostics_bundle.json"
+bundle_success="$(json_read "${tmp_dir}/diagnostics_bundle.json" "success")"
+if [[ "${bundle_success}" != "True" && "${bundle_success}" != "true" ]]; then
+  echo "Diagnostics bundle read failed"
+  cat "${tmp_dir}/diagnostics_bundle.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/diagnostics_bundle.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+support = data.get("support_package", {})
+attempts = data.get("callback_attempts", {})
+if not support.get("success"):
+    print("Diagnostics bundle support_package is not successful")
+    sys.exit(1)
+if not attempts.get("success"):
+    print("Diagnostics bundle callback_attempts is not successful")
+    sys.exit(1)
+if not data.get("generated_at"):
+    print("Diagnostics bundle has no generated_at")
+    sys.exit(1)
+print("Diagnostics bundle OK")
+PY
+then
+  cat "${tmp_dir}/diagnostics_bundle.json"
   exit 1
 fi
 

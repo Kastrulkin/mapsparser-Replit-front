@@ -926,8 +926,28 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_timeline["success"] is True
         assert user_timeline["action_id"] == action_id
         assert user_timeline["count"] >= 3
+        assert int(user_timeline.get("total_count", 0)) >= user_timeline["count"]
         assert any(e.get("source") == "action_transition" for e in user_timeline.get("events", []))
         assert any(e.get("source") == "billing_ledger" for e in user_timeline.get("events", []))
+
+        r_user_timeline_source = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/timeline?limit=200&source=action_transition",
+            headers=_auth_headers(),
+        )
+        assert r_user_timeline_source.status_code == 200, r_user_timeline_source.get_json()
+        user_timeline_source = r_user_timeline_source.get_json()
+        assert user_timeline_source["success"] is True
+        assert user_timeline_source["count"] >= 1
+        assert all(e.get("source") == "action_transition" for e in user_timeline_source.get("events", []))
+
+        r_user_timeline_search = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/timeline?limit=200&search=status_changed",
+            headers=_auth_headers(),
+        )
+        assert r_user_timeline_search.status_code == 200, r_user_timeline_search.get_json()
+        user_timeline_search = r_user_timeline_search.get_json()
+        assert user_timeline_search["success"] is True
+        assert user_timeline_search["count"] >= 1
 
         r_m2m_timeline = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}&limit=200",
@@ -938,6 +958,18 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_timeline["success"] is True
         assert m2m_timeline["action_id"] == action_id
         assert m2m_timeline["count"] >= 3
+
+        r_m2m_timeline_filtered = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}&limit=1&offset=0&source=billing_ledger",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_timeline_filtered.status_code == 200, r_m2m_timeline_filtered.get_json()
+        m2m_timeline_filtered = r_m2m_timeline_filtered.get_json()
+        assert m2m_timeline_filtered["success"] is True
+        assert int(m2m_timeline_filtered.get("limit", 0)) == 1
+        assert int(m2m_timeline_filtered.get("offset", 0)) == 0
+        assert int(m2m_timeline_filtered.get("total_count", 0)) >= m2m_timeline_filtered["count"]
+        assert all(e.get("source") == "billing_ledger" for e in m2m_timeline_filtered.get("events", []))
 
         r_user_support = info["client"].get(
             f"/api/capabilities/actions/{action_id}/support-package?limit=200",
@@ -954,6 +986,39 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert "delivery_stats" in user_support
         assert int(user_support["delivery_stats"].get("attempts_total", 0)) >= 0
 
+        r_user_support_filtered = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/support-package?limit=200&source=billing_ledger",
+            headers=_auth_headers(),
+        )
+        assert r_user_support_filtered.status_code == 200, r_user_support_filtered.get_json()
+        user_support_filtered = r_user_support_filtered.get_json()
+        assert user_support_filtered["success"] is True
+        assert all(
+            e.get("source") == "billing_ledger"
+            for e in (user_support_filtered.get("timeline", {}) or {}).get("events", [])
+        )
+        r_user_support_full = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/support-package?limit=2&offset=0&full=true",
+            headers=_auth_headers(),
+        )
+        assert r_user_support_full.status_code == 200, r_user_support_full.get_json()
+        user_support_full = r_user_support_full.get_json()
+        assert user_support_full["success"] is True
+        timeline_full = (user_support_full.get("timeline", {}) or {})
+        assert int(timeline_full.get("count", 0)) >= 3
+        assert int(timeline_full.get("total_count", 0)) == int(timeline_full.get("count", 0))
+        r_user_bundle = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/diagnostics-bundle?limit=2&offset=0&full=true&attempts_full=true",
+            headers=_auth_headers(),
+        )
+        assert r_user_bundle.status_code == 200, r_user_bundle.get_json()
+        user_bundle = r_user_bundle.get_json()
+        assert user_bundle["success"] is True
+        assert user_bundle.get("support_package", {}).get("success") is True
+        assert user_bundle.get("callback_attempts", {}).get("success") is True
+        assert user_bundle.get("filters", {}).get("timeline", {}).get("full") is True
+        assert user_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
+
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
             headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
@@ -965,6 +1030,39 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_support["tenant_id"] == info["business_id"]
         assert m2m_support["timeline"]["count"] >= 3
         assert "delivery_stats" in m2m_support
+
+        r_m2m_support_filtered = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200&source=action_transition",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_support_filtered.status_code == 200, r_m2m_support_filtered.get_json()
+        m2m_support_filtered = r_m2m_support_filtered.get_json()
+        assert m2m_support_filtered["success"] is True
+        assert all(
+            e.get("source") == "action_transition"
+            for e in (m2m_support_filtered.get("timeline", {}) or {}).get("events", [])
+        )
+        r_m2m_support_full = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=2&offset=0&full=true",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_support_full.status_code == 200, r_m2m_support_full.get_json()
+        m2m_support_full = r_m2m_support_full.get_json()
+        assert m2m_support_full["success"] is True
+        timeline_full_m2m = (m2m_support_full.get("timeline", {}) or {})
+        assert int(timeline_full_m2m.get("count", 0)) >= 3
+        assert int(timeline_full_m2m.get("total_count", 0)) == int(timeline_full_m2m.get("count", 0))
+        r_m2m_bundle = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['business_id']}&limit=2&offset=0&full=true&attempts_full=true",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_bundle.status_code == 200, r_m2m_bundle.get_json()
+        m2m_bundle = r_m2m_bundle.get_json()
+        assert m2m_bundle["success"] is True
+        assert m2m_bundle.get("support_package", {}).get("success") is True
+        assert m2m_bundle.get("callback_attempts", {}).get("success") is True
+        assert m2m_bundle.get("filters", {}).get("timeline", {}).get("full") is True
+        assert m2m_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
 
         r_user_attempts = info["client"].get(
             f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
@@ -1001,6 +1099,13 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant_support.status_code in {400, 403, 404}
         wrong_support = r_m2m_wrong_tenant_support.get_json()
         assert wrong_support["success"] is False
+        r_m2m_wrong_tenant_bundle = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['foreign_business_id']}&limit=200",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_bundle.status_code in {400, 403, 404}
+        wrong_bundle = r_m2m_wrong_tenant_bundle.get_json()
+        assert wrong_bundle["success"] is False
 
         r_m2m_wrong_tenant_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",

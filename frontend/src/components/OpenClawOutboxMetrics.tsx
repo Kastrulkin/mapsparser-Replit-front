@@ -95,6 +95,9 @@ type ActionTimelineResponse = {
   capability?: string;
   status?: string;
   events?: ActionTimelineEvent[];
+  total_count?: number;
+  limit?: number;
+  offset?: number;
   error?: string;
 };
 
@@ -169,6 +172,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [timelineStatusFilter, setTimelineStatusFilter] = useState<string>('all');
   const [timelineSearch, setTimelineSearch] = useState<string>('');
   const [timelineOnlyProblematic, setTimelineOnlyProblematic] = useState(false);
+  const [timelineOffset, setTimelineOffset] = useState(0);
+  const [timelineTotal, setTimelineTotal] = useState(0);
   const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
   const [actionCallbackAttempts, setActionCallbackAttempts] = useState<CallbackAttemptItem[]>([]);
@@ -187,6 +192,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [attemptsSearch, setAttemptsSearch] = useState('');
   const [attemptsOffset, setAttemptsOffset] = useState(0);
   const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [autoRefreshSeconds, setAutoRefreshSeconds] = useState<'15' | '30' | '60'>('30');
+  const [lastAutoRefreshAt, setLastAutoRefreshAt] = useState<string | null>(null);
   const [decisionStatus, setDecisionStatus] = useState<'approved' | 'rejected' | 'expired'>('approved');
   const [decisionReason, setDecisionReason] = useState('manual decision from support');
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -194,6 +202,44 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const buildTimelineParams = useCallback(
+    (options?: { includeOffset?: boolean }) => {
+      const includeOffset = options?.includeOffset !== false;
+      const params = new URLSearchParams();
+      if (businessId) {
+        params.set('tenant_id', businessId);
+      }
+      params.set('limit', '200');
+      params.set('offset', String(includeOffset ? timelineOffset : 0));
+      if (timelineSourceFilter !== 'all') {
+        params.set('source', timelineSourceFilter);
+      }
+      if (timelineEventFilter !== 'all') {
+        params.set('event_type', timelineEventFilter);
+      }
+      if (timelineStatusFilter !== 'all') {
+        params.set('status', timelineStatusFilter);
+      }
+      const searchText = timelineSearch.trim();
+      if (searchText.length > 0) {
+        params.set('search', searchText);
+      }
+      if (timelineOnlyProblematic) {
+        params.set('only_problematic', 'true');
+      }
+      return params;
+    },
+    [
+      businessId,
+      timelineOffset,
+      timelineSourceFilter,
+      timelineEventFilter,
+      timelineStatusFilter,
+      timelineSearch,
+      timelineOnlyProblematic,
+    ]
+  );
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -258,33 +304,59 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     load();
   }, [load]);
 
-  useEffect(() => {
-    const loadTimeline = async () => {
+  const refreshActionTimeline = useCallback(async () => {
       if (!businessId || !selectedActionId) {
         setTimeline([]);
+        setTimelineTotal(0);
         return;
       }
-      setTimelineLoading(true);
-      try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(
-          `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/timeline?tenant_id=${encodeURIComponent(businessId)}&limit=200`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const json: ActionTimelineResponse = await response.json();
-        if (!response.ok || !json?.success) {
-          throw new Error(json?.error || `HTTP ${response.status}`);
-        }
-        setTimeline(json.events || []);
-      } catch (e: any) {
-        setTimeline([]);
-        setError(e?.message || 'Не удалось загрузить timeline действий');
-      } finally {
-        setTimelineLoading(false);
+    setTimelineLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const params = buildTimelineParams({ includeOffset: true });
+      const response = await fetch(
+        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/timeline?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json: ActionTimelineResponse = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
       }
-    };
-    loadTimeline();
-  }, [businessId, selectedActionId]);
+      setTimeline(json.events || []);
+      setTimelineTotal(Number(json.total_count || (json.events || []).length || 0));
+    } catch (e: any) {
+      setTimeline([]);
+      setTimelineTotal(0);
+      setError(e?.message || 'Не удалось загрузить timeline действий');
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, [
+    businessId,
+    selectedActionId,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineSearch,
+    timelineOnlyProblematic,
+    timelineOffset,
+    buildTimelineParams,
+  ]);
+
+  useEffect(() => {
+    refreshActionTimeline();
+  }, [refreshActionTimeline]);
+
+  useEffect(() => {
+    setTimelineOffset(0);
+  }, [
+    selectedActionId,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineSearch,
+    timelineOnlyProblematic,
+  ]);
 
   const refreshActionSnapshots = useCallback(async () => {
     if (!businessId || !selectedActionId) {
@@ -382,6 +454,26 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   useEffect(() => {
     refreshActionAttempts();
   }, [refreshActionAttempts]);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled || !businessId || !selectedActionId) return;
+    const intervalMs = Math.max(5, Number(autoRefreshSeconds || '30')) * 1000;
+    const timerId = window.setInterval(() => {
+      refreshActionTimeline();
+      refreshActionSnapshots();
+      refreshActionAttempts();
+      setLastAutoRefreshAt(new Date().toISOString());
+    }, intervalMs);
+    return () => window.clearInterval(timerId);
+  }, [
+    autoRefreshEnabled,
+    autoRefreshSeconds,
+    businessId,
+    selectedActionId,
+    refreshActionTimeline,
+    refreshActionSnapshots,
+    refreshActionAttempts,
+  ]);
 
   const recoverDelivery = useCallback(async () => {
     if (!businessId) return;
@@ -497,17 +589,82 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     filteredTimeline,
   ]);
 
+  const fetchDiagnosticsBundle = useCallback(async (format?: 'json' | 'markdown') => {
+    if (!selectedActionId) return null;
+    const token = localStorage.getItem('auth_token');
+    const params = buildTimelineParams({ includeOffset: false });
+    params.set('full', 'true');
+    params.set('attempts_full', 'true');
+    if (format === 'markdown') {
+      params.set('format', 'markdown');
+    }
+    const response = await fetch(
+      `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/diagnostics-bundle?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [selectedActionId, buildTimelineParams]);
+
+  const exportDiagnosticsBundleJson = useCallback(async () => {
+    if (!selectedActionId) return;
+    try {
+      const bundle = await fetchDiagnosticsBundle('json');
+      if (!bundle?.success) {
+        throw new Error('Diagnostics bundle недоступен');
+      }
+      const payload = {
+        ...bundle,
+        exported_at: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `action-diagnostics-bundle-${selectedActionId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать diagnostics bundle');
+    }
+  }, [selectedActionId, fetchDiagnosticsBundle]);
+
+  const exportDiagnosticsBundleMarkdown = useCallback(async () => {
+    if (!selectedActionId) return;
+    try {
+      const bundle = await fetchDiagnosticsBundle('markdown');
+      if (!bundle?.success) {
+        throw new Error('Diagnostics bundle недоступен');
+      }
+      const markdown = String(bundle?.markdown_report || '').trim();
+      if (!markdown) {
+        throw new Error('Markdown report не сформирован');
+      }
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `action-diagnostics-bundle-${selectedActionId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать diagnostics markdown');
+    }
+  }, [selectedActionId, fetchDiagnosticsBundle]);
+
   const exportSupportPackageJson = useCallback(async () => {
     if (!selectedActionId) return;
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(
-        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/support-package?limit=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(json?.error || `HTTP ${response.status}`);
+      const json = await fetchDiagnosticsBundle('json');
+      if (!json?.success) {
+        throw new Error('Support package недоступен');
       }
       const payload = {
         ...json,
@@ -525,7 +682,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     } catch (e: any) {
       setError(e?.message || 'Не удалось экспортировать support package');
     }
-  }, [selectedActionId]);
+  }, [selectedActionId, fetchDiagnosticsBundle]);
 
   const copyActionDiagnostics = useCallback(async () => {
     if (!selectedActionId) return;
@@ -644,7 +801,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/callback-attempts?tenant_id=${TENANT_ID}&limit=200&offset=0\" | jq .",
       "",
       "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
-      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/support-package?tenant_id=${TENANT_ID}&limit=200\" | jq .",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/diagnostics-bundle?tenant_id=${TENANT_ID}&limit=200&full=true&attempts_full=true\" | jq .",
       "",
       "OPENCLAW_TOKEN='${OPENCLAW_TOKEN}' TENANT_ID='${TENANT_ID}' ACTION_ID='${ACTION_ID}' ./scripts/diagnose_openclaw_integration.sh",
     ];
@@ -704,19 +861,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!selectedActionId || !businessId) return;
     let serverSupportPackage: any = null;
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(
-        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/support-package?limit=200`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const json = await response.json();
-      if (response.ok && json?.success) {
-        serverSupportPackage = json;
-      }
+      serverSupportPackage = await fetchDiagnosticsBundle('json');
     } catch (_e) {
       // Fallback to local snapshots/timeline below.
     }
-    const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
+    const fullTimeline = (serverSupportPackage?.support_package?.timeline?.events as ActionTimelineEvent[]) || filteredTimeline;
+    const fullAttempts = (serverSupportPackage?.callback_attempts?.items as CallbackAttemptItem[]) || [];
+    const problematic = fullTimeline.filter((event) => isProblematicTimelineEvent(event));
     const diagLines: string[] = [
       `action_id: ${selectedActionId}`,
       `tenant_id: ${businessId}`,
@@ -724,12 +875,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       `status: ${actionStatusSnapshot?.status || 'unknown'}`,
       `billing reserve/settle/release: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0}`,
       `billing cost: ${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
-      `timeline total/filtered/problematic: ${timeline.length}/${filteredTimeline.length}/${problematic.length}`,
+      `timeline total/problematic: ${fullTimeline.length}/${problematic.length}`,
+      `callback attempts total: ${fullAttempts.length}`,
       `filters: source=${timelineSourceFilter}, event=${timelineEventFilter}, status=${timelineStatusFilter}, search=${timelineSearch || '-'}, only_problematic=${timelineOnlyProblematic}`,
       '',
       'recent events:',
     ];
-    filteredTimeline.slice(-10).forEach((event, idx) => {
+    fullTimeline.slice(-10).forEach((event, idx) => {
       diagLines.push(
         `${idx + 1}. ${event.occurred_at} | ${event.source} | ${event.event_type} | ${event.status || '-'} | ${JSON.stringify(event.details || {})}`
       );
@@ -744,7 +896,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       `action: ${selectedActionId.slice(0, 8)}`,
       `status: ${actionStatusSnapshot?.status || 'unknown'}`,
       `billing: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0} (reserve/settle/release), cost=${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
-      `timeline: total=${timeline.length}, filtered=${filteredTimeline.length}, problematic=${problematic.length}`,
+      `timeline: total=${fullTimeline.length}, problematic=${problematic.length}`,
+      `attempts: total=${fullAttempts.length}`,
     ];
     if (timelineSummary.lastRetryDlqAt) {
       telegramLines.push(`last_retry_dlq: ${timelineSummary.lastRetryDlqAt} (${timelineSummary.lastRetryDlqStatus || 'event'})`);
@@ -755,7 +908,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (timelineSummary.lastErrorText) {
       telegramLines.push(`last_error: ${timelineSummary.lastErrorText}`);
     }
-    const lastEvents = filteredTimeline.slice(-3).map((event) => {
+    const lastEvents = fullTimeline.slice(-3).map((event) => {
       return `- ${event.occurred_at} | ${event.source}:${event.event_type} | ${event.status || '-'}`;
     });
     if (lastEvents.length > 0) {
@@ -781,7 +934,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/callback-attempts?tenant_id=${TENANT_ID}&limit=200&offset=0\" | jq .",
       "",
       "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
-      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/support-package?tenant_id=${TENANT_ID}&limit=200\" | jq .",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/diagnostics-bundle?tenant_id=${TENANT_ID}&limit=200&full=true&attempts_full=true\" | jq .",
     ];
 
     const decisionReasonEscaped = (decisionReason || '').replace(/"/g, '\\"');
@@ -838,6 +991,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   }, [
     selectedActionId,
     businessId,
+    fetchDiagnosticsBundle,
     filteredTimeline,
     isProblematicTimelineEvent,
     actionStatusSnapshot,
@@ -894,26 +1048,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return Boolean(details.last_error);
   }, []);
 
-  const filteredTimeline = useMemo(() => {
-    const q = timelineSearch.trim().toLowerCase();
-    return timeline.filter((event) => {
-      if (timelineSourceFilter !== 'all' && event.source !== timelineSourceFilter) return false;
-      if (timelineEventFilter !== 'all' && event.event_type !== timelineEventFilter) return false;
-      if (timelineStatusFilter !== 'all' && String(event.status || '') !== timelineStatusFilter) return false;
-      if (timelineOnlyProblematic && !isProblematicTimelineEvent(event)) return false;
-      if (!q) return true;
-      const haystack = `${event.occurred_at} ${event.source} ${event.event_type} ${event.status || ''} ${JSON.stringify(event.details || {})}`.toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [
-    timeline,
-    timelineSourceFilter,
-    timelineEventFilter,
-    timelineStatusFilter,
-    timelineOnlyProblematic,
-    timelineSearch,
-    isProblematicTimelineEvent,
-  ]);
+  const filteredTimeline = useMemo(() => timeline, [timeline]);
 
   const timelineSummary = useMemo(() => {
     const reversed = [...timeline].reverse();
@@ -1215,6 +1350,36 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => setAutoRefreshEnabled((prev) => !prev)}
+                disabled={!selectedActionId}
+                className={`rounded-md border px-2 py-1.5 text-xs disabled:opacity-60 ${
+                  autoRefreshEnabled
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-gray-200 bg-white text-gray-700'
+                }`}
+              >
+                {autoRefreshEnabled ? 'Auto-refresh: ON' : 'Auto-refresh: OFF'}
+              </button>
+              <select
+                value={autoRefreshSeconds}
+                onChange={(e) => setAutoRefreshSeconds(e.target.value as '15' | '30' | '60')}
+                disabled={!selectedActionId}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
+              >
+                <option value="15">15s</option>
+                <option value="30">30s</option>
+                <option value="60">60s</option>
+              </select>
+              <button
+                type="button"
+                onClick={refreshActionTimeline}
+                disabled={timelineLoading || !selectedActionId}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
+              >
+                {timelineLoading ? 'Обновление timeline...' : 'Обновить timeline'}
+              </button>
+              <button
+                type="button"
                 onClick={refreshActionSnapshots}
                 disabled={actionSnapshotLoading || !selectedActionId}
                 className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
@@ -1255,6 +1420,22 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </button>
               <button
                 type="button"
+                onClick={exportDiagnosticsBundleJson}
+                disabled={!selectedActionId}
+                className="rounded-md border border-fuchsia-200 bg-fuchsia-50 px-2 py-1.5 text-xs text-fuchsia-700 disabled:opacity-60"
+              >
+                Экспорт diagnostics JSON
+              </button>
+              <button
+                type="button"
+                onClick={exportDiagnosticsBundleMarkdown}
+                disabled={!selectedActionId}
+                className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs text-violet-700 disabled:opacity-60"
+              >
+                Экспорт diagnostics MD
+              </button>
+              <button
+                type="button"
                 onClick={copyActionDiagnostics}
                 disabled={!selectedActionId}
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700 disabled:opacity-60"
@@ -1278,6 +1459,12 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 Copy cURL (M2M)
               </button>
             </div>
+            {autoRefreshEnabled && (
+              <div className="mb-2 text-[11px] text-emerald-700">
+                Auto-refresh каждые {autoRefreshSeconds}с
+                {lastAutoRefreshAt ? ` · последнее: ${formatDateTime(lastAutoRefreshAt)}` : ''}
+              </div>
+            )}
             <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
               <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700">
                 <div className="font-semibold text-gray-800">Action status</div>
@@ -1424,7 +1611,26 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </div>
             </div>
             <div className="mb-2 text-[11px] text-gray-500">
-              Показано: {filteredTimeline.length} / {timeline.length}
+              Показано: {filteredTimeline.length} / {timelineTotal || timeline.length} ·
+              {' '}Страница: {Math.floor(timelineOffset / 200) + 1} / {Math.max(1, Math.ceil((timelineTotal || timeline.length) / 200))}
+            </div>
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTimelineOffset((prev) => Math.max(0, prev - 200))}
+                disabled={timelineLoading || timelineOffset <= 0}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-60"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimelineOffset((prev) => prev + 200)}
+                disabled={timelineLoading || timelineOffset + 200 >= (timelineTotal || 0)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-60"
+              >
+                Next
+              </button>
             </div>
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {timelineLoading ? (

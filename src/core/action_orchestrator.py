@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from datetime import timedelta
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import hashlib
 import hmac
@@ -1308,12 +1308,19 @@ class ActionOrchestrator:
         user_data: Dict[str, Any],
         *,
         limit: int = 200,
+        offset: int = 0,
+        source: Optional[str] = None,
+        event_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        only_problematic: bool = False,
     ) -> Dict[str, Any]:
         db = DatabaseManager()
         cursor = db.conn.cursor()
         try:
             self.ensure_tables(cursor)
             limit = max(1, min(int(limit or 200), 500))
+            offset = max(0, min(int(offset or 0), 10000))
 
             cursor.execute(
                 """
@@ -1333,7 +1340,7 @@ class ActionOrchestrator:
             if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
                 return {"success": False, "error": "forbidden", "http_code": 403}
 
-            timeline_query = """
+            base_timeline_query = """
                 SELECT occurred_at, source, event_type, status, details_json
                 FROM (
                     SELECT
@@ -1466,22 +1473,58 @@ class ActionOrchestrator:
                     FROM billing_ledger bl
                     WHERE bl.action_id = %s
                 ) t
-                ORDER BY occurred_at DESC NULLS LAST, source ASC
-                LIMIT %s
             """
+            where_clauses: List[str] = []
+            query_params: List[Any] = [action_id] * 8
+
+            source = (str(source or "") or "").strip()
+            if source:
+                where_clauses.append("source = %s")
+                query_params.append(source)
+
+            event_type = (str(event_type or "") or "").strip()
+            if event_type:
+                where_clauses.append("event_type = %s")
+                query_params.append(event_type)
+
+            status = (str(status or "") or "").strip()
+            if status:
+                where_clauses.append("COALESCE(status, '') = %s")
+                query_params.append(status)
+
+            search = (str(search or "") or "").strip()
+            if search:
+                where_clauses.append("(CAST(details_json AS TEXT) ILIKE %s OR source ILIKE %s OR event_type ILIKE %s)")
+                pattern = f"%{search}%"
+                query_params.extend([pattern, pattern, pattern])
+
+            if only_problematic:
+                where_clauses.append(
+                    """(
+                        COALESCE(status, '') IN ('retry', 'dlq', 'failed')
+                        OR event_type IN ('error', 'failed')
+                        OR COALESCE(details_json->>'error_text', '') <> ''
+                    )"""
+                )
+
+            where_sql = ""
+            if where_clauses:
+                where_sql = " WHERE " + " AND ".join(where_clauses)
+
+            count_query = f"SELECT COUNT(1) FROM ({base_timeline_query}) t{where_sql}"
+            cursor.execute(count_query, tuple(query_params))
+            count_row = cursor.fetchone()
+            total_count = int(self._row_value(count_row, 0, "count") or 0)
+
+            timeline_query = (
+                f"{base_timeline_query}{where_sql} "
+                "ORDER BY occurred_at DESC NULLS LAST, source ASC "
+                "LIMIT %s OFFSET %s"
+            )
+            data_params = list(query_params) + [limit, offset]
             cursor.execute(
                 timeline_query,
-                (
-                    action_id,
-                    action_id,
-                    action_id,
-                    action_id,
-                    action_id,
-                    action_id,
-                    action_id,
-                    action_id,
-                    limit,
-                ),
+                tuple(data_params),
             )
             rows = cursor.fetchall() or []
             rows = list(reversed(rows))
@@ -1509,6 +1552,8 @@ class ActionOrchestrator:
                 "events": events,
                 "count": len(events),
                 "limit": limit,
+                "offset": offset,
+                "total_count": total_count,
             }
         finally:
             db.close()
@@ -1519,6 +1564,13 @@ class ActionOrchestrator:
         user_data: Dict[str, Any],
         *,
         limit: int = 200,
+        offset: int = 0,
+        source: Optional[str] = None,
+        event_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        only_problematic: bool = False,
+        full: bool = False,
     ) -> Dict[str, Any]:
         action_result = self.get_action(action_id, user_data)
         if not action_result.get("success"):
@@ -1528,7 +1580,49 @@ class ActionOrchestrator:
         if not billing_result.get("success"):
             return billing_result
 
-        timeline_result = self.get_action_timeline(action_id, user_data, limit=limit)
+        if full:
+            page_limit = max(1, min(int(limit or 200), 500))
+            page_offset = max(0, int(offset or 0))
+            all_events: List[Dict[str, Any]] = []
+            total_count = 0
+            while True:
+                page_result = self.get_action_timeline(
+                    action_id,
+                    user_data,
+                    limit=page_limit,
+                    offset=page_offset,
+                    source=source,
+                    event_type=event_type,
+                    status=status,
+                    search=search,
+                    only_problematic=only_problematic,
+                )
+                if not page_result.get("success"):
+                    return page_result
+                page_events = list(page_result.get("events") or [])
+                all_events.extend(page_events)
+                total_count = int(page_result.get("total_count") or len(all_events))
+                if len(page_events) < page_limit or len(all_events) >= total_count:
+                    timeline_result = dict(page_result)
+                    timeline_result["events"] = all_events
+                    timeline_result["count"] = len(all_events)
+                    timeline_result["total_count"] = max(total_count, len(all_events))
+                    timeline_result["limit"] = page_limit
+                    timeline_result["offset"] = int(offset or 0)
+                    break
+                page_offset += page_limit
+        else:
+            timeline_result = self.get_action_timeline(
+                action_id,
+                user_data,
+                limit=limit,
+                offset=offset,
+                source=source,
+                event_type=event_type,
+                status=status,
+                search=search,
+                only_problematic=only_problematic,
+            )
         if not timeline_result.get("success"):
             return timeline_result
 
@@ -1566,6 +1660,205 @@ class ActionOrchestrator:
             "billing": billing_result,
             "timeline": timeline_result,
         }
+
+    def get_action_diagnostics_bundle(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+        *,
+        limit: int = 200,
+        offset: int = 0,
+        source: Optional[str] = None,
+        event_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        only_problematic: bool = False,
+        full: bool = False,
+        attempts_limit: int = 200,
+        attempts_offset: int = 0,
+        attempts_success: Optional[bool] = None,
+        attempts_event_type: Optional[str] = None,
+        attempts_full: bool = False,
+    ) -> Dict[str, Any]:
+        support_result = self.get_action_support_package(
+            action_id,
+            user_data,
+            limit=limit,
+            offset=offset,
+            source=source,
+            event_type=event_type,
+            status=status,
+            search=search,
+            only_problematic=only_problematic,
+            full=full,
+        )
+        if not support_result.get("success"):
+            return support_result
+
+        if attempts_full:
+            page_limit = max(1, min(int(attempts_limit or 200), 500))
+            page_offset = max(0, int(attempts_offset or 0))
+            all_items: List[Dict[str, Any]] = []
+            total = 0
+            summary: Dict[str, Any] = {}
+            while True:
+                page_result = self.list_action_callback_attempts(
+                    action_id,
+                    user_data,
+                    limit=page_limit,
+                    offset=page_offset,
+                    success=attempts_success,
+                    event_type=attempts_event_type,
+                )
+                if not page_result.get("success"):
+                    return page_result
+                page_items = list(page_result.get("items") or [])
+                all_items.extend(page_items)
+                total = int(page_result.get("total") or len(all_items))
+                summary = dict(page_result.get("summary") or {})
+                if len(page_items) < page_limit or len(all_items) >= total:
+                    attempts_result = dict(page_result)
+                    attempts_result["items"] = all_items
+                    attempts_result["count"] = len(all_items)
+                    attempts_result["total"] = max(total, len(all_items))
+                    attempts_result["limit"] = page_limit
+                    attempts_result["offset"] = int(attempts_offset or 0)
+                    if summary:
+                        attempts_result["summary"] = summary
+                    break
+                page_offset += page_limit
+        else:
+            attempts_result = self.list_action_callback_attempts(
+                action_id,
+                user_data,
+                limit=attempts_limit,
+                offset=attempts_offset,
+                success=attempts_success,
+                event_type=attempts_event_type,
+            )
+            if not attempts_result.get("success"):
+                return attempts_result
+
+        return {
+            "success": True,
+            "action_id": support_result.get("action_id"),
+            "tenant_id": support_result.get("tenant_id"),
+            "capability": support_result.get("capability"),
+            "trace_id": support_result.get("trace_id"),
+            "status": support_result.get("status"),
+            "generated_at": utcnow().isoformat(),
+            "filters": {
+                "timeline": {
+                    "limit": int(limit or 200),
+                    "offset": int(offset or 0),
+                    "source": source,
+                    "event_type": event_type,
+                    "status": status,
+                    "search": search,
+                    "only_problematic": bool(only_problematic),
+                    "full": bool(full),
+                },
+                "callback_attempts": {
+                    "limit": int(attempts_limit or 200),
+                    "offset": int(attempts_offset or 0),
+                    "success": attempts_success,
+                    "event_type": attempts_event_type,
+                    "full": bool(attempts_full),
+                },
+            },
+            "support_package": support_result,
+            "callback_attempts": attempts_result,
+        }
+
+    def render_action_diagnostics_markdown(self, bundle: Dict[str, Any]) -> str:
+        support = dict(bundle.get("support_package") or {})
+        action = dict(support.get("action") or {})
+        billing = dict(support.get("billing") or {})
+        timeline = dict(support.get("timeline") or {})
+        attempts = dict(bundle.get("callback_attempts") or {})
+
+        status = str(bundle.get("status") or action.get("status") or "unknown")
+        action_id = str(bundle.get("action_id") or "")
+        tenant_id = str(bundle.get("tenant_id") or "")
+        trace_id = str(bundle.get("trace_id") or "")
+        generated_at = str(bundle.get("generated_at") or utcnow().isoformat())
+
+        billing_summary = dict(billing.get("summary") or {})
+        reserve_tokens = int(billing_summary.get("reserved_tokens") or 0)
+        settle_tokens = int(billing_summary.get("settled_tokens") or 0)
+        release_tokens = int(billing_summary.get("released_tokens") or 0)
+        total_cost = billing_summary.get("total_cost") or 0
+
+        timeline_events = list(timeline.get("events") or [])
+        timeline_count = int(timeline.get("count") or len(timeline_events))
+        timeline_total = int(timeline.get("total_count") or timeline_count)
+
+        attempts_items = list(attempts.get("items") or [])
+        attempts_total = int(attempts.get("total") or len(attempts_items))
+        attempts_summary = dict(attempts.get("summary") or {})
+        attempts_success = int(attempts_summary.get("success_attempts") or 0)
+        attempts_failed = int(attempts_summary.get("failed_attempts") or 0)
+
+        lines: List[str] = []
+        lines.append("# OpenClaw Action Diagnostics Bundle")
+        lines.append("")
+        lines.append(f"- generated_at: {generated_at}")
+        lines.append(f"- action_id: `{action_id}`")
+        lines.append(f"- tenant_id: `{tenant_id}`")
+        lines.append(f"- trace_id: `{trace_id}`")
+        lines.append(f"- status: `{status}`")
+        lines.append("")
+        lines.append("## Billing")
+        lines.append("")
+        lines.append(f"- reserve/settle/release: **{reserve_tokens}/{settle_tokens}/{release_tokens}**")
+        lines.append(f"- total_cost: **{total_cost}**")
+        lines.append("")
+        lines.append("## Timeline")
+        lines.append("")
+        lines.append(f"- count: **{timeline_count}**")
+        lines.append(f"- total_count: **{timeline_total}**")
+        lines.append("")
+        lines.append("### Recent Timeline Events")
+        lines.append("")
+        for idx, event in enumerate(timeline_events[-10:], start=1):
+            occurred_at = str(event.get("occurred_at") or "")
+            source = str(event.get("source") or "")
+            event_type = str(event.get("event_type") or "")
+            ev_status = str(event.get("status") or "-")
+            lines.append(f"{idx}. `{occurred_at}` | `{source}` | `{event_type}` | `{ev_status}`")
+        if not timeline_events:
+            lines.append("- no events")
+        lines.append("")
+        lines.append("## Callback Attempts")
+        lines.append("")
+        lines.append(f"- total: **{attempts_total}**")
+        lines.append(f"- success/failed: **{attempts_success}/{attempts_failed}**")
+        lines.append("")
+        lines.append("### Recent Callback Attempts")
+        lines.append("")
+        for idx, item in enumerate(attempts_items[-10:], start=1):
+            created_at = str(item.get("created_at") or "")
+            event_type = str(item.get("event_type") or "")
+            attempt_no = int(item.get("attempt_no") or 0)
+            success = bool(item.get("success"))
+            http_status = item.get("http_status")
+            duration_ms = item.get("duration_ms")
+            err = str(item.get("error_text") or "")
+            lines.append(
+                f"{idx}. `{created_at}` | `{event_type}` | attempt={attempt_no} | success={success} | http={http_status} | duration_ms={duration_ms}"
+            )
+            if err:
+                lines.append(f"   - error: {err}")
+        if not attempts_items:
+            lines.append("- no callback attempts")
+        lines.append("")
+        lines.append("## Raw Filters")
+        lines.append("")
+        lines.append("```json")
+        lines.append(json.dumps(bundle.get("filters") or {}, ensure_ascii=False, indent=2))
+        lines.append("```")
+        lines.append("")
+        return "\n".join(lines)
 
     def list_action_callback_attempts(
         self,
