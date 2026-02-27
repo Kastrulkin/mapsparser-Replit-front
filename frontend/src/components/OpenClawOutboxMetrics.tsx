@@ -138,6 +138,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
   const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
@@ -390,6 +391,52 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     filteredTimeline,
   ]);
 
+  const copyActionDiagnostics = useCallback(async () => {
+    if (!selectedActionId) return;
+    const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
+    const lines: string[] = [
+      `action_id: ${selectedActionId}`,
+      `exported_at: ${new Date().toISOString()}`,
+      `status: ${actionStatusSnapshot?.status || 'unknown'}`,
+      `billing reserve/settle/release: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0}`,
+      `billing cost: ${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
+      `timeline total/filtered/problematic: ${timeline.length}/${filteredTimeline.length}/${problematic.length}`,
+      `filters: source=${timelineSourceFilter}, event=${timelineEventFilter}, status=${timelineStatusFilter}, search=${timelineSearch || '-'}, only_problematic=${timelineOnlyProblematic}`,
+      '',
+      'recent events:',
+    ];
+    filteredTimeline.slice(-10).forEach((event, idx) => {
+      lines.push(
+        `${idx + 1}. ${event.occurred_at} | ${event.source} | ${event.event_type} | ${event.status || '-'} | ${JSON.stringify(event.details || {})}`
+      );
+    });
+    if (timelineSummary.lastErrorText) {
+      lines.push('');
+      lines.push(`last_error: ${timelineSummary.lastErrorText}`);
+    }
+    const report = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyMessage('Diagnostics скопированы в буфер');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать diagnostics в буфер');
+    }
+  }, [
+    selectedActionId,
+    filteredTimeline,
+    isProblematicTimelineEvent,
+    actionStatusSnapshot,
+    actionBillingSnapshot,
+    timeline,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineSearch,
+    timelineOnlyProblematic,
+    timelineSummary.lastErrorText,
+  ]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -509,6 +556,11 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           {recoverMessage && (
             <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
               {recoverMessage}
+            </div>
+          )}
+          {copyMessage && (
+            <div className="mb-3 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+              {copyMessage}
             </div>
           )}
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -723,6 +775,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-700 disabled:opacity-60"
               >
                 Экспорт action bundle
+              </button>
+              <button
+                type="button"
+                onClick={copyActionDiagnostics}
+                disabled={!selectedActionId}
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700 disabled:opacity-60"
+              >
+                Скопировать diagnostics
               </button>
             </div>
             <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
