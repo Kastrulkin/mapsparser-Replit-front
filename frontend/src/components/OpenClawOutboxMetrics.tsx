@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCcw, Wrench } from 'lucide-react';
 
 type HealthResponse = {
@@ -110,6 +110,11 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [selectedActionId, setSelectedActionId] = useState<string>('');
   const [timeline, setTimeline] = useState<ActionTimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineSourceFilter, setTimelineSourceFilter] = useState<string>('all');
+  const [timelineEventFilter, setTimelineEventFilter] = useState<string>('all');
+  const [timelineStatusFilter, setTimelineStatusFilter] = useState<string>('all');
+  const [timelineSearch, setTimelineSearch] = useState<string>('');
+  const [timelineOnlyProblematic, setTimelineOnlyProblematic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
@@ -271,6 +276,53 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
     : 'bg-amber-50 border-amber-200 text-amber-800';
 
+  const timelineSources = useMemo(
+    () => Array.from(new Set(timeline.map((e) => e.source).filter(Boolean))),
+    [timeline]
+  );
+  const timelineEventTypes = useMemo(
+    () => Array.from(new Set(timeline.map((e) => e.event_type).filter(Boolean))),
+    [timeline]
+  );
+  const timelineStatuses = useMemo(
+    () => Array.from(new Set(timeline.map((e) => String(e.status || '')).filter((x) => x.length > 0))),
+    [timeline]
+  );
+
+  const isProblematicTimelineEvent = useCallback((event: ActionTimelineEvent): boolean => {
+    const status = String(event.status || '').toLowerCase();
+    const eventType = String(event.event_type || '').toLowerCase();
+    const details = event.details || {};
+    if (status === 'failed' || status === 'retry' || status === 'dlq' || status === 'rejected' || status === 'expired') {
+      return true;
+    }
+    if (eventType === 'retry' || eventType === 'dlq' || eventType === 'failed') {
+      return true;
+    }
+    return Boolean(details.last_error);
+  }, []);
+
+  const filteredTimeline = useMemo(() => {
+    const q = timelineSearch.trim().toLowerCase();
+    return timeline.filter((event) => {
+      if (timelineSourceFilter !== 'all' && event.source !== timelineSourceFilter) return false;
+      if (timelineEventFilter !== 'all' && event.event_type !== timelineEventFilter) return false;
+      if (timelineStatusFilter !== 'all' && String(event.status || '') !== timelineStatusFilter) return false;
+      if (timelineOnlyProblematic && !isProblematicTimelineEvent(event)) return false;
+      if (!q) return true;
+      const haystack = `${event.occurred_at} ${event.source} ${event.event_type} ${event.status || ''} ${JSON.stringify(event.details || {})}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [
+    timeline,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineOnlyProblematic,
+    timelineSearch,
+    isProblematicTimelineEvent,
+  ]);
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -425,14 +477,73 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 ))}
               </select>
             </div>
+            <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-5">
+              <select
+                value={timelineSourceFilter}
+                onChange={(e) => setTimelineSourceFilter(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              >
+                <option value="all">Источник: все</option>
+                {timelineSources.map((source) => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+              <select
+                value={timelineEventFilter}
+                onChange={(e) => setTimelineEventFilter(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              >
+                <option value="all">Событие: все</option>
+                {timelineEventTypes.map((eventType) => (
+                  <option key={eventType} value={eventType}>{eventType}</option>
+                ))}
+              </select>
+              <select
+                value={timelineStatusFilter}
+                onChange={(e) => setTimelineStatusFilter(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              >
+                <option value="all">Статус: все</option>
+                {timelineStatuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+              <input
+                value={timelineSearch}
+                onChange={(e) => setTimelineSearch(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                placeholder="Поиск по деталям..."
+              />
+              <button
+                type="button"
+                onClick={() => setTimelineOnlyProblematic((prev) => !prev)}
+                className={`rounded-md border px-2 py-1.5 text-xs ${
+                  timelineOnlyProblematic
+                    ? 'border-amber-300 bg-amber-100 text-amber-900'
+                    : 'border-gray-200 bg-white text-gray-700'
+                }`}
+              >
+                {timelineOnlyProblematic ? 'Проблемные: ON' : 'Проблемные: OFF'}
+              </button>
+            </div>
+            <div className="mb-2 text-[11px] text-gray-500">
+              Показано: {filteredTimeline.length} / {timeline.length}
+            </div>
             <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
               {timelineLoading ? (
                 <div className="text-xs text-gray-500">Загрузка timeline...</div>
-              ) : timeline.length === 0 ? (
+              ) : filteredTimeline.length === 0 ? (
                 <div className="text-xs text-gray-500">Для выбранного action нет событий</div>
               ) : (
-                timeline.map((event, idx) => (
-                  <div key={`${event.occurred_at}:${event.source}:${event.event_type}:${idx}`} className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                filteredTimeline.map((event, idx) => (
+                  <div
+                    key={`${event.occurred_at}:${event.source}:${event.event_type}:${idx}`}
+                    className={`rounded border px-2 py-1.5 text-xs ${
+                      isProblematicTimelineEvent(event)
+                        ? 'border-amber-300 bg-amber-50'
+                        : 'border-gray-200 bg-white'
+                    }`}
+                  >
                     <div className="font-medium text-gray-800">
                       {event.occurred_at} · {event.source} · {event.event_type}
                       {event.status ? ` · ${event.status}` : ''}
