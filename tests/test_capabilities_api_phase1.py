@@ -966,6 +966,25 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_support["timeline"]["count"] >= 3
         assert "delivery_stats" in m2m_support
 
+        r_user_attempts = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
+            headers=_auth_headers(),
+        )
+        assert r_user_attempts.status_code == 200, r_user_attempts.get_json()
+        user_attempts = r_user_attempts.get_json()
+        assert user_attempts["success"] is True
+        assert user_attempts["action_id"] == action_id
+        assert "items" in user_attempts
+
+        r_m2m_attempts = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_attempts.status_code == 200, r_m2m_attempts.get_json()
+        m2m_attempts = r_m2m_attempts.get_json()
+        assert m2m_attempts["success"] is True
+        assert m2m_attempts["action_id"] == action_id
+
         r_m2m_wrong_tenant = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
             headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
@@ -981,6 +1000,14 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant_support.status_code in {400, 403, 404}
         wrong_support = r_m2m_wrong_tenant_support.get_json()
         assert wrong_support["success"] is False
+
+        r_m2m_wrong_tenant_attempts = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_attempts.status_code in {400, 403, 404}
+        wrong_attempts = r_m2m_wrong_tenant_attempts.get_json()
+        assert wrong_attempts["success"] is False
     finally:
         if original_reviews_handler is not None:
             main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_reviews_handler

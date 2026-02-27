@@ -75,6 +75,8 @@ if [[ -n "${action_id}" ]]; then
   echo
   fetch_json "action_timeline" "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" || true
   echo
+  fetch_json "action_callback_attempts" "${base_url}/api/openclaw/capabilities/actions/${action_id}/callback-attempts?tenant_id=${TENANT_ID}&limit=200&offset=0" || true
+  echo
   fetch_json "action_support_package" "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=200" || true
   echo
 fi

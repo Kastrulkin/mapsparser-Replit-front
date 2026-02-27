@@ -91,7 +91,7 @@ cat > "${execute_payload_file}" <<EOF
 }
 EOF
 
-echo "[1/11] M2M health"
+echo "[1/12] M2M health"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/health?tenant_id=${TENANT_ID}&window_minutes=120" > "${tmp_dir}/health.json"
@@ -118,7 +118,7 @@ then
   exit 1
 fi
 
-echo "[2/11] M2M health trend"
+echo "[2/12] M2M health trend"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/health/trend?tenant_id=${TENANT_ID}&window_minutes=120&limit=20" > "${tmp_dir}/health_trend.json"
@@ -143,7 +143,7 @@ then
   exit 1
 fi
 
-echo "[3/11] M2M catalog"
+echo "[3/12] M2M catalog"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/catalog" > "${tmp_dir}/catalog.json"
@@ -170,7 +170,7 @@ then
   exit 1
 fi
 
-echo "[4/11] M2M execute"
+echo "[4/12] M2M execute"
 curl -fsS -X POST \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   -H "Content-Type: application/json" \
@@ -191,7 +191,7 @@ if [[ -z "${action_id}" ]]; then
 fi
 echo "Execute OK: action_id=${action_id}, status=${execute_status}"
 
-echo "[5/11] M2M action status"
+echo "[5/12] M2M action status"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/status.json"
@@ -204,7 +204,7 @@ if [[ "${status_success}" != "True" && "${status_success}" != "true" ]]; then
 fi
 echo "Status OK: ${status_value}"
 
-echo "[6/11] M2M action timeline"
+echo "[6/12] M2M action timeline"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline.json"
@@ -229,7 +229,32 @@ then
   exit 1
 fi
 
-echo "[7/11] M2M action support package"
+echo "[7/12] M2M action callback-attempts"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/callback-attempts?tenant_id=${TENANT_ID}&limit=200&offset=0" > "${tmp_dir}/callback_attempts.json"
+callback_attempts_success="$(json_read "${tmp_dir}/callback_attempts.json" "success")"
+if [[ "${callback_attempts_success}" != "True" && "${callback_attempts_success}" != "true" ]]; then
+  echo "Callback-attempts read failed"
+  cat "${tmp_dir}/callback_attempts.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/callback_attempts.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+items = data.get("items")
+if not isinstance(items, list):
+    print("callback-attempts has no items list")
+    sys.exit(1)
+print("Callback-attempts OK: total=", data.get("total"))
+PY
+then
+  cat "${tmp_dir}/callback_attempts.json"
+  exit 1
+fi
+
+echo "[8/12] M2M action support package"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/support_package.json"
@@ -264,7 +289,7 @@ then
   exit 1
 fi
 
-echo "[8/11] M2M action billing"
+echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/billing?tenant_id=${TENANT_ID}" > "${tmp_dir}/billing.json"
@@ -282,7 +307,7 @@ if [[ -n "${decision}" ]]; then
     exit 1
   fi
 
-  echo "[9/11] M2M action decision (${decision})"
+  echo "[10/12] M2M action decision (${decision})"
   decision_payload_file="${tmp_dir}/decision_payload.json"
   cat > "${decision_payload_file}" <<EOF
 {
@@ -305,7 +330,7 @@ EOF
   fi
   echo "Decision OK"
 
-  echo "[10/11] M2M final status"
+  echo "[11/12] M2M final status"
   curl -fsS \
     -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/final_status.json"
@@ -323,7 +348,7 @@ EOF
   fi
   echo "Final status OK: ${final_status}"
 
-  echo "[11/11] M2M final timeline"
+  echo "[12/12] M2M final timeline"
   curl -fsS \
     -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline_final.json"

@@ -1567,6 +1567,106 @@ class ActionOrchestrator:
             "timeline": timeline_result,
         }
 
+    def list_action_callback_attempts(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            limit = max(1, min(int(limit or 100), 500))
+            offset = max(0, int(offset or 0))
+
+            cursor.execute(
+                """
+                SELECT ar.action_id, ar.tenant_id, b.owner_id
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                WHERE ar.action_id = %s
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            action_row = cursor.fetchone()
+            if not action_row:
+                return {"success": False, "error": "action not found", "http_code": 404}
+
+            owner_id = self._row_value(action_row, 2, "owner_id")
+            if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    outbox_id,
+                    action_id,
+                    tenant_id,
+                    event_type,
+                    attempt_no,
+                    success,
+                    http_status,
+                    duration_ms,
+                    error_text,
+                    response_excerpt,
+                    created_at
+                FROM action_callback_attempts
+                WHERE action_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (action_id, limit, offset),
+            )
+            rows = cursor.fetchall() or []
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM action_callback_attempts
+                WHERE action_id = %s
+                """,
+                (action_id,),
+            )
+            total_row = cursor.fetchone()
+            total = int(self._row_value(total_row, 0, "count", 0) or 0)
+
+            items = []
+            for row in rows:
+                items.append(
+                    {
+                        "id": str(self._row_value(row, 0, "id") or ""),
+                        "outbox_id": str(self._row_value(row, 1, "outbox_id") or ""),
+                        "action_id": str(self._row_value(row, 2, "action_id") or ""),
+                        "tenant_id": str(self._row_value(row, 3, "tenant_id") or ""),
+                        "event_type": str(self._row_value(row, 4, "event_type") or ""),
+                        "attempt_no": int(self._row_value(row, 5, "attempt_no", 0) or 0),
+                        "success": bool(self._row_value(row, 6, "success", False)),
+                        "http_status": self._row_value(row, 7, "http_status"),
+                        "duration_ms": self._row_value(row, 8, "duration_ms"),
+                        "error_text": self._row_value(row, 9, "error_text"),
+                        "response_excerpt": self._row_value(row, 10, "response_excerpt"),
+                        "created_at": str(self._row_value(row, 11, "created_at") or ""),
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "action_id": str(self._row_value(action_row, 0, "action_id") or ""),
+                "tenant_id": str(self._row_value(action_row, 1, "tenant_id") or ""),
+                "items": items,
+                "limit": limit,
+                "offset": offset,
+                "total": total,
+            }
+        finally:
+            db.close()
+
     def list_callback_outbox(
         self,
         user_data: Dict[str, Any],
