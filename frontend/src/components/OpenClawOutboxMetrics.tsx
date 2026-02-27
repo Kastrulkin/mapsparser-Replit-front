@@ -560,6 +560,139 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [selectedActionId, businessId]);
 
+  const copyFullSupportPackage = useCallback(async () => {
+    if (!selectedActionId || !businessId) return;
+    const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
+    const diagLines: string[] = [
+      `action_id: ${selectedActionId}`,
+      `tenant_id: ${businessId}`,
+      `exported_at: ${new Date().toISOString()}`,
+      `status: ${actionStatusSnapshot?.status || 'unknown'}`,
+      `billing reserve/settle/release: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0}`,
+      `billing cost: ${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
+      `timeline total/filtered/problematic: ${timeline.length}/${filteredTimeline.length}/${problematic.length}`,
+      `filters: source=${timelineSourceFilter}, event=${timelineEventFilter}, status=${timelineStatusFilter}, search=${timelineSearch || '-'}, only_problematic=${timelineOnlyProblematic}`,
+      '',
+      'recent events:',
+    ];
+    filteredTimeline.slice(-10).forEach((event, idx) => {
+      diagLines.push(
+        `${idx + 1}. ${event.occurred_at} | ${event.source} | ${event.event_type} | ${event.status || '-'} | ${JSON.stringify(event.details || {})}`
+      );
+    });
+    if (timelineSummary.lastErrorText) {
+      diagLines.push('');
+      diagLines.push(`last_error: ${timelineSummary.lastErrorText}`);
+    }
+
+    const telegramLines: string[] = [
+      `OpenClaw diagnostics`,
+      `action: ${selectedActionId.slice(0, 8)}`,
+      `status: ${actionStatusSnapshot?.status || 'unknown'}`,
+      `billing: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0} (reserve/settle/release), cost=${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
+      `timeline: total=${timeline.length}, filtered=${filteredTimeline.length}, problematic=${problematic.length}`,
+    ];
+    if (timelineSummary.lastRetryDlqAt) {
+      telegramLines.push(`last_retry_dlq: ${timelineSummary.lastRetryDlqAt} (${timelineSummary.lastRetryDlqStatus || 'event'})`);
+    }
+    if (timelineSummary.lastErrorAt) {
+      telegramLines.push(`last_error_at: ${timelineSummary.lastErrorAt}`);
+    }
+    if (timelineSummary.lastErrorText) {
+      telegramLines.push(`last_error: ${timelineSummary.lastErrorText}`);
+    }
+    const lastEvents = filteredTimeline.slice(-3).map((event) => {
+      return `- ${event.occurred_at} | ${event.source}:${event.event_type} | ${event.status || '-'}`;
+    });
+    if (lastEvents.length > 0) {
+      telegramLines.push('recent:');
+      telegramLines.push(...lastEvents);
+    }
+
+    const m2mLines: string[] = [
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${businessId}'`,
+      `ACTION_ID='${selectedActionId}'`,
+      '',
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}?tenant_id=${TENANT_ID}\" | jq .",
+      '',
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/billing?tenant_id=${TENANT_ID}\" | jq .",
+      '',
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/timeline?tenant_id=${TENANT_ID}&limit=200\" | jq .",
+    ];
+
+    const decisionReasonEscaped = (decisionReason || '').replace(/"/g, '\\"');
+    const decisionLines: string[] = [
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${businessId}'`,
+      `ACTION_ID='${selectedActionId}'`,
+      '',
+      "curl -fsS -X POST \\",
+      "  -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  -H \"Content-Type: application/json\" \\",
+      `  -d '{"tenant_id":"${businessId}","decision":"${decisionStatus}","reason":"${decisionReasonEscaped}"}' \\`,
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/decision\" | jq .",
+    ];
+
+    const oneLiner = [
+      'cd /opt/seo-app',
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${businessId}'`,
+      `ACTION_ID='${selectedActionId}'`,
+      './scripts/diagnose_openclaw_integration.sh',
+    ].join(' ');
+
+    const report = [
+      '# OpenClaw Full Support Package',
+      '',
+      '## Diagnostics (detailed)',
+      ...diagLines,
+      '',
+      '## Telegram short',
+      ...telegramLines,
+      '',
+      '## M2M cURL',
+      ...m2mLines,
+      '',
+      '## Decision cURL',
+      ...decisionLines,
+      '',
+      '## Diagnose one-liner',
+      oneLiner,
+      '',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyMessage('Full support package скопирован');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать full support package');
+    }
+  }, [
+    selectedActionId,
+    businessId,
+    filteredTimeline,
+    isProblematicTimelineEvent,
+    actionStatusSnapshot,
+    actionBillingSnapshot,
+    timeline.length,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineSearch,
+    timelineOnlyProblematic,
+    timelineSummary.lastRetryDlqAt,
+    timelineSummary.lastRetryDlqStatus,
+    timelineSummary.lastErrorAt,
+    timelineSummary.lastErrorText,
+    decisionStatus,
+    decisionReason,
+  ]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -976,6 +1109,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs text-violet-700 disabled:opacity-60"
               >
                 Copy diagnose one-liner
+              </button>
+              <button
+                type="button"
+                onClick={copyFullSupportPackage}
+                disabled={!selectedActionId || !businessId}
+                className="rounded-md border border-fuchsia-200 bg-fuchsia-50 px-2 py-1.5 text-xs text-fuchsia-700 disabled:opacity-60"
+              >
+                Copy full support package
               </button>
             </div>
             </div>
