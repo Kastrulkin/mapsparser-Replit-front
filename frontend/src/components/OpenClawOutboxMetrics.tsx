@@ -485,6 +485,36 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     timelineSummary.lastErrorText,
   ]);
 
+  const copyActionM2MCurl = useCallback(async () => {
+    if (!selectedActionId || !businessId) return;
+    const actionId = selectedActionId;
+    const tenantId = businessId;
+    const lines: string[] = [
+      "# Set your token first",
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${tenantId}'`,
+      `ACTION_ID='${actionId}'`,
+      "",
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}?tenant_id=${TENANT_ID}\" | jq .",
+      "",
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/billing?tenant_id=${TENANT_ID}\" | jq .",
+      "",
+      "curl -fsS -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/timeline?tenant_id=${TENANT_ID}&limit=200\" | jq .",
+      "",
+      "OPENCLAW_TOKEN='${OPENCLAW_TOKEN}' TENANT_ID='${TENANT_ID}' ACTION_ID='${ACTION_ID}' ./scripts/diagnose_openclaw_integration.sh",
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyMessage('M2M cURL-команды скопированы');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать M2M cURL');
+    }
+  }, [selectedActionId, businessId]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -839,6 +869,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-teal-200 bg-teal-50 px-2 py-1.5 text-xs text-teal-700 disabled:opacity-60"
               >
                 Копировать для Telegram
+              </button>
+              <button
+                type="button"
+                onClick={copyActionM2MCurl}
+                disabled={!selectedActionId || !businessId}
+                className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 disabled:opacity-60"
+              >
+                Copy cURL (M2M)
               </button>
             </div>
             <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
