@@ -111,6 +111,27 @@ curl -sS -X POST \
 - сверить `billing_ledger` vs `action_requests.billing_json` vs `tokenusage`;
 - после правок снова прогнать `./scripts/smoke_openclaw_m2m_reconciliation.sh`.
 
+### Repair helper: `missing_settle` (dry-run first)
+
+Проверка (без изменений в БД):
+
+```bash
+cd /opt/seo-app
+python3 scripts/repair_openclaw_missing_settle.py \
+  --tenant-id <business_id> \
+  --window-minutes 43200
+```
+
+Применение (только после проверки dry-run):
+
+```bash
+cd /opt/seo-app
+python3 scripts/repair_openclaw_missing_settle.py \
+  --tenant-id <business_id> \
+  --window-minutes 43200 \
+  --apply
+```
+
 ## 8) DLQ replay / outbox cleanup
 
 Повторно отправить `dlq` (или `dlq+retry`) в очередь:
