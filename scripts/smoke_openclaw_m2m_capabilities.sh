@@ -191,7 +191,7 @@ if [[ -z "${action_id}" ]]; then
 fi
 echo "Execute OK: action_id=${action_id}, status=${execute_status}"
 
-echo "[5/8] M2M action status"
+echo "[5/10] M2M action status"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/status.json"
@@ -204,7 +204,32 @@ if [[ "${status_success}" != "True" && "${status_success}" != "true" ]]; then
 fi
 echo "Status OK: ${status_value}"
 
-echo "[6/8] M2M action billing"
+echo "[6/10] M2M action timeline"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline.json"
+timeline_success="$(json_read "${tmp_dir}/timeline.json" "success")"
+if [[ "${timeline_success}" != "True" && "${timeline_success}" != "true" ]]; then
+  echo "Timeline read failed"
+  cat "${tmp_dir}/timeline.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/timeline.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+events = data.get("events")
+if not isinstance(events, list) or len(events) == 0:
+    print("Timeline has no events")
+    sys.exit(1)
+print("Timeline OK: count=", data.get("count"))
+PY
+then
+  cat "${tmp_dir}/timeline.json"
+  exit 1
+fi
+
+echo "[7/10] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/billing?tenant_id=${TENANT_ID}" > "${tmp_dir}/billing.json"
@@ -222,7 +247,7 @@ if [[ -n "${decision}" ]]; then
     exit 1
   fi
 
-  echo "[7/8] M2M action decision (${decision})"
+  echo "[8/10] M2M action decision (${decision})"
   decision_payload_file="${tmp_dir}/decision_payload.json"
   cat > "${decision_payload_file}" <<EOF
 {
@@ -245,7 +270,7 @@ EOF
   fi
   echo "Decision OK"
 
-  echo "[8/8] M2M final status"
+  echo "[9/10] M2M final status"
   curl -fsS \
     -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/final_status.json"
@@ -262,6 +287,17 @@ EOF
     exit 1
   fi
   echo "Final status OK: ${final_status}"
+
+  echo "[10/10] M2M final timeline"
+  curl -fsS \
+    -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+    "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline_final.json"
+  timeline_final_success="$(json_read "${tmp_dir}/timeline_final.json" "success")"
+  if [[ "${timeline_final_success}" != "True" && "${timeline_final_success}" != "true" ]]; then
+    echo "Final timeline read failed"
+    cat "${tmp_dir}/timeline_final.json"
+    exit 1
+  fi
 fi
 
 echo "OK: OpenClaw M2M capability smoke passed"
