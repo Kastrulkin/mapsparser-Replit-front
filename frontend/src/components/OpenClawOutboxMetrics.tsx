@@ -138,6 +138,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
   const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
+  const [decisionStatus, setDecisionStatus] = useState<'approved' | 'rejected' | 'expired'>('approved');
+  const [decisionReason, setDecisionReason] = useState('manual decision from support');
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -514,6 +516,31 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setError('Не удалось скопировать M2M cURL');
     }
   }, [selectedActionId, businessId]);
+
+  const copyActionDecisionCurl = useCallback(async () => {
+    if (!selectedActionId || !businessId) return;
+    const actionId = selectedActionId;
+    const tenantId = businessId;
+    const safeReason = (decisionReason || '').replace(/"/g, '\\"');
+    const lines: string[] = [
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${tenantId}'`,
+      `ACTION_ID='${actionId}'`,
+      '',
+      "curl -fsS -X POST \\",
+      "  -H \"X-OpenClaw-Token: ${OPENCLAW_TOKEN}\" \\",
+      "  -H \"Content-Type: application/json\" \\",
+      `  -d '{"tenant_id":"${tenantId}","decision":"${decisionStatus}","reason":"${safeReason}"}' \\`,
+      "  \"http://localhost:8000/api/openclaw/capabilities/actions/${ACTION_ID}/decision\" | jq .",
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyMessage('Decision cURL скопирован');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать Decision cURL');
+    }
+  }, [selectedActionId, businessId, decisionStatus, decisionReason]);
 
   const metrics = data?.metrics;
   const checks = data?.checks;
@@ -894,6 +921,36 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                   {(actionBillingSnapshot?.summary?.released_tokens ?? 0)}
                 </div>
                 <div>cost: {actionBillingSnapshot?.summary?.total_cost ?? 0}</div>
+              </div>
+            </div>
+            <div className="mb-2 rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">
+              <div className="mb-1 font-semibold text-gray-800">M2M decision helper</div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <select
+                  value={decisionStatus}
+                  onChange={(e) => setDecisionStatus(e.target.value as 'approved' | 'rejected' | 'expired')}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                >
+                  <option value="approved">approved</option>
+                  <option value="rejected">rejected</option>
+                  <option value="expired">expired</option>
+                </select>
+                <input
+                  value={decisionReason}
+                  onChange={(e) => setDecisionReason(e.target.value)}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 md:col-span-2"
+                  placeholder="reason..."
+                />
+              </div>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={copyActionDecisionCurl}
+                  disabled={!selectedActionId || !businessId}
+                  className="rounded-md border border-orange-200 bg-orange-50 px-2 py-1.5 text-xs text-orange-700 disabled:opacity-60"
+                >
+                  Copy cURL (M2M decision)
+                </button>
               </div>
             </div>
             <div className="mb-2 text-[11px] text-gray-500">
