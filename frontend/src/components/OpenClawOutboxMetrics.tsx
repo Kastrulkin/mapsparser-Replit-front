@@ -98,6 +98,26 @@ type ActionTimelineResponse = {
   error?: string;
 };
 
+type ActionStatusResponse = {
+  success: boolean;
+  status?: string;
+  error?: string;
+  error_code?: string;
+  action_id?: string;
+};
+
+type ActionBillingResponse = {
+  success: boolean;
+  summary?: {
+    reserved_tokens?: number;
+    settled_tokens?: number;
+    released_tokens?: number;
+    inflight_reserved_tokens?: number;
+    total_cost?: number;
+  };
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -115,6 +135,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [timelineStatusFilter, setTimelineStatusFilter] = useState<string>('all');
   const [timelineSearch, setTimelineSearch] = useState<string>('');
   const [timelineOnlyProblematic, setTimelineOnlyProblematic] = useState(false);
+  const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
+  const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
+  const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
@@ -211,6 +234,48 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     loadTimeline();
   }, [businessId, selectedActionId]);
 
+  const refreshActionSnapshots = useCallback(async () => {
+    if (!businessId || !selectedActionId) {
+      setActionStatusSnapshot(null);
+      setActionBillingSnapshot(null);
+      return;
+    }
+    setActionSnapshotLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const [statusRes, billingRes] = await Promise.all([
+        fetch(
+          `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}?tenant_id=${encodeURIComponent(businessId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+        fetch(
+          `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/billing?tenant_id=${encodeURIComponent(businessId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
+      ]);
+      const statusJson: ActionStatusResponse = await statusRes.json();
+      const billingJson: ActionBillingResponse = await billingRes.json();
+      if (!statusRes.ok || !statusJson?.success) {
+        throw new Error(statusJson?.error || `status HTTP ${statusRes.status}`);
+      }
+      if (!billingRes.ok || !billingJson?.success) {
+        throw new Error(billingJson?.error || `billing HTTP ${billingRes.status}`);
+      }
+      setActionStatusSnapshot(statusJson);
+      setActionBillingSnapshot(billingJson);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить status/billing action');
+      setActionStatusSnapshot(null);
+      setActionBillingSnapshot(null);
+    } finally {
+      setActionSnapshotLoading(false);
+    }
+  }, [businessId, selectedActionId]);
+
+  useEffect(() => {
+    refreshActionSnapshots();
+  }, [refreshActionSnapshots]);
+
   const recoverDelivery = useCallback(async () => {
     if (!businessId) return;
     setRecovering(true);
@@ -263,6 +328,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setRecovering(false);
     }
   }, [businessId, load]);
+
+  const exportTimelineJson = useCallback(() => {
+    if (!selectedActionId) return;
+    const payload = {
+      action_id: selectedActionId,
+      exported_at: new Date().toISOString(),
+      count: filteredTimeline.length,
+      events: filteredTimeline,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `action-timeline-${selectedActionId.slice(0, 8)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [selectedActionId, filteredTimeline]);
 
   const metrics = data?.metrics;
   const checks = data?.checks;
@@ -572,6 +656,41 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               >
                 {timelineOnlyProblematic ? 'Проблемные: ON' : 'Проблемные: OFF'}
               </button>
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={refreshActionSnapshots}
+                disabled={actionSnapshotLoading || !selectedActionId}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
+              >
+                {actionSnapshotLoading ? 'Обновление...' : 'Обновить status/billing'}
+              </button>
+              <button
+                type="button"
+                onClick={exportTimelineJson}
+                disabled={!selectedActionId}
+                className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-700 disabled:opacity-60"
+              >
+                Экспорт timeline JSON
+              </button>
+            </div>
+            <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700">
+                <div className="font-semibold text-gray-800">Action status</div>
+                <div>{actionStatusSnapshot?.status || '—'}</div>
+                {actionStatusSnapshot?.error_code && <div>code: {actionStatusSnapshot.error_code}</div>}
+              </div>
+              <div className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700">
+                <div className="font-semibold text-gray-800">Action billing</div>
+                <div>
+                  reserve/settle/release:{' '}
+                  {(actionBillingSnapshot?.summary?.reserved_tokens ?? 0)}/
+                  {(actionBillingSnapshot?.summary?.settled_tokens ?? 0)}/
+                  {(actionBillingSnapshot?.summary?.released_tokens ?? 0)}
+                </div>
+                <div>cost: {actionBillingSnapshot?.summary?.total_cost ?? 0}</div>
+              </div>
             </div>
             <div className="mb-2 text-[11px] text-gray-500">
               Показано: {filteredTimeline.length} / {timeline.length}
