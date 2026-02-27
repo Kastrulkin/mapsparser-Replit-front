@@ -50,9 +50,20 @@ RUN set -eux; \
 WORKDIR /app
 
 # Python-зависимости (слой кешируется отдельно)
-# --timeout 300: при нестабильной сети pip может обрываться по умолчанию (15 сек)
+# Добавлен fallback по PyPI-индексам и повторные попытки для нестабильной сети.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
+RUN set -eux; \
+    indexes='https://pypi.org/simple https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple'; \
+    installed=0; \
+    for idx in $indexes; do \
+      for n in 1 2 3; do \
+        if PIP_DEFAULT_TIMEOUT=300 pip install --no-cache-dir --retries 10 --index-url "$idx" -r requirements.txt; then installed=1; break; fi; \
+        echo "pip install failed via ${idx} (attempt ${n}), retrying..." >&2; \
+        sleep "$((n*5))"; \
+      done; \
+      [ "$installed" -eq 1 ] && break; \
+    done; \
+    [ "$installed" -eq 1 ] || exit 1
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш.
