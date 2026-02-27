@@ -44,6 +44,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
       libpq-dev \
       gcc \
+      python3-psycopg2 \
       postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -54,10 +55,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN set -eux; \
     indexes='https://mirrors.aliyun.com/pypi/simple https://pypi.org/simple'; \
+    # psycopg2 берем из системного пакета python3-psycopg2, чтобы не падать на flaky download psycopg2-binary
+    grep -vE '^psycopg2-binary([<>=!~].*)?$' requirements.txt > /tmp/requirements.nopsycopg2.txt; \
     installed=0; \
     for idx in $indexes; do \
       for n in 1; do \
-        if PIP_DEFAULT_TIMEOUT=120 pip install --no-cache-dir --retries 2 --index-url "$idx" -r requirements.txt; then installed=1; break; fi; \
+        if PIP_DEFAULT_TIMEOUT=120 pip install --no-cache-dir --retries 2 --index-url "$idx" -r /tmp/requirements.nopsycopg2.txt; then installed=1; break; fi; \
         echo "pip install failed via ${idx} (attempt ${n}), retrying..." >&2; \
         sleep "$((n*5))"; \
       done; \
