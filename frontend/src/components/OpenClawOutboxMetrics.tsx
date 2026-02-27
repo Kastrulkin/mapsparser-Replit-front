@@ -159,6 +159,25 @@ interface Props {
   businessId?: string;
 }
 
+const ACTION_LIFECYCLE_STATUSES = ['pending_human', 'approved', 'rejected', 'expired', 'completed'] as const;
+type ActionLifecycleStatus = (typeof ACTION_LIFECYCLE_STATUSES)[number];
+
+function getActionLifecycleStatus(event: ActionTimelineEvent): ActionLifecycleStatus | null {
+  const status = String(event.status || '').toLowerCase();
+  if ((ACTION_LIFECYCLE_STATUSES as readonly string[]).includes(status)) {
+    return status as ActionLifecycleStatus;
+  }
+  const eventType = String(event.event_type || '').toLowerCase();
+  if ((ACTION_LIFECYCLE_STATUSES as readonly string[]).includes(eventType)) {
+    return eventType as ActionLifecycleStatus;
+  }
+  const toStatus = String(event.details?.to_status || '').toLowerCase();
+  if ((ACTION_LIFECYCLE_STATUSES as readonly string[]).includes(toStatus)) {
+    return toStatus as ActionLifecycleStatus;
+  }
+  return null;
+}
+
 export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
@@ -170,6 +189,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [timelineSourceFilter, setTimelineSourceFilter] = useState<string>('all');
   const [timelineEventFilter, setTimelineEventFilter] = useState<string>('all');
   const [timelineStatusFilter, setTimelineStatusFilter] = useState<string>('all');
+  const [timelineLifecycleQuickFilter, setTimelineLifecycleQuickFilter] = useState<'all' | ActionLifecycleStatus>('all');
+  const [timelineLifecycleOnly, setTimelineLifecycleOnly] = useState(false);
   const [timelineSearch, setTimelineSearch] = useState<string>('');
   const [timelineOnlyProblematic, setTimelineOnlyProblematic] = useState(false);
   const [timelineOffset, setTimelineOffset] = useState(0);
@@ -357,6 +378,10 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     timelineSearch,
     timelineOnlyProblematic,
   ]);
+
+  useEffect(() => {
+    setTimelineOffset(0);
+  }, [timelineLifecycleQuickFilter, timelineLifecycleOnly]);
 
   const refreshActionSnapshots = useCallback(async () => {
     if (!businessId || !selectedActionId) {
@@ -1048,7 +1073,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return Boolean(details.last_error);
   }, []);
 
-  const filteredTimeline = useMemo(() => timeline, [timeline]);
+  const filteredTimeline = useMemo(() => {
+    let events = timeline;
+    if (timelineLifecycleOnly) {
+      events = events.filter((event) => getActionLifecycleStatus(event) !== null);
+    }
+    if (timelineLifecycleQuickFilter !== 'all') {
+      events = events.filter((event) => getActionLifecycleStatus(event) === timelineLifecycleQuickFilter);
+    }
+    return events;
+  }, [timeline, timelineLifecycleOnly, timelineLifecycleQuickFilter]);
+
+  const lifecycleTimelineGroups = useMemo(
+    () =>
+      ACTION_LIFECYCLE_STATUSES.map((status) => ({
+        status,
+        events: filteredTimeline.filter((event) => getActionLifecycleStatus(event) === status),
+      })).filter((group) => group.events.length > 0),
+    [filteredTimeline]
+  );
 
   const timelineSummary = useMemo(() => {
     const reversed = [...timeline].reverse();
@@ -1348,6 +1391,45 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </button>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Lifecycle:</span>
+              <button
+                type="button"
+                onClick={() => setTimelineLifecycleQuickFilter('all')}
+                className={`rounded-md border px-2 py-1 text-xs ${
+                  timelineLifecycleQuickFilter === 'all'
+                    ? 'border-indigo-300 bg-indigo-100 text-indigo-800'
+                    : 'border-gray-200 bg-white text-gray-700'
+                }`}
+              >
+                Все
+              </button>
+              {ACTION_LIFECYCLE_STATUSES.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setTimelineLifecycleQuickFilter(status)}
+                  className={`rounded-md border px-2 py-1 text-xs ${
+                    timelineLifecycleQuickFilter === status
+                      ? 'border-indigo-300 bg-indigo-100 text-indigo-800'
+                      : 'border-gray-200 bg-white text-gray-700'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setTimelineLifecycleOnly((prev) => !prev)}
+                className={`rounded-md border px-2 py-1 text-xs ${
+                  timelineLifecycleOnly
+                    ? 'border-teal-300 bg-teal-100 text-teal-800'
+                    : 'border-gray-200 bg-white text-gray-700'
+                }`}
+              >
+                {timelineLifecycleOnly ? 'Только lifecycle: ON' : 'Только lifecycle: OFF'}
+              </button>
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setAutoRefreshEnabled((prev) => !prev)}
@@ -1614,6 +1696,30 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               Показано: {filteredTimeline.length} / {timelineTotal || timeline.length} ·
               {' '}Страница: {Math.floor(timelineOffset / 200) + 1} / {Math.max(1, Math.ceil((timelineTotal || timeline.length) / 200))}
             </div>
+            {lifecycleTimelineGroups.length > 0 && (
+              <div className="mb-2 rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">
+                <div className="mb-1 font-semibold text-gray-800">Lifecycle timeline (grouped)</div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {lifecycleTimelineGroups.map((group) => (
+                    <div key={group.status} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                      <div className="mb-1 font-medium text-gray-800">
+                        {group.status} · {group.events.length}
+                      </div>
+                      <div className="max-h-24 space-y-1 overflow-y-auto">
+                        {group.events.slice(0, 6).map((event, idx) => (
+                          <div key={`${group.status}:${event.occurred_at}:${idx}`} className="text-[11px] text-gray-600">
+                            {event.occurred_at} · {event.source}:{event.event_type}
+                          </div>
+                        ))}
+                        {group.events.length > 6 && (
+                          <div className="text-[11px] text-gray-500">ещё {group.events.length - 6}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mb-2 flex items-center gap-2">
               <button
                 type="button"
