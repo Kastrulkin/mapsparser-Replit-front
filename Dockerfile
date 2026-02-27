@@ -60,7 +60,7 @@ RUN set -eux; \
     installed=0; \
     for idx in $indexes; do \
       for n in 1; do \
-        if PIP_DEFAULT_TIMEOUT=120 pip install --no-cache-dir --retries 2 --index-url "$idx" -r /tmp/requirements.nopsycopg2.txt; then installed=1; break; fi; \
+        if PIP_DEFAULT_TIMEOUT=300 pip install --no-cache-dir --retries 20 --index-url "$idx" -r /tmp/requirements.nopsycopg2.txt; then installed=1; break; fi; \
         echo "pip install failed via ${idx} (attempt ${n}), retrying..." >&2; \
         sleep "$((n*5))"; \
       done; \
