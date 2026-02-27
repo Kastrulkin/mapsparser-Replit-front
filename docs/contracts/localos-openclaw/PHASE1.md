@@ -32,7 +32,7 @@
 10. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 11. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 12. `GET /api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=` (M2M read timeline)
-13. `GET /api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id=&limit=&offset=&success=&event_type=` (M2M callback delivery attempts, includes `summary`)
+13. `GET /api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id=&limit=&offset=&success=&event_type=` (M2M callback delivery attempts, includes `summary` + `event_type_breakdown`)
 14. `GET /api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=` (M2M aggregated diagnostics)
 15. `GET /api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=&attempts_limit=&attempts_offset=&attempts_success=&attempts_event_type=&attempts_full=` (M2M full diagnostics bundle)
 15.1 `GET /api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=` (M2M lifecycle aggregate)

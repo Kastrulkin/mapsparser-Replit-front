@@ -167,6 +167,12 @@ type CallbackAttemptsResponse = {
     last_success_at?: string;
     last_failed_at?: string;
   };
+  event_type_breakdown?: Array<{
+    event_type: string;
+    total_attempts?: number;
+    success_attempts?: number;
+    failed_attempts?: number;
+  }>;
   error?: string;
 };
 
@@ -222,6 +228,12 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     avg_duration_ms: number;
     last_success_at: string;
     last_failed_at: string;
+    event_type_breakdown: Array<{
+      event_type: string;
+      total_attempts: number;
+      success_attempts: number;
+      failed_attempts: number;
+    }>;
   } | null>(null);
   const [actionAttemptsLoading, setActionAttemptsLoading] = useState(false);
   const [attemptsSuccessFilter, setAttemptsSuccessFilter] = useState<'all' | 'true' | 'false'>('all');
@@ -492,6 +504,12 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         avg_duration_ms: Number(json.summary?.avg_duration_ms || 0),
         last_success_at: String(json.summary?.last_success_at || ''),
         last_failed_at: String(json.summary?.last_failed_at || ''),
+        event_type_breakdown: (json.event_type_breakdown || []).map((item) => ({
+          event_type: String(item.event_type || ''),
+          total_attempts: Number(item.total_attempts || 0),
+          success_attempts: Number(item.success_attempts || 0),
+          failed_attempts: Number(item.failed_attempts || 0),
+        })),
       });
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить callback attempts action');
@@ -1675,6 +1693,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               {(actionCallbackAttemptsSummary?.last_success_at || actionCallbackAttemptsSummary?.last_failed_at) && (
                 <div className="mb-2 text-[11px] text-gray-500">
                   last_success: {actionCallbackAttemptsSummary?.last_success_at || '—'} · last_failed: {actionCallbackAttemptsSummary?.last_failed_at || '—'}
+                </div>
+              )}
+              {!!actionCallbackAttemptsSummary?.event_type_breakdown?.length && (
+                <div className="mb-2 flex flex-wrap items-center gap-1">
+                  {actionCallbackAttemptsSummary.event_type_breakdown.map((item) => (
+                    <span
+                      key={item.event_type}
+                      className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700"
+                    >
+                      <span>{item.event_type}</span>
+                      <span className="font-semibold">{item.success_attempts}/{item.failed_attempts}</span>
+                      <span className="text-sky-500">({item.total_attempts})</span>
+                    </span>
+                  ))}
                 </div>
               )}
               <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">

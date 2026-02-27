@@ -2082,6 +2082,31 @@ class ActionOrchestrator:
                 "last_success_at": str(self._row_value(summary_row, 4, "last_success_at") or ""),
                 "last_failed_at": str(self._row_value(summary_row, 5, "last_failed_at") or ""),
             }
+            cursor.execute(
+                """
+                SELECT
+                    event_type,
+                    COUNT(*) AS total_attempts,
+                    SUM(CASE WHEN success THEN 1 ELSE 0 END) AS success_attempts,
+                    SUM(CASE WHEN success THEN 0 ELSE 1 END) AS failed_attempts
+                FROM action_callback_attempts
+                WHERE """ + where_sql + """
+                GROUP BY event_type
+                ORDER BY event_type ASC
+                """,
+                tuple(params),
+            )
+            breakdown_rows = cursor.fetchall() or []
+            event_type_breakdown = []
+            for row in breakdown_rows:
+                event_type_breakdown.append(
+                    {
+                        "event_type": str(self._row_value(row, 0, "event_type") or ""),
+                        "total_attempts": int(self._row_value(row, 1, "total_attempts", 0) or 0),
+                        "success_attempts": int(self._row_value(row, 2, "success_attempts", 0) or 0),
+                        "failed_attempts": int(self._row_value(row, 3, "failed_attempts", 0) or 0),
+                    }
+                )
 
             items = []
             for row in rows:
@@ -2116,6 +2141,7 @@ class ActionOrchestrator:
                     "event_type": event_type,
                 },
                 "summary": summary,
+                "event_type_breakdown": event_type_breakdown,
             }
         finally:
             db.close()

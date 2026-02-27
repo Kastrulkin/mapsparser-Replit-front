@@ -279,6 +279,10 @@ items = data.get("items")
 if not isinstance(items, list):
     print("callback-attempts has no items list")
     sys.exit(1)
+breakdown = data.get("event_type_breakdown")
+if not isinstance(breakdown, list):
+    print("callback-attempts has no event_type_breakdown list")
+    sys.exit(1)
 print("Callback-attempts OK: total=", data.get("total"))
 PY
 then

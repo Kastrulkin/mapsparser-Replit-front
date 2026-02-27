@@ -1112,6 +1112,7 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_attempts["action_id"] == action_id
         assert "items" in user_attempts
         assert "summary" in user_attempts
+        assert "event_type_breakdown" in user_attempts
 
         r_m2m_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0",
@@ -1121,6 +1122,7 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         m2m_attempts = r_m2m_attempts.get_json()
         assert m2m_attempts["success"] is True
         assert m2m_attempts["action_id"] == action_id
+        assert "event_type_breakdown" in m2m_attempts
 
         r_m2m_wrong_tenant = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
