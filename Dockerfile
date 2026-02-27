@@ -53,7 +53,7 @@ WORKDIR /app
 # Добавлен fallback по PyPI-индексам и повторные попытки для нестабильной сети.
 COPY requirements.txt .
 RUN set -eux; \
-    indexes='https://pypi.org/simple https://mirrors.aliyun.com/pypi/simple'; \
+    indexes='https://mirrors.aliyun.com/pypi/simple https://pypi.org/simple'; \
     installed=0; \
     for idx in $indexes; do \
       for n in 1; do \
