@@ -437,6 +437,54 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     timelineSummary.lastErrorText,
   ]);
 
+  const copyActionDiagnosticsTelegram = useCallback(async () => {
+    if (!selectedActionId) return;
+    const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
+    const shortId = selectedActionId.slice(0, 8);
+    const lines: string[] = [
+      `OpenClaw diagnostics`,
+      `action: ${shortId}`,
+      `status: ${actionStatusSnapshot?.status || 'unknown'}`,
+      `billing: ${actionBillingSnapshot?.summary?.reserved_tokens ?? 0}/${actionBillingSnapshot?.summary?.settled_tokens ?? 0}/${actionBillingSnapshot?.summary?.released_tokens ?? 0} (reserve/settle/release), cost=${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
+      `timeline: total=${timeline.length}, filtered=${filteredTimeline.length}, problematic=${problematic.length}`,
+    ];
+    if (timelineSummary.lastRetryDlqAt) {
+      lines.push(`last_retry_dlq: ${timelineSummary.lastRetryDlqAt} (${timelineSummary.lastRetryDlqStatus || 'event'})`);
+    }
+    if (timelineSummary.lastErrorAt) {
+      lines.push(`last_error_at: ${timelineSummary.lastErrorAt}`);
+    }
+    if (timelineSummary.lastErrorText) {
+      lines.push(`last_error: ${timelineSummary.lastErrorText}`);
+    }
+    const lastEvents = filteredTimeline.slice(-3).map((event) => {
+      return `- ${event.occurred_at} | ${event.source}:${event.event_type} | ${event.status || '-'}`;
+    });
+    if (lastEvents.length > 0) {
+      lines.push(`recent:`);
+      lines.push(...lastEvents);
+    }
+    const report = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopyMessage('Telegram-сводка скопирована');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать Telegram-сводку');
+    }
+  }, [
+    selectedActionId,
+    filteredTimeline,
+    isProblematicTimelineEvent,
+    actionStatusSnapshot,
+    actionBillingSnapshot,
+    timeline.length,
+    timelineSummary.lastRetryDlqAt,
+    timelineSummary.lastRetryDlqStatus,
+    timelineSummary.lastErrorAt,
+    timelineSummary.lastErrorText,
+  ]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -783,6 +831,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700 disabled:opacity-60"
               >
                 Скопировать diagnostics
+              </button>
+              <button
+                type="button"
+                onClick={copyActionDiagnosticsTelegram}
+                disabled={!selectedActionId}
+                className="rounded-md border border-teal-200 bg-teal-50 px-2 py-1.5 text-xs text-teal-700 disabled:opacity-60"
+              >
+                Копировать для Telegram
               </button>
             </div>
             <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
