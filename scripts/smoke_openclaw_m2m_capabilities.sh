@@ -91,7 +91,7 @@ cat > "${execute_payload_file}" <<EOF
 }
 EOF
 
-echo "[1/8] M2M health"
+echo "[1/11] M2M health"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/health?tenant_id=${TENANT_ID}&window_minutes=120" > "${tmp_dir}/health.json"
@@ -118,7 +118,7 @@ then
   exit 1
 fi
 
-echo "[2/8] M2M health trend"
+echo "[2/11] M2M health trend"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/health/trend?tenant_id=${TENANT_ID}&window_minutes=120&limit=20" > "${tmp_dir}/health_trend.json"
@@ -143,7 +143,7 @@ then
   exit 1
 fi
 
-echo "[3/8] M2M catalog"
+echo "[3/11] M2M catalog"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/catalog" > "${tmp_dir}/catalog.json"
@@ -170,7 +170,7 @@ then
   exit 1
 fi
 
-echo "[4/8] M2M execute"
+echo "[4/11] M2M execute"
 curl -fsS -X POST \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   -H "Content-Type: application/json" \
@@ -191,7 +191,7 @@ if [[ -z "${action_id}" ]]; then
 fi
 echo "Execute OK: action_id=${action_id}, status=${execute_status}"
 
-echo "[5/10] M2M action status"
+echo "[5/11] M2M action status"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/status.json"
@@ -204,7 +204,7 @@ if [[ "${status_success}" != "True" && "${status_success}" != "true" ]]; then
 fi
 echo "Status OK: ${status_value}"
 
-echo "[6/10] M2M action timeline"
+echo "[6/11] M2M action timeline"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline.json"
@@ -282,7 +282,7 @@ if [[ -n "${decision}" ]]; then
     exit 1
   fi
 
-  echo "[8/10] M2M action decision (${decision})"
+  echo "[9/11] M2M action decision (${decision})"
   decision_payload_file="${tmp_dir}/decision_payload.json"
   cat > "${decision_payload_file}" <<EOF
 {
@@ -305,7 +305,7 @@ EOF
   fi
   echo "Decision OK"
 
-  echo "[9/10] M2M final status"
+  echo "[10/11] M2M final status"
   curl -fsS \
     -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" > "${tmp_dir}/final_status.json"
@@ -323,7 +323,7 @@ EOF
   fi
   echo "Final status OK: ${final_status}"
 
-  echo "[10/10] M2M final timeline"
+  echo "[11/11] M2M final timeline"
   curl -fsS \
     -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
     "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/timeline_final.json"
