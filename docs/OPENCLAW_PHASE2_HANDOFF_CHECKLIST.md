@@ -60,6 +60,11 @@ Legacy alias (kept for compatibility):
 
 From UI (`Настройки -> Integrations -> Связь ИИ-агентов с системой`):
 - button: `Восстановить доставку`
+- action audit tools:
+  - `Audit trail callbacks/actions` timeline
+  - filters: `source/event/status`, text search, `Проблемные: ON/OFF`
+  - export: `Экспорт timeline JSON` и `Экспорт action bundle`
+  - quick snapshots: `Action status`, `Action billing`
 - backend flow:
   1) `POST /api/capabilities/callbacks/outbox/replay` (`include_retry=true`)
   2) `POST /api/capabilities/callbacks/dispatch` (tenant-scoped)
