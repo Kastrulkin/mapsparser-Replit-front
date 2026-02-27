@@ -1979,6 +1979,104 @@ class ActionOrchestrator:
         lines.append("")
         return "\n".join(lines)
 
+    def render_action_incident_report_markdown(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        diagnostics = self.get_action_diagnostics_bundle(
+            action_id,
+            user_data,
+            full=True,
+            attempts_full=True,
+        )
+        if not diagnostics.get("success"):
+            return diagnostics
+
+        lifecycle = self.get_action_lifecycle_summary(
+            action_id,
+            user_data,
+            full=True,
+        )
+        if not lifecycle.get("success"):
+            return lifecycle
+
+        diagnostics_markdown = self.render_action_diagnostics_markdown(diagnostics)
+        lifecycle_summary = dict(lifecycle.get("lifecycle") or {})
+        support = dict(diagnostics.get("support_package") or {})
+        attempts = dict(diagnostics.get("callback_attempts") or {})
+        timeline = dict(support.get("timeline") or {})
+        attempts_summary = dict(attempts.get("summary") or {})
+        attempts_breakdown = list(attempts.get("event_type_breakdown") or [])
+
+        lines: List[str] = []
+        lines.append("# OpenClaw Incident Report")
+        lines.append("")
+        lines.append(f"- action_id: `{diagnostics.get('action_id')}`")
+        lines.append(f"- tenant_id: `{diagnostics.get('tenant_id')}`")
+        lines.append(f"- capability: `{diagnostics.get('capability')}`")
+        lines.append(f"- trace_id: `{diagnostics.get('trace_id')}`")
+        lines.append(f"- status: `{diagnostics.get('status')}`")
+        lines.append(f"- generated_at: {utcnow().isoformat()}")
+        lines.append("")
+        lines.append("## Lifecycle Summary")
+        lines.append("")
+        for key in ["pending_human", "approved", "rejected", "expired", "completed"]:
+            item = dict(lifecycle_summary.get(key) or {})
+            count = int(item.get("count") or 0)
+            last_at = str(item.get("last_at") or "")
+            suffix = f" (last: {last_at})" if last_at else ""
+            lines.append(f"- {key}: **{count}**{suffix}")
+        lines.append(f"- events: **{int(lifecycle.get('filtered_events') or 0)}/{int(lifecycle.get('total_events') or 0)}**")
+        lines.append(f"- unknown_events: **{int(lifecycle.get('unknown_events') or 0)}**")
+        lines.append("")
+        lines.append("## Callback Attempt Breakdown")
+        lines.append("")
+        lines.append(
+            f"- total: **{int(attempts_summary.get('total_attempts') or 0)}** | "
+            f"success: **{int(attempts_summary.get('success_attempts') or 0)}** | "
+            f"failed: **{int(attempts_summary.get('failed_attempts') or 0)}**"
+        )
+        if attempts_breakdown:
+            for item in attempts_breakdown:
+                lines.append(
+                    f"- {str(item.get('event_type') or '')}: "
+                    f"total={int(item.get('total_attempts') or 0)}, "
+                    f"sent={int(item.get('success_attempts') or 0)}, "
+                    f"failed={int(item.get('failed_attempts') or 0)}"
+                )
+        else:
+            lines.append("- no callback attempts")
+        lines.append("")
+        lines.append("## Recent Timeline")
+        lines.append("")
+        for idx, event in enumerate(list(timeline.get("events") or [])[-8:], start=1):
+            lines.append(
+                f"{idx}. `{event.get('occurred_at')}` | "
+                f"`{event.get('source')}`:`{event.get('event_type')}` | "
+                f"`{event.get('status') or '-'}'"
+            )
+        if not list(timeline.get("events") or []):
+            lines.append("- no timeline events")
+        lines.append("")
+        lines.append("## Diagnostics Bundle")
+        lines.append("")
+        lines.append(diagnostics_markdown)
+        lines.append("")
+
+        return {
+            "success": True,
+            "action_id": diagnostics.get("action_id"),
+            "tenant_id": diagnostics.get("tenant_id"),
+            "capability": diagnostics.get("capability"),
+            "trace_id": diagnostics.get("trace_id"),
+            "status": diagnostics.get("status"),
+            "generated_at": utcnow().isoformat(),
+            "markdown_report": "\n".join(lines),
+            "diagnostics_bundle": diagnostics,
+            "lifecycle_summary": lifecycle,
+        }
+
     def list_action_callback_attempts(
         self,
         action_id: str,

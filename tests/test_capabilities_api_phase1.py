@@ -1038,6 +1038,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         lifecycle_user = user_lifecycle.get("lifecycle", {})
         assert "pending_human" in lifecycle_user
         assert "completed" in lifecycle_user
+        r_user_incident = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/incident-report",
+            headers=_auth_headers(),
+        )
+        assert r_user_incident.status_code == 200, r_user_incident.get_json()
+        user_incident = r_user_incident.get_json()
+        assert user_incident["success"] is True
+        assert isinstance(user_incident.get("markdown_report"), str)
+        assert "# OpenClaw Incident Report" in user_incident.get("markdown_report", "")
 
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
@@ -1101,6 +1110,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_lifecycle["success"] is True
         assert m2m_lifecycle["action_id"] == action_id
         assert "pending_human" in (m2m_lifecycle.get("lifecycle") or {})
+        r_m2m_incident = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/incident-report?tenant_id={info['business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_incident.status_code == 200, r_m2m_incident.get_json()
+        m2m_incident = r_m2m_incident.get_json()
+        assert m2m_incident["success"] is True
+        assert isinstance(m2m_incident.get("markdown_report"), str)
+        assert "# OpenClaw Incident Report" in m2m_incident.get("markdown_report", "")
 
         r_user_attempts = info["client"].get(
             f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
@@ -1153,6 +1171,13 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant_lifecycle.status_code in {400, 403, 404}
         wrong_lifecycle = r_m2m_wrong_tenant_lifecycle.get_json()
         assert wrong_lifecycle["success"] is False
+        r_m2m_wrong_tenant_incident = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/incident-report?tenant_id={info['foreign_business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_incident.status_code in {400, 403, 404}
+        wrong_incident = r_m2m_wrong_tenant_incident.get_json()
+        assert wrong_incident["success"] is False
 
         r_m2m_wrong_tenant_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",

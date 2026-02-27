@@ -136,6 +136,18 @@ type ActionLifecycleSummaryResponse = {
   error?: string;
 };
 
+type ActionIncidentReportResponse = {
+  success: boolean;
+  action_id?: string;
+  tenant_id?: string;
+  capability?: string;
+  trace_id?: string;
+  status?: string;
+  generated_at?: string;
+  markdown_report?: string;
+  error?: string;
+};
+
 type CallbackAttemptItem = {
   id: string;
   outbox_id: string;
@@ -679,6 +691,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [selectedActionId, buildTimelineParams]);
 
+  const fetchIncidentReport = useCallback(async () => {
+    if (!selectedActionId) return null;
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(
+      `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/incident-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json: ActionIncidentReportResponse = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [selectedActionId]);
+
   const exportDiagnosticsBundleJson = useCallback(async () => {
     if (!selectedActionId) return;
     try {
@@ -758,6 +784,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!selectedActionId) {
       throw new Error('Action не выбран');
     }
+    try {
+      const incidentReport = await fetchIncidentReport();
+      const markdown = String(incidentReport?.markdown_report || '').trim();
+      if (markdown) {
+        return markdown;
+      }
+    } catch (_e) {
+      // Fallback to local client-side assembly below.
+    }
+
     let diagnosticsMarkdown = '';
     try {
       const bundle = await fetchDiagnosticsBundle('markdown');
@@ -816,6 +852,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return sections.join('\n');
   }, [
     selectedActionId,
+    fetchIncidentReport,
     fetchDiagnosticsBundle,
     actionLifecycleSummary,
     actionCallbackAttemptsSummary,

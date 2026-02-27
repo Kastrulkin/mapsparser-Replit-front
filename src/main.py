@@ -4782,6 +4782,29 @@ def openclaw_capabilities_action_lifecycle_summary(action_id):
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/capabilities/actions/<action_id>/incident-report', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_action_incident_report(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    result = PHASE1_ACTION_ORCHESTRATOR.render_action_incident_report_markdown(action_id, service_user)
+    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
+        return jsonify({"success": False, "error": "tenant mismatch"}), 403
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/openclaw/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
 def openclaw_capabilities_billing_reconcile():
     if request.method == 'OPTIONS':
@@ -5424,6 +5447,22 @@ def capabilities_action_lifecycle_summary(action_id):
         only_problematic=only_problematic,
         full=full,
     )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/actions/<action_id>/incident-report', methods=['GET', 'OPTIONS'])
+def capabilities_action_incident_report(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    result = PHASE1_ACTION_ORCHESTRATOR.render_action_incident_report_markdown(action_id, user_data)
     return jsonify(result), int(result.pop("http_code", 200))
 
 
