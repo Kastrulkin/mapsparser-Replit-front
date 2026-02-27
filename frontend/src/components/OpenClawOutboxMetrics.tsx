@@ -542,6 +542,24 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [selectedActionId, businessId, decisionStatus, decisionReason]);
 
+  const copyOpenClawDiagnoseOneLiner = useCallback(async () => {
+    if (!selectedActionId || !businessId) return;
+    const command = [
+      "cd /opt/seo-app",
+      "OPENCLAW_TOKEN='<token>'",
+      `TENANT_ID='${businessId}'`,
+      `ACTION_ID='${selectedActionId}'`,
+      "./scripts/diagnose_openclaw_integration.sh",
+    ].join(" ");
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopyMessage('One-liner diagnose команда скопирована');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (_e) {
+      setError('Не удалось скопировать one-liner diagnose команду');
+    }
+  }, [selectedActionId, businessId]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -943,15 +961,23 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 />
               </div>
               <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={copyActionDecisionCurl}
-                  disabled={!selectedActionId || !businessId}
-                  className="rounded-md border border-orange-200 bg-orange-50 px-2 py-1.5 text-xs text-orange-700 disabled:opacity-60"
-                >
-                  Copy cURL (M2M decision)
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={copyActionDecisionCurl}
+                disabled={!selectedActionId || !businessId}
+                className="rounded-md border border-orange-200 bg-orange-50 px-2 py-1.5 text-xs text-orange-700 disabled:opacity-60"
+              >
+                Copy cURL (M2M decision)
+              </button>
+              <button
+                type="button"
+                onClick={copyOpenClawDiagnoseOneLiner}
+                disabled={!selectedActionId || !businessId}
+                className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs text-violet-700 disabled:opacity-60"
+              >
+                Copy diagnose one-liner
+              </button>
+            </div>
             </div>
             <div className="mb-2 text-[11px] text-gray-500">
               Показано: {filteredTimeline.length} / {timeline.length}
