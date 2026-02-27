@@ -16,14 +16,22 @@ FROM python:3.11-bookworm
 # Сеть на сервере может быть нестабильной, поэтому используем retry+backoff и fallback по зеркалам apt.
 RUN set -eux; \
     printf 'Acquire::Retries "10";\nAcquire::ForceIPv4 "true";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
-    cp /etc/apt/sources.list /etc/apt/sources.list.bak; \
+    if [ -f /etc/apt/sources.list ]; then cp /etc/apt/sources.list /etc/apt/sources.list.bak; fi; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian.sources.bak; fi; \
     mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
     updated=0; \
     for mirror in $mirrors; do \
-      cp /etc/apt/sources.list.bak /etc/apt/sources.list; \
+      if [ -f /etc/apt/sources.list.bak ]; then cp /etc/apt/sources.list.bak /etc/apt/sources.list; fi; \
+      if [ -f /etc/apt/sources.list.d/debian.sources.bak ]; then cp /etc/apt/sources.list.d/debian.sources.bak /etc/apt/sources.list.d/debian.sources; fi; \
       case "$mirror" in \
-        mirror.yandex.ru/debian) sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list ;; \
-        *) sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list ;; \
+        mirror.yandex.ru/debian) \
+          if [ -f /etc/apt/sources.list ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list; fi; \
+          if [ -f /etc/apt/sources.list.d/debian.sources ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list.d/debian.sources; fi \
+          ;; \
+        *) \
+          if [ -f /etc/apt/sources.list ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list; fi; \
+          if [ -f /etc/apt/sources.list.d/debian.sources ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list.d/debian.sources; fi \
+          ;; \
       esac; \
       for n in 1 2 3; do \
         if timeout 120 apt-get update; then updated=1; break; fi; \
@@ -49,14 +57,22 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш.
 RUN set -eux; \
-    cp /etc/apt/sources.list /etc/apt/sources.list.bak; \
+    if [ -f /etc/apt/sources.list ]; then cp /etc/apt/sources.list /etc/apt/sources.list.bak; fi; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then cp /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/debian.sources.bak; fi; \
     mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
     updated=0; \
     for mirror in $mirrors; do \
-      cp /etc/apt/sources.list.bak /etc/apt/sources.list; \
+      if [ -f /etc/apt/sources.list.bak ]; then cp /etc/apt/sources.list.bak /etc/apt/sources.list; fi; \
+      if [ -f /etc/apt/sources.list.d/debian.sources.bak ]; then cp /etc/apt/sources.list.d/debian.sources.bak /etc/apt/sources.list.d/debian.sources; fi; \
       case "$mirror" in \
-        mirror.yandex.ru/debian) sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list ;; \
-        *) sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list ;; \
+        mirror.yandex.ru/debian) \
+          if [ -f /etc/apt/sources.list ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list; fi; \
+          if [ -f /etc/apt/sources.list.d/debian.sources ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list.d/debian.sources; fi \
+          ;; \
+        *) \
+          if [ -f /etc/apt/sources.list ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list; fi; \
+          if [ -f /etc/apt/sources.list.d/debian.sources ]; then sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list.d/debian.sources; fi \
+          ;; \
       esac; \
       for n in 1 2 3; do \
         if timeout 120 apt-get update; then updated=1; break; fi; \
