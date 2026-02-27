@@ -50,6 +50,24 @@ type TrendResponse = {
   error?: string;
 };
 
+type BillingReconcileIssueItem = {
+  action_id: string;
+  status?: string;
+  issues?: string[];
+};
+
+type BillingReconcileResponse = {
+  success: boolean;
+  summary?: {
+    actions_checked?: number;
+    actions_with_issues?: number;
+    issue_count?: number;
+    tokenusage_minus_settled?: number;
+  };
+  items?: BillingReconcileIssueItem[];
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -57,6 +75,7 @@ interface Props {
 export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
+  const [billing, setBilling] = useState<BillingReconcileResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +85,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const [healthRes, trendRes] = await Promise.all([
+      const [healthRes, trendRes, billingRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -75,10 +94,15 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/health/trend?tenant_id=${encodeURIComponent(businessId)}&window_minutes=720&limit=24`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/billing/reconcile?tenant_id=${encodeURIComponent(businessId)}&window_minutes=1440&limit=50`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
 
       const healthJson: HealthResponse = await healthRes.json();
       const trendJson: TrendResponse = await trendRes.json();
+      const billingData: BillingReconcileResponse = await billingRes.json();
 
       if (!healthRes.ok || !healthJson?.success) {
         throw new Error(healthJson?.error || `HTTP ${healthRes.status}`);
@@ -86,9 +110,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       if (!trendRes.ok || !trendJson?.success) {
         throw new Error(trendJson?.error || `HTTP ${trendRes.status}`);
       }
+      if (!billingRes.ok || !billingData?.success) {
+        throw new Error(billingData?.error || `HTTP ${billingRes.status}`);
+      }
 
       setData(healthJson);
       setTrend((trendJson.items || []).slice(0, 24));
+      setBilling(billingData || null);
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить состояние интеграции ИИ-агентов');
     } finally {
@@ -104,7 +132,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const checks = data?.checks;
   const alerts = data?.alerts || [];
   const hasAlerts = alerts.length > 0;
-  const isReady = data?.status === 'ready' && !hasAlerts;
+  const billingIssues = Number(billing?.summary?.actions_with_issues || 0);
+  const billingIssueCount = Number(billing?.summary?.issue_count || 0);
+  const isReady = data?.status === 'ready' && !hasAlerts && billingIssues === 0;
   const statusLabel = isReady ? 'Готово к работе' : 'Требует внимания';
   const statusClass = isReady
     ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -177,6 +207,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             <MetricCell label="DLQ / Stuck" value={`${checks?.dlq_count ?? 0} / ${checks?.stuck_retry ?? 0}`} />
           </div>
 
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+            <MetricCell label="Billing actions" value={billing?.summary?.actions_checked ?? 0} />
+            <MetricCell label="Billing issues" value={billingIssues} />
+            <MetricCell label="Issue count" value={billingIssueCount} />
+            <MetricCell label="Token delta" value={billing?.summary?.tokenusage_minus_settled ?? 0} />
+          </div>
+
           <div className="mt-3">
             {hasAlerts ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -194,6 +231,32 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               <div className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                 <CheckCircle2 className="h-4 w-4" />
                 Callback доставка в норме
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3">
+            {billingIssues > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <div className="mb-1 flex items-center gap-2 font-medium">
+                  <AlertTriangle className="h-4 w-4" />
+                  Алерты billing reconciliation
+                </div>
+                <ul className="space-y-1">
+                  {(billing?.items || [])
+                    .filter((x) => (x.issues || []).length > 0)
+                    .slice(0, 5)
+                    .map((item) => (
+                      <li key={item.action_id}>
+                        action {item.action_id.slice(0, 8)} ({item.status || 'unknown'}): {(item.issues || []).join(', ')}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+                Billing reconciliation в норме
               </div>
             )}
           </div>
