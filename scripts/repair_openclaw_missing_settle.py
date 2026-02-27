@@ -9,6 +9,7 @@ Use --apply to insert missing settle ledger entries.
 import argparse
 import json
 import sys
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,34 @@ from core.action_ledger import ensure_ledger_tables, write_ledger_entry
 
 def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _row_value(row, index: int, key: str, default=None):
+    if row is None:
+        return default
+    if isinstance(row, (tuple, list)):
+        try:
+            return row[index]
+        except Exception:
+            return default
+    if hasattr(row, "get"):
+        try:
+            return row.get(key, default)
+        except Exception:
+            return default
+    return default
+
+
+def _as_dict(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
 
 
 def main() -> int:
@@ -67,11 +96,14 @@ def main() -> int:
 
         candidates = []
         for row in rows:
-            action_id = str(row[0] or "")
-            billing_json = row[1] if isinstance(row[1], dict) else {}
-            reserve_total = int(row[3] or 0)
-            settle_total = int(row[4] or 0)
-            release_total = int(row[5] or 0)
+            action_id = str(_row_value(row, 0, "action_id", "") or "")
+            if not action_id:
+                continue
+            billing_raw = _row_value(row, 1, "billing_json", {}) or {}
+            billing_json = _as_dict(billing_raw)
+            reserve_total = int(_row_value(row, 3, "reserve_total", 0) or 0)
+            settle_total = int(_row_value(row, 4, "settle_total", 0) or 0)
+            release_total = int(_row_value(row, 5, "release_total", 0) or 0)
             if reserve_total <= 0 or settle_total > 0:
                 continue
             expected_settle = max(0, reserve_total - release_total)
@@ -131,7 +163,18 @@ def main() -> int:
         return 0
     except Exception as exc:
         db.conn.rollback()
-        print(json.dumps({"success": False, "error": str(exc)}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "success": False,
+                    "error": str(exc),
+                    "error_type": exc.__class__.__name__,
+                    "error_repr": repr(exc),
+                    "traceback": traceback.format_exc().strip(),
+                },
+                ensure_ascii=False,
+            )
+        )
         return 1
     finally:
         db.close()
