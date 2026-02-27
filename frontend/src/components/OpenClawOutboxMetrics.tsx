@@ -754,6 +754,107 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [selectedActionId, fetchDiagnosticsBundle]);
 
+  const buildIncidentReportMarkdown = useCallback(async () => {
+    if (!selectedActionId) {
+      throw new Error('Action не выбран');
+    }
+    let diagnosticsMarkdown = '';
+    try {
+      const bundle = await fetchDiagnosticsBundle('markdown');
+      if (bundle?.success && typeof bundle?.markdown_report === 'string') {
+        diagnosticsMarkdown = String(bundle.markdown_report).trim();
+      }
+    } catch (_e) {
+      // Fallback to local snapshot below.
+    }
+
+    const lifecycleLines = ACTION_LIFECYCLE_STATUSES.map((status) => {
+      const item = actionLifecycleSummary?.lifecycle?.[status] || {};
+      return `- ${status}: ${Number(item.count || 0)}${item.last_at ? ` (last: ${item.last_at})` : ''}`;
+    });
+
+    const attemptBreakdown = (actionCallbackAttemptsSummary?.event_type_breakdown || []).map((item) => {
+      return `- ${item.event_type}: total=${item.total_attempts}, sent=${item.success_attempts}, failed=${item.failed_attempts}`;
+    });
+
+    const recentEvents = filteredTimeline.slice(-8).map((event) => {
+      return `- ${event.occurred_at} | ${event.source}:${event.event_type} | ${event.status || '-'}`;
+    });
+
+    const sections = [
+      '# OpenClaw Incident Report',
+      '',
+      `- action_id: \`${selectedActionId}\``,
+      `- exported_at: ${new Date().toISOString()}`,
+      `- status: \`${actionStatusSnapshot?.status || 'unknown'}\``,
+      `- billing: reserve/settle/release = ${(actionBillingSnapshot?.summary?.reserved_tokens ?? 0)}/${(actionBillingSnapshot?.summary?.settled_tokens ?? 0)}/${(actionBillingSnapshot?.summary?.released_tokens ?? 0)}, cost=${actionBillingSnapshot?.summary?.total_cost ?? 0}`,
+      '',
+      '## Lifecycle summary',
+      '',
+      ...lifecycleLines,
+      '',
+      `- events: ${actionLifecycleSummary?.filtered_events ?? 0}/${actionLifecycleSummary?.total_events ?? 0}`,
+      `- unknown_events: ${actionLifecycleSummary?.unknown_events ?? 0}`,
+      '',
+      '## Callback attempt breakdown',
+      '',
+      ...(attemptBreakdown.length > 0 ? attemptBreakdown : ['- no attempts']),
+      '',
+      '## Recent timeline',
+      '',
+      ...(recentEvents.length > 0 ? recentEvents : ['- no timeline events']),
+    ];
+
+    if (timelineSummary.lastErrorText) {
+      sections.push('', '## Last error', '', `- ${timelineSummary.lastErrorText}`);
+    }
+
+    if (diagnosticsMarkdown) {
+      sections.push('', '## Diagnostics bundle', '', diagnosticsMarkdown);
+    }
+
+    return sections.join('\n');
+  }, [
+    selectedActionId,
+    fetchDiagnosticsBundle,
+    actionLifecycleSummary,
+    actionCallbackAttemptsSummary,
+    filteredTimeline,
+    actionStatusSnapshot,
+    actionBillingSnapshot,
+    timelineSummary.lastErrorText,
+  ]);
+
+  const exportIncidentReportMarkdown = useCallback(async () => {
+    if (!selectedActionId) return;
+    try {
+      const markdown = await buildIncidentReportMarkdown();
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `action-incident-report-${selectedActionId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать incident report');
+    }
+  }, [selectedActionId, buildIncidentReportMarkdown]);
+
+  const copyIncidentReport = useCallback(async () => {
+    if (!selectedActionId) return;
+    try {
+      const markdown = await buildIncidentReportMarkdown();
+      await navigator.clipboard.writeText(markdown);
+      setCopyMessage('Incident report скопирован');
+      setTimeout(() => setCopyMessage(null), 2500);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось скопировать incident report');
+    }
+  }, [selectedActionId, buildIncidentReportMarkdown]);
+
   const copyActionDiagnostics = useCallback(async () => {
     if (!selectedActionId) return;
     const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
@@ -1563,6 +1664,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </button>
               <button
                 type="button"
+                onClick={exportIncidentReportMarkdown}
+                disabled={!selectedActionId}
+                className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-700 disabled:opacity-60"
+              >
+                Экспорт incident report MD
+              </button>
+              <button
+                type="button"
                 onClick={copyActionDiagnostics}
                 disabled={!selectedActionId}
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700 disabled:opacity-60"
@@ -1576,6 +1685,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-teal-200 bg-teal-50 px-2 py-1.5 text-xs text-teal-700 disabled:opacity-60"
               >
                 Копировать для Telegram
+              </button>
+              <button
+                type="button"
+                onClick={copyIncidentReport}
+                disabled={!selectedActionId}
+                className="rounded-md border border-pink-200 bg-pink-50 px-2 py-1.5 text-xs text-pink-700 disabled:opacity-60"
+              >
+                Скопировать incident report
               </button>
               <button
                 type="button"
