@@ -106,6 +106,112 @@ def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
         return False
 
 
+def _incident_snapshot_lines(snapshot: Dict[str, Any]) -> List[str]:
+    if not snapshot or not snapshot.get("success"):
+        return []
+
+    action_id = str(snapshot.get("action_id") or "")
+    capability = str(snapshot.get("capability") or "-")
+    status = str(snapshot.get("status") or "-")
+    overview = dict(snapshot.get("overview") or {})
+    lifecycle = dict((snapshot.get("lifecycle_summary") or {}).get("lifecycle") or {})
+    recent = list(snapshot.get("recent_timeline") or [])
+
+    lines = [
+        f"Action: {action_id[:8] if action_id else '-'}",
+        f"Capability/status: {capability} / {status}",
+        (
+            "Attempts: "
+            f"{int(overview.get('callback_attempts_total') or 0)} total, "
+            f"{int(overview.get('callback_attempts_failed') or 0)} failed"
+        ),
+        (
+            "Lifecycle: "
+            f"pending={int((lifecycle.get('pending_human') or {}).get('count') or 0)}, "
+            f"approved={int((lifecycle.get('approved') or {}).get('count') or 0)}, "
+            f"completed={int((lifecycle.get('completed') or {}).get('count') or 0)}"
+        ),
+    ]
+    if recent:
+        last_event = dict(recent[-1] or {})
+        lines.append(
+            "Last event: "
+            f"{str(last_event.get('source') or '-')}/"
+            f"{str(last_event.get('event_type') or '-')}/"
+            f"{str(last_event.get('status') or '-')}"
+        )
+    return lines
+
+
+def _load_incident_snapshots_for_actions(action_ids: List[str]) -> List[Dict[str, Any]]:
+    snapshots: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    max_items = max(1, min(int(os.getenv("OPENCLAW_TELEGRAM_ALERT_SNAPSHOT_LIMIT", "2")), 5))
+    for action_id in action_ids:
+        normalized = str(action_id or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            result = CALLBACK_DISPATCH_ORCHESTRATOR.get_action_incident_snapshot(
+                normalized,
+                {"user_id": "system-worker", "is_superadmin": True},
+            )
+            if result.get("success"):
+                snapshots.append(result)
+        except Exception as e:
+            print(f"[OPENCLAW_ALERTS] incident snapshot load failed action={normalized}: {e}", flush=True)
+        if len(snapshots) >= max_items:
+            break
+    return snapshots
+
+
+def _load_problematic_action_ids_for_tenant(tenant_id: str, *, limit: int = 2) -> List[str]:
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT action_id
+            FROM action_callback_outbox
+            WHERE tenant_id = %s
+              AND status IN ('dlq', 'retry')
+            ORDER BY
+              CASE WHEN status = 'dlq' THEN 0 ELSE 1 END,
+              updated_at DESC,
+              created_at DESC
+            LIMIT %s
+            """,
+            (str(tenant_id), max(1, min(int(limit or 2), 5))),
+        )
+        rows = cursor.fetchall() or []
+        action_ids: List[str] = []
+        for row in rows:
+            if isinstance(row, dict):
+                value = row.get("action_id")
+            else:
+                value = row[0] if len(row) > 0 else None
+            if value:
+                action_ids.append(str(value))
+        return action_ids
+    except Exception as e:
+        print(f"[CALLBACK_ALERTS] problematic action scan failed tenant={tenant_id}: {e}", flush=True)
+        return []
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
 def _notify_superadmins_billing_reconcile(
     tenant_id: str,
     *,
@@ -191,6 +297,7 @@ def _notify_superadmins_billing_reconcile(
             return
 
         sample = ", ".join([s for s in (sample_action_ids or []) if s][:5]) or "-"
+        sample_snapshots = _load_incident_snapshots_for_actions(sample_action_ids or [])
         lines = [
             "🚨 OpenClaw billing reconcile alert",
             f"Tenant: {tenant_id}",
@@ -200,6 +307,10 @@ def _notify_superadmins_billing_reconcile(
             f"Issue count: {issue_count}",
             f"Sample action_ids: {sample}",
         ]
+        if sample_snapshots:
+            lines.append("Incident snapshots:")
+            for snapshot in sample_snapshots:
+                lines.extend([f"  {line}" for line in _incident_snapshot_lines(snapshot)])
         message = "\n".join(lines)
         sent_any = False
         for telegram_id in target_ids:
@@ -304,6 +415,8 @@ def _notify_superadmins_callback_alerts(
         if not target_ids:
             return
 
+        sample_action_ids = _load_problematic_action_ids_for_tenant(tenant_id, limit=2)
+        sample_snapshots = _load_incident_snapshots_for_actions(sample_action_ids)
         alert_lines = [f"- {a.get('code')}: {a.get('message')}" for a in (alerts or []) if a.get("code")]
         lines = [
             "🚨 OpenClaw callback delivery alert",
@@ -317,6 +430,12 @@ def _notify_superadmins_callback_alerts(
             f"Success rate: {float(metrics.get('delivery_success_rate') or 0.0)}%",
             "Alerts:",
         ] + (alert_lines or ["- unknown"])
+        if sample_action_ids:
+            lines.append(f"Sample action_ids: {', '.join(sample_action_ids[:5])}")
+        if sample_snapshots:
+            lines.append("Incident snapshots:")
+            for snapshot in sample_snapshots:
+                lines.extend([f"  {line}" for line in _incident_snapshot_lines(snapshot)])
         message = "\n".join(lines)
 
         sent_any = False
