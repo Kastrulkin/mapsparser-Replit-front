@@ -53,10 +53,10 @@ WORKDIR /app
 # Добавлен fallback по PyPI-индексам и повторные попытки для нестабильной сети.
 COPY requirements.txt .
 RUN set -eux; \
-    indexes='https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple https://pypi.org/simple'; \
+    indexes='https://pypi.org/simple https://mirrors.aliyun.com/pypi/simple'; \
     installed=0; \
     for idx in $indexes; do \
-      for n in 1 2 3; do \
+      for n in 1; do \
         if PIP_DEFAULT_TIMEOUT=120 pip install --no-cache-dir --retries 2 --index-url "$idx" -r requirements.txt; then installed=1; break; fi; \
         echo "pip install failed via ${idx} (attempt ${n}), retrying..." >&2; \
         sleep "$((n*5))"; \
