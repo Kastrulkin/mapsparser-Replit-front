@@ -13,15 +13,26 @@ RUN npm run build
 FROM python:3.11-bookworm
 
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
-# Сеть на сервере может быть нестабильной, поэтому используем retry+backoff для apt update.
+# Сеть на сервере может быть нестабильной, поэтому используем retry+backoff и fallback по зеркалам apt.
 RUN set -eux; \
     printf 'Acquire::Retries "10";\nAcquire::ForceIPv4 "true";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/99network-retries; \
-    for n in 1 2 3 4 5; do \
-      timeout 120 apt-get update && break; \
-      [ "$n" -eq 5 ] && exit 1; \
-      echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
-      sleep "$((n*5))"; \
+    cp /etc/apt/sources.list /etc/apt/sources.list.bak; \
+    mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
+    updated=0; \
+    for mirror in $mirrors; do \
+      cp /etc/apt/sources.list.bak /etc/apt/sources.list; \
+      case "$mirror" in \
+        mirror.yandex.ru/debian) sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list ;; \
+        *) sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list ;; \
+      esac; \
+      for n in 1 2 3; do \
+        if timeout 120 apt-get update; then updated=1; break; fi; \
+        echo "apt-get update failed via ${mirror} (attempt ${n}), retrying..." >&2; \
+        sleep "$((n*5))"; \
+      done; \
+      [ "$updated" -eq 1 ] && break; \
     done; \
+    [ "$updated" -eq 1 ] || exit 1; \
     apt-get install -y --no-install-recommends \
       libpq-dev \
       gcc \
@@ -36,14 +47,25 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
-# apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
+# apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш.
 RUN set -eux; \
-    for n in 1 2 3 4 5; do \
-      timeout 120 apt-get update && break; \
-      [ "$n" -eq 5 ] && exit 1; \
-      echo "apt-get update failed (attempt ${n}), retrying..." >&2; \
-      sleep "$((n*5))"; \
+    cp /etc/apt/sources.list /etc/apt/sources.list.bak; \
+    mirrors='deb.debian.org ftp.debian.org mirror.yandex.ru/debian'; \
+    updated=0; \
+    for mirror in $mirrors; do \
+      cp /etc/apt/sources.list.bak /etc/apt/sources.list; \
+      case "$mirror" in \
+        mirror.yandex.ru/debian) sed -i "s|http://deb.debian.org/debian|http://${mirror}|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list ;; \
+        *) sed -i "s|http://deb.debian.org/debian|http://${mirror}/debian|g; s|http://deb.debian.org/debian-security|http://${mirror}/debian-security|g" /etc/apt/sources.list ;; \
+      esac; \
+      for n in 1 2 3; do \
+        if timeout 120 apt-get update; then updated=1; break; fi; \
+        echo "apt-get update failed via ${mirror} (attempt ${n}), retrying..." >&2; \
+        sleep "$((n*5))"; \
+      done; \
+      [ "$updated" -eq 1 ] && break; \
     done; \
+    [ "$updated" -eq 1 ] || exit 1; \
     python -m playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
