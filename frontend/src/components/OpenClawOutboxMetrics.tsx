@@ -121,6 +121,21 @@ type ActionBillingResponse = {
   error?: string;
 };
 
+type ActionLifecycleSummaryResponse = {
+  success: boolean;
+  action_id?: string;
+  tenant_id?: string;
+  capability?: string;
+  status?: string;
+  trace_id?: string;
+  total_events?: number;
+  filtered_events?: number;
+  unknown_events?: number;
+  full?: boolean;
+  lifecycle?: Record<string, { count?: number; last_at?: string | null }>;
+  error?: string;
+};
+
 type CallbackAttemptItem = {
   id: string;
   outbox_id: string;
@@ -197,6 +212,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [timelineTotal, setTimelineTotal] = useState(0);
   const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
+  const [actionLifecycleSummary, setActionLifecycleSummary] = useState<ActionLifecycleSummaryResponse | null>(null);
   const [actionCallbackAttempts, setActionCallbackAttempts] = useState<CallbackAttemptItem[]>([]);
   const [actionCallbackAttemptsTotal, setActionCallbackAttemptsTotal] = useState(0);
   const [actionCallbackAttemptsSummary, setActionCallbackAttemptsSummary] = useState<{
@@ -387,12 +403,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!businessId || !selectedActionId) {
       setActionStatusSnapshot(null);
       setActionBillingSnapshot(null);
+      setActionLifecycleSummary(null);
       return;
     }
     setActionSnapshotLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const [statusRes, billingRes] = await Promise.all([
+      const [statusRes, billingRes, lifecycleRes] = await Promise.all([
         fetch(
           `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}?tenant_id=${encodeURIComponent(businessId)}`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -401,21 +418,31 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/billing?tenant_id=${encodeURIComponent(businessId)}`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/lifecycle-summary?tenant_id=${encodeURIComponent(businessId)}&full=true`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
       const statusJson: ActionStatusResponse = await statusRes.json();
       const billingJson: ActionBillingResponse = await billingRes.json();
+      const lifecycleJson: ActionLifecycleSummaryResponse = await lifecycleRes.json();
       if (!statusRes.ok || !statusJson?.success) {
         throw new Error(statusJson?.error || `status HTTP ${statusRes.status}`);
       }
       if (!billingRes.ok || !billingJson?.success) {
         throw new Error(billingJson?.error || `billing HTTP ${billingRes.status}`);
       }
+      if (!lifecycleRes.ok || !lifecycleJson?.success) {
+        throw new Error(lifecycleJson?.error || `lifecycle HTTP ${lifecycleRes.status}`);
+      }
       setActionStatusSnapshot(statusJson);
       setActionBillingSnapshot(billingJson);
+      setActionLifecycleSummary(lifecycleJson);
     } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить status/billing action');
+      setError(e?.message || 'Не удалось загрузить status/billing/lifecycle action');
       setActionStatusSnapshot(null);
       setActionBillingSnapshot(null);
+      setActionLifecycleSummary(null);
     } finally {
       setActionSnapshotLoading(false);
     }
@@ -1466,7 +1493,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 disabled={actionSnapshotLoading || !selectedActionId}
                 className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
               >
-                {actionSnapshotLoading ? 'Обновление...' : 'Обновить status/billing'}
+                {actionSnapshotLoading ? 'Обновление...' : 'Обновить status/billing/lifecycle'}
               </button>
               <button
                 type="button"
@@ -1562,6 +1589,32 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                   {(actionBillingSnapshot?.summary?.released_tokens ?? 0)}
                 </div>
                 <div>cost: {actionBillingSnapshot?.summary?.total_cost ?? 0}</div>
+              </div>
+            </div>
+            <div className="mb-2 rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">
+              <div className="mb-1 font-semibold text-gray-800">Lifecycle summary (full action)</div>
+              <div className="mb-1 flex flex-wrap items-center gap-1">
+                {ACTION_LIFECYCLE_STATUSES.map((status) => {
+                  const item = actionLifecycleSummary?.lifecycle?.[status] || {};
+                  const count = Number(item.count || 0);
+                  return (
+                    <span
+                      key={status}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${
+                        count > 0
+                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-200 bg-gray-50 text-gray-500'
+                      }`}
+                    >
+                      <span>{status}</span>
+                      <span className="font-semibold">{count}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] text-gray-500">
+                events: {actionLifecycleSummary?.filtered_events ?? 0}/{actionLifecycleSummary?.total_events ?? 0}
+                {' '}· unknown: {actionLifecycleSummary?.unknown_events ?? 0}
               </div>
             </div>
             <div className="mb-2 rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">

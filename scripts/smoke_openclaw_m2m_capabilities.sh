@@ -434,6 +434,33 @@ then
   exit 1
 fi
 
+echo "[8.2/12] M2M action lifecycle summary"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/lifecycle-summary?tenant_id=${TENANT_ID}&full=true" > "${tmp_dir}/lifecycle_summary.json"
+lifecycle_summary_success="$(json_read "${tmp_dir}/lifecycle_summary.json" "success")"
+if [[ "${lifecycle_summary_success}" != "True" && "${lifecycle_summary_success}" != "true" ]]; then
+  echo "Lifecycle summary read failed"
+  cat "${tmp_dir}/lifecycle_summary.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/lifecycle_summary.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+lifecycle = data.get("lifecycle") or {}
+required = {"pending_human", "approved", "rejected", "expired", "completed"}
+missing = sorted([k for k in required if k not in lifecycle])
+if missing:
+    print("Lifecycle summary missing keys:", ", ".join(missing))
+    sys.exit(1)
+print("Lifecycle summary OK: events=", data.get("filtered_events"), "/", data.get("total_events"))
+PY
+then
+  cat "${tmp_dir}/lifecycle_summary.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

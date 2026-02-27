@@ -1770,6 +1770,125 @@ class ActionOrchestrator:
             "callback_attempts": attempts_result,
         }
 
+    def _extract_lifecycle_status(self, event: Dict[str, Any]) -> Optional[str]:
+        lifecycle = {"pending_human", "approved", "rejected", "expired", "completed"}
+
+        status_raw = str(event.get("status") or "").strip().lower()
+        if status_raw in lifecycle:
+            return status_raw
+
+        event_type_raw = str(event.get("event_type") or "").strip().lower()
+        if event_type_raw in lifecycle:
+            return event_type_raw
+
+        details = dict(event.get("details") or {})
+        to_status_raw = str(details.get("to_status") or "").strip().lower()
+        if to_status_raw in lifecycle:
+            return to_status_raw
+
+        return None
+
+    def get_action_lifecycle_summary(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+        *,
+        limit: int = 200,
+        offset: int = 0,
+        source: Optional[str] = None,
+        event_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        only_problematic: bool = False,
+        full: bool = True,
+    ) -> Dict[str, Any]:
+        lifecycle_keys = ["pending_human", "approved", "rejected", "expired", "completed"]
+        page_limit = max(1, min(int(limit or 200), 500))
+        page_offset = max(0, int(offset or 0))
+
+        if full:
+            all_events: List[Dict[str, Any]] = []
+            total_count = 0
+            action_meta: Dict[str, Any] = {}
+            while True:
+                page_result = self.get_action_timeline(
+                    action_id,
+                    user_data,
+                    limit=page_limit,
+                    offset=page_offset,
+                    source=source,
+                    event_type=event_type,
+                    status=status,
+                    search=search,
+                    only_problematic=only_problematic,
+                )
+                if not page_result.get("success"):
+                    return page_result
+                page_events = list(page_result.get("events") or [])
+                all_events.extend(page_events)
+                total_count = int(page_result.get("total_count") or len(all_events))
+                if not action_meta:
+                    action_meta = {
+                        "tenant_id": page_result.get("tenant_id"),
+                        "capability": page_result.get("capability"),
+                        "status": page_result.get("status"),
+                        "trace_id": page_result.get("trace_id"),
+                    }
+                if len(page_events) < page_limit or len(all_events) >= total_count:
+                    break
+                page_offset += page_limit
+            events = all_events
+            meta_total_count = max(total_count, len(all_events))
+        else:
+            result = self.get_action_timeline(
+                action_id,
+                user_data,
+                limit=page_limit,
+                offset=page_offset,
+                source=source,
+                event_type=event_type,
+                status=status,
+                search=search,
+                only_problematic=only_problematic,
+            )
+            if not result.get("success"):
+                return result
+            events = list(result.get("events") or [])
+            action_meta = {
+                "tenant_id": result.get("tenant_id"),
+                "capability": result.get("capability"),
+                "status": result.get("status"),
+                "trace_id": result.get("trace_id"),
+            }
+            meta_total_count = int(result.get("total_count") or len(events))
+
+        lifecycle_summary: Dict[str, Dict[str, Any]] = {
+            key: {"count": 0, "last_at": None} for key in lifecycle_keys
+        }
+        unknown_events = 0
+
+        for event in events:
+            lifecycle_status = self._extract_lifecycle_status(event)
+            if lifecycle_status and lifecycle_status in lifecycle_summary:
+                lifecycle_summary[lifecycle_status]["count"] += 1
+                lifecycle_summary[lifecycle_status]["last_at"] = event.get("occurred_at")
+            else:
+                unknown_events += 1
+
+        return {
+            "success": True,
+            "action_id": action_id,
+            "tenant_id": action_meta.get("tenant_id"),
+            "capability": action_meta.get("capability"),
+            "status": action_meta.get("status"),
+            "trace_id": action_meta.get("trace_id"),
+            "total_events": meta_total_count,
+            "filtered_events": len(events),
+            "unknown_events": unknown_events,
+            "full": bool(full),
+            "lifecycle": lifecycle_summary,
+        }
+
     def render_action_diagnostics_markdown(self, bundle: Dict[str, Any]) -> str:
         support = dict(bundle.get("support_package") or {})
         action = dict(support.get("action") or {})

@@ -1027,6 +1027,17 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_bundle_md["success"] is True
         assert isinstance(user_bundle_md.get("markdown_report"), str)
         assert "# OpenClaw Action Diagnostics Bundle" in user_bundle_md.get("markdown_report", "")
+        r_user_lifecycle = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/lifecycle-summary?full=true",
+            headers=_auth_headers(),
+        )
+        assert r_user_lifecycle.status_code == 200, r_user_lifecycle.get_json()
+        user_lifecycle = r_user_lifecycle.get_json()
+        assert user_lifecycle["success"] is True
+        assert user_lifecycle["action_id"] == action_id
+        lifecycle_user = user_lifecycle.get("lifecycle", {})
+        assert "pending_human" in lifecycle_user
+        assert "completed" in lifecycle_user
 
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
@@ -1081,6 +1092,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_bundle_md["success"] is True
         assert isinstance(m2m_bundle_md.get("markdown_report"), str)
         assert "# OpenClaw Action Diagnostics Bundle" in m2m_bundle_md.get("markdown_report", "")
+        r_m2m_lifecycle = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id={info['business_id']}&full=true",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_lifecycle.status_code == 200, r_m2m_lifecycle.get_json()
+        m2m_lifecycle = r_m2m_lifecycle.get_json()
+        assert m2m_lifecycle["success"] is True
+        assert m2m_lifecycle["action_id"] == action_id
+        assert "pending_human" in (m2m_lifecycle.get("lifecycle") or {})
 
         r_user_attempts = info["client"].get(
             f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
@@ -1124,6 +1144,13 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant_bundle.status_code in {400, 403, 404}
         wrong_bundle = r_m2m_wrong_tenant_bundle.get_json()
         assert wrong_bundle["success"] is False
+        r_m2m_wrong_tenant_lifecycle = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id={info['foreign_business_id']}&full=true",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_lifecycle.status_code in {400, 403, 404}
+        wrong_lifecycle = r_m2m_wrong_tenant_lifecycle.get_json()
+        assert wrong_lifecycle["success"] is False
 
         r_m2m_wrong_tenant_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",

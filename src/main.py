@@ -4738,6 +4738,50 @@ def openclaw_capabilities_action_diagnostics_bundle(action_id):
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/capabilities/actions/<action_id>/lifecycle-summary', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_action_lifecycle_summary(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = request.args.get("limit", 200)
+    offset = request.args.get("offset", 0)
+    source = str(request.args.get("source", "")).strip() or None
+    event_type = str(request.args.get("event_type", "")).strip() or None
+    status = str(request.args.get("status", "")).strip() or None
+    search = str(request.args.get("search", "")).strip() or None
+    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
+    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
+    full_raw = str(request.args.get("full", "true")).strip().lower()
+    full = full_raw in {"1", "true", "yes", "on"}
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action_lifecycle_summary(
+        action_id,
+        service_user,
+        limit=limit,
+        offset=offset,
+        source=source,
+        event_type=event_type,
+        status=status,
+        search=search,
+        only_problematic=only_problematic,
+        full=full,
+    )
+    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
+        return jsonify({"success": False, "error": "tenant mismatch"}), 403
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/openclaw/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
 def openclaw_capabilities_billing_reconcile():
     if request.method == 'OPTIONS':
@@ -5343,6 +5387,43 @@ def capabilities_action_diagnostics_bundle(action_id):
     )
     if result.get("success") and response_format == "markdown":
         result["markdown_report"] = PHASE1_ACTION_ORCHESTRATOR.render_action_diagnostics_markdown(result)
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/actions/<action_id>/lifecycle-summary', methods=['GET', 'OPTIONS'])
+def capabilities_action_lifecycle_summary(action_id):
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    limit = request.args.get("limit", 200)
+    offset = request.args.get("offset", 0)
+    source = str(request.args.get("source", "")).strip() or None
+    event_type = str(request.args.get("event_type", "")).strip() or None
+    status = str(request.args.get("status", "")).strip() or None
+    search = str(request.args.get("search", "")).strip() or None
+    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
+    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
+    full_raw = str(request.args.get("full", "true")).strip().lower()
+    full = full_raw in {"1", "true", "yes", "on"}
+    result = PHASE1_ACTION_ORCHESTRATOR.get_action_lifecycle_summary(
+        action_id,
+        user_data,
+        limit=limit,
+        offset=offset,
+        source=source,
+        event_type=event_type,
+        status=status,
+        search=search,
+        only_problematic=only_problematic,
+        full=full,
+    )
     return jsonify(result), int(result.pop("http_code", 200))
 
 
