@@ -118,6 +118,32 @@ type ActionBillingResponse = {
   error?: string;
 };
 
+type CallbackAttemptItem = {
+  id: string;
+  outbox_id: string;
+  action_id: string;
+  tenant_id: string;
+  event_type: string;
+  attempt_no: number;
+  success: boolean;
+  http_status?: number | null;
+  duration_ms?: number | null;
+  error_text?: string | null;
+  response_excerpt?: string | null;
+  created_at: string;
+};
+
+type CallbackAttemptsResponse = {
+  success: boolean;
+  action_id?: string;
+  tenant_id?: string;
+  items?: CallbackAttemptItem[];
+  limit?: number;
+  offset?: number;
+  total?: number;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -137,6 +163,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [timelineOnlyProblematic, setTimelineOnlyProblematic] = useState(false);
   const [actionStatusSnapshot, setActionStatusSnapshot] = useState<ActionStatusResponse | null>(null);
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
+  const [actionCallbackAttempts, setActionCallbackAttempts] = useState<CallbackAttemptItem[]>([]);
+  const [actionCallbackAttemptsTotal, setActionCallbackAttemptsTotal] = useState(0);
+  const [actionAttemptsLoading, setActionAttemptsLoading] = useState(false);
   const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
   const [decisionStatus, setDecisionStatus] = useState<'approved' | 'rejected' | 'expired'>('approved');
   const [decisionReason, setDecisionReason] = useState('manual decision from support');
@@ -278,6 +307,38 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   useEffect(() => {
     refreshActionSnapshots();
   }, [refreshActionSnapshots]);
+
+  const refreshActionAttempts = useCallback(async () => {
+    if (!businessId || !selectedActionId) {
+      setActionCallbackAttempts([]);
+      setActionCallbackAttemptsTotal(0);
+      return;
+    }
+    setActionAttemptsLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/callback-attempts?limit=20&offset=0`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json: CallbackAttemptsResponse = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
+      }
+      setActionCallbackAttempts((json.items || []).slice(0, 20));
+      setActionCallbackAttemptsTotal(Number(json.total || 0));
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить callback attempts action');
+      setActionCallbackAttempts([]);
+      setActionCallbackAttemptsTotal(0);
+    } finally {
+      setActionAttemptsLoading(false);
+    }
+  }, [businessId, selectedActionId]);
+
+  useEffect(() => {
+    refreshActionAttempts();
+  }, [refreshActionAttempts]);
 
   const recoverDelivery = useCallback(async () => {
     if (!businessId) return;
@@ -1105,6 +1166,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </button>
               <button
                 type="button"
+                onClick={refreshActionAttempts}
+                disabled={actionAttemptsLoading || !selectedActionId}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-60"
+              >
+                {actionAttemptsLoading ? 'Обновление attempts...' : 'Обновить callback attempts'}
+              </button>
+              <button
+                type="button"
                 onClick={exportTimelineJson}
                 disabled={!selectedActionId}
                 className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-700 disabled:opacity-60"
@@ -1214,6 +1283,30 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 Copy full support package
               </button>
             </div>
+            </div>
+            <div className="mb-2 rounded border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700">
+              <div className="mb-1 font-semibold text-gray-800">
+                Callback attempts ({actionCallbackAttempts.length}/{actionCallbackAttemptsTotal})
+              </div>
+              {actionAttemptsLoading ? (
+                <div className="text-gray-500">Загрузка callback attempts...</div>
+              ) : actionCallbackAttempts.length === 0 ? (
+                <div className="text-gray-500">Попытки доставки для action пока отсутствуют</div>
+              ) : (
+                <div className="max-h-40 overflow-y-auto">
+                  {actionCallbackAttempts.map((item) => (
+                    <div key={item.id} className="mb-1 rounded border border-gray-100 bg-gray-50 px-2 py-1">
+                      <div className="font-medium text-gray-800">
+                        {item.created_at} · {item.event_type} · attempt #{item.attempt_no} · {item.success ? 'sent' : 'failed'}
+                      </div>
+                      <div className="text-gray-500">
+                        http={item.http_status ?? '—'} · duration={item.duration_ms ?? '—'}ms
+                      </div>
+                      {item.error_text && <div className="text-amber-700">error: {item.error_text}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="mb-2 text-[11px] text-gray-500">
               Показано: {filteredTimeline.length} / {timeline.length}
