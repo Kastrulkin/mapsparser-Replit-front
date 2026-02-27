@@ -10,6 +10,7 @@ WINDOW_MINUTES="${WINDOW_MINUTES:-60}"
 RECOVERY_ATTEMPTS="${RECOVERY_ATTEMPTS:-2}"
 STRICT="${STRICT:-1}"
 SNAPSHOT_LIMIT="${SNAPSHOT_LIMIT:-2}"
+SEND_TELEGRAM_REPORT="${SEND_TELEGRAM_REPORT:-0}"
 
 if [[ -z "${OPENCLAW_TOKEN}" ]]; then
   echo "OPENCLAW_TOKEN is required"
@@ -22,6 +23,7 @@ fi
 
 TMP_DIR="${TMPDIR:-/tmp}/openclaw_ops_recover"
 mkdir -p "${TMP_DIR}"
+REPORT_PATH="${TMP_DIR}/ops_recovery_report.txt"
 
 pick_problem_action_ids() {
   curl -fsS -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
@@ -79,6 +81,37 @@ print(json.dumps({
     "overview": overview,
     "last_event": recent[-1] if recent else None,
 }, ensure_ascii=False, indent=2))
+PY
+}
+
+append_incident_summary() {
+  local action_id="$1"
+  local label="$2"
+  local path="${TMP_DIR}/incident_${label}_${action_id}.json"
+  if [[ ! -f "${path}" ]]; then
+    return 0
+  fi
+  python3 - "${path}" "${label}" >> "${REPORT_PATH}" <<'PY'
+import json, sys
+path = sys.argv[1]
+label = sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+overview = data.get("overview") or {}
+recent = data.get("recent_timeline") or []
+last_event = recent[-1] if recent else {}
+print(f"{label.upper()} {str(data.get('action_id') or '')[:8]}:")
+print(
+    f"  status={data.get('status')} "
+    f"capability={data.get('capability')} "
+    f"attempts={int(overview.get('callback_attempts_total') or 0)} "
+    f"failed={int(overview.get('callback_attempts_failed') or 0)}"
+)
+if last_event:
+    print(
+        "  last_event="
+        f"{last_event.get('source')}/{last_event.get('event_type')}/{last_event.get('status') or '-'}"
+    )
 PY
 }
 
@@ -144,6 +177,30 @@ if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then
     [[ -n "${action_id}" ]] || continue
     print_incident_snapshot "${action_id}" "after" || true
   done <<< "${PROBLEM_ACTION_IDS}"
+fi
+
+cat > "${REPORT_PATH}" <<EOF
+🚑 OpenClaw ops recovery summary
+Tenant: ${TENANT_ID}
+Base URL: ${BASE_URL}
+Window minutes: ${WINDOW_MINUTES}
+Alerts before: ${ALERTS_COUNT}
+Alerts after: ${POST_ALERTS_COUNT}
+Problem action_ids:
+$(if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then printf '%s\n' "${PROBLEM_ACTION_IDS}"; else echo "-"; fi)
+EOF
+
+if [[ -n "${PROBLEM_ACTION_IDS}" ]]; then
+  while IFS= read -r action_id; do
+    [[ -n "${action_id}" ]] || continue
+    append_incident_summary "${action_id}" "before"
+    append_incident_summary "${action_id}" "after"
+  done <<< "${PROBLEM_ACTION_IDS}"
+fi
+
+if [[ "${SEND_TELEGRAM_REPORT}" == "1" ]]; then
+  echo "[ops] sending telegram recovery report"
+  REPORT_FILE="${REPORT_PATH}" ./scripts/send_openclaw_ops_report.sh || true
 fi
 
 echo "[ops] 5/5 deep diagnose"

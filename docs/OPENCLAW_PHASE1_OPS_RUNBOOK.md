@@ -55,6 +55,9 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scr
 - `capabilities/health/trend`
 - `callbacks/metrics`
 - `callbacks/outbox`
+- `capabilities/actions/{action_id}/lifecycle-summary` (если задан `ACTION_ID`)
+- `capabilities/actions/{action_id}/incident-snapshot` (если задан `ACTION_ID`)
+- `capabilities/actions/{action_id}/incident-report` (если задан `ACTION_ID`)
 - `capabilities/actions/{action_id}/support-package` (если задан `ACTION_ID`)
 
 Коды возврата:
@@ -164,6 +167,14 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_
 - `WINDOW_MINUTES` (default `60`) — окно метрик callback
 - `RECOVERY_ATTEMPTS` (default `2`) — число попыток replay+dispatch
 - `STRICT` (default `1`) — если алерты остались после recovery, скрипт завершится с `exit 2`
+- `SNAPSHOT_LIMIT` (default `2`) — сколько проблемных `action_id` показывать в before/after snapshot
+- `SEND_TELEGRAM_REPORT=1` — после recovery отправить краткий ops-report суперадмину через `./scripts/send_openclaw_ops_report.sh`
+
+Прямой вызов sender:
+
+```bash
+REPORT_FILE=/tmp/openclaw_ops_report.txt ./scripts/send_openclaw_ops_report.sh
+```
 
 UI recovery:
 - `Настройки -> Integrations -> Связь ИИ-агентов с системой -> Восстановить доставку`
