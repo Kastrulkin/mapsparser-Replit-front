@@ -323,6 +323,30 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     isProblematicTimelineEvent,
   ]);
 
+  const timelineSummary = useMemo(() => {
+    const reversed = [...timeline].reverse();
+    const isSuccess = (event: ActionTimelineEvent) => {
+      const status = String(event.status || '').toLowerCase();
+      return status === 'completed' || status === 'sent' || status === 'approved';
+    };
+    const isRetryDlq = (event: ActionTimelineEvent) => {
+      const status = String(event.status || '').toLowerCase();
+      const eventType = String(event.event_type || '').toLowerCase();
+      return status === 'retry' || status === 'dlq' || eventType === 'retry' || eventType === 'dlq';
+    };
+    const lastSuccess = reversed.find((event) => isSuccess(event));
+    const lastRetryDlq = reversed.find((event) => isRetryDlq(event));
+    const lastErrorEvent = reversed.find((event) => Boolean((event.details || {}).last_error));
+    const lastErrorText = String((lastErrorEvent?.details || {}).last_error || '').trim();
+    return {
+      lastSuccessAt: lastSuccess?.occurred_at || null,
+      lastRetryDlqAt: lastRetryDlq?.occurred_at || null,
+      lastRetryDlqStatus: lastRetryDlq?.status || lastRetryDlq?.event_type || null,
+      lastErrorAt: lastErrorEvent?.occurred_at || null,
+      lastErrorText: lastErrorText || null,
+    };
+  }, [timeline]);
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -370,6 +394,29 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               <div className="text-[11px] text-gray-500">snapshot: {String(data.snapshot_id).slice(0, 8)}</div>
             )}
           </div>
+          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <MetricCell
+              label="Последний успешный callback"
+              value={timelineSummary.lastSuccessAt || '—'}
+            />
+            <MetricCell
+              label="Последний retry/dlq"
+              value={
+                timelineSummary.lastRetryDlqAt
+                  ? `${timelineSummary.lastRetryDlqAt} (${timelineSummary.lastRetryDlqStatus || 'event'})`
+                  : '—'
+              }
+            />
+            <MetricCell
+              label="Последняя ошибка"
+              value={timelineSummary.lastErrorAt || '—'}
+            />
+          </div>
+          {timelineSummary.lastErrorText && (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Последняя ошибка callback: {timelineSummary.lastErrorText}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
             <MetricCell label="Sent" value={metrics?.sent ?? 0} />
