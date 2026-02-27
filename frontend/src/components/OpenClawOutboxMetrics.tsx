@@ -166,6 +166,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [actionCallbackAttempts, setActionCallbackAttempts] = useState<CallbackAttemptItem[]>([]);
   const [actionCallbackAttemptsTotal, setActionCallbackAttemptsTotal] = useState(0);
   const [actionAttemptsLoading, setActionAttemptsLoading] = useState(false);
+  const [attemptsOnlyFailed, setAttemptsOnlyFailed] = useState(false);
+  const [attemptsSearch, setAttemptsSearch] = useState('');
   const [actionSnapshotLoading, setActionSnapshotLoading] = useState(false);
   const [decisionStatus, setDecisionStatus] = useState<'approved' | 'rejected' | 'expired'>('approved');
   const [decisionReason, setDecisionReason] = useState('manual decision from support');
@@ -896,6 +898,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     };
   }, [timeline]);
 
+  const filteredCallbackAttempts = useMemo(() => {
+    const q = attemptsSearch.trim().toLowerCase();
+    return actionCallbackAttempts.filter((item) => {
+      if (attemptsOnlyFailed && item.success) return false;
+      if (!q) return true;
+      const haystack = `${item.event_type} ${item.http_status ?? ''} ${item.error_text || ''} ${item.response_excerpt || ''}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [actionCallbackAttempts, attemptsOnlyFailed, attemptsSearch]);
+
   const deliveryAttemptSummary = useMemo(() => {
     const attempts = timeline.filter(
       (event) => event.source === 'callback_delivery' && event.event_type === 'attempt'
@@ -1288,13 +1300,32 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               <div className="mb-1 font-semibold text-gray-800">
                 Callback attempts ({actionCallbackAttempts.length}/{actionCallbackAttemptsTotal})
               </div>
+              <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <input
+                  value={attemptsSearch}
+                  onChange={(e) => setAttemptsSearch(e.target.value)}
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                  placeholder="Поиск по http/error/response..."
+                />
+                <button
+                  type="button"
+                  onClick={() => setAttemptsOnlyFailed((prev) => !prev)}
+                  className={`rounded-md border px-2 py-1.5 text-xs ${
+                    attemptsOnlyFailed
+                      ? 'border-amber-300 bg-amber-100 text-amber-900'
+                      : 'border-gray-200 bg-white text-gray-700'
+                  }`}
+                >
+                  {attemptsOnlyFailed ? 'Только failed: ON' : 'Только failed: OFF'}
+                </button>
+              </div>
               {actionAttemptsLoading ? (
                 <div className="text-gray-500">Загрузка callback attempts...</div>
-              ) : actionCallbackAttempts.length === 0 ? (
+              ) : filteredCallbackAttempts.length === 0 ? (
                 <div className="text-gray-500">Попытки доставки для action пока отсутствуют</div>
               ) : (
                 <div className="max-h-40 overflow-y-auto">
-                  {actionCallbackAttempts.map((item) => (
+                  {filteredCallbackAttempts.map((item) => (
                     <div key={item.id} className="mb-1 rounded border border-gray-100 bg-gray-50 px-2 py-1">
                       <div className="font-medium text-gray-800">
                         {item.created_at} · {item.event_type} · attempt #{item.attempt_no} · {item.success ? 'sent' : 'failed'}
