@@ -68,6 +68,36 @@ type BillingReconcileResponse = {
   error?: string;
 };
 
+type ActionListItem = {
+  action_id: string;
+  capability?: string;
+  status?: string;
+  created_at?: string;
+};
+
+type ActionListResponse = {
+  success: boolean;
+  items?: ActionListItem[];
+  error?: string;
+};
+
+type ActionTimelineEvent = {
+  occurred_at: string;
+  source: string;
+  event_type: string;
+  status?: string | null;
+  details?: Record<string, any>;
+};
+
+type ActionTimelineResponse = {
+  success: boolean;
+  action_id?: string;
+  capability?: string;
+  status?: string;
+  events?: ActionTimelineEvent[];
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -76,6 +106,10 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
   const [billing, setBilling] = useState<BillingReconcileResponse | null>(null);
+  const [actions, setActions] = useState<ActionListItem[]>([]);
+  const [selectedActionId, setSelectedActionId] = useState<string>('');
+  const [timeline, setTimeline] = useState<ActionTimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
@@ -87,7 +121,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const [healthRes, trendRes, billingRes] = await Promise.all([
+      const [healthRes, trendRes, billingRes, actionsRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -100,11 +134,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/billing/reconcile?tenant_id=${encodeURIComponent(businessId)}&window_minutes=1440&limit=50`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/actions?tenant_id=${encodeURIComponent(businessId)}&limit=20&offset=0`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
 
       const healthJson: HealthResponse = await healthRes.json();
       const trendJson: TrendResponse = await trendRes.json();
       const billingData: BillingReconcileResponse = await billingRes.json();
+      const actionsData: ActionListResponse = await actionsRes.json();
 
       if (!healthRes.ok || !healthJson?.success) {
         throw new Error(healthJson?.error || `HTTP ${healthRes.status}`);
@@ -115,10 +154,19 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       if (!billingRes.ok || !billingData?.success) {
         throw new Error(billingData?.error || `HTTP ${billingRes.status}`);
       }
+      if (!actionsRes.ok || !actionsData?.success) {
+        throw new Error(actionsData?.error || `HTTP ${actionsRes.status}`);
+      }
 
       setData(healthJson);
       setTrend((trendJson.items || []).slice(0, 24));
       setBilling(billingData || null);
+      const items = (actionsData.items || []).slice(0, 20);
+      setActions(items);
+      setSelectedActionId((prev) => {
+        if (prev && items.some((x) => x.action_id === prev)) return prev;
+        return items[0]?.action_id || '';
+      });
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить состояние интеграции ИИ-агентов');
     } finally {
@@ -129,6 +177,34 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const loadTimeline = async () => {
+      if (!businessId || !selectedActionId) {
+        setTimeline([]);
+        return;
+      }
+      setTimelineLoading(true);
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(
+          `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/timeline?tenant_id=${encodeURIComponent(businessId)}&limit=200`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const json: ActionTimelineResponse = await response.json();
+        if (!response.ok || !json?.success) {
+          throw new Error(json?.error || `HTTP ${response.status}`);
+        }
+        setTimeline(json.events || []);
+      } catch (e: any) {
+        setTimeline([]);
+        setError(e?.message || 'Не удалось загрузить timeline действий');
+      } finally {
+        setTimelineLoading(false);
+      }
+    };
+    loadTimeline();
+  }, [businessId, selectedActionId]);
 
   const recoverDelivery = useCallback(async () => {
     if (!businessId) return;
@@ -330,6 +406,44 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 Billing reconciliation в норме
               </div>
             )}
+          </div>
+
+          <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Audit trail callbacks/actions</div>
+            <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center">
+              <label className="text-xs text-gray-600">Action</label>
+              <select
+                value={selectedActionId}
+                onChange={(e) => setSelectedActionId(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-800"
+              >
+                {actions.length === 0 && <option value="">Нет действий</option>}
+                {actions.map((item) => (
+                  <option key={item.action_id} value={item.action_id}>
+                    {item.capability || 'action'} · {item.status || 'unknown'} · {String(item.action_id).slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="max-h-52 space-y-1 overflow-y-auto pr-1">
+              {timelineLoading ? (
+                <div className="text-xs text-gray-500">Загрузка timeline...</div>
+              ) : timeline.length === 0 ? (
+                <div className="text-xs text-gray-500">Для выбранного action нет событий</div>
+              ) : (
+                timeline.map((event, idx) => (
+                  <div key={`${event.occurred_at}:${event.source}:${event.event_type}:${idx}`} className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                    <div className="font-medium text-gray-800">
+                      {event.occurred_at} · {event.source} · {event.event_type}
+                      {event.status ? ` · ${event.status}` : ''}
+                    </div>
+                    <div className="mt-0.5 text-gray-500">
+                      {JSON.stringify(event.details || {})}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </>
       )}

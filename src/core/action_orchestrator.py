@@ -1247,6 +1247,197 @@ class ActionOrchestrator:
         finally:
             db.close()
 
+    def get_action_timeline(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+        *,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            limit = max(1, min(int(limit or 200), 500))
+
+            cursor.execute(
+                """
+                SELECT ar.action_id, ar.tenant_id, ar.capability, ar.status, ar.trace_id, b.owner_id
+                FROM action_requests ar
+                LEFT JOIN businesses b ON b.id = ar.tenant_id
+                WHERE ar.action_id = %s
+                LIMIT 1
+                """,
+                (action_id,),
+            )
+            action_row = cursor.fetchone()
+            if not action_row:
+                return {"success": False, "error": "action not found", "http_code": 404}
+
+            owner_id = self._row_value(action_row, 5, "owner_id")
+            if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
+                return {"success": False, "error": "forbidden", "http_code": 403}
+
+            timeline_query = """
+                SELECT occurred_at, source, event_type, status, details_json
+                FROM (
+                    SELECT
+                        ar.created_at AS occurred_at,
+                        'action_request'::text AS source,
+                        'created'::text AS event_type,
+                        ar.status::text AS status,
+                        jsonb_build_object(
+                            'capability', ar.capability,
+                            'idempotency_key', ar.idempotency_key,
+                            'trace_id', ar.trace_id
+                        ) AS details_json
+                    FROM action_requests ar
+                    WHERE ar.action_id = %s
+
+                    UNION ALL
+
+                    SELECT
+                        tr.created_at AS occurred_at,
+                        'action_transition'::text AS source,
+                        'status_changed'::text AS event_type,
+                        tr.to_status::text AS status,
+                        jsonb_build_object(
+                            'from_status', tr.from_status,
+                            'to_status', tr.to_status,
+                            'reason', tr.reason,
+                            'meta', tr.meta_json
+                        ) AS details_json
+                    FROM action_transitions tr
+                    WHERE tr.action_id = %s
+
+                    UNION ALL
+
+                    SELECT
+                        aa.requested_at AS occurred_at,
+                        'approval'::text AS source,
+                        'approval_requested'::text AS event_type,
+                        aa.status::text AS status,
+                        jsonb_build_object(
+                            'expires_at', aa.expires_at,
+                            'callback_url', aa.callback_url
+                        ) AS details_json
+                    FROM action_approvals aa
+                    WHERE aa.action_id = %s
+
+                    UNION ALL
+
+                    SELECT
+                        aa.resolved_at AS occurred_at,
+                        'approval'::text AS source,
+                        'approval_resolved'::text AS event_type,
+                        aa.status::text AS status,
+                        jsonb_build_object(
+                            'decision_reason', aa.decision_reason,
+                            'decider_actor', aa.decider_actor_json
+                        ) AS details_json
+                    FROM action_approvals aa
+                    WHERE aa.action_id = %s
+                      AND aa.resolved_at IS NOT NULL
+
+                    UNION ALL
+
+                    SELECT
+                        o.created_at AS occurred_at,
+                        'callback_outbox'::text AS source,
+                        'callback_enqueued'::text AS event_type,
+                        o.status::text AS status,
+                        jsonb_build_object(
+                            'event_type', o.event_type,
+                            'callback_url', o.callback_url,
+                            'attempts', o.attempts,
+                            'max_attempts', o.max_attempts,
+                            'dedupe_key', o.dedupe_key
+                        ) AS details_json
+                    FROM action_callback_outbox o
+                    WHERE o.action_id = %s
+
+                    UNION ALL
+
+                    SELECT
+                        o.updated_at AS occurred_at,
+                        'callback_outbox'::text AS source,
+                        'callback_state'::text AS event_type,
+                        o.status::text AS status,
+                        jsonb_build_object(
+                            'event_type', o.event_type,
+                            'attempts', o.attempts,
+                            'max_attempts', o.max_attempts,
+                            'last_error', o.last_error,
+                            'next_attempt_at', o.next_attempt_at
+                        ) AS details_json
+                    FROM action_callback_outbox o
+                    WHERE o.action_id = %s
+                      AND o.updated_at > o.created_at
+
+                    UNION ALL
+
+                    SELECT
+                        bl.created_at AS occurred_at,
+                        'billing_ledger'::text AS source,
+                        bl.entry_type::text AS event_type,
+                        NULL::text AS status,
+                        jsonb_build_object(
+                            'tokens_in', bl.tokens_in,
+                            'tokens_out', bl.tokens_out,
+                            'cost', bl.cost,
+                            'tariff_id', bl.tariff_id,
+                            'month_key', bl.month_key,
+                            'meta', bl.meta_json
+                        ) AS details_json
+                    FROM billing_ledger bl
+                    WHERE bl.action_id = %s
+                ) t
+                ORDER BY occurred_at DESC NULLS LAST, source ASC
+                LIMIT %s
+            """
+            cursor.execute(
+                timeline_query,
+                (
+                    action_id,
+                    action_id,
+                    action_id,
+                    action_id,
+                    action_id,
+                    action_id,
+                    action_id,
+                    limit,
+                ),
+            )
+            rows = cursor.fetchall() or []
+            rows = list(reversed(rows))
+
+            events = []
+            for row in rows:
+                events.append(
+                    {
+                        "occurred_at": str(self._row_value(row, 0, "occurred_at") or ""),
+                        "source": str(self._row_value(row, 1, "source") or ""),
+                        "event_type": str(self._row_value(row, 2, "event_type") or ""),
+                        "status": self._row_value(row, 3, "status"),
+                        "details": self._row_value(row, 4, "details_json") or {},
+                    }
+                )
+
+            db.conn.commit()
+            return {
+                "success": True,
+                "action_id": self._row_value(action_row, 0, "action_id"),
+                "tenant_id": self._row_value(action_row, 1, "tenant_id"),
+                "capability": self._row_value(action_row, 2, "capability"),
+                "status": self._row_value(action_row, 3, "status"),
+                "trace_id": self._row_value(action_row, 4, "trace_id"),
+                "events": events,
+                "count": len(events),
+                "limit": limit,
+            }
+        finally:
+            db.close()
+
     def list_callback_outbox(
         self,
         user_data: Dict[str, Any],

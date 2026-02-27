@@ -882,6 +882,81 @@ def test_openclaw_action_status_and_billing_with_valid_token(capabilities_client
             os.environ[token_name] = previous
 
 
+def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    import main as main_mod
+
+    original_reviews_handler = main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers.get("reviews.reply")
+    main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = (
+        lambda env, user: {
+            "result": {"reply": "ok"},
+            "billing": {
+                "total_tokens": 111,
+                "cost": 0.01,
+                "tool_calls": 1,
+                "tariff_id": "phase1-test",
+            },
+        }
+    )
+
+    try:
+        body = {
+            "tenant_id": info["business_id"],
+            "actor": {"id": info["user_id"], "type": "user", "role": "owner", "channel": "api"},
+            "trace_id": str(uuid.uuid4()),
+            "idempotency_key": str(uuid.uuid4()),
+            "capability": "reviews.reply",
+            "approval": {"mode": "auto", "ttl_sec": 1200},
+            "billing": {"tariff_id": "phase1-test", "reserve_tokens": 1000},
+            "payload": {"review": "good", "publish": False},
+        }
+        r_exec = info["client"].post("/api/capabilities/execute", json=body, headers=_auth_headers())
+        assert r_exec.status_code == 200, r_exec.get_json()
+        action_id = r_exec.get_json()["action_id"]
+
+        r_user_timeline = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/timeline?limit=200",
+            headers=_auth_headers(),
+        )
+        assert r_user_timeline.status_code == 200, r_user_timeline.get_json()
+        user_timeline = r_user_timeline.get_json()
+        assert user_timeline["success"] is True
+        assert user_timeline["action_id"] == action_id
+        assert user_timeline["count"] >= 3
+        assert any(e.get("source") == "action_transition" for e in user_timeline.get("events", []))
+        assert any(e.get("source") == "billing_ledger" for e in user_timeline.get("events", []))
+
+        r_m2m_timeline = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['business_id']}&limit=200",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_timeline.status_code == 200, r_m2m_timeline.get_json()
+        m2m_timeline = r_m2m_timeline.get_json()
+        assert m2m_timeline["success"] is True
+        assert m2m_timeline["action_id"] == action_id
+        assert m2m_timeline["count"] >= 3
+
+        r_m2m_wrong_tenant = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant.status_code in {400, 403, 404}
+        wrong = r_m2m_wrong_tenant.get_json()
+        assert wrong["success"] is False
+    finally:
+        if original_reviews_handler is not None:
+            main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_reviews_handler
+        else:
+            main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers.pop("reviews.reply", None)
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
 def test_openclaw_action_read_requires_tenant_and_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
