@@ -348,6 +348,48 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     URL.revokeObjectURL(url);
   }, [selectedActionId, filteredTimeline]);
 
+  const exportActionBundleJson = useCallback(() => {
+    if (!selectedActionId) return;
+    const payload = {
+      action_id: selectedActionId,
+      exported_at: new Date().toISOString(),
+      filters: {
+        source: timelineSourceFilter,
+        event_type: timelineEventFilter,
+        status: timelineStatusFilter,
+        search: timelineSearch,
+        only_problematic: timelineOnlyProblematic,
+      },
+      action_status: actionStatusSnapshot,
+      action_billing: actionBillingSnapshot,
+      timeline: {
+        total_count: timeline.length,
+        filtered_count: filteredTimeline.length,
+        events: filteredTimeline,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `action-bundle-${selectedActionId.slice(0, 8)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [
+    selectedActionId,
+    timelineSourceFilter,
+    timelineEventFilter,
+    timelineStatusFilter,
+    timelineSearch,
+    timelineOnlyProblematic,
+    actionStatusSnapshot,
+    actionBillingSnapshot,
+    timeline,
+    filteredTimeline,
+  ]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -673,6 +715,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-700 disabled:opacity-60"
               >
                 Экспорт timeline JSON
+              </button>
+              <button
+                type="button"
+                onClick={exportActionBundleJson}
+                disabled={!selectedActionId}
+                className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-700 disabled:opacity-60"
+              >
+                Экспорт action bundle
               </button>
             </div>
             <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
