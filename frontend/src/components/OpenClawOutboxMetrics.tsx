@@ -393,6 +393,36 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     filteredTimeline,
   ]);
 
+  const exportSupportPackageJson = useCallback(async () => {
+    if (!selectedActionId) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/support-package?limit=200`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
+      }
+      const payload = {
+        ...json,
+        exported_at: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `action-support-package-${selectedActionId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать support package');
+    }
+  }, [selectedActionId]);
+
   const copyActionDiagnostics = useCallback(async () => {
     if (!selectedActionId) return;
     const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
@@ -1054,6 +1084,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-700 disabled:opacity-60"
               >
                 Экспорт action bundle
+              </button>
+              <button
+                type="button"
+                onClick={exportSupportPackageJson}
+                disabled={!selectedActionId}
+                className="rounded-md border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-xs text-cyan-700 disabled:opacity-60"
+              >
+                Экспорт support package JSON
               </button>
               <button
                 type="button"
