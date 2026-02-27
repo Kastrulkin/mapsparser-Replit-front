@@ -150,6 +150,16 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/deploy_openclaw_pha
 Параметры:
 - `SKIP_BUILD=1` — пропустить сборку и выполнить только restart + verify
 
+Примечание по серверной сборке:
+- В Dockerfile включён fallback apt-зеркал с приоритетом `mirror.yandex.ru` для стабильной сборки в текущей сети.
+- Для длительного полного build используйте `tmux`:
+
+```bash
+tmux new -s phase2-build
+cd /opt/seo-app
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/deploy_openclaw_phase2.sh | tee /tmp/phase2_full_deploy.log
+```
+
 ## 11) Final Acceptance (Phase 2)
 
 Итоговый приёмочный прогон в одном запуске:
