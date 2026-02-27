@@ -1532,6 +1532,21 @@ class ActionOrchestrator:
         if not timeline_result.get("success"):
             return timeline_result
 
+        timeline_events = list(timeline_result.get("events") or [])
+        delivery_attempts = [
+            event for event in timeline_events
+            if str(event.get("source") or "") == "callback_delivery"
+            and str(event.get("event_type") or "") == "attempt"
+        ]
+        attempts_total = len(delivery_attempts)
+        attempts_success = sum(
+            1 for event in delivery_attempts
+            if str(event.get("status") or "").lower() == "sent"
+        )
+        attempts_failed = max(attempts_total - attempts_success, 0)
+        last_attempt = delivery_attempts[-1] if attempts_total > 0 else None
+        last_attempt_details = dict(last_attempt.get("details") or {}) if last_attempt else {}
+
         return {
             "success": True,
             "action_id": action_result.get("action_id"),
@@ -1539,6 +1554,14 @@ class ActionOrchestrator:
             "capability": action_result.get("capability"),
             "trace_id": action_result.get("trace_id"),
             "status": action_result.get("status"),
+            "delivery_stats": {
+                "attempts_total": attempts_total,
+                "attempts_success": attempts_success,
+                "attempts_failed": attempts_failed,
+                "last_attempt_at": last_attempt.get("occurred_at") if last_attempt else None,
+                "last_http_status": last_attempt_details.get("http_status"),
+                "last_error": last_attempt_details.get("error_text"),
+            },
             "action": action_result,
             "billing": billing_result,
             "timeline": timeline_result,

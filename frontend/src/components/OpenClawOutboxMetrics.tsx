@@ -829,6 +829,24 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     };
   }, [timeline]);
 
+  const deliveryAttemptSummary = useMemo(() => {
+    const attempts = timeline.filter(
+      (event) => event.source === 'callback_delivery' && event.event_type === 'attempt'
+    );
+    const attemptsTotal = attempts.length;
+    const attemptsSuccess = attempts.filter((event) => String(event.status || '').toLowerCase() === 'sent').length;
+    const attemptsFailed = Math.max(attemptsTotal - attemptsSuccess, 0);
+    const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+    const lastAttemptDetails = (lastAttempt?.details || {}) as Record<string, any>;
+    return {
+      attemptsTotal,
+      attemptsSuccess,
+      attemptsFailed,
+      lastHttpStatus: lastAttemptDetails.http_status ?? null,
+      lastError: String(lastAttemptDetails.error_text || '').trim() || null,
+    };
+  }, [timeline]);
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -902,6 +920,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           {timelineSummary.lastErrorText && (
             <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Последняя ошибка callback: {timelineSummary.lastErrorText}
+            </div>
+          )}
+          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <MetricCell label="Callback attempts" value={deliveryAttemptSummary.attemptsTotal} />
+            <MetricCell label="Attempts sent/failed" value={`${deliveryAttemptSummary.attemptsSuccess}/${deliveryAttemptSummary.attemptsFailed}`} />
+            <MetricCell label="Last attempt HTTP" value={deliveryAttemptSummary.lastHttpStatus ?? '—'} />
+          </div>
+          {deliveryAttemptSummary.lastError && (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Последняя ошибка попытки доставки: {deliveryAttemptSummary.lastError}
             </div>
           )}
 

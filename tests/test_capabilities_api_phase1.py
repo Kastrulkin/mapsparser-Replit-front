@@ -951,6 +951,8 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_support["billing"]["success"] is True
         assert user_support["timeline"]["success"] is True
         assert user_support["timeline"]["count"] >= 3
+        assert "delivery_stats" in user_support
+        assert int(user_support["delivery_stats"].get("attempts_total", 0)) >= 0
 
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
@@ -962,6 +964,7 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_support["action_id"] == action_id
         assert m2m_support["tenant_id"] == info["business_id"]
         assert m2m_support["timeline"]["count"] >= 3
+        assert "delivery_stats" in m2m_support
 
         r_m2m_wrong_tenant = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
