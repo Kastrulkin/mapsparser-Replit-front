@@ -77,6 +77,12 @@ if [[ -n "${action_id}" ]]; then
   echo
   fetch_json "action_callback_attempts" "${base_url}/api/openclaw/capabilities/actions/${action_id}/callback-attempts?tenant_id=${TENANT_ID}&limit=200&offset=0" || true
   echo
+  fetch_json "action_lifecycle_summary" "${base_url}/api/openclaw/capabilities/actions/${action_id}/lifecycle-summary?tenant_id=${TENANT_ID}&full=true" || true
+  echo
+  fetch_json "action_incident_snapshot" "${base_url}/api/openclaw/capabilities/actions/${action_id}/incident-snapshot?tenant_id=${TENANT_ID}" || true
+  echo
+  fetch_json "action_incident_report" "${base_url}/api/openclaw/capabilities/actions/${action_id}/incident-report?tenant_id=${TENANT_ID}" || true
+  echo
   fetch_json "action_support_package" "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=200" || true
   echo
 fi
