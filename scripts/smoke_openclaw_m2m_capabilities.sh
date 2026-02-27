@@ -490,6 +490,38 @@ then
   exit 1
 fi
 
+echo "[8.4/12] M2M action incident snapshot"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/incident-snapshot?tenant_id=${TENANT_ID}" > "${tmp_dir}/incident_snapshot.json"
+incident_snapshot_success="$(json_read "${tmp_dir}/incident_snapshot.json" "success")"
+if [[ "${incident_snapshot_success}" != "True" && "${incident_snapshot_success}" != "true" ]]; then
+  echo "Incident snapshot read failed"
+  cat "${tmp_dir}/incident_snapshot.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/incident_snapshot.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+overview = data.get("overview") or {}
+recent = data.get("recent_timeline")
+if not isinstance(overview, dict):
+    print("Incident snapshot overview is invalid")
+    sys.exit(1)
+if not isinstance(recent, list):
+    print("Incident snapshot recent_timeline is invalid")
+    sys.exit(1)
+if "diagnostics_bundle" not in data:
+    print("Incident snapshot has no diagnostics_bundle")
+    sys.exit(1)
+print("Incident snapshot OK")
+PY
+then
+  cat "${tmp_dir}/incident_snapshot.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

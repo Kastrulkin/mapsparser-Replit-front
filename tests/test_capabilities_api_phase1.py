@@ -1047,6 +1047,17 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_incident["success"] is True
         assert isinstance(user_incident.get("markdown_report"), str)
         assert "# OpenClaw Incident Report" in user_incident.get("markdown_report", "")
+        assert user_incident.get("incident_snapshot", {}).get("success") is True
+        r_user_incident_snapshot = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/incident-snapshot",
+            headers=_auth_headers(),
+        )
+        assert r_user_incident_snapshot.status_code == 200, r_user_incident_snapshot.get_json()
+        user_incident_snapshot = r_user_incident_snapshot.get_json()
+        assert user_incident_snapshot["success"] is True
+        assert user_incident_snapshot["action_id"] == action_id
+        assert user_incident_snapshot.get("overview", {}).get("timeline_events", 0) >= 0
+        assert isinstance(user_incident_snapshot.get("recent_timeline"), list)
 
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
@@ -1119,6 +1130,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_incident["success"] is True
         assert isinstance(m2m_incident.get("markdown_report"), str)
         assert "# OpenClaw Incident Report" in m2m_incident.get("markdown_report", "")
+        r_m2m_incident_snapshot = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/incident-snapshot?tenant_id={info['business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_incident_snapshot.status_code == 200, r_m2m_incident_snapshot.get_json()
+        m2m_incident_snapshot = r_m2m_incident_snapshot.get_json()
+        assert m2m_incident_snapshot["success"] is True
+        assert m2m_incident_snapshot["tenant_id"] == info["business_id"]
+        assert isinstance(m2m_incident_snapshot.get("recent_timeline"), list)
 
         r_user_attempts = info["client"].get(
             f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
@@ -1178,6 +1198,13 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant_incident.status_code in {400, 403, 404}
         wrong_incident = r_m2m_wrong_tenant_incident.get_json()
         assert wrong_incident["success"] is False
+        r_m2m_wrong_tenant_incident_snapshot = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/incident-snapshot?tenant_id={info['foreign_business_id']}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_incident_snapshot.status_code in {400, 403, 404}
+        wrong_incident_snapshot = r_m2m_wrong_tenant_incident_snapshot.get_json()
+        assert wrong_incident_snapshot["success"] is False
 
         r_m2m_wrong_tenant_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['foreign_business_id']}&limit=50&offset=0",

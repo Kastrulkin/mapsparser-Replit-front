@@ -29,6 +29,7 @@
 9. `GET /api/capabilities/actions/{action_id}/diagnostics-bundle?limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=&attempts_limit=&attempts_offset=&attempts_success=&attempts_event_type=&attempts_full=`
 9.1 `GET /api/capabilities/actions/{action_id}/lifecycle-summary?limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=`
 9.2 `GET /api/capabilities/actions/{action_id}/incident-report` (canonical markdown snapshot for support/export)
+9.3 `GET /api/capabilities/actions/{action_id}/incident-snapshot` (canonical structured JSON snapshot for support automation)
 9. `POST /api/openclaw/capabilities/execute` (M2M ingress from OpenClaw)
 10. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 11. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
@@ -38,6 +39,7 @@
 15. `GET /api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=&attempts_limit=&attempts_offset=&attempts_success=&attempts_event_type=&attempts_full=` (M2M full diagnostics bundle)
 15.1 `GET /api/openclaw/capabilities/actions/{action_id}/lifecycle-summary?tenant_id=&limit=&offset=&source=&event_type=&status=&search=&only_problematic=&full=` (M2M lifecycle aggregate)
 15.2 `GET /api/openclaw/capabilities/actions/{action_id}/incident-report?tenant_id=` (M2M canonical markdown snapshot for support/export)
+15.3 `GET /api/openclaw/capabilities/actions/{action_id}/incident-snapshot?tenant_id=` (M2M canonical structured JSON snapshot for support automation)
 16. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
 17. `GET /api/openclaw/capabilities/catalog` (M2M capability discovery)
 18. `GET /api/openclaw/capabilities/health?tenant_id=&window_minutes=` (M2M integration readiness)

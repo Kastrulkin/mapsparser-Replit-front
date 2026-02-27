@@ -1979,7 +1979,7 @@ class ActionOrchestrator:
         lines.append("")
         return "\n".join(lines)
 
-    def render_action_incident_report_markdown(
+    def get_action_incident_snapshot(
         self,
         action_id: str,
         user_data: Dict[str, Any],
@@ -2008,16 +2008,60 @@ class ActionOrchestrator:
         timeline = dict(support.get("timeline") or {})
         attempts_summary = dict(attempts.get("summary") or {})
         attempts_breakdown = list(attempts.get("event_type_breakdown") or [])
+        recent_timeline = list(timeline.get("events") or [])[-8:]
+
+        return {
+            "success": True,
+            "action_id": diagnostics.get("action_id"),
+            "tenant_id": diagnostics.get("tenant_id"),
+            "capability": diagnostics.get("capability"),
+            "trace_id": diagnostics.get("trace_id"),
+            "status": diagnostics.get("status"),
+            "generated_at": utcnow().isoformat(),
+            "overview": {
+                "timeline_events": int(lifecycle.get("filtered_events") or 0),
+                "timeline_total_events": int(lifecycle.get("total_events") or 0),
+                "unknown_events": int(lifecycle.get("unknown_events") or 0),
+                "callback_attempts_total": int(attempts_summary.get("total_attempts") or 0),
+                "callback_attempts_success": int(attempts_summary.get("success_attempts") or 0),
+                "callback_attempts_failed": int(attempts_summary.get("failed_attempts") or 0),
+            },
+            "lifecycle_summary": lifecycle,
+            "callback_attempts_summary": {
+                "summary": attempts_summary,
+                "event_type_breakdown": attempts_breakdown,
+            },
+            "recent_timeline": recent_timeline,
+            "diagnostics_bundle": diagnostics,
+        }
+
+    def render_action_incident_report_markdown(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        snapshot = self.get_action_incident_snapshot(action_id, user_data)
+        if not snapshot.get("success"):
+            return snapshot
+
+        diagnostics = dict(snapshot.get("diagnostics_bundle") or {})
+        lifecycle = dict(snapshot.get("lifecycle_summary") or {})
+        diagnostics_markdown = self.render_action_diagnostics_markdown(diagnostics)
+        lifecycle_summary = dict(lifecycle.get("lifecycle") or {})
+        callback_attempts_summary = dict(snapshot.get("callback_attempts_summary") or {})
+        attempts_summary = dict(callback_attempts_summary.get("summary") or {})
+        attempts_breakdown = list(callback_attempts_summary.get("event_type_breakdown") or [])
+        recent_timeline = list(snapshot.get("recent_timeline") or [])
 
         lines: List[str] = []
         lines.append("# OpenClaw Incident Report")
         lines.append("")
-        lines.append(f"- action_id: `{diagnostics.get('action_id')}`")
-        lines.append(f"- tenant_id: `{diagnostics.get('tenant_id')}`")
-        lines.append(f"- capability: `{diagnostics.get('capability')}`")
-        lines.append(f"- trace_id: `{diagnostics.get('trace_id')}`")
-        lines.append(f"- status: `{diagnostics.get('status')}`")
-        lines.append(f"- generated_at: {utcnow().isoformat()}")
+        lines.append(f"- action_id: `{snapshot.get('action_id')}`")
+        lines.append(f"- tenant_id: `{snapshot.get('tenant_id')}`")
+        lines.append(f"- capability: `{snapshot.get('capability')}`")
+        lines.append(f"- trace_id: `{snapshot.get('trace_id')}`")
+        lines.append(f"- status: `{snapshot.get('status')}`")
+        lines.append(f"- generated_at: {snapshot.get('generated_at')}")
         lines.append("")
         lines.append("## Lifecycle Summary")
         lines.append("")
@@ -2050,13 +2094,13 @@ class ActionOrchestrator:
         lines.append("")
         lines.append("## Recent Timeline")
         lines.append("")
-        for idx, event in enumerate(list(timeline.get("events") or [])[-8:], start=1):
+        for idx, event in enumerate(recent_timeline, start=1):
             lines.append(
                 f"{idx}. `{event.get('occurred_at')}` | "
                 f"`{event.get('source')}`:`{event.get('event_type')}` | "
                 f"`{event.get('status') or '-'}'"
             )
-        if not list(timeline.get("events") or []):
+        if not recent_timeline:
             lines.append("- no timeline events")
         lines.append("")
         lines.append("## Diagnostics Bundle")
@@ -2066,15 +2110,14 @@ class ActionOrchestrator:
 
         return {
             "success": True,
-            "action_id": diagnostics.get("action_id"),
-            "tenant_id": diagnostics.get("tenant_id"),
-            "capability": diagnostics.get("capability"),
-            "trace_id": diagnostics.get("trace_id"),
-            "status": diagnostics.get("status"),
-            "generated_at": utcnow().isoformat(),
+            "action_id": snapshot.get("action_id"),
+            "tenant_id": snapshot.get("tenant_id"),
+            "capability": snapshot.get("capability"),
+            "trace_id": snapshot.get("trace_id"),
+            "status": snapshot.get("status"),
+            "generated_at": snapshot.get("generated_at"),
             "markdown_report": "\n".join(lines),
-            "diagnostics_bundle": diagnostics,
-            "lifecycle_summary": lifecycle,
+            "incident_snapshot": snapshot,
         }
 
     def list_action_callback_attempts(

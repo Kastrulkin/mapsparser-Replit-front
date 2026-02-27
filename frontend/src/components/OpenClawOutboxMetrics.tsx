@@ -148,6 +148,32 @@ type ActionIncidentReportResponse = {
   error?: string;
 };
 
+type ActionIncidentSnapshotResponse = {
+  success: boolean;
+  action_id?: string;
+  tenant_id?: string;
+  capability?: string;
+  trace_id?: string;
+  status?: string;
+  generated_at?: string;
+  overview?: {
+    timeline_events?: number;
+    timeline_total_events?: number;
+    unknown_events?: number;
+    callback_attempts_total?: number;
+    callback_attempts_success?: number;
+    callback_attempts_failed?: number;
+  };
+  lifecycle_summary?: ActionLifecycleSummaryResponse;
+  callback_attempts_summary?: {
+    summary?: CallbackAttemptsResponse['summary'];
+    event_type_breakdown?: CallbackAttemptsResponse['event_type_breakdown'];
+  };
+  recent_timeline?: ActionTimelineEvent[];
+  diagnostics_bundle?: any;
+  error?: string;
+};
+
 type CallbackAttemptItem = {
   id: string;
   outbox_id: string;
@@ -705,6 +731,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [selectedActionId]);
 
+  const fetchIncidentSnapshot = useCallback(async () => {
+    if (!selectedActionId) return null;
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(
+      `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/incident-snapshot`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json: ActionIncidentSnapshotResponse = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [selectedActionId]);
+
   const exportDiagnosticsBundleJson = useCallback(async () => {
     if (!selectedActionId) return;
     try {
@@ -758,9 +798,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const exportSupportPackageJson = useCallback(async () => {
     if (!selectedActionId) return;
     try {
-      const json = await fetchDiagnosticsBundle('json');
+      const json = await fetchIncidentSnapshot();
       if (!json?.success) {
-        throw new Error('Support package недоступен');
+        throw new Error('Incident snapshot недоступен');
       }
       const payload = {
         ...json,
@@ -770,15 +810,15 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `action-support-package-${selectedActionId.slice(0, 8)}.json`;
+      link.download = `action-incident-snapshot-${selectedActionId.slice(0, 8)}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      setError(e?.message || 'Не удалось экспортировать support package');
+      setError(e?.message || 'Не удалось экспортировать incident snapshot');
     }
-  }, [selectedActionId, fetchDiagnosticsBundle]);
+  }, [selectedActionId, fetchIncidentSnapshot]);
 
   const buildIncidentReportMarkdown = useCallback(async () => {
     if (!selectedActionId) {
@@ -1681,7 +1721,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 disabled={!selectedActionId}
                 className="rounded-md border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-xs text-cyan-700 disabled:opacity-60"
               >
-                Экспорт support package JSON
+                Экспорт incident snapshot JSON
               </button>
               <button
                 type="button"
