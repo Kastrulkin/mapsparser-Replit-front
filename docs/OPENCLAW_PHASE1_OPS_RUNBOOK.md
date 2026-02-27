@@ -149,4 +149,20 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/deploy_openclaw_pha
 
 Параметры:
 - `SKIP_BUILD=1` — пропустить сборку и выполнить только restart + verify
+
+## 11) Final Acceptance (Phase 2)
+
+Итоговый приёмочный прогон в одном запуске:
+
+```bash
+cd /opt/seo-app
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/acceptance_openclaw_phase2.sh
+```
+
+Скрипт проверяет:
+- runtime health (`HEAD /`)
+- `capabilities` smoke
+- `outbox` smoke
+- `billing reconciliation` smoke
+- outbox alerts + `capabilities/health.ready=true`
 ```

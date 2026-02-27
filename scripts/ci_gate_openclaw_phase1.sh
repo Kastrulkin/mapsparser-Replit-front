@@ -18,6 +18,7 @@ bash -n scripts/smoke_openclaw_m2m_outbox.sh
 bash -n scripts/smoke_openclaw_m2m_reconciliation.sh
 bash -n scripts/check_openclaw_outbox_alerts.sh
 bash -n scripts/openclaw_ops_smoke_recover.sh
+bash -n scripts/acceptance_openclaw_phase2.sh
 
 if [[ -n "${CI:-}" && "${OPENCLAW_CI_STRICT:-1}" == "1" ]]; then
   echo "[CI gate] CI mode: M2M smoke is mandatory"
@@ -34,7 +35,7 @@ if [[ -n "${CI:-}" && "${OPENCLAW_CI_STRICT:-1}" == "1" ]]; then
   BASE_URL="${BASE_URL:-http://localhost:8000}" \
     OPENCLAW_TOKEN="${OPENCLAW_TOKEN}" \
     TENANT_ID="${TENANT_ID}" \
-    ./scripts/smoke_openclaw_m2m_reconciliation.sh
+    ./scripts/acceptance_openclaw_phase2.sh
 elif [[ -n "${OPENCLAW_TOKEN:-}" && -n "${TENANT_ID:-}" ]]; then
   echo "[CI gate] local mode: running optional M2M smoke"
   BASE_URL="${BASE_URL:-http://localhost:8000}" \
@@ -48,7 +49,7 @@ elif [[ -n "${OPENCLAW_TOKEN:-}" && -n "${TENANT_ID:-}" ]]; then
   BASE_URL="${BASE_URL:-http://localhost:8000}" \
     OPENCLAW_TOKEN="${OPENCLAW_TOKEN}" \
     TENANT_ID="${TENANT_ID}" \
-    ./scripts/smoke_openclaw_m2m_reconciliation.sh
+    ./scripts/acceptance_openclaw_phase2.sh
 else
   echo "[CI gate] local mode: OPENCLAW_TOKEN/TENANT_ID not set, skipping M2M smoke"
 fi
