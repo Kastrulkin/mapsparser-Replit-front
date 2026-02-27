@@ -1654,7 +1654,8 @@ class ActionOrchestrator:
                 is_final = status in {"completed", "failed", "rejected", "expired"}
                 if is_final and reserve_total != (settle_total + release_total):
                     issue_codes.append("reserve_balance_mismatch")
-                if status == "completed" and reserve_total > 0 and settle_total == 0:
+                # "missing_settle" is only actionable when reserved tokens were not fully released.
+                if status == "completed" and reserve_total > release_total and settle_total == 0:
                     issue_codes.append("missing_settle")
                 if expected_tokens > 0 and settle_total != expected_tokens:
                     issue_codes.append("settle_tokens_mismatch")
