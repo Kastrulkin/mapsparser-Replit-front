@@ -84,6 +84,11 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/diagnose_openclaw_integration.sh
 ```
 
+Optional deep action diagnostics:
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scripts/diagnose_openclaw_integration.sh
+```
+
 3. If callback delivery stalled:
 - replay `dlq/retry` to pending
 - dispatch outbox

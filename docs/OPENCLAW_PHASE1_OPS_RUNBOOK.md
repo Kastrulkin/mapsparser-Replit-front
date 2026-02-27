@@ -44,6 +44,11 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/check_openclaw_outb
 OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/diagnose_openclaw_integration.sh
 ```
 
+Для детальной диагностики конкретного action (status + billing + timeline):
+```bash
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scripts/diagnose_openclaw_integration.sh
+```
+
 Скрипт собирает:
 - runtime статус контейнеров и свежие логи `app/worker`
 - `capabilities/health`

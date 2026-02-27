@@ -10,11 +10,15 @@ base_url="${BASE_URL:-http://localhost:8000}"
 window="${WINDOW_MINUTES:-120}"
 log_window="${LOG_WINDOW:-15m}"
 limit="${LIMIT:-20}"
+action_id="${ACTION_ID:-}"
 
 echo "== OpenClaw/LocalOS diagnostics =="
 echo "cwd: $(pwd)"
 echo "base_url: ${base_url}"
 echo "window_minutes: ${window}"
+if [[ -n "${action_id}" ]]; then
+  echo "action_id: ${action_id}"
+fi
 echo "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
 
@@ -64,6 +68,14 @@ fetch_json "outbox" "${base_url}/api/openclaw/callbacks/outbox?tenant_id=${TENAN
 echo
 fetch_json "billing_reconcile" "${base_url}/api/openclaw/capabilities/billing/reconcile?tenant_id=${TENANT_ID}&window_minutes=${window}&limit=${limit}" || true
 echo
+if [[ -n "${action_id}" ]]; then
+  fetch_json "action_status" "${base_url}/api/openclaw/capabilities/actions/${action_id}?tenant_id=${TENANT_ID}" || true
+  echo
+  fetch_json "action_billing" "${base_url}/api/openclaw/capabilities/actions/${action_id}/billing?tenant_id=${TENANT_ID}" || true
+  echo
+  fetch_json "action_timeline" "${base_url}/api/openclaw/capabilities/actions/${action_id}/timeline?tenant_id=${TENANT_ID}&limit=200" || true
+  echo
+fi
 
 echo "== Result =="
 python3 - "${tmp_dir}/health.json" "${tmp_dir}/callbacks_metrics.json" "${tmp_dir}/billing_reconcile.json" <<'PY'
