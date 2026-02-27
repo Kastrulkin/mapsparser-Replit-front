@@ -4597,8 +4597,15 @@ def openclaw_capabilities_action_callback_attempts(action_id):
 
     limit = request.args.get("limit", 100)
     offset = request.args.get("offset", 0)
+    success_raw = str(request.args.get("success", "")).strip().lower()
+    success = None
+    if success_raw in {"1", "true", "yes", "on"}:
+        success = True
+    elif success_raw in {"0", "false", "no", "off"}:
+        success = False
+    event_type = str(request.args.get("event_type", "")).strip() or None
     result = PHASE1_ACTION_ORCHESTRATOR.list_action_callback_attempts(
-        action_id, service_user, limit=limit, offset=offset
+        action_id, service_user, limit=limit, offset=offset, success=success, event_type=event_type
     )
     if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
         return jsonify({"success": False, "error": "tenant mismatch"}), 403
@@ -5112,8 +5119,15 @@ def capabilities_action_callback_attempts(action_id):
 
     limit = request.args.get("limit", 100)
     offset = request.args.get("offset", 0)
+    success_raw = str(request.args.get("success", "")).strip().lower()
+    success = None
+    if success_raw in {"1", "true", "yes", "on"}:
+        success = True
+    elif success_raw in {"0", "false", "no", "off"}:
+        success = False
+    event_type = str(request.args.get("event_type", "")).strip() or None
     result = PHASE1_ACTION_ORCHESTRATOR.list_action_callback_attempts(
-        action_id, user_data, limit=limit, offset=offset
+        action_id, user_data, limit=limit, offset=offset, success=success, event_type=event_type
     )
     return jsonify(result), int(result.pop("http_code", 200))
 

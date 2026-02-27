@@ -1304,6 +1304,26 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
         assert total_attempts >= 2
         assert ok_count >= 1
         assert fail_count >= 1
+
+        r_attempts_failed = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0&success=false",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_attempts_failed.status_code == 200, r_attempts_failed.get_json()
+        failed_body = r_attempts_failed.get_json()
+        assert failed_body["success"] is True
+        assert failed_body["total"] >= 1
+        assert all(not bool(item.get("success")) for item in failed_body.get("items", []))
+
+        r_attempts_sent = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0&success=true",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_attempts_sent.status_code == 200, r_attempts_sent.get_json()
+        sent_body = r_attempts_sent.get_json()
+        assert sent_body["success"] is True
+        assert sent_body["total"] >= 1
+        assert all(bool(item.get("success")) for item in sent_body.get("items", []))
     finally:
         if previous is None:
             os.environ.pop(token_name, None)

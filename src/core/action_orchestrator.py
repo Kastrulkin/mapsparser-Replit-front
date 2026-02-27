@@ -1574,6 +1574,8 @@ class ActionOrchestrator:
         *,
         limit: int = 100,
         offset: int = 0,
+        success: Optional[bool] = None,
+        event_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -1600,6 +1602,16 @@ class ActionOrchestrator:
             if str(owner_id) != str(user_data.get("user_id")) and not user_data.get("is_superadmin"):
                 return {"success": False, "error": "forbidden", "http_code": 403}
 
+            where_parts = ["action_id = %s"]
+            params: List[Any] = [action_id]
+            if success is not None:
+                where_parts.append("success = %s")
+                params.append(bool(success))
+            if event_type:
+                where_parts.append("event_type = %s")
+                params.append(str(event_type))
+            where_sql = " AND ".join(where_parts)
+
             cursor.execute(
                 """
                 SELECT
@@ -1616,11 +1628,11 @@ class ActionOrchestrator:
                     response_excerpt,
                     created_at
                 FROM action_callback_attempts
-                WHERE action_id = %s
+                WHERE """ + where_sql + """
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                (action_id, limit, offset),
+                tuple(params + [limit, offset]),
             )
             rows = cursor.fetchall() or []
 
@@ -1628,9 +1640,9 @@ class ActionOrchestrator:
                 """
                 SELECT COUNT(*)
                 FROM action_callback_attempts
-                WHERE action_id = %s
+                WHERE """ + where_sql + """
                 """,
-                (action_id,),
+                tuple(params),
             )
             total_row = cursor.fetchone()
             total = int(self._row_value(total_row, 0, "count", 0) or 0)
@@ -1663,6 +1675,10 @@ class ActionOrchestrator:
                 "limit": limit,
                 "offset": offset,
                 "total": total,
+                "filters": {
+                    "success": success,
+                    "event_type": event_type,
+                },
             }
         finally:
             db.close()
