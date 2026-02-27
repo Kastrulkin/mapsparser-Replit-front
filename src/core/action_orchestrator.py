@@ -337,20 +337,21 @@ class ActionOrchestrator:
         except Exception:
             pass
 
-    def dispatch_callback_outbox(self, batch_size: int = 50) -> Dict[str, Any]:
+    def dispatch_callback_outbox(self, batch_size: int = 50, tenant_id: Optional[str] = None) -> Dict[str, Any]:
         db = DatabaseManager()
         cursor = db.conn.cursor()
         try:
             self.ensure_tables(cursor)
             batch_size = max(1, min(int(batch_size or 50), 500))
 
-            cursor.execute(
-                """
+            tenant_clause = "AND tenant_id = %s" if tenant_id else ""
+            query = f"""
                 WITH picked AS (
                     SELECT id
                     FROM action_callback_outbox
                     WHERE status IN ('pending', 'retry')
                       AND next_attempt_at <= CURRENT_TIMESTAMP
+                      {tenant_clause}
                     ORDER BY created_at ASC
                     LIMIT %s
                     FOR UPDATE SKIP LOCKED
@@ -360,9 +361,11 @@ class ActionOrchestrator:
                 FROM picked
                 WHERE o.id = picked.id
                 RETURNING o.id, o.action_id, o.tenant_id, o.callback_url, o.event_type, o.payload_json, o.attempts, o.max_attempts, o.dedupe_key
-                """,
-                (batch_size,),
-            )
+            """
+            params = [batch_size]
+            if tenant_id:
+                params = [str(tenant_id), batch_size]
+            cursor.execute(query, tuple(params))
             rows = cursor.fetchall() or []
             db.conn.commit()
 
@@ -442,15 +445,53 @@ class ActionOrchestrator:
                 finally:
                     db2.close()
 
-            return {
+            payload = {
                 "success": True,
                 "picked": len(rows),
                 "sent": sent,
                 "retried": retried,
                 "dlq": dlq,
             }
+            if tenant_id:
+                payload["tenant_id"] = str(tenant_id)
+            return payload
         finally:
             db.close()
+
+    def dispatch_callback_outbox_for_tenant(
+        self,
+        user_data: Dict[str, Any],
+        *,
+        tenant_id: str,
+        batch_size: int = 50,
+    ) -> Dict[str, Any]:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            self.ensure_tables(cursor)
+            is_superadmin = bool(user_data.get("is_superadmin"))
+            current_user = str(user_data.get("user_id") or "")
+
+            cursor.execute(
+                """
+                SELECT owner_id
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (str(tenant_id),),
+            )
+            owner_row = cursor.fetchone()
+            if not owner_row:
+                return {"success": False, "error": "tenant_id not found", "http_code": 404}
+            owner_id = self._row_value(owner_row, 0, "owner_id")
+            if str(owner_id) != current_user and not is_superadmin:
+                return {"success": False, "error": "forbidden", "http_code": 403}
+            db.conn.commit()
+        finally:
+            db.close()
+
+        return self.dispatch_callback_outbox(batch_size=batch_size, tenant_id=str(tenant_id))
 
     def _is_expired(self, expires_at: Any) -> bool:
         if not expires_at:

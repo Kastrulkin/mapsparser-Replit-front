@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, RefreshCcw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCcw, Wrench } from 'lucide-react';
 
 type HealthResponse = {
   success: boolean;
@@ -77,6 +77,8 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
   const [billing, setBilling] = useState<BillingReconcileResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -128,6 +130,59 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     load();
   }, [load]);
 
+  const recoverDelivery = useCallback(async () => {
+    if (!businessId) return;
+    setRecovering(true);
+    setRecoverMessage(null);
+    setError(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const replayRes = await fetch('/api/capabilities/callbacks/outbox/replay', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenant_id: businessId,
+          include_retry: true,
+          limit: 200,
+        }),
+      });
+      const replayJson = await replayRes.json();
+      if (!replayRes.ok || !replayJson?.success) {
+        throw new Error(replayJson?.error || `Replay failed (${replayRes.status})`);
+      }
+
+      const dispatchRes = await fetch('/api/capabilities/callbacks/dispatch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenant_id: businessId,
+          batch_size: 200,
+        }),
+      });
+      const dispatchJson = await dispatchRes.json();
+      if (!dispatchRes.ok || !dispatchJson?.success) {
+        throw new Error(dispatchJson?.error || `Dispatch failed (${dispatchRes.status})`);
+      }
+
+      const replayedCount = Number(replayJson?.replayed_count || 0);
+      const sent = Number(dispatchJson?.sent || 0);
+      const retried = Number(dispatchJson?.retried || 0);
+      const dlq = Number(dispatchJson?.dlq || 0);
+      setRecoverMessage(`Recovery выполнен: replay=${replayedCount}, sent=${sent}, retried=${retried}, dlq=${dlq}`);
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось выполнить recovery callback-доставки');
+    } finally {
+      setRecovering(false);
+    }
+  }, [businessId, load]);
+
   const metrics = data?.metrics;
   const checks = data?.checks;
   const alerts = data?.alerts || [];
@@ -147,21 +202,37 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           <div className="text-sm font-semibold text-gray-900">Связь ИИ-агентов с системой</div>
           <div className="text-xs text-gray-500">Статус интеграции OpenClaw ↔ LocalOS и доставка callback-событий</div>
         </div>
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-        >
-          <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Обновить
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={recoverDelivery}
+            disabled={loading || recovering || !businessId}
+            className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+          >
+            <Wrench className={`h-3.5 w-3.5 ${recovering ? 'animate-pulse' : ''}`} />
+            {recovering ? 'Recovery...' : 'Восстановить доставку'}
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading || recovering}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </button>
+        </div>
       </div>
 
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       ) : (
         <>
+          {recoverMessage && (
+            <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              {recoverMessage}
+            </div>
+          )}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium ${statusClass}`}>
               {isReady ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}

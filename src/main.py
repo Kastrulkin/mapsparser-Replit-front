@@ -4815,6 +4815,33 @@ def capabilities_callbacks_metrics():
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/capabilities/callbacks/dispatch', methods=['POST', 'OPTIONS'])
+def capabilities_callbacks_dispatch():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    batch_size = data.get("batch_size", 50)
+    result = PHASE1_ACTION_ORCHESTRATOR.dispatch_callback_outbox_for_tenant(
+        user_data,
+        tenant_id=str(tenant_id),
+        batch_size=batch_size,
+    )
+    return jsonify(result), int(result.pop("http_code", 200))
+
+
 @app.route('/api/capabilities/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
 def capabilities_callbacks_outbox_replay():
     if request.method == 'OPTIONS':

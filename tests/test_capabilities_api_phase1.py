@@ -1338,6 +1338,74 @@ def test_openclaw_callbacks_metrics_m2m_and_user(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+    import core.action_orchestrator as orchestrator_mod
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    captured = {"urls": []}
+
+    class _OkResponse:
+        status_code = 200
+
+    def _capture_post(url, data=None, timeout=None, headers=None):
+        captured["urls"].append(url)
+        return _OkResponse()
+
+    monkeypatch.setattr(orchestrator_mod.requests, "post", _capture_post)
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        orch = main_mod.PHASE1_ACTION_ORCHESTRATOR
+        orch.ensure_tables(cur)
+        own_action = str(uuid.uuid4())
+        foreign_action = str(uuid.uuid4())
+        orch._enqueue_callback(
+            cur,
+            action_id=own_action,
+            tenant_id=info["business_id"],
+            callback_url="https://cb.local/own",
+            event_type="completed",
+            payload={"own": True},
+            dedupe_key=f"{own_action}:completed",
+        )
+        orch._enqueue_callback(
+            cur,
+            action_id=foreign_action,
+            tenant_id=info["foreign_business_id"],
+            callback_url="https://cb.local/foreign",
+            event_type="completed",
+            payload={"foreign": True},
+            dedupe_key=f"{foreign_action}:completed",
+        )
+    conn.commit()
+    conn.close()
+
+    r_ok = info["client"].post(
+        "/api/capabilities/callbacks/dispatch",
+        json={"tenant_id": info["business_id"], "batch_size": 10},
+        headers=_auth_headers(),
+    )
+    assert r_ok.status_code == 200, r_ok.get_json()
+    ok_body = r_ok.get_json()
+    assert ok_body["success"] is True
+    assert ok_body["tenant_id"] == info["business_id"]
+    assert ok_body["sent"] >= 1
+    assert "https://cb.local/own" in captured["urls"]
+    assert "https://cb.local/foreign" not in captured["urls"]
+
+    r_forbidden = info["client"].post(
+        "/api/capabilities/callbacks/dispatch",
+        json={"tenant_id": info["foreign_business_id"], "batch_size": 10},
+        headers=_auth_headers(),
+    )
+    assert r_forbidden.status_code in {400, 403, 404}
+    forbidden_body = r_forbidden.get_json()
+    assert forbidden_body["success"] is False
+    assert forbidden_body.get("error") in {"forbidden", "tenant_id is required", "tenant_id not found"}
+
+
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
@@ -1355,10 +1423,10 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
     class _OkResponse:
         status_code = 200
 
-    def _capture_post(url, json=None, timeout=None, headers=None):
+    def _capture_post(url, **kwargs):
         captured["url"] = url
-        captured["json"] = json
-        captured["headers"] = headers or {}
+        captured["kwargs"] = kwargs
+        captured["headers"] = kwargs.get("headers") or {}
         return _OkResponse()
 
     try:
@@ -1418,7 +1486,10 @@ def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monke
         assert dedupe_key == f"{action_id}:completed"
         assert signature
 
-        payload = captured.get("json") or {}
+        raw_data = captured.get("kwargs", {}).get("data", b"")
+        if isinstance(raw_data, bytes):
+            raw_data = raw_data.decode("utf-8")
+        payload = json.loads(raw_data or "{}")
         canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         expected = hmac.new(
             b"phase1-sign-secret",

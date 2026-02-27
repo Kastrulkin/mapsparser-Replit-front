@@ -159,6 +159,10 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/openclaw_ops_smoke_
 - `RECOVERY_ATTEMPTS` (default `2`) — число попыток replay+dispatch
 - `STRICT` (default `1`) — если алерты остались после recovery, скрипт завершится с `exit 2`
 
+UI recovery:
+- `Настройки -> Integrations -> Связь ИИ-агентов с системой -> Восстановить доставку`
+- делает `replay (include_retry=true)` + tenant-scoped `dispatch` и обновляет метрики.
+
 ## 10) Reproducible Server Deploy (Phase 2)
 
 Единый сценарий деплоя app/worker + верификация + OpenClaw smoke/recovery:
