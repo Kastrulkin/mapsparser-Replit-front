@@ -562,6 +562,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
   const copyFullSupportPackage = useCallback(async () => {
     if (!selectedActionId || !businessId) return;
+    let serverSupportPackage: any = null;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `/api/capabilities/actions/${encodeURIComponent(selectedActionId)}/support-package?limit=200`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json = await response.json();
+      if (response.ok && json?.success) {
+        serverSupportPackage = json;
+      }
+    } catch (_e) {
+      // Fallback to local snapshots/timeline below.
+    }
     const problematic = filteredTimeline.filter((event) => isProblematicTimelineEvent(event));
     const diagLines: string[] = [
       `action_id: ${selectedActionId}`,
@@ -647,6 +661,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
 
     const report = [
       '# OpenClaw Full Support Package',
+      '',
+      '## Server support package',
+      serverSupportPackage ? JSON.stringify(serverSupportPackage, null, 2) : 'not available (using local snapshots)',
       '',
       '## Diagnostics (detailed)',
       ...diagLines,

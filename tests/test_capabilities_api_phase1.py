@@ -939,6 +939,30 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_timeline["action_id"] == action_id
         assert m2m_timeline["count"] >= 3
 
+        r_user_support = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/support-package?limit=200",
+            headers=_auth_headers(),
+        )
+        assert r_user_support.status_code == 200, r_user_support.get_json()
+        user_support = r_user_support.get_json()
+        assert user_support["success"] is True
+        assert user_support["action_id"] == action_id
+        assert user_support["action"]["success"] is True
+        assert user_support["billing"]["success"] is True
+        assert user_support["timeline"]["success"] is True
+        assert user_support["timeline"]["count"] >= 3
+
+        r_m2m_support = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_support.status_code == 200, r_m2m_support.get_json()
+        m2m_support = r_m2m_support.get_json()
+        assert m2m_support["success"] is True
+        assert m2m_support["action_id"] == action_id
+        assert m2m_support["tenant_id"] == info["business_id"]
+        assert m2m_support["timeline"]["count"] >= 3
+
         r_m2m_wrong_tenant = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/timeline?tenant_id={info['foreign_business_id']}&limit=200",
             headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
@@ -946,6 +970,14 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert r_m2m_wrong_tenant.status_code in {400, 403, 404}
         wrong = r_m2m_wrong_tenant.get_json()
         assert wrong["success"] is False
+
+        r_m2m_wrong_tenant_support = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['foreign_business_id']}&limit=200",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_wrong_tenant_support.status_code in {400, 403, 404}
+        wrong_support = r_m2m_wrong_tenant_support.get_json()
+        assert wrong_support["success"] is False
     finally:
         if original_reviews_handler is not None:
             main_mod.PHASE1_ACTION_ORCHESTRATOR.handlers["reviews.reply"] = original_reviews_handler

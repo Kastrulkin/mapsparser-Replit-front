@@ -229,7 +229,42 @@ then
   exit 1
 fi
 
-echo "[7/10] M2M action billing"
+echo "[7/11] M2M action support package"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/support-package?tenant_id=${TENANT_ID}&limit=200" > "${tmp_dir}/support_package.json"
+support_success="$(json_read "${tmp_dir}/support_package.json" "success")"
+if [[ "${support_success}" != "True" && "${support_success}" != "true" ]]; then
+  echo "Support package read failed"
+  cat "${tmp_dir}/support_package.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/support_package.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+if not data.get("action", {}).get("success"):
+    print("Support package.action is not successful")
+    sys.exit(1)
+if not data.get("billing", {}).get("success"):
+    print("Support package.billing is not successful")
+    sys.exit(1)
+timeline = data.get("timeline", {})
+if not timeline.get("success"):
+    print("Support package.timeline is not successful")
+    sys.exit(1)
+events = timeline.get("events")
+if not isinstance(events, list) or len(events) == 0:
+    print("Support package.timeline has no events")
+    sys.exit(1)
+print("Support package OK")
+PY
+then
+  cat "${tmp_dir}/support_package.json"
+  exit 1
+fi
+
+echo "[8/11] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
   "${base_url}/api/openclaw/capabilities/actions/${action_id}/billing?tenant_id=${TENANT_ID}" > "${tmp_dir}/billing.json"

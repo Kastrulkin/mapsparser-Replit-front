@@ -1438,6 +1438,37 @@ class ActionOrchestrator:
         finally:
             db.close()
 
+    def get_action_support_package(
+        self,
+        action_id: str,
+        user_data: Dict[str, Any],
+        *,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        action_result = self.get_action(action_id, user_data)
+        if not action_result.get("success"):
+            return action_result
+
+        billing_result = self.get_action_billing(action_id, user_data)
+        if not billing_result.get("success"):
+            return billing_result
+
+        timeline_result = self.get_action_timeline(action_id, user_data, limit=limit)
+        if not timeline_result.get("success"):
+            return timeline_result
+
+        return {
+            "success": True,
+            "action_id": action_result.get("action_id"),
+            "tenant_id": action_result.get("tenant_id"),
+            "capability": action_result.get("capability"),
+            "trace_id": action_result.get("trace_id"),
+            "status": action_result.get("status"),
+            "action": action_result,
+            "billing": billing_result,
+            "timeline": timeline_result,
+        }
+
     def list_callback_outbox(
         self,
         user_data: Dict[str, Any],
