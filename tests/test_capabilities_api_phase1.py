@@ -1018,6 +1018,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_bundle.get("callback_attempts", {}).get("success") is True
         assert user_bundle.get("filters", {}).get("timeline", {}).get("full") is True
         assert user_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
+        r_user_bundle_md = info["client"].get(
+            f"/api/capabilities/actions/{action_id}/diagnostics-bundle?limit=2&offset=0&full=true&attempts_full=true&format=markdown",
+            headers=_auth_headers(),
+        )
+        assert r_user_bundle_md.status_code == 200, r_user_bundle_md.get_json()
+        user_bundle_md = r_user_bundle_md.get_json()
+        assert user_bundle_md["success"] is True
+        assert isinstance(user_bundle_md.get("markdown_report"), str)
+        assert "# OpenClaw Action Diagnostics Bundle" in user_bundle_md.get("markdown_report", "")
 
         r_m2m_support = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/support-package?tenant_id={info['business_id']}&limit=200",
@@ -1063,6 +1072,15 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert m2m_bundle.get("callback_attempts", {}).get("success") is True
         assert m2m_bundle.get("filters", {}).get("timeline", {}).get("full") is True
         assert m2m_bundle.get("filters", {}).get("callback_attempts", {}).get("full") is True
+        r_m2m_bundle_md = info["client"].get(
+            f"/api/openclaw/capabilities/actions/{action_id}/diagnostics-bundle?tenant_id={info['business_id']}&limit=2&offset=0&full=true&attempts_full=true&format=markdown",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r_m2m_bundle_md.status_code == 200, r_m2m_bundle_md.get_json()
+        m2m_bundle_md = r_m2m_bundle_md.get_json()
+        assert m2m_bundle_md["success"] is True
+        assert isinstance(m2m_bundle_md.get("markdown_report"), str)
+        assert "# OpenClaw Action Diagnostics Bundle" in m2m_bundle_md.get("markdown_report", "")
 
         r_user_attempts = info["client"].get(
             f"/api/capabilities/actions/{action_id}/callback-attempts?limit=50&offset=0",
