@@ -1647,6 +1647,30 @@ class ActionOrchestrator:
             total_row = cursor.fetchone()
             total = int(self._row_value(total_row, 0, "count", 0) or 0)
 
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_attempts,
+                    SUM(CASE WHEN success THEN 1 ELSE 0 END) AS success_attempts,
+                    SUM(CASE WHEN success THEN 0 ELSE 1 END) AS failed_attempts,
+                    AVG(duration_ms) AS avg_duration_ms,
+                    MAX(CASE WHEN success THEN created_at ELSE NULL END) AS last_success_at,
+                    MAX(CASE WHEN NOT success THEN created_at ELSE NULL END) AS last_failed_at
+                FROM action_callback_attempts
+                WHERE """ + where_sql + """
+                """,
+                tuple(params),
+            )
+            summary_row = cursor.fetchone()
+            summary = {
+                "total_attempts": int(self._row_value(summary_row, 0, "total_attempts", 0) or 0),
+                "success_attempts": int(self._row_value(summary_row, 1, "success_attempts", 0) or 0),
+                "failed_attempts": int(self._row_value(summary_row, 2, "failed_attempts", 0) or 0),
+                "avg_duration_ms": int(float(self._row_value(summary_row, 3, "avg_duration_ms", 0) or 0)),
+                "last_success_at": str(self._row_value(summary_row, 4, "last_success_at") or ""),
+                "last_failed_at": str(self._row_value(summary_row, 5, "last_failed_at") or ""),
+            }
+
             items = []
             for row in rows:
                 items.append(
@@ -1679,6 +1703,7 @@ class ActionOrchestrator:
                     "success": success,
                     "event_type": event_type,
                 },
+                "summary": summary,
             }
         finally:
             db.close()

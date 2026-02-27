@@ -975,6 +975,7 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
         assert user_attempts["success"] is True
         assert user_attempts["action_id"] == action_id
         assert "items" in user_attempts
+        assert "summary" in user_attempts
 
         r_m2m_attempts = info["client"].get(
             f"/api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id={info['business_id']}&limit=50&offset=0",
@@ -1313,6 +1314,7 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
         failed_body = r_attempts_failed.get_json()
         assert failed_body["success"] is True
         assert failed_body["total"] >= 1
+        assert int((failed_body.get("summary") or {}).get("failed_attempts", 0)) >= 1
         assert all(not bool(item.get("success")) for item in failed_body.get("items", []))
 
         r_attempts_sent = info["client"].get(
@@ -1323,6 +1325,7 @@ def test_openclaw_callback_outbox_retry_then_sent(capabilities_client, monkeypat
         sent_body = r_attempts_sent.get_json()
         assert sent_body["success"] is True
         assert sent_body["total"] >= 1
+        assert int((sent_body.get("summary") or {}).get("success_attempts", 0)) >= 1
         assert all(bool(item.get("success")) for item in sent_body.get("items", []))
     finally:
         if previous is None:

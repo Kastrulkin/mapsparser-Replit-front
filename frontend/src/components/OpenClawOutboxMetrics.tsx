@@ -141,6 +141,14 @@ type CallbackAttemptsResponse = {
   limit?: number;
   offset?: number;
   total?: number;
+  summary?: {
+    total_attempts?: number;
+    success_attempts?: number;
+    failed_attempts?: number;
+    avg_duration_ms?: number;
+    last_success_at?: string;
+    last_failed_at?: string;
+  };
   error?: string;
 };
 
@@ -165,6 +173,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [actionBillingSnapshot, setActionBillingSnapshot] = useState<ActionBillingResponse | null>(null);
   const [actionCallbackAttempts, setActionCallbackAttempts] = useState<CallbackAttemptItem[]>([]);
   const [actionCallbackAttemptsTotal, setActionCallbackAttemptsTotal] = useState(0);
+  const [actionCallbackAttemptsSummary, setActionCallbackAttemptsSummary] = useState<{
+    total_attempts: number;
+    success_attempts: number;
+    failed_attempts: number;
+    avg_duration_ms: number;
+    last_success_at: string;
+    last_failed_at: string;
+  } | null>(null);
   const [actionAttemptsLoading, setActionAttemptsLoading] = useState(false);
   const [attemptsSuccessFilter, setAttemptsSuccessFilter] = useState<'all' | 'true' | 'false'>('all');
   const [attemptsEventTypeFilter, setAttemptsEventTypeFilter] = useState<string>('all');
@@ -320,6 +336,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     if (!businessId || !selectedActionId) {
       setActionCallbackAttempts([]);
       setActionCallbackAttemptsTotal(0);
+      setActionCallbackAttemptsSummary(null);
       return;
     }
     setActionAttemptsLoading(true);
@@ -344,10 +361,19 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       }
       setActionCallbackAttempts((json.items || []).slice(0, 20));
       setActionCallbackAttemptsTotal(Number(json.total || 0));
+      setActionCallbackAttemptsSummary({
+        total_attempts: Number(json.summary?.total_attempts || 0),
+        success_attempts: Number(json.summary?.success_attempts || 0),
+        failed_attempts: Number(json.summary?.failed_attempts || 0),
+        avg_duration_ms: Number(json.summary?.avg_duration_ms || 0),
+        last_success_at: String(json.summary?.last_success_at || ''),
+        last_failed_at: String(json.summary?.last_failed_at || ''),
+      });
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить callback attempts action');
       setActionCallbackAttempts([]);
       setActionCallbackAttemptsTotal(0);
+      setActionCallbackAttemptsSummary(null);
     } finally {
       setActionAttemptsLoading(false);
     }
@@ -1319,6 +1345,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               <div className="mb-1 font-semibold text-gray-800">
                 Callback attempts ({actionCallbackAttempts.length}/{actionCallbackAttemptsTotal})
               </div>
+              <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                <MetricCell label="Attempts total" value={actionCallbackAttemptsSummary?.total_attempts ?? 0} />
+                <MetricCell label="Attempts sent/failed" value={`${actionCallbackAttemptsSummary?.success_attempts ?? 0}/${actionCallbackAttemptsSummary?.failed_attempts ?? 0}`} />
+                <MetricCell label="Avg duration (ms)" value={actionCallbackAttemptsSummary?.avg_duration_ms ?? 0} />
+              </div>
+              {(actionCallbackAttemptsSummary?.last_success_at || actionCallbackAttemptsSummary?.last_failed_at) && (
+                <div className="mb-2 text-[11px] text-gray-500">
+                  last_success: {actionCallbackAttemptsSummary?.last_success_at || '—'} · last_failed: {actionCallbackAttemptsSummary?.last_failed_at || '—'}
+                </div>
+              )}
               <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                 <input
                   value={attemptsSearch}

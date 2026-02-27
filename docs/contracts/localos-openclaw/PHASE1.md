@@ -30,7 +30,7 @@
 9. `GET /api/openclaw/capabilities/actions/{action_id}` (M2M read status)
 10. `GET /api/openclaw/capabilities/actions/{action_id}/billing` (M2M read billing)
 11. `GET /api/openclaw/capabilities/actions/{action_id}/timeline` (M2M read timeline)
-12. `GET /api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id=&limit=&offset=&success=&event_type=` (M2M callback delivery attempts)
+12. `GET /api/openclaw/capabilities/actions/{action_id}/callback-attempts?tenant_id=&limit=&offset=&success=&event_type=` (M2M callback delivery attempts, includes `summary`)
 13. `GET /api/openclaw/capabilities/actions/{action_id}/support-package` (M2M aggregated diagnostics)
 14. `GET /api/openclaw/capabilities/actions?tenant_id=&status=&limit=&offset=` (M2M read list)
 14. `GET /api/openclaw/capabilities/catalog` (M2M capability discovery)
