@@ -42,6 +42,20 @@ Expected:
 - reconciliation smoke -> pass
 - outbox alerts check -> pass
 
+## CI Gate
+
+Canonical pipeline script:
+
+```bash
+./scripts/ci_gate_openclaw_phase2.sh
+```
+
+Legacy alias (kept for compatibility):
+
+```bash
+./scripts/ci_gate_openclaw_phase1.sh
+```
+
 ## One-Click Ops Recovery
 
 From UI (`Настройки -> Integrations -> Связь ИИ-агентов с системой`):

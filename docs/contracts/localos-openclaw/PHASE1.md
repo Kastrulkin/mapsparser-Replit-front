@@ -199,12 +199,14 @@ Billing-summary endpoint:
 
 ## CI Gate (Phase 2.2)
 
-- `scripts/ci_gate_openclaw_phase1.sh`:
+- `scripts/ci_gate_openclaw_phase2.sh` (canonical):
   - duplicate suffix guard
   - py_compile critical backend files
   - `tests/test_capabilities_api_phase1.py`
   - syntax-check smoke scripts
   - в `CI` режиме M2M smoke обязателен (требует `OPENCLAW_TOKEN`, `TENANT_ID`)
+- `scripts/ci_gate_openclaw_phase1.sh`:
+  - backward-compat wrapper to `ci_gate_openclaw_phase2.sh`
 - `scripts/manage_openclaw_outbox.sh`
   - `ACTION=replay` для requeue `dlq/retry`
   - `ACTION=cleanup` для удаления старых `sent`
