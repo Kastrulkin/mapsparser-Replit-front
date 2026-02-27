@@ -409,6 +409,31 @@ then
   exit 1
 fi
 
+echo "[8.1/12] M2M action diagnostics bundle (markdown)"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/actions/${action_id}/diagnostics-bundle?tenant_id=${TENANT_ID}&limit=2&offset=0&full=true&attempts_full=true&format=markdown" > "${tmp_dir}/diagnostics_bundle_markdown.json"
+bundle_md_success="$(json_read "${tmp_dir}/diagnostics_bundle_markdown.json" "success")"
+if [[ "${bundle_md_success}" != "True" && "${bundle_md_success}" != "true" ]]; then
+  echo "Diagnostics bundle markdown read failed"
+  cat "${tmp_dir}/diagnostics_bundle_markdown.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/diagnostics_bundle_markdown.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Action Diagnostics Bundle" not in report:
+    print("Diagnostics bundle markdown_report is invalid")
+    sys.exit(1)
+print("Diagnostics bundle markdown OK")
+PY
+then
+  cat "${tmp_dir}/diagnostics_bundle_markdown.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
