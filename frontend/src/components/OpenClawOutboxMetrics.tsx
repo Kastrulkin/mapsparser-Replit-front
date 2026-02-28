@@ -948,6 +948,60 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [selectedActionId, buildIncidentReportMarkdown]);
 
+  const fetchRecoveryHistoryExport = useCallback(async (format: 'json' | 'markdown') => {
+    if (!businessId) return null;
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(
+      `/api/capabilities/callbacks/recovery-history/export?tenant_id=${encodeURIComponent(businessId)}&limit=10&format=${format}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [businessId]);
+
+  const exportRecoveryHistoryJson = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchRecoveryHistoryExport('json');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `callback-recovery-history-${businessId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать recovery history');
+    }
+  }, [businessId, fetchRecoveryHistoryExport]);
+
+  const exportRecoveryHistoryMarkdown = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchRecoveryHistoryExport('markdown');
+      const markdown = String(payload?.markdown_report || '').trim();
+      if (!markdown) {
+        throw new Error('Recovery history markdown не сформирован');
+      }
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `callback-recovery-history-${businessId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать recovery history markdown');
+    }
+  }, [businessId, fetchRecoveryHistoryExport]);
+
   const copyRecoveryReport = useCallback(async () => {
     if (!recoveryReport) return;
     try {
@@ -1475,7 +1529,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           )}
           {recoveryHistory.length > 0 && (
             <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Последние recovery</div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Последние recovery</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={exportRecoveryHistoryJson}
+                    className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-100"
+                  >
+                    Экспорт JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportRecoveryHistoryMarkdown}
+                    className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Экспорт MD
+                  </button>
+                </div>
+              </div>
               <div className="space-y-2">
                 {recoveryHistory.map((item) => (
                   <div key={item.id} className="rounded-md border border-gray-200 bg-white px-2 py-2 text-[11px] text-gray-700">
