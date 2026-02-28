@@ -2216,13 +2216,54 @@ def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
         return False
 
 
-def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
+def _get_superadmin_telegram_ids(cursor) -> list[str]:
     env_ids = {
         x.strip()
         for x in str(os.getenv("OPENCLAW_SUPERADMIN_TELEGRAM_IDS", "")).split(",")
         if x and x.strip()
     }
     target_ids = set(env_ids)
+    users_cols = _load_table_columns(cursor, "users")
+    if "telegram_id" not in users_cols:
+        return sorted(target_ids)
+
+    cursor.execute(
+        """
+        SELECT telegram_id
+        FROM users
+        WHERE is_superadmin = TRUE
+          AND telegram_id IS NOT NULL
+          AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
+        """
+    )
+    for row in cursor.fetchall() or []:
+        telegram_id = str(_row_to_dict(cursor, row).get("telegram_id") or "").strip()
+        if telegram_id:
+            target_ids.add(telegram_id)
+    return sorted(target_ids)
+
+
+def _format_incident_snapshot_digest(snapshot: dict | None) -> str:
+    snapshot = snapshot or {}
+    overview = dict(snapshot.get("overview") or {})
+    action_id = str(snapshot.get("action_id") or "")
+    action_short = action_id[:8] if action_id else "unknown"
+    capability = str(snapshot.get("capability") or "unknown")
+    status = str(snapshot.get("status") or "unknown")
+    last_event = "-"
+    recent_timeline = list(snapshot.get("recent_timeline") or [])
+    if recent_timeline:
+        tail = dict(recent_timeline[-1] or {})
+        last_event = f"{tail.get('source') or '-'}:{tail.get('event_type') or '-'}:{tail.get('status') or '-'}"
+    return (
+        f"- {action_short} | {capability} | status={status} | "
+        f"attempts={int(overview.get('callback_attempts_total') or 0)} "
+        f"(failed={int(overview.get('callback_attempts_failed') or 0)}) | last={last_event}"
+    )
+
+
+def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
+    target_ids = set(_get_superadmin_telegram_ids(cursor))
 
     users_cols = _load_table_columns(cursor, "users")
     rows = []
@@ -5143,6 +5184,152 @@ def capabilities_callbacks_outbox_replay():
         limit=limit,
     )
     return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/callbacks/recovery-report', methods=['POST', 'OPTIONS'])
+def capabilities_callbacks_recovery_report():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    snapshot_limit = max(1, min(int(data.get("snapshot_limit", 2) or 2), 5))
+    include_retry = bool(data.get("include_retry", True))
+    replay_limit = max(1, min(int(data.get("replay_limit", 200) or 200), 2000))
+    batch_size = max(1, min(int(data.get("batch_size", 200) or 200), 1000))
+    send_telegram_report = bool(data.get("send_telegram_report", False))
+
+    pre_metrics = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=60,
+    )
+    if not pre_metrics.get("success"):
+        return jsonify(pre_metrics), int(pre_metrics.pop("http_code", 400))
+
+    outbox_items = []
+    for status_name in ("dlq", "retry"):
+        if status_name == "retry" and not include_retry:
+            continue
+        listing = PHASE1_ACTION_ORCHESTRATOR.list_callback_outbox(
+            user_data,
+            tenant_id=str(tenant_id),
+            status=status_name,
+            limit=replay_limit,
+            offset=0,
+        )
+        if not listing.get("success"):
+            return jsonify(listing), int(listing.pop("http_code", 400))
+        outbox_items.extend(listing.get("items") or [])
+
+    seen_action_ids = set()
+    action_ids = []
+    for item in outbox_items:
+        action_id = str(item.get("action_id") or "").strip()
+        if not action_id or action_id in seen_action_ids:
+            continue
+        seen_action_ids.add(action_id)
+        action_ids.append(action_id)
+    action_ids = action_ids[:snapshot_limit]
+
+    before_snapshots = []
+    for action_id in action_ids:
+        snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
+        if snapshot.get("success"):
+            before_snapshots.append(snapshot)
+
+    replay = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
+        user_data,
+        tenant_id=str(tenant_id),
+        include_retry=include_retry,
+        limit=replay_limit,
+    )
+    if not replay.get("success"):
+        return jsonify(replay), int(replay.pop("http_code", 400))
+
+    dispatch = PHASE1_ACTION_ORCHESTRATOR.dispatch_callback_outbox_for_tenant(
+        user_data,
+        tenant_id=str(tenant_id),
+        batch_size=batch_size,
+    )
+    if not dispatch.get("success"):
+        return jsonify(dispatch), int(dispatch.pop("http_code", 400))
+
+    post_metrics = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=60,
+    )
+    if not post_metrics.get("success"):
+        return jsonify(post_metrics), int(post_metrics.pop("http_code", 400))
+
+    after_snapshots = []
+    for action_id in action_ids:
+        snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
+        if snapshot.get("success"):
+            after_snapshots.append(snapshot)
+
+    before_metric_summary = dict(pre_metrics.get("metrics") or {})
+    after_metric_summary = dict(post_metrics.get("metrics") or {})
+    lines = [
+        "OpenClaw recovery report",
+        f"tenant_id: {tenant_id}",
+        f"generated_at: {datetime.utcnow().isoformat()}",
+        "",
+        "Metrics before:",
+        f"- sent={int(before_metric_summary.get('sent') or 0)} retry={int(before_metric_summary.get('retry') or 0)} dlq={int(before_metric_summary.get('dlq') or 0)} pending={int(before_metric_summary.get('pending') or 0)}",
+        "Metrics after:",
+        f"- sent={int(after_metric_summary.get('sent') or 0)} retry={int(after_metric_summary.get('retry') or 0)} dlq={int(after_metric_summary.get('dlq') or 0)} pending={int(after_metric_summary.get('pending') or 0)}",
+        "",
+        "Recovery result:",
+        f"- replayed={int(replay.get('replayed_count') or 0)} include_retry={include_retry}",
+        f"- dispatched sent={int(dispatch.get('sent') or 0)} retried={int(dispatch.get('retried') or 0)} dlq={int(dispatch.get('dlq') or 0)} picked={int(dispatch.get('picked') or 0)}",
+    ]
+    if before_snapshots:
+        lines.extend(["", "Before snapshots:"])
+        lines.extend(_format_incident_snapshot_digest(item) for item in before_snapshots)
+    if after_snapshots:
+        lines.extend(["", "After snapshots:"])
+        lines.extend(_format_incident_snapshot_digest(item) for item in after_snapshots)
+    report_text = "\n".join(lines)
+
+    telegram_sent = 0
+    if send_telegram_report:
+        db = DatabaseManager()
+        try:
+            cursor = db.conn.cursor()
+            for telegram_id in _get_superadmin_telegram_ids(cursor):
+                if _send_telegram_plain_message(telegram_id, report_text):
+                    telegram_sent += 1
+        finally:
+            db.close()
+
+    return jsonify(
+        {
+            "success": True,
+            "tenant_id": str(tenant_id),
+            "metrics_before": pre_metrics.get("metrics") or {},
+            "metrics_after": post_metrics.get("metrics") or {},
+            "replay": replay,
+            "dispatch": dispatch,
+            "action_ids": action_ids,
+            "before_snapshots": before_snapshots,
+            "after_snapshots": after_snapshots,
+            "telegram_sent": telegram_sent,
+            "report_text": report_text,
+        }
+    ), 200
 
 
 @app.route('/api/capabilities/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])

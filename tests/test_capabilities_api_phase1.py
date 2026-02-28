@@ -1788,6 +1788,24 @@ def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypat
     assert forbidden_body.get("error") in {"forbidden", "tenant_id is required", "tenant_id not found"}
 
 
+def test_user_callbacks_recovery_report_returns_report(capabilities_client):
+    info = capabilities_client
+    r = info["client"].post(
+        "/api/capabilities/callbacks/recovery-report",
+        json={"tenant_id": info["business_id"], "snapshot_limit": 1},
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["success"] is True
+    assert body["tenant_id"] == info["business_id"]
+    assert "report_text" in body
+    assert "OpenClaw recovery report" in body["report_text"]
+    assert isinstance(body.get("metrics_before"), dict)
+    assert isinstance(body.get("metrics_after"), dict)
+    assert body.get("telegram_sent") == 0
+
+
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"

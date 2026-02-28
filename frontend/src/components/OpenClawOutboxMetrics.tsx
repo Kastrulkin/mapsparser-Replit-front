@@ -288,6 +288,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
+  const [recoveryReport, setRecoveryReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const buildTimelineParams = useCallback(
@@ -583,14 +584,15 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     refreshActionAttempts,
   ]);
 
-  const recoverDelivery = useCallback(async () => {
+  const recoverDelivery = useCallback(async (sendTelegramReport = false) => {
     if (!businessId) return;
     setRecovering(true);
     setRecoverMessage(null);
+    setRecoveryReport(null);
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const replayRes = await fetch('/api/capabilities/callbacks/outbox/replay', {
+      const response = await fetch('/api/capabilities/callbacks/recovery-report', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -599,42 +601,34 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         body: JSON.stringify({
           tenant_id: businessId,
           include_retry: true,
-          limit: 200,
-        }),
-      });
-      const replayJson = await replayRes.json();
-      if (!replayRes.ok || !replayJson?.success) {
-        throw new Error(replayJson?.error || `Replay failed (${replayRes.status})`);
-      }
-
-      const dispatchRes = await fetch('/api/capabilities/callbacks/dispatch', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tenant_id: businessId,
+          replay_limit: 200,
           batch_size: 200,
+          snapshot_limit: 2,
+          send_telegram_report: sendTelegramReport,
         }),
       });
-      const dispatchJson = await dispatchRes.json();
-      if (!dispatchRes.ok || !dispatchJson?.success) {
-        throw new Error(dispatchJson?.error || `Dispatch failed (${dispatchRes.status})`);
+      const json = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `Recovery failed (${response.status})`);
       }
 
-      const replayedCount = Number(replayJson?.replayed_count || 0);
-      const sent = Number(dispatchJson?.sent || 0);
-      const retried = Number(dispatchJson?.retried || 0);
-      const dlq = Number(dispatchJson?.dlq || 0);
-      setRecoverMessage(`Recovery выполнен: replay=${replayedCount}, sent=${sent}, retried=${retried}, dlq=${dlq}`);
-      await load();
+      const replayedCount = Number(json?.replay?.replayed_count || 0);
+      const sent = Number(json?.dispatch?.sent || 0);
+      const retried = Number(json?.dispatch?.retried || 0);
+      const dlq = Number(json?.dispatch?.dlq || 0);
+      const telegramSent = Number(json?.telegram_sent || 0);
+      setRecoverMessage(
+        `Recovery выполнен: replay=${replayedCount}, sent=${sent}, retried=${retried}, dlq=${dlq}` +
+          (sendTelegramReport ? `, telegram=${telegramSent}` : '')
+      );
+      setRecoveryReport(String(json?.report_text || '').trim() || null);
+      await Promise.all([load(), refreshActionTimeline(), refreshActionSnapshots(), refreshActionAttempts()]);
     } catch (e: any) {
       setError(e?.message || 'Не удалось выполнить recovery callback-доставки');
     } finally {
       setRecovering(false);
     }
-  }, [businessId, load]);
+  }, [businessId, load, refreshActionAttempts, refreshActionSnapshots, refreshActionTimeline]);
 
   const exportTimelineJson = useCallback(() => {
     if (!selectedActionId) return;
@@ -1382,12 +1376,21 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={recoverDelivery}
+            onClick={() => recoverDelivery(false)}
             disabled={loading || recovering || !businessId}
             className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-60"
           >
             <Wrench className={`h-3.5 w-3.5 ${recovering ? 'animate-pulse' : ''}`} />
-            {recovering ? 'Recovery...' : 'Восстановить доставку'}
+            {recovering ? 'Recovery...' : 'Восстановить + отчёт'}
+          </button>
+          <button
+            type="button"
+            onClick={() => recoverDelivery(true)}
+            disabled={loading || recovering || !businessId}
+            className="inline-flex items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-800 hover:bg-indigo-100 disabled:opacity-60"
+          >
+            <Wrench className={`h-3.5 w-3.5 ${recovering ? 'animate-pulse' : ''}`} />
+            {recovering ? 'Sending...' : 'В Telegram'}
           </button>
           <button
             type="button"
@@ -1408,6 +1411,12 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           {recoverMessage && (
             <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
               {recoverMessage}
+            </div>
+          )}
+          {recoveryReport && (
+            <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Recovery report</div>
+              <pre className="whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-700">{recoveryReport}</pre>
             </div>
           )}
           {copyMessage && (
