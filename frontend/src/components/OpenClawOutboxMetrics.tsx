@@ -238,6 +238,15 @@ type RecoveryHistoryResponse = {
   error?: string;
 };
 
+type SupportExportResponse = {
+  success: boolean;
+  tenant_id?: string;
+  generated_at?: string;
+  action_id?: string | null;
+  markdown_report?: string;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -962,6 +971,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [businessId]);
 
+  const fetchSupportExport = useCallback(async (format: 'json' | 'markdown') => {
+    if (!businessId) return null;
+    const token = localStorage.getItem('auth_token');
+    const params = new URLSearchParams();
+    params.set('tenant_id', businessId);
+    params.set('format', format);
+    if (selectedActionId) {
+      params.set('action_id', selectedActionId);
+    }
+    const response = await fetch(`/api/capabilities/support-export?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: SupportExportResponse = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [businessId, selectedActionId]);
+
   const exportRecoveryHistoryJson = useCallback(async () => {
     if (!businessId) return;
     try {
@@ -1001,6 +1029,46 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setError(e?.message || 'Не удалось экспортировать recovery history markdown');
     }
   }, [businessId, fetchRecoveryHistoryExport]);
+
+  const exportSupportExportJson = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchSupportExport('json');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `openclaw-support-export-${businessId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать support bundle');
+    }
+  }, [businessId, fetchSupportExport]);
+
+  const exportSupportExportMarkdown = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchSupportExport('markdown');
+      const markdown = String(payload?.markdown_report || '').trim();
+      if (!markdown) {
+        throw new Error('Support bundle markdown не сформирован');
+      }
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `openclaw-support-export-${businessId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать support bundle markdown');
+    }
+  }, [businessId, fetchSupportExport]);
 
   const copyRecoveryReport = useCallback(async () => {
     if (!recoveryReport) return;
@@ -1499,6 +1567,22 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           >
             <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
+          </button>
+          <button
+            type="button"
+            onClick={exportSupportExportJson}
+            disabled={loading || recovering || !businessId}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+          >
+            Экспорт support JSON
+          </button>
+          <button
+            type="button"
+            onClick={exportSupportExportMarkdown}
+            disabled={loading || recovering || !businessId}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+          >
+            Экспорт support MD
           </button>
         </div>
       </div>

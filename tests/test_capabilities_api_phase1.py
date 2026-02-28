@@ -1910,6 +1910,65 @@ def test_user_callbacks_recovery_history_export_markdown(capabilities_client):
     assert "# OpenClaw Recovery History" in body["markdown_report"]
 
 
+def test_user_support_export_markdown(capabilities_client):
+    info = capabilities_client
+    create = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert create.status_code == 200, create.get_json()
+    action_id = create.get_json()["action_id"]
+
+    r = info["client"].get(
+        f"/api/capabilities/support-export?tenant_id={info['business_id']}&action_id={action_id}&format=markdown",
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["success"] is True
+    assert body["tenant_id"] == info["business_id"]
+    assert body["action_id"] == action_id
+    assert "# OpenClaw Support Export Bundle" in body["markdown_report"]
+
+
+def test_openclaw_support_export_json_with_action_snapshot(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        create = info["client"].post(
+            "/api/capabilities/execute",
+            json=_pending_request_body(info["business_id"], info["user_id"]),
+            headers=_auth_headers(),
+        )
+        assert create.status_code == 200, create.get_json()
+        action_id = create.get_json()["action_id"]
+
+        r = info["client"].get(
+            f"/api/openclaw/capabilities/support-export?tenant_id={info['business_id']}&action_id={action_id}",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert body["action_id"] == action_id
+        assert body["health"]["success"] is True
+        assert body["health_trend"]["success"] is True
+        assert body["callback_metrics"]["success"] is True
+        assert body["billing_reconcile"]["success"] is True
+        assert body["recovery_history"]["success"] is True
+        assert body["selected_action_snapshot"]["success"] is True
+        assert body["selected_action_snapshot"]["action_id"] == action_id
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"

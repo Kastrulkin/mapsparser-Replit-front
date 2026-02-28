@@ -44,6 +44,7 @@
 17. `GET /api/openclaw/capabilities/catalog` (M2M capability discovery)
 18. `GET /api/openclaw/capabilities/health?tenant_id=&window_minutes=` (M2M integration readiness)
 19. `GET /api/openclaw/capabilities/health/trend?tenant_id=&window_minutes=&limit=` (M2M health trend/history)
+19.1 `GET /api/openclaw/capabilities/support-export?tenant_id=&action_id=&format=` (M2M canonical support bundle for ops/export)
 20. `POST /api/openclaw/capabilities/actions/{action_id}/decision` (M2M human decision)
 21. `POST /api/openclaw/callbacks/dispatch` (M2M callback dispatcher)
 22. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
@@ -62,6 +63,7 @@
 33. `POST /api/capabilities/callbacks/recovery-report` (user replay + dispatch + report, optional Telegram notify)
 34. `GET /api/capabilities/callbacks/recovery-history?tenant_id=&limit=` (user recovery audit trail)
 35. `GET /api/capabilities/callbacks/recovery-history/export?tenant_id=&limit=&format=` (user canonical recovery history export)
+36. `GET /api/capabilities/support-export?tenant_id=&action_id=&format=` (user canonical support bundle for ops/export)
 
 ## Обязательные поля envelope (`execute`)
 

@@ -2371,6 +2371,187 @@ def _render_callback_recovery_history_markdown(tenant_id: str, items: list[dict]
     return "\n".join(lines)
 
 
+def _build_openclaw_support_export_bundle(
+    user_data: dict,
+    tenant_id: str,
+    *,
+    action_id: str | None = None,
+    health_window_minutes: int = 60,
+    trend_window_minutes: int = 12 * 60,
+    billing_window_minutes: int = 24 * 60,
+    trend_limit: int = 24,
+    billing_limit: int = 50,
+    recovery_limit: int = 10,
+) -> tuple[dict, int]:
+    health_payload, health_code = _build_openclaw_capabilities_health(
+        user_data,
+        str(tenant_id),
+        health_window_minutes,
+        persist=True,
+    )
+    if not health_payload.get("success"):
+        return health_payload, int(health_code)
+
+    trend_payload = PHASE1_ACTION_ORCHESTRATOR.get_capability_health_trend(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=trend_window_minutes,
+        limit=trend_limit,
+    )
+    trend_code = int(trend_payload.pop("http_code", 200))
+    if not trend_payload.get("success"):
+        return trend_payload, trend_code
+
+    billing_payload = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=billing_window_minutes,
+        limit=billing_limit,
+    )
+    billing_code = int(billing_payload.pop("http_code", 200))
+    if not billing_payload.get("success"):
+        return billing_payload, billing_code
+
+    callback_metrics_payload = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
+        user_data,
+        tenant_id=str(tenant_id),
+        window_minutes=health_window_minutes,
+    )
+    callback_metrics_code = int(callback_metrics_payload.pop("http_code", 200))
+    if not callback_metrics_payload.get("success"):
+        return callback_metrics_payload, callback_metrics_code
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        recovery_items = _load_callback_recovery_history_items(cursor, str(tenant_id), int(recovery_limit))
+    finally:
+        db.close()
+
+    selected_action_snapshot = None
+    if action_id:
+        selected_action_snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
+        action_code = int(selected_action_snapshot.pop("http_code", 200))
+        if not selected_action_snapshot.get("success"):
+            return selected_action_snapshot, action_code
+        if str(selected_action_snapshot.get("tenant_id") or "") != str(tenant_id):
+            return {"success": False, "error": "tenant mismatch"}, 403
+
+    bundle = {
+        "success": True,
+        "tenant_id": str(tenant_id),
+        "generated_at": datetime.utcnow().isoformat(),
+        "health": health_payload,
+        "alerts": list(health_payload.get("alerts") or []),
+        "health_trend": {
+            "success": True,
+            "tenant_id": str(tenant_id),
+            "window_minutes": int(trend_window_minutes),
+            "count": int(trend_payload.get("count") or len(trend_payload.get("items") or [])),
+            "items": list(trend_payload.get("items") or []),
+        },
+        "callback_metrics": callback_metrics_payload,
+        "billing_reconcile": billing_payload,
+        "recovery_history": {
+            "success": True,
+            "tenant_id": str(tenant_id),
+            "count": len(recovery_items),
+            "items": recovery_items,
+        },
+        "selected_action_snapshot": selected_action_snapshot,
+    }
+    if action_id:
+        bundle["action_id"] = str(action_id)
+    return bundle, 200
+
+
+def _render_openclaw_support_export_markdown(bundle: dict) -> str:
+    bundle = bundle or {}
+    tenant_id = str(bundle.get("tenant_id") or "")
+    health = dict(bundle.get("health") or {})
+    checks = dict(health.get("checks") or {})
+    metrics = dict((bundle.get("callback_metrics") or {}).get("metrics") or health.get("metrics") or {})
+    billing_summary = dict((bundle.get("billing_reconcile") or {}).get("summary") or {})
+    trend_items = list(((bundle.get("health_trend") or {}).get("items") or []))[:5]
+    recovery_items = list(((bundle.get("recovery_history") or {}).get("items") or []))[:5]
+    alerts = list(bundle.get("alerts") or [])
+    lines = [
+        "# OpenClaw Support Export Bundle",
+        "",
+        f"- tenant_id: `{tenant_id}`",
+        f"- generated_at: {bundle.get('generated_at') or datetime.utcnow().isoformat()}",
+        f"- health: `{health.get('status') or 'unknown'}` ready={bool(health.get('ready'))}",
+        (
+            "- queue: "
+            f"sent={int(metrics.get('sent') or 0)} "
+            f"retry={int(metrics.get('retry') or 0)} "
+            f"dlq={int(metrics.get('dlq') or 0)} "
+            f"pending={int(metrics.get('pending') or 0)}"
+        ),
+        (
+            "- checks: "
+            f"token={bool(checks.get('token_configured'))} "
+            f"callbacks={bool(checks.get('callbacks_enabled'))} "
+            f"stuck_retry={int(checks.get('stuck_retry') or 0)}"
+        ),
+        "",
+        "## Alerts",
+        "",
+    ]
+    if alerts:
+        for item in alerts:
+            lines.append(
+                f"- [{str(item.get('severity') or 'info').upper()}] {str(item.get('code') or 'UNKNOWN')}: {str(item.get('message') or '')}"
+            )
+    else:
+        lines.append("- no alerts")
+
+    lines.extend(["", "## Health trend", ""])
+    if trend_items:
+        for item in trend_items:
+            trend_checks = dict(item.get("checks") or {})
+            lines.append(
+                f"- {item.get('captured_at') or ''} | {item.get('status') or 'unknown'} "
+                f"(dlq={int(trend_checks.get('dlq_count') or 0)}, stuck={int(trend_checks.get('stuck_retry') or 0)})"
+            )
+    else:
+        lines.append("- no trend snapshots")
+
+    lines.extend(
+        [
+            "",
+            "## Billing reconcile",
+            "",
+            (
+                "- checked/issues/token_delta: "
+                f"**{int(billing_summary.get('actions_checked') or 0)}/"
+                f"{int(billing_summary.get('actions_with_issues') or 0)}/"
+                f"{int(billing_summary.get('tokenusage_minus_settled') or 0)}**"
+            ),
+            "",
+            "## Recovery history",
+            "",
+        ]
+    )
+    if recovery_items:
+        for item in recovery_items:
+            lines.append(
+                f"- {item.get('created_at') or ''} | "
+                f"replay/sent/retry/dlq={int(item.get('replayed_count') or 0)}/"
+                f"{int(item.get('sent_count') or 0)}/"
+                f"{int(item.get('retried_count') or 0)}/"
+                f"{int(item.get('dlq_count') or 0)}"
+            )
+    else:
+        lines.append("- no recovery runs")
+
+    selected_action_snapshot = bundle.get("selected_action_snapshot")
+    if isinstance(selected_action_snapshot, dict) and selected_action_snapshot.get("success"):
+        lines.extend(["", "## Selected action", "", _format_incident_snapshot_digest(selected_action_snapshot)])
+
+    return "\n".join(lines)
+
+
 def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
     target_ids = set(_get_superadmin_telegram_ids(cursor))
 
@@ -5172,6 +5353,45 @@ def openclaw_callbacks_recovery_history_export():
         db.close()
 
 
+@app.route('/api/openclaw/capabilities/support-export', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_support_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    action_id = str(request.args.get("action_id") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    bundle, code = _build_openclaw_support_export_bundle(
+        service_user,
+        tenant_id,
+        action_id=action_id,
+    )
+    if not bundle.get("success"):
+        return jsonify(bundle), int(code)
+    if export_format == "markdown":
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "generated_at": bundle.get("generated_at"),
+                "action_id": action_id,
+                "markdown_report": _render_openclaw_support_export_markdown(bundle),
+            }
+        ), 200
+    return jsonify(bundle), 200
+
+
 @app.route('/api/openclaw/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
 def openclaw_callbacks_outbox_replay():
     if request.method == 'OPTIONS':
@@ -5703,6 +5923,45 @@ def capabilities_health_trend():
         limit=limit,
     )
     return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/support-export', methods=['GET', 'OPTIONS'])
+def capabilities_support_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    action_id = str(request.args.get("action_id") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    bundle, code = _build_openclaw_support_export_bundle(
+        user_data,
+        str(tenant_id),
+        action_id=action_id,
+    )
+    if not bundle.get("success"):
+        return jsonify(bundle), int(code)
+    if export_format == "markdown":
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "generated_at": bundle.get("generated_at"),
+                "action_id": action_id,
+                "markdown_report": _render_openclaw_support_export_markdown(bundle),
+            }
+        ), 200
+    return jsonify(bundle), 200
 
 
 @app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])

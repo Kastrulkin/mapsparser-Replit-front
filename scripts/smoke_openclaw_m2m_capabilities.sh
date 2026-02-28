@@ -572,6 +572,31 @@ then
   exit 1
 fi
 
+echo "[8.7/12] M2M support export bundle"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/support-export?tenant_id=${TENANT_ID}&action_id=${action_id}&format=markdown" > "${tmp_dir}/support_export.json"
+support_export_success="$(json_read "${tmp_dir}/support_export.json" "success")"
+if [[ "${support_export_success}" != "True" && "${support_export_success}" != "true" ]]; then
+  echo "Support export bundle failed"
+  cat "${tmp_dir}/support_export.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/support_export.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Support Export Bundle" not in report:
+    print("Support export markdown_report is invalid")
+    sys.exit(1)
+print("Support export bundle OK")
+PY
+then
+  cat "${tmp_dir}/support_export.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
