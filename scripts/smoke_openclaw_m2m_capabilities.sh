@@ -522,6 +522,31 @@ then
   exit 1
 fi
 
+echo "[8.5/12] M2M recovery history"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/callbacks/recovery-history?tenant_id=${TENANT_ID}&limit=5" > "${tmp_dir}/recovery_history.json"
+recovery_history_success="$(json_read "${tmp_dir}/recovery_history.json" "success")"
+if [[ "${recovery_history_success}" != "True" && "${recovery_history_success}" != "true" ]]; then
+  echo "Recovery history read failed"
+  cat "${tmp_dir}/recovery_history.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/recovery_history.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+items = data.get("items")
+if not isinstance(items, list):
+    print("Recovery history has no items list")
+    sys.exit(1)
+print("Recovery history OK: count=", data.get("count"))
+PY
+then
+  cat "${tmp_dir}/recovery_history.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

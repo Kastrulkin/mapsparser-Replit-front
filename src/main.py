@@ -5027,6 +5027,74 @@ def openclaw_callbacks_metrics():
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
+def openclaw_callbacks_recovery_history():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        _ensure_callback_recovery_history_table(cursor)
+        cursor.execute(
+            """
+            SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
+                   replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+                   action_ids_json, report_text, created_at
+            FROM callback_recovery_history
+            WHERE tenant_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(tenant_id), limit),
+        )
+        rows = cursor.fetchall() or []
+        items = []
+        for row in rows:
+            rd = _row_to_dict(cursor, row)
+            raw_action_ids = rd.get("action_ids_json")
+            if isinstance(raw_action_ids, str):
+                try:
+                    action_ids = json.loads(raw_action_ids)
+                except Exception:
+                    action_ids = []
+            else:
+                action_ids = raw_action_ids or []
+            items.append(
+                {
+                    "id": str(rd.get("id") or ""),
+                    "tenant_id": str(rd.get("tenant_id") or ""),
+                    "triggered_by": str(rd.get("triggered_by") or ""),
+                    "send_telegram_report": bool(rd.get("send_telegram_report")),
+                    "include_retry": bool(rd.get("include_retry")),
+                    "replayed_count": int(rd.get("replayed_count") or 0),
+                    "sent_count": int(rd.get("sent_count") or 0),
+                    "retried_count": int(rd.get("retried_count") or 0),
+                    "dlq_count": int(rd.get("dlq_count") or 0),
+                    "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
+                    "action_ids": action_ids,
+                    "report_text": str(rd.get("report_text") or ""),
+                    "created_at": str(rd.get("created_at") or ""),
+                }
+            )
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
 @app.route('/api/openclaw/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
 def openclaw_callbacks_outbox_replay():
     if request.method == 'OPTIONS':
