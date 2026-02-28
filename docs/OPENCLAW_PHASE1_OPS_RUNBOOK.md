@@ -177,8 +177,10 @@ REPORT_FILE=/tmp/openclaw_ops_report.txt ./scripts/send_openclaw_ops_report.sh
 ```
 
 UI recovery:
-- `Настройки -> Integrations -> Связь ИИ-агентов с системой -> Восстановить доставку`
-- делает `replay (include_retry=true)` + tenant-scoped `dispatch` и обновляет метрики.
+- `Настройки -> Integrations -> Связь ИИ-агентов с системой -> Восстановить + отчёт`
+- `Настройки -> Integrations -> Связь ИИ-агентов с системой -> В Telegram`
+- backend endpoint: `POST /api/capabilities/callbacks/recovery-report`
+- делает `replay (include_retry=true)` + tenant-scoped `dispatch`, возвращает краткий recovery report и, при `send_telegram_report=true`, отправляет его суперадмину в Telegram.
 
 ## 10) Reproducible Server Deploy (Phase 2)
 

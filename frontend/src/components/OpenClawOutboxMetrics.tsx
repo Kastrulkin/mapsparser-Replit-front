@@ -914,6 +914,17 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [selectedActionId, buildIncidentReportMarkdown]);
 
+  const copyRecoveryReport = useCallback(async () => {
+    if (!recoveryReport) return;
+    try {
+      await navigator.clipboard.writeText(recoveryReport);
+      setCopyMessage('Recovery report скопирован');
+      window.setTimeout(() => setCopyMessage(null), 2500);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось скопировать recovery report');
+    }
+  }, [recoveryReport]);
+
   const copyIncidentReport = useCallback(async () => {
     if (!selectedActionId) return;
     try {
@@ -1415,7 +1426,16 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           )}
           {recoveryReport && (
             <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Recovery report</div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Recovery report</div>
+                <button
+                  type="button"
+                  onClick={copyRecoveryReport}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                >
+                  Скопировать
+                </button>
+              </div>
               <pre className="whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-700">{recoveryReport}</pre>
             </div>
           )}

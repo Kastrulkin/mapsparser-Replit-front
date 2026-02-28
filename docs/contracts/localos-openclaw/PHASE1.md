@@ -57,6 +57,7 @@
 30. `GET /api/capabilities/billing/reconcile?tenant_id=&window_minutes=&limit=` (user billing reconciliation)
 31. `POST /api/capabilities/callbacks/outbox/replay` (user replay DLQ/retry to pending)
 32. `POST /api/capabilities/callbacks/outbox/cleanup` (user cleanup old sent callbacks)
+33. `POST /api/capabilities/callbacks/recovery-report` (user replay + dispatch + report, optional Telegram notify)
 
 ## Обязательные поля envelope (`execute`)
 
