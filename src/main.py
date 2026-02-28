@@ -2290,6 +2290,87 @@ def _format_incident_snapshot_digest(snapshot: dict | None) -> str:
     )
 
 
+def _load_callback_recovery_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:
+    _ensure_callback_recovery_history_table(cursor)
+    cursor.execute(
+        """
+        SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
+               replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+               action_ids_json, report_text, created_at
+        FROM callback_recovery_history
+        WHERE tenant_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (str(tenant_id), int(limit)),
+    )
+    rows = cursor.fetchall() or []
+    items = []
+    for row in rows:
+        rd = _row_to_dict(cursor, row)
+        raw_action_ids = rd.get("action_ids_json")
+        if isinstance(raw_action_ids, str):
+            try:
+                action_ids = json.loads(raw_action_ids)
+            except Exception:
+                action_ids = []
+        else:
+            action_ids = raw_action_ids or []
+        items.append(
+            {
+                "id": str(rd.get("id") or ""),
+                "tenant_id": str(rd.get("tenant_id") or ""),
+                "triggered_by": str(rd.get("triggered_by") or ""),
+                "send_telegram_report": bool(rd.get("send_telegram_report")),
+                "include_retry": bool(rd.get("include_retry")),
+                "replayed_count": int(rd.get("replayed_count") or 0),
+                "sent_count": int(rd.get("sent_count") or 0),
+                "retried_count": int(rd.get("retried_count") or 0),
+                "dlq_count": int(rd.get("dlq_count") or 0),
+                "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
+                "action_ids": action_ids,
+                "report_text": str(rd.get("report_text") or ""),
+                "created_at": str(rd.get("created_at") or ""),
+            }
+        )
+    return items
+
+
+def _render_callback_recovery_history_markdown(tenant_id: str, items: list[dict]) -> str:
+    lines = [
+        "# OpenClaw Recovery History",
+        "",
+        f"- tenant_id: `{tenant_id}`",
+        f"- exported_at: {datetime.utcnow().isoformat()}",
+        f"- count: **{len(items)}**",
+        "",
+    ]
+    if not items:
+        lines.append("- no recovery runs")
+        return "\n".join(lines)
+
+    for idx, item in enumerate(items, start=1):
+        lines.extend(
+            [
+                f"## {idx}. Recovery `{str(item.get('id') or '')[:8]}`",
+                "",
+                f"- created_at: {item.get('created_at') or ''}",
+                f"- triggered_by: `{item.get('triggered_by') or ''}`",
+                f"- include_retry: `{bool(item.get('include_retry'))}`",
+                f"- replayed/sent/retried/dlq: **{int(item.get('replayed_count') or 0)}/{int(item.get('sent_count') or 0)}/{int(item.get('retried_count') or 0)}/{int(item.get('dlq_count') or 0)}**",
+                f"- telegram: `{bool(item.get('send_telegram_report'))}` sent={int(item.get('telegram_sent_count') or 0)}",
+            ]
+        )
+        action_ids = list(item.get("action_ids") or [])
+        if action_ids:
+            lines.append(f"- action_ids: {', '.join(f'`{str(x)[:8]}`' for x in action_ids)}")
+        report_text = str(item.get("report_text") or "").strip()
+        if report_text:
+            lines.extend(["", "```", report_text, "```"])
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
     target_ids = set(_get_superadmin_telegram_ids(cursor))
 
@@ -5048,48 +5129,44 @@ def openclaw_callbacks_recovery_history():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        _ensure_callback_recovery_history_table(cursor)
-        cursor.execute(
-            """
-            SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
-                   replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
-                   action_ids_json, report_text, created_at
-            FROM callback_recovery_history
-            WHERE tenant_id = %s
-            ORDER BY created_at DESC
-            LIMIT %s
-            """,
-            (str(tenant_id), limit),
-        )
-        rows = cursor.fetchall() or []
-        items = []
-        for row in rows:
-            rd = _row_to_dict(cursor, row)
-            raw_action_ids = rd.get("action_ids_json")
-            if isinstance(raw_action_ids, str):
-                try:
-                    action_ids = json.loads(raw_action_ids)
-                except Exception:
-                    action_ids = []
-            else:
-                action_ids = raw_action_ids or []
-            items.append(
+        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/openclaw/callbacks/recovery-history/export', methods=['GET', 'OPTIONS'])
+def openclaw_callbacks_recovery_history_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
+        if export_format == "markdown":
+            return jsonify(
                 {
-                    "id": str(rd.get("id") or ""),
-                    "tenant_id": str(rd.get("tenant_id") or ""),
-                    "triggered_by": str(rd.get("triggered_by") or ""),
-                    "send_telegram_report": bool(rd.get("send_telegram_report")),
-                    "include_retry": bool(rd.get("include_retry")),
-                    "replayed_count": int(rd.get("replayed_count") or 0),
-                    "sent_count": int(rd.get("sent_count") or 0),
-                    "retried_count": int(rd.get("retried_count") or 0),
-                    "dlq_count": int(rd.get("dlq_count") or 0),
-                    "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
-                    "action_ids": action_ids,
-                    "report_text": str(rd.get("report_text") or ""),
-                    "created_at": str(rd.get("created_at") or ""),
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "count": len(items),
+                    "markdown_report": _render_callback_recovery_history_markdown(str(tenant_id), items),
                 }
-            )
+            ), 200
         return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
     finally:
         db.close()
@@ -5482,48 +5559,44 @@ def capabilities_callbacks_recovery_history():
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        _ensure_callback_recovery_history_table(cursor)
-        cursor.execute(
-            """
-            SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
-                   replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
-                   action_ids_json, report_text, created_at
-            FROM callback_recovery_history
-            WHERE tenant_id = %s
-            ORDER BY created_at DESC
-            LIMIT %s
-            """,
-            (str(tenant_id), limit),
-        )
-        rows = cursor.fetchall() or []
-        items = []
-        for row in rows:
-            rd = _row_to_dict(cursor, row)
-            raw_action_ids = rd.get("action_ids_json")
-            if isinstance(raw_action_ids, str):
-                try:
-                    action_ids = json.loads(raw_action_ids)
-                except Exception:
-                    action_ids = []
-            else:
-                action_ids = raw_action_ids or []
-            items.append(
+        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/capabilities/callbacks/recovery-history/export', methods=['GET', 'OPTIONS'])
+def capabilities_callbacks_recovery_history_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
+        if export_format == "markdown":
+            return jsonify(
                 {
-                    "id": str(rd.get("id") or ""),
-                    "tenant_id": str(rd.get("tenant_id") or ""),
-                    "triggered_by": str(rd.get("triggered_by") or ""),
-                    "send_telegram_report": bool(rd.get("send_telegram_report")),
-                    "include_retry": bool(rd.get("include_retry")),
-                    "replayed_count": int(rd.get("replayed_count") or 0),
-                    "sent_count": int(rd.get("sent_count") or 0),
-                    "retried_count": int(rd.get("retried_count") or 0),
-                    "dlq_count": int(rd.get("dlq_count") or 0),
-                    "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
-                    "action_ids": action_ids,
-                    "report_text": str(rd.get("report_text") or ""),
-                    "created_at": str(rd.get("created_at") or ""),
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "count": len(items),
+                    "markdown_report": _render_callback_recovery_history_markdown(str(tenant_id), items),
                 }
-            )
+            ), 200
         return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
     finally:
         db.close()

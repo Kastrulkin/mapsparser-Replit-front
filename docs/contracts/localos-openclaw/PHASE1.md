@@ -49,6 +49,7 @@
 22. `GET /api/openclaw/callbacks/outbox?tenant_id=&status=&limit=&offset=` (M2M outbox inspect)
 23. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
 23.1 `GET /api/openclaw/callbacks/recovery-history?tenant_id=&limit=` (M2M recovery audit trail)
+23.2 `GET /api/openclaw/callbacks/recovery-history/export?tenant_id=&limit=&format=` (M2M canonical recovery history export)
 24. `GET /api/openclaw/capabilities/billing/reconcile?tenant_id=&window_minutes=&limit=` (M2M ledger/tokenusage reconciliation)
 25. `POST /api/openclaw/callbacks/outbox/replay` (M2M replay DLQ/retry to pending)
 26. `POST /api/openclaw/callbacks/outbox/cleanup` (M2M cleanup old sent callbacks)
@@ -60,6 +61,7 @@
 32. `POST /api/capabilities/callbacks/outbox/cleanup` (user cleanup old sent callbacks)
 33. `POST /api/capabilities/callbacks/recovery-report` (user replay + dispatch + report, optional Telegram notify)
 34. `GET /api/capabilities/callbacks/recovery-history?tenant_id=&limit=` (user recovery audit trail)
+35. `GET /api/capabilities/callbacks/recovery-history/export?tenant_id=&limit=&format=` (user canonical recovery history export)
 
 ## Обязательные поля envelope (`execute`)
 

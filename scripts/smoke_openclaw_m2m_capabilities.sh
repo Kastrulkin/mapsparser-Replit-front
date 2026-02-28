@@ -547,6 +547,31 @@ then
   exit 1
 fi
 
+echo "[8.6/12] M2M recovery history export"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/callbacks/recovery-history/export?tenant_id=${TENANT_ID}&limit=5&format=markdown" > "${tmp_dir}/recovery_history_export.json"
+recovery_history_export_success="$(json_read "${tmp_dir}/recovery_history_export.json" "success")"
+if [[ "${recovery_history_export_success}" != "True" && "${recovery_history_export_success}" != "true" ]]; then
+  echo "Recovery history export failed"
+  cat "${tmp_dir}/recovery_history_export.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/recovery_history_export.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Recovery History" not in report:
+    print("Recovery history markdown_report is invalid")
+    sys.exit(1)
+print("Recovery history export OK")
+PY
+then
+  cat "${tmp_dir}/recovery_history_export.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

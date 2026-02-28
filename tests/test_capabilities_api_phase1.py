@@ -1751,6 +1751,35 @@ def test_openclaw_callbacks_recovery_history_m2m(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_openclaw_callbacks_recovery_history_export_m2m_markdown(capabilities_client):
+    info = capabilities_client
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    try:
+        create = info["client"].post(
+            "/api/capabilities/callbacks/recovery-report",
+            json={"tenant_id": info["business_id"], "snapshot_limit": 1},
+            headers=_auth_headers(),
+        )
+        assert create.status_code == 200, create.get_json()
+
+        r = info["client"].get(
+            f"/api/openclaw/callbacks/recovery-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert "# OpenClaw Recovery History" in body["markdown_report"]
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
 def test_user_callbacks_dispatch_scoped_by_tenant(capabilities_client, monkeypatch):
     info = capabilities_client
     import main as main_mod
@@ -1859,6 +1888,26 @@ def test_user_callbacks_recovery_history_returns_recent_runs(capabilities_client
     first = body["items"][0]
     assert "OpenClaw recovery report" in first["report_text"]
     assert isinstance(first["action_ids"], list)
+
+
+def test_user_callbacks_recovery_history_export_markdown(capabilities_client):
+    info = capabilities_client
+    create = info["client"].post(
+        "/api/capabilities/callbacks/recovery-report",
+        json={"tenant_id": info["business_id"], "snapshot_limit": 1},
+        headers=_auth_headers(),
+    )
+    assert create.status_code == 200, create.get_json()
+
+    r = info["client"].get(
+        f"/api/capabilities/callbacks/recovery-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["success"] is True
+    assert body["tenant_id"] == info["business_id"]
+    assert "# OpenClaw Recovery History" in body["markdown_report"]
 
 
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
