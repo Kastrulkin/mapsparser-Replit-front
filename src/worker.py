@@ -212,6 +212,79 @@ def _load_problematic_action_ids_for_tenant(tenant_id: str, *, limit: int = 2) -
             pass
 
 
+def _build_support_bundle_digest_lines(
+    tenant_id: str,
+    *,
+    callback_metrics: Optional[Dict[str, Any]] = None,
+    alerts: Optional[List[Dict[str, Any]]] = None,
+    billing_summary: Optional[Dict[str, Any]] = None,
+    action_ids: Optional[List[str]] = None,
+) -> List[str]:
+    metrics_payload: Dict[str, Any] = {}
+    if callback_metrics:
+        metrics_payload = {"success": True, "metrics": callback_metrics, "alerts": alerts or []}
+    else:
+        try:
+            metrics_payload = CALLBACK_DISPATCH_ORCHESTRATOR.get_callback_metrics(
+                {"user_id": "system-worker", "is_superadmin": True},
+                tenant_id=str(tenant_id),
+                window_minutes=60,
+            )
+        except Exception as e:
+            print(f"[OPENCLAW_ALERTS] support bundle callback metrics failed tenant={tenant_id}: {e}", flush=True)
+            metrics_payload = {"success": False, "metrics": {}, "alerts": []}
+
+    metrics = dict(metrics_payload.get("metrics") or {})
+    resolved_alerts = list(alerts or metrics_payload.get("alerts") or [])
+    sample_action_ids = list(action_ids or [])
+    if not sample_action_ids:
+        sample_action_ids = _load_problematic_action_ids_for_tenant(tenant_id, limit=2)
+    sample_snapshots = _load_incident_snapshots_for_actions(sample_action_ids)
+
+    lines = [
+        "Support bundle:",
+        (
+            "Queue: "
+            f"sent={int(metrics.get('sent') or 0)}, "
+            f"retry={int(metrics.get('retry') or 0)}, "
+            f"dlq={int(metrics.get('dlq') or 0)}, "
+            f"pending={int(metrics.get('pending') or 0)}"
+        ),
+        (
+            "Success rate / stuck: "
+            f"{float(metrics.get('delivery_success_rate') or 0.0)}% / "
+            f"{int(metrics.get('stuck_retry') or 0)}"
+        ),
+    ]
+    if billing_summary:
+        lines.append(
+            "Billing: "
+            f"checked={int(billing_summary.get('actions_checked') or 0)}, "
+            f"with_issues={int(billing_summary.get('actions_with_issues') or 0)}, "
+            f"issue_count={int(billing_summary.get('issue_count') or 0)}, "
+            f"token_delta={int(billing_summary.get('tokenusage_minus_settled') or 0)}"
+        )
+    if resolved_alerts:
+        lines.append(
+            "Alerts: "
+            + "; ".join(
+                f"{str(item.get('code') or 'UNKNOWN')}: {str(item.get('message') or '').strip()}"
+                for item in resolved_alerts[:5]
+            )
+        )
+    else:
+        lines.append("Alerts: none")
+
+    if sample_action_ids:
+        lines.append(f"Sample action_ids: {', '.join(sample_action_ids[:5])}")
+    if sample_snapshots:
+        lines.append("Action snapshots:")
+        for snapshot in sample_snapshots:
+            lines.extend([f"  {line}" for line in _incident_snapshot_lines(snapshot)])
+
+    return lines
+
+
 def _notify_superadmins_billing_reconcile(
     tenant_id: str,
     *,
@@ -296,8 +369,6 @@ def _notify_superadmins_billing_reconcile(
         if not target_ids:
             return
 
-        sample = ", ".join([s for s in (sample_action_ids or []) if s][:5]) or "-"
-        sample_snapshots = _load_incident_snapshots_for_actions(sample_action_ids or [])
         lines = [
             "🚨 OpenClaw billing reconcile alert",
             f"Tenant: {tenant_id}",
@@ -305,12 +376,18 @@ def _notify_superadmins_billing_reconcile(
             f"Actions checked: {actions_checked}",
             f"Actions with issues: {actions_with_issues}",
             f"Issue count: {issue_count}",
-            f"Sample action_ids: {sample}",
         ]
-        if sample_snapshots:
-            lines.append("Incident snapshots:")
-            for snapshot in sample_snapshots:
-                lines.extend([f"  {line}" for line in _incident_snapshot_lines(snapshot)])
+        lines.extend(
+            _build_support_bundle_digest_lines(
+                tenant_id,
+                billing_summary={
+                    "actions_checked": actions_checked,
+                    "actions_with_issues": actions_with_issues,
+                    "issue_count": issue_count,
+                },
+                action_ids=sample_action_ids or [],
+            )
+        )
         message = "\n".join(lines)
         sent_any = False
         for telegram_id in target_ids:
@@ -415,8 +492,6 @@ def _notify_superadmins_callback_alerts(
         if not target_ids:
             return
 
-        sample_action_ids = _load_problematic_action_ids_for_tenant(tenant_id, limit=2)
-        sample_snapshots = _load_incident_snapshots_for_actions(sample_action_ids)
         alert_lines = [f"- {a.get('code')}: {a.get('message')}" for a in (alerts or []) if a.get("code")]
         lines = [
             "🚨 OpenClaw callback delivery alert",
@@ -430,12 +505,13 @@ def _notify_superadmins_callback_alerts(
             f"Success rate: {float(metrics.get('delivery_success_rate') or 0.0)}%",
             "Alerts:",
         ] + (alert_lines or ["- unknown"])
-        if sample_action_ids:
-            lines.append(f"Sample action_ids: {', '.join(sample_action_ids[:5])}")
-        if sample_snapshots:
-            lines.append("Incident snapshots:")
-            for snapshot in sample_snapshots:
-                lines.extend([f"  {line}" for line in _incident_snapshot_lines(snapshot)])
+        lines.extend(
+            _build_support_bundle_digest_lines(
+                tenant_id,
+                callback_metrics=metrics,
+                alerts=alerts,
+            )
+        )
         message = "\n".join(lines)
 
         sent_any = False
