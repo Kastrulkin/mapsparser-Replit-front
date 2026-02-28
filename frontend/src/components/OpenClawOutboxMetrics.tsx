@@ -214,6 +214,30 @@ type CallbackAttemptsResponse = {
   error?: string;
 };
 
+type RecoveryHistoryItem = {
+  id: string;
+  tenant_id: string;
+  triggered_by: string;
+  send_telegram_report: boolean;
+  include_retry: boolean;
+  replayed_count: number;
+  sent_count: number;
+  retried_count: number;
+  dlq_count: number;
+  telegram_sent_count: number;
+  action_ids: string[];
+  report_text: string;
+  created_at: string;
+};
+
+type RecoveryHistoryResponse = {
+  success: boolean;
+  tenant_id?: string;
+  items?: RecoveryHistoryItem[];
+  count?: number;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -289,6 +313,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [recovering, setRecovering] = useState(false);
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const [recoveryReport, setRecoveryReport] = useState<string | null>(null);
+  const [recoveryHistory, setRecoveryHistory] = useState<RecoveryHistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const buildTimelineParams = useCallback(
@@ -335,7 +360,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const [healthRes, trendRes, billingRes, actionsRes] = await Promise.all([
+      const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -352,12 +377,17 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/actions?tenant_id=${encodeURIComponent(businessId)}&limit=20&offset=0`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/callbacks/recovery-history?tenant_id=${encodeURIComponent(businessId)}&limit=5`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
 
       const healthJson: HealthResponse = await healthRes.json();
       const trendJson: TrendResponse = await trendRes.json();
       const billingData: BillingReconcileResponse = await billingRes.json();
       const actionsData: ActionListResponse = await actionsRes.json();
+      const recoveryHistoryData: RecoveryHistoryResponse = await recoveryHistoryRes.json();
 
       if (!healthRes.ok || !healthJson?.success) {
         throw new Error(healthJson?.error || `HTTP ${healthRes.status}`);
@@ -371,10 +401,14 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       if (!actionsRes.ok || !actionsData?.success) {
         throw new Error(actionsData?.error || `HTTP ${actionsRes.status}`);
       }
+      if (!recoveryHistoryRes.ok || !recoveryHistoryData?.success) {
+        throw new Error(recoveryHistoryData?.error || `HTTP ${recoveryHistoryRes.status}`);
+      }
 
       setData(healthJson);
       setTrend((trendJson.items || []).slice(0, 24));
       setBilling(billingData || null);
+      setRecoveryHistory((recoveryHistoryData.items || []).slice(0, 5));
       const items = (actionsData.items || []).slice(0, 20);
       setActions(items);
       setSelectedActionId((prev) => {
@@ -1437,6 +1471,28 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 </button>
               </div>
               <pre className="whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-700">{recoveryReport}</pre>
+            </div>
+          )}
+          {recoveryHistory.length > 0 && (
+            <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600">Последние recovery</div>
+              <div className="space-y-2">
+                {recoveryHistory.map((item) => (
+                  <div key={item.id} className="rounded-md border border-gray-200 bg-white px-2 py-2 text-[11px] text-gray-700">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-gray-900">{item.created_at || '—'}</span>
+                      <span>replay={item.replayed_count}</span>
+                      <span>sent={item.sent_count}</span>
+                      <span>retry={item.retried_count}</span>
+                      <span>dlq={item.dlq_count}</span>
+                      {item.send_telegram_report ? <span>telegram={item.telegram_sent_count}</span> : null}
+                    </div>
+                    {item.action_ids?.length ? (
+                      <div className="mt-1 text-gray-500">actions: {item.action_ids.map((id) => id.slice(0, 8)).join(', ')}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {copyMessage && (

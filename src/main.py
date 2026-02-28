@@ -2187,6 +2187,34 @@ def _ensure_manual_competitors_tables(cursor):
     )
 
 
+def _ensure_callback_recovery_history_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS callback_recovery_history (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            triggered_by TEXT NOT NULL,
+            send_telegram_report BOOLEAN NOT NULL DEFAULT FALSE,
+            include_retry BOOLEAN NOT NULL DEFAULT TRUE,
+            replayed_count INTEGER NOT NULL DEFAULT 0,
+            sent_count INTEGER NOT NULL DEFAULT 0,
+            retried_count INTEGER NOT NULL DEFAULT 0,
+            dlq_count INTEGER NOT NULL DEFAULT 0,
+            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
+            action_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            report_text TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_callback_recovery_history_tenant_created
+        ON callback_recovery_history (tenant_id, created_at DESC)
+        """
+    )
+
+
 def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
@@ -5315,9 +5343,42 @@ def capabilities_callbacks_recovery_report():
         finally:
             db.close()
 
+    history_id = str(uuid.uuid4())
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        _ensure_callback_recovery_history_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO callback_recovery_history (
+                id, tenant_id, triggered_by, send_telegram_report, include_retry,
+                replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+                action_ids_json, report_text
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+            """,
+            (
+                history_id,
+                str(tenant_id),
+                str(user_data.get("user_id") or ""),
+                bool(send_telegram_report),
+                bool(include_retry),
+                int(replay.get("replayed_count") or 0),
+                int(dispatch.get("sent") or 0),
+                int(dispatch.get("retried") or 0),
+                int(dispatch.get("dlq") or 0),
+                int(telegram_sent or 0),
+                json.dumps(action_ids, ensure_ascii=False),
+                report_text,
+            ),
+        )
+        db.conn.commit()
+    finally:
+        db.close()
+
     return jsonify(
         {
             "success": True,
+            "history_id": history_id,
             "tenant_id": str(tenant_id),
             "metrics_before": pre_metrics.get("metrics") or {},
             "metrics_after": post_metrics.get("metrics") or {},
@@ -5330,6 +5391,74 @@ def capabilities_callbacks_recovery_report():
             "report_text": report_text,
         }
     ), 200
+
+
+@app.route('/api/capabilities/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
+def capabilities_callbacks_recovery_history():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        _ensure_callback_recovery_history_table(cursor)
+        cursor.execute(
+            """
+            SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
+                   replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+                   action_ids_json, report_text, created_at
+            FROM callback_recovery_history
+            WHERE tenant_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(tenant_id), limit),
+        )
+        rows = cursor.fetchall() or []
+        items = []
+        for row in rows:
+            rd = _row_to_dict(cursor, row)
+            raw_action_ids = rd.get("action_ids_json")
+            if isinstance(raw_action_ids, str):
+                try:
+                    action_ids = json.loads(raw_action_ids)
+                except Exception:
+                    action_ids = []
+            else:
+                action_ids = raw_action_ids or []
+            items.append(
+                {
+                    "id": str(rd.get("id") or ""),
+                    "tenant_id": str(rd.get("tenant_id") or ""),
+                    "triggered_by": str(rd.get("triggered_by") or ""),
+                    "send_telegram_report": bool(rd.get("send_telegram_report")),
+                    "include_retry": bool(rd.get("include_retry")),
+                    "replayed_count": int(rd.get("replayed_count") or 0),
+                    "sent_count": int(rd.get("sent_count") or 0),
+                    "retried_count": int(rd.get("retried_count") or 0),
+                    "dlq_count": int(rd.get("dlq_count") or 0),
+                    "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
+                    "action_ids": action_ids,
+                    "report_text": str(rd.get("report_text") or ""),
+                    "created_at": str(rd.get("created_at") or ""),
+                }
+            )
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
 
 
 @app.route('/api/capabilities/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])
