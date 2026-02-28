@@ -2215,6 +2215,29 @@ def _ensure_callback_recovery_history_table(cursor):
     )
 
 
+def _ensure_support_export_send_history_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS support_export_send_history (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            triggered_by TEXT NOT NULL,
+            action_id TEXT NULL,
+            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
+            target_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            report_text TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_support_export_send_history_tenant_created
+        ON support_export_send_history (tenant_id, created_at DESC)
+        """
+    )
+
+
 def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
@@ -2369,6 +2392,45 @@ def _render_callback_recovery_history_markdown(tenant_id: str, items: list[dict]
             lines.extend(["", "```", report_text, "```"])
         lines.append("")
     return "\n".join(lines)
+
+
+def _load_support_export_send_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:
+    _ensure_support_export_send_history_table(cursor)
+    cursor.execute(
+        """
+        SELECT id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text, created_at
+        FROM support_export_send_history
+        WHERE tenant_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (str(tenant_id), int(limit)),
+    )
+    rows = cursor.fetchall() or []
+    items = []
+    for row in rows:
+        rd = _row_to_dict(cursor, row)
+        raw_target_ids = rd.get("target_ids_json")
+        if isinstance(raw_target_ids, str):
+            try:
+                target_ids = json.loads(raw_target_ids)
+            except Exception:
+                target_ids = []
+        else:
+            target_ids = raw_target_ids or []
+        items.append(
+            {
+                "id": str(rd.get("id") or ""),
+                "tenant_id": str(rd.get("tenant_id") or ""),
+                "triggered_by": str(rd.get("triggered_by") or ""),
+                "action_id": str(rd.get("action_id") or ""),
+                "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
+                "target_ids": target_ids,
+                "report_text": str(rd.get("report_text") or ""),
+                "created_at": str(rd.get("created_at") or ""),
+            }
+        )
+    return items
 
 
 def _build_openclaw_support_export_bundle(
@@ -5962,6 +6024,105 @@ def capabilities_support_export():
             }
         ), 200
     return jsonify(bundle), 200
+
+
+@app.route('/api/capabilities/support-export/send', methods=['POST', 'OPTIONS'])
+def capabilities_support_export_send():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    data = request.get_json(silent=True) or {}
+    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    action_id = str(data.get("action_id") or request.args.get("action_id") or "").strip() or None
+    bundle, code = _build_openclaw_support_export_bundle(
+        user_data,
+        str(tenant_id),
+        action_id=action_id,
+    )
+    if not bundle.get("success"):
+        return jsonify(bundle), int(code)
+
+    report_text = _render_openclaw_support_export_markdown(bundle)
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        target_ids = _get_superadmin_telegram_ids(cursor)
+        sent_count = 0
+        for telegram_id in target_ids:
+            if _send_telegram_plain_message(telegram_id, report_text):
+                sent_count += 1
+
+        history_id = str(uuid.uuid4())
+        _ensure_support_export_send_history_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO support_export_send_history (
+                id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text
+            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+            """,
+            (
+                history_id,
+                str(tenant_id),
+                str(user_data.get("user_id") or ""),
+                str(action_id or ""),
+                int(sent_count),
+                json.dumps(list(target_ids), ensure_ascii=False),
+                report_text,
+            ),
+        )
+        db.conn.commit()
+    finally:
+        db.close()
+
+    return jsonify(
+        {
+            "success": True,
+            "history_id": history_id,
+            "tenant_id": str(tenant_id),
+            "action_id": action_id,
+            "telegram_sent_count": int(sent_count),
+            "target_count": len(target_ids),
+            "report_text": report_text,
+        }
+    ), 200
+
+
+@app.route('/api/capabilities/support-export/send-history', methods=['GET', 'OPTIONS'])
+def capabilities_support_export_send_history():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
 
 
 @app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])

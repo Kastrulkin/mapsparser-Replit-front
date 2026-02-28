@@ -1969,6 +1969,66 @@ def test_openclaw_support_export_json_with_action_snapshot(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_user_support_export_send_records_history(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+
+    create = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert create.status_code == 200, create.get_json()
+    action_id = create.get_json()["action_id"]
+
+    sent = {"count": 0, "targets": []}
+
+    def _fake_send(chat_id, text):
+        sent["count"] += 1
+        sent["targets"].append(str(chat_id))
+        assert "# OpenClaw Support Export Bundle" in str(text)
+        return True
+
+    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", _fake_send)
+    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "273282710"
+    try:
+        r = info["client"].post(
+            "/api/capabilities/support-export/send",
+            json={"tenant_id": info["business_id"], "action_id": action_id},
+            headers=_auth_headers(),
+        )
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert body["action_id"] == action_id
+        assert body["telegram_sent_count"] == 1
+        assert body["target_count"] >= 1
+        assert "# OpenClaw Support Export Bundle" in body["report_text"]
+
+        hist = info["client"].get(
+            f"/api/capabilities/support-export/send-history?tenant_id={info['business_id']}&limit=5",
+            headers=_auth_headers(),
+        )
+        assert hist.status_code == 200, hist.get_json()
+        hist_body = hist.get_json()
+        assert hist_body["success"] is True
+        assert hist_body["count"] >= 1
+        first = hist_body["items"][0]
+        assert first["action_id"] == action_id
+        assert first["telegram_sent_count"] == 1
+        assert "273282710" in first["target_ids"]
+        assert "# OpenClaw Support Export Bundle" in first["report_text"]
+        assert sent["count"] == 1
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"

@@ -247,6 +247,25 @@ type SupportExportResponse = {
   error?: string;
 };
 
+type SupportSendHistoryItem = {
+  id: string;
+  tenant_id: string;
+  triggered_by: string;
+  action_id: string;
+  telegram_sent_count: number;
+  target_ids: string[];
+  report_text: string;
+  created_at: string;
+};
+
+type SupportSendHistoryResponse = {
+  success: boolean;
+  tenant_id?: string;
+  items?: SupportSendHistoryItem[];
+  count?: number;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -323,6 +342,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const [recoveryReport, setRecoveryReport] = useState<string | null>(null);
   const [recoveryHistory, setRecoveryHistory] = useState<RecoveryHistoryItem[]>([]);
+  const [supportSendHistory, setSupportSendHistory] = useState<SupportSendHistoryItem[]>([]);
+  const [supportSendReport, setSupportSendReport] = useState<string | null>(null);
+  const [supportSending, setSupportSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const buildTimelineParams = useCallback(
@@ -369,7 +391,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes] = await Promise.all([
+      const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes, supportSendHistoryRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -390,6 +412,10 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/callbacks/recovery-history?tenant_id=${encodeURIComponent(businessId)}&limit=5`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/support-export/send-history?tenant_id=${encodeURIComponent(businessId)}&limit=5`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
 
       const healthJson: HealthResponse = await healthRes.json();
@@ -397,6 +423,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       const billingData: BillingReconcileResponse = await billingRes.json();
       const actionsData: ActionListResponse = await actionsRes.json();
       const recoveryHistoryData: RecoveryHistoryResponse = await recoveryHistoryRes.json();
+      const supportSendHistoryData: SupportSendHistoryResponse = await supportSendHistoryRes.json();
 
       if (!healthRes.ok || !healthJson?.success) {
         throw new Error(healthJson?.error || `HTTP ${healthRes.status}`);
@@ -413,11 +440,15 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       if (!recoveryHistoryRes.ok || !recoveryHistoryData?.success) {
         throw new Error(recoveryHistoryData?.error || `HTTP ${recoveryHistoryRes.status}`);
       }
+      if (!supportSendHistoryRes.ok || !supportSendHistoryData?.success) {
+        throw new Error(supportSendHistoryData?.error || `HTTP ${supportSendHistoryRes.status}`);
+      }
 
       setData(healthJson);
       setTrend((trendJson.items || []).slice(0, 24));
       setBilling(billingData || null);
       setRecoveryHistory((recoveryHistoryData.items || []).slice(0, 5));
+      setSupportSendHistory((supportSendHistoryData.items || []).slice(0, 5));
       const items = (actionsData.items || []).slice(0, 20);
       setActions(items);
       setSelectedActionId((prev) => {
@@ -672,6 +703,39 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setRecovering(false);
     }
   }, [businessId, load, refreshActionAttempts, refreshActionSnapshots, refreshActionTimeline]);
+
+  const sendSupportExportToTelegram = useCallback(async () => {
+    if (!businessId) return;
+    setSupportSending(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/capabilities/support-export/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenant_id: businessId,
+          action_id: selectedActionId || undefined,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `Support send failed (${response.status})`);
+      }
+      setSupportSendReport(String(json?.report_text || '').trim() || null);
+      setRecoverMessage(
+        `Support snapshot отправлен: telegram=${Number(json?.telegram_sent_count || 0)}/${Number(json?.target_count || 0)}`
+      );
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отправить support snapshot в Telegram');
+    } finally {
+      setSupportSending(false);
+    }
+  }, [businessId, selectedActionId, load]);
 
   const exportTimelineJson = useCallback(() => {
     if (!selectedActionId) return;
@@ -1561,6 +1625,15 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           </button>
           <button
             type="button"
+            onClick={sendSupportExportToTelegram}
+            disabled={loading || recovering || supportSending || !businessId}
+            className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            <Wrench className={`h-3.5 w-3.5 ${supportSending ? 'animate-pulse' : ''}`} />
+            {supportSending ? 'Отправка...' : 'Support в Telegram'}
+          </button>
+          <button
+            type="button"
             onClick={load}
             disabled={loading || recovering}
             className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-60"
@@ -1611,6 +1684,12 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               <pre className="whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-700">{recoveryReport}</pre>
             </div>
           )}
+          {supportSendReport && (
+            <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Last support send</div>
+              <pre className="whitespace-pre-wrap break-words text-[11px] leading-5 text-emerald-900">{supportSendReport}</pre>
+            </div>
+          )}
           {recoveryHistory.length > 0 && (
             <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1646,6 +1725,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                     {item.action_ids?.length ? (
                       <div className="mt-1 text-gray-500">actions: {item.action_ids.map((id) => id.slice(0, 8)).join(', ')}</div>
                     ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {supportSendHistory.length > 0 && (
+            <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Последние support-send</div>
+              <div className="space-y-2">
+                {supportSendHistory.map((item) => (
+                  <div key={item.id} className="rounded-md border border-emerald-200 bg-white px-2 py-2 text-[11px] text-emerald-800">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-emerald-950">{item.created_at || '—'}</span>
+                      <span>telegram={item.telegram_sent_count}</span>
+                      {item.action_id ? <span>action={item.action_id.slice(0, 8)}</span> : null}
+                    </div>
+                    <div className="mt-1 text-emerald-700">
+                      targets={item.target_ids.length} • triggered_by={item.triggered_by || '-'}
+                    </div>
                   </div>
                 ))}
               </div>

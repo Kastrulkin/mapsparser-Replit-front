@@ -64,6 +64,8 @@
 34. `GET /api/capabilities/callbacks/recovery-history?tenant_id=&limit=` (user recovery audit trail)
 35. `GET /api/capabilities/callbacks/recovery-history/export?tenant_id=&limit=&format=` (user canonical recovery history export)
 36. `GET /api/capabilities/support-export?tenant_id=&action_id=&format=` (user canonical support bundle for ops/export)
+37. `POST /api/capabilities/support-export/send` (user manual send of support bundle to superadmin Telegram)
+38. `GET /api/capabilities/support-export/send-history?tenant_id=&limit=` (user audit trail for manual support bundle sends)
 
 ## Обязательные поля envelope (`execute`)
 
