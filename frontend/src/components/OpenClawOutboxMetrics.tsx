@@ -510,6 +510,32 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     });
   }, [auditTimeline, auditTimelineQuickFilter]);
 
+  const auditTimelineSummary = useMemo(() => {
+    let failedCallbacks = 0;
+    let attentionRecovery = 0;
+    let supportSend = 0;
+    for (const item of auditTimeline) {
+      const source = String(item.source || '').toLowerCase();
+      const status = String(item.status || '').toLowerCase();
+      if (source === 'callback_attempt' && status === 'failed') {
+        failedCallbacks += 1;
+      }
+      if (source === 'recovery_run' && status === 'attention') {
+        attentionRecovery += 1;
+      }
+      if (source === 'support_send') {
+        supportSend += 1;
+      }
+    }
+    return {
+      totalLoaded: auditTimeline.length,
+      failedCallbacks,
+      attentionRecovery,
+      supportSend,
+      incident: failedCallbacks + attentionRecovery + supportSend,
+    };
+  }, [auditTimeline]);
+
   const buildTimelineParams = useCallback(
     (options?: { includeOffset?: boolean }) => {
       const includeOffset = options?.includeOffset !== false;
@@ -2231,6 +2257,53 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             </div>
             <div className="mb-2 text-[11px] text-amber-700">
               Показано: {filteredAuditTimeline.length} / {auditTimelineTotal}
+            </div>
+            <div className="mb-3 rounded-md border border-amber-200 bg-white px-3 py-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                Incident summary
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter('incident')}
+                  className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  <span>Incident</span>
+                  <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold">{auditTimelineSummary.incident}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter('failed_callback')}
+                  className="inline-flex items-center gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-[10px] font-medium text-rose-900 hover:bg-rose-100"
+                >
+                  <span>Failed callback</span>
+                  <span className="rounded bg-rose-200 px-1.5 py-0.5 font-semibold">{auditTimelineSummary.failedCallbacks}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter('attention_recovery')}
+                  className="inline-flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-900 hover:bg-blue-100"
+                >
+                  <span>Attention recovery</span>
+                  <span className="rounded bg-blue-200 px-1.5 py-0.5 font-semibold">{auditTimelineSummary.attentionRecovery}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter('support_send')}
+                  className="inline-flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-900 hover:bg-emerald-100"
+                >
+                  <span>Support send</span>
+                  <span className="rounded bg-emerald-200 px-1.5 py-0.5 font-semibold">{auditTimelineSummary.supportSend}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter('all')}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-800 hover:bg-slate-100"
+                >
+                  <span>Loaded</span>
+                  <span className="rounded bg-slate-200 px-1.5 py-0.5 font-semibold">{auditTimelineSummary.totalLoaded}</span>
+                </button>
+              </div>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Incident mode</span>
