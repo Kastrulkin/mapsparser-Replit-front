@@ -17,6 +17,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from database_manager import get_db_connection
 from core.action_orchestrator import ActionOrchestrator
+from core.helpers import get_user_language
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 
 # Автоматически подгружаем переменные окружения из .env,
@@ -35,6 +36,12 @@ API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
 # Словарь для хранения состояния пользователей (telegram_id -> state)
 user_states = {}
 OPENCLAW_ORCHESTRATOR = ActionOrchestrator({})
+REVIEW_REPLY_TONES = [
+    ("friendly", "Дружелюбный"),
+    ("professional", "Профессиональный"),
+    ("premium", "Премиум"),
+    ("business", "Деловой"),
+]
 
 
 def _row_get(row, key: str, index: int | None = None, default=None):
@@ -51,6 +58,153 @@ def _row_get(row, key: str, index: int | None = None, default=None):
         except Exception:
             return default
     return default
+
+
+def _get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
+        row = cursor.fetchone()
+    except Exception:
+        return fallback or ""
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    prompt_text = _row_get(row, "prompt_text", 0, "")
+    prompt_text = str(prompt_text or "").strip()
+    return prompt_text or (fallback or "")
+
+
+def _extract_json_candidate(raw_text: str):
+    if not isinstance(raw_text, str):
+        return None
+    txt = raw_text.strip()
+    if not txt:
+        return None
+    try:
+        parsed = json.loads(txt)
+        if isinstance(parsed, (dict, list)):
+            return parsed
+    except Exception:
+        pass
+    start = txt.find("{")
+    end = txt.rfind("}") + 1
+    if start != -1 and end > start:
+        try:
+            return json.loads(txt[start:end])
+        except Exception:
+            return None
+    return None
+
+
+def _format_prompt_with_replacements(template: str, mapping: dict) -> str:
+    prompt = str(template or "")
+    for key, value in (mapping or {}).items():
+        prompt = prompt.replace("{" + str(key) + "}", str(value or ""))
+    return prompt
+
+
+def _load_review_examples(user_id: str, limit: int = 5) -> list[str]:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT example_text
+            FROM UserExamples
+            WHERE user_id = %s AND example_type = 'review'
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(user_id), int(limit)),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    examples = []
+    for row in rows:
+        text = str(_row_get(row, "example_text", 0, "") or "").strip()
+        if text:
+            examples.append(text)
+    return examples
+
+
+def _telegram_capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    review_text = str(payload.get("review") or "").strip()
+    tone = str(payload.get("tone") or "профессиональный").strip()
+    language = get_user_language(
+        str(user_data.get("user_id") or ""),
+        str(payload.get("language") or "").strip() or None,
+    )
+    examples = payload.get("examples")
+    if not isinstance(examples, list) or not examples:
+        examples = _load_review_examples(str(user_data.get("user_id") or ""), limit=5)
+    if not review_text:
+        raise ValueError("review is required for reviews.reply")
+
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    prompt_template = _get_prompt_from_db("review_reply", None)
+    if not prompt_template:
+        raise ValueError("Промпт review_reply не настроен в админ-панели.")
+
+    prompt = _format_prompt_with_replacements(
+        prompt_template,
+        {
+            "tone": tone,
+            "language_name": language_names.get(language, "Russian"),
+            "examples_text": "\n".join([str(x) for x in examples[:5] if str(x).strip()]),
+            "review_text": review_text[:1000],
+        },
+    )
+    result_text = analyze_text_with_gigachat(
+        prompt,
+        task_type="review_reply",
+        business_id=str(envelope.get("tenant_id") or ""),
+        user_id=str(user_data.get("user_id") or ""),
+    )
+    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
+    if isinstance(parsed, dict) and parsed.get("error"):
+        raise ValueError(str(parsed.get("error")))
+
+    reply_text = ""
+    if isinstance(parsed, dict):
+        reply_text = str(parsed.get("reply") or parsed.get("text") or "").strip()
+    if not reply_text:
+        reply_text = str(result_text or "").strip()
+    if not reply_text:
+        raise ValueError("Не удалось сгенерировать ответ")
+
+    return {
+        "result": {"reply": reply_text},
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
+OPENCLAW_ORCHESTRATOR.handlers["reviews.reply"] = _telegram_capability_reviews_reply
 
 def get_user_id_from_telegram(telegram_id: str):
     """Получить user_id из telegram_id"""
@@ -672,6 +826,74 @@ def _perform_recovery_report(business_ctx: dict) -> tuple[bool, str]:
     return True, f"✅ Recovery выполнен.\nHistory ID: {history_id}\n\n{report_text[:3000]}"
 
 
+def _build_review_tone_markup() -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton(label, callback_data=f"openclaw_review_tone_{tone_key}")]
+        for tone_key, label in REVIEW_REPLY_TONES
+    ]
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="openclaw_review_cancel")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _perform_reviews_reply(business_ctx: dict, review_text: str, tone: str = "professional") -> tuple[bool, str]:
+    review_text = str(review_text or "").strip()
+    if not review_text:
+        return False, "❌ Текст отзыва пустой."
+
+    tone_map = {
+        "friendly": "дружелюбный",
+        "professional": "профессиональный",
+        "premium": "премиум",
+        "business": "деловой",
+    }
+    envelope = {
+        "tenant_id": str(business_ctx["business_id"]),
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "actor": {
+            "id": str(business_ctx["user_id"]),
+            "type": "user",
+            "role": "owner",
+            "channel": "telegram",
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+        },
+        "capability": "reviews.reply",
+        "approval": {"mode": "auto", "ttl_sec": 1800},
+        "billing": {"tariff_id": "telegram-review-reply", "reserve_tokens": 1200},
+        "payload": {
+            "review": review_text,
+            "tone": tone_map.get(str(tone or "").strip().lower(), "профессиональный"),
+            "publish": False,
+        },
+    }
+    result = OPENCLAW_ORCHESTRATOR.execute(
+        envelope,
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+    )
+    if not result.get("success") or result.get("status") == "failed":
+        return False, f"❌ Не удалось сгенерировать ответ: {result.get('error') or 'неизвестная ошибка'}"
+
+    action_id = str(result.get("action_id") or "")
+    reply_payload = result.get("result") or {}
+    reply_text = str((reply_payload or {}).get("reply") or "").strip()
+    if not reply_text:
+        return False, "❌ Ответ сгенерирован пустым."
+
+    return True, "\n".join(
+        [
+            "💬 Ответ на отзыв",
+            f"Бизнес: {business_ctx['business_name']}",
+            f"Action: {action_id}",
+            "",
+            reply_text[:3000],
+        ]
+    )
+
+
 def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     ctx = resolve_business_context(str(telegram_id))
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
@@ -684,6 +906,7 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     )
     keyboard = [
         [InlineKeyboardButton("📊 Статус", callback_data="openclaw_status")],
+        [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
         [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
         [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
         [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
@@ -770,6 +993,41 @@ async def recovery_report_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(text)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка recovery report: {e}")
+
+
+async def reply_review_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Chat-first flow: сгенерировать ответ на отзыв."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    review_text = " ".join(context.args or []).strip()
+    state_ref = user_states.setdefault(str(update.effective_user.id), {})
+    state_ref["active_business_id"] = str(business_ctx["business_id"])
+
+    if review_text:
+        state_ref.update(
+            {
+                "state": "waiting_review_reply_tone",
+                "business_id": str(business_ctx["business_id"]),
+                "pending_review_text": review_text,
+            }
+        )
+        await update.message.reply_text(
+            "Выберите тон ответа:",
+            reply_markup=_build_review_tone_markup(),
+        )
+        return
+
+    state_ref.update(
+        {
+            "state": "waiting_review_reply_text",
+            "business_id": str(business_ctx["business_id"]),
+        }
+    )
+    await update.message.reply_text(
+        "💬 Отправьте текст отзыва. Затем я предложу выбрать тон и сгенерирую ответ."
+    )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -880,6 +1138,58 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         menu_text, reply_markup = build_openclaw_menu(user_id)
         await query.edit_message_text(
             f"{text}\n\n──────────\n\n{menu_text}",
+            reply_markup=reply_markup,
+        )
+    elif data == "openclaw_review_start":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref.update(
+            {
+                "state": "waiting_review_reply_text",
+                "business_id": str(business_ctx["business_id"]),
+                "active_business_id": str(business_ctx["business_id"]),
+            }
+        )
+        await query.edit_message_text(
+            "💬 Отправьте текст отзыва следующим сообщением. Затем выберете тон и я сгенерирую ответ."
+        )
+    elif data == "openclaw_review_cancel":
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref["state"] = "idle"
+        state_ref.pop("pending_review_text", None)
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(
+            f"❌ Генерация ответа отменена.\n\n{menu_text}",
+            reply_markup=reply_markup,
+        )
+    elif data.startswith("openclaw_review_tone_"):
+        state_ref = user_states.setdefault(user_id, {})
+        review_text = str(state_ref.get("pending_review_text") or "").strip()
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        if not review_text:
+            await query.edit_message_text("❌ Не найден текст отзыва. Начните заново через кнопку 'Ответ на отзыв'.")
+            return
+        tone = data.replace("openclaw_review_tone_", "", 1)
+        ok, text = _perform_reviews_reply(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+            },
+            review_text,
+            tone=tone,
+        )
+        state_ref["state"] = "idle"
+        state_ref.pop("pending_review_text", None)
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        safe_text = text[:3200]
+        await query.edit_message_text(
+            f"{safe_text}\n\n──────────\n\n{menu_text}",
             reply_markup=reply_markup,
         )
     elif data == "openclaw_support_export":
@@ -1349,10 +1659,27 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_transaction_text(update, context, user_id, text)
     elif state == 'waiting_optimize':
         await handle_optimize_text(update, context, user_id, text)
+    elif state == 'waiting_review_reply_text':
+        await handle_review_reply_text(update, context, user_id, text)
     elif state.startswith('waiting_setting_'):
         await handle_setting_text(update, context, user_id, text, state)
     else:
         await update.message.reply_text("Неожиданное сообщение. Используйте /start для начала работы")
+
+
+async def handle_review_reply_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
+    review_text = str(text or "").strip()
+    if not review_text:
+        await update.message.reply_text("❌ Текст отзыва пустой. Отправьте нормальный текст.")
+        return
+
+    state_ref = user_states.setdefault(user_id, {})
+    state_ref["state"] = "waiting_review_reply_tone"
+    state_ref["pending_review_text"] = review_text
+    await update.message.reply_text(
+        "Выберите тон ответа:",
+        reply_markup=_build_review_tone_markup(),
+    )
 
 async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
     """Обработка текста транзакции"""
@@ -1729,6 +2056,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /businesses - Показать ваши бизнесы
 /use_business - Выбрать активный бизнес
 /status - Статус OpenClaw по вашему бизнесу
+/reply_review - Сгенерировать ответ на отзыв
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
 
@@ -1766,6 +2094,7 @@ def main():
         application.add_handler(CommandHandler("businesses", businesses_command))
         application.add_handler(CommandHandler("use_business", use_business_command))
         application.add_handler(CommandHandler("status", openclaw_status_command))
+        application.add_handler(CommandHandler("reply_review", reply_review_command))
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
