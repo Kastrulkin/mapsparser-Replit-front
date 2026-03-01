@@ -2,7 +2,7 @@
 
 У нас два Telegram-бота:
 
-1. **@Local_bot** - для управления аккаунтом (использует `TELEGRAM_BOT_TOKEN`)
+1. **@LocalOspro_bot** - для управления аккаунтом и OpenClaw actions (использует `TELEGRAM_BOT_TOKEN`)
 2. **@beautyreviewexchange_bot** - для обмена отзывами (использует `TELEGRAM_REVIEWS_BOT_TOKEN`)
 
 ## 📋 Требования
@@ -61,6 +61,21 @@ systemctl start telegram-bot
 # Проверить статус
 systemctl status telegram-bot
 ```
+
+После запуска для рабочего сценария используйте в Telegram:
+
+```text
+/control
+```
+
+Это основной guided-вход. Из него доступны:
+- статус бизнеса;
+- ответы на отзывы;
+- оптимизация одной услуги;
+- генерация новости;
+- последние actions;
+- очередь подтверждений (`pending approvals`);
+- support snapshot и recovery report.
 
 #### Бот для обмена отзывами:
 
@@ -137,3 +152,7 @@ journalctl -u telegram-reviews-bot -f
 - Убедитесь, что API сервер (`main.py`) запущен и доступен
 - Проверьте, что база данных доступна и содержит необходимые таблицы
 - Для работы с фото нужен настроенный GigaChat API (только для бота управления аккаунтом)
+- Для human-in-the-loop доступны команды:
+  - `/pending_approvals`
+  - `/approve_action <action_id>`
+  - `/reject_action <action_id>`

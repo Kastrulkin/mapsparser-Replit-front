@@ -9,10 +9,12 @@ Telegram-бот для управления аккаунтом BeautyBot
 """
 import os
 import json
+import re
 import uuid
 import base64
 import requests
 from datetime import datetime
+from typing import Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from database_manager import get_db_connection
@@ -1433,6 +1435,28 @@ def _format_pending_human_text(title: str, business_ctx: dict, action_id: str) -
     )
 
 
+def _extract_action_id_from_text(text: str) -> str:
+    match = re.search(r"^Action:\s*([a-zA-Z0-9\\-]+)\s*$", str(text or ""), flags=re.MULTILINE)
+    return str(match.group(1) if match else "").strip()
+
+
+def _compose_openclaw_followup(telegram_id: str, lead_text: str) -> tuple[str, InlineKeyboardMarkup]:
+    lead_text = str(lead_text or "").strip()
+    action_id = _extract_action_id_from_text(lead_text)
+    if "Действие отправлено на подтверждение." in lead_text and action_id:
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Подтвердить", callback_data=f"approval_approved_{action_id}"),
+                InlineKeyboardButton("✖️ Отклонить", callback_data=f"approval_rejected_{action_id}"),
+            ],
+            [InlineKeyboardButton("ℹ️ Статус action", callback_data=f"approval_status_{action_id}")],
+            [InlineKeyboardButton("⏳ Pending approvals", callback_data="openclaw_pending_approvals")],
+            [InlineKeyboardButton("🤖 OpenClaw menu", callback_data="menu_openclaw")],
+        ]
+        return lead_text, InlineKeyboardMarkup(keyboard)
+    return _compose_openclaw_panel(telegram_id, lead_text)
+
+
 def _build_pending_approvals_view(business_ctx: dict, limit: int = 6) -> tuple[bool, str, InlineKeyboardMarkup]:
     result = OPENCLAW_ORCHESTRATOR.list_actions(
         {
@@ -1561,7 +1585,7 @@ async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_
 
     try:
         ok, text = _build_openclaw_status_text(business_ctx)
-        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        panel_text, reply_markup = _compose_openclaw_followup(str(update.effective_user.id), text)
         await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка OpenClaw status: {e}")
@@ -1630,7 +1654,7 @@ async def support_export_command(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text("⏳ Формирую support snapshot...")
     try:
         ok, text = _perform_support_export(business_ctx)
-        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        panel_text, reply_markup = _compose_openclaw_followup(str(update.effective_user.id), text)
         await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка support export: {e}")
@@ -1701,7 +1725,7 @@ async def optimize_service_command(update: Update, context: ContextTypes.DEFAULT
             {**business_ctx, "telegram_id": str(update.effective_user.id)},
             service_text,
         )
-        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        panel_text, reply_markup = _compose_openclaw_followup(str(update.effective_user.id), text)
         await update.message.reply_text(panel_text, reply_markup=reply_markup)
         return
 
@@ -1734,7 +1758,7 @@ async def generate_news_command(update: Update, context: ContextTypes.DEFAULT_TY
             {**business_ctx, "telegram_id": str(update.effective_user.id)},
             raw_info,
         )
-        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        panel_text, reply_markup = _compose_openclaw_followup(str(update.effective_user.id), text)
         await update.message.reply_text(panel_text, reply_markup=reply_markup)
         return
 
@@ -2163,10 +2187,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         state_ref["state"] = "idle"
         state_ref.pop("pending_review_text", None)
-        menu_text, reply_markup = build_openclaw_menu(user_id)
         safe_text = text[:3200]
+        panel_text, reply_markup = _compose_openclaw_followup(user_id, safe_text)
         await query.edit_message_text(
-            f"{safe_text}\n\n──────────\n\n{menu_text}",
+            panel_text,
             reply_markup=reply_markup,
         )
     elif data == "openclaw_support_export":
@@ -2696,7 +2720,7 @@ async def handle_openclaw_service_optimize_text(update: Update, context: Context
         text,
     )
     user_states.setdefault(user_id, {})["state"] = "idle"
-    panel_text, reply_markup = _compose_openclaw_panel(user_id, response_text)
+    panel_text, reply_markup = _compose_openclaw_followup(user_id, response_text)
     await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 
@@ -2711,7 +2735,7 @@ async def handle_openclaw_news_generate_text(update: Update, context: ContextTyp
         text,
     )
     user_states.setdefault(user_id, {})["state"] = "idle"
-    panel_text, reply_markup = _compose_openclaw_panel(user_id, response_text)
+    panel_text, reply_markup = _compose_openclaw_followup(user_id, response_text)
     await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
