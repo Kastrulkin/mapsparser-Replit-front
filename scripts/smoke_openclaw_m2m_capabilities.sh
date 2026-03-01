@@ -650,6 +650,31 @@ then
   exit 1
 fi
 
+echo "[8.10/12] M2M unified audit timeline export"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/audit-timeline/export?tenant_id=${TENANT_ID}&limit=20&format=markdown" > "${tmp_dir}/audit_timeline_export.json"
+audit_timeline_export_success="$(json_read "${tmp_dir}/audit_timeline_export.json" "success")"
+if [[ "${audit_timeline_export_success}" != "True" && "${audit_timeline_export_success}" != "true" ]]; then
+  echo "Unified audit timeline export failed"
+  cat "${tmp_dir}/audit_timeline_export.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/audit_timeline_export.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Unified Audit Timeline" not in report:
+    print("Unified audit timeline markdown_report is invalid")
+    sys.exit(1)
+print("Unified audit timeline export OK")
+PY
+then
+  cat "${tmp_dir}/audit_timeline_export.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

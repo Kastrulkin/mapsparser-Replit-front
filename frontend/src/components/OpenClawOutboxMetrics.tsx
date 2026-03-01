@@ -1141,6 +1141,31 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [businessId]);
 
+  const fetchAuditTimelineExport = useCallback(async (format: 'json' | 'markdown') => {
+    if (!businessId) return null;
+    const token = localStorage.getItem('auth_token');
+    const params = new URLSearchParams();
+    params.set('tenant_id', businessId);
+    params.set('limit', '50');
+    params.set('offset', '0');
+    params.set('format', format);
+    if (auditTimelineSourceFilter !== 'all') {
+      params.set('source', auditTimelineSourceFilter);
+    }
+    const searchText = auditTimelineSearch.trim();
+    if (searchText) {
+      params.set('search', searchText);
+    }
+    const response = await fetch(`/api/capabilities/audit-timeline/export?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [businessId, auditTimelineSourceFilter, auditTimelineSearch]);
+
   const exportRecoveryHistoryJson = useCallback(async () => {
     if (!businessId) return;
     try {
@@ -1260,6 +1285,54 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setError(e?.message || 'Не удалось экспортировать support-send history markdown');
     }
   }, [businessId, fetchSupportSendHistoryExport]);
+
+  const exportAuditTimelineJson = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchAuditTimelineExport('json');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `unified-audit-timeline-${businessId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать unified audit timeline');
+    }
+  }, [businessId, fetchAuditTimelineExport]);
+
+  const exportAuditTimelineMarkdown = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchAuditTimelineExport('markdown');
+      const markdown = String(payload?.markdown_report || '').trim();
+      if (!markdown) {
+        throw new Error('Unified audit timeline markdown не сформирован');
+      }
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `unified-audit-timeline-${businessId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать unified audit timeline markdown');
+    }
+  }, [businessId, fetchAuditTimelineExport]);
+
+  const jumpToActionFromAudit = useCallback((actionId?: string) => {
+    const normalized = String(actionId || '').trim();
+    if (!normalized) return;
+    setSelectedActionId(normalized);
+    setCopyMessage(`Выбрано action ${normalized.slice(0, 8)}`);
+    window.setTimeout(() => setCopyMessage(null), 2500);
+  }, []);
 
   const copyRecoveryReport = useCallback(async () => {
     if (!recoveryReport) return;
@@ -1898,6 +1971,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Unified audit timeline</div>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportAuditTimelineJson}
+                  className="inline-flex items-center rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Экспорт JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={exportAuditTimelineMarkdown}
+                  className="inline-flex items-center rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Экспорт MD
+                </button>
                 <select
                   value={auditTimelineSourceFilter}
                   onChange={(e) => setAuditTimelineSourceFilter(e.target.value)}
@@ -1938,7 +2025,18 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                     </span>
                     <span>{item.event_type}</span>
                     {item.status ? <span>status={item.status}</span> : null}
-                    {item.action_id ? <span>action={item.action_id.slice(0, 8)}</span> : null}
+                    {item.action_id ? (
+                      <>
+                        <span>action={item.action_id.slice(0, 8)}</span>
+                        <button
+                          type="button"
+                          onClick={() => jumpToActionFromAudit(item.action_id)}
+                          className="inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-100"
+                        >
+                          Открыть action
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                   {item.details && Object.keys(item.details).length > 0 ? (
                     <div className="mt-1 text-amber-700">

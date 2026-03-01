@@ -2649,6 +2649,61 @@ def _load_tenant_audit_timeline_items(
     return items, total_count
 
 
+def _render_tenant_audit_timeline_markdown(
+    tenant_id: str,
+    items: list[dict],
+    total_count: int,
+    *,
+    source: str | None = None,
+    search: str | None = None,
+    action_id: str | None = None,
+) -> str:
+    lines = [
+        "# OpenClaw Unified Audit Timeline",
+        "",
+        f"- tenant_id: `{tenant_id}`",
+        f"- exported_at: {datetime.utcnow().isoformat()}",
+        f"- total_count: **{int(total_count or 0)}**",
+        f"- shown_count: **{len(items)}**",
+    ]
+    if source:
+        lines.append(f"- source_filter: `{source}`")
+    if action_id:
+        lines.append(f"- action_id_filter: `{action_id}`")
+    if search:
+        lines.append(f"- search_filter: `{search}`")
+    lines.append("")
+
+    if not items:
+        lines.append("- no audit events")
+        return "\n".join(lines)
+
+    for idx, item in enumerate(items, start=1):
+        lines.extend(
+            [
+                f"## {idx}. {item.get('source') or 'event'} / {item.get('event_type') or 'unknown'}",
+                "",
+                f"- occurred_at: {item.get('occurred_at') or ''}",
+                f"- status: `{item.get('status') or ''}`",
+                f"- event_id: `{str(item.get('event_id') or '')[:12]}`",
+            ]
+        )
+        current_action_id = str(item.get("action_id") or "").strip()
+        if current_action_id:
+            lines.append(f"- action_id: `{current_action_id}`")
+        details = item.get("details")
+        if isinstance(details, dict) and details:
+            lines.append("- details:")
+            for key, value in list(details.items())[:6]:
+                if isinstance(value, (dict, list)):
+                    formatted = json.dumps(value, ensure_ascii=False)
+                else:
+                    formatted = str(value)
+                lines.append(f"  - {key}: {formatted}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _build_openclaw_support_export_bundle(
     user_data: dict,
     tenant_id: str,
@@ -5617,6 +5672,76 @@ def openclaw_audit_timeline():
         db.close()
 
 
+@app.route('/api/openclaw/audit-timeline/export', methods=['GET', 'OPTIONS'])
+def openclaw_audit_timeline_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
+    offset = max(0, int(request.args.get("offset", 0) or 0))
+    source = str(request.args.get("source") or "").strip() or None
+    search = str(request.args.get("search") or "").strip() or None
+    action_id = str(request.args.get("action_id") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items, total_count = _load_tenant_audit_timeline_items(
+            cursor,
+            tenant_id,
+            limit,
+            offset,
+            source=source,
+            search=search,
+            action_id=action_id,
+        )
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": tenant_id,
+                    "count": len(items),
+                    "total_count": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "markdown_report": _render_tenant_audit_timeline_markdown(
+                        tenant_id,
+                        items,
+                        total_count,
+                        source=source,
+                        search=search,
+                        action_id=action_id,
+                    ),
+                }
+            ), 200
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": tenant_id,
+                "items": items,
+                "count": len(items),
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        ), 200
+    finally:
+        db.close()
+
+
 @app.route('/api/openclaw/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
 def openclaw_callbacks_recovery_history():
     if request.method == 'OPTIONS':
@@ -6006,6 +6131,76 @@ def capabilities_audit_timeline():
             search=search,
             action_id=action_id,
         )
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "items": items,
+                "count": len(items),
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        ), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/capabilities/audit-timeline/export', methods=['GET', 'OPTIONS'])
+def capabilities_audit_timeline_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
+    offset = max(0, int(request.args.get("offset", 0) or 0))
+    source = str(request.args.get("source") or "").strip() or None
+    search = str(request.args.get("search") or "").strip() or None
+    action_id = str(request.args.get("action_id") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items, total_count = _load_tenant_audit_timeline_items(
+            cursor,
+            str(tenant_id),
+            limit,
+            offset,
+            source=source,
+            search=search,
+            action_id=action_id,
+        )
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "count": len(items),
+                    "total_count": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "markdown_report": _render_tenant_audit_timeline_markdown(
+                        str(tenant_id),
+                        items,
+                        total_count,
+                        source=source,
+                        search=search,
+                        action_id=action_id,
+                    ),
+                }
+            ), 200
         return jsonify(
             {
                 "success": True,
