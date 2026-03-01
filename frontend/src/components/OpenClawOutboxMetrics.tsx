@@ -393,6 +393,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [auditTimelineLoading, setAuditTimelineLoading] = useState(false);
   const [auditTimelineSourceFilter, setAuditTimelineSourceFilter] = useState<string>('all');
   const [auditTimelineSearch, setAuditTimelineSearch] = useState('');
+  const [auditTimelineQuickFilter, setAuditTimelineQuickFilter] = useState<'all' | 'incident' | 'failed_callback' | 'attention_recovery' | 'support_send'>('all');
   const [selectedAuditEventBundle, setSelectedAuditEventBundle] = useState<AuditEventBundleResponse | null>(null);
   const [selectedAuditEventId, setSelectedAuditEventId] = useState<string | null>(null);
   const [auditEventLoading, setAuditEventLoading] = useState(false);
@@ -429,6 +430,34 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setAuditTimelineLoading(false);
     }
   }, [businessId, auditTimelineSourceFilter, auditTimelineSearch]);
+
+  const filteredAuditTimeline = useMemo(() => {
+    if (auditTimelineQuickFilter === 'all') {
+      return auditTimeline;
+    }
+    if (auditTimelineQuickFilter === 'support_send') {
+      return auditTimeline.filter((item) => item.source === 'support_send');
+    }
+    if (auditTimelineQuickFilter === 'failed_callback') {
+      return auditTimeline.filter(
+        (item) => item.source === 'callback_attempt' && String(item.status || '').toLowerCase() === 'failed'
+      );
+    }
+    if (auditTimelineQuickFilter === 'attention_recovery') {
+      return auditTimeline.filter(
+        (item) => item.source === 'recovery_run' && String(item.status || '').toLowerCase() === 'attention'
+      );
+    }
+    return auditTimeline.filter((item) => {
+      const source = String(item.source || '').toLowerCase();
+      const status = String(item.status || '').toLowerCase();
+      return (
+        (source === 'callback_attempt' && status === 'failed') ||
+        (source === 'recovery_run' && status === 'attention') ||
+        source === 'support_send'
+      );
+    });
+  }, [auditTimeline, auditTimelineQuickFilter]);
 
   const buildTimelineParams = useCallback(
     (options?: { includeOffset?: boolean }) => {
@@ -2155,7 +2184,30 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </div>
             </div>
             <div className="mb-2 text-[11px] text-amber-700">
-              Показано: {auditTimeline.length} / {auditTimelineTotal}
+              Показано: {filteredAuditTimeline.length} / {auditTimelineTotal}
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Incident mode</span>
+              {[
+                ['all', 'Все'],
+                ['incident', 'Incident'],
+                ['failed_callback', 'Failed callback'],
+                ['attention_recovery', 'Attention recovery'],
+                ['support_send', 'Support send'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setAuditTimelineQuickFilter(value as typeof auditTimelineQuickFilter)}
+                  className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-medium ${
+                    auditTimelineQuickFilter === value
+                      ? 'border-amber-400 bg-amber-200 text-amber-950'
+                      : 'border-amber-300 bg-white text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             {selectedAuditEventBundle?.event && (
               <div className="mb-3 rounded-md border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-violet-900">
@@ -2231,7 +2283,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </div>
             )}
             <div className="space-y-2">
-              {auditTimeline.map((item) => (
+              {filteredAuditTimeline.map((item) => (
                 <div
                   key={item.event_id}
                   className={`rounded-md border px-2 py-2 text-[11px] ${
@@ -2316,9 +2368,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                   ) : null}
                 </div>
               ))}
-              {auditTimeline.length === 0 && (
+              {filteredAuditTimeline.length === 0 && (
                 <div className="rounded-md border border-dashed border-amber-200 bg-white px-2 py-3 text-[11px] text-amber-700">
-                  {auditTimelineLoading ? 'Загрузка unified audit timeline...' : 'Событий пока нет'}
+                  {auditTimelineLoading ? 'Загрузка unified audit timeline...' : 'Событий для текущего фильтра нет'}
                 </div>
               )}
             </div>
