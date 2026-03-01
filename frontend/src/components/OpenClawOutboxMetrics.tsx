@@ -331,6 +331,7 @@ function getActionLifecycleStatus(event: ActionTimelineEvent): ActionLifecycleSt
 
 export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const actionAuditSectionRef = useRef<HTMLDivElement | null>(null);
+  const hasRestoredUiStateRef = useRef(false);
   const [data, setData] = useState<HealthResponse | null>(null);
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
   const [billing, setBilling] = useState<BillingReconcileResponse | null>(null);
@@ -399,6 +400,76 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [auditEventLoading, setAuditEventLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const auditTimelinePageSize = 20;
+  const uiStateStorageKey = useMemo(
+    () => `openclaw-outbox-ui-state:${businessId || 'global'}`,
+    [businessId]
+  );
+
+  useEffect(() => {
+    if (!businessId) return;
+    hasRestoredUiStateRef.current = false;
+    try {
+      const raw = localStorage.getItem(uiStateStorageKey);
+      if (!raw) {
+        hasRestoredUiStateRef.current = true;
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      if (typeof parsed.selectedActionId === 'string') {
+        setSelectedActionId(parsed.selectedActionId);
+      }
+      if (typeof parsed.auditTimelineSourceFilter === 'string') {
+        setAuditTimelineSourceFilter(parsed.auditTimelineSourceFilter);
+      }
+      if (typeof parsed.auditTimelineSearch === 'string') {
+        setAuditTimelineSearch(parsed.auditTimelineSearch);
+      }
+      if (
+        parsed.auditTimelineQuickFilter === 'all' ||
+        parsed.auditTimelineQuickFilter === 'incident' ||
+        parsed.auditTimelineQuickFilter === 'failed_callback' ||
+        parsed.auditTimelineQuickFilter === 'attention_recovery' ||
+        parsed.auditTimelineQuickFilter === 'support_send'
+      ) {
+        setAuditTimelineQuickFilter(parsed.auditTimelineQuickFilter);
+      }
+      if (typeof parsed.selectedAuditEventId === 'string' && parsed.selectedAuditEventId.trim()) {
+        setSelectedAuditEventId(parsed.selectedAuditEventId);
+      } else {
+        setSelectedAuditEventId(null);
+      }
+    } catch {
+      // Ignore malformed persisted UI state.
+    } finally {
+      hasRestoredUiStateRef.current = true;
+    }
+  }, [businessId, uiStateStorageKey]);
+
+  useEffect(() => {
+    if (!businessId || !hasRestoredUiStateRef.current) return;
+    try {
+      localStorage.setItem(
+        uiStateStorageKey,
+        JSON.stringify({
+          selectedActionId,
+          auditTimelineSourceFilter,
+          auditTimelineSearch,
+          auditTimelineQuickFilter,
+          selectedAuditEventId,
+        })
+      );
+    } catch {
+      // Ignore local storage write failures.
+    }
+  }, [
+    businessId,
+    uiStateStorageKey,
+    selectedActionId,
+    auditTimelineSourceFilter,
+    auditTimelineSearch,
+    auditTimelineQuickFilter,
+    selectedAuditEventId,
+  ]);
 
   const loadAuditTimeline = useCallback(async () => {
     if (!businessId) return;
@@ -606,7 +677,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           { headers: { Authorization: `Bearer ${token}` } }
         ),
         fetch(
-          `/api/capabilities/audit-timeline?tenant_id=${encodeURIComponent(businessId)}&limit=20`,
+          `/api/capabilities/audit-timeline?${(() => {
+            const params = new URLSearchParams();
+            params.set('tenant_id', businessId);
+            params.set('limit', String(auditTimelinePageSize));
+            params.set('offset', '0');
+            if (auditTimelineSourceFilter !== 'all') {
+              params.set('source', auditTimelineSourceFilter);
+            }
+            const searchText = auditTimelineSearch.trim();
+            if (searchText) {
+              params.set('search', searchText);
+            }
+            return params.toString();
+          })()}`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
       ]);
@@ -646,7 +730,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setBilling(billingData || null);
       setRecoveryHistory((recoveryHistoryData.items || []).slice(0, 5));
       setSupportSendHistory((supportSendHistoryData.items || []).slice(0, 5));
-      setAuditTimeline((auditTimelineData.items || []).slice(0, 20));
+      setAuditTimeline((auditTimelineData.items || []).slice(0, auditTimelinePageSize));
       setAuditTimelineTotal(Number(auditTimelineData.total_count || auditTimelineData.count || 0));
       const items = (actionsData.items || []).slice(0, 20);
       setActions(items);
@@ -659,7 +743,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [businessId]);
+  }, [businessId, auditTimelinePageSize, auditTimelineSearch, auditTimelineSourceFilter]);
 
   useEffect(() => {
     load();
