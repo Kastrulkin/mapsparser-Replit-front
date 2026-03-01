@@ -138,6 +138,75 @@ def _load_review_examples(user_id: str, limit: int = 5) -> list[str]:
     return examples
 
 
+def _load_user_examples(user_id: str, example_type: str, limit: int = 5) -> list[str]:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT example_text
+            FROM UserExamples
+            WHERE user_id = %s AND example_type = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (str(user_id), str(example_type), int(limit)),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return [
+        text for text in
+        [str(_row_get(row, "example_text", 0, "") or "").strip() for row in rows]
+        if text
+    ]
+
+
+def _load_business_prompt_context(business_id: str) -> dict:
+    context = {
+        "business_name": "",
+        "region": "",
+        "industry": "",
+        "business_type": "",
+    }
+    if not business_id:
+        return context
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT name, city, address, industry, business_type
+            FROM Businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (str(business_id),),
+        )
+        row = cursor.fetchone()
+    except Exception:
+        return context
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if not row:
+        return context
+    city = str(_row_get(row, "city", 1, "") or "").strip()
+    address = str(_row_get(row, "address", 2, "") or "").strip()
+    context["business_name"] = str(_row_get(row, "name", 0, "") or "").strip()
+    context["region"] = city or address
+    context["industry"] = str(_row_get(row, "industry", 3, "") or "").strip()
+    context["business_type"] = str(_row_get(row, "business_type", 4, "") or "").strip()
+    return context
+
+
 def _telegram_capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
     payload = envelope.get("payload") or {}
     review_text = str(payload.get("review") or "").strip()
@@ -204,7 +273,121 @@ def _telegram_capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
     }
 
 
+def _telegram_capability_services_optimize(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    language = str(payload.get("language") or "ru").strip()
+    tone = str(payload.get("tone") or "профессиональный").strip()
+    length = int(payload.get("description_length") or 150)
+    instructions = str(payload.get("instructions") or "").strip()
+    business_name = str(payload.get("business_name") or "бизнес").strip()
+    region = str(payload.get("region") or "").strip()
+    original_name = str(payload.get("name") or payload.get("original_name") or "").strip()
+    original_description = str(payload.get("description") or payload.get("original_description") or "").strip()
+    content = (original_name + ("\n" + original_description if original_description else "")).strip()
+    if not content:
+        raise ValueError("service name/description is required for services.optimize")
+
+    prompt_template = _get_prompt_from_db("service_optimization", None)
+    if not prompt_template:
+        raise ValueError("Промпт service_optimization не настроен в админ-панели.")
+
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    service_examples = _load_user_examples(str(user_data.get("user_id") or ""), "service", limit=5)
+    prompt = _format_prompt_with_replacements(
+        prompt_template,
+        {
+            "region": region or "не указан",
+            "business_name": business_name,
+            "industry": str(payload.get("industry") or "-"),
+            "business_type": str(payload.get("business_type") or "-"),
+            "tone": tone,
+            "language_name": language_names.get(language, "Russian"),
+            "length": length,
+            "instructions": instructions or "-",
+            "frequent_queries": "",
+            "seo_keywords": "No matched SEO keywords found",
+            "seo_keywords_top10": "No matched SEO keywords found",
+            "good_examples": "\n".join(service_examples),
+            "content": content[:4000],
+        },
+    )
+    prompt += (
+        "\n\n"
+        "КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:\n"
+        "1) Используй ТОЛЬКО исходную услугу из блока {content}. Не меняй тематику.\n"
+        "2) Не копируй чужие примеры как готовый результат.\n"
+        "3) Если не можешь улучшить формулировку корректно, верни исходное название и исходное описание.\n"
+        "4) Верни СТРОГО JSON в требуемой схеме, без markdown и без пояснений.\n"
+    )
+
+    result_text = analyze_text_with_gigachat(
+        prompt,
+        task_type="service_optimization",
+        business_id=str(envelope.get("tenant_id") or ""),
+        user_id=str(user_data.get("user_id") or ""),
+    )
+    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
+    if isinstance(parsed, dict) and parsed.get("error"):
+        raise ValueError(str(parsed.get("error")))
+
+    services = []
+    if isinstance(parsed, dict) and isinstance(parsed.get("services"), list):
+        services = parsed.get("services") or []
+    elif isinstance(parsed, list):
+        services = parsed
+
+    if not services:
+        services = [{
+            "original_name": original_name,
+            "optimized_name": original_name,
+            "original_description": original_description,
+            "seo_description": original_description,
+            "keywords": [],
+            "price": payload.get("price"),
+            "category": payload.get("category") or "other",
+        }]
+
+    normalized = []
+    for svc in services:
+        if not isinstance(svc, dict):
+            continue
+        normalized.append(
+            {
+                "original_name": str(svc.get("original_name") or original_name or "").strip(),
+                "optimized_name": str(svc.get("optimized_name") or svc.get("name") or original_name or "").strip(),
+                "original_description": str(svc.get("original_description") or original_description or "").strip(),
+                "seo_description": str(svc.get("seo_description") or svc.get("description") or original_description or "").strip(),
+                "keywords": svc.get("keywords") if isinstance(svc.get("keywords"), list) else [],
+                "price": svc.get("price"),
+                "category": str(svc.get("category") or payload.get("category") or "other"),
+            }
+        )
+
+    return {
+        "result": {
+            "services": normalized,
+            "general_recommendations": [],
+        },
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
 OPENCLAW_ORCHESTRATOR.handlers["reviews.reply"] = _telegram_capability_reviews_reply
+OPENCLAW_ORCHESTRATOR.handlers["services.optimize"] = _telegram_capability_services_optimize
 
 def get_user_id_from_telegram(telegram_id: str):
     """Получить user_id из telegram_id"""
@@ -894,6 +1077,91 @@ def _perform_reviews_reply(business_ctx: dict, review_text: str, tone: str = "pr
     )
 
 
+def _parse_service_input(text: str) -> tuple[str, str]:
+    raw = str(text or "").strip()
+    if not raw:
+        return "", ""
+    if "|" in raw:
+        left, right = raw.split("|", 1)
+        return left.strip(), right.strip()
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    if not lines:
+        return "", ""
+    if len(lines) == 1:
+        return lines[0], ""
+    return lines[0], "\n".join(lines[1:]).strip()
+
+
+def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bool, str]:
+    original_name, original_description = _parse_service_input(service_text)
+    if not original_name:
+        return False, "❌ Не удалось распознать название услуги. Отправьте хотя бы название."
+
+    business_meta = _load_business_prompt_context(str(business_ctx["business_id"]))
+    envelope = {
+        "tenant_id": str(business_ctx["business_id"]),
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "actor": {
+            "id": str(business_ctx["user_id"]),
+            "type": "user",
+            "role": "owner",
+            "channel": "telegram",
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+        },
+        "capability": "services.optimize",
+        "approval": {"mode": "auto", "ttl_sec": 1800},
+        "billing": {"tariff_id": "telegram-services-optimize", "reserve_tokens": 1600},
+        "payload": {
+            "name": original_name,
+            "description": original_description,
+            "original_name": original_name,
+            "original_description": original_description,
+            "tone": "профессиональный",
+            "language": "ru",
+            "description_length": 150,
+            "instructions": "Сохрани тематику услуги и сделай формулировку пригодной для карточки бизнеса.",
+            "business_name": business_meta.get("business_name") or business_ctx["business_name"],
+            "region": business_meta.get("region") or "",
+            "industry": business_meta.get("industry") or "",
+            "business_type": business_meta.get("business_type") or "",
+            "bulk": False,
+            "source": "telegram",
+        },
+    }
+    result = OPENCLAW_ORCHESTRATOR.execute(
+        envelope,
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+    )
+    if not result.get("success") or result.get("status") == "failed":
+        return False, f"❌ Не удалось оптимизировать услугу: {result.get('error') or 'неизвестная ошибка'}"
+
+    action_id = str(result.get("action_id") or "")
+    services = list((result.get("result") or {}).get("services") or [])
+    service = dict(services[0] or {}) if services else {}
+    optimized_name = str(service.get("optimized_name") or original_name).strip()
+    seo_description = str(service.get("seo_description") or original_description or "").strip()
+    keywords = service.get("keywords") if isinstance(service.get("keywords"), list) else []
+
+    lines = [
+        "📊 SEO-оптимизация услуги",
+        f"Бизнес: {business_ctx['business_name']}",
+        f"Action: {action_id}",
+        "",
+        f"Исходное: {original_name}",
+        f"SEO-название: {optimized_name}",
+    ]
+    if seo_description:
+        lines.extend(["", "SEO-описание:", seo_description[:1200]])
+    if keywords:
+        lines.extend(["", "Ключевые слова:", ", ".join([str(item).strip() for item in keywords[:10] if str(item).strip()])])
+    return True, "\n".join(lines)
+
+
 def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     ctx = resolve_business_context(str(telegram_id))
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
@@ -907,6 +1175,7 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     keyboard = [
         [InlineKeyboardButton("📊 Статус", callback_data="openclaw_status")],
         [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
+        [InlineKeyboardButton("🧩 Оптимизировать услугу", callback_data="openclaw_service_optimize_start")],
         [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
         [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
         [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
@@ -1027,6 +1296,38 @@ async def reply_review_command(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     await update.message.reply_text(
         "💬 Отправьте текст отзыва. Затем я предложу выбрать тон и сгенерирую ответ."
+    )
+
+
+async def optimize_service_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Chat-first flow: оптимизировать одну услугу через orchestrator."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    service_text = " ".join(context.args or []).strip()
+    state_ref = user_states.setdefault(str(update.effective_user.id), {})
+    state_ref["active_business_id"] = str(business_ctx["business_id"])
+
+    if service_text:
+        ok, text = _perform_service_optimize(
+            {**business_ctx, "telegram_id": str(update.effective_user.id)},
+            service_text,
+        )
+        await update.message.reply_text(text)
+        return
+
+    state_ref.update(
+        {
+            "state": "waiting_openclaw_service_optimize_text",
+            "business_id": str(business_ctx["business_id"]),
+        }
+    )
+    await update.message.reply_text(
+        "🧩 Отправьте одну услугу для SEO-оптимизации.\n\n"
+        "Формат:\n"
+        "Название | Краткое описание\n\n"
+        "Если описания нет, можно отправить только название."
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1155,6 +1456,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(
             "💬 Отправьте текст отзыва следующим сообщением. Затем выберете тон и я сгенерирую ответ."
+        )
+    elif data == "openclaw_service_optimize_start":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref.update(
+            {
+                "state": "waiting_openclaw_service_optimize_text",
+                "business_id": str(business_ctx["business_id"]),
+                "active_business_id": str(business_ctx["business_id"]),
+            }
+        )
+        await query.edit_message_text(
+            "🧩 Отправьте одну услугу следующим сообщением.\n\n"
+            "Формат: Название | Краткое описание\n"
+            "Можно отправить только название."
         )
     elif data == "openclaw_review_cancel":
         state_ref = user_states.setdefault(user_id, {})
@@ -1661,6 +1980,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_optimize_text(update, context, user_id, text)
     elif state == 'waiting_review_reply_text':
         await handle_review_reply_text(update, context, user_id, text)
+    elif state == 'waiting_openclaw_service_optimize_text':
+        await handle_openclaw_service_optimize_text(update, context, user_id, text)
     elif state.startswith('waiting_setting_'):
         await handle_setting_text(update, context, user_id, text, state)
     else:
@@ -1680,6 +2001,20 @@ async def handle_review_reply_text(update: Update, context: ContextTypes.DEFAULT
         "Выберите тон ответа:",
         reply_markup=_build_review_tone_markup(),
     )
+
+
+async def handle_openclaw_service_optimize_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
+    business_ctx = resolve_business_context(user_id)
+    if not business_ctx or not business_ctx.get("business_id"):
+        await update.message.reply_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+        user_states.setdefault(user_id, {})["state"] = "idle"
+        return
+    ok, response_text = _perform_service_optimize(
+        {**business_ctx, "telegram_id": user_id},
+        text,
+    )
+    user_states.setdefault(user_id, {})["state"] = "idle"
+    await update.message.reply_text(response_text)
 
 async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
     """Обработка текста транзакции"""
@@ -2057,6 +2392,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /use_business - Выбрать активный бизнес
 /status - Статус OpenClaw по вашему бизнесу
 /reply_review - Сгенерировать ответ на отзыв
+/optimize_service - Оптимизировать одну услугу
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
 
@@ -2095,6 +2431,7 @@ def main():
         application.add_handler(CommandHandler("use_business", use_business_command))
         application.add_handler(CommandHandler("status", openclaw_status_command))
         application.add_handler(CommandHandler("reply_review", reply_review_command))
+        application.add_handler(CommandHandler("optimize_service", optimize_service_command))
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
