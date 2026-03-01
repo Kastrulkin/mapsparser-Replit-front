@@ -1736,6 +1736,54 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
     elif hasattr(update, 'callback_query') and update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
+
+async def show_optimize_business_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, telegram_id: str, db_user_id: str):
+    """Выбор бизнеса перед запуском guided optimize flow."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM Businesses WHERE owner_id = %s", (db_user_id,))
+    businesses = cursor.fetchall()
+    conn.close()
+
+    if not businesses:
+        await update.callback_query.edit_message_text("У вас пока нет бизнесов. Создайте бизнес на сайте.")
+        return
+
+    keyboard = []
+    for row in businesses:
+        business_id = str(_row_get(row, "id", 0) or "")
+        business_name = str(_row_get(row, "name", 1) or "Без названия")
+        keyboard.append([InlineKeyboardButton(business_name, callback_data=f"optimizepick_{business_id}")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
+
+    await update.callback_query.edit_message_text(
+        "Выберите бизнес для оптимизации услуг:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def show_optimize_mode_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, business_id: str):
+    """Выбор режима оптимизации: новая guided ветка или legacy OCR."""
+    ctx = resolve_business_context(user_id, business_id)
+    if not ctx or not ctx.get("business_id"):
+        await update.callback_query.edit_message_text("❌ Не удалось выбрать бизнес.")
+        return
+    state_ref = user_states.setdefault(user_id, {})
+    state_ref["active_business_id"] = str(ctx["business_id"])
+
+    keyboard = [
+        [InlineKeyboardButton("🧩 Одна услуга (OpenClaw)", callback_data=f"optmode_openclaw_{ctx['business_id']}")],
+        [InlineKeyboardButton("📷 Прайс-лист / файл (legacy)", callback_data=f"optmode_legacy_{ctx['business_id']}")],
+        [InlineKeyboardButton("🤖 В OpenClaw panel", callback_data="menu_openclaw")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+    ]
+    await update.callback_query.edit_message_text(
+        "📊 Выберите режим оптимизации:\n\n"
+        "• OpenClaw: одна услуга, чистый capability-flow\n"
+        "• Legacy: фото/прайс-лист, OCR и старый bulk-сценарий",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик нажатий на кнопки"""
     query = update.callback_query
@@ -1752,7 +1800,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "menu_transaction":
         await show_business_selection(update, context, user_id, db_user_id, "transaction")
     elif data == "menu_optimize":
-        await show_business_selection(update, context, user_id, db_user_id, "optimize")
+        await show_optimize_business_selection(update, context, user_id, db_user_id)
     elif data == "menu_settings":
         await show_business_selection(update, context, user_id, db_user_id, "settings")
     elif data == "menu_openclaw":
@@ -1925,6 +1973,44 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"✅ Активный бизнес переключён.\n\n{text}",
             reply_markup=reply_markup,
+        )
+    elif data.startswith("optimizepick_"):
+        business_id = data.replace("optimizepick_", "", 1)
+        await show_optimize_mode_selection(update, context, user_id, business_id)
+    elif data.startswith("optmode_openclaw_"):
+        business_id = data.replace("optmode_openclaw_", "", 1)
+        business_ctx = resolve_business_context(user_id, business_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Не удалось выбрать бизнес.")
+            return
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref.update(
+            {
+                "state": "waiting_openclaw_service_optimize_text",
+                "business_id": str(business_ctx["business_id"]),
+                "active_business_id": str(business_ctx["business_id"]),
+            }
+        )
+        await query.edit_message_text(
+            "🧩 Отправьте одну услугу следующим сообщением.\n\n"
+            "Формат: Название | Краткое описание\n"
+            "Можно отправить только название."
+        )
+    elif data.startswith("optmode_legacy_"):
+        business_id = data.replace("optmode_legacy_", "", 1)
+        user_states[user_id] = {
+            "state": "waiting_optimize",
+            "business_id": business_id,
+            "active_business_id": business_id,
+        }
+        await query.edit_message_text(
+            "📷 *Legacy оптимизация прайс-листа*\n\n"
+            "Отправьте:\n"
+            "1. Фото прайс-листа, или\n"
+            "2. Текст со списком услуг\n\n"
+            "Этот режим использует старый OCR/bulk-сценарий.\n\n"
+            "Или /cancel для отмены",
+            parse_mode='Markdown'
         )
     elif data.startswith("business_"):
         parts = data.split("_")
