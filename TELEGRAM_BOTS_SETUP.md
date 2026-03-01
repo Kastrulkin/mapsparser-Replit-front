@@ -16,7 +16,8 @@
 ### 1. Установка зависимостей
 
 ```bash
-pip install python-telegram-bot>=20.0 schedule
+python3 -m venv telegram-bot-venv
+./telegram-bot-venv/bin/pip install "python-telegram-bot>=20.0" requests python-dotenv psycopg2-binary
 ```
 
 Или установите из `requirements.txt`:
@@ -45,6 +46,10 @@ TELEGRAM_REVIEWS_BOT_TOKEN=ваш_токен_от_beautyreviewexchange_bot
 ```bash
 # Скопировать сервис
 cp telegram-bot.service /etc/systemd/system/
+
+# Подготовить отдельное окружение бота в runtime-каталоге
+python3 -m venv /opt/seo-app/telegram-bot-venv
+/opt/seo-app/telegram-bot-venv/bin/pip install "python-telegram-bot>=20.0" requests python-dotenv psycopg2-binary
 
 # Перезагрузить systemd
 systemctl daemon-reload
@@ -132,4 +137,3 @@ journalctl -u telegram-reviews-bot -f
 - Убедитесь, что API сервер (`main.py`) запущен и доступен
 - Проверьте, что база данных доступна и содержит необходимые таблицы
 - Для работы с фото нужен настроенный GigaChat API (только для бота управления аккаунтом)
-
