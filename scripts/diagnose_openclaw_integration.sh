@@ -66,6 +66,12 @@ fetch_json "callbacks_metrics" "${base_url}/api/openclaw/callbacks/metrics?tenan
 echo
 fetch_json "outbox" "${base_url}/api/openclaw/callbacks/outbox?tenant_id=${TENANT_ID}&limit=${limit}&offset=0" || true
 echo
+fetch_json "support_export_bundle" "${base_url}/api/openclaw/capabilities/support-export?tenant_id=${TENANT_ID}&format=markdown" || true
+echo
+fetch_json "support_send_history" "${base_url}/api/openclaw/capabilities/support-export/send-history?tenant_id=${TENANT_ID}&limit=${limit}" || true
+echo
+fetch_json "support_send_history_export" "${base_url}/api/openclaw/capabilities/support-export/send-history/export?tenant_id=${TENANT_ID}&limit=${limit}&format=markdown" || true
+echo
 fetch_json "billing_reconcile" "${base_url}/api/openclaw/capabilities/billing/reconcile?tenant_id=${TENANT_ID}&window_minutes=${window}&limit=${limit}" || true
 echo
 if [[ -n "${action_id}" ]]; then

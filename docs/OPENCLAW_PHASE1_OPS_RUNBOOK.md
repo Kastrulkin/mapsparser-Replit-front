@@ -55,6 +55,9 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ACTION_ID='<action_id>' ./scr
 - `capabilities/health/trend`
 - `callbacks/metrics`
 - `callbacks/outbox`
+- `capabilities/support-export` (каноничный markdown support bundle)
+- `capabilities/support-export/send-history`
+- `capabilities/support-export/send-history/export` (каноничный markdown support-send history)
 - `capabilities/actions/{action_id}/lifecycle-summary` (если задан `ACTION_ID`)
 - `capabilities/actions/{action_id}/incident-snapshot` (если задан `ACTION_ID`)
 - `capabilities/actions/{action_id}/incident-report` (если задан `ACTION_ID`)
@@ -181,6 +184,17 @@ UI recovery:
 - `Настройки -> Integrations -> Связь ИИ-агентов с системой -> В Telegram`
 - backend endpoint: `POST /api/capabilities/callbacks/recovery-report`
 - делает `replay (include_retry=true)` + tenant-scoped `dispatch`, возвращает краткий recovery report и, при `send_telegram_report=true`, отправляет его суперадмину в Telegram.
+
+UI support export:
+- `Настройки -> Integrations -> Связь ИИ-агентов с системой -> Support в Telegram`
+- backend endpoint: `POST /api/capabilities/support-export/send`
+- отправляет суперадмину каноничный `support bundle` по текущему tenant (и выбранному `action_id`, если он есть).
+- аудит отправок:
+  - `GET /api/capabilities/support-export/send-history`
+  - `GET /api/capabilities/support-export/send-history/export?format=json|markdown`
+- в UI доступны каноничные выгрузки:
+  - `Экспорт JSON`
+  - `Экспорт MD`
 
 ## 10) Reproducible Server Deploy (Phase 2)
 
