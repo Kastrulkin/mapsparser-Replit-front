@@ -108,6 +108,16 @@ def _format_prompt_with_replacements(template: str, mapping: dict) -> str:
     return prompt
 
 
+def _normalize_news_text(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parsed = _extract_json_candidate(text)
+    if isinstance(parsed, dict):
+        text = str(parsed.get("news") or parsed.get("text") or text)
+    return text.replace('\\"', '"').replace("\\n", "\n").strip()
+
+
 def _load_review_examples(user_id: str, limit: int = 5) -> list[str]:
     try:
         conn = get_db_connection()
@@ -386,8 +396,107 @@ def _telegram_capability_services_optimize(envelope: dict, user_data: dict) -> d
     }
 
 
+def _telegram_capability_news_generate(envelope: dict, user_data: dict) -> dict:
+    payload = envelope.get("payload") or {}
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    if not tenant_id:
+        raise ValueError("tenant_id is required for news.generate")
+
+    language = str(payload.get("language") or "ru").strip()
+    raw_info = str(payload.get("raw_info") or "").strip()
+    if not raw_info:
+        raise ValueError("raw_info is required for news.generate")
+
+    language_names = {
+        "ru": "Russian",
+        "en": "English",
+        "es": "Spanish",
+        "de": "German",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+    }
+    prompt_template = _get_prompt_from_db("news_generation", None)
+    if not prompt_template:
+        raise ValueError("Промпт news_generation не настроен в админ-панели.")
+
+    news_examples = "\n".join(_load_user_examples(str(user_data.get("user_id") or ""), "news", limit=5))
+    prompt = _format_prompt_with_replacements(
+        prompt_template,
+        {
+            "language_name": language_names.get(language, "Russian"),
+            "service_context": "",
+            "transaction_context": "",
+            "raw_info": raw_info[:800],
+            "seo_keywords": "No matched SEO keywords found",
+            "seo_keywords_top10": "No matched SEO keywords found",
+            "seo_generation_hint": "",
+            "news_examples": news_examples,
+        },
+    )
+
+    result_text = analyze_text_with_gigachat(
+        prompt,
+        task_type="news_generation",
+        business_id=tenant_id,
+        user_id=str(user_data.get("user_id") or ""),
+    )
+    generated_text = _normalize_news_text(result_text if isinstance(result_text, str) else str(result_text))
+    if not generated_text:
+        raise ValueError("Пустой результат генерации")
+
+    news_id = str(uuid.uuid4())
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                news_id,
+                str(user_data.get("user_id") or ""),
+                None,
+                raw_info,
+                generated_text,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "result": {
+            "news_id": news_id,
+            "generated_text": generated_text,
+        },
+        "billing": {
+            "total_tokens": 0,
+            "cost": 0.0,
+            "tool_calls": 1,
+            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
+        },
+    }
+
+
 OPENCLAW_ORCHESTRATOR.handlers["reviews.reply"] = _telegram_capability_reviews_reply
 OPENCLAW_ORCHESTRATOR.handlers["services.optimize"] = _telegram_capability_services_optimize
+OPENCLAW_ORCHESTRATOR.handlers["news.generate"] = _telegram_capability_news_generate
 
 def get_user_id_from_telegram(telegram_id: str):
     """Получить user_id из telegram_id"""
@@ -1162,6 +1271,63 @@ def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bo
     return True, "\n".join(lines)
 
 
+def _perform_news_generate(business_ctx: dict, raw_info: str) -> tuple[bool, str]:
+    raw_info = str(raw_info or "").strip()
+    if not raw_info:
+        return False, "❌ Нужна тема или исходная информация для новости."
+
+    envelope = {
+        "tenant_id": str(business_ctx["business_id"]),
+        "trace_id": str(uuid.uuid4()),
+        "idempotency_key": str(uuid.uuid4()),
+        "actor": {
+            "id": str(business_ctx["user_id"]),
+            "type": "user",
+            "role": "owner",
+            "channel": "telegram",
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+        },
+        "capability": "news.generate",
+        "approval": {"mode": "auto", "ttl_sec": 1800},
+        "billing": {"tariff_id": "telegram-news-generate", "reserve_tokens": 1800},
+        "payload": {
+            "raw_info": raw_info,
+            "language": "ru",
+            "use_service": False,
+            "use_transaction": False,
+            "use_seo_keywords": False,
+        },
+    }
+    result = OPENCLAW_ORCHESTRATOR.execute(
+        envelope,
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+    )
+    if not result.get("success") or result.get("status") == "failed":
+        return False, f"❌ Не удалось сгенерировать новость: {result.get('error') or 'неизвестная ошибка'}"
+
+    action_id = str(result.get("action_id") or "")
+    news_payload = result.get("result") or {}
+    news_id = str(news_payload.get("news_id") or "")
+    generated_text = str(news_payload.get("generated_text") or "").strip()
+    if not generated_text:
+        return False, "❌ Новость сгенерирована пустой."
+
+    return True, "\n".join(
+        [
+            "📰 Новость для публикации",
+            f"Бизнес: {business_ctx['business_name']}",
+            f"Action: {action_id}",
+            f"News ID: {news_id}",
+            "",
+            generated_text[:2800],
+        ]
+    )
+
+
 def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     ctx = resolve_business_context(str(telegram_id))
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
@@ -1176,6 +1342,7 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
         [InlineKeyboardButton("📊 Статус", callback_data="openclaw_status")],
         [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
         [InlineKeyboardButton("🧩 Оптимизировать услугу", callback_data="openclaw_service_optimize_start")],
+        [InlineKeyboardButton("📰 Сгенерировать новость", callback_data="openclaw_news_generate_start")],
         [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
         [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
         [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
@@ -1330,6 +1497,36 @@ async def optimize_service_command(update: Update, context: ContextTypes.DEFAULT
         "Если описания нет, можно отправить только название."
     )
 
+
+async def generate_news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Chat-first flow: сгенерировать новость по теме/сырому тексту."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    raw_info = " ".join(context.args or []).strip()
+    state_ref = user_states.setdefault(str(update.effective_user.id), {})
+    state_ref["active_business_id"] = str(business_ctx["business_id"])
+
+    if raw_info:
+        ok, text = _perform_news_generate(
+            {**business_ctx, "telegram_id": str(update.effective_user.id)},
+            raw_info,
+        )
+        await update.message.reply_text(text)
+        return
+
+    state_ref.update(
+        {
+            "state": "waiting_openclaw_news_generate_text",
+            "business_id": str(business_ctx["business_id"]),
+        }
+    )
+    await update.message.reply_text(
+        "📰 Отправьте тему или исходную информацию для новости.\n\n"
+        "Например: новая группа по робототехнике, акция на консультацию, старт весенней программы."
+    )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
@@ -1474,6 +1671,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🧩 Отправьте одну услугу следующим сообщением.\n\n"
             "Формат: Название | Краткое описание\n"
             "Можно отправить только название."
+        )
+    elif data == "openclaw_news_generate_start":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        state_ref = user_states.setdefault(user_id, {})
+        state_ref.update(
+            {
+                "state": "waiting_openclaw_news_generate_text",
+                "business_id": str(business_ctx["business_id"]),
+                "active_business_id": str(business_ctx["business_id"]),
+            }
+        )
+        await query.edit_message_text(
+            "📰 Отправьте тему или исходную информацию для новости следующим сообщением."
         )
     elif data == "openclaw_review_cancel":
         state_ref = user_states.setdefault(user_id, {})
@@ -1982,6 +2195,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_review_reply_text(update, context, user_id, text)
     elif state == 'waiting_openclaw_service_optimize_text':
         await handle_openclaw_service_optimize_text(update, context, user_id, text)
+    elif state == 'waiting_openclaw_news_generate_text':
+        await handle_openclaw_news_generate_text(update, context, user_id, text)
     elif state.startswith('waiting_setting_'):
         await handle_setting_text(update, context, user_id, text, state)
     else:
@@ -2010,6 +2225,20 @@ async def handle_openclaw_service_optimize_text(update: Update, context: Context
         user_states.setdefault(user_id, {})["state"] = "idle"
         return
     ok, response_text = _perform_service_optimize(
+        {**business_ctx, "telegram_id": user_id},
+        text,
+    )
+    user_states.setdefault(user_id, {})["state"] = "idle"
+    await update.message.reply_text(response_text)
+
+
+async def handle_openclaw_news_generate_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
+    business_ctx = resolve_business_context(user_id)
+    if not business_ctx or not business_ctx.get("business_id"):
+        await update.message.reply_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+        user_states.setdefault(user_id, {})["state"] = "idle"
+        return
+    ok, response_text = _perform_news_generate(
         {**business_ctx, "telegram_id": user_id},
         text,
     )
@@ -2393,6 +2622,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /status - Статус OpenClaw по вашему бизнесу
 /reply_review - Сгенерировать ответ на отзыв
 /optimize_service - Оптимизировать одну услугу
+/generate_news - Сгенерировать новость
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
 
@@ -2432,6 +2662,7 @@ def main():
         application.add_handler(CommandHandler("status", openclaw_status_command))
         application.add_handler(CommandHandler("reply_review", reply_review_command))
         application.add_handler(CommandHandler("optimize_service", optimize_service_command))
+        application.add_handler(CommandHandler("generate_news", generate_news_command))
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
