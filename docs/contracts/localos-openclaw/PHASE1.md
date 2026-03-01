@@ -51,6 +51,8 @@
 23. `GET /api/openclaw/callbacks/metrics?tenant_id=&window_minutes=` (M2M outbox metrics)
 23.1 `GET /api/openclaw/callbacks/recovery-history?tenant_id=&limit=` (M2M recovery audit trail)
 23.2 `GET /api/openclaw/callbacks/recovery-history/export?tenant_id=&limit=&format=` (M2M canonical recovery history export)
+23.3 `GET /api/openclaw/capabilities/support-export/send-history?tenant_id=&limit=` (M2M support-send audit trail)
+23.4 `GET /api/openclaw/capabilities/support-export/send-history/export?tenant_id=&limit=&format=` (M2M canonical support-send history export)
 24. `GET /api/openclaw/capabilities/billing/reconcile?tenant_id=&window_minutes=&limit=` (M2M ledger/tokenusage reconciliation)
 25. `POST /api/openclaw/callbacks/outbox/replay` (M2M replay DLQ/retry to pending)
 26. `POST /api/openclaw/callbacks/outbox/cleanup` (M2M cleanup old sent callbacks)
@@ -66,6 +68,7 @@
 36. `GET /api/capabilities/support-export?tenant_id=&action_id=&format=` (user canonical support bundle for ops/export)
 37. `POST /api/capabilities/support-export/send` (user manual send of support bundle to superadmin Telegram)
 38. `GET /api/capabilities/support-export/send-history?tenant_id=&limit=` (user audit trail for manual support bundle sends)
+39. `GET /api/capabilities/support-export/send-history/export?tenant_id=&limit=&format=` (user canonical support-send history export)
 
 ## Обязательные поля envelope (`execute`)
 

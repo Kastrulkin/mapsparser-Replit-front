@@ -597,6 +597,31 @@ then
   exit 1
 fi
 
+echo "[8.8/12] M2M support-send history export"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/capabilities/support-export/send-history/export?tenant_id=${TENANT_ID}&limit=5&format=markdown" > "${tmp_dir}/support_send_history_export.json"
+support_send_history_export_success="$(json_read "${tmp_dir}/support_send_history_export.json" "success")"
+if [[ "${support_send_history_export_success}" != "True" && "${support_send_history_export_success}" != "true" ]]; then
+  echo "Support-send history export failed"
+  cat "${tmp_dir}/support_send_history_export.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/support_send_history_export.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Support Send History" not in report:
+    print("Support-send history markdown_report is invalid")
+    sys.exit(1)
+print("Support-send history export OK")
+PY
+then
+  cat "${tmp_dir}/support_send_history_export.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

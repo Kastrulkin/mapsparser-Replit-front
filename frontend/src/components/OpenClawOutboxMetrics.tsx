@@ -1054,6 +1054,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [businessId, selectedActionId]);
 
+  const fetchSupportSendHistoryExport = useCallback(async (format: 'json' | 'markdown') => {
+    if (!businessId) return null;
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(
+      `/api/capabilities/support-export/send-history/export?tenant_id=${encodeURIComponent(businessId)}&limit=10&format=${format}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const json = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [businessId]);
+
   const exportRecoveryHistoryJson = useCallback(async () => {
     if (!businessId) return;
     try {
@@ -1133,6 +1147,46 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setError(e?.message || 'Не удалось экспортировать support bundle markdown');
     }
   }, [businessId, fetchSupportExport]);
+
+  const exportSupportSendHistoryJson = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchSupportSendHistoryExport('json');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `support-send-history-${businessId.slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать support-send history');
+    }
+  }, [businessId, fetchSupportSendHistoryExport]);
+
+  const exportSupportSendHistoryMarkdown = useCallback(async () => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchSupportSendHistoryExport('markdown');
+      const markdown = String(payload?.markdown_report || '').trim();
+      if (!markdown) {
+        throw new Error('Support-send history markdown не сформирован');
+      }
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `support-send-history-${businessId.slice(0, 8)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать support-send history markdown');
+    }
+  }, [businessId, fetchSupportSendHistoryExport]);
 
   const copyRecoveryReport = useCallback(async () => {
     if (!recoveryReport) return;
@@ -1732,7 +1786,25 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           )}
           {supportSendHistory.length > 0 && (
             <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Последние support-send</div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Последние support-send</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={exportSupportSendHistoryJson}
+                    className="inline-flex items-center rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Экспорт JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportSupportSendHistoryMarkdown}
+                    className="inline-flex items-center rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Экспорт MD
+                  </button>
+                </div>
+              </div>
               <div className="space-y-2">
                 {supportSendHistory.map((item) => (
                   <div key={item.id} className="rounded-md border border-emerald-200 bg-white px-2 py-2 text-[11px] text-emerald-800">

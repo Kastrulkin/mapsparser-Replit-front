@@ -2433,6 +2433,42 @@ def _load_support_export_send_history_items(cursor, tenant_id: str, limit: int) 
     return items
 
 
+def _render_support_export_send_history_markdown(tenant_id: str, items: list[dict]) -> str:
+    lines = [
+        "# OpenClaw Support Send History",
+        "",
+        f"- tenant_id: `{tenant_id}`",
+        f"- exported_at: {datetime.utcnow().isoformat()}",
+        f"- count: **{len(items)}**",
+        "",
+    ]
+    if not items:
+        lines.append("- no support-send runs")
+        return "\n".join(lines)
+
+    for idx, item in enumerate(items, start=1):
+        lines.extend(
+            [
+                f"## {idx}. Support send `{str(item.get('id') or '')[:8]}`",
+                "",
+                f"- created_at: {item.get('created_at') or ''}",
+                f"- triggered_by: `{item.get('triggered_by') or ''}`",
+                f"- telegram_sent_count: **{int(item.get('telegram_sent_count') or 0)}**",
+            ]
+        )
+        action_id = str(item.get("action_id") or "").strip()
+        if action_id:
+            lines.append(f"- action_id: `{action_id[:8]}`")
+        target_ids = list(item.get("target_ids") or [])
+        if target_ids:
+            lines.append(f"- target_ids: {', '.join(f'`{str(x)}`' for x in target_ids)}")
+        report_text = str(item.get("report_text") or "").strip()
+        if report_text:
+            lines.extend(["", "```", report_text, "```"])
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _build_openclaw_support_export_bundle(
     user_data: dict,
     tenant_id: str,
@@ -5415,6 +5451,70 @@ def openclaw_callbacks_recovery_history_export():
         db.close()
 
 
+@app.route('/api/openclaw/capabilities/support-export/send-history', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_support_export_send_history():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/openclaw/capabilities/support-export/send-history/export', methods=['GET', 'OPTIONS'])
+def openclaw_capabilities_support_export_send_history_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "count": len(items),
+                    "markdown_report": _render_support_export_send_history_markdown(str(tenant_id), items),
+                }
+            ), 200
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
 @app.route('/api/openclaw/capabilities/support-export', methods=['GET', 'OPTIONS'])
 def openclaw_capabilities_support_export():
     if request.method == 'OPTIONS':
@@ -6120,6 +6220,43 @@ def capabilities_support_export_send_history():
     try:
         cursor = db.conn.cursor()
         items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
+        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/capabilities/support-export/send-history/export', methods=['GET', 'OPTIONS'])
+def capabilities_support_export_send_history_export():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
+    export_format = str(request.args.get("format") or "json").strip().lower()
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "count": len(items),
+                    "markdown_report": _render_support_export_send_history_markdown(str(tenant_id), items),
+                }
+            ), 200
         return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
     finally:
         db.close()

@@ -2029,6 +2029,95 @@ def test_user_support_export_send_records_history(capabilities_client, monkeypat
             os.environ[token_name] = previous
 
 
+def test_user_support_export_send_history_export_markdown(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+
+    create = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert create.status_code == 200, create.get_json()
+    action_id = create.get_json()["action_id"]
+
+    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
+    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
+    previous = os.getenv(token_name)
+    os.environ[token_name] = "273282710"
+    try:
+        send_r = info["client"].post(
+            "/api/capabilities/support-export/send",
+            json={"tenant_id": info["business_id"], "action_id": action_id},
+            headers=_auth_headers(),
+        )
+        assert send_r.status_code == 200, send_r.get_json()
+
+        export_r = info["client"].get(
+            f"/api/capabilities/support-export/send-history/export?tenant_id={info['business_id']}&limit=5&format=markdown",
+            headers=_auth_headers(),
+        )
+        assert export_r.status_code == 200, export_r.get_json()
+        body = export_r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert "# OpenClaw Support Send History" in body["markdown_report"]
+        assert action_id[:8] in body["markdown_report"]
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+
+
+def test_openclaw_support_export_send_history_export_json(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+
+    create = info["client"].post(
+        "/api/capabilities/execute",
+        json=_pending_request_body(info["business_id"], info["user_id"]),
+        headers=_auth_headers(),
+    )
+    assert create.status_code == 200, create.get_json()
+    action_id = create.get_json()["action_id"]
+
+    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
+    token_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
+    openclaw_token_name = "OPENCLAW_LOCALOS_TOKEN"
+    previous = os.getenv(token_name)
+    previous_openclaw = os.getenv(openclaw_token_name)
+    os.environ[token_name] = "273282710"
+    os.environ[openclaw_token_name] = "phase1-openclaw-token"
+    try:
+        send_r = info["client"].post(
+            "/api/capabilities/support-export/send",
+            json={"tenant_id": info["business_id"], "action_id": action_id},
+            headers=_auth_headers(),
+        )
+        assert send_r.status_code == 200, send_r.get_json()
+
+        export_r = info["client"].get(
+            f"/api/openclaw/capabilities/support-export/send-history/export?tenant_id={info['business_id']}&limit=5",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert export_r.status_code == 200, export_r.get_json()
+        body = export_r.get_json()
+        assert body["success"] is True
+        assert body["tenant_id"] == info["business_id"]
+        assert body["count"] >= 1
+        assert body["items"][0]["action_id"] == action_id
+    finally:
+        if previous is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous
+        if previous_openclaw is None:
+            os.environ.pop(openclaw_token_name, None)
+        else:
+            os.environ[openclaw_token_name] = previous_openclaw
+
+
 def test_callback_dispatch_signature_and_dedupe_guard(capabilities_client, monkeypatch):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"
