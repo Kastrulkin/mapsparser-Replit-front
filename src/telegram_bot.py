@@ -2014,7 +2014,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("business_"):
         parts = data.split("_")
         if len(parts) >= 3:
-            action = parts[1]  # transaction, optimize, settings
+            action = parts[1]  # transaction, settings, stats
             business_id = "_".join(parts[2:])  # На случай если в ID есть подчеркивания
             user_states.setdefault(user_id, {})["active_business_id"] = business_id
             
@@ -2034,21 +2034,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "   (или Услуги: Стрижка, Окрашивание)\n"
                     "   Мастер: Имя (опционально)\n"
                     "   Дата: YYYY-MM-DD (опционально)\n\n"
-                    "Или /cancel для отмены",
-                    parse_mode='Markdown'
-                )
-            elif action == "optimize":
-                user_states[user_id] = {
-                    'state': 'waiting_optimize',
-                    'business_id': business_id,
-                    'active_business_id': business_id,
-                }
-                await query.edit_message_text(
-                    "📊 *Оптимизация услуг*\n\n"
-                    "Отправьте:\n"
-                    "1. 📷 Фото прайс-листа, или\n"
-                    "2. 📝 Текст со списком услуг\n\n"
-                    "Бот проанализирует и предложит SEO-оптимизированные названия.\n\n"
                     "Или /cancel для отмены",
                     parse_mode='Markdown'
                 )
@@ -2123,7 +2108,6 @@ async def show_business_selection(update: Update, context: ContextTypes.DEFAULT_
     
     action_names = {
         "transaction": "добавления транзакции",
-        "optimize": "оптимизации услуг",
         "settings": "настроек компании",
         "stats": "просмотра статуса бизнеса",
     }
@@ -2864,7 +2848,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Команды:*
 /start - Главное меню
-/control - OpenClaw control center
+/control - Основная guided-панель OpenClaw
 /help - Справка
 /cancel - Отменить текущую операцию
 /businesses - Показать ваши бизнесы
@@ -2884,6 +2868,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚙️ Настройки компании
 📈 Статус бизнеса через OpenClaw
 🤖 Guided OpenClaw control panel
+
+*Рекомендуемый сценарий:*
+Используйте /control — это основной вход для ИИ-функций и управления бизнесом.
 
 *Поддержка:*
 Если возникли проблемы, обратитесь в поддержку через личный кабинет на сайте.
