@@ -16,6 +16,12 @@ interface ChannelStatus {
   target?: string | null;
 }
 
+interface RouteItem extends ChannelStatus {
+  preferred?: boolean;
+  fallback_order?: number;
+  eligible?: boolean;
+}
+
 interface ChannelControlCenterProps {
   businessId: string | null;
 }
@@ -25,11 +31,13 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
   const [loading, setLoading] = useState(false);
   const [sendingChannelId, setSendingChannelId] = useState<string | null>(null);
   const [channels, setChannels] = useState<ChannelStatus[]>([]);
+  const [recommendedRoute, setRecommendedRoute] = useState<RouteItem[]>([]);
   const [businessName, setBusinessName] = useState("");
 
   const loadStatus = async () => {
     if (!businessId) {
       setChannels([]);
+      setRecommendedRoute([]);
       setBusinessName("");
       return;
     }
@@ -49,6 +57,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
         throw new Error(data.error || "Не удалось загрузить статус каналов");
       }
       setChannels(Array.isArray(data.channels) ? data.channels : []);
+      setRecommendedRoute(Array.isArray(data.recommended_route) ? data.recommended_route : []);
       setBusinessName(data.business_name || "");
     } catch (e: any) {
       toast({
@@ -111,6 +120,47 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     }
   };
 
+  const handleAutoRouteTest = async () => {
+    if (!businessId) {
+      return;
+    }
+    setSendingChannelId("auto");
+    try {
+      const token = newAuth.getToken();
+      if (!token) {
+        throw new Error("Нужна авторизация");
+      }
+      const res = await fetch("/api/channels/test-send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          business_id: businessId,
+          channel_id: "auto",
+          preferred_provider: "telegram",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Авто-маршрут не доставил сообщение");
+      }
+      toast({
+        title: "Авто-маршрут сработал",
+        description: `Сообщение ушло через ${data.channel_id}.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Авто-маршрут не сработал",
+        description: e.message || "Не удалось пройти по цепочке fallback",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingChannelId(null);
+    }
+  };
+
   const getBadgeClass = (status: string) => {
     if (status === "ready") {
       return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -152,12 +202,44 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                 Готово каналов: {readyCount} из {channels.length}
               </div>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              Multi-channel readiness
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Multi-channel readiness
+              </div>
+              <Button size="sm" onClick={handleAutoRouteTest} disabled={!businessId || sendingChannelId === "auto"}>
+                {sendingChannelId === "auto" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Авто-тест по цепочке
+              </Button>
             </div>
           </div>
         </div>
+
+        {businessId && recommendedRoute.length > 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="text-sm font-semibold text-slate-900">Рекомендуемая цепочка доставки</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recommendedRoute.map((item) => (
+                <div
+                  key={item.channel_id}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    item.eligible
+                      ? "border-emerald-200 bg-white text-slate-700"
+                      : "border-slate-200 bg-white text-slate-400"
+                  }`}
+                >
+                  {item.fallback_order}. {item.label}
+                  {item.preferred ? " (preferred)" : ""}
+                  {!item.eligible ? " [skip]" : ""}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {!businessId ? (
           <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">

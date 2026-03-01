@@ -218,22 +218,43 @@ def send_booking_notification(business_id: str, booking_id: str) -> bool:
             'notes': notes
         }
         
-        # Отправляем уведомления
-        telegram_sent = False
-        whatsapp_sent = False
-        
-        # Telegram уведомление
-        # Получаем telegram_id владельца из Users
-        cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (owner_id,))
-        user = cursor.fetchone()
-        if user and user[0]:
-            telegram_id = user[0]
-            telegram_sent = send_telegram_notification(telegram_id, booking_data)
-        
-        # WhatsApp уведомление
-        if whatsapp_phone and whatsapp_verified:
-            whatsapp_sent = send_whatsapp_notification(whatsapp_phone, booking_data)
-        
+        # Пытаемся отправить через unified router.
+        from core.channel_router import load_business_channel_context, dispatch_with_routing
+
+        unified_message = f"""🔔 Новое бронирование!
+
+👤 Клиент: {booking_data.get('client_name', 'Не указано')}
+📞 Телефон: {booking_data.get('client_phone', 'Не указано')}
+📧 Email: {booking_data.get('client_email', 'Не указано') or 'Не указано'}
+🕐 Время: {booking_data.get('booking_time_local', booking_data.get('booking_time', 'Не указано'))}
+"""
+        if booking_data.get('service_name'):
+            unified_message += f"\n💇 Услуга: {booking_data['service_name']}"
+        if booking_data.get('notes'):
+            unified_message += f"\n📝 Заметки: {booking_data['notes']}"
+        unified_message += f"\n\nID бронирования: {booking_data.get('booking_id', '')}"
+
+        route_ctx = load_business_channel_context(cursor, business_id, global_telegram_bot_token=TELEGRAM_BOT_TOKEN)
+        route_result = dispatch_with_routing(route_ctx, unified_message, preferred_provider='telegram')
+        telegram_sent = any(
+            attempt.get('success') and attempt.get('provider') == 'telegram'
+            for attempt in (route_result.get('attempts') or [])
+        )
+        whatsapp_sent = any(
+            attempt.get('success') and attempt.get('provider') == 'whatsapp'
+            for attempt in (route_result.get('attempts') or [])
+        )
+
+        # Fallback на legacy, если routing ничего не доставил.
+        if not (telegram_sent or whatsapp_sent):
+            cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (owner_id,))
+            user = cursor.fetchone()
+            if user and user[0]:
+                telegram_id = user[0]
+                telegram_sent = send_telegram_notification(telegram_id, booking_data)
+            if whatsapp_phone and whatsapp_verified:
+                whatsapp_sent = send_whatsapp_notification(whatsapp_phone, booking_data)
+
         # Обновляем статус уведомления в БД
         notification_channel = []
         if telegram_sent:
@@ -291,9 +312,6 @@ def send_support_request_notification(
     Returns:
         True если хотя бы одно уведомление отправлено
     """
-    telegram_sent = False
-    whatsapp_sent = False
-    
     # Формируем сообщение
     message = f"""🔔 Запрос на поддержку от клиента ChatGPT!
 
@@ -313,10 +331,35 @@ def send_support_request_notification(
     
     message += "\n\n⚠️ Клиент ожидает ответа от представителя салона!"
     
-    # Telegram уведомление
-    # Используем токен бота бизнеса, если он есть, иначе глобальный токен
+    telegram_sent = False
+    whatsapp_sent = False
+
+    # Новый путь: unified router по business_id.
+    if business_id:
+        try:
+            from database_manager import DatabaseManager
+            from core.channel_router import load_business_channel_context, dispatch_with_routing
+
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            route_ctx = load_business_channel_context(cursor, business_id, global_telegram_bot_token=TELEGRAM_BOT_TOKEN)
+            db.close()
+            route_result = dispatch_with_routing(route_ctx, message, preferred_provider='telegram')
+            telegram_sent = any(
+                attempt.get('success') and attempt.get('provider') == 'telegram'
+                for attempt in (route_result.get('attempts') or [])
+            )
+            whatsapp_sent = any(
+                attempt.get('success') and attempt.get('provider') == 'whatsapp'
+                for attempt in (route_result.get('attempts') or [])
+            )
+            if telegram_sent or whatsapp_sent:
+                return True
+        except Exception as e:
+            print(f"⚠️ Unified channel routing failed, falling back to legacy support notify: {e}")
+
+    # Legacy fallback.
     bot_token_to_use = telegram_bot_token or TELEGRAM_BOT_TOKEN
-    
     if telegram_id and bot_token_to_use:
         try:
             url = f"https://api.telegram.org/bot{bot_token_to_use}/sendMessage"
@@ -334,14 +377,13 @@ def send_support_request_notification(
                 print(f"❌ Ошибка отправки Telegram: {response.status_code} - {response.text}")
         except Exception as e:
             print(f"❌ Ошибка отправки Telegram уведомления о поддержке: {e}")
-    
-    # WhatsApp уведомление
+
     if whatsapp and WHATSAPP_PHONE_ID and WHATSAPP_ACCESS_TOKEN:
         try:
             phone_clean = ''.join(c for c in whatsapp if c.isdigit() or c == '+')
             if not phone_clean.startswith('+'):
                 phone_clean = '+' + phone_clean
-            
+
             url = f"https://graph.facebook.com/v20.0/{WHATSAPP_PHONE_ID}/messages"
             headers = {
                 'Authorization': f'Bearer {WHATSAPP_ACCESS_TOKEN}',
@@ -361,6 +403,5 @@ def send_support_request_notification(
                 print(f"✅ WhatsApp уведомление о поддержке отправлено на {phone_clean}")
         except Exception as e:
             print(f"❌ Ошибка отправки WhatsApp уведомления о поддержке: {e}")
-    
-    return telegram_sent or whatsapp_sent
 
+    return telegram_sent or whatsapp_sent

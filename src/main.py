@@ -57,11 +57,11 @@ from core.default_ai_prompts import get_default_ai_prompts
 from core.default_business_types import get_default_business_types
 from core.seo_keywords import collect_ranked_keywords
 from core.action_orchestrator import ActionOrchestrator
-from core.channel_delivery import (
-    mask_phone,
-    normalize_phone,
-    send_telegram_bot_message,
-    send_whatsapp_waba_message,
+from core.channel_router import (
+    build_channel_statuses,
+    dispatch_with_routing,
+    get_routing_plan,
+    load_business_channel_context,
 )
 try:
     from api.google_business_api import google_business_bp
@@ -1237,7 +1237,7 @@ def get_external_accounts(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -1360,7 +1360,7 @@ def upsert_external_account(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -1530,7 +1530,7 @@ def delete_external_account(account_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
@@ -1595,7 +1595,7 @@ def test_external_account_cookies(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
@@ -1833,11 +1833,13 @@ def get_channels_status():
             return jsonify({"error": "Бизнес не найден"}), 404
 
         owner_id = str(ctx.get("owner_id") or "")
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+        preferred_provider = str(request.args.get("preferred") or "telegram").strip().lower()
         channels = _build_business_channels_payload(ctx)
+        recommended_route = get_routing_plan(ctx, preferred_provider=preferred_provider)
         db.close()
         return jsonify(
             {
@@ -1845,11 +1847,60 @@ def get_channels_status():
                 "business_id": business_id,
                 "business_name": str(ctx.get("name") or ""),
                 "owner_telegram_id": str(ctx.get("owner_telegram_id") or ""),
+                "preferred_provider": preferred_provider,
                 "channels": channels,
+                "recommended_route": recommended_route,
             }
         )
     except Exception as e:
         print(f"❌ Ошибка GET channels/status: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/channels/route-preview", methods=["GET"])
+def get_channels_route_preview():
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        business_id = str(request.args.get("business_id") or "").strip()
+        preferred_provider = str(request.args.get("preferred") or "telegram").strip().lower()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        ctx = _load_business_channel_context(cursor, business_id)
+        if not ctx:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = str(ctx.get("owner_id") or "")
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        route = get_routing_plan(ctx, preferred_provider=preferred_provider)
+        db.close()
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "preferred_provider": preferred_provider,
+                "route": route,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка GET channels/route-preview: {e}")
         import traceback
 
         traceback.print_exc()
@@ -1871,6 +1922,7 @@ def test_channel_send():
         data = request.get_json() or {}
         business_id = str(data.get("business_id") or "").strip()
         channel_id = str(data.get("channel_id") or "").strip()
+        preferred_provider = str(data.get("preferred_provider") or "telegram").strip().lower()
         custom_message = str(data.get("message") or "").strip()
 
         if not business_id or not channel_id:
@@ -1884,47 +1936,39 @@ def test_channel_send():
             return jsonify({"error": "Бизнес не найден"}), 404
 
         owner_id = str(ctx.get("owner_id") or "")
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        channels = {item["channel_id"]: item for item in _build_business_channels_payload(ctx)}
-        selected = channels.get(channel_id)
-        if not selected:
-            db.close()
-            return jsonify({"error": "Неизвестный канал"}), 400
-        if not selected.get("testable"):
-            db.close()
-            return jsonify({"error": "Этот канал пока нельзя протестировать из интерфейса"}), 400
 
         business_name = str(ctx.get("name") or "вашего бизнеса")
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         message = custom_message or (
             "Тестовый сигнал LocalOS.\n"
             f"Бизнес: {business_name}\n"
-            f"Канал: {selected.get('label')}\n"
+            f"Маршрут: {channel_id}\n"
             f"Время: {timestamp}"
         )
 
-        result = {"success": False, "error": "Unsupported channel"}
-        if channel_id == "telegram_owner_global":
-            result = send_telegram_bot_message(
-                os.getenv("TELEGRAM_BOT_TOKEN"),
-                ctx.get("owner_telegram_id"),
+        if channel_id == "auto":
+            result = dispatch_with_routing(
+                ctx,
                 message,
+                preferred_provider=preferred_provider,
             )
-        elif channel_id == "telegram_owner_business_bot":
-            result = send_telegram_bot_message(
-                ctx.get("telegram_bot_token"),
-                ctx.get("owner_telegram_id"),
+        else:
+            channels = {item["channel_id"]: item for item in _build_business_channels_payload(ctx)}
+            selected = channels.get(channel_id)
+            if not selected:
+                db.close()
+                return jsonify({"error": "Неизвестный канал"}), 400
+            if not selected.get("testable"):
+                db.close()
+                return jsonify({"error": "Этот канал пока нельзя протестировать из интерфейса"}), 400
+            result = dispatch_with_routing(
+                ctx,
                 message,
-            )
-        elif channel_id == "whatsapp_owner":
-            result = send_whatsapp_waba_message(
-                ctx.get("waba_phone_id"),
-                ctx.get("waba_access_token"),
-                ctx.get("whatsapp_phone"),
-                message,
+                preferred_provider=preferred_provider,
+                force_channel_id=channel_id,
             )
 
         db.close()
@@ -1932,9 +1976,10 @@ def test_channel_send():
             return jsonify(
                 {
                     "success": True,
-                    "channel_id": channel_id,
+                    "channel_id": str(result.get("selected_channel_id") or channel_id),
+                    "selected_provider": str(result.get("selected_provider") or ""),
                     "message": "Тестовое сообщение отправлено",
-                    "provider_status_code": result.get("status_code"),
+                    "attempts": result.get("attempts") or [],
                 }
             )
         return (
@@ -1943,7 +1988,7 @@ def test_channel_send():
                     "success": False,
                     "channel_id": channel_id,
                     "error": str(result.get("error") or "Не удалось отправить тестовое сообщение"),
-                    "provider_status_code": result.get("status_code"),
+                    "attempts": result.get("attempts") or [],
                 }
             ),
             502,
@@ -4128,149 +4173,15 @@ def _business_display_fields(row_dict):
 
 
 def _load_business_channel_context(cursor, business_id: str) -> dict | None:
-    business_cols = _load_table_columns(cursor, "businesses")
-    users_cols = _load_table_columns(cursor, "users")
-
-    business_optional = [
-        "telegram_bot_token",
-        "waba_phone_id",
-        "waba_access_token",
-        "whatsapp_phone",
-        "whatsapp_verified",
-    ]
-    user_optional = [
-        ("telegram_id", "owner_telegram_id"),
-        ("email", "owner_email"),
-        ("name", "owner_name"),
-    ]
-
-    select_parts = [
-        "b.id",
-        "b.name",
-        "b.owner_id",
-    ]
-    for col in business_optional:
-        if col in business_cols:
-            select_parts.append(f"b.{col}")
-        else:
-            select_parts.append(f"NULL AS {col}")
-    for col, alias in user_optional:
-        if col in users_cols:
-            select_parts.append(f"u.{col} AS {alias}")
-        else:
-            select_parts.append(f"NULL AS {alias}")
-
-    cursor.execute(
-        f"""
-        SELECT {", ".join(select_parts)}
-        FROM businesses b
-        LEFT JOIN users u ON u.id = b.owner_id
-        WHERE b.id = %s
-        LIMIT 1
-        """,
-        (str(business_id),),
+    return load_business_channel_context(
+        cursor,
+        business_id,
+        global_telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
     )
-    row = cursor.fetchone()
-    if not row:
-        return None
-
-    data = _row_to_dict(cursor, row)
-    data["maton_connected"] = False
-    ext_cols = _load_table_columns(cursor, "externalbusinessaccounts")
-    if {"business_id", "source"}.issubset(ext_cols):
-        is_active_expr = "COALESCE(is_active, TRUE)" if "is_active" in ext_cols else "TRUE"
-        cursor.execute(
-            f"""
-            SELECT 1
-            FROM externalbusinessaccounts
-            WHERE business_id = %s
-              AND source = 'maton'
-              AND {is_active_expr}
-            LIMIT 1
-            """,
-            (str(business_id),),
-        )
-        data["maton_connected"] = cursor.fetchone() is not None
-    return data
 
 
 def _build_business_channels_payload(ctx: dict | None) -> list[dict]:
-    ctx = ctx or {}
-    owner_telegram_id = str(ctx.get("owner_telegram_id") or "").strip()
-    telegram_bot_token = str(ctx.get("telegram_bot_token") or "").strip()
-    global_bot_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-    whatsapp_phone = normalize_phone(ctx.get("whatsapp_phone"))
-    whatsapp_verified = bool(ctx.get("whatsapp_verified"))
-    waba_phone_id = str(ctx.get("waba_phone_id") or "").strip()
-    waba_access_token = str(ctx.get("waba_access_token") or "").strip()
-    maton_connected = bool(ctx.get("maton_connected"))
-
-    return [
-        {
-            "channel_id": "telegram_owner_global",
-            "label": "Telegram владельца (глобальный бот)",
-            "provider": "telegram",
-            "configured": bool(global_bot_token and owner_telegram_id),
-            "testable": bool(global_bot_token and owner_telegram_id),
-            "status": "ready" if (global_bot_token and owner_telegram_id) else "not_configured",
-            "detail": (
-                "Глобальный бот может отправлять служебные сообщения владельцу."
-                if (global_bot_token and owner_telegram_id)
-                else "Нужны TELEGRAM_BOT_TOKEN и telegram_id владельца."
-            ),
-            "target": owner_telegram_id or None,
-        },
-        {
-            "channel_id": "telegram_owner_business_bot",
-            "label": "Telegram владельца (бот бизнеса)",
-            "provider": "telegram",
-            "configured": bool(telegram_bot_token and owner_telegram_id),
-            "testable": bool(telegram_bot_token and owner_telegram_id),
-            "status": "ready" if (telegram_bot_token and owner_telegram_id) else "not_configured",
-            "detail": (
-                "Брендированный бот бизнеса может писать владельцу."
-                if (telegram_bot_token and owner_telegram_id)
-                else "Нужны telegram_bot_token бизнеса и telegram_id владельца."
-            ),
-            "target": owner_telegram_id or None,
-        },
-        {
-            "channel_id": "whatsapp_owner",
-            "label": "WhatsApp владельца / бизнеса (WABA)",
-            "provider": "whatsapp",
-            "configured": bool(waba_phone_id and waba_access_token and whatsapp_phone),
-            "testable": bool(waba_phone_id and waba_access_token and whatsapp_phone and whatsapp_verified),
-            "status": (
-                "ready"
-                if (waba_phone_id and waba_access_token and whatsapp_phone and whatsapp_verified)
-                else "verification_required"
-                if (waba_phone_id and waba_access_token and whatsapp_phone)
-                else "not_configured"
-            ),
-            "detail": (
-                "WABA настроен и номер подтверждён."
-                if (waba_phone_id and waba_access_token and whatsapp_phone and whatsapp_verified)
-                else "Номер сохранён, но ещё не верифицирован."
-                if (waba_phone_id and waba_access_token and whatsapp_phone)
-                else "Нужны waba_phone_id, waba_access_token и whatsapp_phone."
-            ),
-            "target": mask_phone(whatsapp_phone) or None,
-        },
-        {
-            "channel_id": "maton_bridge",
-            "label": "Maton.ai bridge",
-            "provider": "maton",
-            "configured": maton_connected,
-            "testable": False,
-            "status": "ready" if maton_connected else "not_configured",
-            "detail": (
-                "Maton.ai подключён. Этот bridge готов как upstream-коннектор."
-                if maton_connected
-                else "Нужен API-ключ Maton.ai в интеграциях."
-            ),
-            "target": "maton.ai" if maton_connected else None,
-        },
-    ]
+    return build_channel_statuses(ctx)
 
 
 def suggest_city_from_address(address: str):

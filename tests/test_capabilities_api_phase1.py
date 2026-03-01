@@ -26,6 +26,7 @@ def capabilities_client(postgres_container, run_migrations):
         insert_test_data,
     )
     import pg_db_utils as pg_mod
+    import database_manager as db_mod
     import psycopg2
     from psycopg2.extras import RealDictCursor
     import main as main_mod
@@ -53,7 +54,9 @@ def capabilities_client(postgres_container, run_migrations):
         return get_connection_with_search_path(dsn, schema_name)
 
     original_get_db = pg_mod.get_db_connection
+    original_db_manager_get_db = db_mod.get_db_connection
     pg_mod.get_db_connection = patched_get_db_connection
+    db_mod.get_db_connection = patched_get_db_connection
 
     original_verify = main_mod.verify_session
     main_mod.verify_session = lambda _token: {"user_id": user_id, "id": user_id, "is_superadmin": False}
@@ -68,6 +71,7 @@ def capabilities_client(postgres_container, run_migrations):
     }
 
     pg_mod.get_db_connection = original_get_db
+    db_mod.get_db_connection = original_db_manager_get_db
     main_mod.verify_session = original_verify
 
 
@@ -2434,13 +2438,21 @@ def test_channels_status_returns_channel_list(capabilities_client):
             """
             UPDATE businesses
             SET telegram_bot_token = %s,
+                owner_id = %s,
                 waba_phone_id = %s,
                 waba_access_token = %s,
                 whatsapp_phone = %s,
                 whatsapp_verified = TRUE
             WHERE id = %s
             """,
-            ("telegram-business-token", "waba-phone-id", "waba-access-token", "+79990001122", info["business_id"]),
+            (
+                "telegram-business-token",
+                info["user_id"],
+                "waba-phone-id",
+                "waba-access-token",
+                "+79990001122",
+                info["business_id"],
+            ),
         )
     conn.commit()
     conn.close()
@@ -2459,7 +2471,7 @@ def test_channels_status_returns_channel_list(capabilities_client):
     assert by_id["maton_bridge"]["testable"] is False
 
 
-def test_channels_test_send_telegram_uses_helper(capabilities_client, monkeypatch):
+def test_channels_test_send_telegram_uses_routing(capabilities_client, monkeypatch):
     info = capabilities_client
     from tests.helpers.db_init_client_info import get_connection_with_search_path
     import main as main_mod
@@ -2468,19 +2480,30 @@ def test_channels_test_send_telegram_uses_helper(capabilities_client, monkeypatc
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
         cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
+        cur.execute("UPDATE businesses SET owner_id = %s WHERE id = %s", (info["user_id"], info["business_id"]))
     conn.commit()
     conn.close()
 
     called = {}
 
-    def _fake_send(bot_token, chat_id, text):
-        called["bot_token"] = bot_token
-        called["chat_id"] = chat_id
+    def _fake_route(ctx, text, preferred_provider="telegram", force_channel_id=None):
+        called["preferred_provider"] = preferred_provider
+        called["force_channel_id"] = force_channel_id
         called["text"] = text
-        return {"success": True, "status_code": 200}
+        return {
+            "success": True,
+            "selected_channel_id": "telegram_owner_global",
+            "selected_provider": "telegram",
+            "attempts": [
+                {
+                    "channel_id": "telegram_owner_global",
+                    "provider": "telegram",
+                    "success": True,
+                }
+            ],
+        }
 
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "global-bot-token")
-    monkeypatch.setattr(main_mod, "send_telegram_bot_message", _fake_send)
+    monkeypatch.setattr(main_mod, "dispatch_with_routing", _fake_route)
 
     r = info["client"].post(
         "/api/channels/test-send",
@@ -2491,6 +2514,101 @@ def test_channels_test_send_telegram_uses_helper(capabilities_client, monkeypatc
     body = r.get_json()
     assert body["success"] is True
     assert body["channel_id"] == "telegram_owner_global"
-    assert called["bot_token"] == "global-bot-token"
-    assert called["chat_id"] == "273282710"
+    assert called["preferred_provider"] == "telegram"
+    assert called["force_channel_id"] == "telegram_owner_global"
     assert "Тестовый сигнал LocalOS." in called["text"]
+
+
+def test_channels_route_preview_returns_fallback_chain(capabilities_client):
+    info = capabilities_client
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_phone_id TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS waba_access_token TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_verified BOOLEAN DEFAULT FALSE")
+        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
+        cur.execute(
+            """
+            UPDATE businesses
+            SET telegram_bot_token = %s,
+                owner_id = %s,
+                waba_phone_id = %s,
+                waba_access_token = %s,
+                whatsapp_phone = %s,
+                whatsapp_verified = TRUE
+            WHERE id = %s
+            """,
+            (
+                "telegram-business-token",
+                info["user_id"],
+                "waba-phone-id",
+                "waba-access-token",
+                "+79990001122",
+                info["business_id"],
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+    r = info["client"].get(
+        f"/api/channels/route-preview?business_id={info['business_id']}&preferred=telegram",
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["success"] is True
+    route = body["route"]
+    assert route[0]["channel_id"] == "telegram_owner_business_bot"
+    assert route[1]["channel_id"] == "telegram_owner_global"
+    assert route[2]["channel_id"] == "whatsapp_owner"
+
+
+def test_channels_auto_test_send_uses_routing(capabilities_client, monkeypatch):
+    info = capabilities_client
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+    import main as main_mod
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
+        cur.execute("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS telegram_bot_token TEXT")
+        cur.execute("UPDATE users SET telegram_id = %s WHERE id = %s", ("273282710", info["user_id"]))
+        cur.execute(
+            "UPDATE businesses SET telegram_bot_token = %s, owner_id = %s WHERE id = %s",
+            ("telegram-business-token", info["user_id"], info["business_id"]),
+        )
+    conn.commit()
+    conn.close()
+
+    def _fake_route(ctx, text, preferred_provider="telegram", force_channel_id=None):
+        assert preferred_provider == "telegram"
+        assert force_channel_id is None
+        return {
+            "success": True,
+            "selected_channel_id": "telegram_owner_business_bot",
+            "selected_provider": "telegram",
+            "attempts": [
+                {
+                    "channel_id": "telegram_owner_business_bot",
+                    "provider": "telegram",
+                    "success": True,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(main_mod, "dispatch_with_routing", _fake_route)
+
+    r = info["client"].post(
+        "/api/channels/test-send",
+        json={"business_id": info["business_id"], "channel_id": "auto", "preferred_provider": "telegram"},
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["success"] is True
+    assert body["channel_id"] == "telegram_owner_business_bot"
