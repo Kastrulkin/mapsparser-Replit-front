@@ -2612,3 +2612,89 @@ def test_channels_auto_test_send_uses_routing(capabilities_client, monkeypatch):
     body = r.get_json()
     assert body["success"] is True
     assert body["channel_id"] == "telegram_owner_business_bot"
+
+
+def test_channels_status_marks_maton_ready_when_bridge_enabled(capabilities_client, monkeypatch):
+    info = capabilities_client
+    from auth_encryption import encrypt_auth_data
+    from tests.helpers.db_init_client_info import get_connection_with_search_path
+
+    monkeypatch.setenv("MATON_API_URL", "https://maton.example.test/v1/messages/send")
+    monkeypatch.setenv("MATON_BRIDGE_ENABLED", "1")
+
+    conn = get_connection_with_search_path(info["dsn"], info["schema_name"])
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS externalbusinessaccounts (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                auth_data_encrypted TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP NULL,
+                updated_at TIMESTAMP NULL
+            )
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO externalbusinessaccounts (id, business_id, source, auth_data_encrypted, is_active)
+            VALUES (%s, %s, 'maton', %s, TRUE)
+            """,
+            (
+                str(uuid.uuid4()),
+                info["business_id"],
+                encrypt_auth_data(json.dumps({"api_key": "maton-live-key"})),
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+    r = info["client"].get(
+        f"/api/channels/status?business_id={info['business_id']}&preferred=maton",
+        headers=_auth_headers(),
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    by_id = {item["channel_id"]: item for item in body["channels"]}
+    assert by_id["maton_bridge"]["configured"] is True
+    assert by_id["maton_bridge"]["testable"] is True
+    assert by_id["maton_bridge"]["status"] == "ready"
+    assert body["recommended_route"][0]["channel_id"] == "maton_bridge"
+
+
+def test_channel_router_dispatch_uses_maton_adapter(monkeypatch):
+    import core.channel_router as router
+
+    called = {}
+
+    def _fake_send(api_key, text, **kwargs):
+        called["api_key"] = api_key
+        called["text"] = text
+        called["kwargs"] = kwargs
+        return {"success": True, "status_code": 202}
+
+    monkeypatch.setattr(router, "send_maton_bridge_message", _fake_send)
+
+    result = router.dispatch_with_routing(
+        {
+            "id": "biz-1",
+            "name": "Test Biz",
+            "maton_api_key": "maton-key",
+            "maton_api_url": "https://maton.example.test/v1/messages/send",
+            "maton_bridge_enabled": True,
+            "maton_connected": True,
+            "owner_telegram_id": "273282710",
+            "whatsapp_phone": "+79990001122",
+        },
+        "hello from test",
+        preferred_provider="maton",
+        force_channel_id="maton_bridge",
+    )
+    assert result["success"] is True
+    assert result["selected_channel_id"] == "maton_bridge"
+    assert result["selected_provider"] == "maton"
+    assert called["api_key"] == "maton-key"
+    assert called["text"] == "hello from test"
+    assert called["kwargs"]["business_id"] == "biz-1"

@@ -165,7 +165,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     if (status === "ready") {
       return "bg-emerald-100 text-emerald-700 border-emerald-200";
     }
-    if (status === "verification_required") {
+    if (status === "verification_required" || status === "bridge_disabled") {
       return "bg-amber-100 text-amber-700 border-amber-200";
     }
     return "bg-slate-100 text-slate-600 border-slate-200";
@@ -266,6 +266,8 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                       ? "Готов"
                       : channel.status === "verification_required"
                         ? "Нужна верификация"
+                        : channel.status === "bridge_disabled"
+                          ? "Bridge выключен"
                         : "Не настроен"}
                   </div>
                 </div>

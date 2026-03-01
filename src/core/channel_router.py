@@ -3,11 +3,16 @@ Unified channel routing policy for business communications.
 """
 from __future__ import annotations
 
+import json
+import os
 from datetime import datetime
 
+from auth_encryption import decrypt_auth_data
 from core.channel_delivery import (
     mask_phone,
     normalize_phone,
+    resolve_maton_api_url,
+    send_maton_bridge_message,
     send_telegram_bot_message,
     send_whatsapp_waba_message,
 )
@@ -86,23 +91,57 @@ def load_business_channel_context(cursor, business_id: str, *, global_telegram_b
     ctx["owner_email"] = str(ctx.get("owner_email") or "").strip()
     ctx["owner_name"] = str(ctx.get("owner_name") or "").strip()
     ctx["whatsapp_verified"] = bool(ctx.get("whatsapp_verified"))
+    ctx["maton_api_key"] = ""
+    ctx["maton_api_url"] = resolve_maton_api_url()
+    ctx["maton_bridge_enabled"] = str(os.getenv("MATON_BRIDGE_ENABLED", "") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     ext_cols = _query_table_columns(cursor, "externalbusinessaccounts")
     ctx["maton_connected"] = False
     if {"business_id", "source"}.issubset(ext_cols):
+        select_parts = ["id"]
+        if "auth_data_encrypted" in ext_cols:
+            select_parts.append("auth_data_encrypted")
+        else:
+            select_parts.append("NULL AS auth_data_encrypted")
         is_active_expr = "COALESCE(is_active, TRUE)" if "is_active" in ext_cols else "TRUE"
+        order_parts = []
+        if "updated_at" in ext_cols:
+            order_parts.append("updated_at DESC NULLS LAST")
+        if "created_at" in ext_cols:
+            order_parts.append("created_at DESC NULLS LAST")
+        order_sql = ", ".join(order_parts) if order_parts else "id DESC"
         cursor.execute(
             f"""
-            SELECT 1
+            SELECT {", ".join(select_parts)}
             FROM externalbusinessaccounts
             WHERE business_id = %s
               AND source = 'maton'
               AND {is_active_expr}
+            ORDER BY {order_sql}
             LIMIT 1
             """,
             (business_id,),
         )
-        ctx["maton_connected"] = cursor.fetchone() is not None
+        row = cursor.fetchone()
+        ctx["maton_connected"] = row is not None
+        if row:
+            row_dict = dict(row) if hasattr(row, "keys") else {"auth_data_encrypted": row[1] if len(row) > 1 else None}
+            auth_data_encrypted = str(row_dict.get("auth_data_encrypted") or "").strip()
+            if auth_data_encrypted:
+                plain_auth = decrypt_auth_data(auth_data_encrypted) or ""
+                plain_auth = plain_auth.strip()
+                if plain_auth:
+                    try:
+                        parsed = json.loads(plain_auth)
+                        if isinstance(parsed, dict):
+                            ctx["maton_api_key"] = str(parsed.get("api_key") or "").strip()
+                    except Exception:
+                        ctx["maton_api_key"] = plain_auth
     return ctx
 
 
@@ -116,6 +155,11 @@ def build_channel_statuses(ctx: dict | None) -> list[dict]:
     waba_phone_id = str(ctx.get("waba_phone_id") or "").strip()
     waba_access_token = str(ctx.get("waba_access_token") or "").strip()
     maton_connected = bool(ctx.get("maton_connected"))
+    maton_api_key = str(ctx.get("maton_api_key") or "").strip()
+    maton_api_url = str(ctx.get("maton_api_url") or "").strip()
+    maton_bridge_enabled = bool(ctx.get("maton_bridge_enabled"))
+    maton_ready = bool(maton_api_key and maton_api_url and maton_bridge_enabled)
+    maton_has_key = bool(maton_api_key)
 
     return [
         {
@@ -172,15 +216,23 @@ def build_channel_statuses(ctx: dict | None) -> list[dict]:
             "channel_id": "maton_bridge",
             "label": "Maton.ai bridge",
             "provider": "maton",
-            "configured": maton_connected,
-            "testable": False,
-            "status": "ready" if maton_connected else "not_configured",
+            "configured": maton_has_key,
+            "testable": maton_ready,
+            "status": (
+                "ready"
+                if maton_ready
+                else "bridge_disabled"
+                if maton_connected and maton_has_key
+                else "not_configured"
+            ),
             "detail": (
-                "Maton.ai подключён. Этот bridge готов как upstream-коннектор."
-                if maton_connected
+                "Maton.ai подключён и готов к outbound-отправке."
+                if maton_ready
+                else "API-ключ Maton.ai сохранён, но outbound bridge выключен. Нужны MATON_BRIDGE_ENABLED=1 и MATON_API_URL."
+                if (maton_connected and maton_has_key)
                 else "Нужен API-ключ Maton.ai в интеграциях."
             ),
-            "target": "maton.ai" if maton_connected else None,
+            "target": "maton.ai" if maton_has_key else None,
         },
     ]
 
@@ -217,8 +269,6 @@ def get_routing_plan(ctx: dict | None, *, preferred_provider: str = "telegram") 
         item["preferred"] = item.get("provider") == provider
         item["fallback_order"] = len(plan) + 1
         item["eligible"] = bool(item.get("testable"))
-        if channel_id == "maton_bridge":
-            item["eligible"] = bool(item.get("configured"))
         plan.append(item)
     return plan
 
@@ -276,11 +326,19 @@ def dispatch_with_routing(
                 message,
             )
         elif channel_id == "maton_bridge":
-            result = {
-                "success": False,
-                "error": "Maton bridge is configured but active outbound adapter is not enabled yet",
-                "unsupported": True,
-            }
+            result = send_maton_bridge_message(
+                ctx.get("maton_api_key"),
+                message,
+                target_channel="auto",
+                business_id=ctx.get("id"),
+                business_name=ctx.get("name"),
+                owner_telegram_id=ctx.get("owner_telegram_id"),
+                whatsapp_phone=ctx.get("whatsapp_phone"),
+                metadata={
+                    "preferred_provider": preferred_provider,
+                    "channel_id": channel_id,
+                },
+            )
 
         attempt = {
             "channel_id": channel_id,

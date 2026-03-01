@@ -1020,6 +1020,108 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
   }, [businessId, selectedActionId, load]);
 
+  const timelineSources = useMemo(
+    () => Array.from(new Set(timeline.map((e) => e.source).filter(Boolean))),
+    [timeline]
+  );
+  const timelineEventTypes = useMemo(
+    () => Array.from(new Set(timeline.map((e) => e.event_type).filter(Boolean))),
+    [timeline]
+  );
+  const timelineStatuses = useMemo(
+    () => Array.from(new Set(timeline.map((e) => String(e.status || '')).filter((x) => x.length > 0))),
+    [timeline]
+  );
+
+  const isProblematicTimelineEvent = useCallback((event: ActionTimelineEvent): boolean => {
+    const status = String(event.status || '').toLowerCase();
+    const eventType = String(event.event_type || '').toLowerCase();
+    const details = event.details || {};
+    if (status === 'failed' || status === 'retry' || status === 'dlq' || status === 'rejected' || status === 'expired') {
+      return true;
+    }
+    if (eventType === 'retry' || eventType === 'dlq' || eventType === 'failed') {
+      return true;
+    }
+    return Boolean(details.last_error);
+  }, []);
+
+  const filteredTimeline = useMemo(() => {
+    let events = timeline;
+    if (timelineLifecycleOnly) {
+      events = events.filter((event) => getActionLifecycleStatus(event) !== null);
+    }
+    if (timelineLifecycleQuickFilter !== 'all') {
+      events = events.filter((event) => getActionLifecycleStatus(event) === timelineLifecycleQuickFilter);
+    }
+    return events;
+  }, [timeline, timelineLifecycleOnly, timelineLifecycleQuickFilter]);
+
+  const lifecycleTimelineGroups = useMemo(
+    () =>
+      ACTION_LIFECYCLE_STATUSES.map((status) => ({
+        status,
+        events: filteredTimeline.filter((event) => getActionLifecycleStatus(event) === status),
+      })).filter((group) => group.events.length > 0),
+    [filteredTimeline]
+  );
+
+  const timelineSummary = useMemo(() => {
+    const reversed = [...timeline].reverse();
+    const isSuccess = (event: ActionTimelineEvent) => {
+      const status = String(event.status || '').toLowerCase();
+      return status === 'completed' || status === 'sent' || status === 'approved';
+    };
+    const isRetryDlq = (event: ActionTimelineEvent) => {
+      const status = String(event.status || '').toLowerCase();
+      const eventType = String(event.event_type || '').toLowerCase();
+      return status === 'retry' || status === 'dlq' || eventType === 'retry' || eventType === 'dlq';
+    };
+    const lastSuccess = reversed.find((event) => isSuccess(event));
+    const lastRetryDlq = reversed.find((event) => isRetryDlq(event));
+    const lastErrorEvent = reversed.find((event) => Boolean((event.details || {}).last_error));
+    const lastErrorText = String((lastErrorEvent?.details || {}).last_error || '').trim();
+    return {
+      lastSuccessAt: lastSuccess?.occurred_at || null,
+      lastRetryDlqAt: lastRetryDlq?.occurred_at || null,
+      lastRetryDlqStatus: lastRetryDlq?.status || lastRetryDlq?.event_type || null,
+      lastErrorAt: lastErrorEvent?.occurred_at || null,
+      lastErrorText: lastErrorText || null,
+    };
+  }, [timeline]);
+
+  const filteredCallbackAttempts = useMemo(() => {
+    const q = attemptsSearch.trim().toLowerCase();
+    return actionCallbackAttempts.filter((item) => {
+      if (!q) return true;
+      const haystack = `${item.event_type} ${item.http_status ?? ''} ${item.error_text || ''} ${item.response_excerpt || ''}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [actionCallbackAttempts, attemptsSearch]);
+
+  const attemptsEventTypes = useMemo(
+    () => Array.from(new Set(actionCallbackAttempts.map((item) => item.event_type).filter(Boolean))),
+    [actionCallbackAttempts]
+  );
+
+  const deliveryAttemptSummary = useMemo(() => {
+    const attempts = timeline.filter(
+      (event) => event.source === 'callback_delivery' && event.event_type === 'attempt'
+    );
+    const attemptsTotal = attempts.length;
+    const attemptsSuccess = attempts.filter((event) => String(event.status || '').toLowerCase() === 'sent').length;
+    const attemptsFailed = Math.max(attemptsTotal - attemptsSuccess, 0);
+    const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+    const lastAttemptDetails = (lastAttempt?.details || {}) as Record<string, any>;
+    return {
+      attemptsTotal,
+      attemptsSuccess,
+      attemptsFailed,
+      lastHttpStatus: lastAttemptDetails.http_status ?? null,
+      lastError: String(lastAttemptDetails.error_text || '').trim() || null,
+    };
+  }, [timeline]);
+
   const exportTimelineJson = useCallback(() => {
     if (!selectedActionId) return;
     const payload = {
@@ -1998,108 +2100,6 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const statusClass = isReady
     ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
     : 'bg-amber-50 border-amber-200 text-amber-800';
-
-  const timelineSources = useMemo(
-    () => Array.from(new Set(timeline.map((e) => e.source).filter(Boolean))),
-    [timeline]
-  );
-  const timelineEventTypes = useMemo(
-    () => Array.from(new Set(timeline.map((e) => e.event_type).filter(Boolean))),
-    [timeline]
-  );
-  const timelineStatuses = useMemo(
-    () => Array.from(new Set(timeline.map((e) => String(e.status || '')).filter((x) => x.length > 0))),
-    [timeline]
-  );
-
-  const isProblematicTimelineEvent = useCallback((event: ActionTimelineEvent): boolean => {
-    const status = String(event.status || '').toLowerCase();
-    const eventType = String(event.event_type || '').toLowerCase();
-    const details = event.details || {};
-    if (status === 'failed' || status === 'retry' || status === 'dlq' || status === 'rejected' || status === 'expired') {
-      return true;
-    }
-    if (eventType === 'retry' || eventType === 'dlq' || eventType === 'failed') {
-      return true;
-    }
-    return Boolean(details.last_error);
-  }, []);
-
-  const filteredTimeline = useMemo(() => {
-    let events = timeline;
-    if (timelineLifecycleOnly) {
-      events = events.filter((event) => getActionLifecycleStatus(event) !== null);
-    }
-    if (timelineLifecycleQuickFilter !== 'all') {
-      events = events.filter((event) => getActionLifecycleStatus(event) === timelineLifecycleQuickFilter);
-    }
-    return events;
-  }, [timeline, timelineLifecycleOnly, timelineLifecycleQuickFilter]);
-
-  const lifecycleTimelineGroups = useMemo(
-    () =>
-      ACTION_LIFECYCLE_STATUSES.map((status) => ({
-        status,
-        events: filteredTimeline.filter((event) => getActionLifecycleStatus(event) === status),
-      })).filter((group) => group.events.length > 0),
-    [filteredTimeline]
-  );
-
-  const timelineSummary = useMemo(() => {
-    const reversed = [...timeline].reverse();
-    const isSuccess = (event: ActionTimelineEvent) => {
-      const status = String(event.status || '').toLowerCase();
-      return status === 'completed' || status === 'sent' || status === 'approved';
-    };
-    const isRetryDlq = (event: ActionTimelineEvent) => {
-      const status = String(event.status || '').toLowerCase();
-      const eventType = String(event.event_type || '').toLowerCase();
-      return status === 'retry' || status === 'dlq' || eventType === 'retry' || eventType === 'dlq';
-    };
-    const lastSuccess = reversed.find((event) => isSuccess(event));
-    const lastRetryDlq = reversed.find((event) => isRetryDlq(event));
-    const lastErrorEvent = reversed.find((event) => Boolean((event.details || {}).last_error));
-    const lastErrorText = String((lastErrorEvent?.details || {}).last_error || '').trim();
-    return {
-      lastSuccessAt: lastSuccess?.occurred_at || null,
-      lastRetryDlqAt: lastRetryDlq?.occurred_at || null,
-      lastRetryDlqStatus: lastRetryDlq?.status || lastRetryDlq?.event_type || null,
-      lastErrorAt: lastErrorEvent?.occurred_at || null,
-      lastErrorText: lastErrorText || null,
-    };
-  }, [timeline]);
-
-  const filteredCallbackAttempts = useMemo(() => {
-    const q = attemptsSearch.trim().toLowerCase();
-    return actionCallbackAttempts.filter((item) => {
-      if (!q) return true;
-      const haystack = `${item.event_type} ${item.http_status ?? ''} ${item.error_text || ''} ${item.response_excerpt || ''}`.toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [actionCallbackAttempts, attemptsSearch]);
-
-  const attemptsEventTypes = useMemo(
-    () => Array.from(new Set(actionCallbackAttempts.map((item) => item.event_type).filter(Boolean))),
-    [actionCallbackAttempts]
-  );
-
-  const deliveryAttemptSummary = useMemo(() => {
-    const attempts = timeline.filter(
-      (event) => event.source === 'callback_delivery' && event.event_type === 'attempt'
-    );
-    const attemptsTotal = attempts.length;
-    const attemptsSuccess = attempts.filter((event) => String(event.status || '').toLowerCase() === 'sent').length;
-    const attemptsFailed = Math.max(attemptsTotal - attemptsSuccess, 0);
-    const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-    const lastAttemptDetails = (lastAttempt?.details || {}) as Record<string, any>;
-    return {
-      attemptsTotal,
-      attemptsSuccess,
-      attemptsFailed,
-      lastHttpStatus: lastAttemptDetails.http_status ?? null,
-      lastError: String(lastAttemptDetails.error_text || '').trim() || null,
-    };
-  }, [timeline]);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
