@@ -287,6 +287,25 @@ type UnifiedAuditTimelineResponse = {
   error?: string;
 };
 
+type AuditEventBundleResponse = {
+  success: boolean;
+  tenant_id?: string;
+  generated_at?: string;
+  event?: UnifiedAuditTimelineItem;
+  action_snapshot?: {
+    action_id?: string;
+    capability?: string;
+    status?: string;
+    overview?: {
+      callback_attempts_total?: number;
+      callback_attempts_failed?: number;
+    };
+  };
+  recovery_run?: RecoveryHistoryItem | null;
+  support_send?: SupportSendHistoryItem | null;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -374,6 +393,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [auditTimelineLoading, setAuditTimelineLoading] = useState(false);
   const [auditTimelineSourceFilter, setAuditTimelineSourceFilter] = useState<string>('all');
   const [auditTimelineSearch, setAuditTimelineSearch] = useState('');
+  const [selectedAuditEventBundle, setSelectedAuditEventBundle] = useState<AuditEventBundleResponse | null>(null);
+  const [selectedAuditEventId, setSelectedAuditEventId] = useState<string | null>(null);
+  const [auditEventLoading, setAuditEventLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadAuditTimeline = useCallback(async () => {
@@ -1191,6 +1213,20 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     }
     return json;
   }, [businessId]);
+
+  const loadAuditEventBundle = useCallback(async (item: UnifiedAuditTimelineItem) => {
+    if (!businessId) return;
+    setSelectedAuditEventId(String(item.event_id || ''));
+    setAuditEventLoading(true);
+    try {
+      const payload = await fetchAuditEventBundleExport(item, 'json');
+      setSelectedAuditEventBundle(payload as AuditEventBundleResponse);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить audit event bundle');
+    } finally {
+      setAuditEventLoading(false);
+    }
+  }, [businessId, fetchAuditEventBundleExport]);
 
   const exportRecoveryHistoryJson = useCallback(async () => {
     if (!businessId) return;
@@ -2121,9 +2157,89 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             <div className="mb-2 text-[11px] text-amber-700">
               Показано: {auditTimeline.length} / {auditTimelineTotal}
             </div>
+            {selectedAuditEventBundle?.event && (
+              <div className="mb-3 rounded-md border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-violet-900">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-800">
+                    Event preview {selectedAuditEventId ? `· ${selectedAuditEventId.slice(0, 8)}` : ''}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedAuditEventBundle.event.action_id ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => jumpToActionFromAudit(selectedAuditEventBundle.event?.action_id)}
+                          className="inline-flex items-center rounded-md border border-violet-300 bg-white px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
+                        >
+                          Открыть action
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => jumpToIncidentArtifactFromAudit(selectedAuditEventBundle.event?.action_id, 'incident snapshot')}
+                          className="inline-flex items-center rounded-md border border-cyan-300 bg-cyan-50 px-2 py-1 text-[10px] font-medium text-cyan-800 hover:bg-cyan-100"
+                        >
+                          Incident snapshot
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAuditEventBundle(null)}
+                      className="inline-flex items-center rounded-md border border-violet-300 bg-white px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
+                    >
+                      Скрыть
+                    </button>
+                  </div>
+                </div>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px]">
+                  <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-violet-800">
+                    {selectedAuditEventBundle.event.source}
+                  </span>
+                  <span>{selectedAuditEventBundle.event.event_type}</span>
+                  {selectedAuditEventBundle.event.status ? <span>status={selectedAuditEventBundle.event.status}</span> : null}
+                  {selectedAuditEventBundle.event.action_id ? <span>action={selectedAuditEventBundle.event.action_id.slice(0, 8)}</span> : null}
+                </div>
+                {selectedAuditEventBundle.event.details && Object.keys(selectedAuditEventBundle.event.details).length > 0 ? (
+                  <div className="mb-2 text-violet-700">
+                    {Object.entries(selectedAuditEventBundle.event.details)
+                      .slice(0, 6)
+                      .map(([key, value]) => `${key}=${Array.isArray(value) ? value.length : String(value)}`)
+                      .join(' • ')}
+                  </div>
+                ) : null}
+                {selectedAuditEventBundle.action_snapshot?.action_id ? (
+                  <div className="mb-2 rounded-md border border-violet-200 bg-white px-2 py-2 text-violet-900">
+                    <div className="font-medium">
+                      Action: {selectedAuditEventBundle.action_snapshot.capability || 'action'} · {selectedAuditEventBundle.action_snapshot.status || 'unknown'} · {selectedAuditEventBundle.action_snapshot.action_id?.slice(0, 8)}
+                    </div>
+                    <div className="mt-1 text-violet-700">
+                      callback attempts={selectedAuditEventBundle.action_snapshot.overview?.callback_attempts_total || 0}
+                      {' '}failed={selectedAuditEventBundle.action_snapshot.overview?.callback_attempts_failed || 0}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedAuditEventBundle.recovery_run ? (
+                  <div className="mb-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-2 text-blue-900">
+                    Recovery: replayed={selectedAuditEventBundle.recovery_run.replayed_count} sent={selectedAuditEventBundle.recovery_run.sent_count} retry={selectedAuditEventBundle.recovery_run.retried_count} dlq={selectedAuditEventBundle.recovery_run.dlq_count}
+                  </div>
+                ) : null}
+                {selectedAuditEventBundle.support_send ? (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-2 text-emerald-900">
+                    Support-send: telegram={selectedAuditEventBundle.support_send.telegram_sent_count} target_ids={selectedAuditEventBundle.support_send.target_ids.length}
+                  </div>
+                ) : null}
+              </div>
+            )}
             <div className="space-y-2">
               {auditTimeline.map((item) => (
-                <div key={item.event_id} className="rounded-md border border-amber-200 bg-white px-2 py-2 text-[11px] text-amber-900">
+                <div
+                  key={item.event_id}
+                  className={`rounded-md border px-2 py-2 text-[11px] ${
+                    selectedAuditEventId === item.event_id
+                      ? 'border-violet-300 bg-violet-50 text-violet-950'
+                      : 'border-amber-200 bg-white text-amber-900'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{item.occurred_at || '—'}</span>
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
@@ -2137,6 +2253,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                       className="inline-flex items-center rounded-md border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
                     >
                       Event JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loadAuditEventBundle(item)}
+                      className="inline-flex items-center rounded-md border border-violet-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
+                    >
+                      {auditEventLoading && selectedAuditEventId === item.event_id ? 'Загрузка...' : 'Preview'}
                     </button>
                     {item.action_id ? (
                       <>
