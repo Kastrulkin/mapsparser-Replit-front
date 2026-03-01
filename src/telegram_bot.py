@@ -1807,7 +1807,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, reply_markup = build_openclaw_menu(user_id)
         await query.edit_message_text(text, reply_markup=reply_markup)
     elif data == "menu_stats":
-        await show_business_selection(update, context, user_id, db_user_id, "stats")
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _, status_text = _build_openclaw_status_text(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+            }
+        )
+        panel_text, reply_markup = _compose_openclaw_panel(user_id, status_text)
+        await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data == "openclaw_status":
         business_ctx = resolve_business_context(user_id)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -2039,19 +2050,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             elif action == "settings":
                 await show_settings_menu(update, context, user_id, business_id)
-            elif action == "stats":
-                business_ctx = resolve_business_context(user_id, business_id)
-                if not business_ctx or not business_ctx.get("business_id"):
-                    await query.edit_message_text("❌ Не удалось загрузить статус бизнеса.")
-                    return
-                _, status_text = _build_openclaw_status_text(
-                    {
-                        **business_ctx,
-                        "telegram_id": user_id,
-                    }
-                )
-                panel_text, reply_markup = _compose_openclaw_panel(user_id, status_text)
-                await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data.startswith("setting_"):
         parts = data.split("_")
         if len(parts) >= 3:
@@ -2109,7 +2107,6 @@ async def show_business_selection(update: Update, context: ContextTypes.DEFAULT_
     action_names = {
         "transaction": "добавления транзакции",
         "settings": "настроек компании",
-        "stats": "просмотра статуса бизнеса",
     }
     
     text = f"Выберите бизнес для {action_names.get(action, action)}:"
