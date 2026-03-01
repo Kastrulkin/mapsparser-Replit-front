@@ -1427,6 +1427,14 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     return text, InlineKeyboardMarkup(keyboard)
 
 
+def _compose_openclaw_panel(telegram_id: str, lead_text: str = "") -> tuple[str, InlineKeyboardMarkup]:
+    menu_text, reply_markup = build_openclaw_menu(telegram_id)
+    lead_text = str(lead_text or "").strip()
+    if lead_text:
+        return f"{lead_text}\n\n──────────\n\n{menu_text}", reply_markup
+    return menu_text, reply_markup
+
+
 async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Краткий статус OpenClaw для привязанного бизнеса."""
     business_ctx = await _require_bound_business(update, context)
@@ -1435,9 +1443,23 @@ async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_
 
     try:
         ok, text = _build_openclaw_status_text(business_ctx)
-        await update.message.reply_text(text)
+        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка OpenClaw status: {e}")
+
+
+async def control_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Единая точка входа в Telegram control panel для OpenClaw."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    user_states.setdefault(str(update.effective_user.id), {})["active_business_id"] = str(business_ctx["business_id"])
+    panel_text, reply_markup = _compose_openclaw_panel(
+        str(update.effective_user.id),
+        f"🧭 OpenClaw control center\nБизнес: {business_ctx['business_name']}",
+    )
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 
 async def businesses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1474,9 +1496,11 @@ async def use_business_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not ctx or not ctx.get("business_id"):
         await update.message.reply_text("❌ Не удалось найти бизнес по этому значению.")
         return
-    await update.message.reply_text(
-        f"✅ Активный бизнес переключён:\n{ctx['business_name']}\n{ctx['business_id']}"
+    panel_text, reply_markup = _compose_openclaw_panel(
+        str(update.effective_user.id),
+        f"✅ Активный бизнес переключён:\n{ctx['business_name']}\n{ctx['business_id']}",
     )
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 
 async def support_export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1488,7 +1512,8 @@ async def support_export_command(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text("⏳ Формирую support snapshot...")
     try:
         ok, text = _perform_support_export(business_ctx)
-        await update.message.reply_text(text)
+        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка support export: {e}")
 
@@ -1502,7 +1527,8 @@ async def recovery_report_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text("⏳ Выполняю recovery callback очереди...")
     try:
         ok, text = _perform_recovery_report(business_ctx)
-        await update.message.reply_text(text)
+        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text[:3200])
+        await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка recovery report: {e}")
 
@@ -1557,7 +1583,8 @@ async def optimize_service_command(update: Update, context: ContextTypes.DEFAULT
             {**business_ctx, "telegram_id": str(update.effective_user.id)},
             service_text,
         )
-        await update.message.reply_text(text)
+        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        await update.message.reply_text(panel_text, reply_markup=reply_markup)
         return
 
     state_ref.update(
@@ -1589,7 +1616,8 @@ async def generate_news_command(update: Update, context: ContextTypes.DEFAULT_TY
             {**business_ctx, "telegram_id": str(update.effective_user.id)},
             raw_info,
         )
-        await update.message.reply_text(text)
+        panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+        await update.message.reply_text(panel_text, reply_markup=reply_markup)
         return
 
     state_ref.update(
@@ -1613,7 +1641,8 @@ async def actions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {**business_ctx, "telegram_id": str(update.effective_user.id)},
         limit=8,
     )
-    await update.message.reply_text(text)
+    panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 
 async def action_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1629,7 +1658,8 @@ async def action_status_command(update: Update, context: ContextTypes.DEFAULT_TY
         {**business_ctx, "telegram_id": str(update.effective_user.id)},
         action_id,
     )
-    await update.message.reply_text(text)
+    panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -2347,7 +2377,8 @@ async def handle_openclaw_service_optimize_text(update: Update, context: Context
         text,
     )
     user_states.setdefault(user_id, {})["state"] = "idle"
-    await update.message.reply_text(response_text)
+    panel_text, reply_markup = _compose_openclaw_panel(user_id, response_text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 
 async def handle_openclaw_news_generate_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
@@ -2361,7 +2392,8 @@ async def handle_openclaw_news_generate_text(update: Update, context: ContextTyp
         text,
     )
     user_states.setdefault(user_id, {})["state"] = "idle"
-    await update.message.reply_text(response_text)
+    panel_text, reply_markup = _compose_openclaw_panel(user_id, response_text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
 async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
     """Обработка текста транзакции"""
@@ -2733,6 +2765,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Команды:*
 /start - Главное меню
+/control - OpenClaw control center
 /help - Справка
 /cancel - Отменить текущую операцию
 /businesses - Показать ваши бизнесы
@@ -2751,6 +2784,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 Оптимизация услуг для SEO
 ⚙️ Настройки компании
 📈 Статистика (в разработке)
+🤖 Guided OpenClaw control panel
 
 *Поддержка:*
 Если возникли проблемы, обратитесь в поддержку через личный кабинет на сайте.
@@ -2775,6 +2809,7 @@ def main():
         
         # Регистрируем обработчики
         application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("control", control_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("cancel", cancel_command))
         application.add_handler(CommandHandler("businesses", businesses_command))
