@@ -1720,11 +1720,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
             return
     
     keyboard = [
-        [InlineKeyboardButton("💰 Добавить транзакцию", callback_data="menu_transaction")],
-        [InlineKeyboardButton("📊 Оптимизировать услуги", callback_data="menu_optimize")],
-        [InlineKeyboardButton("⚙️ Настройки компании", callback_data="menu_settings")],
-        [InlineKeyboardButton("📈 Статус бизнеса", callback_data="menu_stats")],
         [InlineKeyboardButton("🤖 OpenClaw Control", callback_data="menu_openclaw")],
+        [InlineKeyboardButton("📈 Статус бизнеса", callback_data="menu_stats")],
+        [InlineKeyboardButton("📊 Оптимизировать услуги", callback_data="menu_optimize")],
+        [InlineKeyboardButton("💰 Добавить транзакцию", callback_data="menu_transaction")],
+        [InlineKeyboardButton("⚙️ Настройки компании", callback_data="menu_settings")],
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
