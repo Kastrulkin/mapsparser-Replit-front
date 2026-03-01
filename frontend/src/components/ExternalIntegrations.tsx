@@ -6,6 +6,7 @@ import { newAuth } from "@/lib/auth_new";
 import { useToast } from "@/components/ui/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
 import OpenClawOutboxMetrics from "@/components/OpenClawOutboxMetrics";
+import { ChannelControlCenter } from "@/components/ChannelControlCenter";
 
 interface ExternalAccount {
   id: string;
@@ -309,6 +310,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       </CardHeader>
       <CardContent className="space-y-6">
         <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
+        <ChannelControlCenter businessId={currentBusinessId} />
 
         {/* Maton.ai */}
         <div className="border rounded-lg p-6 bg-gray-50 flex flex-col gap-4">
