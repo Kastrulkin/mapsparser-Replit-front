@@ -398,6 +398,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [selectedAuditEventId, setSelectedAuditEventId] = useState<string | null>(null);
   const [auditEventLoading, setAuditEventLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const auditTimelinePageSize = 20;
 
   const loadAuditTimeline = useCallback(async () => {
     if (!businessId) return;
@@ -406,7 +407,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       const token = localStorage.getItem('auth_token');
       const params = new URLSearchParams();
       params.set('tenant_id', businessId);
-      params.set('limit', '20');
+      params.set('limit', String(auditTimelinePageSize));
       params.set('offset', '0');
       if (auditTimelineSourceFilter !== 'all') {
         params.set('source', auditTimelineSourceFilter);
@@ -429,7 +430,57 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     } finally {
       setAuditTimelineLoading(false);
     }
-  }, [businessId, auditTimelineSourceFilter, auditTimelineSearch]);
+  }, [businessId, auditTimelinePageSize, auditTimelineSourceFilter, auditTimelineSearch]);
+
+  const loadMoreAuditTimeline = useCallback(async () => {
+    if (!businessId || auditTimelineLoading || auditTimeline.length >= auditTimelineTotal) return;
+    setAuditTimelineLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const params = new URLSearchParams();
+      params.set('tenant_id', businessId);
+      params.set('limit', String(auditTimelinePageSize));
+      params.set('offset', String(auditTimeline.length));
+      if (auditTimelineSourceFilter !== 'all') {
+        params.set('source', auditTimelineSourceFilter);
+      }
+      const searchText = auditTimelineSearch.trim();
+      if (searchText) {
+        params.set('search', searchText);
+      }
+      const response = await fetch(`/api/capabilities/audit-timeline?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json: UnifiedAuditTimelineResponse = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
+      }
+      const nextItems = json.items || [];
+      setAuditTimeline((prev) => {
+        const existing = new Set(prev.map((item) => item.event_id));
+        const merged = [...prev];
+        nextItems.forEach((item) => {
+          if (!existing.has(item.event_id)) {
+            merged.push(item);
+          }
+        });
+        return merged;
+      });
+      setAuditTimelineTotal(Number(json.total_count || json.count || 0));
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось дозагрузить unified audit timeline');
+    } finally {
+      setAuditTimelineLoading(false);
+    }
+  }, [
+    businessId,
+    auditTimeline.length,
+    auditTimelineLoading,
+    auditTimelinePageSize,
+    auditTimelineSearch,
+    auditTimelineSourceFilter,
+    auditTimelineTotal,
+  ]);
 
   const filteredAuditTimeline = useMemo(() => {
     if (auditTimelineQuickFilter === 'all') {
@@ -583,11 +634,6 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setLoading(false);
     }
   }, [businessId]);
-
-  useEffect(() => {
-    if (!businessId) return;
-    loadAuditTimeline();
-  }, [businessId, loadAuditTimeline]);
 
   useEffect(() => {
     load();
@@ -2374,6 +2420,18 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                 </div>
               )}
             </div>
+            {auditTimeline.length < auditTimelineTotal && (
+              <div className="mt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={loadMoreAuditTimeline}
+                  disabled={auditTimelineLoading}
+                  className="inline-flex items-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                >
+                  {auditTimelineLoading ? 'Загрузка...' : 'Показать ещё'}
+                </button>
+              </div>
+            )}
           </div>
           {copyMessage && (
             <div className="mb-3 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
