@@ -1170,6 +1170,8 @@ def _perform_reviews_reply(business_ctx: dict, review_text: str, tone: str = "pr
         return False, f"❌ Не удалось сгенерировать ответ: {result.get('error') or 'неизвестная ошибка'}"
 
     action_id = str(result.get("action_id") or "")
+    if str(result.get("status") or "") == "pending_human":
+        return True, _format_pending_human_text("💬 Ответ на отзыв", business_ctx, action_id)
     reply_payload = result.get("result") or {}
     reply_text = str((reply_payload or {}).get("reply") or "").strip()
     if not reply_text:
@@ -1250,6 +1252,8 @@ def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bo
         return False, f"❌ Не удалось оптимизировать услугу: {result.get('error') or 'неизвестная ошибка'}"
 
     action_id = str(result.get("action_id") or "")
+    if str(result.get("status") or "") == "pending_human":
+        return True, _format_pending_human_text("📊 SEO-оптимизация услуги", business_ctx, action_id)
     services = list((result.get("result") or {}).get("services") or [])
     service = dict(services[0] or {}) if services else {}
     optimized_name = str(service.get("optimized_name") or original_name).strip()
@@ -1310,6 +1314,8 @@ def _perform_news_generate(business_ctx: dict, raw_info: str) -> tuple[bool, str
         return False, f"❌ Не удалось сгенерировать новость: {result.get('error') or 'неизвестная ошибка'}"
 
     action_id = str(result.get("action_id") or "")
+    if str(result.get("status") or "") == "pending_human":
+        return True, _format_pending_human_text("📰 Новость для публикации", business_ctx, action_id)
     news_payload = result.get("result") or {}
     news_id = str(news_payload.get("news_id") or "")
     generated_text = str(news_payload.get("generated_text") or "").strip()
@@ -1403,6 +1409,117 @@ def _perform_action_status(business_ctx: dict, action_id: str) -> tuple[bool, st
     return True, "\n".join(lines)
 
 
+def _extract_action_result_preview(action_result: Any) -> str:
+    if not isinstance(action_result, dict):
+        return ""
+    return str(
+        action_result.get("reply")
+        or action_result.get("generated_text")
+        or action_result.get("news")
+        or ""
+    ).strip()
+
+
+def _format_pending_human_text(title: str, business_ctx: dict, action_id: str) -> str:
+    return "\n".join(
+        [
+            title,
+            f"Бизнес: {business_ctx['business_name']}",
+            f"Action: {action_id}",
+            "",
+            "Действие отправлено на подтверждение.",
+            "Используйте /pending_approvals или кнопку '⏳ Pending approvals'.",
+        ]
+    )
+
+
+def _build_pending_approvals_view(business_ctx: dict, limit: int = 6) -> tuple[bool, str, InlineKeyboardMarkup]:
+    result = OPENCLAW_ORCHESTRATOR.list_actions(
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+        tenant_id=str(business_ctx["business_id"]),
+        status="pending_human",
+        limit=limit,
+        offset=0,
+    )
+    if not result.get("success"):
+        text, fallback_markup = _compose_openclaw_panel(
+            str(business_ctx.get("telegram_id") or ""),
+            f"❌ Не удалось загрузить pending approvals: {result.get('error') or 'неизвестная ошибка'}",
+        )
+        return False, text, fallback_markup
+
+    items = list(result.get("items") or [])
+    lines = [
+        "⏳ Pending approvals",
+        f"Бизнес: {business_ctx['business_name']}",
+        "",
+    ]
+    keyboard: list[list[InlineKeyboardButton]] = []
+    if not items:
+        lines.append("Ожидающих подтверждения действий нет.")
+    else:
+        for item in items:
+            action_id = str(item.get("action_id") or "")
+            capability = str(item.get("capability") or "-")
+            created_at = str(item.get("created_at") or "-")
+            lines.append(
+                f"- {action_id[:8]} | {capability} | {created_at}"
+            )
+            keyboard.append(
+                [
+                    InlineKeyboardButton(f"✅ {action_id[:8]}", callback_data=f"approval_approved_{action_id}"),
+                    InlineKeyboardButton("✖️", callback_data=f"approval_rejected_{action_id}"),
+                    InlineKeyboardButton("ℹ️", callback_data=f"approval_status_{action_id}"),
+                ]
+            )
+    keyboard.append([InlineKeyboardButton("🔄 Обновить", callback_data="openclaw_pending_approvals")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_openclaw")])
+    return True, "\n".join(lines), InlineKeyboardMarkup(keyboard)
+
+
+def _perform_action_decision(business_ctx: dict, action_id: str, decision: str, reason: str = "") -> tuple[bool, str]:
+    action_id = str(action_id or "").strip()
+    decision = str(decision or "").strip().lower()
+    if not action_id:
+        return False, "❌ Укажите action_id."
+    if decision not in {"approved", "rejected", "expired"}:
+        return False, "❌ Некорректное решение. Используйте approved, rejected или expired."
+
+    result = OPENCLAW_ORCHESTRATOR.resolve_human_decision(
+        action_id,
+        decision,
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+            "name": str(business_ctx.get("telegram_name") or ""),
+            "email": "",
+        },
+        reason,
+    )
+    if not result.get("success"):
+        return False, f"❌ Не удалось применить решение: {result.get('error') or 'неизвестная ошибка'}"
+
+    lines = [
+        "🧾 Решение по action",
+        f"Бизнес: {business_ctx['business_name']}",
+        f"Action: {action_id}",
+        f"Решение: {decision}",
+        f"Статус: {result.get('status') or '-'}",
+    ]
+    error_text = str(result.get("error") or "").strip()
+    if error_text:
+        lines.append(f"Ошибка: {error_text}")
+    preview = _extract_action_result_preview(result.get("result") or {})
+    if preview:
+        lines.extend(["", preview[:2500]])
+    return True, "\n".join(lines)
+
+
 def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     ctx = resolve_business_context(str(telegram_id))
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
@@ -1418,6 +1535,7 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
         [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
         [InlineKeyboardButton("🧩 Оптимизировать услугу", callback_data="openclaw_service_optimize_start")],
         [InlineKeyboardButton("📰 Сгенерировать новость", callback_data="openclaw_news_generate_start")],
+        [InlineKeyboardButton("⏳ Pending approvals", callback_data="openclaw_pending_approvals")],
         [InlineKeyboardButton("📚 Последние actions", callback_data="openclaw_actions")],
         [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
         [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
@@ -1661,6 +1779,62 @@ async def action_status_command(update: Update, context: ContextTypes.DEFAULT_TY
     panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
     await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
+
+async def pending_approvals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать действия, ожидающие подтверждения."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    business_ctx = {**business_ctx, "telegram_id": str(update.effective_user.id), "telegram_name": update.effective_user.full_name}
+    _ok, text, reply_markup = _build_pending_approvals_view(business_ctx)
+    await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+async def approve_action_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтвердить action."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    action_id = " ".join(context.args or []).strip()
+    if not action_id:
+        await update.message.reply_text("❌ Укажите action_id: /approve_action <action_id>")
+        return
+    ok, text = _perform_action_decision(
+        {
+            **business_ctx,
+            "telegram_id": str(update.effective_user.id),
+            "telegram_name": update.effective_user.full_name,
+        },
+        action_id,
+        "approved",
+        "approved via telegram",
+    )
+    panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
+
+
+async def reject_action_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отклонить action."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    action_id = " ".join(context.args or []).strip()
+    if not action_id:
+        await update.message.reply_text("❌ Укажите action_id: /reject_action <action_id>")
+        return
+    ok, text = _perform_action_decision(
+        {
+            **business_ctx,
+            "telegram_id": str(update.effective_user.id),
+            "telegram_name": update.effective_user.full_name,
+        },
+        action_id,
+        "rejected",
+        "rejected via telegram",
+    )
+    panel_text, reply_markup = _compose_openclaw_panel(str(update.effective_user.id), text)
+    await update.message.reply_text(panel_text, reply_markup=reply_markup)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
@@ -1880,6 +2054,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "📰 Отправьте тему или исходную информацию для новости следующим сообщением."
         )
+    elif data == "openclaw_pending_approvals":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _, text, reply_markup = _build_pending_approvals_view(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+                "telegram_name": update.effective_user.full_name,
+            }
+        )
+        await query.edit_message_text(text, reply_markup=reply_markup)
     elif data == "openclaw_actions":
         business_ctx = resolve_business_context(user_id)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -1894,6 +2081,58 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{text}\n\n──────────\n\n{menu_text}",
             reply_markup=reply_markup,
         )
+    elif data.startswith("approval_approved_"):
+        action_id = data.replace("approval_approved_", "", 1)
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _, text = _perform_action_decision(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+                "telegram_name": update.effective_user.full_name,
+            },
+            action_id,
+            "approved",
+            "approved via telegram inline",
+        )
+        panel_text, reply_markup = _compose_openclaw_panel(user_id, text)
+        await query.edit_message_text(panel_text, reply_markup=reply_markup)
+    elif data.startswith("approval_rejected_"):
+        action_id = data.replace("approval_rejected_", "", 1)
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _, text = _perform_action_decision(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+                "telegram_name": update.effective_user.full_name,
+            },
+            action_id,
+            "rejected",
+            "rejected via telegram inline",
+        )
+        panel_text, reply_markup = _compose_openclaw_panel(user_id, text)
+        await query.edit_message_text(panel_text, reply_markup=reply_markup)
+    elif data.startswith("approval_status_"):
+        action_id = data.replace("approval_status_", "", 1)
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _, text = _perform_action_status(
+            {
+                **business_ctx,
+                "telegram_id": user_id,
+                "telegram_name": update.effective_user.full_name,
+            },
+            action_id,
+        )
+        panel_text, reply_markup = _compose_openclaw_panel(user_id, text)
+        await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data == "openclaw_review_cancel":
         state_ref = user_states.setdefault(user_id, {})
         state_ref["state"] = "idle"
@@ -2856,6 +3095,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /generate_news - Сгенерировать новость
 /actions - Показать последние actions
 /action_status - Статус конкретного action
+/pending_approvals - Очередь действий на подтверждение
+/approve_action - Подтвердить action по ID
+/reject_action - Отклонить action по ID
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
 
@@ -2903,6 +3145,9 @@ def main():
         application.add_handler(CommandHandler("generate_news", generate_news_command))
         application.add_handler(CommandHandler("actions", actions_command))
         application.add_handler(CommandHandler("action_status", action_status_command))
+        application.add_handler(CommandHandler("pending_approvals", pending_approvals_command))
+        application.add_handler(CommandHandler("approve_action", approve_action_command))
+        application.add_handler(CommandHandler("reject_action", reject_action_command))
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
