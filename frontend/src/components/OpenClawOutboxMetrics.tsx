@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCcw, Wrench } from 'lucide-react';
 
 type HealthResponse = {
@@ -311,6 +311,7 @@ function getActionLifecycleStatus(event: ActionTimelineEvent): ActionLifecycleSt
 }
 
 export default function OpenClawOutboxMetrics({ businessId }: Props) {
+  const actionAuditSectionRef = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<HealthResponse | null>(null);
   const [trend, setTrend] = useState<HealthTrendItem[]>([]);
   const [billing, setBilling] = useState<BillingReconcileResponse | null>(null);
@@ -363,7 +364,9 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const [recoveryReport, setRecoveryReport] = useState<string | null>(null);
   const [recoveryHistory, setRecoveryHistory] = useState<RecoveryHistoryItem[]>([]);
+  const [selectedRecoveryHistoryId, setSelectedRecoveryHistoryId] = useState<string | null>(null);
   const [supportSendHistory, setSupportSendHistory] = useState<SupportSendHistoryItem[]>([]);
+  const [selectedSupportSendHistoryId, setSelectedSupportSendHistoryId] = useState<string | null>(null);
   const [supportSendReport, setSupportSendReport] = useState<string | null>(null);
   const [supportSending, setSupportSending] = useState(false);
   const [auditTimeline, setAuditTimeline] = useState<UnifiedAuditTimelineItem[]>([]);
@@ -1329,8 +1332,47 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const jumpToActionFromAudit = useCallback((actionId?: string) => {
     const normalized = String(actionId || '').trim();
     if (!normalized) return;
+    setSelectedRecoveryHistoryId(null);
+    setSelectedSupportSendHistoryId(null);
     setSelectedActionId(normalized);
     setCopyMessage(`Выбрано action ${normalized.slice(0, 8)}`);
+    window.requestAnimationFrame(() => {
+      actionAuditSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    window.setTimeout(() => setCopyMessage(null), 2500);
+  }, []);
+
+  const jumpToIncidentArtifactFromAudit = useCallback((
+    actionId: string | undefined,
+    artifact: 'incident report' | 'incident snapshot',
+  ) => {
+    const normalized = String(actionId || '').trim();
+    if (!normalized) return;
+    setSelectedRecoveryHistoryId(null);
+    setSelectedSupportSendHistoryId(null);
+    setSelectedActionId(normalized);
+    setCopyMessage(`Открыт ${artifact} для action ${normalized.slice(0, 8)}`);
+    window.requestAnimationFrame(() => {
+      actionAuditSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    window.setTimeout(() => setCopyMessage(null), 2500);
+  }, []);
+
+  const jumpToRecoveryHistoryFromAudit = useCallback((historyId?: string) => {
+    const normalized = String(historyId || '').trim();
+    if (!normalized) return;
+    setSelectedRecoveryHistoryId(normalized);
+    setSelectedSupportSendHistoryId(null);
+    setCopyMessage(`Открыт recovery ${normalized.slice(0, 8)}`);
+    window.setTimeout(() => setCopyMessage(null), 2500);
+  }, []);
+
+  const jumpToSupportSendHistoryFromAudit = useCallback((historyId?: string) => {
+    const normalized = String(historyId || '').trim();
+    if (!normalized) return;
+    setSelectedSupportSendHistoryId(normalized);
+    setSelectedRecoveryHistoryId(null);
+    setCopyMessage(`Открыт support-send ${normalized.slice(0, 8)}`);
     window.setTimeout(() => setCopyMessage(null), 2500);
   }, []);
 
@@ -1911,11 +1953,18 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                   </button>
                 </div>
               </div>
-              <div className="space-y-2">
+                <div className="space-y-2">
                 {recoveryHistory.map((item) => (
-                  <div key={item.id} className="rounded-md border border-gray-200 bg-white px-2 py-2 text-[11px] text-gray-700">
+                  <div
+                    key={item.id}
+                    className={`rounded-md border px-2 py-2 text-[11px] ${
+                      selectedRecoveryHistoryId === item.id
+                        ? 'border-blue-300 bg-blue-50 text-blue-900'
+                        : 'border-gray-200 bg-white text-gray-700'
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-gray-900">{item.created_at || '—'}</span>
+                      <span className={`font-medium ${selectedRecoveryHistoryId === item.id ? 'text-blue-950' : 'text-gray-900'}`}>{item.created_at || '—'}</span>
                       <span>replay={item.replayed_count}</span>
                       <span>sent={item.sent_count}</span>
                       <span>retry={item.retried_count}</span>
@@ -1951,13 +2000,29 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                   </button>
                 </div>
               </div>
-              <div className="space-y-2">
+                <div className="space-y-2">
                 {supportSendHistory.map((item) => (
-                  <div key={item.id} className="rounded-md border border-emerald-200 bg-white px-2 py-2 text-[11px] text-emerald-800">
+                  <div
+                    key={item.id}
+                    className={`rounded-md border px-2 py-2 text-[11px] ${
+                      selectedSupportSendHistoryId === item.id
+                        ? 'border-emerald-400 bg-emerald-100 text-emerald-950'
+                        : 'border-emerald-200 bg-white text-emerald-800'
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-emerald-950">{item.created_at || '—'}</span>
                       <span>telegram={item.telegram_sent_count}</span>
                       {item.action_id ? <span>action={item.action_id.slice(0, 8)}</span> : null}
+                      {item.action_id ? (
+                        <button
+                          type="button"
+                          onClick={() => jumpToActionFromAudit(item.action_id)}
+                          className="inline-flex items-center rounded-md border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-50"
+                        >
+                          Открыть action
+                        </button>
+                      ) : null}
                     </div>
                     <div className="mt-1 text-emerald-700">
                       targets={item.target_ids.length} • triggered_by={item.triggered_by || '-'}
@@ -2035,7 +2100,39 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                         >
                           Открыть action
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => jumpToIncidentArtifactFromAudit(item.action_id, 'incident report')}
+                          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-800 hover:bg-rose-100"
+                        >
+                          Incident report
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => jumpToIncidentArtifactFromAudit(item.action_id, 'incident snapshot')}
+                          className="inline-flex items-center rounded-md border border-cyan-300 bg-cyan-50 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800 hover:bg-cyan-100"
+                        >
+                          Incident snapshot
+                        </button>
                       </>
+                    ) : null}
+                    {item.source === 'recovery_run' ? (
+                      <button
+                        type="button"
+                        onClick={() => jumpToRecoveryHistoryFromAudit(item.event_id)}
+                        className="inline-flex items-center rounded-md border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 hover:bg-blue-100"
+                      >
+                        Открыть recovery
+                      </button>
+                    ) : null}
+                    {item.source === 'support_send' ? (
+                      <button
+                        type="button"
+                        onClick={() => jumpToSupportSendHistoryFromAudit(item.event_id)}
+                        className="inline-flex items-center rounded-md border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
+                      >
+                        Открыть support-send
+                      </button>
                     ) : null}
                   </div>
                   {item.details && Object.keys(item.details).length > 0 ? (
@@ -2192,7 +2289,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
             )}
           </div>
 
-          <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
+          <div ref={actionAuditSectionRef} className="mt-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Audit trail callbacks/actions</div>
             <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center">
               <label className="text-xs text-gray-600">Action</label>
