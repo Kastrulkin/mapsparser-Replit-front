@@ -1328,6 +1328,81 @@ def _perform_news_generate(business_ctx: dict, raw_info: str) -> tuple[bool, str
     )
 
 
+def _perform_list_actions(business_ctx: dict, limit: int = 8) -> tuple[bool, str]:
+    result = OPENCLAW_ORCHESTRATOR.list_actions(
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+        tenant_id=str(business_ctx["business_id"]),
+        limit=limit,
+        offset=0,
+    )
+    if not result.get("success"):
+        return False, f"❌ Не удалось загрузить actions: {result.get('error') or 'неизвестная ошибка'}"
+
+    items = list(result.get("items") or [])
+    lines = [
+        "📚 Последние actions",
+        f"Бизнес: {business_ctx['business_name']}",
+        "",
+    ]
+    if not items:
+        lines.append("Запусков пока нет.")
+    else:
+        for item in items:
+            action_id = str(item.get("action_id") or "")
+            lines.append(
+                f"- {action_id[:8]} | {item.get('capability') or '-'} | {item.get('status') or '-'}"
+            )
+        lines.extend(
+            [
+                "",
+                "Для деталей:",
+                "/action_status <action_id>",
+            ]
+        )
+    return True, "\n".join(lines)
+
+
+def _perform_action_status(business_ctx: dict, action_id: str) -> tuple[bool, str]:
+    action_id = str(action_id or "").strip()
+    if not action_id:
+        return False, "❌ Укажите action_id."
+    result = OPENCLAW_ORCHESTRATOR.get_action(
+        action_id,
+        {
+            "user_id": str(business_ctx["user_id"]),
+            "telegram_id": str(business_ctx.get("telegram_id") or ""),
+            "is_superadmin": False,
+        },
+    )
+    if not result.get("success"):
+        return False, f"❌ Не удалось получить action: {result.get('error') or 'неизвестная ошибка'}"
+
+    lines = [
+        "🔎 Action status",
+        f"Бизнес: {business_ctx['business_name']}",
+        f"Action: {result.get('action_id') or action_id}",
+        f"Capability: {result.get('capability') or '-'}",
+        f"Status: {result.get('status') or '-'}",
+    ]
+    if result.get("error"):
+        lines.append(f"Error: {result.get('error')}")
+    reply_text = ""
+    action_result = result.get("result") or {}
+    if isinstance(action_result, dict):
+        reply_text = str(
+            action_result.get("reply")
+            or action_result.get("generated_text")
+            or ""
+        ).strip()
+    if reply_text:
+        lines.extend(["", reply_text[:2500]])
+    return True, "\n".join(lines)
+
+
 def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     ctx = resolve_business_context(str(telegram_id))
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
@@ -1343,6 +1418,7 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
         [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
         [InlineKeyboardButton("🧩 Оптимизировать услугу", callback_data="openclaw_service_optimize_start")],
         [InlineKeyboardButton("📰 Сгенерировать новость", callback_data="openclaw_news_generate_start")],
+        [InlineKeyboardButton("📚 Последние actions", callback_data="openclaw_actions")],
         [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
         [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
         [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
@@ -1527,6 +1603,34 @@ async def generate_news_command(update: Update, context: ContextTypes.DEFAULT_TY
         "Например: новая группа по робототехнике, акция на консультацию, старт весенней программы."
     )
 
+
+async def actions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать последние capability-вызовы для активного бизнеса."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    ok, text = _perform_list_actions(
+        {**business_ctx, "telegram_id": str(update.effective_user.id)},
+        limit=8,
+    )
+    await update.message.reply_text(text)
+
+
+async def action_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать статус конкретного action."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    action_id = " ".join(context.args or []).strip()
+    if not action_id:
+        await update.message.reply_text("❌ Укажите action_id: /action_status <action_id>")
+        return
+    ok, text = _perform_action_status(
+        {**business_ctx, "telegram_id": str(update.effective_user.id)},
+        action_id,
+    )
+    await update.message.reply_text(text)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
@@ -1687,6 +1791,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(
             "📰 Отправьте тему или исходную информацию для новости следующим сообщением."
+        )
+    elif data == "openclaw_actions":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        ok, text = _perform_list_actions(
+            {**business_ctx, "telegram_id": user_id},
+            limit=8,
+        )
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(
+            f"{text}\n\n──────────\n\n{menu_text}",
+            reply_markup=reply_markup,
         )
     elif data == "openclaw_review_cancel":
         state_ref = user_states.setdefault(user_id, {})
@@ -2623,6 +2741,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /reply_review - Сгенерировать ответ на отзыв
 /optimize_service - Оптимизировать одну услугу
 /generate_news - Сгенерировать новость
+/actions - Показать последние actions
+/action_status - Статус конкретного action
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
 
@@ -2663,6 +2783,8 @@ def main():
         application.add_handler(CommandHandler("reply_review", reply_review_command))
         application.add_handler(CommandHandler("optimize_service", optimize_service_command))
         application.add_handler(CommandHandler("generate_news", generate_news_command))
+        application.add_handler(CommandHandler("actions", actions_command))
+        application.add_handler(CommandHandler("action_status", action_status_command))
         application.add_handler(CommandHandler("support_export", support_export_command))
         application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
