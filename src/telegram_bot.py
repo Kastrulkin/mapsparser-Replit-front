@@ -443,6 +443,255 @@ async def _require_bound_business(update: Update, context: ContextTypes.DEFAULT_
     return ctx
 
 
+def _build_openclaw_status_text(business_ctx: dict) -> tuple[bool, str]:
+    runtime = get_openclaw_runtime()
+    user_data = {"user_id": business_ctx["user_id"]}
+    bundle, _report_text = runtime["build_support_report"](
+        user_data,
+        str(business_ctx["business_id"]),
+    )
+    if not bundle.get("success"):
+        return False, "❌ Не удалось получить OpenClaw статус."
+
+    metrics = dict(bundle.get("metrics") or {})
+    retry_items = list(bundle.get("retry_items") or [])
+    dlq_items = list(bundle.get("dlq_items") or [])
+    recovery_items = list(bundle.get("recovery_items") or [])
+
+    lines = [
+        "🤖 OpenClaw status",
+        f"Бизнес: {business_ctx['business_name']}",
+        f"Tenant: {business_ctx['business_id']}",
+        "",
+        "Очередь callback:",
+        f"- sent={int(metrics.get('sent') or 0)} retry={int(metrics.get('retry') or 0)} dlq={int(metrics.get('dlq') or 0)} pending={int(metrics.get('pending') or 0)}",
+    ]
+    if retry_items or dlq_items:
+        lines.extend(
+            [
+                "",
+                "Проблемные события:",
+                f"- retry items: {len(retry_items)}",
+                f"- dlq items: {len(dlq_items)}",
+            ]
+        )
+    if recovery_items:
+        latest = dict(recovery_items[0] or {})
+        lines.extend(
+            [
+                "",
+                "Последний recovery:",
+                f"- {latest.get('created_at') or '-'}",
+                f"- replay/sent/retry/dlq={int(latest.get('replayed_count') or 0)}/{int(latest.get('sent_count') or 0)}/{int(latest.get('retried_count') or 0)}/{int(latest.get('dlq_count') or 0)}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "Команды:",
+            "/support_export — отправить support snapshot суперадмину",
+            "/recovery_report — выполнить recovery callback и вернуть отчёт",
+        ]
+    )
+    return True, "\n".join(lines)
+
+
+def _perform_support_export(business_ctx: dict) -> tuple[bool, str]:
+    runtime = get_openclaw_runtime()
+    user_data = {"user_id": business_ctx["user_id"]}
+    bundle, report_text = runtime["build_support_report"](
+        user_data,
+        str(business_ctx["business_id"]),
+    )
+    if not bundle.get("success"):
+        return False, "❌ Не удалось собрать support snapshot."
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        target_ids = runtime["get_superadmin_ids"](cursor)
+        sent_count = 0
+        for telegram_id in target_ids:
+            if runtime["send_telegram"](telegram_id, report_text):
+                sent_count += 1
+
+        history_id = str(uuid.uuid4())
+        runtime["ensure_support_history"](cursor)
+        cursor.execute(
+            """
+            INSERT INTO support_export_send_history (
+                id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text
+            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+            """,
+            (
+                history_id,
+                str(business_ctx["business_id"]),
+                str(business_ctx["user_id"]),
+                "",
+                int(sent_count),
+                json.dumps(list(target_ids), ensure_ascii=False),
+                report_text,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return True, "\n".join(
+        [
+            "✅ Support snapshot отправлен.",
+            f"Бизнес: {business_ctx['business_name']}",
+            f"Получатели: {int(sent_count)}/{len(target_ids)}",
+            f"History ID: {history_id}",
+        ]
+    )
+
+
+def _perform_recovery_report(business_ctx: dict) -> tuple[bool, str]:
+    runtime = get_openclaw_runtime()
+    orchestrator = runtime["orchestrator"]
+    user_data = {"user_id": business_ctx["user_id"]}
+    tenant_id = str(business_ctx["business_id"])
+
+    pre_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
+    if not pre_metrics.get("success"):
+        return False, "❌ Не удалось получить pre-metrics для recovery."
+
+    outbox_items = []
+    for status_name in ("dlq", "retry"):
+        listing = orchestrator.list_callback_outbox(
+            user_data,
+            tenant_id=tenant_id,
+            status=status_name,
+            limit=200,
+            offset=0,
+        )
+        if not listing.get("success"):
+            return False, f"❌ Не удалось загрузить outbox ({status_name})."
+        outbox_items.extend(listing.get("items") or [])
+
+    action_ids = []
+    seen_action_ids = set()
+    for item in outbox_items:
+        action_id = str(item.get("action_id") or "").strip()
+        if not action_id or action_id in seen_action_ids:
+            continue
+        seen_action_ids.add(action_id)
+        action_ids.append(action_id)
+    action_ids = action_ids[:2]
+
+    before_snapshots = []
+    for action_id in action_ids:
+        snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
+        if snapshot.get("success"):
+            before_snapshots.append(snapshot)
+
+    replay = orchestrator.replay_callback_outbox(
+        user_data,
+        tenant_id=tenant_id,
+        include_retry=True,
+        limit=200,
+    )
+    if not replay.get("success"):
+        return False, "❌ Recovery replay завершился ошибкой."
+
+    dispatch = orchestrator.dispatch_callback_outbox_for_tenant(
+        user_data,
+        tenant_id=tenant_id,
+        batch_size=200,
+    )
+    if not dispatch.get("success"):
+        return False, "❌ Recovery dispatch завершился ошибкой."
+
+    post_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
+    if not post_metrics.get("success"):
+        return False, "❌ Не удалось получить post-metrics для recovery."
+
+    after_snapshots = []
+    for action_id in action_ids:
+        snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
+        if snapshot.get("success"):
+            after_snapshots.append(snapshot)
+
+    before_metric_summary = dict(pre_metrics.get("metrics") or {})
+    after_metric_summary = dict(post_metrics.get("metrics") or {})
+    lines = [
+        "OpenClaw recovery report",
+        f"Бизнес: {business_ctx['business_name']}",
+        f"tenant_id: {tenant_id}",
+        "",
+        "Metrics before:",
+        f"- sent={int(before_metric_summary.get('sent') or 0)} retry={int(before_metric_summary.get('retry') or 0)} dlq={int(before_metric_summary.get('dlq') or 0)} pending={int(before_metric_summary.get('pending') or 0)}",
+        "Metrics after:",
+        f"- sent={int(after_metric_summary.get('sent') or 0)} retry={int(after_metric_summary.get('retry') or 0)} dlq={int(after_metric_summary.get('dlq') or 0)} pending={int(after_metric_summary.get('pending') or 0)}",
+        "",
+        "Recovery result:",
+        f"- replayed={int(replay.get('replayed_count') or 0)}",
+        f"- dispatched sent={int(dispatch.get('sent') or 0)} retried={int(dispatch.get('retried') or 0)} dlq={int(dispatch.get('dlq') or 0)} picked={int(dispatch.get('picked') or 0)}",
+    ]
+    if before_snapshots:
+        lines.extend(["", "Before:"])
+        lines.extend(runtime["format_snapshot_digest"](item) for item in before_snapshots)
+    if after_snapshots:
+        lines.extend(["", "After:"])
+        lines.extend(runtime["format_snapshot_digest"](item) for item in after_snapshots)
+    report_text = "\n".join(lines)
+
+    history_id = str(uuid.uuid4())
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        runtime["ensure_recovery_history"](cursor)
+        cursor.execute(
+            """
+            INSERT INTO callback_recovery_history (
+                id, tenant_id, triggered_by, send_telegram_report, include_retry,
+                replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+                action_ids_json, report_text
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+            """,
+            (
+                history_id,
+                tenant_id,
+                str(business_ctx["user_id"]),
+                False,
+                True,
+                int(replay.get("replayed_count") or 0),
+                int(dispatch.get("sent") or 0),
+                int(dispatch.get("retried") or 0),
+                int(dispatch.get("dlq") or 0),
+                0,
+                json.dumps(action_ids, ensure_ascii=False),
+                report_text,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return True, f"✅ Recovery выполнен.\nHistory ID: {history_id}\n\n{report_text[:3000]}"
+
+
+def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    ctx = resolve_business_context(str(telegram_id))
+    active_name = str((ctx or {}).get("business_name") or "Не выбран")
+    active_id = str((ctx or {}).get("business_id") or "")
+    text = (
+        "🤖 OpenClaw Control\n\n"
+        f"Активный бизнес: {active_name}\n"
+        f"{active_id}\n\n"
+        "Доступны быстрые действия:"
+    )
+    keyboard = [
+        [InlineKeyboardButton("📊 Статус", callback_data="openclaw_status")],
+        [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
+        [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
+        [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+    ]
+    return text, InlineKeyboardMarkup(keyboard)
+
+
 async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Краткий статус OpenClaw для привязанного бизнеса."""
     business_ctx = await _require_bound_business(update, context)
@@ -450,57 +699,8 @@ async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_
         return
 
     try:
-        runtime = get_openclaw_runtime()
-        user_data = {"user_id": business_ctx["user_id"]}
-        bundle, report_text = runtime["build_support_report"](
-            user_data,
-            str(business_ctx["business_id"]),
-        )
-        if not bundle.get("success"):
-            await update.message.reply_text("❌ Не удалось получить OpenClaw статус.")
-            return
-
-        metrics = dict(bundle.get("metrics") or {})
-        retry_items = list(bundle.get("retry_items") or [])
-        dlq_items = list(bundle.get("dlq_items") or [])
-        recovery_items = list(bundle.get("recovery_items") or [])
-
-        lines = [
-            "🤖 OpenClaw status",
-            f"Бизнес: {business_ctx['business_name']}",
-            f"Tenant: {business_ctx['business_id']}",
-            "",
-            "Очередь callback:",
-            f"- sent={int(metrics.get('sent') or 0)} retry={int(metrics.get('retry') or 0)} dlq={int(metrics.get('dlq') or 0)} pending={int(metrics.get('pending') or 0)}",
-        ]
-        if retry_items or dlq_items:
-            lines.extend(
-                [
-                    "",
-                    "Проблемные события:",
-                    f"- retry items: {len(retry_items)}",
-                    f"- dlq items: {len(dlq_items)}",
-                ]
-            )
-        if recovery_items:
-            latest = dict(recovery_items[0] or {})
-            lines.extend(
-                [
-                    "",
-                    "Последний recovery:",
-                    f"- {latest.get('created_at') or '-'}",
-                    f"- replay/sent/retry/dlq={int(latest.get('replayed_count') or 0)}/{int(latest.get('sent_count') or 0)}/{int(latest.get('retried_count') or 0)}/{int(latest.get('dlq_count') or 0)}",
-                ]
-            )
-        lines.extend(
-            [
-                "",
-                "Команды:",
-                "/support_export — отправить support snapshot суперадмину",
-                "/recovery_report — выполнить recovery callback и вернуть отчёт",
-            ]
-        )
-        await update.message.reply_text("\n".join(lines))
+        ok, text = _build_openclaw_status_text(business_ctx)
+        await update.message.reply_text(text)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка OpenClaw status: {e}")
 
@@ -552,57 +752,8 @@ async def support_export_command(update: Update, context: ContextTypes.DEFAULT_T
 
     await update.message.reply_text("⏳ Формирую support snapshot...")
     try:
-        runtime = get_openclaw_runtime()
-        user_data = {"user_id": business_ctx["user_id"]}
-        bundle, report_text = runtime["build_support_report"](
-            user_data,
-            str(business_ctx["business_id"]),
-        )
-        if not bundle.get("success"):
-            await update.message.reply_text("❌ Не удалось собрать support snapshot.")
-            return
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            target_ids = runtime["get_superadmin_ids"](cursor)
-            sent_count = 0
-            for telegram_id in target_ids:
-                if runtime["send_telegram"](telegram_id, report_text):
-                    sent_count += 1
-
-            history_id = str(uuid.uuid4())
-            runtime["ensure_support_history"](cursor)
-            cursor.execute(
-                """
-                INSERT INTO support_export_send_history (
-                    id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text
-                ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
-                """,
-                (
-                    history_id,
-                    str(business_ctx["business_id"]),
-                    str(business_ctx["user_id"]),
-                    "",
-                    int(sent_count),
-                    json.dumps(list(target_ids), ensure_ascii=False),
-                    report_text,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        await update.message.reply_text(
-            "\n".join(
-                [
-                    "✅ Support snapshot отправлен.",
-                    f"Бизнес: {business_ctx['business_name']}",
-                    f"Получатели: {int(sent_count)}/{len(target_ids)}",
-                    f"History ID: {history_id}",
-                ]
-            )
-        )
+        ok, text = _perform_support_export(business_ctx)
+        await update.message.reply_text(text)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка support export: {e}")
 
@@ -615,133 +766,8 @@ async def recovery_report_command(update: Update, context: ContextTypes.DEFAULT_
 
     await update.message.reply_text("⏳ Выполняю recovery callback очереди...")
     try:
-        runtime = get_openclaw_runtime()
-        orchestrator = runtime["orchestrator"]
-        user_data = {"user_id": business_ctx["user_id"]}
-        tenant_id = str(business_ctx["business_id"])
-
-        pre_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
-        if not pre_metrics.get("success"):
-            await update.message.reply_text("❌ Не удалось получить pre-metrics для recovery.")
-            return
-
-        outbox_items = []
-        for status_name in ("dlq", "retry"):
-            listing = orchestrator.list_callback_outbox(
-                user_data,
-                tenant_id=tenant_id,
-                status=status_name,
-                limit=200,
-                offset=0,
-            )
-            if not listing.get("success"):
-                await update.message.reply_text(f"❌ Не удалось загрузить outbox ({status_name}).")
-                return
-            outbox_items.extend(listing.get("items") or [])
-
-        action_ids = []
-        seen_action_ids = set()
-        for item in outbox_items:
-            action_id = str(item.get("action_id") or "").strip()
-            if not action_id or action_id in seen_action_ids:
-                continue
-            seen_action_ids.add(action_id)
-            action_ids.append(action_id)
-        action_ids = action_ids[:2]
-
-        before_snapshots = []
-        for action_id in action_ids:
-            snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
-            if snapshot.get("success"):
-                before_snapshots.append(snapshot)
-
-        replay = orchestrator.replay_callback_outbox(
-            user_data,
-            tenant_id=tenant_id,
-            include_retry=True,
-            limit=200,
-        )
-        if not replay.get("success"):
-            await update.message.reply_text("❌ Recovery replay завершился ошибкой.")
-            return
-
-        dispatch = orchestrator.dispatch_callback_outbox_for_tenant(
-            user_data,
-            tenant_id=tenant_id,
-            batch_size=200,
-        )
-        if not dispatch.get("success"):
-            await update.message.reply_text("❌ Recovery dispatch завершился ошибкой.")
-            return
-
-        post_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
-        if not post_metrics.get("success"):
-            await update.message.reply_text("❌ Не удалось получить post-metrics для recovery.")
-            return
-
-        after_snapshots = []
-        for action_id in action_ids:
-            snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
-            if snapshot.get("success"):
-                after_snapshots.append(snapshot)
-
-        before_metric_summary = dict(pre_metrics.get("metrics") or {})
-        after_metric_summary = dict(post_metrics.get("metrics") or {})
-        lines = [
-            "OpenClaw recovery report",
-            f"Бизнес: {business_ctx['business_name']}",
-            f"tenant_id: {tenant_id}",
-            "",
-            "Metrics before:",
-            f"- sent={int(before_metric_summary.get('sent') or 0)} retry={int(before_metric_summary.get('retry') or 0)} dlq={int(before_metric_summary.get('dlq') or 0)} pending={int(before_metric_summary.get('pending') or 0)}",
-            "Metrics after:",
-            f"- sent={int(after_metric_summary.get('sent') or 0)} retry={int(after_metric_summary.get('retry') or 0)} dlq={int(after_metric_summary.get('dlq') or 0)} pending={int(after_metric_summary.get('pending') or 0)}",
-            "",
-            "Recovery result:",
-            f"- replayed={int(replay.get('replayed_count') or 0)}",
-            f"- dispatched sent={int(dispatch.get('sent') or 0)} retried={int(dispatch.get('retried') or 0)} dlq={int(dispatch.get('dlq') or 0)} picked={int(dispatch.get('picked') or 0)}",
-        ]
-        if before_snapshots:
-            lines.extend(["", "Before:"])
-            lines.extend(runtime["format_snapshot_digest"](item) for item in before_snapshots)
-        if after_snapshots:
-            lines.extend(["", "After:"])
-            lines.extend(runtime["format_snapshot_digest"](item) for item in after_snapshots)
-        report_text = "\n".join(lines)
-
-        history_id = str(uuid.uuid4())
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            runtime["ensure_recovery_history"](cursor)
-            cursor.execute(
-                """
-                INSERT INTO callback_recovery_history (
-                    id, tenant_id, triggered_by, send_telegram_report, include_retry,
-                    replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
-                    action_ids_json, report_text
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-                """,
-                (
-                    history_id,
-                    tenant_id,
-                    str(business_ctx["user_id"]),
-                    False,
-                    True,
-                    int(replay.get("replayed_count") or 0),
-                    int(dispatch.get("sent") or 0),
-                    int(dispatch.get("retried") or 0),
-                    int(dispatch.get("dlq") or 0),
-                    0,
-                    json.dumps(action_ids, ensure_ascii=False),
-                    report_text,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        await update.message.reply_text(f"✅ Recovery выполнен.\nHistory ID: {history_id}\n\n{report_text[:3000]}")
+        ok, text = _perform_recovery_report(business_ctx)
+        await update.message.reply_text(text)
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка recovery report: {e}")
 
@@ -807,7 +833,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
         [InlineKeyboardButton("💰 Добавить транзакцию", callback_data="menu_transaction")],
         [InlineKeyboardButton("📊 Оптимизировать услуги", callback_data="menu_optimize")],
         [InlineKeyboardButton("⚙️ Настройки компании", callback_data="menu_settings")],
-        [InlineKeyboardButton("📈 Статистика", callback_data="menu_stats")]
+        [InlineKeyboardButton("📈 Статистика", callback_data="menu_stats")],
+        [InlineKeyboardButton("🤖 OpenClaw Control", callback_data="menu_openclaw")],
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -838,19 +865,89 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_business_selection(update, context, user_id, db_user_id, "optimize")
     elif data == "menu_settings":
         await show_business_selection(update, context, user_id, db_user_id, "settings")
+    elif data == "menu_openclaw":
+        text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
     elif data == "menu_stats":
         await query.edit_message_text("📈 Статистика пока в разработке. Используйте личный кабинет на сайте.")
         await show_main_menu(update, context, user_id, db_user_id)
+    elif data == "openclaw_status":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        ok, text = _build_openclaw_status_text(business_ctx)
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(
+            f"{text}\n\n──────────\n\n{menu_text}",
+            reply_markup=reply_markup,
+        )
+    elif data == "openclaw_support_export":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        ok, text = _perform_support_export(business_ctx)
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(
+            f"{text}\n\n──────────\n\n{menu_text}",
+            reply_markup=reply_markup,
+        )
+    elif data == "openclaw_recovery_report":
+        business_ctx = resolve_business_context(user_id)
+        if not business_ctx or not business_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        ok, text = _perform_recovery_report(business_ctx)
+        menu_text, reply_markup = build_openclaw_menu(user_id)
+        safe_text = text[:3200]
+        await query.edit_message_text(
+            f"{safe_text}\n\n──────────\n\n{menu_text}",
+            reply_markup=reply_markup,
+        )
+    elif data == "openclaw_businesses":
+        items = list_user_businesses(user_id)
+        if not items:
+            await query.edit_message_text("❌ Бизнесы не найдены или аккаунт не привязан.")
+            return
+        current_ctx = resolve_business_context(user_id)
+        current_id = str((current_ctx or {}).get("business_id") or "")
+        keyboard = []
+        for item in items[:20]:
+            marker = "✅ " if item["id"] == current_id else ""
+            keyboard.append(
+                [InlineKeyboardButton(f"{marker}{item['name']}", callback_data=f"openclaw_use_{item['id']}")]
+            )
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_openclaw")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        lines = ["🏢 Выберите активный бизнес"]
+        for item in items[:10]:
+            marker = "✅" if item["id"] == current_id else "•"
+            lines.append(f"{marker} {item['name']}")
+        await query.edit_message_text("\n".join(lines), reply_markup=reply_markup)
+    elif data.startswith("openclaw_use_"):
+        business_id = data.replace("openclaw_use_", "", 1)
+        ctx = resolve_business_context(user_id, business_id)
+        if not ctx or not ctx.get("business_id"):
+            await query.edit_message_text("❌ Не удалось переключить бизнес.")
+            return
+        text, reply_markup = build_openclaw_menu(user_id)
+        await query.edit_message_text(
+            f"✅ Активный бизнес переключён.\n\n{text}",
+            reply_markup=reply_markup,
+        )
     elif data.startswith("business_"):
         parts = data.split("_")
         if len(parts) >= 3:
             action = parts[1]  # transaction, optimize, settings
             business_id = "_".join(parts[2:])  # На случай если в ID есть подчеркивания
+            user_states.setdefault(user_id, {})["active_business_id"] = business_id
             
             if action == "transaction":
                 user_states[user_id] = {
                     'state': 'waiting_transaction',
-                    'business_id': business_id
+                    'business_id': business_id,
+                    'active_business_id': business_id,
                 }
                 await query.edit_message_text(
                     "💰 *Добавление транзакции*\n\n"
@@ -868,7 +965,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif action == "optimize":
                 user_states[user_id] = {
                     'state': 'waiting_optimize',
-                    'business_id': business_id
+                    'business_id': business_id,
+                    'active_business_id': business_id,
                 }
                 await query.edit_message_text(
                     "📊 *Оптимизация услуг*\n\n"
@@ -888,7 +986,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             business_id = "_".join(parts[2:])
             user_states[user_id] = {
                 'state': f'waiting_setting_{setting_type}',
-                'business_id': business_id
+                'business_id': business_id,
+                'active_business_id': business_id,
             }
             
             setting_names = {
