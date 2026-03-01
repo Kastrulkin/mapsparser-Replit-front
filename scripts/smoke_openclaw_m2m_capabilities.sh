@@ -622,6 +622,34 @@ then
   exit 1
 fi
 
+echo "[8.9/12] M2M unified audit timeline"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/audit-timeline?tenant_id=${TENANT_ID}&limit=20" > "${tmp_dir}/audit_timeline.json"
+audit_timeline_success="$(json_read "${tmp_dir}/audit_timeline.json" "success")"
+if [[ "${audit_timeline_success}" != "True" && "${audit_timeline_success}" != "true" ]]; then
+  echo "Unified audit timeline failed"
+  cat "${tmp_dir}/audit_timeline.json"
+  exit 1
+fi
+if ! python3 - "${tmp_dir}/audit_timeline.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+items = data.get("items")
+if not isinstance(items, list):
+    print("Unified audit timeline has no items list")
+    sys.exit(1)
+if int(data.get("total_count") or 0) < int(data.get("count") or 0):
+    print("Unified audit timeline total_count < count")
+    sys.exit(1)
+print("Unified audit timeline OK: count=", data.get("count"))
+PY
+then
+  cat "${tmp_dir}/audit_timeline.json"
+  exit 1
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \

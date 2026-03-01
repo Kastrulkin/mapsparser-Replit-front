@@ -196,6 +196,16 @@ UI support export:
   - `Экспорт JSON`
   - `Экспорт MD`
 
+Unified audit timeline:
+- `GET /api/capabilities/audit-timeline`
+- `GET /api/openclaw/audit-timeline`
+- объединяет в одном tenant-scoped потоке:
+  - `action_request`
+  - `action_transition`
+  - `callback_attempt`
+  - `recovery_run`
+  - `support_send`
+
 ## 10) Reproducible Server Deploy (Phase 2)
 
 Единый сценарий деплоя app/worker + верификация + OpenClaw smoke/recovery:

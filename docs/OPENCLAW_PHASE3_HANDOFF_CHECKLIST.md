@@ -22,6 +22,7 @@
   - incident report / incident snapshot
 
 2. На backend доступны endpoint'ы:
+- `GET /api/capabilities/audit-timeline`
 - `POST /api/capabilities/callbacks/recovery-report`
 - `GET /api/capabilities/callbacks/recovery-history`
 - `GET /api/capabilities/callbacks/recovery-history/export`
@@ -31,6 +32,7 @@
 - `GET /api/capabilities/support-export/send-history/export`
 
 3. На M2M стороне доступны endpoint'ы:
+- `GET /api/openclaw/audit-timeline`
 - `GET /api/openclaw/capabilities/support-export`
 - `GET /api/openclaw/capabilities/support-export/send-history`
 - `GET /api/openclaw/capabilities/support-export/send-history/export`
@@ -81,6 +83,7 @@ Phase 3 считается завершённой, когда:
 - `./scripts/acceptance_openclaw_phase3.sh` проходит без ошибок на сервере;
 - UI export/send действия работают без ручного SSH;
 - support может получить:
+  - единый tenant-wide audit timeline,
   - текущий operational snapshot,
   - recovery history,
   - support-send history,

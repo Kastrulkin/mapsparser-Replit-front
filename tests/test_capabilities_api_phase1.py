@@ -1224,6 +1224,77 @@ def test_capabilities_action_timeline_user_and_m2m(capabilities_client):
             os.environ[token_name] = previous
 
 
+def test_capabilities_unified_audit_timeline_user_and_m2m(capabilities_client, monkeypatch):
+    info = capabilities_client
+    import main as main_mod
+
+    token_name = "OPENCLAW_LOCALOS_TOKEN"
+    tg_name = "OPENCLAW_SUPERADMIN_TELEGRAM_IDS"
+    previous_token = os.getenv(token_name)
+    previous_tg = os.getenv(tg_name)
+    os.environ[token_name] = "phase1-openclaw-token"
+    os.environ[tg_name] = "273282710"
+    monkeypatch.setattr(main_mod, "_send_telegram_plain_message", lambda chat_id, text: True)
+    try:
+        create = info["client"].post(
+            "/api/capabilities/execute",
+            json=_pending_request_body(info["business_id"], info["user_id"]),
+            headers=_auth_headers(),
+        )
+        assert create.status_code == 200, create.get_json()
+        action_id = create.get_json()["action_id"]
+
+        recovery = info["client"].post(
+            "/api/capabilities/callbacks/recovery-report",
+            json={"tenant_id": info["business_id"], "snapshot_limit": 1},
+            headers=_auth_headers(),
+        )
+        assert recovery.status_code == 200, recovery.get_json()
+
+        support_send = info["client"].post(
+            "/api/capabilities/support-export/send",
+            json={"tenant_id": info["business_id"], "action_id": action_id},
+            headers=_auth_headers(),
+        )
+        assert support_send.status_code == 200, support_send.get_json()
+
+        user_r = info["client"].get(
+            f"/api/capabilities/audit-timeline?tenant_id={info['business_id']}&limit=50",
+            headers=_auth_headers(),
+        )
+        assert user_r.status_code == 200, user_r.get_json()
+        user_body = user_r.get_json()
+        assert user_body["success"] is True
+        assert user_body["tenant_id"] == info["business_id"]
+        assert user_body["count"] >= 1
+        assert int(user_body["total_count"]) >= int(user_body["count"])
+        sources = {str(item.get("source") or "") for item in user_body.get("items", [])}
+        assert "action_request" in sources
+        assert "action_transition" in sources
+        assert "recovery_run" in sources
+        assert "support_send" in sources
+
+        m2m_r = info["client"].get(
+            f"/api/openclaw/audit-timeline?tenant_id={info['business_id']}&limit=50&source=support_send",
+            headers={"X-OpenClaw-Token": "phase1-openclaw-token"},
+        )
+        assert m2m_r.status_code == 200, m2m_r.get_json()
+        m2m_body = m2m_r.get_json()
+        assert m2m_body["success"] is True
+        assert m2m_body["count"] >= 1
+        assert all(item.get("source") == "support_send" for item in m2m_body.get("items", []))
+        assert any(item.get("action_id") == action_id for item in m2m_body.get("items", []))
+    finally:
+        if previous_token is None:
+            os.environ.pop(token_name, None)
+        else:
+            os.environ[token_name] = previous_token
+        if previous_tg is None:
+            os.environ.pop(tg_name, None)
+        else:
+            os.environ[tg_name] = previous_tg
+
+
 def test_openclaw_action_read_requires_tenant_and_token(capabilities_client):
     info = capabilities_client
     token_name = "OPENCLAW_LOCALOS_TOKEN"

@@ -266,6 +266,27 @@ type SupportSendHistoryResponse = {
   error?: string;
 };
 
+type UnifiedAuditTimelineItem = {
+  occurred_at: string;
+  source: string;
+  event_type: string;
+  status?: string;
+  action_id?: string;
+  event_id: string;
+  details?: Record<string, any>;
+};
+
+type UnifiedAuditTimelineResponse = {
+  success: boolean;
+  tenant_id?: string;
+  items?: UnifiedAuditTimelineItem[];
+  count?: number;
+  total_count?: number;
+  limit?: number;
+  offset?: number;
+  error?: string;
+};
+
 interface Props {
   businessId?: string;
 }
@@ -345,7 +366,44 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
   const [supportSendHistory, setSupportSendHistory] = useState<SupportSendHistoryItem[]>([]);
   const [supportSendReport, setSupportSendReport] = useState<string | null>(null);
   const [supportSending, setSupportSending] = useState(false);
+  const [auditTimeline, setAuditTimeline] = useState<UnifiedAuditTimelineItem[]>([]);
+  const [auditTimelineTotal, setAuditTimelineTotal] = useState(0);
+  const [auditTimelineLoading, setAuditTimelineLoading] = useState(false);
+  const [auditTimelineSourceFilter, setAuditTimelineSourceFilter] = useState<string>('all');
+  const [auditTimelineSearch, setAuditTimelineSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const loadAuditTimeline = useCallback(async () => {
+    if (!businessId) return;
+    setAuditTimelineLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const params = new URLSearchParams();
+      params.set('tenant_id', businessId);
+      params.set('limit', '20');
+      params.set('offset', '0');
+      if (auditTimelineSourceFilter !== 'all') {
+        params.set('source', auditTimelineSourceFilter);
+      }
+      const searchText = auditTimelineSearch.trim();
+      if (searchText) {
+        params.set('search', searchText);
+      }
+      const response = await fetch(`/api/capabilities/audit-timeline?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json: UnifiedAuditTimelineResponse = await response.json();
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
+      }
+      setAuditTimeline(json.items || []);
+      setAuditTimelineTotal(Number(json.total_count || json.count || 0));
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить unified audit timeline');
+    } finally {
+      setAuditTimelineLoading(false);
+    }
+  }, [businessId, auditTimelineSourceFilter, auditTimelineSearch]);
 
   const buildTimelineParams = useCallback(
     (options?: { includeOffset?: boolean }) => {
@@ -391,7 +449,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     setError(null);
     try {
       const token = localStorage.getItem('auth_token');
-      const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes, supportSendHistoryRes] = await Promise.all([
+      const [healthRes, trendRes, billingRes, actionsRes, recoveryHistoryRes, supportSendHistoryRes, auditTimelineRes] = await Promise.all([
         fetch(
           `/api/capabilities/health?tenant_id=${encodeURIComponent(businessId)}&window_minutes=60`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -416,6 +474,10 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
           `/api/capabilities/support-export/send-history?tenant_id=${encodeURIComponent(businessId)}&limit=5`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
+        fetch(
+          `/api/capabilities/audit-timeline?tenant_id=${encodeURIComponent(businessId)}&limit=20`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ),
       ]);
 
       const healthJson: HealthResponse = await healthRes.json();
@@ -424,6 +486,7 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       const actionsData: ActionListResponse = await actionsRes.json();
       const recoveryHistoryData: RecoveryHistoryResponse = await recoveryHistoryRes.json();
       const supportSendHistoryData: SupportSendHistoryResponse = await supportSendHistoryRes.json();
+      const auditTimelineData: UnifiedAuditTimelineResponse = await auditTimelineRes.json();
 
       if (!healthRes.ok || !healthJson?.success) {
         throw new Error(healthJson?.error || `HTTP ${healthRes.status}`);
@@ -443,12 +506,17 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       if (!supportSendHistoryRes.ok || !supportSendHistoryData?.success) {
         throw new Error(supportSendHistoryData?.error || `HTTP ${supportSendHistoryRes.status}`);
       }
+      if (!auditTimelineRes.ok || !auditTimelineData?.success) {
+        throw new Error(auditTimelineData?.error || `HTTP ${auditTimelineRes.status}`);
+      }
 
       setData(healthJson);
       setTrend((trendJson.items || []).slice(0, 24));
       setBilling(billingData || null);
       setRecoveryHistory((recoveryHistoryData.items || []).slice(0, 5));
       setSupportSendHistory((supportSendHistoryData.items || []).slice(0, 5));
+      setAuditTimeline((auditTimelineData.items || []).slice(0, 20));
+      setAuditTimelineTotal(Number(auditTimelineData.total_count || auditTimelineData.count || 0));
       const items = (actionsData.items || []).slice(0, 20);
       setActions(items);
       setSelectedActionId((prev) => {
@@ -461,6 +529,11 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setLoading(false);
     }
   }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    loadAuditTimeline();
+  }, [businessId, loadAuditTimeline]);
 
   useEffect(() => {
     load();
@@ -1821,6 +1894,69 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
               </div>
             </div>
           )}
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Unified audit timeline</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={auditTimelineSourceFilter}
+                  onChange={(e) => setAuditTimelineSourceFilter(e.target.value)}
+                  className="rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-900"
+                >
+                  <option value="all">Все источники</option>
+                  <option value="action_request">action_request</option>
+                  <option value="action_transition">action_transition</option>
+                  <option value="callback_attempt">callback_attempt</option>
+                  <option value="recovery_run">recovery_run</option>
+                  <option value="support_send">support_send</option>
+                </select>
+                <input
+                  value={auditTimelineSearch}
+                  onChange={(e) => setAuditTimelineSearch(e.target.value)}
+                  placeholder="Поиск"
+                  className="rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-900"
+                />
+                <button
+                  type="button"
+                  onClick={loadAuditTimeline}
+                  className="inline-flex items-center rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  {auditTimelineLoading ? 'Загрузка...' : 'Обновить'}
+                </button>
+              </div>
+            </div>
+            <div className="mb-2 text-[11px] text-amber-700">
+              Показано: {auditTimeline.length} / {auditTimelineTotal}
+            </div>
+            <div className="space-y-2">
+              {auditTimeline.map((item) => (
+                <div key={item.event_id} className="rounded-md border border-amber-200 bg-white px-2 py-2 text-[11px] text-amber-900">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{item.occurred_at || '—'}</span>
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                      {item.source}
+                    </span>
+                    <span>{item.event_type}</span>
+                    {item.status ? <span>status={item.status}</span> : null}
+                    {item.action_id ? <span>action={item.action_id.slice(0, 8)}</span> : null}
+                  </div>
+                  {item.details && Object.keys(item.details).length > 0 ? (
+                    <div className="mt-1 text-amber-700">
+                      {Object.entries(item.details)
+                        .slice(0, 4)
+                        .map(([key, value]) => `${key}=${Array.isArray(value) ? value.length : String(value)}`)
+                        .join(' • ')}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {auditTimeline.length === 0 && (
+                <div className="rounded-md border border-dashed border-amber-200 bg-white px-2 py-3 text-[11px] text-amber-700">
+                  {auditTimelineLoading ? 'Загрузка unified audit timeline...' : 'Событий пока нет'}
+                </div>
+              )}
+            </div>
+          </div>
           {copyMessage && (
             <div className="mb-3 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
               {copyMessage}

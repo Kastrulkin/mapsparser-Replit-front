@@ -2469,6 +2469,186 @@ def _render_support_export_send_history_markdown(tenant_id: str, items: list[dic
     return "\n".join(lines)
 
 
+def _load_tenant_audit_timeline_items(
+    cursor,
+    tenant_id: str,
+    limit: int,
+    offset: int,
+    *,
+    source: str | None = None,
+    search: str | None = None,
+    action_id: str | None = None,
+) -> tuple[list[dict], int]:
+    _ensure_callback_recovery_history_table(cursor)
+    _ensure_support_export_send_history_table(cursor)
+    tenant_id = str(tenant_id)
+    limit = max(1, min(int(limit or 20), 200))
+    offset = max(0, int(offset or 0))
+    source = str(source or "").strip() or None
+    search = str(search or "").strip() or None
+    action_id = str(action_id or "").strip() or None
+
+    base_query = """
+        SELECT *
+        FROM (
+            SELECT
+                ar.created_at AS occurred_at,
+                'action_request' AS source,
+                'action_created' AS event_type,
+                ar.status AS status,
+                ar.action_id AS action_id,
+                ar.action_id AS event_id,
+                jsonb_build_object(
+                    'capability', ar.capability,
+                    'trace_id', ar.trace_id,
+                    'idempotency_key', ar.idempotency_key
+                ) AS details,
+                CONCAT_WS(' ', ar.action_id, ar.capability, ar.status, ar.trace_id, ar.idempotency_key) AS search_text
+            FROM action_requests ar
+            WHERE ar.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                at.created_at AS occurred_at,
+                'action_transition' AS source,
+                COALESCE(NULLIF(TRIM(at.reason), ''), 'status_changed') AS event_type,
+                at.to_status AS status,
+                at.action_id AS action_id,
+                at.id AS event_id,
+                jsonb_build_object(
+                    'from_status', at.from_status,
+                    'to_status', at.to_status,
+                    'reason', at.reason
+                ) AS details,
+                CONCAT_WS(' ', at.action_id, at.from_status, at.to_status, at.reason) AS search_text
+            FROM action_transitions at
+            JOIN action_requests ar ON ar.action_id = at.action_id
+            WHERE ar.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                aca.created_at AS occurred_at,
+                'callback_attempt' AS source,
+                aca.event_type AS event_type,
+                CASE WHEN aca.success THEN 'success' ELSE 'failed' END AS status,
+                aca.action_id AS action_id,
+                aca.id AS event_id,
+                jsonb_build_object(
+                    'attempt_no', aca.attempt_no,
+                    'success', aca.success,
+                    'http_status', aca.http_status,
+                    'duration_ms', aca.duration_ms,
+                    'error_text', aca.error_text
+                ) AS details,
+                CONCAT_WS(' ', aca.action_id, aca.event_type, aca.error_text, aca.http_status::text, aca.attempt_no::text) AS search_text
+            FROM action_callback_attempts aca
+            WHERE aca.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                crh.created_at AS occurred_at,
+                'recovery_run' AS source,
+                'recovery_report' AS event_type,
+                CASE
+                    WHEN COALESCE(crh.dlq_count, 0) > 0 OR COALESCE(crh.retried_count, 0) > 0 THEN 'attention'
+                    ELSE 'ok'
+                END AS status,
+                NULL AS action_id,
+                crh.id AS event_id,
+                jsonb_build_object(
+                    'triggered_by', crh.triggered_by,
+                    'include_retry', crh.include_retry,
+                    'replayed_count', crh.replayed_count,
+                    'sent_count', crh.sent_count,
+                    'retried_count', crh.retried_count,
+                    'dlq_count', crh.dlq_count,
+                    'telegram_sent_count', crh.telegram_sent_count,
+                    'action_ids', crh.action_ids_json
+                ) AS details,
+                CONCAT_WS(' ', crh.id, crh.triggered_by, crh.report_text) AS search_text
+            FROM callback_recovery_history crh
+            WHERE crh.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                sesh.created_at AS occurred_at,
+                'support_send' AS source,
+                'support_export_sent' AS event_type,
+                CASE
+                    WHEN COALESCE(sesh.telegram_sent_count, 0) > 0 THEN 'sent'
+                    ELSE 'noop'
+                END AS status,
+                NULLIF(TRIM(COALESCE(sesh.action_id, '')), '') AS action_id,
+                sesh.id AS event_id,
+                jsonb_build_object(
+                    'triggered_by', sesh.triggered_by,
+                    'telegram_sent_count', sesh.telegram_sent_count,
+                    'target_ids', sesh.target_ids_json
+                ) AS details,
+                CONCAT_WS(' ', sesh.id, sesh.action_id, sesh.triggered_by, sesh.report_text) AS search_text
+            FROM support_export_send_history sesh
+            WHERE sesh.tenant_id = %s
+        ) audit
+    """
+
+    filters = []
+    params: list = [tenant_id, tenant_id, tenant_id, tenant_id, tenant_id]
+    if source:
+        filters.append("source = %s")
+        params.append(source)
+    if action_id:
+        filters.append("action_id = %s")
+        params.append(action_id)
+    if search:
+        filters.append("search_text ILIKE %s")
+        params.append(f"%{search}%")
+
+    where_sql = f" WHERE {' AND '.join(filters)}" if filters else ""
+    count_query = f"SELECT COUNT(1) FROM ({base_query}) audit_rows{where_sql}"
+    cursor.execute(count_query, tuple(params))
+    count_row = cursor.fetchone()
+    if isinstance(count_row, (tuple, list)):
+        total_count = int(count_row[0] or 0)
+    else:
+        total_count = int(_row_to_dict(cursor, count_row).get("count") or 0)
+
+    query = (
+        f"{base_query}{where_sql} "
+        "ORDER BY occurred_at DESC, event_id DESC "
+        "LIMIT %s OFFSET %s"
+    )
+    query_params = list(params) + [limit, offset]
+    cursor.execute(query, tuple(query_params))
+    rows = cursor.fetchall() or []
+    items: list[dict] = []
+    for row in rows:
+        rd = _row_to_dict(cursor, row)
+        details = rd.get("details")
+        if isinstance(details, str):
+            try:
+                details = json.loads(details)
+            except Exception:
+                details = {}
+        elif not isinstance(details, dict):
+            details = {}
+        items.append(
+            {
+                "occurred_at": str(rd.get("occurred_at") or ""),
+                "source": str(rd.get("source") or ""),
+                "event_type": str(rd.get("event_type") or ""),
+                "status": str(rd.get("status") or ""),
+                "action_id": str(rd.get("action_id") or ""),
+                "event_id": str(rd.get("event_id") or ""),
+                "details": details,
+            }
+        )
+    return items, total_count
+
+
 def _build_openclaw_support_export_bundle(
     user_data: dict,
     tenant_id: str,
@@ -5387,6 +5567,56 @@ def openclaw_callbacks_metrics():
     return jsonify(result), int(result.pop("http_code", 200))
 
 
+@app.route('/api/openclaw/audit-timeline', methods=['GET', 'OPTIONS'])
+def openclaw_audit_timeline():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
+    offset = max(0, int(request.args.get("offset", 0) or 0))
+    source = str(request.args.get("source") or "").strip() or None
+    search = str(request.args.get("search") or "").strip() or None
+    action_id = str(request.args.get("action_id") or "").strip() or None
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items, total_count = _load_tenant_audit_timeline_items(
+            cursor,
+            tenant_id,
+            limit,
+            offset,
+            source=source,
+            search=search,
+            action_id=action_id,
+        )
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": tenant_id,
+                "items": items,
+                "count": len(items),
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        ), 200
+    finally:
+        db.close()
+
+
 @app.route('/api/openclaw/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
 def openclaw_callbacks_recovery_history():
     if request.method == 'OPTIONS':
@@ -5739,6 +5969,56 @@ def capabilities_callbacks_outbox_replay():
         limit=limit,
     )
     return jsonify(result), int(result.pop("http_code", 200))
+
+
+@app.route('/api/capabilities/audit-timeline', methods=['GET', 'OPTIONS'])
+def capabilities_audit_timeline():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
+    offset = max(0, int(request.args.get("offset", 0) or 0))
+    source = str(request.args.get("source") or "").strip() or None
+    search = str(request.args.get("search") or "").strip() or None
+    action_id = str(request.args.get("action_id") or "").strip() or None
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        items, total_count = _load_tenant_audit_timeline_items(
+            cursor,
+            str(tenant_id),
+            limit,
+            offset,
+            source=source,
+            search=search,
+            action_id=action_id,
+        )
+        return jsonify(
+            {
+                "success": True,
+                "tenant_id": str(tenant_id),
+                "items": items,
+                "count": len(items),
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        ), 200
+    finally:
+        db.close()
 
 
 @app.route('/api/capabilities/callbacks/recovery-report', methods=['POST', 'OPTIONS'])
