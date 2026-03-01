@@ -235,4 +235,18 @@ OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/acceptance_openclaw
 - `outbox` smoke
 - `billing reconciliation` smoke
 - outbox alerts + `capabilities/health.ready=true`
+
+## 12) Final Acceptance (Phase 3)
+
+Итоговый приёмочный прогон support/ops слоя:
+
+```bash
+cd /opt/seo-app
+OPENCLAW_TOKEN='<token>' TENANT_ID='<business_id>' ./scripts/acceptance_openclaw_phase3.sh
+```
+
+Скрипт дополнительно проверяет:
+- `support-export` markdown
+- `support-send history export` markdown
+- финальный `health.ready=true`
 ```
