@@ -43,6 +43,409 @@ def get_user_id_from_telegram(telegram_id: str):
     conn.close()
     return user_row[0] if user_row else None
 
+
+def resolve_business_context(telegram_id: str, preferred: str = ""):
+    """Определить бизнес пользователя для команд OpenClaw."""
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    if not db_user_id:
+        return None
+
+    preferred = str(preferred or "").strip().lower()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, name
+            FROM Businesses
+            WHERE owner_id = %s
+            ORDER BY created_at ASC NULLS LAST, name ASC
+            """,
+            (db_user_id,),
+        )
+        businesses = cursor.fetchall() or []
+        if not businesses:
+            return {
+                "user_id": db_user_id,
+                "business_id": None,
+                "business_name": None,
+                "business_count": 0,
+            }
+
+        normalized = []
+        for row in businesses:
+            business_id = str(row[0])
+            business_name = str(row[1] or "").strip()
+            normalized.append((business_id, business_name))
+
+        if preferred:
+            for business_id, business_name in normalized:
+                if preferred == business_id.lower() or preferred == business_name.lower():
+                    return {
+                        "user_id": db_user_id,
+                        "business_id": business_id,
+                        "business_name": business_name,
+                        "business_count": len(normalized),
+                    }
+            for business_id, business_name in normalized:
+                if preferred in business_name.lower():
+                    return {
+                        "user_id": db_user_id,
+                        "business_id": business_id,
+                        "business_name": business_name,
+                        "business_count": len(normalized),
+                    }
+
+        latest_business_id = None
+        try:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
+                """
+            )
+            token_columns = {str(row[0]) for row in (cursor.fetchall() or [])}
+            if "business_id" in token_columns:
+                cursor.execute(
+                    """
+                    SELECT business_id
+                    FROM TelegramBindTokens
+                    WHERE user_id = %s
+                      AND used = 1
+                      AND business_id IS NOT NULL
+                      AND NULLIF(TRIM(CAST(business_id AS TEXT)), '') IS NOT NULL
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (db_user_id,),
+                )
+                latest_row = cursor.fetchone()
+                if latest_row and latest_row[0]:
+                    latest_business_id = str(latest_row[0])
+        except Exception:
+            latest_business_id = None
+
+        selected_business_id = None
+        selected_business_name = None
+        if latest_business_id:
+            for business_id, business_name in normalized:
+                if business_id == latest_business_id:
+                    selected_business_id = business_id
+                    selected_business_name = business_name
+                    break
+        if not selected_business_id:
+            selected_business_id, selected_business_name = normalized[0]
+
+        return {
+            "user_id": db_user_id,
+            "business_id": selected_business_id,
+            "business_name": selected_business_name,
+            "business_count": len(normalized),
+        }
+    finally:
+        conn.close()
+
+
+def get_openclaw_runtime():
+    """Ленивая загрузка OpenClaw helper'ов из backend."""
+    from main import (
+        PHASE1_ACTION_ORCHESTRATOR,
+        _build_openclaw_support_export_bundle,
+        _ensure_callback_recovery_history_table,
+        _ensure_support_export_send_history_table,
+        _format_incident_snapshot_digest,
+        _get_superadmin_telegram_ids,
+        _render_openclaw_support_export_markdown,
+        _send_telegram_plain_message,
+    )
+
+    return {
+        "orchestrator": PHASE1_ACTION_ORCHESTRATOR,
+        "build_support_bundle": _build_openclaw_support_export_bundle,
+        "render_support_markdown": _render_openclaw_support_export_markdown,
+        "send_telegram": _send_telegram_plain_message,
+        "get_superadmin_ids": _get_superadmin_telegram_ids,
+        "ensure_support_history": _ensure_support_export_send_history_table,
+        "ensure_recovery_history": _ensure_callback_recovery_history_table,
+        "format_snapshot_digest": _format_incident_snapshot_digest,
+    }
+
+
+async def _require_bound_business(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    preferred = " ".join(context.args or []).strip()
+    ctx = resolve_business_context(str(update.effective_user.id), preferred)
+    if not ctx:
+        await update.message.reply_text("❌ Аккаунт не привязан. Используйте /start <код_привязки>.")
+        return None
+    if not ctx.get("business_id"):
+        await update.message.reply_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+        return None
+    return ctx
+
+
+async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Краткий статус OpenClaw для привязанного бизнеса."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    try:
+        runtime = get_openclaw_runtime()
+        user_data = {"user_id": business_ctx["user_id"]}
+        bundle, code = runtime["build_support_bundle"](
+            user_data,
+            str(business_ctx["business_id"]),
+            recovery_limit=3,
+            trend_limit=6,
+            billing_limit=20,
+        )
+        if not bundle.get("success"):
+            await update.message.reply_text(f"❌ Не удалось получить OpenClaw статус (code={code}).")
+            return
+
+        health = dict(bundle.get("health") or {})
+        metrics = dict((bundle.get("callback_metrics") or {}).get("metrics") or {})
+        alerts = list(bundle.get("alerts") or [])
+        recovery_items = list((bundle.get("recovery_history") or {}).get("items") or [])
+
+        lines = [
+            "🤖 OpenClaw status",
+            f"Бизнес: {business_ctx['business_name']}",
+            f"Tenant: {business_ctx['business_id']}",
+            f"Ready: {'да' if health.get('ready') else 'нет'}",
+            "",
+            "Очередь callback:",
+            f"- sent={int(metrics.get('sent') or 0)} retry={int(metrics.get('retry') or 0)} dlq={int(metrics.get('dlq') or 0)} pending={int(metrics.get('pending') or 0)}",
+        ]
+        if alerts:
+            lines.extend(["", "Алерты:"])
+            lines.extend(f"- {str(item)}" for item in alerts[:5])
+        if recovery_items:
+            latest = dict(recovery_items[0] or {})
+            lines.extend(
+                [
+                    "",
+                    "Последний recovery:",
+                    f"- {latest.get('created_at') or '-'}",
+                    f"- replay/sent/retry/dlq={int(latest.get('replayed_count') or 0)}/{int(latest.get('sent_count') or 0)}/{int(latest.get('retried_count') or 0)}/{int(latest.get('dlq_count') or 0)}",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "Команды:",
+                "/support_export — отправить support snapshot суперадмину",
+                "/recovery_report — выполнить recovery callback и вернуть отчёт",
+            ]
+        )
+        await update.message.reply_text("\n".join(lines))
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка OpenClaw status: {e}")
+
+
+async def support_export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Собрать support-export и отправить суперадмину."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    await update.message.reply_text("⏳ Формирую support snapshot...")
+    try:
+        runtime = get_openclaw_runtime()
+        user_data = {"user_id": business_ctx["user_id"]}
+        bundle, code = runtime["build_support_bundle"](
+            user_data,
+            str(business_ctx["business_id"]),
+        )
+        if not bundle.get("success"):
+            await update.message.reply_text(f"❌ Не удалось собрать support snapshot (code={code}).")
+            return
+
+        report_text = runtime["render_support_markdown"](bundle)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            target_ids = runtime["get_superadmin_ids"](cursor)
+            sent_count = 0
+            for telegram_id in target_ids:
+                if runtime["send_telegram"](telegram_id, report_text):
+                    sent_count += 1
+
+            history_id = str(uuid.uuid4())
+            runtime["ensure_support_history"](cursor)
+            cursor.execute(
+                """
+                INSERT INTO support_export_send_history (
+                    id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text
+                ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+                """,
+                (
+                    history_id,
+                    str(business_ctx["business_id"]),
+                    str(business_ctx["user_id"]),
+                    "",
+                    int(sent_count),
+                    json.dumps(list(target_ids), ensure_ascii=False),
+                    report_text,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        await update.message.reply_text(
+            "\n".join(
+                [
+                    "✅ Support snapshot отправлен.",
+                    f"Бизнес: {business_ctx['business_name']}",
+                    f"Получатели: {int(sent_count)}/{len(target_ids)}",
+                    f"History ID: {history_id}",
+                ]
+            )
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка support export: {e}")
+
+
+async def recovery_report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выполнить recovery callback queue и вернуть отчёт в чат."""
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+
+    await update.message.reply_text("⏳ Выполняю recovery callback очереди...")
+    try:
+        runtime = get_openclaw_runtime()
+        orchestrator = runtime["orchestrator"]
+        user_data = {"user_id": business_ctx["user_id"]}
+        tenant_id = str(business_ctx["business_id"])
+
+        pre_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
+        if not pre_metrics.get("success"):
+            await update.message.reply_text("❌ Не удалось получить pre-metrics для recovery.")
+            return
+
+        outbox_items = []
+        for status_name in ("dlq", "retry"):
+            listing = orchestrator.list_callback_outbox(
+                user_data,
+                tenant_id=tenant_id,
+                status=status_name,
+                limit=200,
+                offset=0,
+            )
+            if not listing.get("success"):
+                await update.message.reply_text(f"❌ Не удалось загрузить outbox ({status_name}).")
+                return
+            outbox_items.extend(listing.get("items") or [])
+
+        action_ids = []
+        seen_action_ids = set()
+        for item in outbox_items:
+            action_id = str(item.get("action_id") or "").strip()
+            if not action_id or action_id in seen_action_ids:
+                continue
+            seen_action_ids.add(action_id)
+            action_ids.append(action_id)
+        action_ids = action_ids[:2]
+
+        before_snapshots = []
+        for action_id in action_ids:
+            snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
+            if snapshot.get("success"):
+                before_snapshots.append(snapshot)
+
+        replay = orchestrator.replay_callback_outbox(
+            user_data,
+            tenant_id=tenant_id,
+            include_retry=True,
+            limit=200,
+        )
+        if not replay.get("success"):
+            await update.message.reply_text("❌ Recovery replay завершился ошибкой.")
+            return
+
+        dispatch = orchestrator.dispatch_callback_outbox_for_tenant(
+            user_data,
+            tenant_id=tenant_id,
+            batch_size=200,
+        )
+        if not dispatch.get("success"):
+            await update.message.reply_text("❌ Recovery dispatch завершился ошибкой.")
+            return
+
+        post_metrics = orchestrator.get_callback_metrics(user_data, tenant_id=tenant_id, window_minutes=60)
+        if not post_metrics.get("success"):
+            await update.message.reply_text("❌ Не удалось получить post-metrics для recovery.")
+            return
+
+        after_snapshots = []
+        for action_id in action_ids:
+            snapshot = orchestrator.get_action_incident_snapshot(action_id, user_data)
+            if snapshot.get("success"):
+                after_snapshots.append(snapshot)
+
+        before_metric_summary = dict(pre_metrics.get("metrics") or {})
+        after_metric_summary = dict(post_metrics.get("metrics") or {})
+        lines = [
+            "OpenClaw recovery report",
+            f"Бизнес: {business_ctx['business_name']}",
+            f"tenant_id: {tenant_id}",
+            "",
+            "Metrics before:",
+            f"- sent={int(before_metric_summary.get('sent') or 0)} retry={int(before_metric_summary.get('retry') or 0)} dlq={int(before_metric_summary.get('dlq') or 0)} pending={int(before_metric_summary.get('pending') or 0)}",
+            "Metrics after:",
+            f"- sent={int(after_metric_summary.get('sent') or 0)} retry={int(after_metric_summary.get('retry') or 0)} dlq={int(after_metric_summary.get('dlq') or 0)} pending={int(after_metric_summary.get('pending') or 0)}",
+            "",
+            "Recovery result:",
+            f"- replayed={int(replay.get('replayed_count') or 0)}",
+            f"- dispatched sent={int(dispatch.get('sent') or 0)} retried={int(dispatch.get('retried') or 0)} dlq={int(dispatch.get('dlq') or 0)} picked={int(dispatch.get('picked') or 0)}",
+        ]
+        if before_snapshots:
+            lines.extend(["", "Before:"])
+            lines.extend(runtime["format_snapshot_digest"](item) for item in before_snapshots)
+        if after_snapshots:
+            lines.extend(["", "After:"])
+            lines.extend(runtime["format_snapshot_digest"](item) for item in after_snapshots)
+        report_text = "\n".join(lines)
+
+        history_id = str(uuid.uuid4())
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            runtime["ensure_recovery_history"](cursor)
+            cursor.execute(
+                """
+                INSERT INTO callback_recovery_history (
+                    id, tenant_id, triggered_by, send_telegram_report, include_retry,
+                    replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
+                    action_ids_json, report_text
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                """,
+                (
+                    history_id,
+                    tenant_id,
+                    str(business_ctx["user_id"]),
+                    False,
+                    True,
+                    int(replay.get("replayed_count") or 0),
+                    int(dispatch.get("sent") or 0),
+                    int(dispatch.get("retried") or 0),
+                    int(dispatch.get("dlq") or 0),
+                    0,
+                    json.dumps(action_ids, ensure_ascii=False),
+                    report_text,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        await update.message.reply_text(f"✅ Recovery выполнен.\nHistory ID: {history_id}\n\n{report_text[:3000]}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка recovery report: {e}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
@@ -800,6 +1203,13 @@ async def handle_transaction_text(update: Update, context: ContextTypes.DEFAULT_
 
 async def handle_optimize_text(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, text: str):
     """Обработка текста для оптимизации"""
+    business_id = user_states[user_id].get('business_id')
+    db_user_id = get_user_id_from_telegram(user_id)
+
+    if not db_user_id:
+        await update.message.reply_text("❌ Аккаунт не привязан")
+        return
+
     await update.message.reply_text("⏳ Анализирую услуги...")
     
     try:
@@ -916,6 +1326,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /start - Главное меню
 /help - Справка
 /cancel - Отменить текущую операцию
+/status - Статус OpenClaw по вашему бизнесу
+/support_export - Отправить support snapshot суперадмину
+/recovery_report - Выполнить recovery callback-очереди
 
 *Функции:*
 💰 Добавление транзакций (фото/текст)
@@ -927,6 +1340,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Если возникли проблемы, обратитесь в поддержку через личный кабинет на сайте.
     """
     await update.message.reply_text(help_text, parse_mode='Markdown')
+
+
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_states[str(update.effective_user.id)] = {'state': 'idle'}
+    await update.message.reply_text("❌ Операция отменена")
 
 def main():
     """Запуск бота"""
@@ -942,7 +1360,10 @@ def main():
         # Регистрируем обработчики
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("cancel", lambda u, c: u.message.reply_text("❌ Операция отменена")))
+        application.add_handler(CommandHandler("cancel", cancel_command))
+        application.add_handler(CommandHandler("status", openclaw_status_command))
+        application.add_handler(CommandHandler("support_export", support_export_command))
+        application.add_handler(CommandHandler("recovery_report", recovery_report_command))
         application.add_handler(CallbackQueryHandler(button_callback))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
