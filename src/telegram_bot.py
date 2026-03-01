@@ -1723,7 +1723,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
         [InlineKeyboardButton("💰 Добавить транзакцию", callback_data="menu_transaction")],
         [InlineKeyboardButton("📊 Оптимизировать услуги", callback_data="menu_optimize")],
         [InlineKeyboardButton("⚙️ Настройки компании", callback_data="menu_settings")],
-        [InlineKeyboardButton("📈 Статистика", callback_data="menu_stats")],
+        [InlineKeyboardButton("📈 Статус бизнеса", callback_data="menu_stats")],
         [InlineKeyboardButton("🤖 OpenClaw Control", callback_data="menu_openclaw")],
     ]
     
@@ -1807,8 +1807,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, reply_markup = build_openclaw_menu(user_id)
         await query.edit_message_text(text, reply_markup=reply_markup)
     elif data == "menu_stats":
-        await query.edit_message_text("📈 Статистика пока в разработке. Используйте личный кабинет на сайте.")
-        await show_main_menu(update, context, user_id, db_user_id)
+        await show_business_selection(update, context, user_id, db_user_id, "stats")
     elif data == "openclaw_status":
         business_ctx = resolve_business_context(user_id)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -2055,6 +2054,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             elif action == "settings":
                 await show_settings_menu(update, context, user_id, business_id)
+            elif action == "stats":
+                business_ctx = resolve_business_context(user_id, business_id)
+                if not business_ctx or not business_ctx.get("business_id"):
+                    await query.edit_message_text("❌ Не удалось загрузить статус бизнеса.")
+                    return
+                _, status_text = _build_openclaw_status_text(
+                    {
+                        **business_ctx,
+                        "telegram_id": user_id,
+                    }
+                )
+                panel_text, reply_markup = _compose_openclaw_panel(user_id, status_text)
+                await query.edit_message_text(panel_text, reply_markup=reply_markup)
     elif data.startswith("setting_"):
         parts = data.split("_")
         if len(parts) >= 3:
@@ -2112,7 +2124,8 @@ async def show_business_selection(update: Update, context: ContextTypes.DEFAULT_
     action_names = {
         "transaction": "добавления транзакции",
         "optimize": "оптимизации услуг",
-        "settings": "настроек компании"
+        "settings": "настроек компании",
+        "stats": "просмотра статуса бизнеса",
     }
     
     text = f"Выберите бизнес для {action_names.get(action, action)}:"
@@ -2867,9 +2880,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Функции:*
 💰 Добавление транзакций (фото/текст)
-📊 Оптимизация услуг для SEO
+📊 Оптимизация услуг (guided + legacy режим для файлов)
 ⚙️ Настройки компании
-📈 Статистика (в разработке)
+📈 Статус бизнеса через OpenClaw
 🤖 Guided OpenClaw control panel
 
 *Поддержка:*
