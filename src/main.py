@@ -2649,6 +2649,152 @@ def _load_tenant_audit_timeline_items(
     return items, total_count
 
 
+def _load_tenant_audit_timeline_event(
+    cursor,
+    tenant_id: str,
+    event_id: str,
+    *,
+    source: str | None = None,
+) -> dict | None:
+    _ensure_callback_recovery_history_table(cursor)
+    _ensure_support_export_send_history_table(cursor)
+    tenant_id = str(tenant_id)
+    event_id = str(event_id or "").strip()
+    if not event_id:
+        return None
+    source = str(source or "").strip() or None
+
+    base_query = """
+        SELECT *
+        FROM (
+            SELECT
+                ar.created_at AS occurred_at,
+                'action_request' AS source,
+                'action_created' AS event_type,
+                ar.status AS status,
+                ar.action_id AS action_id,
+                ar.action_id AS event_id,
+                jsonb_build_object(
+                    'capability', ar.capability,
+                    'trace_id', ar.trace_id,
+                    'idempotency_key', ar.idempotency_key
+                ) AS details
+            FROM action_requests ar
+            WHERE ar.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                at.created_at AS occurred_at,
+                'action_transition' AS source,
+                COALESCE(NULLIF(TRIM(at.reason), ''), 'status_changed') AS event_type,
+                at.to_status AS status,
+                at.action_id AS action_id,
+                at.id AS event_id,
+                jsonb_build_object(
+                    'from_status', at.from_status,
+                    'to_status', at.to_status,
+                    'reason', at.reason
+                ) AS details
+            FROM action_transitions at
+            JOIN action_requests ar ON ar.action_id = at.action_id
+            WHERE ar.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                aca.created_at AS occurred_at,
+                'callback_attempt' AS source,
+                aca.event_type AS event_type,
+                CASE WHEN aca.success THEN 'success' ELSE 'failed' END AS status,
+                aca.action_id AS action_id,
+                aca.id AS event_id,
+                jsonb_build_object(
+                    'attempt_no', aca.attempt_no,
+                    'success', aca.success,
+                    'http_status', aca.http_status,
+                    'duration_ms', aca.duration_ms,
+                    'error_text', aca.error_text
+                ) AS details
+            FROM action_callback_attempts aca
+            WHERE aca.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                crh.created_at AS occurred_at,
+                'recovery_run' AS source,
+                'recovery_report' AS event_type,
+                CASE
+                    WHEN COALESCE(crh.dlq_count, 0) > 0 OR COALESCE(crh.retried_count, 0) > 0 THEN 'attention'
+                    ELSE 'ok'
+                END AS status,
+                NULL AS action_id,
+                crh.id AS event_id,
+                jsonb_build_object(
+                    'triggered_by', crh.triggered_by,
+                    'include_retry', crh.include_retry,
+                    'replayed_count', crh.replayed_count,
+                    'sent_count', crh.sent_count,
+                    'retried_count', crh.retried_count,
+                    'dlq_count', crh.dlq_count,
+                    'telegram_sent_count', crh.telegram_sent_count,
+                    'action_ids', crh.action_ids_json
+                ) AS details
+            FROM callback_recovery_history crh
+            WHERE crh.tenant_id = %s
+
+            UNION ALL
+
+            SELECT
+                sesh.created_at AS occurred_at,
+                'support_send' AS source,
+                'support_export_sent' AS event_type,
+                CASE
+                    WHEN COALESCE(sesh.telegram_sent_count, 0) > 0 THEN 'sent'
+                    ELSE 'noop'
+                END AS status,
+                NULLIF(TRIM(COALESCE(sesh.action_id, '')), '') AS action_id,
+                sesh.id AS event_id,
+                jsonb_build_object(
+                    'triggered_by', sesh.triggered_by,
+                    'telegram_sent_count', sesh.telegram_sent_count,
+                    'target_ids', sesh.target_ids_json
+                ) AS details
+            FROM support_export_send_history sesh
+            WHERE sesh.tenant_id = %s
+        ) audit
+    """
+    params: list = [tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, event_id]
+    filters = ["event_id = %s"]
+    if source:
+        filters.append("source = %s")
+        params.append(source)
+    query = f"{base_query} WHERE {' AND '.join(filters)} ORDER BY occurred_at DESC LIMIT 1"
+    cursor.execute(query, tuple(params))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    rd = _row_to_dict(cursor, row)
+    details = rd.get("details")
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except Exception:
+            details = {}
+    elif not isinstance(details, dict):
+        details = {}
+    return {
+        "occurred_at": str(rd.get("occurred_at") or ""),
+        "source": str(rd.get("source") or ""),
+        "event_type": str(rd.get("event_type") or ""),
+        "status": str(rd.get("status") or ""),
+        "action_id": str(rd.get("action_id") or ""),
+        "event_id": str(rd.get("event_id") or ""),
+        "details": details,
+    }
+
+
 def _render_tenant_audit_timeline_markdown(
     tenant_id: str,
     items: list[dict],
@@ -2701,6 +2847,94 @@ def _render_tenant_audit_timeline_markdown(
                     formatted = str(value)
                 lines.append(f"  - {key}: {formatted}")
         lines.append("")
+    return "\n".join(lines)
+
+
+def _build_tenant_audit_event_bundle(cursor, user_data: dict, tenant_id: str, event: dict) -> dict:
+    bundle = {
+        "success": True,
+        "tenant_id": str(tenant_id),
+        "generated_at": datetime.utcnow().isoformat(),
+        "event": event,
+    }
+    source = str(event.get("source") or "")
+    event_id = str(event.get("event_id") or "")
+    action_id = str(event.get("action_id") or "").strip()
+    if action_id:
+        bundle["action_snapshot"] = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(
+            action_id,
+            user_data,
+        )
+    if source == "recovery_run":
+        recovery_items = _load_callback_recovery_history_items(cursor, str(tenant_id), 20)
+        bundle["recovery_run"] = next((item for item in recovery_items if str(item.get("id") or "") == event_id), None)
+    elif source == "support_send":
+        send_items = _load_support_export_send_history_items(cursor, str(tenant_id), 20)
+        bundle["support_send"] = next((item for item in send_items if str(item.get("id") or "") == event_id), None)
+    return bundle
+
+
+def _render_tenant_audit_event_bundle_markdown(bundle: dict) -> str:
+    event = dict(bundle.get("event") or {})
+    lines = [
+        "# OpenClaw Audit Event Bundle",
+        "",
+        f"- tenant_id: `{bundle.get('tenant_id') or ''}`",
+        f"- generated_at: {bundle.get('generated_at') or ''}",
+        f"- source: `{event.get('source') or ''}`",
+        f"- event_type: `{event.get('event_type') or ''}`",
+        f"- status: `{event.get('status') or ''}`",
+        f"- event_id: `{event.get('event_id') or ''}`",
+    ]
+    action_id = str(event.get("action_id") or "").strip()
+    if action_id:
+        lines.append(f"- action_id: `{action_id}`")
+    details = event.get("details")
+    if isinstance(details, dict) and details:
+        lines.extend(["", "## Event details", ""])
+        for key, value in list(details.items())[:8]:
+            if isinstance(value, (dict, list)):
+                formatted = json.dumps(value, ensure_ascii=False)
+            else:
+                formatted = str(value)
+            lines.append(f"- {key}: {formatted}")
+    action_snapshot = dict(bundle.get("action_snapshot") or {})
+    if action_snapshot:
+        overview = dict(action_snapshot.get("overview") or {})
+        lines.extend(
+            [
+                "",
+                "## Related action",
+                "",
+                f"- capability: `{action_snapshot.get('capability') or ''}`",
+                f"- status: `{action_snapshot.get('status') or ''}`",
+                f"- callback_attempts_total: **{int(overview.get('callback_attempts_total') or 0)}**",
+                f"- callback_attempts_failed: **{int(overview.get('callback_attempts_failed') or 0)}**",
+            ]
+        )
+    recovery_run = dict(bundle.get("recovery_run") or {})
+    if recovery_run:
+        lines.extend(
+            [
+                "",
+                "## Recovery run",
+                "",
+                f"- recovery_id: `{recovery_run.get('id') or ''}`",
+                f"- replayed/sent/retried/dlq: **{int(recovery_run.get('replayed_count') or 0)}/{int(recovery_run.get('sent_count') or 0)}/{int(recovery_run.get('retried_count') or 0)}/{int(recovery_run.get('dlq_count') or 0)}**",
+            ]
+        )
+    support_send = dict(bundle.get("support_send") or {})
+    if support_send:
+        lines.extend(
+            [
+                "",
+                "## Support send",
+                "",
+                f"- support_send_id: `{support_send.get('id') or ''}`",
+                f"- telegram_sent_count: **{int(support_send.get('telegram_sent_count') or 0)}**",
+                f"- triggered_by: `{support_send.get('triggered_by') or ''}`",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -5742,6 +5976,50 @@ def openclaw_audit_timeline_export():
         db.close()
 
 
+@app.route('/api/openclaw/audit-timeline/event-bundle', methods=['GET', 'OPTIONS'])
+def openclaw_audit_timeline_event_bundle():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    ok, reason = _authenticate_openclaw_request()
+    if not ok:
+        return jsonify({"success": False, "error": reason}), 401
+
+    tenant_id = str(request.args.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    service_user = _openclaw_service_user(tenant_id)
+    if not service_user:
+        return jsonify({"success": False, "error": "tenant_id not found"}), 404
+
+    event_id = str(request.args.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify({"success": False, "error": "event_id is required"}), 400
+    source = str(request.args.get("source") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        event = _load_tenant_audit_timeline_event(cursor, tenant_id, event_id, source=source)
+        if not event:
+            return jsonify({"success": False, "error": "event not found"}), 404
+        bundle = _build_tenant_audit_event_bundle(cursor, service_user, tenant_id, event)
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": tenant_id,
+                    "event_id": event_id,
+                    "markdown_report": _render_tenant_audit_event_bundle_markdown(bundle),
+                }
+            ), 200
+        return jsonify(bundle), 200
+    finally:
+        db.close()
+
+
 @app.route('/api/openclaw/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
 def openclaw_callbacks_recovery_history():
     if request.method == 'OPTIONS':
@@ -6212,6 +6490,50 @@ def capabilities_audit_timeline_export():
                 "offset": offset,
             }
         ), 200
+    finally:
+        db.close()
+
+
+@app.route('/api/capabilities/audit-timeline/event-bundle', methods=['GET', 'OPTIONS'])
+def capabilities_audit_timeline_event_bundle():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
+    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
+    if not tenant_id:
+        return jsonify({"success": False, "error": "tenant_id is required"}), 400
+
+    event_id = str(request.args.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify({"success": False, "error": "event_id is required"}), 400
+    source = str(request.args.get("source") or "").strip() or None
+    export_format = str(request.args.get("format") or "json").strip().lower()
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        event = _load_tenant_audit_timeline_event(cursor, str(tenant_id), event_id, source=source)
+        if not event:
+            return jsonify({"success": False, "error": "event not found"}), 404
+        bundle = _build_tenant_audit_event_bundle(cursor, user_data, str(tenant_id), event)
+        if export_format == "markdown":
+            return jsonify(
+                {
+                    "success": True,
+                    "tenant_id": str(tenant_id),
+                    "event_id": event_id,
+                    "markdown_report": _render_tenant_audit_event_bundle_markdown(bundle),
+                }
+            ), 200
+        return jsonify(bundle), 200
     finally:
         db.close()
 

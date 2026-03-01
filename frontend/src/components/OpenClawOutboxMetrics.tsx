@@ -1169,6 +1169,29 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
     return json;
   }, [businessId, auditTimelineSourceFilter, auditTimelineSearch]);
 
+  const fetchAuditEventBundleExport = useCallback(async (
+    item: UnifiedAuditTimelineItem,
+    format: 'json' | 'markdown',
+  ) => {
+    if (!businessId) return null;
+    const token = localStorage.getItem('auth_token');
+    const params = new URLSearchParams();
+    params.set('tenant_id', businessId);
+    params.set('event_id', String(item.event_id || ''));
+    params.set('format', format);
+    if (item.source) {
+      params.set('source', item.source);
+    }
+    const response = await fetch(`/api/capabilities/audit-timeline/event-bundle?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await response.json();
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.error || `HTTP ${response.status}`);
+    }
+    return json;
+  }, [businessId]);
+
   const exportRecoveryHistoryJson = useCallback(async () => {
     if (!businessId) return;
     try {
@@ -1328,6 +1351,24 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
       setError(e?.message || 'Не удалось экспортировать unified audit timeline markdown');
     }
   }, [businessId, fetchAuditTimelineExport]);
+
+  const exportAuditEventBundleJson = useCallback(async (item: UnifiedAuditTimelineItem) => {
+    if (!businessId) return;
+    try {
+      const payload = await fetchAuditEventBundleExport(item, 'json');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit-event-bundle-${String(item.source || 'event')}-${String(item.event_id || '').slice(0, 8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось экспортировать audit event bundle');
+    }
+  }, [businessId, fetchAuditEventBundleExport]);
 
   const jumpToActionFromAudit = useCallback((actionId?: string) => {
     const normalized = String(actionId || '').trim();
@@ -2090,6 +2131,13 @@ export default function OpenClawOutboxMetrics({ businessId }: Props) {
                     </span>
                     <span>{item.event_type}</span>
                     {item.status ? <span>status={item.status}</span> : null}
+                    <button
+                      type="button"
+                      onClick={() => exportAuditEventBundleJson(item)}
+                      className="inline-flex items-center rounded-md border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
+                    >
+                      Event JSON
+                    </button>
                     {item.action_id ? (
                       <>
                         <span>action={item.action_id.slice(0, 8)}</span>

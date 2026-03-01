@@ -675,6 +675,49 @@ then
   exit 1
 fi
 
+echo "[8.11/12] M2M audit event bundle"
+curl -fsS \
+  -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+  "${base_url}/api/openclaw/audit-timeline?tenant_id=${TENANT_ID}&limit=20&source=support_send" > "${tmp_dir}/audit_timeline_support_send.json"
+python3 - "${tmp_dir}/audit_timeline_support_send.json" > "${tmp_dir}/audit_event_query.txt" <<'PY'
+import json, sys, urllib.parse
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+items = data.get("items") or []
+if not items:
+    print("NO_EVENT")
+    sys.exit(0)
+item = items[0]
+params = urllib.parse.urlencode({
+    "tenant_id": data.get("tenant_id") or "",
+    "event_id": item.get("event_id") or "",
+    "source": item.get("source") or "",
+    "format": "markdown",
+})
+print(params)
+PY
+if [[ "$(cat "${tmp_dir}/audit_event_query.txt")" != "NO_EVENT" ]]; then
+  curl -fsS \
+    -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
+    "${base_url}/api/openclaw/audit-timeline/event-bundle?$(cat "${tmp_dir}/audit_event_query.txt")" > "${tmp_dir}/audit_event_bundle.json"
+  if ! python3 - "${tmp_dir}/audit_event_bundle.json" <<'PY'
+import json, sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+report = data.get("markdown_report")
+if not isinstance(report, str) or "# OpenClaw Audit Event Bundle" not in report:
+    print("Audit event bundle markdown_report is invalid")
+    sys.exit(1)
+print("Audit event bundle OK")
+PY
+  then
+    cat "${tmp_dir}/audit_event_bundle.json"
+    exit 1
+  fi
+else
+  echo "Audit event bundle skipped: no support_send event"
+fi
+
 echo "[9/12] M2M action billing"
 curl -fsS \
   -H "X-OpenClaw-Token: ${OPENCLAW_TOKEN}" \
