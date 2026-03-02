@@ -46,6 +46,17 @@ _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 
+_EDITORIAL_SERVICE_PATTERNS = (
+    "хорошее место",
+    "где можно",
+    "выбрали места",
+    "рассказываем про",
+    "подборка",
+    "в районе ",
+    "на улице ",
+    "рядом с ",
+)
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -2261,6 +2272,14 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     name = (item.get("name") or "").strip() or None
     if not name:
         return {}
+    description = (item.get("description") or "").strip() or None
+    combined_text = f"{name} {description or ''}".lower()
+    if any(pattern in combined_text for pattern in _EDITORIAL_SERVICE_PATTERNS):
+        print(f"⚠️ [map_card_services] Skip editorial listing: {name}")
+        return {}
+    if (description or "").lower().startswith("рассказываем") or (description or "").lower().startswith("выбрали"):
+        print(f"⚠️ [map_card_services] Skip non-service description: {name}")
+        return {}
     external_id = item.get("id") or item.get("external_id")
     if external_id is not None:
         external_id = str(external_id).strip() or None
@@ -2270,7 +2289,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "business_id": business_id,
         "user_id": user_id,
         "name": name,
-        "description": (item.get("description") or "").strip() or None,
+        "description": description,
         "category": _extract_service_category(item) or "Общие услуги",
         "source": source,
         "external_id": external_id,

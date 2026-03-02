@@ -19,6 +19,68 @@ import requests
 from external_sources import ExternalReview, ExternalStatsPoint, ExternalPost, ExternalPhoto
 
 
+_EDITORIAL_SERVICE_PATTERNS = (
+    "хорошее место",
+    "где можно",
+    "выбрали места",
+    "рассказываем про",
+    "подборка",
+    "в районе ",
+    "на улице ",
+    "рядом с ",
+)
+
+
+def _extract_org_reference(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    for key in (
+        "organization_id",
+        "organizationId",
+        "org_id",
+        "orgId",
+        "company_id",
+        "companyId",
+        "business_id",
+        "businessId",
+        "permalink",
+    ):
+        raw = payload.get(key)
+        if isinstance(raw, dict):
+            raw = raw.get("id") or raw.get("permalink") or raw.get("value")
+        if raw is None:
+            continue
+        normalized = str(raw).strip()
+        if normalized:
+            return normalized
+    return None
+
+
+def _is_editorial_listing(name: Any, description: Any) -> bool:
+    title = str(name or "").strip().lower()
+    body = str(description or "").strip().lower()
+    combined = f"{title} {body}"
+    if any(pattern in combined for pattern in _EDITORIAL_SERVICE_PATTERNS):
+        return True
+    if body.startswith("рассказываем") or body.startswith("выбрали"):
+        return True
+    if title.startswith("бары ") or title.startswith("бары и пабы "):
+        if any(marker in title for marker in ("в районе", "на ", "рядом", "с наградой")):
+            return True
+    return False
+
+
+def _service_payload_is_relevant(payload: Any, expected_org_id: Optional[str], *, name: Any = None, description: Any = None) -> bool:
+    if _is_editorial_listing(name, description):
+        return False
+    if not expected_org_id:
+        return True
+    found_org_id = _extract_org_reference(payload)
+    if not found_org_id:
+        return True
+    return str(found_org_id) == str(expected_org_id)
+
+
 class YandexBusinessParser:
     """Парсер для личного кабинета Яндекс.Бизнес."""
 
@@ -2416,6 +2478,15 @@ class YandexBusinessParser:
                     print(f"   Ключи верхнего уровня: {list(service_data.keys())[:15]}")
                     print(f"   Извлечённая категория: {category}")
                     print(f"   Извлечённое название: {name}")
+
+                if not _service_payload_is_relevant(
+                    service_data,
+                    external_id,
+                    name=name,
+                    description=description,
+                ):
+                    print(f"⚠️ Пропускаем нерелевантную услугу/подборку: {name}")
+                    continue
                 
                 services.append({
                     "category": category,
@@ -2577,6 +2648,8 @@ class YandexBusinessParser:
         parsed_products = []
         
         for category in categories:
+            if not _service_payload_is_relevant(category, external_id):
+                continue
             cat_name = category.get("name", "Разное")
             items = category.get("items") or category.get("goods") or []
             
@@ -2591,9 +2664,20 @@ class YandexBusinessParser:
                 else:
                     price_str = str(price) if price else ""
                 
+                item_name = item.get("name") or item.get("title") or item.get("text") or ""
+                item_description = item.get("description") or item.get("text") or item.get("details") or item.get("content") or ""
+                if not _service_payload_is_relevant(
+                    item,
+                    external_id,
+                    name=item_name,
+                    description=item_description,
+                ):
+                    print(f"⚠️ Пропускаем нерелевантный товар/подборку: {item_name}")
+                    continue
+
                 parsed_items.append({
-                    "name": item.get("name") or item.get("title") or item.get("text") or "",
-                    "description": item.get("description") or item.get("text") or item.get("details") or item.get("content") or "",
+                    "name": item_name,
+                    "description": item_description,
                     "price": price_str,
                     "photo_url": item.get("photos", [{}])[0].get("url") if item.get("photos") else None
                 })

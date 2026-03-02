@@ -141,6 +141,23 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         conn.commit()
         print(f"📊 [SyncWorker] Синхронизация услуг: {count_new} новых, {count_updated} обновлено.")
 
+    @staticmethod
+    def _group_flat_services(services: list) -> list:
+        grouped = {}
+        for service in services or []:
+            if not isinstance(service, dict):
+                continue
+            name = (service.get('name') or '').strip()
+            if not name:
+                continue
+            category = (service.get('category') or 'Общие услуги').strip() or 'Общие услуги'
+            grouped.setdefault(category, []).append(service)
+        return [
+            {"category": category, "items": items}
+            for category, items in grouped.items()
+            if items
+        ]
+
     def _upsert_posts(self, db: DatabaseManager, posts: list) -> None:
         """Вставка/обновление постов (для совместимости с main.py)"""
         repository = ExternalDataRepository(db)
@@ -373,7 +390,10 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
             
             # --- EXTRACT AND SYNC SERVICES (NEW) ---
             try:
-                products = parser.fetch_products(account)
+                services = parser.fetch_services(account)
+                products = self._group_flat_services(services)
+                if not products:
+                    products = parser.fetch_products(account)
                 if products:
                     print(f"📦 Получено {len(products)} категорий услуг")
                     self._sync_services_to_db(db.conn, account['business_id'], products, owner_id=owner_id)
