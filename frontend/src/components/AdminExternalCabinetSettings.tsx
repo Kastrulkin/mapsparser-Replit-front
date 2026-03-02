@@ -86,8 +86,9 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
       });
 
       toast({
-        title: 'Успешно',
+        title: data.noop ? 'Новых задач нет' : 'Успешно',
         description: data.message || 'Парсинг выполнен',
+        variant: data.noop ? 'default' : 'default',
       });
       // Перезагружаем данные аккаунта
       loadAccounts();

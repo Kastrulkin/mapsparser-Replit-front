@@ -12561,16 +12561,17 @@ def admin_sync_business_yandex(business_id):
         if not enqueued:
             return jsonify(
                 {
-                    "success": False,
+                    "success": True,
+                    "noop": True,
                     "error": "Нет задач для запуска",
-                    "message": "Все точки уже в очереди или у точек отсутствует источник данных",
+                    "message": "Новых задач для запуска нет: все точки уже в очереди или отсутствует источник данных",
                     "details": {
                         "scope": scope,
                         "skipped_no_source": skipped_no_source,
                         "skipped_has_active": skipped_has_active,
                     },
                 }
-            ), 400
+            )
 
         # Backward compatibility для одиночного запуска
         if scope == "single":
