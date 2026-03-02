@@ -24,6 +24,9 @@ This file is the canonical instruction set for AI agents in this repository.
 - Frontend-only changes: build locally and sync `frontend/dist` into `app` container.
 - Backend-only changes: sync `src/` (and migrations when needed) into `app`/`worker`, then restart only affected services.
 - Use `docker compose restart app worker` instead of restarting all containers.
+- Canonical backend source path on server is `/opt/seo-app/src`.
+- Do not copy Python runtime files into `/opt/seo-app/*.py` unless the file actually lives in the repository root.
+- When verifying a hotfix, check the live file in container (`/app/src/...`), not only the host copy.
 
 ## 4. Database Safety
 - Never modify production data without explicit user approval.
@@ -54,6 +57,17 @@ This file is the canonical instruction set for AI agents in this repository.
 ## 8. Legacy Cleanup Note
 Older SQLite/systemd-first instructions were superseded by Docker/Postgres workflow.
 Legacy details remain in git history and must not be used as default runbook.
+
+## 8.1 Current Platform State
+- OpenClaw ↔ LocalOS integration roadmap (Phase 1–9) is complete in the current codebase.
+- Live platform includes:
+  - Action Orchestrator + policy + ledger + human-in-the-loop
+  - M2M callbacks with retry/DLQ/outbox
+  - diagnostics / support export / recovery flows
+  - unified audit timeline
+  - Telegram control surface with approval flow
+  - unified multi-channel router (Telegram / WhatsApp / Maton bridge)
+- The next product track is supervised outreach (lead sourcing, shortlist approval, draft approval, controlled sending).
 
 ## 9. Terminal Sessions (tmux)
 - Use `tmux` for all long-running operations on server and local machine.

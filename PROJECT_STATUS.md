@@ -1,186 +1,101 @@
 # Статус проекта SEO с Реплит на Курсоре
 
-**Последнее обновление:** 24 декабря 2025
+**Последнее обновление:** 2 марта 2026
 
-## 🎯 Текущий фокус: Парсинг из личного кабинета Яндекс.Бизнес
+## 🎯 Текущий фокус
 
-### ✅ Выполнено
+### 1. Базовая платформа уже собрана
+- OpenClaw ↔ LocalOS integration roadmap (Phase 1–9) завершён.
+- Работают:
+  - Action Orchestrator + policy + ledger
+  - human-in-the-loop
+  - M2M callback receiver / outbox / retry / DLQ
+  - diagnostics / incident snapshot / support export / recovery flows
+  - unified audit timeline
+  - Telegram control surface
+  - multi-channel routing (Telegram / WhatsApp / Maton bridge)
 
-#### Парсер Yandex.Business
-- ✅ Базовый парсер для личного кабинета (`yandex_business_parser.py`)
-- ✅ Парсинг отзывов с пагинацией
-- ✅ Определение ответов на отзывы (через поле `owner_comment`)
-- ✅ Парсинг статистики (просмотры, звонки, переходы)
-- ✅ Парсинг постов/публикаций через sidebar API
-- ✅ Парсинг количества фото через sidebar API
-- ✅ Сохранение данных в `ExternalBusinessReviews`, `ExternalBusinessStats`, `ExternalBusinessPosts`, `ExternalBusinessPhotos`
-- ✅ Обработка ошибок и логирование
-- ✅ Поддержка cookies для аутентификации
-- ✅ Fallback на HTML-парсинг при недоступности API
+### 2. Следующий продуктовый трек
+- supervised outreach для поиска и аккуратного первого касания потенциальных клиентов
+- режим только с ручным подтверждением на каждом этапе
 
-#### Инфраструктура
-- ✅ Таблицы БД для внешних источников:
-  - `ExternalBusinessAccounts` - аккаунты для парсинга
-  - `ExternalBusinessReviews` - отзывы
-  - `ExternalBusinessStats` - статистика по дням
-  - `ExternalBusinessPosts` - посты/публикации
-  - `ExternalBusinessPhotos` - фото
-- ✅ Воркер синхронизации (`yandex_business_sync_worker.py`)
-- ✅ Шифрование auth_data через `EXTERNAL_AUTH_SECRET_KEY`
-- ✅ Документация API endpoints (`docs/YANDEX_BUSINESS_API_ENDPOINTS.md`)
-- ✅ Скрипты для тестирования на сервере
+## ✅ Что уже есть в production
 
-#### Интеграция ChatGPT
-- ✅ Базовые API endpoints для поиска салонов
-- ✅ Создание бронирований через ChatGPT
-- ✅ Интеграция со Stripe для оплаты
-- ✅ Telegram и WhatsApp уведомления
-- ✅ Модерация бизнесов
+### OpenClaw / LocalOS
+- Capability execution и tenant-scoped orchestration
+- Billing accounting и reconciliation
+- Approval flow в Telegram
+- Support / recovery отчёты и экспорт
+- Multi-channel control center в UI
+- Maton adapter в unified channel router
 
-## 🔄 В процессе
+### Telegram
+- Guided `/control` entrypoint
+- `reviews.reply`, `services.optimize`, `news.generate`
+- `status`, `actions`, `action_status`
+- `support_export`, `recovery_report`
+- queue pending approvals + approve/reject inline
 
-### Парсинг Yandex.Business
-- [ ] Тестирование парсера на реальном сервере (без sandbox ограничений)
-- [ ] Проверка корректности данных (62 отзыва, 25 с ответами, 37 без)
-- [ ] Исправление проблем с sidebar API (404 ошибки)
-- [ ] Добавление отображения данных для одной точки в UI
+### Карты и метрики
+- Исправлен production drift в `_get_map_metrics`: runtime снова читает `cards.overview` как text/json в Python, без `overview->>` в SQL
+- Hotfix синхронизирован в live containers (`app`, `worker`)
 
-### Поддержка сетей
-- [ ] Добавление поддержки нескольких точек в одном аккаунте Яндекс.Бизнес
-- [ ] Связывание точек сети с одним `external_account_id`
-- [ ] Агрегация данных по сети
-- [ ] Отображение данных сети в UI
+## 🔄 В работе
 
-### Автоматизация
-- [ ] Настройка запуска парсера по календарю (cron/scheduler)
-- [ ] Обработка ошибок и повторные попытки
-- [ ] Уведомления об ошибках парсинга
+### Supervised Outreach MVP
+- Админский раздел `Поиск клиентов` уже существует как ранняя заготовка
+- Сейчас он умеет:
+  - запускать поиск через Apify
+  - сохранять лиды
+  - менять статус
+- Текущая реализация пока черновая и требует переработки в staged pipeline
 
-### ChatGPT App Store
-- [ ] Доработка коннекта к ChatGPT App Store
-- [ ] Поиск бизнесов из сети через ChatGPT
-- [ ] Заказ услуг через ChatGPT
-- [ ] Консультации через ChatGPT
+### Что планируется следующим
+- Перевести поиск на Yandex-first source:
+  - Apify actor `m_mamaev/yandex-maps-places-scraper`
+- Сделать staged UI:
+  - найденные кандидаты
+  - shortlist
+  - выбранные для контакта
+  - черновики сообщений
+  - очередь отправки
+  - результаты / learning loop
+- Добавить строгий manual approval на каждом шаге
+- Стартовый лимит отправки: 10 в день
 
-## 📊 Архитектура
+## 🧱 Архитектурные ориентиры
 
-### База данных
+### Канонический runtime
+- Docker Compose
+- PostgreSQL
+- Server path: `/opt/seo-app`
+- Основные сервисы:
+  - `app`
+  - `worker`
+  - `postgres`
 
-#### ExternalBusinessAccounts
-Хранит аккаунты для парсинга:
-- `id` - ID аккаунта
-- `business_id` - связь с бизнесом (может быть NULL для сетей)
-- `source` - источник ('yandex_business')
-- `external_id` - ID в системе источника (permalink)
-- `auth_data_encrypted` - зашифрованные cookies
-- `is_active` - активен ли аккаунт
-- `last_sync` - последняя синхронизация
-- `last_error` - последняя ошибка
+### Следующий data model для outreach
+- `outreach_leads`
+- `outreach_lead_reviews`
+- `outreach_message_drafts`
+- `outreach_send_batches`
+- `outreach_send_queue`
+- `outreach_reactions`
+- `outreach_learning_examples`
 
-#### ExternalBusinessReviews
-Отзывы из внешних источников:
-- `id` - ID отзыва
-- `external_account_id` - связь с аккаунтом
-- `business_id` - связь с бизнесом (для быстрого доступа)
-- `external_review_id` - ID в системе источника
-- `author_name` - имя автора
-- `rating` - оценка (1-5)
-- `text` - текст отзыва
-- `date` - дата отзыва
-- `has_response` - есть ли ответ
-- `response_text` - текст ответа
-- `response_date` - дата ответа
+### Роль OpenClaw в outreach
+OpenClaw должен выполнять только capability-задачи:
+- `leads.score`
+- `leads.channel_enrich`
+- `outreach.draft_first_message`
+- `outreach.classify_reply`
+- `outreach.suggest_next_step`
 
-#### ExternalBusinessStats
-Статистика по дням:
-- `id` - ID записи
-- `external_account_id` - связь с аккаунтом
-- `business_id` - связь с бизнесом
-- `date` - дата статистики
-- `views` - просмотры
-- `calls` - звонки
-- `clicks` - переходы
-- `unique_id` - уникальный ID (external_account_id + date)
+Workflow и источник правды по аутричу должны оставаться в LocalOS.
 
-#### ExternalBusinessPosts
-Посты/публикации:
-- `id` - ID поста
-- `external_account_id` - связь с аккаунтом
-- `business_id` - связь с бизнесом
-- `external_post_id` - ID в системе источника
-- `title` - заголовок
-- `text` - текст
-- `date` - дата публикации
-- `views` - просмотры
-- `likes` - лайки
-
-#### ExternalBusinessPhotos
-Фото:
-- `id` - ID записи
-- `external_account_id` - связь с аккаунтом
-- `business_id` - связь с бизнесом
-- `total_count` - общее количество фото
-- `last_updated` - последнее обновление
-
-### Компоненты
-
-#### YandexBusinessParser (`src/yandex_business_parser.py`)
-Основной класс для парсинга:
-- `fetch_reviews()` - получение отзывов с пагинацией
-- `fetch_stats()` - получение статистики
-- `fetch_posts()` - получение постов
-- `fetch_photos_count()` - получение количества фото
-- `fetch_organization_info()` - получение информации об организации
-
-#### YandexBusinessSyncWorker (`src/yandex_business_sync_worker.py`)
-Воркер для синхронизации:
-- `run_once()` - один проход синхронизации
-- `_load_active_accounts()` - загрузка активных аккаунтов
-- `_upsert_reviews()` - сохранение отзывов
-- `_upsert_stats()` - сохранение статистики
-- `_upsert_posts()` - сохранение постов
-- `_upsert_photos()` - сохранение фото
-
-## 🔐 Безопасность
-
-- ✅ Шифрование auth_data через `EXTERNAL_AUTH_SECRET_KEY`
-- ✅ Использование `safe_db_utils` для работы с БД
-- ✅ Валидация данных перед сохранением
-- ⚠️ Требуется: обработка истечения cookies, автоматическое обновление
-
-## 📝 Документация
-
-- `docs/YANDEX_BUSINESS_API_ENDPOINTS.md` - описание API endpoints
-- `docs/TEST_YANDEX_ON_SERVER.md` - инструкция по тестированию на сервере
-- `CHATGPT_INTEGRATION_STATUS.md` - статус ChatGPT интеграции
-
-## 🚀 Деплой
-
-### Обновление кода
-```bash
-git pull origin main
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Перезапуск сервисов
-```bash
-# Flask сервер
-systemctl restart seo-main
-
-# Воркер синхронизации (если запущен отдельно)
-systemctl restart yandex-sync-worker
-```
-
-### Миграции БД
-```bash
-python src/migrate_external_posts_photos.py
-```
-
-## 📈 Метрики
-
-- Количество активных аккаунтов: проверяется через `ExternalBusinessAccounts`
-- Успешность синхронизации: через `last_sync` и `last_error`
-- Количество отзывов: через `ExternalBusinessReviews`
-- Количество точек статистики: через `ExternalBusinessStats`
-
+## 📝 Важные замечания
+- `src/api/admin_prospecting.py` сейчас требует security-hardening:
+  - добавить auth
+  - ограничить superadmin-only
+- Текущий `ProspectingManagement` — это не финальный outreach UI, а переходный экран
+- Для server hotfix всегда проверять live file в контейнере (`/app/src/...`), а не только host copy

@@ -1,10 +1,11 @@
-# Current State (2026-02-24)
+# Current State (2026-03-02)
 
 ## Runtime
 - Deployment model: Docker Compose
 - DB runtime: PostgreSQL
 - Server path: `/opt/seo-app`
 - Main services: `app`, `worker`, `postgres`
+- Primary domain: `localos.pro`
 
 ## Canonical docs
 1. `README.md` (primary source of truth)
@@ -22,3 +23,23 @@
 - Use Alembic for schema changes.
 - Always back up DB before server migrations.
 - Treat legacy SQLite details as archival only.
+
+## OpenClaw Integration
+- Phases 1–9 of the LocalOS ↔ OpenClaw integration roadmap are complete.
+- Current production capabilities include:
+  - action orchestration, policy, billing ledger, approval workflow
+  - M2M callback receiver/outbox/retry/DLQ
+  - diagnostics, incident snapshot/report, recovery report/history
+  - unified audit timeline and event bundles
+  - Telegram-first control panel with approvals
+  - multi-channel routing with Telegram, WhatsApp and Maton bridge adapter
+
+## Current Product Focus
+- Next implementation track: supervised outreach for lead generation.
+- Admin panel already contains an early `Поиск клиентов` section backed by Apify, but it is still a draft and not yet a full staged outreach pipeline.
+- Planned outreach mode:
+  - manual shortlist approval
+  - manual lead selection
+  - manual approval of first-message drafts
+  - capped sends (start with 10/day)
+  - learning from approved edits and reply outcomes
