@@ -62,6 +62,10 @@
   - explicit `selected_for_outreach`
   - manual channel confirmation with `selected_channel`
   - lead moves to `channel_selected` after channel approval
+- Parsing runtime hardening:
+  - editorial Yandex listing payloads are filtered out of service sync
+  - `parse-resume` endpoint added for explicit human continuation after captcha
+  - polluted editorial service rows already deactivated for `Новамед` and `Оливер`
 
 ### Что планируется следующим
 - Следующий этап:

@@ -78,3 +78,11 @@
   - `prospectingleads` exists
   - `selected_channel` column exists
   - current Alembic runtime revision on server is based on `20260302_003`
+
+## Parsing runtime hardening
+- Yandex service sync now rejects editorial/listing payloads (for example, "Хорошее место" collections and district/street подборки) instead of writing them into `userservices`.
+- Added explicit human resume endpoint after captcha:
+  - `POST /api/business/<business_id>/parse-resume`
+- Production cleanup already applied for previously polluted services in:
+  - `Новамед`
+  - `Оливер`

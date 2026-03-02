@@ -208,6 +208,47 @@ export const ParsingManagement: React.FC = () => {
     }
   };
 
+  const handleResumeCaptcha = async (businessId?: string) => {
+    if (!businessId) {
+      toast({
+        title: t.common.error,
+        description: 'У задачи нет business_id',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!confirm('Подтвердите, что капча уже пройдена, и запросите продолжение парсинга.')) return;
+
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+
+      const res = await fetch(`/api/business/${businessId}/parse-resume`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка продолжения после капчи');
+      }
+
+      toast({
+        title: t.common.success,
+        description: data.message || 'Продолжение парсинга запрошено',
+      });
+
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Ошибка продолжения после капчи',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       'pending': { label: t.dashboard.parsing.status.pending, className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
@@ -455,6 +496,17 @@ export const ParsingManagement: React.FC = () => {
                                 <Play className="w-4 h-4" />
                               </Button>
                             )}
+                          {task.status === 'captcha' && task.business_id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResumeCaptcha(task.business_id)}
+                              className="text-orange-600 hover:text-orange-700"
+                              title="Продолжить после капчи"
+                            >
+                              <Loader2 className="w-4 h-4" />
+                            </Button>
+                          )}
                           {task.task_type !== 'sync_yandex_business' && task.business_id && (
                             <Button
                               size="sm"

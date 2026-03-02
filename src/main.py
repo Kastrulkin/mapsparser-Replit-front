@@ -10486,6 +10486,79 @@ def get_parse_status(business_id):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
 
+
+@app.route('/api/business/<string:business_id>/parse-resume', methods=['POST'])
+def resume_parse_after_captcha(business_id):
+    """Запросить продолжение парсинга после ручного прохождения captcha."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        user_id = user_data.get('user_id') or user_data.get('id')
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if owner_id != user_id and not db.is_superadmin(user_id):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+
+        cursor.execute("""
+            SELECT id, status, captcha_session_id, captcha_url, retry_after
+            FROM parsequeue
+            WHERE business_id = %s
+              AND status = 'captcha'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (business_id,))
+        raw_task = cursor.fetchone()
+        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
+
+        if not task_row:
+            db.close()
+            return jsonify({"success": False, "error": "Нет активной captcha-задачи"}), 404
+
+        if not task_row.get("captcha_session_id"):
+            db.close()
+            return jsonify({
+                "success": False,
+                "error": "У задачи нет активной captcha-сессии"
+            }), 400
+
+        cursor.execute("""
+            UPDATE parsequeue
+            SET resume_requested = 1,
+                retry_after = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN error_message IS NULL OR error_message = '' THEN 'resume requested after captcha'
+                    ELSE error_message || '; resume requested after captcha'
+                END
+            WHERE id = %s
+        """, (task_row["id"],))
+        db.conn.commit()
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Продолжение парсинга запрошено",
+            "task_id": task_row["id"],
+            "captcha_url": task_row.get("captcha_url"),
+        })
+    except Exception as e:
+        import traceback
+        err_tb = traceback.format_exc()
+        print(f"❌ resume_parse_after_captcha: {e}\n{err_tb}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/business/<string:business_id>/map-parses', methods=['GET'])
 def get_map_parses(business_id):
     try:
