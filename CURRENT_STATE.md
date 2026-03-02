@@ -86,3 +86,12 @@
 - Production cleanup already applied for previously polluted services in:
   - `Новамед`
   - `Оливер`
+- Global exception handling no longer logs expected `HTTPException` routing noise (`404/405`, external `CONNECT` probes) as fatal backend errors.
+
+## Sprint 2B (Outreach drafts)
+- Added `outreachmessagedrafts` and `outreachlearningexamples` runtime tables through Alembic.
+- Admin API now supports:
+  - listing drafts
+  - generating first-contact drafts for `channel_selected` leads
+  - approving/rejecting drafts
+- `ProspectingManagement` now includes a dedicated `Черновики первого сообщения` stage with manual edit and approval flow.

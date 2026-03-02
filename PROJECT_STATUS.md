@@ -62,10 +62,16 @@
   - explicit `selected_for_outreach`
   - manual channel confirmation with `selected_channel`
   - lead moves to `channel_selected` after channel approval
+- Sprint 2B draft workflow:
+  - dedicated `Черновики` stage in admin UI
+  - first-contact draft generation for `channel_selected` leads
+  - manual text approval / rejection
+  - approved edits stored as outreach learning examples
 - Parsing runtime hardening:
   - editorial Yandex listing payloads are filtered out of service sync
   - `parse-resume` endpoint added for explicit human continuation after captcha
   - polluted editorial service rows already deactivated for `Новамед` and `Оливер`
+  - expected `404/405` routing noise is no longer logged as fatal backend exceptions
 
 ### Что планируется следующим
 - Следующий этап:

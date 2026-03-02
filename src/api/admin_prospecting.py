@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import uuid
 from typing import Any
@@ -20,6 +21,9 @@ SHORTLIST_REJECTED = "shortlist_rejected"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
 ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "email", "manual"}
+DRAFT_GENERATED = "generated"
+DRAFT_APPROVED = "approved"
+DRAFT_REJECTED = "rejected"
 
 
 def _auth_error(message: str, status_code: int):
@@ -203,6 +207,64 @@ def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -
     except Exception as exc:
         print(f"Error in async prospecting search job {job_id}: {exc}")
         _update_search_job(job_id, status="failed", error_text=str(exc))
+
+
+def _generate_first_message_draft(lead: dict[str, Any], channel: str) -> dict[str, str]:
+    company_name = (lead.get("name") or "вашей компании").strip()
+    category = (lead.get("category") or "локального бизнеса").strip()
+    city = (lead.get("city") or "").strip()
+    rating = lead.get("rating")
+    reviews_count = lead.get("reviews_count") or 0
+
+    weak_points = []
+    if reviews_count < 20:
+        weak_points.append("мало отзывов")
+    if rating and float(rating) < 4.7:
+        weak_points.append("есть запас роста по рейтингу")
+    if not lead.get("website"):
+        weak_points.append("не видно отдельного сайта")
+    if not lead.get("phone"):
+        weak_points.append("не указан удобный контакт")
+    if not weak_points:
+        weak_points.append("карточку можно усилить по конверсии")
+
+    angle = f"обратили внимание, что у {company_name} в Яндекс.Картах {', '.join(weak_points[:2])}"
+    money_hint = "По нашей модели это может стоить бизнесу части входящих обращений каждый месяц."
+
+    if channel == "telegram":
+        opening = f"Здравствуйте. Посмотрели карточку {company_name}"
+        cta = "Если хотите, пришлю короткий разбор и покажу, что можно быстро улучшить."
+    elif channel == "whatsapp":
+        opening = f"Здравствуйте! Посмотрели карточку {company_name}"
+        cta = "Могу отправить короткий разбор с конкретными точками роста, если это актуально."
+    elif channel == "email":
+        opening = f"Здравствуйте! Мы посмотрели карточку {company_name} в Яндекс.Картах."
+        cta = "Если интересно, отправим короткий разбор с конкретными доработками и прогнозом эффекта."
+    else:
+        opening = f"Здравствуйте. Изучили карточку {company_name}."
+        cta = "Если удобно, покажу короткий разбор и объясню, какие доработки дадут эффект."
+
+    location_line = f" Видим вас по направлению «{category}»{f' в {city}' if city else ''}."
+    draft_text = f"{opening}:{location_line} {angle}. {money_hint} {cta}".strip()
+
+    return {
+        "angle_type": "maps_growth",
+        "tone": "professional",
+        "generated_text": draft_text,
+    }
+
+
+def _serialize_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    payload = dict(row)
+    learning = payload.get("learning_note_json")
+    if isinstance(learning, str) and learning:
+        try:
+            payload["learning_note_json"] = json.loads(learning)
+        except Exception:
+            payload["learning_note_json"] = None
+    return payload
 
 
 @admin_prospecting_bp.route("/api/admin/prospecting/search", methods=["POST"])
@@ -455,6 +517,216 @@ def select_outreach_channel(lead_id):
         return jsonify({"success": True, "lead": lead, "status": CHANNEL_SELECTED, "selected_channel": channel})
     except Exception as e:
         print(f"Error selecting outreach channel: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts", methods=["GET"])
+def get_outreach_drafts():
+    """List outreach message drafts."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        status_filter = (request.args.get("status") or "").strip().lower() or None
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            query = """
+                SELECT
+                    d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
+                    d.generated_text, d.edited_text, d.approved_text,
+                    d.learning_note_json, d.created_at, d.updated_at,
+                    l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+            """
+            params: list[Any] = []
+            if status_filter:
+                query += " WHERE d.status = %s"
+                params.append(status_filter)
+            query += " ORDER BY d.created_at DESC"
+            cur.execute(query, params)
+            rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "drafts": rows, "count": len(rows)})
+    except Exception as e:
+        print(f"Error loading outreach drafts: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/draft-generate", methods=["POST"])
+def generate_outreach_draft(lead_id):
+    """Generate initial first-contact draft for lead in channel_selected."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+            lead = cur.fetchone()
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            lead_dict = dict(lead)
+            if lead_dict.get("status") != CHANNEL_SELECTED:
+                return jsonify({"error": "Lead must be channel_selected before draft generation"}), 400
+
+            channel = (lead_dict.get("selected_channel") or "").strip().lower()
+            if channel not in ALLOWED_OUTREACH_CHANNELS:
+                return jsonify({"error": "Lead has no approved outreach channel"}), 400
+
+            draft_payload = _generate_first_message_draft(lead_dict, channel)
+            draft_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachmessagedrafts (
+                    id, lead_id, channel, angle_type, tone, status,
+                    generated_text, created_by
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (
+                    draft_id,
+                    lead_id,
+                    channel,
+                    draft_payload["angle_type"],
+                    draft_payload["tone"],
+                    DRAFT_GENERATED,
+                    draft_payload["generated_text"],
+                    user_data["user_id"],
+                ),
+            )
+            draft = dict(cur.fetchone())
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "draft": _serialize_draft(draft)})
+    except Exception as e:
+        print(f"Error generating outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/approve", methods=["POST"])
+def approve_outreach_draft(draft_id):
+    """Approve outreach draft and persist learning example."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        approved_text = (data.get("approved_text") or "").strip()
+        note = (data.get("note") or "").strip() or None
+        if not approved_text:
+            return jsonify({"error": "approved_text is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM outreachmessagedrafts WHERE id = %s", (draft_id,))
+            draft = cur.fetchone()
+            if not draft:
+                return jsonify({"error": "Draft not found"}), 404
+            draft_dict = dict(draft)
+
+            cur.execute(
+                """
+                UPDATE outreachmessagedrafts
+                SET approved_text = %s,
+                    edited_text = %s,
+                    status = %s,
+                    approved_by = %s,
+                    learning_note_json = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (
+                    approved_text,
+                    approved_text,
+                    DRAFT_APPROVED,
+                    user_data["user_id"],
+                    Json({"note": note} if note else {}),
+                    draft_id,
+                ),
+            )
+            updated = dict(cur.fetchone())
+
+            learning_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachlearningexamples (
+                    id, example_type, lead_id, input_text, output_text, metadata_json, created_by
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s
+                )
+                """,
+                (
+                    learning_id,
+                    "approved_opening",
+                    draft_dict["lead_id"],
+                    draft_dict.get("generated_text"),
+                    approved_text,
+                    Json({"draft_id": draft_id, "note": note}),
+                    user_data["user_id"],
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "draft": _serialize_draft(updated)})
+    except Exception as e:
+        print(f"Error approving outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/reject", methods=["POST"])
+def reject_outreach_draft(draft_id):
+    """Reject outreach draft."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE outreachmessagedrafts
+                SET status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (DRAFT_REJECTED, draft_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Draft not found"}), 404
+            conn.commit()
+            updated = dict(row)
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "draft": _serialize_draft(updated)})
+    except Exception as e:
+        print(f"Error rejecting outreach draft: {e}")
         return jsonify({"error": str(e)}), 500
 
 

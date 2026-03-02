@@ -39,6 +39,19 @@ type SearchJob = {
     results: Lead[];
 };
 
+type OutreachDraft = {
+    id: string;
+    lead_id: string;
+    lead_name?: string;
+    channel: string;
+    status: string;
+    generated_text: string;
+    edited_text?: string;
+    approved_text?: string;
+    learning_note_json?: { note?: string } | null;
+    created_at?: string;
+};
+
 type LeadFilters = {
     category: string;
     city: string;
@@ -162,6 +175,10 @@ export const ProspectingManagement: React.FC = () => {
     const [leadTab, setLeadTab] = useState<'candidates' | 'shortlist' | 'rejected'>('candidates');
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
     const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
+    const [drafts, setDrafts] = useState<OutreachDraft[]>([]);
+    const [loadingDrafts, setLoadingDrafts] = useState(false);
+    const [draftBusy, setDraftBusy] = useState<Record<string, string>>({});
+    const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -187,6 +204,10 @@ export const ProspectingManagement: React.FC = () => {
     useEffect(() => {
         fetchSavedLeads();
     }, [activeFilters]);
+
+    useEffect(() => {
+        fetchDrafts();
+    }, []);
 
     useEffect(() => {
         if (!searchJobId) {
@@ -237,6 +258,28 @@ export const ProspectingManagement: React.FC = () => {
             console.error('Error fetching leads:', error);
         } finally {
             setLoadingLeads(false);
+        }
+    };
+
+    const fetchDrafts = async () => {
+        setLoadingDrafts(true);
+        try {
+            const response = await api.get('/admin/prospecting/drafts');
+            const items = response.data?.drafts || [];
+            setDrafts(items);
+            setDraftEdits((prev) => {
+                const next = { ...prev };
+                for (const draft of items) {
+                    if (!(draft.id in next)) {
+                        next[draft.id] = draft.approved_text || draft.edited_text || draft.generated_text || '';
+                    }
+                }
+                return next;
+            });
+        } catch (error) {
+            console.error('Error fetching drafts:', error);
+        } finally {
+            setLoadingDrafts(false);
         }
     };
 
@@ -323,6 +366,58 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const generateDraft = async (leadId: string) => {
+        setDraftBusy(prev => ({ ...prev, [leadId]: 'generate' }));
+        try {
+            await api.post(`/admin/prospecting/lead/${leadId}/draft-generate`);
+            await Promise.all([fetchSavedLeads(), fetchDrafts()]);
+        } catch (error) {
+            console.error('Error generating draft:', error);
+        } finally {
+            setDraftBusy(prev => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
+        }
+    };
+
+    const approveDraft = async (draftId: string) => {
+        const approvedText = (draftEdits[draftId] || '').trim();
+        if (!approvedText) return;
+        setDraftBusy(prev => ({ ...prev, [draftId]: 'approve' }));
+        try {
+            await api.post(`/admin/prospecting/drafts/${draftId}/approve`, {
+                approved_text: approvedText,
+            });
+            await fetchDrafts();
+        } catch (error) {
+            console.error('Error approving draft:', error);
+        } finally {
+            setDraftBusy(prev => {
+                const next = { ...prev };
+                delete next[draftId];
+                return next;
+            });
+        }
+    };
+
+    const rejectDraft = async (draftId: string) => {
+        setDraftBusy(prev => ({ ...prev, [draftId]: 'reject' }));
+        try {
+            await api.post(`/admin/prospecting/drafts/${draftId}/reject`);
+            await fetchDrafts();
+        } catch (error) {
+            console.error('Error rejecting draft:', error);
+        } finally {
+            setDraftBusy(prev => {
+                const next = { ...prev };
+                delete next[draftId];
+                return next;
+            });
+        }
+    };
+
     const resetFilters = () => setFilters(emptyFilters);
 
     const shortlistLeads = useMemo(
@@ -339,6 +434,10 @@ export const ProspectingManagement: React.FC = () => {
     );
     const outreachLeads = useMemo(
         () => savedLeads.filter((lead) => lead.status === selectedForOutreach || lead.status === channelSelected),
+        [savedLeads]
+    );
+    const draftReadyLeads = useMemo(
+        () => savedLeads.filter((lead) => lead.status === channelSelected),
         [savedLeads]
     );
 
@@ -451,6 +550,7 @@ export const ProspectingManagement: React.FC = () => {
                     <TabsTrigger value="search">Поиск</TabsTrigger>
                     <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>
                     <TabsTrigger value="outreach">Отбор для контакта ({outreachLeads.length})</TabsTrigger>
+                    <TabsTrigger value="drafts">Черновики ({drafts.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
@@ -753,6 +853,104 @@ export const ProspectingManagement: React.FC = () => {
                                                             {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
                                                         </Button>
                                                     ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="drafts" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Черновики первого сообщения</CardTitle>
+                            <CardDescription>
+                                Для лидов в `channel_selected` генерируйте первый текст, редактируйте его и вручную утверждайте.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Готовые к генерации</h3>
+                                        <p className="text-sm text-muted-foreground">Только лиды с подтверждённым каналом.</p>
+                                    </div>
+                                    <Badge variant="secondary">{draftReadyLeads.length}</Badge>
+                                </div>
+                                <div className="space-y-3">
+                                    {draftReadyLeads.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Пока нет лидов со статусом channel_selected.</div>
+                                    )}
+                                    {draftReadyLeads.map((lead) => {
+                                        const pending = draftBusy[lead.id || ''];
+                                        return (
+                                            <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
+                                                <div className="space-y-1">
+                                                    <div className="font-medium">{lead.name}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        Канал: {lead.selected_channel || 'не подтверждён'}
+                                                    </div>
+                                                </div>
+                                                <Button onClick={() => lead.id && generateDraft(lead.id)} disabled={!lead.id || Boolean(pending)}>
+                                                    {pending === 'generate' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                    Сгенерировать черновик
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Список черновиков</h3>
+                                        <p className="text-sm text-muted-foreground">Ваши правки после утверждения сохраняются как learning examples.</p>
+                                    </div>
+                                    <Badge variant="secondary">{drafts.length}</Badge>
+                                </div>
+                                <div className="space-y-4">
+                                    {loadingDrafts && (
+                                        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                    )}
+                                    {!loadingDrafts && drafts.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Черновиков пока нет.</div>
+                                    )}
+                                    {drafts.map((draft) => {
+                                        const pending = draftBusy[draft.id];
+                                        return (
+                                            <div key={draft.id} className="rounded-md border p-4 space-y-3">
+                                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                    <div>
+                                                        <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            Канал: {draft.channel} · Статус: {draft.status}
+                                                        </div>
+                                                    </div>
+                                                    <Badge variant={draft.status === 'approved' ? 'default' : draft.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                                        {draft.status}
+                                                    </Badge>
+                                                </div>
+                                                <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+                                                    {draft.generated_text}
+                                                </div>
+                                                <textarea
+                                                    className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                    value={draftEdits[draft.id] ?? ''}
+                                                    onChange={(e) => setDraftEdits(prev => ({ ...prev, [draft.id]: e.target.value }))}
+                                                />
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button onClick={() => approveDraft(draft.id)} disabled={Boolean(pending)}>
+                                                        {pending === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Утвердить
+                                                    </Button>
+                                                    <Button variant="outline" onClick={() => rejectDraft(draft.id)} disabled={Boolean(pending)}>
+                                                        {pending === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Отклонить
+                                                    </Button>
                                                 </div>
                                             </div>
                                         );

@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 # Rate limiting для защиты от brute force и DDoS
 try:
@@ -16575,6 +16576,12 @@ def report_status(card_id):
 def handle_exception(e):
     """Глобальный обработчик исключений"""
     import traceback
+    if isinstance(e, HTTPException):
+        if request.method == "CONNECT":
+            return ("", e.code or 405)
+        if request.path.startswith('/api/'):
+            return jsonify({"error": e.description or str(e)}), e.code or 500
+        return e
     print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
