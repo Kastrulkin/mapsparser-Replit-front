@@ -1602,6 +1602,15 @@ class DatabaseManager:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    def get_lead_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
+        """Получить лид по id"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return dict(zip([d[0] for d in cursor.description], row))
+
     def delete_lead(self, lead_id: str) -> bool:
         """Удалить лид"""
         cursor = self.conn.cursor()

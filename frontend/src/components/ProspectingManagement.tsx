@@ -1,27 +1,33 @@
-
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
-import { Loader2, Search, Save, MapPin, Phone, Globe, Star, Users } from "lucide-react";
+import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save } from "lucide-react";
 import { api } from "@/services/api";
 
 type Lead = {
     id?: string;
     name: string;
     address?: string;
+    city?: string;
     phone?: string;
     website?: string;
+    email?: string;
+    telegram_url?: string;
+    whatsapp_url?: string;
+    messenger_links_json?: string[] | string;
     rating?: number;
     reviews_count?: number;
     source_url?: string;
+    source_external_id?: string;
     google_id?: string;
     category?: string;
     location?: any;
     status: string;
+    created_at?: string;
 };
 
 type SearchJob = {
@@ -31,6 +37,108 @@ type SearchJob = {
     error_text?: string | null;
     results: Lead[];
 };
+
+type LeadFilters = {
+    category: string;
+    city: string;
+    minRating: string;
+    maxRating: string;
+    minReviews: string;
+    maxReviews: string;
+    hasWebsite: string;
+    hasPhone: string;
+    hasEmail: string;
+    hasMessengers: string;
+};
+
+const emptyFilters: LeadFilters = {
+    category: '',
+    city: '',
+    minRating: '',
+    maxRating: '',
+    minReviews: '',
+    maxReviews: '',
+    hasWebsite: '',
+    hasPhone: '',
+    hasEmail: '',
+    hasMessengers: '',
+};
+
+const shortlistApproved = 'shortlist_approved';
+const shortlistRejected = 'shortlist_rejected';
+
+const badgeVariantForStatus = (status: string) => {
+    if (status === shortlistApproved) {
+        return 'default';
+    }
+    if (status === shortlistRejected) {
+        return 'destructive';
+    }
+    return 'secondary';
+};
+
+const statusLabel = (status: string) => {
+    switch (status) {
+        case shortlistApproved:
+            return 'В shortlist';
+        case shortlistRejected:
+            return 'Отклонён';
+        case 'new':
+            return 'Новый';
+        case 'contacted':
+            return 'Контакт';
+        case 'qualified':
+            return 'Квалифицирован';
+        case 'converted':
+            return 'Конвертирован';
+        case 'rejected':
+            return 'Отклонён';
+        default:
+            return status || 'Без статуса';
+    }
+};
+
+const normalizeBooleanFilter = (value: string) => {
+    if (value === '') {
+        return undefined;
+    }
+    return value === 'yes';
+};
+
+const extractHasMessengers = (lead: Lead) => {
+    const rawLinks = lead.messenger_links_json;
+    const parsedLinks = Array.isArray(rawLinks)
+        ? rawLinks
+        : typeof rawLinks === 'string' && rawLinks.trim()
+            ? (() => {
+                try {
+                    return JSON.parse(rawLinks);
+                } catch {
+                    return [];
+                }
+            })()
+            : [];
+    return Boolean(lead.telegram_url || lead.whatsapp_url || (Array.isArray(parsedLinks) && parsedLinks.length > 0));
+};
+
+const ContactStack: React.FC<{ lead: Lead }> = ({ lead }) => (
+    <div className="flex flex-col gap-1 text-sm">
+        {lead.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {lead.phone}</span>}
+        {lead.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {lead.email}</span>}
+        {lead.website && (
+            <span className="flex items-center gap-1">
+                <Globe className="h-3 w-3" />
+                <a href={lead.website} target="_blank" rel="noreferrer" className="underline truncate max-w-[180px]">{lead.website}</a>
+            </span>
+        )}
+        {extractHasMessengers(lead) && (
+            <span className="flex items-center gap-1 text-emerald-700">
+                <MessageCircle className="h-3 w-3" />
+                Мессенджеры найдены
+            </span>
+        )}
+    </div>
+);
 
 export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
@@ -43,10 +151,34 @@ export const ProspectingManagement: React.FC = () => {
     const [loadingLeads, setLoadingLeads] = useState(false);
     const [searchJobId, setSearchJobId] = useState<string | null>(null);
     const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
+    const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
+    const [leadTab, setLeadTab] = useState<'candidates' | 'shortlist' | 'rejected'>('candidates');
+    const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
+
+    const activeFilters = useMemo(() => {
+        const params: Record<string, string> = {};
+        if (filters.category.trim()) params.category = filters.category.trim();
+        if (filters.city.trim()) params.city = filters.city.trim();
+        if (filters.minRating.trim()) params.min_rating = filters.minRating.trim();
+        if (filters.maxRating.trim()) params.max_rating = filters.maxRating.trim();
+        if (filters.minReviews.trim()) params.min_reviews = filters.minReviews.trim();
+        if (filters.maxReviews.trim()) params.max_reviews = filters.maxReviews.trim();
+
+        const hasWebsite = normalizeBooleanFilter(filters.hasWebsite);
+        if (hasWebsite !== undefined) params.has_website = String(hasWebsite);
+        const hasPhone = normalizeBooleanFilter(filters.hasPhone);
+        if (hasPhone !== undefined) params.has_phone = String(hasPhone);
+        const hasEmail = normalizeBooleanFilter(filters.hasEmail);
+        if (hasEmail !== undefined) params.has_email = String(hasEmail);
+        const hasMessengers = normalizeBooleanFilter(filters.hasMessengers);
+        if (hasMessengers !== undefined) params.has_messengers = String(hasMessengers);
+
+        return params;
+    }, [filters]);
 
     useEffect(() => {
         fetchSavedLeads();
-    }, []);
+    }, [activeFilters]);
 
     useEffect(() => {
         if (!searchJobId) {
@@ -91,7 +223,7 @@ export const ProspectingManagement: React.FC = () => {
     const fetchSavedLeads = async () => {
         setLoadingLeads(true);
         try {
-            const response = await api.get('/admin/prospecting/leads');
+            const response = await api.get('/admin/prospecting/leads', { params: activeFilters });
             setSavedLeads(response.data.leads || []);
         } catch (error) {
             console.error('Error fetching leads:', error);
@@ -113,24 +245,21 @@ export const ProspectingManagement: React.FC = () => {
                 location,
                 limit: Number(limit)
             });
-            console.log("Search queued:", response.data);
             setResults([]);
             setSearchJobId(response.data.job_id);
         } catch (error) {
             console.error('Error searching:', error);
-            alert('Error searching. Check console.');
+            alert('Ошибка поиска. Проверьте консоль.');
             setLoading(false);
-        } finally {
-            // loading is reset by polling on completed/failed
         }
     };
 
     const saveLead = async (lead: Lead) => {
-        const key = lead.google_id || lead.name;
+        const key = lead.source_external_id || lead.google_id || lead.name;
         setSaving(prev => ({ ...prev, [key]: true }));
         try {
             await api.post('/admin/prospecting/save', { lead });
-            fetchSavedLeads(); // Refresh list
+            await fetchSavedLeads();
         } catch (error) {
             console.error('Error saving lead:', error);
         } finally {
@@ -138,38 +267,155 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const updateStatus = async (leadId: string, status: string) => {
+    const reviewShortlist = async (leadId: string, decision: 'approved' | 'rejected') => {
+        setShortlistLoading(prev => ({ ...prev, [leadId]: decision }));
         try {
-            await api.post(`/admin/prospecting/lead/${leadId}/status`, { status });
-            fetchSavedLeads();
+            await api.post(`/admin/prospecting/lead/${leadId}/shortlist`, { decision });
+            await fetchSavedLeads();
         } catch (error) {
-            console.error('Error updating status:', error);
+            console.error('Error updating shortlist:', error);
+        } finally {
+            setShortlistLoading(prev => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
         }
+    };
+
+    const resetFilters = () => setFilters(emptyFilters);
+
+    const shortlistLeads = useMemo(
+        () => savedLeads.filter((lead) => lead.status === shortlistApproved),
+        [savedLeads]
+    );
+    const rejectedLeads = useMemo(
+        () => savedLeads.filter((lead) => lead.status === shortlistRejected),
+        [savedLeads]
+    );
+    const candidateLeads = useMemo(
+        () => savedLeads.filter((lead) => lead.status !== shortlistApproved && lead.status !== shortlistRejected),
+        [savedLeads]
+    );
+
+    const visibleLeads = leadTab === 'shortlist'
+        ? shortlistLeads
+        : leadTab === 'rejected'
+            ? rejectedLeads
+            : candidateLeads;
+
+    const renderLeadRow = (lead: Lead) => {
+        const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
+        const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
+
+        return (
+            <TableRow key={lead.id}>
+                <TableCell className="font-medium min-w-[260px]">
+                    <div>{lead.name}</div>
+                    <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
+                    {lead.source_url && (
+                        <a href={lead.source_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 underline">
+                            Открыть в Яндекс Картах
+                        </a>
+                    )}
+                </TableCell>
+                <TableCell className="min-w-[220px]">
+                    <div className="flex items-center gap-1 text-sm">
+                        <MapPin className="h-3 w-3" />
+                        <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
+                    </div>
+                </TableCell>
+                <TableCell className="min-w-[220px]">
+                    <ContactStack lead={lead} />
+                </TableCell>
+                <TableCell className="min-w-[120px]">
+                    <div className="space-y-1 text-sm">
+                        <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            <span>{lead.rating ?? '-'}</span>
+                        </div>
+                        <div className="text-muted-foreground">Отзывы: {lead.reviews_count ?? 0}</div>
+                    </div>
+                </TableCell>
+                <TableCell className="min-w-[120px]">
+                    <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
+                </TableCell>
+                <TableCell className="min-w-[220px]">
+                    <div className="flex flex-wrap gap-2">
+                        {leadTab !== 'shortlist' && leadTab !== 'rejected' && lead.id && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    onClick={() => reviewShortlist(lead.id!, 'approved')}
+                                    disabled={isBusy}
+                                >
+                                    {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                    В shortlist
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
+                                    disabled={isBusy}
+                                >
+                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                    Отклонить
+                                </Button>
+                            </>
+                        )}
+                        {leadTab === 'shortlist' && lead.id && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewShortlist(lead.id!, 'rejected')}
+                                disabled={isBusy}
+                            >
+                                {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                Убрать
+                            </Button>
+                        )}
+                        {leadTab === 'rejected' && lead.id && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewShortlist(lead.id!, 'approved')}
+                                disabled={isBusy}
+                            >
+                                {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                Вернуть
+                            </Button>
+                        )}
+                    </div>
+                </TableCell>
+            </TableRow>
+        );
     };
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Prospecting</h2>
-                    <p className="text-muted-foreground">Yandex-first поиск потенциальных клиентов через Apify с ручным отбором.</p>
+                    <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
+                    <p className="text-muted-foreground">
+                        Yandex-first поиск потенциальных клиентов через Apify с ручным shortlist-отбором.
+                    </p>
                 </div>
             </div>
 
             <Tabs defaultValue="search" className="w-full">
                 <TabsList>
-                    <TabsTrigger value="search">Search</TabsTrigger>
-                    <TabsTrigger value="leads">Saved Leads ({savedLeads.length})</TabsTrigger>
+                    <TabsTrigger value="search">Поиск</TabsTrigger>
+                    <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Search Parameters</CardTitle>
-                            <CardDescription>Search for businesses on Yandex Maps via Apify</CardDescription>
+                            <CardTitle>Источники и сбор</CardTitle>
+                            <CardDescription>Поиск компаний в Яндекс Картах через Apify actor и сохранение в лиды.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <form onSubmit={handleSearch} className="flex gap-4 items-end">
+                            <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
                                 <div className="grid w-full max-w-sm items-center gap-1.5">
                                     <label htmlFor="query">Категория / запрос</label>
                                     <Input
@@ -215,12 +461,8 @@ export const ProspectingManagement: React.FC = () => {
                                             searchJob.status === 'running' ? 'выполняется' :
                                             searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
                                     </div>
-                                    <div className="text-muted-foreground">
-                                        Найдено: {searchJob.result_count || 0}
-                                    </div>
-                                    {searchJob.error_text && (
-                                        <div className="mt-2 text-red-600">{searchJob.error_text}</div>
-                                    )}
+                                    <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
+                                    {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
                                 </div>
                             )}
                         </CardContent>
@@ -229,58 +471,58 @@ export const ProspectingManagement: React.FC = () => {
                     {results.length > 0 && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>Results ({results.length})</CardTitle>
+                                <CardTitle>Найденные компании ({results.length})</CardTitle>
+                                <CardDescription>На этом шаге вы сохраняете только релевантные компании в базу кандидатов.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Address</TableHead>
-                                            <TableHead>Contacts</TableHead>
-                                            <TableHead>Rating</TableHead>
-                                            <TableHead>Action</TableHead>
+                                            <TableHead>Компания</TableHead>
+                                            <TableHead>Адрес</TableHead>
+                                            <TableHead>Контакты</TableHead>
+                                            <TableHead>Рейтинг</TableHead>
+                                            <TableHead>Действие</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {results.map((r, i) => {
-                                            // Check if already saved
-                                            const isSaved = savedLeads.some(sl => sl.google_id === r.google_id);
-                                            const key = r.google_id || r.name;
-
+                                        {results.map((lead, index) => {
+                                            const isSaved = savedLeads.some((saved) =>
+                                                (saved.source_external_id && saved.source_external_id === lead.source_external_id) ||
+                                                (saved.google_id && saved.google_id === lead.google_id)
+                                            );
+                                            const key = lead.source_external_id || lead.google_id || `${lead.name}-${index}`;
                                             return (
-                                                <TableRow key={i}>
-                                                    <TableCell className="font-medium">
-                                                        <div>{r.name}</div>
-                                                        {r.category && <span className="text-xs text-muted-foreground">{r.category}</span>}
+                                                <TableRow key={key}>
+                                                    <TableCell className="font-medium min-w-[260px]">
+                                                        <div>{lead.name}</div>
+                                                        <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
                                                     </TableCell>
-                                                    <TableCell className="max-w-[200px] truncate" title={r.address}>
-                                                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {r.address}</div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-col gap-1 text-sm">
-                                                            {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {r.phone}</span>}
-                                                            {r.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> <a href={r.website} target="_blank" rel="noreferrer" className="underline truncate max-w-[150px]">{r.website}</a></span>}
+                                                    <TableCell className="min-w-[220px]">
+                                                        <div className="flex items-center gap-1 text-sm">
+                                                            <MapPin className="h-3 w-3" />
+                                                            <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>
-                                                        {r.rating && (
-                                                            <div className="flex items-center gap-1">
-                                                                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                                                {r.rating}
-                                                                <span className="text-muted-foreground">({r.reviews_count})</span>
-                                                            </div>
-                                                        )}
+                                                    <TableCell className="min-w-[220px]">
+                                                        <ContactStack lead={lead} />
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="min-w-[120px]">
+                                                        <div className="flex items-center gap-1">
+                                                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                                            {lead.rating ?? '-'}
+                                                            <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="min-w-[140px]">
                                                         <Button
                                                             size="sm"
                                                             variant={isSaved ? "secondary" : "default"}
-                                                            onClick={() => saveLead(r)}
+                                                            onClick={() => saveLead(lead)}
                                                             disabled={isSaved || saving[key]}
                                                         >
-                                                            {saving[key] && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            {isSaved ? "Saved" : "Save"}
+                                                            {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
+                                                            {isSaved ? "Сохранён" : "Сохранить"}
                                                         </Button>
                                                     </TableCell>
                                                 </TableRow>
@@ -293,70 +535,91 @@ export const ProspectingManagement: React.FC = () => {
                     )}
                 </TabsContent>
 
-                <TabsContent value="leads">
+                <TabsContent value="leads" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Saved Leads</CardTitle>
+                            <CardTitle>Фильтры кандидатов</CardTitle>
+                            <CardDescription>Подготовьте shortlist: отберите релевантные компании и отсекайте лишние.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                                <Input placeholder="Категория" value={filters.category} onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))} />
+                                <Input placeholder="Город" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} />
+                                <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.minRating} onChange={(e) => setFilters(prev => ({ ...prev, minRating: e.target.value }))} />
+                                <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.maxRating} onChange={(e) => setFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
+                                <Input placeholder="Мин. отзывов" type="number" min="0" value={filters.minReviews} onChange={(e) => setFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
+                                <Input placeholder="Макс. отзывов" type="number" min="0" value={filters.maxReviews} onChange={(e) => setFilters(prev => ({ ...prev, maxReviews: e.target.value }))} />
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWebsite} onChange={(e) => setFilters(prev => ({ ...prev, hasWebsite: e.target.value }))}>
+                                    <option value="">Сайт: любой</option>
+                                    <option value="yes">Есть сайт</option>
+                                    <option value="no">Нет сайта</option>
+                                </select>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasPhone} onChange={(e) => setFilters(prev => ({ ...prev, hasPhone: e.target.value }))}>
+                                    <option value="">Телефон: любой</option>
+                                    <option value="yes">Есть телефон</option>
+                                    <option value="no">Нет телефона</option>
+                                </select>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasEmail} onChange={(e) => setFilters(prev => ({ ...prev, hasEmail: e.target.value }))}>
+                                    <option value="">Email: любой</option>
+                                    <option value="yes">Есть email</option>
+                                    <option value="no">Нет email</option>
+                                </select>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMessengers} onChange={(e) => setFilters(prev => ({ ...prev, hasMessengers: e.target.value }))}>
+                                    <option value="">Мессенджеры: любые</option>
+                                    <option value="yes">Есть мессенджеры</option>
+                                    <option value="no">Нет мессенджеров</option>
+                                </select>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>
+                                <Badge variant="secondary">Кандидаты: {candidateLeads.length}</Badge>
+                                <Badge variant="default">Shortlist: {shortlistLeads.length}</Badge>
+                                <Badge variant="destructive">Отклонено: {rejectedLeads.length}</Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Ручной shortlist</CardTitle>
+                            <CardDescription>Первый ручной этап: подтверждайте только подходящие компании.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {loadingLeads ? (
-                                <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Contact Info</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Added</TableHead>
-                                            <TableHead>Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {savedLeads.map((lead) => (
-                                            <TableRow key={lead.id}>
-                                                <TableCell className="font-medium">
-                                                    <div>{lead.name}</div>
-                                                    <div className="text-xs text-muted-foreground">{lead.category}</div>
-                                                    {lead.source_url && <a href={lead.source_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 underline">Maps Link</a>}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col gap-1 text-sm">
-                                                        {lead.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {lead.phone}</span>}
-                                                        {lead.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> <a href={lead.website} target="_blank" rel="noreferrer" className="underline truncate max-w-[150px]">{lead.website}</a></span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <select
-                                                        className="bg-transparent border rounded p-1 text-sm"
-                                                        value={lead.status}
-                                                        onChange={(e) => lead.id && updateStatus(lead.id, e.target.value)}
-                                                    >
-                                                        <option value="new">New</option>
-                                                        <option value="contacted">Contacted</option>
-                                                        <option value="qualified">Qualified</option>
-                                                        <option value="converted">Converted</option>
-                                                        <option value="rejected">Rejected</option>
-                                                    </select>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">
-                                                    {/* We don't have created_at in type yet but it comes from DB */}
-                                                    {/* @ts-ignore */}
-                                                    {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {/* Actions like Edit, Delete could go here */}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {savedLeads.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-4">No leads saved yet.</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            )}
+                            <Tabs value={leadTab} onValueChange={(value) => setLeadTab(value as 'candidates' | 'shortlist' | 'rejected')}>
+                                <TabsList>
+                                    <TabsTrigger value="candidates">Кандидаты ({candidateLeads.length})</TabsTrigger>
+                                    <TabsTrigger value="shortlist">Shortlist ({shortlistLeads.length})</TabsTrigger>
+                                    <TabsTrigger value="rejected">Отклонённые ({rejectedLeads.length})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value={leadTab} className="mt-4">
+                                    {loadingLeads ? (
+                                        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Компания</TableHead>
+                                                    <TableHead>Адрес</TableHead>
+                                                    <TableHead>Контакты</TableHead>
+                                                    <TableHead>Рейтинг</TableHead>
+                                                    <TableHead>Статус</TableHead>
+                                                    <TableHead>Действие</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {visibleLeads.map(renderLeadRow)}
+                                                {visibleLeads.length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                                            Для текущего набора фильтров здесь пока нет лидов.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    )}
+                                </TabsContent>
+                            </Tabs>
                         </CardContent>
                     </Card>
                 </TabsContent>

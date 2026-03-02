@@ -15,6 +15,9 @@ from services.prospecting_service import ProspectingService
 
 admin_prospecting_bp = Blueprint("admin_prospecting", __name__)
 
+SHORTLIST_APPROVED = "shortlist_approved"
+SHORTLIST_REJECTED = "shortlist_rejected"
+
 
 def _auth_error(message: str, status_code: int):
     return jsonify({"error": message}), status_code
@@ -105,6 +108,81 @@ def _get_search_job(job_id: str):
         return cur.fetchone()
     finally:
         conn.close()
+
+
+def _to_bool_filter(value: str | None):
+    if value is None or value == "":
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return None
+
+
+def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool:
+    category = filters.get("category")
+    if category and category.lower() not in (lead.get("category") or "").lower():
+        return False
+
+    city = filters.get("city")
+    if city:
+        haystack = " ".join(
+            part for part in [lead.get("city"), lead.get("address"), lead.get("location")] if part
+        ).lower()
+        if city.lower() not in haystack:
+            return False
+
+    status = filters.get("status")
+    if status and (lead.get("status") or "") != status:
+        return False
+
+    min_rating = filters.get("min_rating")
+    if min_rating is not None and float(lead.get("rating") or 0) < min_rating:
+        return False
+
+    max_rating = filters.get("max_rating")
+    if max_rating is not None and float(lead.get("rating") or 0) > max_rating:
+        return False
+
+    min_reviews = filters.get("min_reviews")
+    if min_reviews is not None and int(lead.get("reviews_count") or 0) < min_reviews:
+        return False
+
+    max_reviews = filters.get("max_reviews")
+    if max_reviews is not None and int(lead.get("reviews_count") or 0) > max_reviews:
+        return False
+
+    has_website = filters.get("has_website")
+    if has_website is not None and bool(lead.get("website")) != has_website:
+        return False
+
+    has_phone = filters.get("has_phone")
+    if has_phone is not None and bool(lead.get("phone")) != has_phone:
+        return False
+
+    has_email = filters.get("has_email")
+    if has_email is not None and bool(lead.get("email")) != has_email:
+        return False
+
+    has_messengers = filters.get("has_messengers")
+    if has_messengers is not None:
+        messenger_links = lead.get("messenger_links_json") or []
+        if isinstance(messenger_links, str):
+            try:
+                import json
+
+                messenger_links = json.loads(messenger_links)
+            except Exception:
+                messenger_links = []
+        has_any_messenger = bool(
+            lead.get("telegram_url") or lead.get("whatsapp_url") or (messenger_links if isinstance(messenger_links, list) else [])
+        )
+        if has_any_messenger != has_messengers:
+            return False
+
+    return True
 
 
 def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
@@ -222,9 +300,23 @@ def get_leads():
         return error
 
     try:
+        filters = {
+            "category": (request.args.get("category") or "").strip() or None,
+            "city": (request.args.get("city") or "").strip() or None,
+            "status": (request.args.get("status") or "").strip() or None,
+            "min_rating": float(request.args.get("min_rating")) if request.args.get("min_rating") not in {None, ""} else None,
+            "max_rating": float(request.args.get("max_rating")) if request.args.get("max_rating") not in {None, ""} else None,
+            "min_reviews": int(request.args.get("min_reviews")) if request.args.get("min_reviews") not in {None, ""} else None,
+            "max_reviews": int(request.args.get("max_reviews")) if request.args.get("max_reviews") not in {None, ""} else None,
+            "has_website": _to_bool_filter(request.args.get("has_website")),
+            "has_phone": _to_bool_filter(request.args.get("has_phone")),
+            "has_email": _to_bool_filter(request.args.get("has_email")),
+            "has_messengers": _to_bool_filter(request.args.get("has_messengers")),
+        }
         with DatabaseManager() as db:
             leads = db.get_all_leads()
-        return jsonify({"leads": leads})
+        filtered = [lead for lead in leads if _lead_matches_filters(lead, filters)]
+        return jsonify({"leads": filtered, "count": len(filtered)})
     except Exception as e:
         print(f"Error getting leads: {e}")
         return jsonify({"error": str(e)}), 500
@@ -279,6 +371,32 @@ def update_lead_status(lead_id):
         return jsonify({"error": "Lead not found"}), 404
     except Exception as e:
         print(f"Error updating lead status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/shortlist", methods=["POST"])
+def review_lead_shortlist(lead_id):
+    """Approve or reject lead for shortlist."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        decision = (data.get("decision") or "").strip().lower()
+        if decision not in {"approved", "rejected"}:
+            return jsonify({"error": "Decision must be approved or rejected"}), 400
+
+        new_status = SHORTLIST_APPROVED if decision == "approved" else SHORTLIST_REJECTED
+        with DatabaseManager() as db:
+            success = db.update_lead_status(lead_id, new_status)
+            if not success:
+                return jsonify({"error": "Lead not found"}), 404
+            lead = db.get_lead_by_id(lead_id)
+
+        return jsonify({"success": True, "lead": lead, "status": new_status})
+    except Exception as e:
+        print(f"Error reviewing lead shortlist: {e}")
         return jsonify({"error": str(e)}), 500
 
 

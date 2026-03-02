@@ -68,6 +68,9 @@ Legacy details remain in git history and must not be used as default runbook.
   - Telegram control surface with approval flow
   - unified multi-channel router (Telegram / WhatsApp / Maton bridge)
 - The next product track is supervised outreach (lead sourcing, shortlist approval, draft approval, controlled sending).
+- Current outreach stage:
+  - Sprint 0 foundation is live (secure admin prospecting, async jobs, Yandex-first sourcing).
+  - Sprint 1 uses the existing `prospectingleads` table as a transitional shortlist UI; do not introduce a second lead table unless the user asks for the full outreach schema migration.
 
 ## 9. Terminal Sessions (tmux)
 - Use `tmux` for all long-running operations on server and local machine.

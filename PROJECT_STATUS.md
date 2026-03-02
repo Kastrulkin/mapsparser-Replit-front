@@ -53,6 +53,10 @@
   - security hardening (`auth` + `superadmin-only`)
   - Yandex-first sourcing via Apify actor `m_mamaev/yandex-maps-places-scraper`
   - async search jobs instead of long synchronous HTTP requests
+- Sprint 1 shortlist foundation:
+  - staged candidate review UI on top of `prospectingleads`
+  - candidate filters by category/city/rating/reviews/contact availability
+  - explicit manual actions `В shortlist` / `Отклонить`
 
 ### Что планируется следующим
 - Перевести поиск на Yandex-first source:
@@ -98,9 +102,7 @@ OpenClaw должен выполнять только capability-задачи:
 Workflow и источник правды по аутричу должны оставаться в LocalOS.
 
 ## 📝 Важные замечания
-- `src/api/admin_prospecting.py` сейчас требует security-hardening:
-  - добавить auth
-  - ограничить superadmin-only
 - Текущий `ProspectingManagement` — это не финальный outreach UI, а переходный экран
+- Текущий `ProspectingManagement` уже покрывает Sprint 1 shortlist, но ещё не является полным outreach pipeline
 - Для server hotfix всегда проверять live file в контейнере (`/app/src/...`), а не только host copy
 - Entry-point migrations теперь должны идти через advisory lock, иначе одновременный restart `app` и `worker` может повторно дать migration deadlock.

@@ -50,3 +50,15 @@
   - switch Apify sourcing to Yandex-first actor `m_mamaev/yandex-maps-places-scraper`
   - move prospecting search to async jobs (`outreachsearchjobs`) instead of synchronous HTTP wait
 - Startup migrations are now serialized by PostgreSQL advisory lock in `entrypoint.sh` to avoid `deadlock detected` on simultaneous `app` + `worker` restarts.
+
+## Sprint 1 (Outreach shortlist)
+- Transitional staged UI is now built on top of existing `prospectingleads`.
+- Candidate filtering is available by:
+  - category
+  - city
+  - rating
+  - reviews count
+  - website / phone / email / messengers presence
+- First manual review step is in place:
+  - `В shortlist`
+  - `Отклонить`
