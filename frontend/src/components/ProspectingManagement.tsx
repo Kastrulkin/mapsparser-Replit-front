@@ -24,6 +24,14 @@ type Lead = {
     status: string;
 };
 
+type SearchJob = {
+    id: string;
+    status: 'queued' | 'running' | 'completed' | 'failed';
+    result_count: number;
+    error_text?: string | null;
+    results: Lead[];
+};
+
 export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
     const [location, setLocation] = useState('');
@@ -33,10 +41,52 @@ export const ProspectingManagement: React.FC = () => {
     const [saving, setSaving] = useState<Record<string, boolean>>({});
     const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
     const [loadingLeads, setLoadingLeads] = useState(false);
+    const [searchJobId, setSearchJobId] = useState<string | null>(null);
+    const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
 
     useEffect(() => {
         fetchSavedLeads();
     }, []);
+
+    useEffect(() => {
+        if (!searchJobId) {
+            return;
+        }
+
+        let cancelled = false;
+        const poll = async () => {
+            try {
+                const response = await api.get(`/admin/prospecting/search-job/${searchJobId}`);
+                const job = response.data?.job as SearchJob;
+                if (cancelled || !job) {
+                    return;
+                }
+                setSearchJob(job);
+                if (job.status === 'completed') {
+                    const newResults = (job.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                    setResults(newResults);
+                    setLoading(false);
+                    return;
+                }
+                if (job.status === 'failed') {
+                    setLoading(false);
+                    return;
+                }
+                window.setTimeout(poll, 2000);
+            } catch (error) {
+                console.error('Error polling prospecting job:', error);
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        poll();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [searchJobId]);
 
     const fetchSavedLeads = async () => {
         setLoadingLeads(true);
@@ -55,21 +105,23 @@ export const ProspectingManagement: React.FC = () => {
         if (!query || !location) return;
 
         setLoading(true);
+        setSearchJob(null);
+        setSearchJobId(null);
         try {
             const response = await api.post('/admin/prospecting/search', {
                 query,
                 location,
                 limit: Number(limit)
             });
-            console.log("Search results:", response.data);
-            // Ensure results have status 'new' for display
-            const newResults = (response.data.results || []).map((r: any) => ({ ...r, status: 'new' }));
-            setResults(newResults);
+            console.log("Search queued:", response.data);
+            setResults([]);
+            setSearchJobId(response.data.job_id);
         } catch (error) {
             console.error('Error searching:', error);
             alert('Error searching. Check console.');
-        } finally {
             setLoading(false);
+        } finally {
+            // loading is reset by polling on completed/failed
         }
     };
 
@@ -100,7 +152,7 @@ export const ProspectingManagement: React.FC = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Prospecting</h2>
-                    <p className="text-muted-foreground">Find and manage potential clients using Apify.</p>
+                    <p className="text-muted-foreground">Yandex-first поиск потенциальных клиентов через Apify с ручным отбором.</p>
                 </div>
             </div>
 
@@ -114,34 +166,34 @@ export const ProspectingManagement: React.FC = () => {
                     <Card>
                         <CardHeader>
                             <CardTitle>Search Parameters</CardTitle>
-                            <CardDescription>Search for businesses on Google Maps via Apify</CardDescription>
+                            <CardDescription>Search for businesses on Yandex Maps via Apify</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSearch} className="flex gap-4 items-end">
                                 <div className="grid w-full max-w-sm items-center gap-1.5">
-                                    <label htmlFor="query">Keywords</label>
+                                    <label htmlFor="query">Категория / запрос</label>
                                     <Input
                                         type="text"
                                         id="query"
-                                        placeholder="e.g. Hair Salon"
+                                        placeholder="например: салон красоты"
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
                                         required
                                     />
                                 </div>
                                 <div className="grid w-full max-w-sm items-center gap-1.5">
-                                    <label htmlFor="location">Location</label>
+                                    <label htmlFor="location">Город</label>
                                     <Input
                                         type="text"
                                         id="location"
-                                        placeholder="e.g. Moscow, Russia"
+                                        placeholder="например: Санкт-Петербург"
                                         value={location}
                                         onChange={(e) => setLocation(e.target.value)}
                                         required
                                     />
                                 </div>
                                 <div className="grid w-24 items-center gap-1.5">
-                                    <label htmlFor="limit">Limit</label>
+                                    <label htmlFor="limit">Лимит</label>
                                     <Input
                                         type="number"
                                         id="limit"
@@ -153,9 +205,24 @@ export const ProspectingManagement: React.FC = () => {
                                 </div>
                                 <Button type="submit" disabled={loading}>
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Search
+                                    Запустить поиск
                                 </Button>
                             </form>
+                            {searchJob && (
+                                <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                                    <div className="font-medium">
+                                        Поиск: {searchJob.status === 'queued' ? 'в очереди' :
+                                            searchJob.status === 'running' ? 'выполняется' :
+                                            searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                        Найдено: {searchJob.result_count || 0}
+                                    </div>
+                                    {searchJob.error_text && (
+                                        <div className="mt-2 text-red-600">{searchJob.error_text}</div>
+                                    )}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

@@ -3,6 +3,7 @@
 Менеджер базы данных для управления всеми 4 таблицами
 """
 import os
+import json
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Any
@@ -1520,8 +1521,20 @@ class DatabaseManager:
     def save_lead(self, lead_data: Dict[str, Any]) -> str:
         """Сохранить лид (если уже есть google_id - обновить)"""
         cursor = self.conn.cursor()
-        
-        # Проверяем дубликат по google_id
+
+        source_external_id = lead_data.get('source_external_id') or lead_data.get('google_id')
+        if source_external_id:
+            try:
+                cursor.execute(
+                    "SELECT id FROM prospectingleads WHERE source_external_id = %s",
+                    (source_external_id,),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    return existing[0]
+            except Exception:
+                self.conn.rollback()
+
         google_id = lead_data.get('google_id')
         if google_id:
             cursor.execute("SELECT id FROM prospectingleads WHERE google_id = %s", (google_id,))
@@ -1530,19 +1543,50 @@ class DatabaseManager:
                 return existing[0]
 
         lead_id = str(uuid.uuid4())
-        fields = ['id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count', 
-                  'source_url', 'google_id', 'category', 'location', 'status']
-        
-        values = [lead_id]
-        for f in fields[1:]:
-            values.append(lead_data.get(f))
-            
+        fields = [
+            'id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count',
+            'source_url', 'google_id', 'category', 'location', 'status',
+            'source', 'source_external_id', 'email', 'telegram_url', 'whatsapp_url', 'messenger_links_json'
+        ]
+        values = [
+            lead_id,
+            lead_data.get('name'),
+            lead_data.get('address'),
+            lead_data.get('phone'),
+            lead_data.get('website'),
+            lead_data.get('rating'),
+            lead_data.get('reviews_count'),
+            lead_data.get('source_url'),
+            lead_data.get('google_id'),
+            lead_data.get('category'),
+            lead_data.get('location'),
+            lead_data.get('status'),
+            lead_data.get('source') or 'apify_yandex',
+            source_external_id,
+            lead_data.get('email'),
+            lead_data.get('telegram_url'),
+            lead_data.get('whatsapp_url'),
+            json.dumps(lead_data.get('messenger_links') or [], ensure_ascii=False),
+        ]
         placeholders = ', '.join(['%s' for _ in values])
-        
-        cursor.execute(f"""
-            INSERT INTO prospectingleads ({', '.join(fields)}, created_at, updated_at)
-            VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """, values)
+
+        try:
+            cursor.execute(f"""
+                INSERT INTO prospectingleads ({', '.join(fields)}, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, values)
+        except Exception:
+            self.conn.rollback()
+            legacy_fields = ['id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count',
+                             'source_url', 'google_id', 'category', 'location', 'status']
+            legacy_values = [lead_id]
+            for field in legacy_fields[1:]:
+                legacy_values.append(lead_data.get(field))
+            legacy_placeholders = ', '.join(['%s' for _ in legacy_values])
+            cursor.execute(f"""
+                INSERT INTO prospectingleads ({', '.join(legacy_fields)}, created_at, updated_at)
+                VALUES ({legacy_placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, legacy_values)
         
         self.conn.commit()
         return lead_id

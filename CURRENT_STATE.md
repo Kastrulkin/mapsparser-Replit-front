@@ -43,3 +43,10 @@
   - manual approval of first-message drafts
   - capped sends (start with 10/day)
   - learning from approved edits and reply outcomes
+
+## Sprint 0 (Outreach foundation)
+- In progress:
+  - secure `admin_prospecting` endpoints (auth + superadmin-only)
+  - switch Apify sourcing to Yandex-first actor `m_mamaev/yandex-maps-places-scraper`
+  - move prospecting search to async jobs (`outreachsearchjobs`) instead of synchronous HTTP wait
+- Startup migrations are now serialized by PostgreSQL advisory lock in `entrypoint.sh` to avoid `deadlock detected` on simultaneous `app` + `worker` restarts.
