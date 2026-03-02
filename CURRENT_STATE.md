@@ -62,3 +62,19 @@
 - First manual review step is in place:
   - `В shortlist`
   - `Отклонить`
+
+## Sprint 1.5 / Sprint 2A (Outreach contact selection)
+- `ProspectingManagement` now includes a dedicated `Отбор для контакта` stage.
+- Leads in `shortlist_approved` can be explicitly moved to:
+  - `selected_for_outreach`
+- After selection, superadmin can manually confirm the first contact channel:
+  - `telegram`
+  - `whatsapp`
+  - `email`
+  - `manual`
+- Confirmed channel moves the lead to:
+  - `channel_selected`
+- Transitional runtime schema for this stage is now guaranteed in production:
+  - `prospectingleads` exists
+  - `selected_channel` column exists
+  - current Alembic runtime revision on server is based on `20260302_003`

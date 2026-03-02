@@ -25,6 +25,7 @@ type Lead = {
     source_external_id?: string;
     google_id?: string;
     category?: string;
+    selected_channel?: string;
     location?: any;
     status: string;
     created_at?: string;
@@ -66,6 +67,8 @@ const emptyFilters: LeadFilters = {
 
 const shortlistApproved = 'shortlist_approved';
 const shortlistRejected = 'shortlist_rejected';
+const selectedForOutreach = 'selected_for_outreach';
+const channelSelected = 'channel_selected';
 
 const badgeVariantForStatus = (status: string) => {
     if (status === shortlistApproved) {
@@ -87,6 +90,10 @@ const statusLabel = (status: string) => {
             return 'Новый';
         case 'contacted':
             return 'Контакт';
+        case selectedForOutreach:
+            return 'Выбран для контакта';
+        case channelSelected:
+            return 'Канал подтверждён';
         case 'qualified':
             return 'Квалифицирован';
         case 'converted':
@@ -154,6 +161,7 @@ export const ProspectingManagement: React.FC = () => {
     const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
     const [leadTab, setLeadTab] = useState<'candidates' | 'shortlist' | 'rejected'>('candidates');
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
+    const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -283,6 +291,38 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const selectForOutreach = async (leadId: string) => {
+        setSelectionLoading(prev => ({ ...prev, [leadId]: 'select' }));
+        try {
+            await api.post(`/admin/prospecting/lead/${leadId}/select`);
+            await fetchSavedLeads();
+        } catch (error) {
+            console.error('Error selecting lead for outreach:', error);
+        } finally {
+            setSelectionLoading(prev => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
+        }
+    };
+
+    const chooseChannel = async (leadId: string, channel: 'telegram' | 'whatsapp' | 'email' | 'manual') => {
+        setSelectionLoading(prev => ({ ...prev, [leadId]: channel }));
+        try {
+            await api.post(`/admin/prospecting/lead/${leadId}/channel`, { channel });
+            await fetchSavedLeads();
+        } catch (error) {
+            console.error('Error selecting channel:', error);
+        } finally {
+            setSelectionLoading(prev => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
+        }
+    };
+
     const resetFilters = () => setFilters(emptyFilters);
 
     const shortlistLeads = useMemo(
@@ -294,7 +334,11 @@ export const ProspectingManagement: React.FC = () => {
         [savedLeads]
     );
     const candidateLeads = useMemo(
-        () => savedLeads.filter((lead) => lead.status !== shortlistApproved && lead.status !== shortlistRejected),
+        () => savedLeads.filter((lead) => ![shortlistApproved, shortlistRejected, selectedForOutreach, channelSelected].includes(lead.status)),
+        [savedLeads]
+    );
+    const outreachLeads = useMemo(
+        () => savedLeads.filter((lead) => lead.status === selectedForOutreach || lead.status === channelSelected),
         [savedLeads]
     );
 
@@ -406,6 +450,7 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsList>
                     <TabsTrigger value="search">Поиск</TabsTrigger>
                     <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>
+                    <TabsTrigger value="outreach">Отбор для контакта ({outreachLeads.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
@@ -620,6 +665,100 @@ export const ProspectingManagement: React.FC = () => {
                                     )}
                                 </TabsContent>
                             </Tabs>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="outreach" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Отбор для контакта</CardTitle>
+                            <CardDescription>
+                                Переводите лиды из shortlist в контактную работу и вручную подтверждайте первый канал касания.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Shortlist, готовые к выбору</h3>
+                                        <p className="text-sm text-muted-foreground">Следующий шаг после shortlist: пометить лид как выбранный для аутрича.</p>
+                                    </div>
+                                    <Badge variant="secondary">{shortlistLeads.length}</Badge>
+                                </div>
+                                <div className="space-y-3">
+                                    {shortlistLeads.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Нет лидов в shortlist для следующего шага.</div>
+                                    )}
+                                    {shortlistLeads.map((lead) => {
+                                        const pending = selectionLoading[lead.id || ''];
+                                        return (
+                                            <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
+                                                <div className="space-y-1">
+                                                    <div className="font-medium">{lead.name}</div>
+                                                    <div className="text-sm text-muted-foreground">{lead.category || 'Без категории'} · {lead.address || lead.city || 'Адрес не указан'}</div>
+                                                    <ContactStack lead={lead} />
+                                                </div>
+                                                <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
+                                                    {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                    Выбрать для контакта
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Выбранные для аутрича</h3>
+                                        <p className="text-sm text-muted-foreground">Подтвердите первый канал: Telegram, WhatsApp, Email или ручное касание.</p>
+                                    </div>
+                                    <Badge variant="secondary">{outreachLeads.length}</Badge>
+                                </div>
+                                <div className="space-y-3">
+                                    {outreachLeads.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Пока нет выбранных лидов для контакта.</div>
+                                    )}
+                                    {outreachLeads.map((lead) => {
+                                        const pending = selectionLoading[lead.id || ''];
+                                        return (
+                                            <div key={lead.id} className="rounded-md border p-3">
+                                                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                    <div className="space-y-1">
+                                                        <div className="font-medium">{lead.name}</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {lead.address || lead.city || 'Адрес не указан'}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
+                                                            {lead.selected_channel && (
+                                                                <Badge variant="outline">Канал: {lead.selected_channel}</Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <ContactStack lead={lead} />
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
+                                                        <Button
+                                                            key={channel}
+                                                            size="sm"
+                                                            variant={lead.selected_channel === channel ? 'default' : 'outline'}
+                                                            onClick={() => lead.id && chooseChannel(lead.id, channel)}
+                                                            disabled={!lead.id || Boolean(pending)}
+                                                        >
+                                                            {pending === channel && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                            {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

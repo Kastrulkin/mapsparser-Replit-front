@@ -57,19 +57,18 @@
   - staged candidate review UI on top of `prospectingleads`
   - candidate filters by category/city/rating/reviews/contact availability
   - explicit manual actions `В shortlist` / `Отклонить`
+- Sprint 1.5 / Sprint 2A contact selection:
+  - dedicated `Отбор для контакта` stage in admin UI
+  - explicit `selected_for_outreach`
+  - manual channel confirmation with `selected_channel`
+  - lead moves to `channel_selected` after channel approval
 
 ### Что планируется следующим
-- Перевести поиск на Yandex-first source:
-  - Apify actor `m_mamaev/yandex-maps-places-scraper`
-- Сделать staged UI:
-  - найденные кандидаты
-  - shortlist
-  - выбранные для контакта
-  - черновики сообщений
-  - очередь отправки
-  - результаты / learning loop
-- Добавить строгий manual approval на каждом шаге
-- Стартовый лимит отправки: 10 в день
+- Следующий этап:
+  - AI-черновики первого сообщения для лидов в `channel_selected`
+  - ручное утверждение текста
+  - формирование дневной очереди отправки
+  - лимит первой волны: 10/день
 
 ## 🧱 Архитектурные ориентиры
 

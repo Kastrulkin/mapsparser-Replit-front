@@ -17,6 +17,9 @@ admin_prospecting_bp = Blueprint("admin_prospecting", __name__)
 
 SHORTLIST_APPROVED = "shortlist_approved"
 SHORTLIST_REJECTED = "shortlist_rejected"
+SELECTED_FOR_OUTREACH = "selected_for_outreach"
+CHANNEL_SELECTED = "channel_selected"
+ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "email", "manual"}
 
 
 def _auth_error(message: str, status_code: int):
@@ -397,6 +400,61 @@ def review_lead_shortlist(lead_id):
         return jsonify({"success": True, "lead": lead, "status": new_status})
     except Exception as e:
         print(f"Error reviewing lead shortlist: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/select", methods=["POST"])
+def select_lead_for_outreach(lead_id):
+    """Move shortlisted lead into outreach selection stage."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        with DatabaseManager() as db:
+            lead = db.get_lead_by_id(lead_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            if lead.get("status") != SHORTLIST_APPROVED:
+                return jsonify({"error": "Lead must be in shortlist before outreach selection"}), 400
+            success = db.update_lead_outreach(lead_id, SELECTED_FOR_OUTREACH, lead.get("selected_channel"))
+            if not success:
+                return jsonify({"error": "Lead not found"}), 404
+            lead = db.get_lead_by_id(lead_id)
+
+        return jsonify({"success": True, "lead": lead, "status": SELECTED_FOR_OUTREACH})
+    except Exception as e:
+        print(f"Error selecting lead for outreach: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/channel", methods=["POST"])
+def select_outreach_channel(lead_id):
+    """Select outreach channel for lead and advance to channel_selected."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        channel = (data.get("channel") or "").strip().lower()
+        if channel not in ALLOWED_OUTREACH_CHANNELS:
+            return jsonify({"error": "Channel must be one of: telegram, whatsapp, email, manual"}), 400
+
+        with DatabaseManager() as db:
+            lead = db.get_lead_by_id(lead_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            if lead.get("status") not in {SELECTED_FOR_OUTREACH, CHANNEL_SELECTED}:
+                return jsonify({"error": "Lead must be selected for outreach before channel selection"}), 400
+            success = db.update_lead_outreach(lead_id, CHANNEL_SELECTED, channel)
+            if not success:
+                return jsonify({"error": "Lead not found"}), 404
+            lead = db.get_lead_by_id(lead_id)
+
+        return jsonify({"success": True, "lead": lead, "status": CHANNEL_SELECTED, "selected_channel": channel})
+    except Exception as e:
+        print(f"Error selecting outreach channel: {e}")
         return jsonify({"error": str(e)}), 500
 
 

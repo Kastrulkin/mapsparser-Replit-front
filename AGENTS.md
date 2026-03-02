@@ -71,6 +71,9 @@ Legacy details remain in git history and must not be used as default runbook.
 - Current outreach stage:
   - Sprint 0 foundation is live (secure admin prospecting, async jobs, Yandex-first sourcing).
   - Sprint 1 uses the existing `prospectingleads` table as a transitional shortlist UI; do not introduce a second lead table unless the user asks for the full outreach schema migration.
+  - Sprint 1.5 / Sprint 2A also uses the same transitional table for contact selection:
+    - statuses `selected_for_outreach` and `channel_selected`
+    - `selected_channel` is stored on `prospectingleads`
 
 ## 9. Terminal Sessions (tmux)
 - Use `tmux` for all long-running operations on server and local machine.

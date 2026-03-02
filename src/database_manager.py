@@ -1602,6 +1602,34 @@ class DatabaseManager:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    def update_lead_outreach(self, lead_id: str, status: str, selected_channel: Optional[str] = None) -> bool:
+        """Обновить outreach-статус и, если доступно, выбранный канал."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    selected_channel = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (status, selected_channel, lead_id),
+            )
+        except Exception:
+            self.conn.rollback()
+            cursor.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (status, lead_id),
+            )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
     def get_lead_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
         """Получить лид по id"""
         cursor = self.conn.cursor()
