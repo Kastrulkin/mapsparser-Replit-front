@@ -975,6 +975,33 @@ def _validate_parsing_result(card_data: dict) -> tuple:
 
     return True, "success", validation
 
+
+def _has_existing_card_snapshot(business_id: str) -> bool:
+    """Есть ли у бизнеса уже сохранённый snapshot в cards."""
+    if not business_id:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM cards
+            WHERE business_id = %s
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        return cursor.fetchone() is not None
+    except Exception as e:
+        print(f"⚠️ Не удалось проверить existing cards snapshot для {business_id}: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def _has_cabinet_account(business_id: str) -> tuple:
     """
     Проверяет, есть ли у бизнеса аккаунт в личном кабинете.
@@ -1588,6 +1615,38 @@ def process_queue():
             if debug_bundle_id:
                 bundle_path = f"{debug_dir}/{debug_bundle_id}"
                 err_msg = f"{err_msg} bundle={bundle_path}"
+
+            business_id = queue_dict.get("business_id")
+            preserve_existing_snapshot = (
+                str(reason).startswith("low_quality_payload:")
+                and bool(business_id)
+                and _has_existing_card_snapshot(str(business_id))
+            )
+
+            if preserve_existing_snapshot:
+                warning_msg = f"{err_msg} preserved_existing_snapshot=1"
+                print(
+                    f"⚠️ Слабый payload для business_id={business_id}; "
+                    "существующий snapshot сохранён, задача помечена completed.",
+                    flush=True,
+                )
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE parsequeue
+                    SET status = %s,
+                        error_message = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (STATUS_COMPLETED, warning_msg, queue_dict["id"]),
+                )
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return
+
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
