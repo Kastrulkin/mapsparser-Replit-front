@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 import uuid
 from datetime import timedelta
@@ -20,6 +21,8 @@ Handler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 class ActionOrchestrator:
     def __init__(self, handlers: Dict[str, Handler]):
         self.handlers = handlers or {}
+        self._tables_ready = False
+        self._tables_lock = threading.Lock()
 
     def _row_value(self, row: Any, index: int, key: str, default: Any = None) -> Any:
         if row is None:
@@ -37,9 +40,15 @@ class ActionOrchestrator:
         return default
 
     def ensure_tables(self, cursor) -> None:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_requests (
+        if self._tables_ready:
+            return
+        with self._tables_lock:
+            if self._tables_ready:
+                return
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", (883742,))
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_requests (
                 action_id TEXT PRIMARY KEY,
                 tenant_id TEXT NOT NULL,
                 capability TEXT NOT NULL,
@@ -56,17 +65,17 @@ class ActionOrchestrator:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        cursor.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_requests_tenant_idempotency ON action_requests(tenant_id, idempotency_key)"
-        )
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_requests_status ON action_requests(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_requests_tenant_created ON action_requests(tenant_id, created_at DESC)")
+                """
+            )
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_requests_tenant_idempotency ON action_requests(tenant_id, idempotency_key)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_requests_status ON action_requests(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_requests_tenant_created ON action_requests(tenant_id, created_at DESC)")
 
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_transitions (
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_transitions (
                 id TEXT PRIMARY KEY,
                 action_id TEXT NOT NULL,
                 from_status TEXT,
@@ -75,13 +84,13 @@ class ActionOrchestrator:
                 meta_json JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_transitions_action_id ON action_transitions(action_id)")
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_transitions_action_id ON action_transitions(action_id)")
 
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_approvals (
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_approvals (
                 action_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 requested_at TIMESTAMP NOT NULL,
@@ -91,13 +100,13 @@ class ActionOrchestrator:
                 callback_url TEXT,
                 resolved_at TIMESTAMP
             )
-            """
-        )
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_approvals_status ON action_approvals(status)")
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_action_approvals_status ON action_approvals(status)")
 
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_callback_outbox (
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_callback_outbox (
                 id TEXT PRIMARY KEY,
                 action_id TEXT NOT NULL,
                 tenant_id TEXT NOT NULL,
@@ -114,23 +123,23 @@ class ActionOrchestrator:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_status_next ON action_callback_outbox(status, next_attempt_at)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_action_id ON action_callback_outbox(action_id)"
-        )
-        cursor.execute(
-            "ALTER TABLE action_callback_outbox ADD COLUMN IF NOT EXISTS dedupe_key TEXT"
-        )
-        cursor.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_callback_outbox_dedupe_key ON action_callback_outbox(dedupe_key)"
-        )
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_callback_attempts (
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_status_next ON action_callback_outbox(status, next_attempt_at)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_action_callback_outbox_action_id ON action_callback_outbox(action_id)"
+            )
+            cursor.execute(
+                "ALTER TABLE action_callback_outbox ADD COLUMN IF NOT EXISTS dedupe_key TEXT"
+            )
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_action_callback_outbox_dedupe_key ON action_callback_outbox(dedupe_key)"
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS action_callback_attempts (
                 id TEXT PRIMARY KEY,
                 outbox_id TEXT NOT NULL,
                 action_id TEXT NOT NULL,
@@ -144,18 +153,18 @@ class ActionOrchestrator:
                 response_excerpt TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_action_id ON action_callback_attempts(action_id, created_at DESC)"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_outbox_id ON action_callback_attempts(outbox_id)"
-        )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_action_id ON action_callback_attempts(action_id, created_at DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_action_callback_attempts_outbox_id ON action_callback_attempts(outbox_id)"
+            )
 
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS openclaw_capability_health_history (
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS openclaw_capability_health_history (
                 id TEXT PRIMARY KEY,
                 tenant_id TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -167,13 +176,14 @@ class ActionOrchestrator:
                 captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_openclaw_health_history_tenant_captured ON openclaw_capability_health_history(tenant_id, captured_at DESC)"
-        )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_openclaw_health_history_tenant_captured ON openclaw_capability_health_history(tenant_id, captured_at DESC)"
+            )
 
-        ensure_ledger_tables(cursor)
+            ensure_ledger_tables(cursor)
+            self._tables_ready = True
 
     def _transition(self, cursor, action_id: str, from_status: Optional[str], to_status: str, reason: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
         cursor.execute(

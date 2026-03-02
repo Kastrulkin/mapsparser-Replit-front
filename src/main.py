@@ -8138,6 +8138,28 @@ def services_optimize():
                 "Уточните детали и формат при обращении."
             )
 
+        def _infer_service_category(service_name: str, service_description: str) -> str:
+            text = f"{service_name or ''} {service_description or ''}".strip().lower()
+            if not text:
+                return str(business_type_value or business_industry or "general").strip() or "general"
+
+            keyword_map = [
+                ("nails", ("маник", "педик", "ногт", "гель-лак", "nail")),
+                ("massage", ("массаж", "massage", "релакс", "лимфодренаж")),
+                ("cosmetology", ("космет", "чистк", "пилинг", "биоревитал", "hydrafacial", "лифтинг")),
+                ("laser", ("лазер", "эпиляц", "laser")),
+                ("injections", ("ботокс", "инъекц", "контурн", "филлер", "диспорт")),
+                ("body", ("emsculpt", "ems", "фигура", "коррекц", "body")),
+                ("hair", ("стриж", "уклад", "окраш", "волос", "hair")),
+                ("medical", ("прием", "консультац", "врач", "диагност", "анализ", "узи", "процедур")),
+            ]
+            for category_key, markers in keyword_map:
+                if any(marker in text for marker in markers):
+                    return category_key
+
+            fallback = str(business_type_value or business_industry or "").strip().lower()
+            return fallback or "general"
+
         if isinstance(result, dict):
             if 'error' in result:
                 error_msg = str(result.get('error') or 'Ошибка оптимизации')
@@ -8275,7 +8297,7 @@ def services_optimize():
                 "seo_description": fallback_description,
                 "keywords": [],
                 "price": None,
-                "category": "other"
+                "category": _infer_service_category(input_original_name, input_original_description)
             }]
             parsed_result["services"] = services_block
 
@@ -8318,6 +8340,12 @@ def services_optimize():
                 or original_description
                 or _default_seo_description(optimized_name or original_name)
             )
+            current_category = str(svc.get("category") or "").strip()
+            if not current_category or current_category.lower() == "other":
+                svc["category"] = _infer_service_category(
+                    original_name or optimized_name,
+                    original_description or seo_description,
+                )
             sanitized_services.append(svc)
 
         parsed_result["services"] = sanitized_services
@@ -8408,7 +8436,7 @@ def services_optimize():
                         "seo_description": original_description,
                         "keywords": keywords,
                         "price": price,
-                        "category": category
+                        "category": _infer_service_category(original_name, original_description) if not category or str(category).strip().lower() == "other" else category
                     })
 
             result = {
@@ -9735,7 +9763,6 @@ def get_services_legacy():
 def update_service(service_id):
     """Обновление существующей услуги пользователя."""
     try:
-        print(f"🔍 Начало обновления услуги: {service_id}", flush=True)
         if request.method == 'OPTIONS':
             return ('', 204)
 
@@ -9747,37 +9774,55 @@ def update_service(service_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         if not data:
             return jsonify({"error": "Данные не предоставлены"}), 400
-
-        print(f"🔍 DEBUG update_service: data keys = {list(data.keys())}", flush=True)
 
         category = data.get('category', '')
         name = data.get('name', '')
         description = data.get('description', '')
-        optimized_description = data.get('optimized_description', '')  # Новое поле для SEO описания
+        optimized_description = data.get('optimized_description', '')
+        optimized_name = data.get('optimized_name', '')
         keywords = data.get('keywords', [])
-        price = data.get('price', '')
         user_id = user_data['user_id']
-        
-        print(f"🔍 DEBUG update_service: keywords type = {type(keywords)}, value = {keywords}", flush=True)
-        
-        # Преобразуем keywords в строку JSON, если это массив
+        if not name:
+            return jsonify({"error": "Название услуги обязательно"}), 400
+
         if isinstance(keywords, list):
             keywords_str = json.dumps(keywords, ensure_ascii=False)
         elif isinstance(keywords, str):
             keywords_str = keywords
         else:
-            keywords_str = json.dumps([])
-        
-        print(f"🔍 DEBUG update_service: keywords_str = {keywords_str[:100]}", flush=True)
+            keywords_str = json.dumps([], ensure_ascii=False)
 
-        if not name:
-            return jsonify({"error": "Название услуги обязательно"}), 400
+        raw_price = data.get('price')
+        if isinstance(raw_price, str):
+            raw_price = raw_price.strip()
+            price_value = None if raw_price == '' else raw_price
+        elif raw_price in ({}, [], ()):
+            price_value = None
+        else:
+            price_value = raw_price
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
+
+        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = %s", (service_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Услуга не найдена"}), 404
+
+        if hasattr(row, "get"):
+            service_user_id = row.get("user_id")
+        elif isinstance(row, (tuple, list)):
+            service_user_id = row[0] if len(row) > 0 else None
+        else:
+            service_user_id = None
+
+        if service_user_id != user_id and not db.is_superadmin(user_id):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
         cursor.execute("""
@@ -9787,30 +9832,31 @@ def update_service(service_id):
         columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
-        
-        optimized_name = data.get('optimized_name', '')
-        
-        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
-        print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
-        print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
-        print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
-        
+
         if has_optimized_description and has_optimized_name:
-            print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
                 category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s AND user_id = %s
-            """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
-            print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
-
+            """, (category, name, optimized_name, description, optimized_description, keywords_str, price_value, service_id, user_id))
+        elif has_optimized_description:
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = %s, name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
+            """, (category, name, description, optimized_description, keywords_str, price_value, service_id, user_id))
+        elif has_optimized_name:
+            cursor.execute("""
+                UPDATE UserServices SET
+                category = %s, name = %s, optimized_name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
+            """, (category, name, optimized_name, description, keywords_str, price_value, service_id, user_id))
         else:
-            print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
                 category = %s, name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s AND user_id = %s
-            """, (category, name, description, keywords_str, price, service_id, user_id))
+            """, (category, name, description, keywords_str, price_value, service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -9818,7 +9864,7 @@ def update_service(service_id):
 
         db.conn.commit()
         db.close()
-        return jsonify({"success": True, "message": "Услуга обновлена"})
+        return jsonify({"success": True})
 
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}", flush=True)
