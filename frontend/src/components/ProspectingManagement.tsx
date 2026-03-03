@@ -103,6 +103,7 @@ type OutreachReaction = {
 type LeadFilters = {
     category: string;
     city: string;
+    source: string;
     minRating: string;
     maxRating: string;
     minReviews: string;
@@ -116,6 +117,7 @@ type LeadFilters = {
 const emptyFilters: LeadFilters = {
     category: '',
     city: '',
+    source: '',
     minRating: '',
     maxRating: '',
     minReviews: '',
@@ -190,6 +192,23 @@ const normalizeBooleanFilter = (value: string) => {
     return value === 'yes';
 };
 
+const formatLeadSource = (source?: string) => sourceLabel(source);
+
+const formatLeadChannel = (channel?: string) => {
+    switch (channel) {
+        case 'telegram':
+            return 'Telegram';
+        case 'whatsapp':
+            return 'WhatsApp';
+        case 'email':
+            return 'Email';
+        case 'manual':
+            return 'Manual';
+        default:
+            return channel || 'Канал не выбран';
+    }
+};
+
 const extractHasMessengers = (lead: Lead) => {
     const rawLinks = lead.messenger_links_json;
     const parsedLinks = Array.isArray(rawLinks)
@@ -222,6 +241,38 @@ const ContactStack: React.FC<{ lead: Lead }> = ({ lead }) => (
                 Мессенджеры найдены
             </span>
         )}
+    </div>
+);
+
+const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead, showChannel = false }) => (
+    <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="text-[11px] font-normal">
+                {formatLeadSource(lead.source)}
+            </Badge>
+            <Badge variant="secondary" className="text-[11px] font-normal">
+                {lead.category || 'Без категории'}
+            </Badge>
+            {showChannel && (
+                <Badge variant={lead.selected_channel ? 'default' : 'outline'} className="text-[11px] font-normal">
+                    {formatLeadChannel(lead.selected_channel)}
+                </Badge>
+            )}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                <span className="max-w-[420px] truncate" title={lead.address || lead.city || ''}>
+                    {lead.address || lead.city || 'Адрес не указан'}
+                </span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                {lead.rating ?? '-'}
+                <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
+            </span>
+        </div>
+        <ContactStack lead={lead} />
     </div>
 );
 
@@ -624,25 +675,29 @@ export const ProspectingManagement: React.FC = () => {
 
     const resetFilters = () => setFilters(emptyFilters);
 
+    const sourceFilteredLeads = useMemo(
+        () => savedLeads.filter((lead) => !filters.source || (lead.source || '') === filters.source),
+        [savedLeads, filters.source]
+    );
     const shortlistLeads = useMemo(
-        () => savedLeads.filter((lead) => lead.status === shortlistApproved),
-        [savedLeads]
+        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistApproved),
+        [sourceFilteredLeads]
     );
     const rejectedLeads = useMemo(
-        () => savedLeads.filter((lead) => lead.status === shortlistRejected),
-        [savedLeads]
+        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistRejected),
+        [sourceFilteredLeads]
     );
     const candidateLeads = useMemo(
-        () => savedLeads.filter((lead) => ![shortlistApproved, shortlistRejected, selectedForOutreach, channelSelected].includes(lead.status)),
-        [savedLeads]
+        () => sourceFilteredLeads.filter((lead) => ![shortlistApproved, shortlistRejected, selectedForOutreach, channelSelected].includes(lead.status)),
+        [sourceFilteredLeads]
     );
     const outreachLeads = useMemo(
-        () => savedLeads.filter((lead) => lead.status === selectedForOutreach || lead.status === channelSelected),
-        [savedLeads]
+        () => sourceFilteredLeads.filter((lead) => lead.status === selectedForOutreach || lead.status === channelSelected),
+        [sourceFilteredLeads]
     );
     const draftReadyLeads = useMemo(
-        () => savedLeads.filter((lead) => lead.status === channelSelected),
-        [savedLeads]
+        () => sourceFilteredLeads.filter((lead) => lead.status === channelSelected),
+        [sourceFilteredLeads]
     );
 
     const visibleLeads = leadTab === 'shortlist'
@@ -662,7 +717,7 @@ export const ProspectingManagement: React.FC = () => {
                     <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
                     <div className="mt-1">
                         <Badge variant="outline" className="text-[11px] font-normal">
-                            {sourceLabel(lead.source)}
+                            {formatLeadSource(lead.source)}
                         </Badge>
                     </div>
                     {lead.source_url && (
@@ -974,6 +1029,13 @@ export const ProspectingManagement: React.FC = () => {
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                                 <Input placeholder="Категория" value={filters.category} onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))} />
                                 <Input placeholder="Город" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} />
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.source} onChange={(e) => setFilters(prev => ({ ...prev, source: e.target.value }))}>
+                                    <option value="">Источник: любой</option>
+                                    <option value="external_import">Внешний импорт</option>
+                                    <option value="apify_yandex">Apify Yandex</option>
+                                    <option value="openclaw">OpenClaw</option>
+                                    <option value="manual">Ручной ввод</option>
+                                </select>
                                 <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.minRating} onChange={(e) => setFilters(prev => ({ ...prev, minRating: e.target.value }))} />
                                 <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.maxRating} onChange={(e) => setFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
                                 <Input placeholder="Мин. отзывов" type="number" min="0" value={filters.minReviews} onChange={(e) => setFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
@@ -1078,10 +1140,9 @@ export const ProspectingManagement: React.FC = () => {
                                         const pending = selectionLoading[lead.id || ''];
                                         return (
                                             <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
-                                                <div className="space-y-1">
+                                                <div className="space-y-2">
                                                     <div className="font-medium">{lead.name}</div>
-                                                    <div className="text-sm text-muted-foreground">{lead.category || 'Без категории'} · {lead.address || lead.city || 'Адрес не указан'}</div>
-                                                    <ContactStack lead={lead} />
+                                                    <LeadMetaSummary lead={lead} />
                                                 </div>
                                                 <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
                                                     {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1110,19 +1171,13 @@ export const ProspectingManagement: React.FC = () => {
                                         return (
                                             <div key={lead.id} className="rounded-md border p-3">
                                                 <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div className="space-y-1">
+                                                    <div className="space-y-2">
                                                         <div className="font-medium">{lead.name}</div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {lead.address || lead.city || 'Адрес не указан'}
-                                                        </div>
+                                                        <LeadMetaSummary lead={lead} showChannel />
                                                         <div className="flex items-center gap-2">
                                                             <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
-                                                            {lead.selected_channel && (
-                                                                <Badge variant="outline">Канал: {lead.selected_channel}</Badge>
-                                                            )}
                                                         </div>
                                                     </div>
-                                                    <ContactStack lead={lead} />
                                                 </div>
                                                 <div className="flex flex-wrap gap-2">
                                                     {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
@@ -1172,11 +1227,9 @@ export const ProspectingManagement: React.FC = () => {
                                         const pending = draftBusy[lead.id || ''];
                                         return (
                                             <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
-                                                <div className="space-y-1">
+                                                <div className="space-y-2">
                                                     <div className="font-medium">{lead.name}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        Канал: {lead.selected_channel || 'не подтверждён'}
-                                                    </div>
+                                                    <LeadMetaSummary lead={lead} showChannel />
                                                 </div>
                                                 <Button onClick={() => lead.id && generateDraft(lead.id)} disabled={!lead.id || Boolean(pending)}>
                                                     {pending === 'generate' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1211,8 +1264,17 @@ export const ProspectingManagement: React.FC = () => {
                                                     <div>
                                                         <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
                                                         <div className="text-sm text-muted-foreground">
-                                                            Канал: {draft.channel} · Статус: {draft.status}
+                                                            Канал: {formatLeadChannel(draft.channel)} · Статус: {draft.status}
                                                         </div>
+                                                        {(() => {
+                                                            const lead = savedLeads.find((item) => item.id === draft.lead_id);
+                                                            if (!lead) return null;
+                                                            return (
+                                                                <div className="mt-2">
+                                                                    <LeadMetaSummary lead={lead} showChannel />
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                     <Badge variant={draft.status === 'approved' ? 'default' : draft.status === 'rejected' ? 'destructive' : 'secondary'}>
                                                         {draft.status}
