@@ -24,6 +24,9 @@ _EDITORIAL_SERVICE_PATTERNS = (
     "где можно",
     "выбрали места",
     "рассказываем про",
+    "собрали в одном месте",
+    "собрали в одном месте салоны",
+    "собрали в одном месте бары",
     "подборка",
     "популярных салонов красоты",
     "салоны красоты на ",
@@ -74,9 +77,13 @@ def _is_editorial_listing(name: Any, description: Any) -> bool:
         return True
     if body.startswith("рассказываем") or body.startswith("выбрали"):
         return True
+    if body.startswith("собрали"):
+        return True
     if title.startswith("бары ") or title.startswith("бары и пабы "):
         if any(marker in title for marker in ("в районе", "на ", "рядом", "с наградой")):
             return True
+    if title.startswith("салоны красоты "):
+        return True
     return False
 
 

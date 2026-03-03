@@ -51,6 +51,9 @@ _EDITORIAL_SERVICE_PATTERNS = (
     "где можно",
     "выбрали места",
     "рассказываем про",
+    "собрали в одном месте",
+    "собрали в одном месте салоны",
+    "собрали в одном месте бары",
     "подборка",
     "популярных салонов красоты",
     "салоны красоты на ",
@@ -1803,6 +1806,10 @@ def process_queue():
                                     if service_rows:
                                         services_saved_count = db_manager.upsert_parsed_services(business_id, owner_id, service_rows)
                                         print(f"[Services] Saved {services_saved_count} services")
+                                    else:
+                                        cleared_count = _deactivate_parsed_service_source(db_manager.conn, business_id, "yandex_maps")
+                                        if cleared_count > 0:
+                                            print(f"[Services] Cleared {cleared_count} stale yandex_maps services after editorial-only payload")
                                 except Exception as svc_e:
                                     print(f"⚠️ upsert_parsed_services failed for {business_id}: {svc_e}")
                         except Exception as sync_e:
@@ -2346,7 +2353,11 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     if any(pattern in combined_text for pattern in _EDITORIAL_SERVICE_PATTERNS):
         print(f"⚠️ [map_card_services] Skip editorial listing: {name}")
         return {}
-    if (description or "").lower().startswith("рассказываем") or (description or "").lower().startswith("выбрали"):
+    if (
+        (description or "").lower().startswith("рассказываем")
+        or (description or "").lower().startswith("выбрали")
+        or (description or "").lower().startswith("собрали")
+    ):
         print(f"⚠️ [map_card_services] Skip non-service description: {name}")
         return {}
     external_id = item.get("id") or item.get("external_id")
@@ -2367,6 +2378,23 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         "raw": (dict(item) if isinstance(item, dict) else {"_error": "not_a_dict", "_type": type(item).__name__}),
         "duration_minutes": item.get("duration_minutes") or item.get("duration"),
     }
+
+
+def _deactivate_parsed_service_source(conn, business_id: str, source: str) -> int:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE userservices
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE business_id = %s
+          AND source = %s
+          AND raw IS NOT NULL
+          AND COALESCE(is_active, TRUE) = TRUE
+        """,
+        (business_id, source),
+    )
+    conn.commit()
+    return int(cursor.rowcount or 0)
 
 
 def _extract_service_category(payload: Dict[str, Any]) -> str:

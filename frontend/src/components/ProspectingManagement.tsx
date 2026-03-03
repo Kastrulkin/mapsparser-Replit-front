@@ -754,6 +754,11 @@ export const ProspectingManagement: React.FC = () => {
                                             searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
                                     </div>
                                     <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
+                                    {searchJob.status === 'completed' && (searchJob.result_count || 0) === 0 && (
+                                        <div className="mt-2 text-muted-foreground">
+                                            Поиск завершён, но actor не вернул компаний по этому запросу. Попробуйте сузить категорию или изменить формулировку запроса.
+                                        </div>
+                                    )}
                                     {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
                                 </div>
                             )}

@@ -20,7 +20,7 @@ class ProspectingService:
         self.actor_id = (
             os.environ.get('APIFY_YANDEX_ACTOR_ID')
             or os.environ.get('APIFY_ACTOR_ID')
-            or 'm_mamaev/yandex-maps-places-scraper'
+            or 'PSCXgHmlrrRaoXgRx'
         )
         if not APIFY_AVAILABLE:
             print("Warning: apify_client not available. Prospecting service disabled.")
@@ -75,18 +75,15 @@ class ProspectingService:
         if not self.client:
             raise ValueError("APIFY_TOKEN is not set")
 
+        full_query = f"{query.strip()} in {location.strip()}".strip()
         run_input = {
-            "search": query,
-            "query": query,
-            "searchString": query,
-            "searchStringsArray": [query],
-            "location": location,
-            "locationQuery": location,
-            "city": location,
+            "query": full_query,
             "maxItems": limit,
-            "maxCrawledPlaces": limit,
-            "maxCrawledPlacesPerSearch": limit,
-            "language": "ru",
+            "language": "RU",
+            "maxPhotos": 1,
+            "proxyConfig": {"useApifyProxy": True},
+            "mapsDomain": "auto",
+            "enableGlobalDataset": False,
         }
 
         try:
