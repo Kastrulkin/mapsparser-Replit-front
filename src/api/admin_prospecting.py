@@ -223,6 +223,14 @@ def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -
             },
         )
     except Exception as exc:
+        if "timed out" in str(exc).lower():
+            _update_search_job(
+                job_id,
+                status="running",
+                error_text=None,
+                results_json={"_apify": {"status": "START_PENDING"}},
+            )
+            return
         print(f"Error in async prospecting search job {job_id}: {exc}")
         _update_search_job(job_id, status="failed", error_text=str(exc))
 
@@ -242,7 +250,41 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
     run_id = apify_meta.get("run_id")
     dataset_id = apify_meta.get("dataset_id")
     if not run_id:
-        return row
+        try:
+            service = ProspectingService()
+            run_meta = service.start_search_run(
+                row.get("query") or "",
+                row.get("location") or "",
+                int(row.get("search_limit") or 50),
+            )
+            _update_search_job(
+                row["id"],
+                status="running",
+                error_text=None,
+                results_json={
+                    "_apify": {
+                        "run_id": run_meta.get("run_id"),
+                        "dataset_id": run_meta.get("dataset_id"),
+                        "status": run_meta.get("status"),
+                    }
+                },
+            )
+            refreshed = _get_search_job(row["id"])
+            return dict(refreshed) if refreshed else row
+        except Exception as exc:
+            if "timed out" in str(exc).lower():
+                _update_search_job(
+                    row["id"],
+                    status="running",
+                    error_text=None,
+                    results_json={"_apify": {"status": "START_PENDING"}},
+                )
+                refreshed = _get_search_job(row["id"])
+                return dict(refreshed) if refreshed else {**row, "status": "running", "error_text": None}
+            print(f"Error starting Apify search job {row.get('id')}: {exc}")
+            _update_search_job(row["id"], status="failed", error_text=str(exc))
+            refreshed = _get_search_job(row["id"])
+            return dict(refreshed) if refreshed else {**row, "status": "failed", "error_text": str(exc)}
 
     try:
         service = ProspectingService()
