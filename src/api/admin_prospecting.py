@@ -35,7 +35,7 @@ QUEUE_STATUS_SENT = "sent"
 QUEUE_STATUS_FAILED = "failed"
 MAX_DAILY_OUTREACH_BATCH = 10
 ALLOWED_REPLY_OUTCOMES = {"positive", "question", "no_response", "hard_no"}
-SEARCH_JOB_TIMEOUT_SEC = 45
+SEARCH_JOB_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 
 
 def _auth_error(message: str, status_code: int):
