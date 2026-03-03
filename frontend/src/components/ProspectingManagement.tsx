@@ -35,6 +35,7 @@ type SearchJob = {
     id: string;
     status: 'queued' | 'running' | 'completed' | 'failed';
     result_count: number;
+    apify_status?: string | null;
     error_text?: string | null;
     results: Lead[];
 };
@@ -232,6 +233,7 @@ export const ProspectingManagement: React.FC = () => {
     const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
     const [reactions, setReactions] = useState<OutreachReaction[]>([]);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+    const [searchPollError, setSearchPollError] = useState<string | null>(null);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -279,6 +281,7 @@ export const ProspectingManagement: React.FC = () => {
                 if (cancelled || !job) {
                     return;
                 }
+                setSearchPollError(null);
                 setSearchJob(job);
                 if (job.status === 'completed') {
                     const newResults = (job.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
@@ -294,7 +297,8 @@ export const ProspectingManagement: React.FC = () => {
             } catch (error) {
                 console.error('Error polling prospecting job:', error);
                 if (!cancelled) {
-                    setLoading(false);
+                    setSearchPollError('Связь с сервером прервалась. Повторяем опрос...');
+                    window.setTimeout(poll, 3000);
                 }
             }
         };
@@ -362,6 +366,7 @@ export const ProspectingManagement: React.FC = () => {
         setLoading(true);
         setSearchJob(null);
         setSearchJobId(null);
+        setSearchPollError(null);
         try {
             const response = await api.post('/admin/prospecting/search', {
                 query,
@@ -754,10 +759,18 @@ export const ProspectingManagement: React.FC = () => {
                                             searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
                                     </div>
                                     <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
+                                    {searchJob.status === 'running' && searchJob.apify_status === 'START_PENDING' && (
+                                        <div className="mt-2 text-muted-foreground">
+                                            Ожидаем подтверждение запуска от Apify. Это может занять больше обычного.
+                                        </div>
+                                    )}
                                     {searchJob.status === 'completed' && (searchJob.result_count || 0) === 0 && (
                                         <div className="mt-2 text-muted-foreground">
                                             Поиск завершён, но actor не вернул компаний по этому запросу. Попробуйте сузить категорию или изменить формулировку запроса.
                                         </div>
+                                    )}
+                                    {searchPollError && searchJob.status === 'running' && (
+                                        <div className="mt-2 text-amber-600">{searchPollError}</div>
                                     )}
                                     {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
                                 </div>
