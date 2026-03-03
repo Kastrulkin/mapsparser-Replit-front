@@ -60,8 +60,32 @@ class ProspectingService:
         if not isinstance(messenger_links, list):
             messenger_links = [messenger_links]
 
+        normalized_messenger_links: List[str] = []
+        for link in messenger_links:
+            if isinstance(link, str) and link.strip():
+                normalized_messenger_links.append(link.strip())
+            elif isinstance(link, dict):
+                for key in ("url", "link", "value"):
+                    value = link.get(key)
+                    if isinstance(value, str) and value.strip():
+                        normalized_messenger_links.append(value.strip())
+                        break
+
+        categories_value = self._pick(item, "categories", "category", "categoryName", "rubric")
+        category_text = None
+        if isinstance(categories_value, list):
+            clean_categories = [str(v).strip() for v in categories_value if str(v).strip()]
+            if clean_categories:
+                category_text = " / ".join(clean_categories[:3])
+        elif categories_value not in (None, ""):
+            category_text = str(categories_value).strip()
+
         telegram_url = self._pick(item, "telegram", "telegram_url", "telegramUrl")
         whatsapp_url = self._pick(item, "whatsapp", "whatsapp_url", "whatsappUrl")
+        if not telegram_url:
+            telegram_url = next((link for link in normalized_messenger_links if "t.me/" in link or "telegram.me/" in link), None)
+        if not whatsapp_url:
+            whatsapp_url = next((link for link in normalized_messenger_links if "wa.me/" in link or "whatsapp" in link.lower()), None)
 
         return {
             "source": "apify_yandex",
@@ -75,12 +99,12 @@ class ProspectingService:
             "source_url": self._pick(item, "url", "placeUrl", "mapsUrl"),
             "source_external_id": self._pick(item, "id", "placeId", "oid", "organizationId"),
             "google_id": self._pick(item, "placeId", "id", "oid"),
-            "category": self._pick(item, "category", "categoryName", "rubric"),
+            "category": category_text,
             "location": self._pick(item, "location", "coordinates"),
             "city": self._pick(item, "city", "locality"),
             "telegram_url": telegram_url,
             "whatsapp_url": whatsapp_url,
-            "messenger_links": messenger_links,
+            "messenger_links": normalized_messenger_links,
         }
 
     def normalize_results(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
