@@ -1,6 +1,7 @@
 import os
 from decimal import Decimal
 import requests
+from urllib.parse import quote
 try:
     from apify_client import ApifyClient
     APIFY_AVAILABLE = True
@@ -31,6 +32,19 @@ class ProspectingService:
             self.client = None
         else:
             self.client = ApifyClient(self.api_token)
+
+    def _actor_path_id(self) -> str:
+        """
+        Apify REST path accepts actor username/name in `owner~actor` form, while
+        older local config may still store `owner/actor`. Normalize it here so
+        server .env does not have to be perfectly formatted.
+        """
+        raw_actor_id = str(self.actor_id or "").strip()
+        if not raw_actor_id:
+            return ""
+        if "/" in raw_actor_id and "~" not in raw_actor_id:
+            raw_actor_id = raw_actor_id.replace("/", "~", 1)
+        return quote(raw_actor_id, safe="~")
 
     @staticmethod
     def _pick(item: Dict[str, Any], *keys: str) -> Any:
@@ -86,11 +100,14 @@ class ProspectingService:
             raise ValueError("APIFY_TOKEN is not set")
 
         run_input = self._build_run_input(query, location, limit)
+        actor_path_id = self._actor_path_id()
+        if not actor_path_id:
+            raise ValueError("APIFY actor id is not set")
         response = requests.post(
-            f"https://api.apify.com/v2/acts/{self.actor_id}/runs",
+            f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
             params={"token": self.api_token},
             json=run_input,
-            timeout=30,
+            timeout=(10, 120),
         )
         response.raise_for_status()
         payload = response.json().get("data") or {}
@@ -109,7 +126,7 @@ class ProspectingService:
         response = requests.get(
             f"https://api.apify.com/v2/actor-runs/{run_id}",
             params={"token": self.api_token},
-            timeout=30,
+            timeout=(10, 45),
         )
         response.raise_for_status()
         return response.json().get("data") or {}
@@ -122,7 +139,7 @@ class ProspectingService:
         response = requests.get(
             f"https://api.apify.com/v2/datasets/{dataset_id}/items",
             params={"token": self.api_token, "format": "json", "clean": "1"},
-            timeout=60,
+            timeout=(10, 90),
         )
         response.raise_for_status()
         items = response.json()
