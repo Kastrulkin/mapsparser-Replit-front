@@ -11,6 +11,7 @@ import { api } from "@/services/api";
 type Lead = {
     id?: string;
     name: string;
+    source?: string;
     address?: string;
     city?: string;
     phone?: string;
@@ -162,6 +163,23 @@ const statusLabel = (status: string) => {
             return 'Отклонён';
         default:
             return status || 'Без статуса';
+    }
+};
+
+const sourceLabel = (source?: string) => {
+    switch (source) {
+        case 'external_import':
+            return 'Внешний импорт';
+        case 'apify_yandex':
+            return 'Apify Yandex';
+        case 'apify_google':
+            return 'Apify Google';
+        case 'manual':
+            return 'Ручной ввод';
+        case 'openclaw':
+            return 'OpenClaw';
+        default:
+            return source || 'Источник не указан';
     }
 };
 
@@ -642,6 +660,11 @@ export const ProspectingManagement: React.FC = () => {
                 <TableCell className="font-medium min-w-[260px]">
                     <div>{lead.name}</div>
                     <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
+                    <div className="mt-1">
+                        <Badge variant="outline" className="text-[11px] font-normal">
+                            {sourceLabel(lead.source)}
+                        </Badge>
+                    </div>
                     {lead.source_url && (
                         <a href={lead.source_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 underline">
                             Открыть в Яндекс Картах
@@ -828,6 +851,33 @@ export const ProspectingManagement: React.FC = () => {
                                     Импортировать JSON
                                 </Button>
                             </div>
+                            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                                <div className="font-medium">Рекомендуемый формат</div>
+                                <div className="mt-1 text-muted-foreground">
+                                    Лучше всего загружать экспорт Apify в формате <code>JSON</code> с <code>All fields</code>.
+                                    Импорт понимает либо массив объектов, либо объект с полем <code>items</code>, <code>results</code> или <code>leads</code>.
+                                </div>
+                                <pre className="mt-3 overflow-x-auto rounded-md bg-background p-3 text-xs leading-5">
+{`{
+  "items": [
+    {
+      "title": "Maya",
+      "categories": ["Beauty salon", "Nail salon"],
+      "address": "Санкт-Петербург, ...",
+      "phone": "+7 ...",
+      "website": "https://...",
+      "totalScore": 4.8,
+      "reviewsCount": 124,
+      "url": "https://yandex.ru/maps/..."
+    }
+  ]
+}`}
+                                </pre>
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                    Если в выгрузке нет <code>email</code>, <code>telegram</code> или <code>whatsapp</code>, импорт это не выдумает.
+                                    Для первого этапа достаточно названия, категории, адреса, телефона, сайта, рейтинга и отзывов.
+                                </div>
+                            </div>
                             <textarea
                                 className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 placeholder='Вставьте JSON из Apify export: [{"title":"...","address":"..."}]'
@@ -871,6 +921,11 @@ export const ProspectingManagement: React.FC = () => {
                                                     <TableCell className="font-medium min-w-[260px]">
                                                         <div>{lead.name}</div>
                                                         <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
+                                                        <div className="mt-1">
+                                                            <Badge variant="outline" className="text-[11px] font-normal">
+                                                                {sourceLabel(lead.source)}
+                                                            </Badge>
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell className="min-w-[220px]">
                                                         <div className="flex items-center gap-1 text-sm">
