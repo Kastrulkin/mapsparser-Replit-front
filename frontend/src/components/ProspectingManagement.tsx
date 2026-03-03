@@ -234,6 +234,9 @@ export const ProspectingManagement: React.FC = () => {
     const [reactions, setReactions] = useState<OutreachReaction[]>([]);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
     const [searchPollError, setSearchPollError] = useState<string | null>(null);
+    const [importJson, setImportJson] = useState('');
+    const [importBusy, setImportBusy] = useState(false);
+    const [importResult, setImportResult] = useState<string | null>(null);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -379,6 +382,38 @@ export const ProspectingManagement: React.FC = () => {
             console.error('Error searching:', error);
             alert('Ошибка поиска. Проверьте консоль.');
             setLoading(false);
+        }
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        setImportJson(text);
+        setImportResult(null);
+        e.target.value = '';
+    };
+
+    const importLeads = async () => {
+        const raw = importJson.trim();
+        if (!raw) return;
+
+        setImportBusy(true);
+        setImportResult(null);
+        try {
+            const parsed = JSON.parse(raw);
+            const payload = Array.isArray(parsed) ? { items: parsed } : parsed;
+            const response = await api.post('/admin/prospecting/import', payload);
+            const importedCount = response.data?.imported_count || 0;
+            setImportResult(`Импортировано лидов: ${importedCount}`);
+            setImportJson('');
+            await fetchSavedLeads();
+        } catch (error: any) {
+            console.error('Error importing leads:', error);
+            const message = error?.message || 'Не удалось импортировать лиды';
+            setImportResult(`Ошибка импорта: ${message}`);
+        } finally {
+            setImportBusy(false);
         }
     };
 
@@ -773,6 +808,35 @@ export const ProspectingManagement: React.FC = () => {
                                         <div className="mt-2 text-amber-600">{searchPollError}</div>
                                     )}
                                     {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Внешний импорт лидов</CardTitle>
+                            <CardDescription>
+                                Используйте этот путь, если запускаете поиск в Apify вручную. Поддерживается JSON-массив items или объект с полем <code>items</code>.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex flex-wrap gap-3 items-center">
+                                <Input type="file" accept=".json,application/json" onChange={handleImportFile} className="max-w-sm" />
+                                <Button onClick={importLeads} disabled={importBusy || !importJson.trim()}>
+                                    {importBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Импортировать JSON
+                                </Button>
+                            </div>
+                            <textarea
+                                className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                placeholder='Вставьте JSON из Apify export: [{"title":"...","address":"..."}]'
+                                value={importJson}
+                                onChange={(e) => setImportJson(e.target.value)}
+                            />
+                            {importResult && (
+                                <div className={`text-sm ${importResult.startsWith('Ошибка') ? 'text-red-600' : 'text-emerald-700'}`}>
+                                    {importResult}
                                 </div>
                             )}
                         </CardContent>

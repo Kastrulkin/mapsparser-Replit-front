@@ -83,6 +83,13 @@ class ProspectingService:
             "messenger_links": messenger_links,
         }
 
+    def normalize_results(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+        for item in items:
+            if isinstance(item, dict):
+                normalized.append(self._normalize_result(item))
+        return normalized
+
     def _build_run_input(self, query: str, location: str, limit: int) -> Dict[str, Any]:
         full_query = f"{query.strip()} in {location.strip()}".strip()
         return {

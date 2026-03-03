@@ -1227,6 +1227,52 @@ def save_lead():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/import", methods=["POST"])
+def import_leads():
+    """Bulk import leads from external JSON payload (e.g. manual Apify export)."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True)
+        if isinstance(data, list):
+            raw_items = data
+        else:
+            payload = data or {}
+            raw_items = (
+                payload.get("items")
+                or payload.get("results")
+                or payload.get("leads")
+                or []
+            )
+
+        if not isinstance(raw_items, list) or not raw_items:
+            return jsonify({"error": "Items array is required"}), 400
+
+        service = ProspectingService()
+        normalized = service.normalize_results(raw_items)
+        if not normalized:
+            return jsonify({"error": "No valid lead items to import"}), 400
+
+        imported_ids: list[str] = []
+        with DatabaseManager() as db:
+            for lead_data in normalized:
+                lead_data.setdefault("source", "external_import")
+                lead_data.setdefault("status", "new")
+                lead_data.setdefault("source_external_id", lead_data.get("source_external_id") or lead_data.get("google_id"))
+                imported_ids.append(db.save_lead(lead_data))
+
+        return jsonify({
+            "success": True,
+            "imported_count": len(imported_ids),
+            "lead_ids": imported_ids,
+        })
+    except Exception as e:
+        print(f"Error importing leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/status", methods=["POST"])
 def update_lead_status(lead_id):
     """Update lead status."""
