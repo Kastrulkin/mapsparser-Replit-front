@@ -106,12 +106,23 @@ class ProspectingService:
         actor_path_id = self._actor_path_id()
         if not actor_path_id:
             raise ValueError("APIFY actor id is not set")
-        response = requests.post(
-            f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
-            params={"token": self.api_token, "waitForFinish": 0},
-            json=run_input,
-            timeout=(10, 120),
-        )
+        last_exc = None
+        response = None
+        for timeout_seconds in (30, 120):
+            try:
+                response = requests.post(
+                    f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
+                    params={"token": self.api_token, "waitForFinish": 0},
+                    json=run_input,
+                    timeout=timeout_seconds,
+                )
+                break
+            except requests.exceptions.Timeout as exc:
+                last_exc = exc
+        if response is None:
+            if last_exc:
+                raise last_exc
+            raise RuntimeError("Apify run start request failed without response")
         response.raise_for_status()
         payload = response.json().get("data") or {}
         if not payload.get("id"):
@@ -129,7 +140,7 @@ class ProspectingService:
         response = requests.get(
             f"https://api.apify.com/v2/actor-runs/{run_id}",
             params={"token": self.api_token},
-            timeout=(10, 45),
+            timeout=45,
         )
         response.raise_for_status()
         return response.json().get("data") or {}
@@ -142,7 +153,7 @@ class ProspectingService:
         response = requests.get(
             f"https://api.apify.com/v2/datasets/{dataset_id}/items",
             params={"token": self.api_token, "format": "json", "clean": "1"},
-            timeout=(10, 90),
+            timeout=90,
         )
         response.raise_for_status()
         items = response.json()

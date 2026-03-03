@@ -281,6 +281,15 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
         refreshed = _get_search_job(row["id"])
         return dict(refreshed) if refreshed else row
     except Exception as exc:
+        if "timed out" in str(exc).lower():
+            _update_search_job(
+                row["id"],
+                status="running",
+                error_text=None,
+                results_json={"_apify": {"run_id": run_id, "dataset_id": dataset_id, "status": "RUNNING"}},
+            )
+            refreshed = _get_search_job(row["id"])
+            return dict(refreshed) if refreshed else {**row, "status": "running", "error_text": None}
         print(f"Error polling Apify search job {row.get('id')}: {exc}")
         return row
 
