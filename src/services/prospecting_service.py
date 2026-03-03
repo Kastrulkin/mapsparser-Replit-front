@@ -1,5 +1,6 @@
 import os
 from decimal import Decimal
+import requests
 try:
     from apify_client import ApifyClient
     APIFY_AVAILABLE = True
@@ -68,15 +69,9 @@ class ProspectingService:
             "messenger_links": messenger_links,
         }
 
-    def search_businesses(self, query: str, location: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Search for businesses using Apify Yandex Maps scraper.
-        """
-        if not self.client:
-            raise ValueError("APIFY_TOKEN is not set")
-
+    def _build_run_input(self, query: str, location: str, limit: int) -> Dict[str, Any]:
         full_query = f"{query.strip()} in {location.strip()}".strip()
-        run_input = {
+        return {
             "query": full_query,
             "maxItems": limit,
             "language": "RU",
@@ -86,9 +81,65 @@ class ProspectingService:
             "enableGlobalDataset": False,
         }
 
+    def start_search_run(self, query: str, location: str, limit: int = 50) -> Dict[str, Any]:
+        if not self.api_token:
+            raise ValueError("APIFY_TOKEN is not set")
+
+        run_input = self._build_run_input(query, location, limit)
+        response = requests.post(
+            f"https://api.apify.com/v2/acts/{self.actor_id}/runs",
+            params={"token": self.api_token},
+            json=run_input,
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json().get("data") or {}
+        if not payload.get("id"):
+            raise RuntimeError("Apify run did not return an id")
+        return {
+            "run_id": payload.get("id"),
+            "dataset_id": payload.get("defaultDatasetId"),
+            "status": payload.get("status"),
+            "run_input": run_input,
+        }
+
+    def get_run(self, run_id: str) -> Dict[str, Any]:
+        if not self.api_token:
+            raise ValueError("APIFY_TOKEN is not set")
+        response = requests.get(
+            f"https://api.apify.com/v2/actor-runs/{run_id}",
+            params={"token": self.api_token},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json().get("data") or {}
+
+    def fetch_dataset_items(self, dataset_id: str) -> List[Dict[str, Any]]:
+        if not self.api_token:
+            raise ValueError("APIFY_TOKEN is not set")
+        if not dataset_id:
+            return []
+        response = requests.get(
+            f"https://api.apify.com/v2/datasets/{dataset_id}/items",
+            params={"token": self.api_token, "format": "json", "clean": "1"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        items = response.json()
+        if not isinstance(items, list):
+            return []
+        return [self._normalize_result(item) for item in items if isinstance(item, dict)]
+
+    def search_businesses(self, query: str, location: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Search for businesses using Apify Yandex Maps scraper.
+        """
+        if not self.client:
+            raise ValueError("APIFY_TOKEN is not set")
+
         try:
             run = self.client.actor(self.actor_id).call(
-                run_input=run_input,
+                run_input=self._build_run_input(query, location, limit),
                 timeout_secs=APIFY_SEARCH_TIMEOUT_SEC,
                 wait_secs=APIFY_SEARCH_TIMEOUT_SEC,
                 max_items=limit,

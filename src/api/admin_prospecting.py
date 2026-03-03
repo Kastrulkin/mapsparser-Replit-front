@@ -206,48 +206,86 @@ def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool
 
 def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
     _update_search_job(job_id, status="running", error_text=None)
-    outcome: dict[str, Any] = {}
-
-    def _search_target() -> None:
-        try:
-            service = ProspectingService()
-            outcome["results"] = service.search_businesses(query, location, search_limit)
-        except Exception as exc:
-            outcome["error"] = exc
-
-    search_thread = threading.Thread(
-        target=_search_target,
-        daemon=True,
-        name=f"apify-search-{job_id}",
-    )
-    search_thread.start()
-    search_thread.join(SEARCH_JOB_TIMEOUT_SEC)
-
-    if search_thread.is_alive():
+    try:
+        service = ProspectingService()
+        run_meta = service.start_search_run(query, location, search_limit)
         _update_search_job(
             job_id,
-            status="failed",
-            error_text=f"Search timed out after {SEARCH_JOB_TIMEOUT_SEC} seconds",
+            status="running",
+            error_text=None,
+            results_json={
+                "_apify": {
+                    "run_id": run_meta.get("run_id"),
+                    "dataset_id": run_meta.get("dataset_id"),
+                    "status": run_meta.get("status"),
+                }
+            },
         )
-        return
-
-    if "error" in outcome:
-        exc = outcome["error"]
+    except Exception as exc:
         print(f"Error in async prospecting search job {job_id}: {exc}")
         _update_search_job(job_id, status="failed", error_text=str(exc))
-        return
 
-    results = outcome.get("results") or []
-    _update_search_job(
-        job_id,
-        status="completed",
-        result_count=len(results),
-        results_json=results,
-        error_text=None,
-    )
+
+def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
+    status = (row.get("status") or "").strip().lower()
+    if status not in {"queued", "running"}:
+        return row
+
+    results_blob = row.get("results_json")
+    apify_meta = None
+    if isinstance(results_blob, dict):
+        apify_meta = results_blob.get("_apify")
+    if not isinstance(apify_meta, dict):
+        return row
+
+    run_id = apify_meta.get("run_id")
+    dataset_id = apify_meta.get("dataset_id")
+    if not run_id:
+        return row
+
+    try:
+        service = ProspectingService()
+        run_info = service.get_run(run_id)
+        run_status = (run_info.get("status") or "").strip().upper()
+        dataset_id = run_info.get("defaultDatasetId") or dataset_id
+
+        if run_status in {"SUCCEEDED"}:
+            results = service.fetch_dataset_items(dataset_id)
+            _update_search_job(
+                row["id"],
+                status="completed",
+                result_count=len(results),
+                results_json=results,
+                error_text=None,
+            )
+        elif run_status in {"FAILED", "ABORTED", "TIMED-OUT"}:
+            status_message = (
+                run_info.get("statusMessage")
+                or run_info.get("status_message")
+                or f"Apify run {run_status.lower()}"
+            )
+            _update_search_job(
+                row["id"],
+                status="failed",
+                error_text=str(status_message),
+                results_json={"_apify": {"run_id": run_id, "dataset_id": dataset_id, "status": run_status}},
+            )
+        else:
+            _update_search_job(
+                row["id"],
+                status="running",
+                error_text=None,
+                results_json={"_apify": {"run_id": run_id, "dataset_id": dataset_id, "status": run_status}},
+            )
+        refreshed = _get_search_job(row["id"])
+        return dict(refreshed) if refreshed else row
+    except Exception as exc:
+        print(f"Error polling Apify search job {row.get('id')}: {exc}")
+        return row
 
 
 def _mark_search_job_failed_if_stale(row: dict[str, Any]) -> dict[str, Any]:
+    row = _refresh_search_job_from_apify(row)
     status = (row.get("status") or "").strip().lower()
     if status not in {"queued", "running"}:
         return row
@@ -943,6 +981,13 @@ def get_search_job_status(job_id):
         if not row:
             return jsonify({"error": "Search job not found"}), 404
         row = _mark_search_job_failed_if_stale(dict(row))
+        raw_results = row.get("results_json")
+        apify_status = None
+        results_payload = []
+        if isinstance(raw_results, list):
+            results_payload = raw_results
+        elif isinstance(raw_results, dict):
+            apify_status = ((raw_results.get("_apify") or {}).get("status") if isinstance(raw_results.get("_apify"), dict) else None)
         return jsonify(
             {
                 "success": True,
@@ -955,8 +1000,9 @@ def get_search_job_status(job_id):
                     "limit": row.get("search_limit"),
                     "status": row.get("status"),
                     "result_count": row.get("result_count") or 0,
+                    "apify_status": apify_status,
                     "error_text": row.get("error_text"),
-                    "results": row.get("results_json") or [],
+                    "results": results_payload,
                     "created_at": row.get("created_at"),
                     "updated_at": row.get("updated_at"),
                     "completed_at": row.get("completed_at"),
