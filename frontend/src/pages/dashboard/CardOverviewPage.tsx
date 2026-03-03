@@ -50,6 +50,8 @@ export const CardOverviewPage = () => {
   // Состояния для услуг
   const [userServices, setUserServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [servicesLastParseDate, setServicesLastParseDate] = useState<string | null>(null);
+  const [servicesNoNewFromParse, setServicesNoNewFromParse] = useState(false);
   const [servicesCurrentPage, setServicesCurrentPage] = useState(1);
   const servicesItemsPerPage = 1000;
   const [showAddService, setShowAddService] = useState(false);
@@ -134,11 +136,15 @@ export const CardOverviewPage = () => {
       });
       const data = await response.json();
       if (data.success) {
+        setServicesLastParseDate(data.last_parse_date || null);
+        setServicesNoNewFromParse(Boolean(data.no_new_services_found));
         // Объединяем пользовательские и внешние услуги
         const services = [...(data.services || [])];
         if (data.external_services) {
-          // Маркируем или просто добавляем. Можно добавить поле isExternal, если нужно
-          services.push(...data.external_services);
+          services.push(...data.external_services.map((service: any) => ({
+            ...service,
+            source: service.source || 'external',
+          })));
         }
         setUserServices(services);
       }
@@ -376,6 +382,25 @@ export const CardOverviewPage = () => {
     () => filteredServices.slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage),
     [filteredServices, servicesCurrentPage, servicesItemsPerPage]
   );
+
+  const formatServiceSource = (service: any) => {
+    const source = String(service?.source || '').trim().toLowerCase();
+    if (!source) return 'Ручная';
+    if (source === 'yandex_maps') return 'Яндекс Карты';
+    if (source === 'yandex_business') return 'Яндекс Бизнес';
+    if (source === 'external') return 'Внешняя';
+    if (source === 'file_import') return 'Из файла';
+    return source.replace(/_/g, ' ');
+  };
+
+  const getDisplayedServiceUpdatedAt = (service: any) => {
+    const latest = servicesLastParseDate || lastParseDate;
+    const source = String(service?.source || '').trim().toLowerCase();
+    if (servicesNoNewFromParse && latest && !source) {
+      return latest;
+    }
+    return service?.updated_at || null;
+  };
 
   const checkIfNetworkMaster = async () => {
     if (!currentBusinessId) {
@@ -1109,6 +1134,25 @@ export const CardOverviewPage = () => {
                 </div>
               )}
 
+              {(servicesLastParseDate || lastParseDate) && (
+                <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div className="text-sm text-gray-700">
+                    <span className="font-semibold text-gray-900">Последний парсинг карточки:</span>{' '}
+                    {new Date(servicesLastParseDate || lastParseDate!).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                  {servicesNoNewFromParse && (
+                    <div className="text-sm font-medium text-amber-700">
+                      Новых услуг не найдено
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1153,11 +1197,14 @@ export const CardOverviewPage = () => {
               {/* Services List */}
               <div className="rounded-xl border border-gray-100">
                 <div className="overflow-x-auto">
-                <table className="min-w-[1180px] w-full divide-y divide-gray-100">
+                <table className="min-w-[1320px] w-full divide-y divide-gray-100">
                   <thead className="bg-gray-50/50">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
                         {t.dashboard.card.table.category}
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[150px]">
+                        Источник
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">
                         {t.dashboard.card.table.name}
@@ -1179,7 +1226,7 @@ export const CardOverviewPage = () => {
                   <tbody className="bg-white divide-y divide-gray-100">
                     {loadingServices ? (
                       <tr>
-                        <td className="px-6 py-8 text-center" colSpan={6}>
+                        <td className="px-6 py-8 text-center" colSpan={7}>
                           <div className="flex justify-center items-center gap-2 text-gray-500">
                             <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
                             <span>{t.dashboard.subscription.processing}</span>
@@ -1188,7 +1235,7 @@ export const CardOverviewPage = () => {
                       </tr>
                     ) : filteredServices.length === 0 ? (
                       <tr>
-                        <td className="px-6 py-12 text-center text-gray-500" colSpan={6}>
+                        <td className="px-6 py-12 text-center text-gray-500" colSpan={7}>
                           <div className="flex flex-col items-center justify-center gap-3">
                             <div className="p-3 bg-gray-50 rounded-full">
                               <Search className="w-8 h-8 text-gray-300" />
@@ -1204,6 +1251,11 @@ export const CardOverviewPage = () => {
                             <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap align-top">
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                 {service.category}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap align-top">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                                {formatServiceSource(service)}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-900 align-top max-w-[250px]">
@@ -1332,7 +1384,7 @@ export const CardOverviewPage = () => {
                               {service.price ? `${Number(service.price).toLocaleString('ru-RU')} ₽` : '—'}
                             </td>
                             <td className="px-6 py-4 text-right text-sm text-gray-500 whitespace-nowrap align-top">
-                              {service.updated_at ? new Date(service.updated_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                              {getDisplayedServiceUpdatedAt(service) ? new Date(getDisplayedServiceUpdatedAt(service)).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
                                 day: '2-digit',
                                 month: '2-digit',
                                 hour: '2-digit',

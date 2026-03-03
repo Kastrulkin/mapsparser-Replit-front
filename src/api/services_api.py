@@ -155,6 +155,10 @@ def get_services():
             if 'raw' not in select_fields:
                 select_fields.append('raw')
 
+        latest_parse_date = None
+        latest_parse_status = None
+        no_new_services_found = False
+
         # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
         if business_id:
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
@@ -184,6 +188,29 @@ def get_services():
 
         services_rows = cursor.fetchall()
         col_names = [d[0] for d in cursor.description] if cursor.description else select_fields
+
+        if business_id:
+            cursor.execute(
+                """
+                SELECT status, updated_at
+                FROM parsequeue
+                WHERE business_id = %s
+                  AND task_type = 'parse_card'
+                  AND source = 'yandex_maps'
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+            latest_parse_row = cursor.fetchone()
+            if latest_parse_row:
+                if hasattr(latest_parse_row, 'keys'):
+                    latest_parse_status = latest_parse_row.get('status')
+                    latest_parse_date = latest_parse_row.get('updated_at')
+                else:
+                    latest_parse_status = latest_parse_row[0]
+                    latest_parse_date = latest_parse_row[1]
+
         db.close()
 
         def _parse_price_text(raw_price):
@@ -309,13 +336,20 @@ def get_services():
                 parsed_keys = {_svc_key(svc) for svc in parsed_merged}
                 manual_unique = [svc for svc in manual_services if _svc_key(svc) not in parsed_keys]
                 services = parsed_merged + manual_unique
+            elif latest_parse_status in ('completed', 'done'):
+                no_new_services_found = True
 
-            # Убираем служебные поля из ответа API
+            # Убираем только raw; source нужен UI для ясного отображения происхождения строки.
             for svc in services:
-                svc.pop('source', None)
                 svc.pop('raw', None)
 
-        return jsonify({"success": True, "services": services})
+        return jsonify({
+            "success": True,
+            "services": services,
+            "last_parse_date": latest_parse_date,
+            "last_parse_status": latest_parse_status,
+            "no_new_services_found": no_new_services_found,
+        })
     
     except Exception as e:
         print(f"❌ Ошибка получения услуг: {e}")
