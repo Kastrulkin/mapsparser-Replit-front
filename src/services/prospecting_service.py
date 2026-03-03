@@ -12,7 +12,11 @@ import datetime
 class ProspectingService:
     def __init__(self, api_token: Optional[str] = None):
         self.api_token = api_token or os.environ.get('APIFY_TOKEN')
-        self.actor_id = os.environ.get('APIFY_YANDEX_ACTOR_ID', 'm_mamaev/yandex-maps-places-scraper')
+        self.actor_id = (
+            os.environ.get('APIFY_YANDEX_ACTOR_ID')
+            or os.environ.get('APIFY_ACTOR_ID')
+            or 'm_mamaev/yandex-maps-places-scraper'
+        )
         if not APIFY_AVAILABLE:
             print("Warning: apify_client not available. Prospecting service disabled.")
             self.client = None
