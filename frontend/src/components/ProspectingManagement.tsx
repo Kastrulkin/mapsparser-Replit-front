@@ -81,6 +81,23 @@ type OutreachBatch = {
     items: OutreachQueueItem[];
 };
 
+type OutreachReaction = {
+    id: string;
+    queue_id: string;
+    lead_id: string;
+    raw_reply?: string | null;
+    classified_outcome: string;
+    confidence?: number | null;
+    human_confirmed_outcome?: string | null;
+    note?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    lead_name?: string;
+    batch_id?: string;
+    channel?: string;
+    delivery_status?: string;
+};
+
 type LeadFilters = {
     category: string;
     city: string;
@@ -213,6 +230,8 @@ export const ProspectingManagement: React.FC = () => {
     const [sendDailyCap, setSendDailyCap] = useState(10);
     const [loadingSendQueue, setLoadingSendQueue] = useState(false);
     const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
+    const [reactions, setReactions] = useState<OutreachReaction[]>([]);
+    const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -327,6 +346,7 @@ export const ProspectingManagement: React.FC = () => {
             const response = await api.get('/admin/prospecting/send-batches');
             setSendReadyDrafts(response.data?.ready_drafts || []);
             setSendBatches(response.data?.batches || []);
+            setReactions(response.data?.reactions || []);
             setSendDailyCap(response.data?.daily_cap || 10);
         } catch (error) {
             console.error('Error fetching send queue:', error);
@@ -497,6 +517,44 @@ export const ProspectingManagement: React.FC = () => {
             setSendQueueBusy(prev => {
                 const next = { ...prev };
                 delete next[batchId];
+                return next;
+            });
+        }
+    };
+
+    const markDelivery = async (queueId: string, deliveryStatus: 'sent' | 'failed') => {
+        setSendQueueBusy(prev => ({ ...prev, [queueId]: deliveryStatus }));
+        try {
+            await api.post(`/admin/prospecting/send-queue/${queueId}/delivery`, {
+                delivery_status: deliveryStatus,
+                error_text: deliveryStatus === 'failed' ? 'Manual delivery failure' : undefined,
+            });
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error updating delivery status:', error);
+        } finally {
+            setSendQueueBusy(prev => {
+                const next = { ...prev };
+                delete next[queueId];
+                return next;
+            });
+        }
+    };
+
+    const recordReaction = async (queueId: string, outcome?: 'positive' | 'question' | 'no_response' | 'hard_no') => {
+        setSendQueueBusy(prev => ({ ...prev, [queueId]: `reaction:${outcome || 'auto'}` }));
+        try {
+            await api.post(`/admin/prospecting/send-queue/${queueId}/reaction`, {
+                raw_reply: (replyDrafts[queueId] || '').trim(),
+                outcome,
+            });
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error recording reaction:', error);
+        } finally {
+            setSendQueueBusy(prev => {
+                const next = { ...prev };
+                delete next[queueId];
                 return next;
             });
         }
@@ -1104,7 +1162,7 @@ export const ProspectingManagement: React.FC = () => {
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
                                         <h3 className="font-semibold">Сформированные batch</h3>
-                                        <p className="text-sm text-muted-foreground">После ручного подтверждения batch считается готовым к последующей реальной отправке.</p>
+                                        <p className="text-sm text-muted-foreground">После ручного подтверждения batch можно вручную отмечать доставку и фиксировать входящие реакции.</p>
                                     </div>
                                     <Badge variant="secondary">{sendBatches.length}</Badge>
                                 </div>
@@ -1139,17 +1197,112 @@ export const ProspectingManagement: React.FC = () => {
                                             </div>
                                             <div className="space-y-2">
                                                 {(batch.items || []).map((item) => (
-                                                    <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm">
-                                                        <div className="font-medium">{item.lead_name || item.lead_id}</div>
-                                                        <div className="text-muted-foreground">
-                                                            Канал: {item.channel} · Статус: {item.delivery_status}
+                                                    <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm space-y-3">
+                                                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                            <div>
+                                                                <div className="font-medium">{item.lead_name || item.lead_id}</div>
+                                                                <div className="text-muted-foreground">
+                                                                    Канал: {item.channel} · Доставка: {item.delivery_status}
+                                                                </div>
+                                                                {(item.latest_human_outcome || item.latest_outcome) && (
+                                                                    <div className="text-xs text-emerald-700 mt-1">
+                                                                        Последний outcome: {item.latest_human_outcome || item.latest_outcome}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant={item.delivery_status === 'sent' ? 'default' : 'outline'}
+                                                                    onClick={() => markDelivery(item.id, 'sent')}
+                                                                    disabled={Boolean(sendQueueBusy[item.id])}
+                                                                >
+                                                                    {sendQueueBusy[item.id] === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                    Отмечено как sent
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => markDelivery(item.id, 'failed')}
+                                                                    disabled={Boolean(sendQueueBusy[item.id])}
+                                                                >
+                                                                    {sendQueueBusy[item.id] === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                    Пометить failed
+                                                                </Button>
+                                                            </div>
                                                         </div>
-                                                        <div className="mt-2 whitespace-pre-wrap">
+                                                        <div className="whitespace-pre-wrap">
                                                             {item.approved_text || item.generated_text || '—'}
                                                         </div>
+                                                        {item.delivery_status !== 'failed' && (
+                                                            <div className="space-y-2 rounded-md border p-3">
+                                                                <div className="text-xs font-medium text-muted-foreground">Входящая реакция</div>
+                                                                <textarea
+                                                                    className="min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                                    placeholder="Вставьте ответ клиента или оставьте пустым для no_response"
+                                                                    value={replyDrafts[item.id] ?? ''}
+                                                                    onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                                />
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => recordReaction(item.id)}
+                                                                        disabled={Boolean(sendQueueBusy[item.id])}
+                                                                    >
+                                                                        {sendQueueBusy[item.id] === 'reaction:auto' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                        Автоклассифицировать
+                                                                    </Button>
+                                                                    {(['positive', 'question', 'no_response', 'hard_no'] as const).map((outcome) => (
+                                                                        <Button
+                                                                            key={outcome}
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => recordReaction(item.id, outcome)}
+                                                                            disabled={Boolean(sendQueueBusy[item.id])}
+                                                                        >
+                                                                            {sendQueueBusy[item.id] === `reaction:${outcome}` && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                            {outcome}
+                                                                        </Button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Последние реакции</h3>
+                                        <p className="text-sm text-muted-foreground">Базовая классификация outcome для первого supervised цикла.</p>
+                                    </div>
+                                    <Badge variant="secondary">{reactions.length}</Badge>
+                                </div>
+                                <div className="space-y-2">
+                                    {!loadingSendQueue && reactions.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Реакций пока нет.</div>
+                                    )}
+                                    {reactions.map((reaction) => (
+                                        <div key={reaction.id} className="rounded-md border p-3 text-sm">
+                                            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                                                <div className="font-medium">{reaction.lead_name || reaction.lead_id}</div>
+                                                <Badge variant={reaction.human_confirmed_outcome === 'hard_no' ? 'destructive' : 'secondary'}>
+                                                    {reaction.human_confirmed_outcome || reaction.classified_outcome}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-muted-foreground">
+                                                Batch: {reaction.batch_id || '—'} · Канал: {reaction.channel || '—'} · Delivery: {reaction.delivery_status || '—'}
+                                            </div>
+                                            {reaction.raw_reply && (
+                                                <div className="mt-2 whitespace-pre-wrap">
+                                                    {reaction.raw_reply}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

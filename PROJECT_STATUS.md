@@ -71,6 +71,10 @@
   - dedicated `Очередь отправки` stage in admin UI
   - daily capped batch creation (`10/day`)
   - manual batch approval before real sending
+- Sprint 2D delivery + reactions:
+  - manual per-item delivery status
+  - inbound reply capture
+  - baseline classification (`positive / question / no_response / hard_no`)
 - Parsing runtime hardening:
   - editorial Yandex listing payloads are filtered out of service sync
   - `parse-resume` endpoint added for explicit human continuation after captcha
@@ -79,9 +83,9 @@
 
 ### Что планируется следующим
 - Следующий этап:
-  - реальные delivery события поверх утверждённого batch
-  - сбор ответов и базовая классификация outcome
-  - первая supervised send loop с реакциями
+  - реальная отправка поверх approved batch
+  - provider-level delivery integration
+  - более точная AI-классификация ответов вместо baseline-эвристики
 
 ## 🧱 Архитектурные ориентиры
 

@@ -106,3 +106,18 @@
   - ready-to-queue approved drafts
   - batch creation
   - manual batch approval
+
+## Sprint 2D (Delivery + reactions)
+- Added `outreachreactions` runtime table through Alembic.
+- Admin API now supports:
+  - manual delivery status updates per queue item (`sent` / `failed`)
+  - inbound reaction capture
+  - baseline outcome classification:
+    - `positive`
+    - `question`
+    - `no_response`
+    - `hard_no`
+- `ProspectingManagement` queue stage now includes:
+  - per-item delivery controls
+  - inbound reply capture
+  - recent reactions list for the first supervised feedback loop

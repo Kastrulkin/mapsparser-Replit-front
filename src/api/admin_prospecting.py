@@ -28,7 +28,10 @@ QUEUED_FOR_SEND = "queued_for_send"
 BATCH_DRAFT = "draft"
 BATCH_APPROVED = "approved"
 QUEUE_STATUS_QUEUED = "queued"
+QUEUE_STATUS_SENT = "sent"
+QUEUE_STATUS_FAILED = "failed"
 MAX_DAILY_OUTREACH_BATCH = 10
+ALLOWED_REPLY_OUTCOMES = {"positive", "question", "no_response", "hard_no"}
 
 
 def _auth_error(message: str, status_code: int):
@@ -278,6 +281,46 @@ def _serialize_batch_row(row: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _classify_reply_outcome(raw_reply: str) -> tuple[str, float]:
+    text = (raw_reply or "").strip().lower()
+    if not text:
+        return "no_response", 0.9
+
+    hard_no_signals = [
+        "не интересно",
+        "неактуально",
+        "не надо",
+        "не пишите",
+        "удалите",
+        "отстаньте",
+        "stop",
+        "не беспокоить",
+    ]
+    if any(signal in text for signal in hard_no_signals):
+        return "hard_no", 0.9
+
+    question_signals = ["?", "сколько", "как", "что", "подробнее", "цена", "стоимость", "какая"]
+    if any(signal in text for signal in question_signals):
+        return "question", 0.75
+
+    positive_signals = [
+        "интересно",
+        "давайте",
+        "актуально",
+        "хорошо",
+        "ок",
+        "окей",
+        "пришлите",
+        "отправьте",
+        "можно",
+        "свяжитесь",
+    ]
+    if any(signal in text for signal in positive_signals):
+        return "positive", 0.8
+
+    return "question", 0.55
+
+
 def _load_send_queue_snapshot():
     conn = get_db_connection()
     try:
@@ -324,10 +367,21 @@ def _load_send_queue_snapshot():
                     q.delivery_status, q.provider_message_id, q.error_text,
                     q.sent_at, q.created_at, q.updated_at,
                     l.name AS lead_name,
-                    d.approved_text, d.generated_text
+                    d.approved_text, d.generated_text,
+                    r.classified_outcome AS latest_outcome,
+                    r.human_confirmed_outcome AS latest_human_outcome,
+                    r.raw_reply AS latest_raw_reply,
+                    r.created_at AS latest_reaction_at
                 FROM outreachsendqueue q
                 JOIN prospectingleads l ON l.id = q.lead_id
                 JOIN outreachmessagedrafts d ON d.id = q.draft_id
+                LEFT JOIN LATERAL (
+                    SELECT classified_outcome, human_confirmed_outcome, raw_reply, created_at
+                    FROM outreachreactions rx
+                    WHERE rx.queue_id = q.id
+                    ORDER BY rx.created_at DESC
+                    LIMIT 1
+                ) r ON TRUE
                 WHERE q.batch_id = ANY(%s)
                 ORDER BY q.created_at ASC
                 """,
@@ -338,6 +392,31 @@ def _load_send_queue_snapshot():
                 batches_by_id[payload["batch_id"]]["items"].append(payload)
 
         return {"ready_drafts": ready_drafts, "batches": batch_rows}
+    finally:
+        conn.close()
+
+
+def _load_reactions(limit: int = 50):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                r.id, r.queue_id, r.lead_id, r.raw_reply,
+                r.classified_outcome, r.confidence, r.human_confirmed_outcome,
+                r.note, r.created_by, r.created_at, r.updated_at,
+                l.name AS lead_name,
+                q.batch_id, q.channel, q.delivery_status
+            FROM outreachreactions r
+            JOIN prospectingleads l ON l.id = r.lead_id
+            JOIN outreachsendqueue q ON q.id = r.queue_id
+            ORDER BY r.created_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
 
@@ -453,6 +532,115 @@ def _approve_send_batch(batch_id: str, user_id: str):
             return None, "Batch is not in draft status"
         conn.commit()
         return _serialize_batch_row(dict(row)), None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_message_id: str | None, error_text: str | None):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        sent_at_sql = "NOW()" if delivery_status == QUEUE_STATUS_SENT else "NULL"
+        cur.execute(
+            f"""
+            UPDATE outreachsendqueue
+            SET delivery_status = %s,
+                provider_message_id = %s,
+                error_text = %s,
+                sent_at = {sent_at_sql},
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING id, batch_id, lead_id, draft_id, channel, delivery_status,
+                      provider_message_id, error_text, sent_at, created_at, updated_at
+            """,
+            (delivery_status, provider_message_id, error_text, queue_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        conn.commit()
+        return dict(row)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, note: str | None, user_id: str):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT q.id, q.lead_id, q.delivery_status
+            FROM outreachsendqueue q
+            WHERE q.id = %s
+            """,
+            (queue_id,),
+        )
+        queue_row = cur.fetchone()
+        if not queue_row:
+            return None, "Queue item not found"
+
+        queue_payload = dict(queue_row)
+        if queue_payload.get("delivery_status") == QUEUE_STATUS_FAILED:
+            return None, "Cannot attach reaction to failed delivery"
+
+        normalized_outcome = (outcome or "").strip().lower() or None
+        if normalized_outcome and normalized_outcome not in ALLOWED_REPLY_OUTCOMES:
+            return None, "Outcome must be one of: positive, question, no_response, hard_no"
+
+        classified_outcome, confidence = _classify_reply_outcome(raw_reply or "")
+        final_outcome = normalized_outcome or classified_outcome
+
+        reaction_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO outreachreactions (
+                id, queue_id, lead_id, raw_reply, classified_outcome,
+                confidence, human_confirmed_outcome, note, created_by
+            ) VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
+            RETURNING id, queue_id, lead_id, raw_reply, classified_outcome,
+                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at
+            """,
+            (
+                reaction_id,
+                queue_id,
+                queue_payload["lead_id"],
+                (raw_reply or "").strip() or None,
+                classified_outcome,
+                confidence,
+                final_outcome,
+                note,
+                user_id,
+            ),
+        )
+        reaction = dict(cur.fetchone())
+
+        next_lead_status = {
+            "positive": "responded",
+            "question": "responded",
+            "hard_no": "closed_negative",
+            "no_response": "closed_no_response",
+        }.get(final_outcome, "responded")
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (next_lead_status, queue_payload["lead_id"]),
+        )
+        conn.commit()
+        return reaction, None
     except Exception:
         conn.rollback()
         raise
@@ -764,6 +952,7 @@ def get_outreach_send_batches():
                 "success": True,
                 "ready_drafts": snapshot["ready_drafts"],
                 "batches": snapshot["batches"],
+                "reactions": _load_reactions(),
                 "daily_cap": MAX_DAILY_OUTREACH_BATCH,
             }
         )
@@ -816,6 +1005,58 @@ def approve_outreach_send_batch(batch_id):
         return jsonify({"success": True, "batch": batch})
     except Exception as e:
         print(f"Error approving outreach send batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-queue/<string:queue_id>/delivery", methods=["POST"])
+def update_send_queue_delivery(queue_id):
+    """Manually mark delivery result for queued item."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        delivery_status = (data.get("delivery_status") or "").strip().lower()
+        if delivery_status not in {QUEUE_STATUS_SENT, QUEUE_STATUS_FAILED}:
+            return jsonify({"error": "delivery_status must be sent or failed"}), 400
+
+        row = _update_send_queue_delivery(
+            queue_id,
+            delivery_status,
+            (data.get("provider_message_id") or "").strip() or None,
+            (data.get("error_text") or "").strip() or None,
+        )
+        if not row:
+            return jsonify({"error": "Queue item not found"}), 404
+        return jsonify({"success": True, "item": row})
+    except Exception as e:
+        print(f"Error updating send queue delivery: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-queue/<string:queue_id>/reaction", methods=["POST"])
+def record_send_queue_reaction(queue_id):
+    """Record inbound reaction and classify basic outcome."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        reaction, reaction_error = _record_reaction(
+            queue_id,
+            data.get("raw_reply"),
+            data.get("outcome"),
+            (data.get("note") or "").strip() or None,
+            user_data["user_id"],
+        )
+        if reaction_error:
+            status_code = 404 if reaction_error == "Queue item not found" else 400
+            return jsonify({"error": reaction_error}), status_code
+        return jsonify({"success": True, "reaction": reaction})
+    except Exception as e:
+        print(f"Error recording outreach reaction: {e}")
         return jsonify({"error": str(e)}), 500
 
 
