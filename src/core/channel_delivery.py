@@ -137,6 +137,7 @@ def send_maton_bridge_message(
     business_id: str | None = None,
     business_name: str | None = None,
     owner_telegram_id: str | None = None,
+    telegram_handle: str | None = None,
     whatsapp_phone: str | None = None,
     metadata: dict | None = None,
 ) -> dict:
@@ -159,6 +160,7 @@ def send_maton_bridge_message(
                 },
                 "recipient": {
                     "telegram_id": str(owner_telegram_id or "").strip() or None,
+                    "telegram_handle": str(telegram_handle or "").strip().lstrip("@") or None,
                     "phone": normalize_phone(whatsapp_phone) or None,
                 },
                 "metadata": metadata or {},

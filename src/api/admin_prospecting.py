@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -10,6 +11,7 @@ from flask import Blueprint, jsonify, request
 from psycopg2.extras import Json
 
 from auth_system import verify_session
+from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.prospecting_service import ProspectingService
@@ -599,13 +601,170 @@ def _approve_send_batch(batch_id: str, user_id: str):
             if not existing:
                 return None, "Batch not found"
             return None, "Batch is not in draft status"
+        batch_payload = _serialize_batch_row(dict(row))
+        cur.execute(
+            """
+            SELECT
+                q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status,
+                l.name AS lead_name, l.phone, l.email, l.telegram_url, l.whatsapp_url, l.selected_channel,
+                d.approved_text, d.generated_text
+            FROM outreachsendqueue q
+            JOIN prospectingleads l ON l.id = q.lead_id
+            JOIN outreachmessagedrafts d ON d.id = q.draft_id
+            WHERE q.batch_id = %s
+            ORDER BY q.created_at ASC
+            """,
+            (batch_id,),
+        )
+        queue_rows = [dict(item) for item in cur.fetchall()]
+        dispatch_summary = {"total": len(queue_rows), "sent": 0, "failed": 0, "results": []}
+        for item in queue_rows:
+            dispatch_result = _dispatch_outreach_queue_item(item)
+            delivery_status = dispatch_result["delivery_status"]
+            provider_message_id = dispatch_result.get("provider_message_id")
+            error_text = dispatch_result.get("error_text")
+            sent_at_sql = "NOW()" if delivery_status == QUEUE_STATUS_SENT else "NULL"
+            cur.execute(
+                f"""
+                UPDATE outreachsendqueue
+                SET delivery_status = %s,
+                    provider_message_id = %s,
+                    error_text = %s,
+                    sent_at = {sent_at_sql},
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (delivery_status, provider_message_id, error_text, item["id"]),
+            )
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (
+                    "sent" if delivery_status == QUEUE_STATUS_SENT else CHANNEL_SELECTED,
+                    item["lead_id"],
+                ),
+            )
+            dispatch_summary["sent" if delivery_status == QUEUE_STATUS_SENT else "failed"] += 1
+            dispatch_summary["results"].append(
+                {
+                    "queue_id": item["id"],
+                    "lead_id": item["lead_id"],
+                    "lead_name": item.get("lead_name"),
+                    "channel": item.get("channel"),
+                    "delivery_status": delivery_status,
+                    "provider_message_id": provider_message_id,
+                    "error_text": error_text,
+                }
+            )
         conn.commit()
-        return _serialize_batch_row(dict(row)), None
+        return batch_payload | {"dispatch_summary": dispatch_summary}, None
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+
+def _extract_telegram_handle(raw_value: str | None) -> str:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("@"):
+        return raw[1:].strip()
+    for prefix in ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/"):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+            break
+    raw = raw.strip().strip("/")
+    if "/" in raw:
+        raw = raw.split("/", 1)[0]
+    if "?" in raw:
+        raw = raw.split("?", 1)[0]
+    return raw.strip().lstrip("@")
+
+
+def _resolve_outreach_maton_key() -> str:
+    return (
+        str(os.getenv("MATON_OUTREACH_API_KEY", "") or "").strip()
+        or str(os.getenv("MATON_API_KEY", "") or "").strip()
+    )
+
+
+def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
+    channel = str(item.get("channel") or item.get("selected_channel") or "").strip().lower()
+    message = str(item.get("approved_text") or item.get("generated_text") or "").strip()
+    if not channel:
+        return {"delivery_status": QUEUE_STATUS_FAILED, "error_text": "No channel selected"}
+    if not message:
+        return {"delivery_status": QUEUE_STATUS_FAILED, "error_text": "Draft text is empty"}
+
+    if channel == "manual":
+        return {
+            "delivery_status": QUEUE_STATUS_SENT,
+            "provider_message_id": f"manual:{item.get('id')}",
+            "error_text": None,
+        }
+
+    if channel == "email":
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "Email provider is not configured for outreach yet",
+        }
+
+    maton_key = _resolve_outreach_maton_key()
+    if not maton_key:
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "MATON_OUTREACH_API_KEY is not configured",
+        }
+
+    whatsapp_phone = normalize_phone(item.get("whatsapp_url") or item.get("phone"))
+    telegram_handle = _extract_telegram_handle(item.get("telegram_url"))
+    if channel == "telegram" and not telegram_handle:
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "Lead has no telegram handle/url",
+        }
+    if channel == "whatsapp" and not whatsapp_phone:
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "Lead has no WhatsApp phone",
+        }
+
+    response = send_maton_bridge_message(
+        maton_key,
+        message,
+        target_channel=channel,
+        business_id="outreach",
+        business_name="LocalOS Outreach",
+        telegram_handle=telegram_handle or None,
+        whatsapp_phone=whatsapp_phone or None,
+        metadata={
+            "lead_id": item.get("lead_id"),
+            "queue_id": item.get("id"),
+            "lead_name": item.get("lead_name"),
+            "channel": channel,
+        },
+    )
+    if response.get("success"):
+        provider_marker = (
+            response.get("response_excerpt")
+            or f"maton:{channel}:{item.get('id')}"
+        )
+        return {
+            "delivery_status": QUEUE_STATUS_SENT,
+            "provider_message_id": str(provider_marker)[:255],
+            "error_text": None,
+        }
+    return {
+        "delivery_status": QUEUE_STATUS_FAILED,
+        "error_text": str(response.get("error") or "Maton bridge delivery failed")[:500],
+        "provider_message_id": None,
+    }
 
 
 def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_message_id: str | None, error_text: str | None):

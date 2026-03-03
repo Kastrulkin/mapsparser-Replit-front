@@ -121,3 +121,9 @@
   - per-item delivery controls
   - inbound reply capture
   - recent reactions list for the first supervised feedback loop
+
+## Sprint 3 (Real batch delivery)
+- Batch approval now performs actual dispatch instead of only flipping batch status.
+- `manual` delivery is marked `sent` immediately on approval.
+- `telegram` and `whatsapp` deliveries use the Maton outbound adapter when `MATON_OUTREACH_API_KEY` (or fallback `MATON_API_KEY`) is configured.
+- `email` remains explicit `failed` until a real email provider is wired in.

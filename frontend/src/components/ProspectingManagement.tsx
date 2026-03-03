@@ -509,8 +509,12 @@ export const ProspectingManagement: React.FC = () => {
     const approveSendBatch = async (batchId: string) => {
         setSendQueueBusy(prev => ({ ...prev, [batchId]: 'approve' }));
         try {
-            await api.post(`/admin/prospecting/send-batches/${batchId}/approve`, {});
+            const response = await api.post(`/admin/prospecting/send-batches/${batchId}/approve`, {});
             await fetchSendQueue();
+            const summary = response.data?.batch?.dispatch_summary;
+            if (summary) {
+                alert(`Отправка batch завершена: sent ${summary.sent}/${summary.total}, failed ${summary.failed}`);
+            }
         } catch (error) {
             console.error('Error approving outreach batch:', error);
         } finally {
@@ -1190,7 +1194,7 @@ export const ProspectingManagement: React.FC = () => {
                                                             disabled={Boolean(sendQueueBusy[batch.id])}
                                                         >
                                                             {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            Подтвердить batch
+                                                            Подтвердить и отправить
                                                         </Button>
                                                     )}
                                                 </div>

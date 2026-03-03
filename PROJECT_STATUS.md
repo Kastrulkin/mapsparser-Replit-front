@@ -75,6 +75,11 @@
   - manual per-item delivery status
   - inbound reply capture
   - baseline classification (`positive / question / no_response / hard_no`)
+- Sprint 3 real delivery:
+  - batch approval performs actual dispatch
+  - `manual` is marked sent immediately
+  - `telegram` / `whatsapp` use Maton outbound adapter
+  - `email` remains intentionally unsupported until a provider is added
 - Parsing runtime hardening:
   - editorial Yandex listing payloads are filtered out of service sync
   - `parse-resume` endpoint added for explicit human continuation after captcha
