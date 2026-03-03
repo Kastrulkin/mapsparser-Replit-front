@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from flask import Blueprint, jsonify, request
@@ -32,6 +33,7 @@ QUEUE_STATUS_SENT = "sent"
 QUEUE_STATUS_FAILED = "failed"
 MAX_DAILY_OUTREACH_BATCH = 10
 ALLOWED_REPLY_OUTCOMES = {"positive", "question", "no_response", "hard_no"}
+SEARCH_JOB_TIMEOUT_SEC = 45
 
 
 def _auth_error(message: str, status_code: int):
@@ -202,19 +204,86 @@ def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool
 
 def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
     _update_search_job(job_id, status="running", error_text=None)
-    try:
-        service = ProspectingService()
-        results = service.search_businesses(query, location, search_limit)
+    outcome: dict[str, Any] = {}
+
+    def _search_target() -> None:
+        try:
+            service = ProspectingService()
+            outcome["results"] = service.search_businesses(query, location, search_limit)
+        except Exception as exc:
+            outcome["error"] = exc
+
+    search_thread = threading.Thread(
+        target=_search_target,
+        daemon=True,
+        name=f"apify-search-{job_id}",
+    )
+    search_thread.start()
+    search_thread.join(SEARCH_JOB_TIMEOUT_SEC)
+
+    if search_thread.is_alive():
         _update_search_job(
             job_id,
-            status="completed",
-            result_count=len(results),
-            results_json=results,
-            error_text=None,
+            status="failed",
+            error_text=f"Search timed out after {SEARCH_JOB_TIMEOUT_SEC} seconds",
         )
-    except Exception as exc:
+        return
+
+    if "error" in outcome:
+        exc = outcome["error"]
         print(f"Error in async prospecting search job {job_id}: {exc}")
         _update_search_job(job_id, status="failed", error_text=str(exc))
+        return
+
+    results = outcome.get("results") or []
+    _update_search_job(
+        job_id,
+        status="completed",
+        result_count=len(results),
+        results_json=results,
+        error_text=None,
+    )
+
+
+def _mark_search_job_failed_if_stale(row: dict[str, Any]) -> dict[str, Any]:
+    status = (row.get("status") or "").strip().lower()
+    if status not in {"queued", "running"}:
+        return row
+
+    updated_at = row.get("updated_at") or row.get("created_at")
+    if not isinstance(updated_at, datetime):
+        return row
+
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+    deadline = updated_at + timedelta(seconds=SEARCH_JOB_TIMEOUT_SEC)
+    if datetime.now(timezone.utc) <= deadline:
+        return row
+
+    stale_error = f"Search timed out after {SEARCH_JOB_TIMEOUT_SEC} seconds"
+    _update_search_job(row["id"], status="failed", error_text=stale_error)
+    refreshed = _get_search_job(row["id"])
+    return dict(refreshed) if refreshed else {**row, "status": "failed", "error_text": stale_error}
+
+
+def _expire_stale_search_jobs() -> None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, status, error_text, created_at, updated_at
+            FROM outreachsearchjobs
+            WHERE status IN ('queued', 'running')
+            """
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    for row in rows:
+        _mark_search_job_failed_if_stale(dict(row))
 
 
 def _generate_first_message_draft(lead: dict[str, Any], channel: str) -> dict[str, str]:
@@ -655,6 +724,7 @@ def search_businesses():
     if error:
         return error
 
+    _expire_stale_search_jobs()
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     location = (data.get("location") or "").strip()
@@ -713,6 +783,7 @@ def get_search_job_status(job_id):
         row = _get_search_job(job_id)
         if not row:
             return jsonify({"error": "Search job not found"}), 404
+        row = _mark_search_job_failed_if_stale(dict(row))
         return jsonify(
             {
                 "success": True,

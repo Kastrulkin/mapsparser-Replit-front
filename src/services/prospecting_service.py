@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 try:
     from apify_client import ApifyClient
     APIFY_AVAILABLE = True
@@ -8,6 +9,10 @@ except ImportError:
     print("Warning: apify_client not installed. Prospecting features disabled.")
 from typing import List, Dict, Any, Optional
 import datetime
+
+
+APIFY_SEARCH_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "45"))
+APIFY_SEARCH_MAX_CHARGE_USD = Decimal(os.environ.get("APIFY_SEARCH_MAX_CHARGE_USD", "1.0"))
 
 class ProspectingService:
     def __init__(self, api_token: Optional[str] = None):
@@ -85,10 +90,19 @@ class ProspectingService:
         }
 
         try:
-            run = self.client.actor(self.actor_id).call(run_input=run_input)
+            run = self.client.actor(self.actor_id).call(
+                run_input=run_input,
+                timeout_secs=APIFY_SEARCH_TIMEOUT_SEC,
+                wait_secs=APIFY_SEARCH_TIMEOUT_SEC,
+                max_items=limit,
+                max_total_charge_usd=APIFY_SEARCH_MAX_CHARGE_USD,
+            )
         except Exception as e:
             print(f"Error running Apify actor: {e}")
             raise
+
+        if not run:
+            raise TimeoutError(f"Apify actor did not finish within {APIFY_SEARCH_TIMEOUT_SEC} seconds")
 
         results = []
         for item in self.client.dataset(run["defaultDatasetId"]).iterate_items():
