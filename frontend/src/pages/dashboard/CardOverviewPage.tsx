@@ -1170,7 +1170,7 @@ export const CardOverviewPage = () => {
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">
                         {t.common?.updated || "Updated"}
                       </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[132px] min-w-[132px]">
                         {t.dashboard.card.table.actions}
                       </th>
                     </tr>
@@ -1338,8 +1338,8 @@ export const CardOverviewPage = () => {
                                 minute: '2-digit'
                               }) : '—'}
                             </td>
-                            <td className="px-6 py-4 text-right text-sm text-gray-500 align-top">
-                              <div className="flex gap-1 justify-end">
+                            <td className="px-6 py-4 text-right text-sm text-gray-500 align-top whitespace-nowrap">
+                              <div className="inline-flex min-w-[108px] items-center justify-end gap-1.5">
                                 <Button
                                   variant="ghost"
                                   size="icon"
