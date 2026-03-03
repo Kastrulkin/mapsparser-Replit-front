@@ -804,6 +804,28 @@ export const ProspectingManagement: React.FC = () => {
             ),
         [todaySendBatches, queueChannelFilter]
     );
+    const todayQueueSummary = useMemo(() => {
+        let queued = 0;
+        let sent = 0;
+        let failed = 0;
+        let withReaction = 0;
+
+        for (const item of todayQueueItems) {
+            if (item.delivery_status === 'sent') {
+                sent += 1;
+            } else if (item.delivery_status === 'failed') {
+                failed += 1;
+            } else {
+                queued += 1;
+            }
+
+            if (item.latest_human_outcome || item.latest_outcome) {
+                withReaction += 1;
+            }
+        }
+
+        return { queued, sent, failed, withReaction };
+    }, [todayQueueItems]);
 
     useEffect(() => {
         setSelectedDraftIds((prev) => prev.filter((id) => filteredDrafts.some((draft) => draft.id === id)));
@@ -1591,6 +1613,16 @@ export const ProspectingManagement: React.FC = () => {
                                 <div className="space-y-3">
                                     {todaySendBatches.length === 0 && (
                                         <div className="text-sm text-muted-foreground">На сегодня ещё нет batch.</div>
+                                    )}
+                                    {todaySendBatches.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline">В очереди: {todayQueueSummary.queued}</Badge>
+                                            <Badge variant="default">Sent: {todayQueueSummary.sent}</Badge>
+                                            <Badge variant={todayQueueSummary.failed > 0 ? 'destructive' : 'outline'}>
+                                                Failed: {todayQueueSummary.failed}
+                                            </Badge>
+                                            <Badge variant="secondary">С реакцией: {todayQueueSummary.withReaction}</Badge>
+                                        </div>
                                     )}
                                     {todaySendBatches.map((batch) => (
                                         <div key={`today-${batch.id}`} className="rounded-md border p-3">
