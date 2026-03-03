@@ -342,18 +342,29 @@ def _mark_search_job_failed_if_stale(row: dict[str, Any]) -> dict[str, Any]:
     if status not in {"queued", "running"}:
         return row
 
-    updated_at = row.get("updated_at") or row.get("created_at")
-    if not isinstance(updated_at, datetime):
+    results_blob = row.get("results_json")
+    apify_meta = None
+    if isinstance(results_blob, dict):
+        apify_meta = results_blob.get("_apify")
+    apify_status = ""
+    if isinstance(apify_meta, dict):
+        apify_status = str(apify_meta.get("status") or "").strip().upper()
+
+    deadline_anchor = row.get("created_at") if apify_status == "START_PENDING" else (row.get("updated_at") or row.get("created_at"))
+    if not isinstance(deadline_anchor, datetime):
         return row
 
-    if updated_at.tzinfo is None:
-        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    if deadline_anchor.tzinfo is None:
+        deadline_anchor = deadline_anchor.replace(tzinfo=timezone.utc)
 
-    deadline = updated_at + timedelta(seconds=SEARCH_JOB_TIMEOUT_SEC)
+    deadline = deadline_anchor + timedelta(seconds=SEARCH_JOB_TIMEOUT_SEC)
     if datetime.now(timezone.utc) <= deadline:
         return row
 
-    stale_error = f"Search timed out after {SEARCH_JOB_TIMEOUT_SEC} seconds"
+    if apify_status == "START_PENDING":
+        stale_error = f"Apify actor did not acknowledge start within {SEARCH_JOB_TIMEOUT_SEC} seconds"
+    else:
+        stale_error = f"Search timed out after {SEARCH_JOB_TIMEOUT_SEC} seconds"
     _update_search_job(row["id"], status="failed", error_text=stale_error)
     refreshed = _get_search_job(row["id"])
     return dict(refreshed) if refreshed else {**row, "status": "failed", "error_text": stale_error}
