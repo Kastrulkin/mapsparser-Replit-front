@@ -168,6 +168,32 @@ const statusLabel = (status: string) => {
     }
 };
 
+const workflowStatusLabel = (status: string) => {
+    switch (status) {
+        case 'new':
+            return '1. Новый кандидат';
+        case shortlistApproved:
+            return '2. В shortlist';
+        case selectedForOutreach:
+            return '3. Выбран для контакта';
+        case channelSelected:
+            return '4. Канал подтверждён';
+        case 'queued_for_send':
+            return '5. В очереди на отправку';
+        case 'sent':
+            return '6. Отправлено';
+        case 'responded':
+            return '7. Есть реакция';
+        case 'converted':
+            return '8. Конвертирован';
+        case shortlistRejected:
+        case 'rejected':
+            return 'Отклонён';
+        default:
+            return statusLabel(status);
+    }
+};
+
 const sourceLabel = (source?: string) => {
     switch (source) {
         case 'external_import':
@@ -306,6 +332,8 @@ export const ProspectingManagement: React.FC = () => {
     const [importJson, setImportJson] = useState('');
     const [importBusy, setImportBusy] = useState(false);
     const [importResult, setImportResult] = useState<string | null>(null);
+    const [draftChannelFilter, setDraftChannelFilter] = useState('');
+    const [queueChannelFilter, setQueueChannelFilter] = useState('');
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -699,6 +727,39 @@ export const ProspectingManagement: React.FC = () => {
         () => sourceFilteredLeads.filter((lead) => lead.status === channelSelected),
         [sourceFilteredLeads]
     );
+    const filteredDraftReadyLeads = useMemo(
+        () => draftReadyLeads.filter((lead) => !draftChannelFilter || (lead.selected_channel || '') === draftChannelFilter),
+        [draftReadyLeads, draftChannelFilter]
+    );
+    const filteredDrafts = useMemo(
+        () => drafts.filter((draft) => !draftChannelFilter || draft.channel === draftChannelFilter),
+        [drafts, draftChannelFilter]
+    );
+    const filteredSendReadyDrafts = useMemo(
+        () => sendReadyDrafts.filter((draft) => !queueChannelFilter || draft.channel === queueChannelFilter),
+        [sendReadyDrafts, queueChannelFilter]
+    );
+    const filteredSendBatches = useMemo(
+        () => sendBatches.filter((batch) =>
+            !queueChannelFilter || (batch.items || []).some((item) => item.channel === queueChannelFilter)
+        ),
+        [sendBatches, queueChannelFilter]
+    );
+    const groupedSendBatches = useMemo(() => {
+        const groups = new Map<string, { batchDate: string; draftCount: number; approvedCount: number; batches: OutreachBatch[] }>();
+        for (const batch of filteredSendBatches) {
+            const key = batch.batch_date || 'Без даты';
+            const existing = groups.get(key) || { batchDate: key, draftCount: 0, approvedCount: 0, batches: [] };
+            existing.batches.push(batch);
+            if (batch.status === 'approved') {
+                existing.approvedCount += 1;
+            } else {
+                existing.draftCount += 1;
+            }
+            groups.set(key, existing);
+        }
+        return Array.from(groups.values()).sort((a, b) => b.batchDate.localeCompare(a.batchDate));
+    }, [filteredSendBatches]);
 
     const visibleLeads = leadTab === 'shortlist'
         ? shortlistLeads
@@ -1176,6 +1237,7 @@ export const ProspectingManagement: React.FC = () => {
                                                         <LeadMetaSummary lead={lead} showChannel />
                                                         <div className="flex items-center gap-2">
                                                             <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
+                                                            <Badge variant="outline">{workflowStatusLabel(lead.status)}</Badge>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1211,19 +1273,31 @@ export const ProspectingManagement: React.FC = () => {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
+                                <div className="text-sm font-medium">Фильтр канала для черновиков</div>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftChannelFilter} onChange={(e) => setDraftChannelFilter(e.target.value)}>
+                                    <option value="">Все каналы</option>
+                                    <option value="telegram">Telegram</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="email">Email</option>
+                                    <option value="manual">Manual</option>
+                                </select>
+                                <Badge variant="secondary">Готовы к генерации: {filteredDraftReadyLeads.length}</Badge>
+                                <Badge variant="outline">Черновики: {filteredDrafts.length}</Badge>
+                            </div>
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
                                         <h3 className="font-semibold">Готовые к генерации</h3>
                                         <p className="text-sm text-muted-foreground">Только лиды с подтверждённым каналом.</p>
                                     </div>
-                                    <Badge variant="secondary">{draftReadyLeads.length}</Badge>
+                                    <Badge variant="secondary">{filteredDraftReadyLeads.length}</Badge>
                                 </div>
                                 <div className="space-y-3">
-                                    {draftReadyLeads.length === 0 && (
+                                    {filteredDraftReadyLeads.length === 0 && (
                                         <div className="text-sm text-muted-foreground">Пока нет лидов со статусом channel_selected.</div>
                                     )}
-                                    {draftReadyLeads.map((lead) => {
+                                    {filteredDraftReadyLeads.map((lead) => {
                                         const pending = draftBusy[lead.id || ''];
                                         return (
                                             <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
@@ -1247,16 +1321,16 @@ export const ProspectingManagement: React.FC = () => {
                                         <h3 className="font-semibold">Список черновиков</h3>
                                         <p className="text-sm text-muted-foreground">Ваши правки после утверждения сохраняются как learning examples.</p>
                                     </div>
-                                    <Badge variant="secondary">{drafts.length}</Badge>
+                                    <Badge variant="secondary">{filteredDrafts.length}</Badge>
                                 </div>
                                 <div className="space-y-4">
                                     {loadingDrafts && (
                                         <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
                                     )}
-                                    {!loadingDrafts && drafts.length === 0 && (
+                                    {!loadingDrafts && filteredDrafts.length === 0 && (
                                         <div className="text-sm text-muted-foreground">Черновиков пока нет.</div>
                                     )}
-                                    {drafts.map((draft) => {
+                                    {filteredDrafts.map((draft) => {
                                         const pending = draftBusy[draft.id];
                                         return (
                                             <div key={draft.id} className="rounded-md border p-4 space-y-3">
@@ -1265,6 +1339,9 @@ export const ProspectingManagement: React.FC = () => {
                                                         <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
                                                         <div className="text-sm text-muted-foreground">
                                                             Канал: {formatLeadChannel(draft.channel)} · Статус: {draft.status}
+                                                        </div>
+                                                        <div className="mt-1">
+                                                            <Badge variant="outline">{workflowStatusLabel(savedLeads.find((item) => item.id === draft.lead_id)?.status || '')}</Badge>
                                                         </div>
                                                         {(() => {
                                                             const lead = savedLeads.find((item) => item.id === draft.lead_id);
@@ -1316,6 +1393,18 @@ export const ProspectingManagement: React.FC = () => {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
+                                <div className="text-sm font-medium">Фильтр канала для очереди</div>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={queueChannelFilter} onChange={(e) => setQueueChannelFilter(e.target.value)}>
+                                    <option value="">Все каналы</option>
+                                    <option value="telegram">Telegram</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="email">Email</option>
+                                    <option value="manual">Manual</option>
+                                </select>
+                                <Badge variant="secondary">Готовы к queue: {filteredSendReadyDrafts.length}</Badge>
+                                <Badge variant="outline">Batch-групп: {groupedSendBatches.length}</Badge>
+                            </div>
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
@@ -1323,8 +1412,8 @@ export const ProspectingManagement: React.FC = () => {
                                         <p className="text-sm text-muted-foreground">Используются только утверждённые черновики, которые ещё не попали в send queue.</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{sendReadyDrafts.length}</Badge>
-                                        <Button onClick={createSendBatch} disabled={loadingSendQueue || Boolean(sendQueueBusy.create) || sendReadyDrafts.length === 0}>
+                                        <Badge variant="secondary">{filteredSendReadyDrafts.length}</Badge>
+                                        <Button onClick={createSendBatch} disabled={loadingSendQueue || Boolean(sendQueueBusy.create) || filteredSendReadyDrafts.length === 0}>
                                             {(loadingSendQueue || sendQueueBusy.create === 'create') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                             Собрать batch (до {sendDailyCap})
                                         </Button>
@@ -1334,17 +1423,26 @@ export const ProspectingManagement: React.FC = () => {
                                     {loadingSendQueue && (
                                         <div className="flex justify-center p-6"><Loader2 className="h-8 w-8 animate-spin" /></div>
                                     )}
-                                    {!loadingSendQueue && sendReadyDrafts.length === 0 && (
+                                    {!loadingSendQueue && filteredSendReadyDrafts.length === 0 && (
                                         <div className="text-sm text-muted-foreground">Нет утверждённых черновиков, готовых к постановке в очередь.</div>
                                     )}
-                                    {sendReadyDrafts.slice(0, sendDailyCap).map((draft) => (
+                                    {filteredSendReadyDrafts.slice(0, sendDailyCap).map((draft) => (
                                         <div key={draft.id} className="rounded-md border p-3">
                                             <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                                 <div>
                                                     <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
                                                     <div className="text-sm text-muted-foreground">
-                                                        Канал: {draft.channel} · Черновик утверждён
+                                                        Канал: {formatLeadChannel(draft.channel)} · Черновик утверждён
                                                     </div>
+                                                    {(() => {
+                                                        const lead = savedLeads.find((item) => item.id === draft.lead_id);
+                                                        if (!lead) return null;
+                                                        return (
+                                                            <div className="mt-2">
+                                                                <LeadMetaSummary lead={lead} showChannel />
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <Badge variant="default">Готов к queue</Badge>
                                             </div>
@@ -1353,7 +1451,7 @@ export const ProspectingManagement: React.FC = () => {
                                             </div>
                                         </div>
                                     ))}
-                                    {sendReadyDrafts.length > sendDailyCap && (
+                                    {filteredSendReadyDrafts.length > sendDailyCap && (
                                         <div className="text-xs text-muted-foreground">
                                             В batch попадут первые {sendDailyCap} черновиков по времени обновления. Остальные останутся ждать следующего дня.
                                         </div>
@@ -1367,112 +1465,138 @@ export const ProspectingManagement: React.FC = () => {
                                         <h3 className="font-semibold">Сформированные batch</h3>
                                         <p className="text-sm text-muted-foreground">После ручного подтверждения batch можно вручную отмечать доставку и фиксировать входящие реакции.</p>
                                     </div>
-                                    <Badge variant="secondary">{sendBatches.length}</Badge>
+                                    <Badge variant="secondary">{filteredSendBatches.length}</Badge>
                                 </div>
                                 <div className="space-y-4">
-                                    {!loadingSendQueue && sendBatches.length === 0 && (
+                                    {!loadingSendQueue && filteredSendBatches.length === 0 && (
                                         <div className="text-sm text-muted-foreground">Пока нет сформированных batch.</div>
                                     )}
-                                    {sendBatches.map((batch) => (
-                                        <div key={batch.id} className="rounded-md border p-4 space-y-3">
-                                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                    {groupedSendBatches.map((group) => (
+                                        <div key={group.batchDate} className="rounded-lg border p-4 space-y-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
                                                 <div>
-                                                    <div className="font-medium">Batch от {batch.batch_date}</div>
+                                                    <div className="font-semibold">Группа batch за {group.batchDate}</div>
                                                     <div className="text-sm text-muted-foreground">
-                                                        Элементов: {batch.items?.length || 0} · Лимит: {batch.daily_limit}
+                                                        Batch: {group.batches.length} · Draft: {group.draftCount} · Подтверждено: {group.approvedCount}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant={batch.status === 'approved' ? 'default' : 'secondary'}>
-                                                        {batch.status === 'approved' ? 'Подтверждён' : 'Черновик'}
-                                                    </Badge>
-                                                    {batch.status === 'draft' && (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => approveSendBatch(batch.id)}
-                                                            disabled={Boolean(sendQueueBusy[batch.id])}
-                                                        >
-                                                            {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            Подтвердить и отправить
-                                                        </Button>
-                                                    )}
-                                                </div>
+                                                <Badge variant="outline">Дата: {group.batchDate}</Badge>
                                             </div>
-                                            <div className="space-y-2">
-                                                {(batch.items || []).map((item) => (
-                                                    <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm space-y-3">
-                                                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                            <div>
-                                                                <div className="font-medium">{item.lead_name || item.lead_id}</div>
-                                                                <div className="text-muted-foreground">
-                                                                    Канал: {item.channel} · Доставка: {item.delivery_status}
+                                            {group.batches.map((batch) => (
+                                                <div key={batch.id} className="rounded-md border p-4 space-y-3">
+                                                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                        <div>
+                                                            <div className="font-medium">Batch от {batch.batch_date}</div>
+                                                            <div className="text-sm text-muted-foreground">
+                                                                Элементов: {batch.items?.length || 0} · Лимит: {batch.daily_limit}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant={batch.status === 'approved' ? 'default' : 'secondary'}>
+                                                                {batch.status === 'approved' ? 'Подтверждён' : 'Черновик'}
+                                                            </Badge>
+                                                            {batch.status === 'draft' && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => approveSendBatch(batch.id)}
+                                                                    disabled={Boolean(sendQueueBusy[batch.id])}
+                                                                >
+                                                                    {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                    Подтвердить и отправить
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {(batch.items || [])
+                                                            .filter((item) => !queueChannelFilter || item.channel === queueChannelFilter)
+                                                            .map((item) => (
+                                                            <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm space-y-3">
+                                                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                                    <div>
+                                                                        <div className="font-medium">{item.lead_name || item.lead_id}</div>
+                                                                        <div className="text-muted-foreground">
+                                                                            Канал: {formatLeadChannel(item.channel)} · Доставка: {item.delivery_status}
+                                                                        </div>
+                                                                        <div className="mt-1">
+                                                                            <Badge variant="outline">
+                                                                                {workflowStatusLabel(
+                                                                                    item.latest_human_outcome || item.latest_outcome
+                                                                                        ? 'responded'
+                                                                                        : item.delivery_status === 'sent'
+                                                                                            ? 'sent'
+                                                                                            : 'queued_for_send'
+                                                                                )}
+                                                                            </Badge>
+                                                                        </div>
+                                                                        {(item.latest_human_outcome || item.latest_outcome) && (
+                                                                            <div className="text-xs text-emerald-700 mt-1">
+                                                                                Последний outcome: {item.latest_human_outcome || item.latest_outcome}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant={item.delivery_status === 'sent' ? 'default' : 'outline'}
+                                                                            onClick={() => markDelivery(item.id, 'sent')}
+                                                                            disabled={Boolean(sendQueueBusy[item.id])}
+                                                                        >
+                                                                            {sendQueueBusy[item.id] === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                            Отмечено как sent
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => markDelivery(item.id, 'failed')}
+                                                                            disabled={Boolean(sendQueueBusy[item.id])}
+                                                                        >
+                                                                            {sendQueueBusy[item.id] === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                            Пометить failed
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
-                                                                {(item.latest_human_outcome || item.latest_outcome) && (
-                                                                    <div className="text-xs text-emerald-700 mt-1">
-                                                                        Последний outcome: {item.latest_human_outcome || item.latest_outcome}
+                                                                <div className="whitespace-pre-wrap">
+                                                                    {item.approved_text || item.generated_text || '—'}
+                                                                </div>
+                                                                {item.delivery_status !== 'failed' && (
+                                                                    <div className="space-y-2 rounded-md border p-3">
+                                                                        <div className="text-xs font-medium text-muted-foreground">Входящая реакция</div>
+                                                                        <textarea
+                                                                            className="min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                                            placeholder="Вставьте ответ клиента или оставьте пустым для no_response"
+                                                                            value={replyDrafts[item.id] ?? ''}
+                                                                            onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                                        />
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            <Button
+                                                                                size="sm"
+                                                                                onClick={() => recordReaction(item.id)}
+                                                                                disabled={Boolean(sendQueueBusy[item.id])}
+                                                                            >
+                                                                                {sendQueueBusy[item.id] === 'reaction:auto' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                                Автоклассифицировать
+                                                                            </Button>
+                                                                            {(['positive', 'question', 'no_response', 'hard_no'] as const).map((outcome) => (
+                                                                                <Button
+                                                                                    key={outcome}
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    onClick={() => recordReaction(item.id, outcome)}
+                                                                                    disabled={Boolean(sendQueueBusy[item.id])}
+                                                                                >
+                                                                                    {sendQueueBusy[item.id] === `reaction:${outcome}` && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                                    {outcome}
+                                                                                </Button>
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant={item.delivery_status === 'sent' ? 'default' : 'outline'}
-                                                                    onClick={() => markDelivery(item.id, 'sent')}
-                                                                    disabled={Boolean(sendQueueBusy[item.id])}
-                                                                >
-                                                                    {sendQueueBusy[item.id] === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                    Отмечено как sent
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() => markDelivery(item.id, 'failed')}
-                                                                    disabled={Boolean(sendQueueBusy[item.id])}
-                                                                >
-                                                                    {sendQueueBusy[item.id] === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                    Пометить failed
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="whitespace-pre-wrap">
-                                                            {item.approved_text || item.generated_text || '—'}
-                                                        </div>
-                                                        {item.delivery_status !== 'failed' && (
-                                                            <div className="space-y-2 rounded-md border p-3">
-                                                                <div className="text-xs font-medium text-muted-foreground">Входящая реакция</div>
-                                                                <textarea
-                                                                    className="min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                                                    placeholder="Вставьте ответ клиента или оставьте пустым для no_response"
-                                                                    value={replyDrafts[item.id] ?? ''}
-                                                                    onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                                                />
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => recordReaction(item.id)}
-                                                                        disabled={Boolean(sendQueueBusy[item.id])}
-                                                                    >
-                                                                        {sendQueueBusy[item.id] === 'reaction:auto' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                        Автоклассифицировать
-                                                                    </Button>
-                                                                    {(['positive', 'question', 'no_response', 'hard_no'] as const).map((outcome) => (
-                                                                        <Button
-                                                                            key={outcome}
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            onClick={() => recordReaction(item.id, outcome)}
-                                                                            disabled={Boolean(sendQueueBusy[item.id])}
-                                                                        >
-                                                                            {sendQueueBusy[item.id] === `reaction:${outcome}` && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                            {outcome}
-                                                                        </Button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
+                                                        ))}
                                                     </div>
-                                                ))}
-                                            </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     ))}
                                 </div>
