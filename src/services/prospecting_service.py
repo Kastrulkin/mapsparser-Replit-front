@@ -100,6 +100,9 @@ class ProspectingService:
             raise ValueError("APIFY_TOKEN is not set")
 
         run_input = self._build_run_input(query, location, limit)
+        # Use raw REST start instead of apify_client.start() because the client
+        # library uses a shorter default HTTP timeout and can still block before
+        # returning a run id on slow API responses.
         actor_path_id = self._actor_path_id()
         if not actor_path_id:
             raise ValueError("APIFY actor id is not set")
@@ -107,7 +110,7 @@ class ProspectingService:
             f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
             params={"token": self.api_token, "waitForFinish": 0},
             json=run_input,
-            timeout=30,
+            timeout=(10, 120),
         )
         response.raise_for_status()
         payload = response.json().get("data") or {}
