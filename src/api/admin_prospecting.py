@@ -14,6 +14,7 @@ from auth_system import verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
+from services.gigachat_client import analyze_text_with_gigachat
 from services.prospecting_service import ProspectingService
 
 
@@ -390,6 +391,52 @@ def _serialize_batch_row(row: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
+        row = cur.fetchone()
+        if not row:
+            return fallback
+        if hasattr(row, "get"):
+            value = row.get("prompt_text")
+        elif isinstance(row, dict):
+            value = row.get("prompt_text")
+        else:
+            value = row[0] if len(row) > 0 else None
+        text = str(value or "").strip()
+        return text or fallback
+    except Exception:
+        return fallback
+    finally:
+        conn.close()
+
+
+def _extract_json_candidate(raw_text: str) -> dict[str, Any] | None:
+    if not isinstance(raw_text, str):
+        return None
+    text = raw_text.strip()
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start != -1 and end > start:
+        try:
+            parsed = json.loads(text[start:end])
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            return None
+    return None
+
+
 def _classify_reply_outcome(raw_reply: str) -> tuple[str, float]:
     text = (raw_reply or "").strip().lower()
     if not text:
@@ -428,6 +475,51 @@ def _classify_reply_outcome(raw_reply: str) -> tuple[str, float]:
         return "positive", 0.8
 
     return "question", 0.55
+
+
+def _classify_reply_outcome_ai(raw_reply: str) -> tuple[str, float, str]:
+    raw_reply = str(raw_reply or "").strip()
+    if not raw_reply:
+        outcome, confidence = _classify_reply_outcome("")
+        return outcome, confidence, "heuristic"
+
+    fallback_prompt = (
+        "Ты классифицируешь ответ лида на первое аутрич-сообщение.\n"
+        "Верни ТОЛЬКО JSON без пояснений.\n"
+        "Допустимые значения outcome: positive, question, no_response, hard_no.\n"
+        "confidence: число от 0 до 1.\n"
+        "Правила:\n"
+        "- positive: согласие, интерес, запрос прислать детали, готовность обсудить\n"
+        "- question: вопрос, запрос уточнений, цены, условий, деталей\n"
+        "- no_response: пустой/неинформативный ответ без явного интереса или отказа\n"
+        "- hard_no: отказ, просьба не писать, негатив, stop\n"
+        "Формат ответа:\n"
+        "{\"outcome\":\"question\",\"confidence\":0.74}\n"
+        "Текст ответа лида:\n"
+        "{raw_reply}"
+    )
+    prompt_template = _get_prompt_from_db("outreach_reply_classification", fallback_prompt)
+    prompt = prompt_template.replace("{raw_reply}", raw_reply)
+
+    try:
+        result_text = analyze_text_with_gigachat(prompt, task_type="ai_agent_marketing")
+        parsed = _extract_json_candidate(result_text)
+        if not parsed:
+            raise ValueError("AI classifier did not return JSON")
+        outcome = str(parsed.get("outcome") or "").strip().lower()
+        if outcome not in ALLOWED_REPLY_OUTCOMES:
+            raise ValueError(f"Unsupported outcome: {outcome}")
+        confidence_raw = parsed.get("confidence", 0.7)
+        try:
+            confidence = float(confidence_raw)
+        except Exception:
+            confidence = 0.7
+        confidence = max(0.0, min(1.0, confidence))
+        return outcome, confidence, "ai"
+    except Exception as exc:
+        print(f"Outreach reply AI classification fallback: {exc}")
+        outcome, confidence = _classify_reply_outcome(raw_reply)
+        return outcome, confidence, "heuristic"
 
 
 def _load_send_queue_snapshot():
@@ -860,8 +952,10 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
         if normalized_outcome and normalized_outcome not in ALLOWED_REPLY_OUTCOMES:
             return None, "Outcome must be one of: positive, question, no_response, hard_no"
 
-        classified_outcome, confidence = _classify_reply_outcome(raw_reply or "")
+        classified_outcome, confidence, classifier_source = _classify_reply_outcome_ai(raw_reply or "")
         final_outcome = normalized_outcome or classified_outcome
+        note_prefix = f"classifier={classifier_source}"
+        note_value = f"{note_prefix}; {note}" if note else note_prefix
 
         reaction_id = str(uuid.uuid4())
         cur.execute(
@@ -884,7 +978,7 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
                 classified_outcome,
                 confidence,
                 final_outcome,
-                note,
+                note_value,
                 user_id,
             ),
         )
