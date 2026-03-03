@@ -95,3 +95,14 @@
   - generating first-contact drafts for `channel_selected` leads
   - approving/rejecting drafts
 - `ProspectingManagement` now includes a dedicated `Черновики первого сообщения` stage with manual edit and approval flow.
+
+## Sprint 2C (Outreach send queue)
+- Added `outreachsendbatches` and `outreachsendqueue` runtime tables through Alembic.
+- Admin API now supports:
+  - listing ready approved drafts for queue
+  - creating a daily capped batch (`10/day`)
+  - manual batch approval before any real sending
+- `ProspectingManagement` now includes a dedicated `Очередь отправки` stage with:
+  - ready-to-queue approved drafts
+  - batch creation
+  - manual batch approval

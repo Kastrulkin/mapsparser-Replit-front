@@ -24,6 +24,11 @@ ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "email", "manual"}
 DRAFT_GENERATED = "generated"
 DRAFT_APPROVED = "approved"
 DRAFT_REJECTED = "rejected"
+QUEUED_FOR_SEND = "queued_for_send"
+BATCH_DRAFT = "draft"
+BATCH_APPROVED = "approved"
+QUEUE_STATUS_QUEUED = "queued"
+MAX_DAILY_OUTREACH_BATCH = 10
 
 
 def _auth_error(message: str, status_code: int):
@@ -265,6 +270,194 @@ def _serialize_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
         except Exception:
             payload["learning_note_json"] = None
     return payload
+
+
+def _serialize_batch_row(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row)
+    payload["items"] = []
+    return payload
+
+
+def _load_send_queue_snapshot():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                d.id, d.lead_id, d.channel, d.status,
+                d.generated_text, d.edited_text, d.approved_text,
+                d.created_at, d.updated_at,
+                l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+            FROM outreachmessagedrafts d
+            JOIN prospectingleads l ON l.id = d.lead_id
+            WHERE d.status = %s
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM outreachsendqueue q
+                    WHERE q.draft_id = d.id
+              )
+            ORDER BY d.updated_at DESC, d.created_at DESC
+            """,
+            (DRAFT_APPROVED,),
+        )
+        ready_drafts = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+
+        cur.execute(
+            """
+            SELECT
+                b.id, b.batch_date, b.daily_limit, b.status,
+                b.created_by, b.approved_by, b.created_at, b.updated_at
+            FROM outreachsendbatches b
+            ORDER BY b.batch_date DESC, b.created_at DESC
+            LIMIT 20
+            """
+        )
+        batch_rows = [_serialize_batch_row(dict(row)) for row in cur.fetchall()]
+        batches_by_id = {row["id"]: row for row in batch_rows}
+
+        if batches_by_id:
+            cur.execute(
+                """
+                SELECT
+                    q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
+                    q.delivery_status, q.provider_message_id, q.error_text,
+                    q.sent_at, q.created_at, q.updated_at,
+                    l.name AS lead_name,
+                    d.approved_text, d.generated_text
+                FROM outreachsendqueue q
+                JOIN prospectingleads l ON l.id = q.lead_id
+                JOIN outreachmessagedrafts d ON d.id = q.draft_id
+                WHERE q.batch_id = ANY(%s)
+                ORDER BY q.created_at ASC
+                """,
+                (list(batches_by_id.keys()),),
+            )
+            for row in cur.fetchall():
+                payload = dict(row)
+                batches_by_id[payload["batch_id"]]["items"].append(payload)
+
+        return {"ready_drafts": ready_drafts, "batches": batch_rows}
+    finally:
+        conn.close()
+
+
+def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = """
+            SELECT
+                d.id, d.lead_id, d.channel,
+                l.status AS lead_status
+            FROM outreachmessagedrafts d
+            JOIN prospectingleads l ON l.id = d.lead_id
+            WHERE d.status = %s
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM outreachsendqueue q
+                    WHERE q.draft_id = d.id
+              )
+        """
+        params: list[Any] = [DRAFT_APPROVED]
+        if draft_ids:
+            query += " AND d.id = ANY(%s)"
+            params.append(draft_ids)
+        query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+        params.append(MAX_DAILY_OUTREACH_BATCH)
+        cur.execute(query, params)
+        selected_rows = [dict(row) for row in cur.fetchall()]
+
+        if not selected_rows:
+            return None, "No approved drafts available for queue"
+
+        batch_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO outreachsendbatches (
+                id, batch_date, daily_limit, status, created_by
+            ) VALUES (
+                %s, CURRENT_DATE, %s, %s, %s
+            )
+            """,
+            (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_DRAFT, user_id),
+        )
+
+        for row in selected_rows:
+            queue_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachsendqueue (
+                    id, batch_id, lead_id, draft_id, channel, delivery_status
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s
+                )
+                """,
+                (
+                    queue_id,
+                    batch_id,
+                    row["lead_id"],
+                    row["id"],
+                    row["channel"],
+                    QUEUE_STATUS_QUEUED,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (QUEUED_FOR_SEND, row["lead_id"]),
+            )
+
+        conn.commit()
+        return batch_id, None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _approve_send_batch(batch_id: str, user_id: str):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE outreachsendbatches
+            SET status = %s,
+                approved_by = %s,
+                updated_at = NOW()
+            WHERE id = %s
+              AND status = %s
+            RETURNING id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            """,
+            (BATCH_APPROVED, user_id, batch_id, BATCH_DRAFT),
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                """
+                SELECT id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+                FROM outreachsendbatches
+                WHERE id = %s
+                """,
+                (batch_id,),
+            )
+            existing = cur.fetchone()
+            if not existing:
+                return None, "Batch not found"
+            return None, "Batch is not in draft status"
+        conn.commit()
+        return _serialize_batch_row(dict(row)), None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @admin_prospecting_bp.route("/api/admin/prospecting/search", methods=["POST"])
@@ -554,6 +747,75 @@ def get_outreach_drafts():
         return jsonify({"success": True, "drafts": rows, "count": len(rows)})
     except Exception as e:
         print(f"Error loading outreach drafts: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches", methods=["GET"])
+def get_outreach_send_batches():
+    """List approved drafts ready for queue and recent batches."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        snapshot = _load_send_queue_snapshot()
+        return jsonify(
+            {
+                "success": True,
+                "ready_drafts": snapshot["ready_drafts"],
+                "batches": snapshot["batches"],
+                "daily_cap": MAX_DAILY_OUTREACH_BATCH,
+            }
+        )
+    except Exception as e:
+        print(f"Error loading outreach send batches: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches", methods=["POST"])
+def create_outreach_send_batch():
+    """Create capped daily outreach batch from approved drafts."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        draft_ids = data.get("draft_ids") or None
+        if draft_ids is not None and not isinstance(draft_ids, list):
+            return jsonify({"error": "draft_ids must be an array"}), 400
+
+        batch_id, batch_error = _create_send_batch(user_data["user_id"], draft_ids)
+        if batch_error:
+            return jsonify({"error": batch_error}), 400
+        snapshot = _load_send_queue_snapshot()
+        batch = next((item for item in snapshot["batches"] if item["id"] == batch_id), None)
+        return jsonify(
+            {
+                "success": True,
+                "batch": batch,
+                "daily_cap": MAX_DAILY_OUTREACH_BATCH,
+            }
+        )
+    except Exception as e:
+        print(f"Error creating outreach send batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches/<string:batch_id>/approve", methods=["POST"])
+def approve_outreach_send_batch(batch_id):
+    """Manual approval before actual sending."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        batch, batch_error = _approve_send_batch(batch_id, user_data["user_id"])
+        if batch_error:
+            return jsonify({"error": batch_error}), 400 if batch_error != "Batch not found" else 404
+        return jsonify({"success": True, "batch": batch})
+    except Exception as e:
+        print(f"Error approving outreach send batch: {e}")
         return jsonify({"error": str(e)}), 500
 
 

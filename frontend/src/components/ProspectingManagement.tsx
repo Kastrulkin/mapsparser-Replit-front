@@ -52,6 +52,35 @@ type OutreachDraft = {
     created_at?: string;
 };
 
+type OutreachQueueItem = {
+    id: string;
+    batch_id: string;
+    lead_id: string;
+    draft_id: string;
+    channel: string;
+    delivery_status: string;
+    provider_message_id?: string | null;
+    error_text?: string | null;
+    sent_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    lead_name?: string;
+    approved_text?: string;
+    generated_text?: string;
+};
+
+type OutreachBatch = {
+    id: string;
+    batch_date: string;
+    daily_limit: number;
+    status: string;
+    created_by?: string | null;
+    approved_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    items: OutreachQueueItem[];
+};
+
 type LeadFilters = {
     category: string;
     city: string;
@@ -179,6 +208,11 @@ export const ProspectingManagement: React.FC = () => {
     const [loadingDrafts, setLoadingDrafts] = useState(false);
     const [draftBusy, setDraftBusy] = useState<Record<string, string>>({});
     const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+    const [sendReadyDrafts, setSendReadyDrafts] = useState<OutreachDraft[]>([]);
+    const [sendBatches, setSendBatches] = useState<OutreachBatch[]>([]);
+    const [sendDailyCap, setSendDailyCap] = useState(10);
+    const [loadingSendQueue, setLoadingSendQueue] = useState(false);
+    const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -207,6 +241,10 @@ export const ProspectingManagement: React.FC = () => {
 
     useEffect(() => {
         fetchDrafts();
+    }, []);
+
+    useEffect(() => {
+        fetchSendQueue();
     }, []);
 
     useEffect(() => {
@@ -280,6 +318,20 @@ export const ProspectingManagement: React.FC = () => {
             console.error('Error fetching drafts:', error);
         } finally {
             setLoadingDrafts(false);
+        }
+    };
+
+    const fetchSendQueue = async () => {
+        setLoadingSendQueue(true);
+        try {
+            const response = await api.get('/admin/prospecting/send-batches');
+            setSendReadyDrafts(response.data?.ready_drafts || []);
+            setSendBatches(response.data?.batches || []);
+            setSendDailyCap(response.data?.daily_cap || 10);
+        } catch (error) {
+            console.error('Error fetching send queue:', error);
+        } finally {
+            setLoadingSendQueue(false);
         }
     };
 
@@ -370,7 +422,7 @@ export const ProspectingManagement: React.FC = () => {
         setDraftBusy(prev => ({ ...prev, [leadId]: 'generate' }));
         try {
             await api.post(`/admin/prospecting/lead/${leadId}/draft-generate`);
-            await Promise.all([fetchSavedLeads(), fetchDrafts()]);
+            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
         } catch (error) {
             console.error('Error generating draft:', error);
         } finally {
@@ -390,7 +442,7 @@ export const ProspectingManagement: React.FC = () => {
             await api.post(`/admin/prospecting/drafts/${draftId}/approve`, {
                 approved_text: approvedText,
             });
-            await fetchDrafts();
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
         } catch (error) {
             console.error('Error approving draft:', error);
         } finally {
@@ -406,13 +458,45 @@ export const ProspectingManagement: React.FC = () => {
         setDraftBusy(prev => ({ ...prev, [draftId]: 'reject' }));
         try {
             await api.post(`/admin/prospecting/drafts/${draftId}/reject`);
-            await fetchDrafts();
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
         } catch (error) {
             console.error('Error rejecting draft:', error);
         } finally {
             setDraftBusy(prev => {
                 const next = { ...prev };
                 delete next[draftId];
+                return next;
+            });
+        }
+    };
+
+    const createSendBatch = async () => {
+        setSendQueueBusy(prev => ({ ...prev, create: 'create' }));
+        try {
+            await api.post('/admin/prospecting/send-batches', {});
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error creating outreach batch:', error);
+        } finally {
+            setSendQueueBusy(prev => {
+                const next = { ...prev };
+                delete next.create;
+                return next;
+            });
+        }
+    };
+
+    const approveSendBatch = async (batchId: string) => {
+        setSendQueueBusy(prev => ({ ...prev, [batchId]: 'approve' }));
+        try {
+            await api.post(`/admin/prospecting/send-batches/${batchId}/approve`, {});
+            await fetchSendQueue();
+        } catch (error) {
+            console.error('Error approving outreach batch:', error);
+        } finally {
+            setSendQueueBusy(prev => {
+                const next = { ...prev };
+                delete next[batchId];
                 return next;
             });
         }
@@ -551,6 +635,7 @@ export const ProspectingManagement: React.FC = () => {
                     <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>
                     <TabsTrigger value="outreach">Отбор для контакта ({outreachLeads.length})</TabsTrigger>
                     <TabsTrigger value="drafts">Черновики ({drafts.length})</TabsTrigger>
+                    <TabsTrigger value="queue">Очередь отправки ({sendBatches.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
@@ -955,6 +1040,118 @@ export const ProspectingManagement: React.FC = () => {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="queue" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Очередь отправки</CardTitle>
+                            <CardDescription>
+                                Дневная capped-пачка: не более {sendDailyCap} сообщений. Сначала собираете batch, затем вручную подтверждаете его.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Готовые к постановке в очередь</h3>
+                                        <p className="text-sm text-muted-foreground">Используются только утверждённые черновики, которые ещё не попали в send queue.</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{sendReadyDrafts.length}</Badge>
+                                        <Button onClick={createSendBatch} disabled={loadingSendQueue || Boolean(sendQueueBusy.create) || sendReadyDrafts.length === 0}>
+                                            {(loadingSendQueue || sendQueueBusy.create === 'create') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Собрать batch (до {sendDailyCap})
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {loadingSendQueue && (
+                                        <div className="flex justify-center p-6"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                    )}
+                                    {!loadingSendQueue && sendReadyDrafts.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Нет утверждённых черновиков, готовых к постановке в очередь.</div>
+                                    )}
+                                    {sendReadyDrafts.slice(0, sendDailyCap).map((draft) => (
+                                        <div key={draft.id} className="rounded-md border p-3">
+                                            <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                <div>
+                                                    <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        Канал: {draft.channel} · Черновик утверждён
+                                                    </div>
+                                                </div>
+                                                <Badge variant="default">Готов к queue</Badge>
+                                            </div>
+                                            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+                                                {draft.approved_text || draft.edited_text || draft.generated_text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {sendReadyDrafts.length > sendDailyCap && (
+                                        <div className="text-xs text-muted-foreground">
+                                            В batch попадут первые {sendDailyCap} черновиков по времени обновления. Остальные останутся ждать следующего дня.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Сформированные batch</h3>
+                                        <p className="text-sm text-muted-foreground">После ручного подтверждения batch считается готовым к последующей реальной отправке.</p>
+                                    </div>
+                                    <Badge variant="secondary">{sendBatches.length}</Badge>
+                                </div>
+                                <div className="space-y-4">
+                                    {!loadingSendQueue && sendBatches.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Пока нет сформированных batch.</div>
+                                    )}
+                                    {sendBatches.map((batch) => (
+                                        <div key={batch.id} className="rounded-md border p-4 space-y-3">
+                                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                <div>
+                                                    <div className="font-medium">Batch от {batch.batch_date}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        Элементов: {batch.items?.length || 0} · Лимит: {batch.daily_limit}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant={batch.status === 'approved' ? 'default' : 'secondary'}>
+                                                        {batch.status === 'approved' ? 'Подтверждён' : 'Черновик'}
+                                                    </Badge>
+                                                    {batch.status === 'draft' && (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => approveSendBatch(batch.id)}
+                                                            disabled={Boolean(sendQueueBusy[batch.id])}
+                                                        >
+                                                            {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                            Подтвердить batch
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {(batch.items || []).map((item) => (
+                                                    <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm">
+                                                        <div className="font-medium">{item.lead_name || item.lead_id}</div>
+                                                        <div className="text-muted-foreground">
+                                                            Канал: {item.channel} · Статус: {item.delivery_status}
+                                                        </div>
+                                                        <div className="mt-2 whitespace-pre-wrap">
+                                                            {item.approved_text || item.generated_text || '—'}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </CardContent>

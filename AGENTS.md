@@ -73,6 +73,9 @@ Legacy details remain in git history and must not be used as default runbook.
   - Sprint 1 uses the existing `prospectingleads` table as a transitional shortlist UI; do not introduce a second lead table unless the user asks for the full outreach schema migration.
   - Sprint 1.5 / Sprint 2A also uses the same transitional table for contact selection:
     - statuses `selected_for_outreach` and `channel_selected`
+  - Sprint 2B / 2C extend the same transitional flow:
+    - first-message drafts + manual approval
+    - capped send batches (`10/day`) + manual batch approval
     - `selected_channel` is stored on `prospectingleads`
 
 ## 9. Terminal Sessions (tmux)

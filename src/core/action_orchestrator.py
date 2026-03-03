@@ -21,7 +21,7 @@ Handler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
 class ActionOrchestrator:
     def __init__(self, handlers: Dict[str, Handler]):
         self.handlers = handlers or {}
-        self._tables_ready = False
+        self._tables_ready_schemas: set[str] = set()
         self._tables_lock = threading.Lock()
 
     def _row_value(self, row: Any, index: int, key: str, default: Any = None) -> Any:
@@ -40,10 +40,12 @@ class ActionOrchestrator:
         return default
 
     def ensure_tables(self, cursor) -> None:
-        if self._tables_ready:
+        cursor.execute("SELECT current_schema()")
+        schema_name = self._row_value(cursor.fetchone(), 0, "current_schema", "public") or "public"
+        if schema_name in self._tables_ready_schemas:
             return
         with self._tables_lock:
-            if self._tables_ready:
+            if schema_name in self._tables_ready_schemas:
                 return
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", (883742,))
             cursor.execute(
@@ -183,7 +185,7 @@ class ActionOrchestrator:
             )
 
             ensure_ledger_tables(cursor)
-            self._tables_ready = True
+            self._tables_ready_schemas.add(str(schema_name))
 
     def _transition(self, cursor, action_id: str, from_status: Optional[str], to_status: str, reason: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
         cursor.execute(
