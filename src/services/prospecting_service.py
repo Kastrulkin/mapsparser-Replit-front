@@ -105,9 +105,9 @@ class ProspectingService:
             raise ValueError("APIFY actor id is not set")
         response = requests.post(
             f"https://api.apify.com/v2/acts/{actor_path_id}/runs",
-            params={"token": self.api_token},
+            params={"token": self.api_token, "waitForFinish": 0},
             json=run_input,
-            timeout=(10, 120),
+            timeout=30,
         )
         response.raise_for_status()
         payload = response.json().get("data") or {}
