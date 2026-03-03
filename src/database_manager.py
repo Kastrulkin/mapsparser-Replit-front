@@ -1512,11 +1512,21 @@ class DatabaseManager:
 
     # ===== PROSPECTING LEADS =====
 
+    @staticmethod
+    def _row_to_dict(cursor, row) -> Optional[Dict[str, Any]]:
+        """Безопасно преобразовать строку курсора в dict для tuple/DictRow."""
+        if not row:
+            return None
+        if hasattr(row, "keys"):
+            return {key: row[key] for key in row.keys()}
+        return dict(zip([d[0] for d in cursor.description], row))
+
     def get_all_leads(self) -> List[Dict[str, Any]]:
         """Получить все лиды"""
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM prospectingleads ORDER BY created_at DESC")
-        return [dict(zip([d[0] for d in cursor.description], row)) for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+        return [self._row_to_dict(cursor, row) for row in rows if row]
 
     def save_lead(self, lead_data: Dict[str, Any]) -> str:
         """Сохранить лид (если уже есть google_id - обновить)"""
@@ -1635,9 +1645,7 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
         row = cursor.fetchone()
-        if not row:
-            return None
-        return dict(zip([d[0] for d in cursor.description], row))
+        return self._row_to_dict(cursor, row)
 
     def delete_lead(self, lead_id: str) -> bool:
         """Удалить лид"""

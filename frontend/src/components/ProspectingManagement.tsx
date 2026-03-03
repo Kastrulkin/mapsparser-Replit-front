@@ -69,6 +69,10 @@ type OutreachQueueItem = {
     lead_name?: string;
     approved_text?: string;
     generated_text?: string;
+    latest_outcome?: string | null;
+    latest_human_outcome?: string | null;
+    latest_raw_reply?: string | null;
+    latest_reaction_at?: string | null;
 };
 
 type OutreachBatch = {
@@ -334,8 +338,12 @@ export const ProspectingManagement: React.FC = () => {
     const [importResult, setImportResult] = useState<string | null>(null);
     const [draftChannelFilter, setDraftChannelFilter] = useState('');
     const [queueChannelFilter, setQueueChannelFilter] = useState('');
+    const [queueViewFilter, setQueueViewFilter] = useState<'all' | 'today' | 'attention'>('all');
     const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
     const [selectedSendReadyDraftIds, setSelectedSendReadyDraftIds] = useState<string[]>([]);
+    const [selectedShortlistLeadIds, setSelectedShortlistLeadIds] = useState<string[]>([]);
+    const [selectedOutreachLeadIds, setSelectedOutreachLeadIds] = useState<string[]>([]);
+    const [bulkOutreachChannel, setBulkOutreachChannel] = useState<'telegram' | 'whatsapp' | 'email' | 'manual'>('telegram');
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -577,6 +585,52 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const bulkSelectForOutreach = async () => {
+        const leadIds = shortlistLeads
+            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
+            .map((lead) => lead.id as string);
+        if (leadIds.length === 0) return;
+
+        setSelectionLoading((prev) => ({ ...prev, bulkSelect: 'select' }));
+        try {
+            await Promise.all(leadIds.map((leadId) => api.post(`/admin/prospecting/lead/${leadId}/select`)));
+            setSelectedShortlistLeadIds([]);
+            await fetchSavedLeads();
+        } catch (error) {
+            console.error('Error bulk selecting leads for outreach:', error);
+        } finally {
+            setSelectionLoading((prev) => {
+                const next = { ...prev };
+                delete next.bulkSelect;
+                return next;
+            });
+        }
+    };
+
+    const bulkAssignOutreachChannel = async () => {
+        const leadIds = outreachLeads
+            .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
+            .map((lead) => lead.id as string);
+        if (leadIds.length === 0) return;
+
+        setSelectionLoading((prev) => ({ ...prev, bulkChannel: bulkOutreachChannel }));
+        try {
+            await Promise.all(
+                leadIds.map((leadId) => api.post(`/admin/prospecting/lead/${leadId}/channel`, { channel: bulkOutreachChannel }))
+            );
+            setSelectedOutreachLeadIds([]);
+            await fetchSavedLeads();
+        } catch (error) {
+            console.error('Error bulk assigning outreach channel:', error);
+        } finally {
+            setSelectionLoading((prev) => {
+                const next = { ...prev };
+                delete next.bulkChannel;
+                return next;
+            });
+        }
+    };
+
     const generateDraft = async (leadId: string) => {
         setDraftBusy(prev => ({ ...prev, [leadId]: 'generate' }));
         try {
@@ -771,12 +825,25 @@ export const ProspectingManagement: React.FC = () => {
         () => sendReadyDrafts.filter((draft) => !queueChannelFilter || draft.channel === queueChannelFilter),
         [sendReadyDrafts, queueChannelFilter]
     );
-    const filteredSendBatches = useMemo(
-        () => sendBatches.filter((batch) =>
-            !queueChannelFilter || (batch.items || []).some((item) => item.channel === queueChannelFilter)
-        ),
-        [sendBatches, queueChannelFilter]
-    );
+    const todayBatchDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+    const queueBatchNeedsAttention = (batch: OutreachBatch) =>
+        (batch.items || []).some((item) => {
+            if (queueChannelFilter && item.channel !== queueChannelFilter) return false;
+            if (item.delivery_status === 'failed') return true;
+            return item.delivery_status === 'sent' && !item.latest_human_outcome && !item.latest_outcome;
+        });
+    const filteredSendBatches = useMemo(() => {
+        const byChannel = sendBatches.filter(
+            (batch) => !queueChannelFilter || (batch.items || []).some((item) => item.channel === queueChannelFilter)
+        );
+        if (queueViewFilter === 'today') {
+            return byChannel.filter((batch) => batch.batch_date === todayBatchDate);
+        }
+        if (queueViewFilter === 'attention') {
+            return byChannel.filter((batch) => queueBatchNeedsAttention(batch));
+        }
+        return byChannel;
+    }, [sendBatches, queueChannelFilter, queueViewFilter, todayBatchDate]);
     const groupedSendBatches = useMemo(() => {
         const groups = new Map<string, { batchDate: string; draftCount: number; approvedCount: number; batches: OutreachBatch[] }>();
         for (const batch of filteredSendBatches) {
@@ -792,7 +859,6 @@ export const ProspectingManagement: React.FC = () => {
         }
         return Array.from(groups.values()).sort((a, b) => b.batchDate.localeCompare(a.batchDate));
     }, [filteredSendBatches]);
-    const todayBatchDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
     const todaySendBatches = useMemo(
         () => filteredSendBatches.filter((batch) => batch.batch_date === todayBatchDate),
         [filteredSendBatches, todayBatchDate]
@@ -834,6 +900,14 @@ export const ProspectingManagement: React.FC = () => {
     useEffect(() => {
         setSelectedSendReadyDraftIds((prev) => prev.filter((id) => filteredSendReadyDrafts.some((draft) => draft.id === id)));
     }, [filteredSendReadyDrafts]);
+
+    useEffect(() => {
+        setSelectedShortlistLeadIds((prev) => prev.filter((id) => shortlistLeads.some((lead) => lead.id === id)));
+    }, [shortlistLeads]);
+
+    useEffect(() => {
+        setSelectedOutreachLeadIds((prev) => prev.filter((id) => outreachLeads.some((lead) => lead.id === id)));
+    }, [outreachLeads]);
 
     const visibleLeads = leadTab === 'shortlist'
         ? shortlistLeads
@@ -1265,7 +1339,32 @@ export const ProspectingManagement: React.FC = () => {
                                         <h3 className="font-semibold">Shortlist, готовые к выбору</h3>
                                         <p className="text-sm text-muted-foreground">Следующий шаг после shortlist: пометить лид как выбранный для аутрича.</p>
                                     </div>
-                                    <Badge variant="secondary">{shortlistLeads.length}</Badge>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{shortlistLeads.length}</Badge>
+                                        <Badge variant="outline">Выбрано: {selectedShortlistLeadIds.length}</Badge>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setSelectedShortlistLeadIds(
+                                                    selectedShortlistLeadIds.length === shortlistLeads.length
+                                                        ? []
+                                                        : shortlistLeads.map((lead) => lead.id).filter(Boolean) as string[]
+                                                )
+                                            }
+                                            disabled={shortlistLeads.length === 0}
+                                        >
+                                            {selectedShortlistLeadIds.length === shortlistLeads.length && shortlistLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={bulkSelectForOutreach}
+                                            disabled={selectedShortlistLeadIds.length === 0 || selectionLoading.bulkSelect === 'select'}
+                                        >
+                                            {selectionLoading.bulkSelect === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Выбрать отмеченные
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="space-y-3">
                                     {shortlistLeads.length === 0 && (
@@ -1276,6 +1375,19 @@ export const ProspectingManagement: React.FC = () => {
                                         return (
                                             <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
                                                 <div className="space-y-2">
+                                                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!lead.id && selectedShortlistLeadIds.includes(lead.id)}
+                                                            onChange={(e) =>
+                                                                lead.id &&
+                                                                setSelectedShortlistLeadIds((prev) =>
+                                                                    e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
+                                                                )
+                                                            }
+                                                        />
+                                                        Отметить для массового перевода
+                                                    </label>
                                                     <div className="font-medium">{lead.name}</div>
                                                     <LeadMetaSummary lead={lead} />
                                                 </div>
@@ -1295,7 +1407,42 @@ export const ProspectingManagement: React.FC = () => {
                                         <h3 className="font-semibold">Выбранные для аутрича</h3>
                                         <p className="text-sm text-muted-foreground">Подтвердите первый канал: Telegram, WhatsApp, Email или ручное касание.</p>
                                     </div>
-                                    <Badge variant="secondary">{outreachLeads.length}</Badge>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="secondary">{outreachLeads.length}</Badge>
+                                        <Badge variant="outline">Выбрано: {selectedOutreachLeadIds.length}</Badge>
+                                        <select
+                                            className="border rounded-md px-3 py-2 bg-background text-sm"
+                                            value={bulkOutreachChannel}
+                                            onChange={(e) => setBulkOutreachChannel(e.target.value as 'telegram' | 'whatsapp' | 'email' | 'manual')}
+                                        >
+                                            <option value="telegram">Telegram</option>
+                                            <option value="whatsapp">WhatsApp</option>
+                                            <option value="email">Email</option>
+                                            <option value="manual">Manual</option>
+                                        </select>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setSelectedOutreachLeadIds(
+                                                    selectedOutreachLeadIds.length === outreachLeads.length
+                                                        ? []
+                                                        : outreachLeads.map((lead) => lead.id).filter(Boolean) as string[]
+                                                )
+                                            }
+                                            disabled={outreachLeads.length === 0}
+                                        >
+                                            {selectedOutreachLeadIds.length === outreachLeads.length && outreachLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={bulkAssignOutreachChannel}
+                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkChannel === bulkOutreachChannel}
+                                        >
+                                            {selectionLoading.bulkChannel === bulkOutreachChannel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Назначить канал выбранным
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="space-y-3">
                                     {outreachLeads.length === 0 && (
@@ -1307,6 +1454,19 @@ export const ProspectingManagement: React.FC = () => {
                                             <div key={lead.id} className="rounded-md border p-3">
                                                 <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                                     <div className="space-y-2">
+                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!lead.id && selectedOutreachLeadIds.includes(lead.id)}
+                                                                onChange={(e) =>
+                                                                    lead.id &&
+                                                                    setSelectedOutreachLeadIds((prev) =>
+                                                                        e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
+                                                                    )
+                                                                }
+                                                            />
+                                                            Отметить для массового назначения канала
+                                                        </label>
                                                         <div className="font-medium">{lead.name}</div>
                                                         <LeadMetaSummary lead={lead} showChannel />
                                                         <div className="flex items-center gap-2">
@@ -1507,6 +1667,18 @@ export const ProspectingManagement: React.FC = () => {
                                     <option value="email">Email</option>
                                     <option value="manual">Manual</option>
                                 </select>
+                                <div className="text-sm font-medium">Показать</div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" variant={queueViewFilter === 'all' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('all')}>
+                                        Все
+                                    </Button>
+                                    <Button size="sm" variant={queueViewFilter === 'today' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('today')}>
+                                        Только сегодня
+                                    </Button>
+                                    <Button size="sm" variant={queueViewFilter === 'attention' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('attention')}>
+                                        Требует внимания
+                                    </Button>
+                                </div>
                                 <Badge variant="secondary">Готовы к queue: {filteredSendReadyDrafts.length}</Badge>
                                 <Badge variant="outline">Batch-групп: {groupedSendBatches.length}</Badge>
                             </div>
