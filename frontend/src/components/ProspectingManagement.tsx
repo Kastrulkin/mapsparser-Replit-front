@@ -669,6 +669,26 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const saveDraftEdit = async (draftId: string) => {
+        const editedText = (draftEdits[draftId] || '').trim();
+        if (!editedText) return;
+        setDraftBusy((prev) => ({ ...prev, [draftId]: 'save' }));
+        try {
+            await api.post(`/admin/prospecting/drafts/${draftId}/save`, {
+                edited_text: editedText,
+            });
+            await fetchDrafts();
+        } catch (error) {
+            console.error('Error saving draft edit:', error);
+        } finally {
+            setDraftBusy((prev) => {
+                const next = { ...prev };
+                delete next[draftId];
+                return next;
+            });
+        }
+    };
+
     const rejectDraft = async (draftId: string) => {
         setDraftBusy(prev => ({ ...prev, [draftId]: 'reject' }));
         try {
@@ -1712,6 +1732,10 @@ export const ProspectingManagement: React.FC = () => {
                                                     onChange={(e) => setDraftEdits(prev => ({ ...prev, [draft.id]: e.target.value }))}
                                                 />
                                                 <div className="flex flex-wrap gap-2">
+                                                    <Button variant="secondary" onClick={() => saveDraftEdit(draft.id)} disabled={Boolean(pending)}>
+                                                        {pending === 'save' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Сохранить черновик
+                                                    </Button>
                                                     <Button onClick={() => approveDraft(draft.id)} disabled={Boolean(pending)}>
                                                         {pending === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                                         Утвердить

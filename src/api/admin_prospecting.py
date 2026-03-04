@@ -1674,6 +1674,58 @@ def approve_outreach_draft(draft_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/save", methods=["POST"])
+def save_outreach_draft(draft_id):
+    """Save edited outreach draft without approving it."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        edited_text = (data.get("edited_text") or "").strip()
+        if not edited_text:
+            return jsonify({"error": "edited_text is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT status FROM outreachmessagedrafts WHERE id = %s", (draft_id,))
+            draft = cur.fetchone()
+            if not draft:
+                return jsonify({"error": "Draft not found"}), 404
+
+            current_status = draft["status"] if hasattr(draft, "__getitem__") else draft[0]
+            next_status = DRAFT_GENERATED if current_status == DRAFT_REJECTED else current_status
+
+            cur.execute(
+                """
+                UPDATE outreachmessagedrafts
+                SET edited_text = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (
+                    edited_text,
+                    next_status,
+                    draft_id,
+                ),
+            )
+            updated = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "draft": _serialize_draft(dict(updated))})
+    except Exception as e:
+        print(f"Error saving outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/reject", methods=["POST"])
 def reject_outreach_draft(draft_id):
     """Reject outreach draft."""
