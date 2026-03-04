@@ -202,6 +202,215 @@ def estimate_card_revenue_gap(
     }
 
 
+def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
+    lead_name = str(lead.get("name") or "Лид").strip() or "Лид"
+    business_type = str(lead.get("category") or lead.get("business_type") or "").strip() or "Локальный бизнес"
+    city = str(lead.get("city") or "").strip()
+    rating_raw = lead.get("rating")
+    rating = float(rating_raw) if rating_raw is not None else None
+    reviews_count = int(lead.get("reviews_count") or 0)
+    has_website = bool(str(lead.get("website") or "").strip())
+    has_phone = bool(str(lead.get("phone") or "").strip())
+    has_email = bool(str(lead.get("email") or "").strip())
+    has_messenger = bool(
+        str(lead.get("telegram_url") or "").strip()
+        or str(lead.get("whatsapp_url") or "").strip()
+        or _safe_json(lead.get("messenger_links_json"))
+    )
+
+    services_count = 0
+    priced_services_count = 0
+    unanswered_reviews_count = 0
+    photos_count = 0
+    news_count = 0
+    has_recent_activity = False
+
+    profile_score = 100
+    if not has_website:
+        profile_score -= 12
+    if not has_phone:
+        profile_score -= 10
+    if not (has_email or has_messenger):
+        profile_score -= 8
+    if not str(lead.get("source_url") or "").strip():
+        profile_score -= 10
+    if not str(lead.get("address") or "").strip():
+        profile_score -= 8
+    profile_score = max(35, min(100, profile_score))
+
+    reputation_score = 100
+    if rating is None:
+        reputation_score -= 18
+    elif rating < 4.4:
+        reputation_score -= 28
+    elif rating < 4.7:
+        reputation_score -= 12
+    if reviews_count < 10:
+        reputation_score -= 16
+    elif reviews_count < 20:
+        reputation_score -= 8
+    reputation_score = max(30, min(100, reputation_score))
+
+    service_score = 48
+    if services_count <= 0:
+        service_score -= 20
+    if priced_services_count <= 0:
+        service_score -= 8
+    service_score = max(20, min(100, service_score))
+
+    activity_score = 42
+    if has_recent_activity:
+        activity_score += 12
+    if news_count > 0:
+        activity_score += 6
+    activity_score = max(20, min(100, activity_score))
+
+    summary_score = round(
+        profile_score * 0.20
+        + reputation_score * 0.35
+        + service_score * 0.30
+        + activity_score * 0.15
+    )
+
+    if summary_score >= 80:
+        health_level = "strong"
+        health_label = "Сильная карточка"
+    elif summary_score >= 55:
+        health_level = "growth"
+        health_label = "Есть точки роста"
+    else:
+        health_level = "risk"
+        health_label = "Карточка теряет клиентов"
+
+    findings: List[Dict[str, Any]] = []
+    if services_count <= 0:
+        findings.append(
+            {
+                "code": "services_missing",
+                "severity": "high",
+                "title": "Услуги не заполнены",
+                "description": "В карточке не видно структурированного списка услуг. Это снижает конверсию и затрудняет принятие решения.",
+            }
+        )
+    if not has_website or not has_phone:
+        findings.append(
+            {
+                "code": "profile_incomplete",
+                "severity": "high" if not has_website and not has_phone else "medium",
+                "title": "Карточка заполнена не полностью",
+                "description": "Не хватает части базовых контактов. Это снижает доверие и уменьшает число входящих действий.",
+            }
+        )
+    if rating is None or rating < 4.7:
+        findings.append(
+            {
+                "code": "rating_below_target",
+                "severity": "high" if (rating is None or rating < 4.4) else "medium",
+                "title": "Рейтинг ниже целевого уровня",
+                "description": "Текущий рейтинг и уровень доверия ниже зоны, где карточка получает максимум переходов.",
+            }
+        )
+    if reviews_count < 20:
+        findings.append(
+            {
+                "code": "reviews_too_few",
+                "severity": "medium",
+                "title": "Недостаточно отзывов",
+                "description": "Социального доказательства мало. Карточка выглядит менее надёжно для новых клиентов.",
+            }
+        )
+
+    revenue_potential = estimate_card_revenue_gap(
+        rating=rating,
+        services_count=services_count,
+        priced_services_count=priced_services_count,
+        unanswered_reviews_count=unanswered_reviews_count,
+        reviews_count=reviews_count,
+        photos_count=photos_count,
+        news_count=news_count,
+        average_check=None,
+        current_revenue=None,
+        business_type=business_type,
+    )
+
+    top_driver = "заполнении карточки"
+    if revenue_potential["rating_gap"]["max"] >= max(
+        revenue_potential["content_gap"]["max"],
+        revenue_potential["service_gap"]["max"],
+    ):
+        top_driver = "рейтинге и доверии"
+    elif revenue_potential["service_gap"]["max"] >= revenue_potential["content_gap"]["max"]:
+        top_driver = "структуре услуг"
+
+    summary_text = (
+        f"Это демо-аудит лида: карточка {lead_name} выглядит неполной, основной потенциал роста сейчас в {top_driver}. "
+        f"Такой экран можно использовать в разговоре как наглядный пример точек роста."
+    )
+
+    recommended_actions: List[Dict[str, Any]] = [
+        {
+            "priority": "high",
+            "title": "Заполнить и структурировать услуги",
+            "description": "Добавьте основные услуги с понятными названиями и ценами, чтобы карточка лучше конвертировала просмотры в обращения.",
+        },
+        {
+            "priority": "high" if rating is None or rating < 4.4 else "medium",
+            "title": "Усилить рейтинг и работу с отзывами",
+            "description": "Соберите свежие отзывы и закройте негатив корректными ответами, чтобы поднять доверие к карточке.",
+        },
+        {
+            "priority": "medium",
+            "title": "Закрыть пробелы в карточке",
+            "description": "Проверьте контакты, сайт и базовое наполнение карточки — это быстрые улучшения с ощутимым эффектом.",
+        },
+    ]
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "business": {
+            "id": lead.get("id"),
+            "name": lead_name,
+            "business_type": business_type,
+            "city": city or None,
+        },
+        "parse_context": {
+            "last_parse_at": lead.get("updated_at") or lead.get("created_at"),
+            "last_parse_status": "lead_preview",
+            "no_new_services_found": services_count <= 0,
+        },
+        "summary_score": summary_score,
+        "health_level": health_level,
+        "health_label": health_label,
+        "summary_text": summary_text,
+        "subscores": {
+            "profile": profile_score,
+            "reputation": reputation_score,
+            "services": service_score,
+            "activity": activity_score,
+        },
+        "findings": findings[:5],
+        "current_state": {
+            "rating": rating,
+            "reviews_count": reviews_count,
+            "unanswered_reviews_count": unanswered_reviews_count,
+            "services_count": services_count,
+            "services_with_price_count": priced_services_count,
+            "has_website": has_website,
+            "has_recent_activity": has_recent_activity,
+            "photos_state": "unknown",
+        },
+        "revenue_potential": revenue_potential,
+        "recommended_actions": recommended_actions,
+        "preview_meta": {
+            "has_phone": has_phone,
+            "has_email": has_email,
+            "has_messenger": has_messenger,
+            "source": lead.get("source"),
+            "source_url": lead.get("source_url"),
+        },
+    }
+
+
 def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()

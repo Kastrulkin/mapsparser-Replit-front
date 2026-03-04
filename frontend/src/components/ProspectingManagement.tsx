@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save } from "lucide-react";
 import { api } from "@/services/api";
+import LeadCardPreviewPanel, { type LeadCardPreview } from "./LeadCardPreviewPanel";
 
 type Lead = {
     id?: string;
@@ -401,6 +402,10 @@ export const ProspectingManagement: React.FC = () => {
     const [selectedOutreachLeadIds, setSelectedOutreachLeadIds] = useState<string[]>([]);
     const [selectedQueueItemIds, setSelectedQueueItemIds] = useState<string[]>([]);
     const [bulkOutreachChannel, setBulkOutreachChannel] = useState<'telegram' | 'whatsapp' | 'email' | 'manual'>('telegram');
+    const [previewLead, setPreviewLead] = useState<Lead | null>(null);
+    const [previewSnapshot, setPreviewSnapshot] = useState<LeadCardPreview | null>(null);
+    const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
+    const [previewError, setPreviewError] = useState<string | null>(null);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -1073,6 +1078,37 @@ export const ProspectingManagement: React.FC = () => {
             ? rejectedLeads
             : candidateLeads;
 
+    const closeLeadPreview = () => {
+        setPreviewLead(null);
+        setPreviewSnapshot(null);
+        setPreviewError(null);
+        setPreviewLoadingId(null);
+    };
+
+    const openLeadPreview = async (lead: Lead) => {
+        if (!lead.id) {
+            return;
+        }
+
+        setPreviewLead(lead);
+        setPreviewSnapshot(null);
+        setPreviewError(null);
+        setPreviewLoadingId(lead.id);
+
+        try {
+            const response = await api.get(`/admin/prospecting/lead/${lead.id}/preview`);
+            const payload = response.data || {};
+            if (payload.lead) {
+                setPreviewLead(payload.lead as Lead);
+            }
+            setPreviewSnapshot((payload.preview as LeadCardPreview) || null);
+        } catch (error: any) {
+            setPreviewError(error?.message || 'Не удалось загрузить аудит карточки лида');
+        } finally {
+            setPreviewLoadingId(null);
+        }
+    };
+
     const renderLeadRow = (lead: Lead) => {
         const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
         const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
@@ -1116,6 +1152,17 @@ export const ProspectingManagement: React.FC = () => {
                 </TableCell>
                 <TableCell className="min-w-[220px]">
                     <div className="flex flex-wrap gap-2">
+                        {lead.id && (
+                            <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => openLeadPreview(lead)}
+                                disabled={previewLoadingId === lead.id}
+                            >
+                                {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                Аудит карточки
+                            </Button>
+                        )}
                         {leadTab !== 'shortlist' && leadTab !== 'rejected' && lead.id && (
                             <>
                                 <Button
@@ -1175,6 +1222,16 @@ export const ProspectingManagement: React.FC = () => {
                     </p>
                 </div>
             </div>
+
+            {previewLead && (
+                <LeadCardPreviewPanel
+                    lead={previewLead}
+                    preview={previewSnapshot}
+                    loading={previewLoadingId === previewLead.id}
+                    error={previewError}
+                    onClose={closeLeadPreview}
+                />
+            )}
 
             <Tabs defaultValue="search" className="w-full">
                 <TabsList>
@@ -1549,10 +1606,22 @@ export const ProspectingManagement: React.FC = () => {
                                                     <div className="font-medium">{lead.name}</div>
                                                     <LeadMetaSummary lead={lead} />
                                                 </div>
-                                                <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
-                                                    {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                    Выбрать для контакта
-                                                </Button>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {lead.id && (
+                                                        <Button
+                                                            variant="secondary"
+                                                            onClick={() => openLeadPreview(lead)}
+                                                            disabled={previewLoadingId === lead.id}
+                                                        >
+                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                            Аудит карточки
+                                                        </Button>
+                                                    )}
+                                                    <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
+                                                        {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Выбрать для контакта
+                                                    </Button>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1634,6 +1703,17 @@ export const ProspectingManagement: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-wrap gap-2">
+                                                    {lead.id && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            onClick={() => openLeadPreview(lead)}
+                                                            disabled={previewLoadingId === lead.id}
+                                                        >
+                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                            Аудит карточки
+                                                        </Button>
+                                                    )}
                                                     {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
                                                         <Button
                                                             key={channel}
@@ -1704,10 +1784,22 @@ export const ProspectingManagement: React.FC = () => {
                                                     <div className="font-medium">{lead.name}</div>
                                                     <LeadMetaSummary lead={lead} showChannel />
                                                 </div>
-                                                <Button onClick={() => lead.id && generateDraft(lead.id)} disabled={!lead.id || Boolean(pending)}>
-                                                    {pending === 'generate' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                    Сгенерировать черновик
-                                                </Button>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {lead.id && (
+                                                        <Button
+                                                            variant="secondary"
+                                                            onClick={() => openLeadPreview(lead)}
+                                                            disabled={previewLoadingId === lead.id}
+                                                        >
+                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                            Аудит карточки
+                                                        </Button>
+                                                    )}
+                                                    <Button onClick={() => lead.id && generateDraft(lead.id)} disabled={!lead.id || Boolean(pending)}>
+                                                        {pending === 'generate' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Сгенерировать черновик
+                                                    </Button>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1792,9 +1884,26 @@ export const ProspectingManagement: React.FC = () => {
                                                             );
                                                         })()}
                                                     </div>
-                                                    <Badge variant={draft.status === 'approved' ? 'default' : draft.status === 'rejected' ? 'destructive' : 'secondary'}>
-                                                        {draft.status}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-2">
+                                                        {(() => {
+                                                            const lead = savedLeads.find((item) => item.id === draft.lead_id);
+                                                            if (!lead?.id) return null;
+                                                            return (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="secondary"
+                                                                    onClick={() => openLeadPreview(lead)}
+                                                                    disabled={previewLoadingId === lead.id}
+                                                                >
+                                                                    {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                    Аудит карточки
+                                                                </Button>
+                                                            );
+                                                        })()}
+                                                        <Badge variant={draft.status === 'approved' ? 'default' : draft.status === 'rejected' ? 'destructive' : 'secondary'}>
+                                                            {draft.status}
+                                                        </Badge>
+                                                    </div>
                                                 </div>
                                                 <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap">
                                                     {draft.generated_text}

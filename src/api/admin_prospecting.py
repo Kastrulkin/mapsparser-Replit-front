@@ -1923,6 +1923,31 @@ def reject_outreach_draft(draft_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/preview", methods=["GET"])
+def preview_lead_card(lead_id):
+    """Return deterministic preview snapshot for an outreach lead."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        with DatabaseManager() as db:
+            lead = db.get_lead_by_id(lead_id)
+
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+
+        display_lead = _normalize_lead_for_display(dict(lead))
+        if not display_lead:
+            return jsonify({"error": "Lead is not available for preview"}), 404
+
+        preview = build_lead_card_preview_snapshot(display_lead)
+        return jsonify({"success": True, "lead": display_lead, "preview": preview})
+    except Exception as e:
+        print(f"Error building outreach lead preview: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>", methods=["DELETE"])
 def delete_lead(lead_id):
     """Delete a lead."""
