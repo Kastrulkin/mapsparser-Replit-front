@@ -26,6 +26,7 @@ import { AIChatPromotionPage } from "./pages/dashboard/AIChatPromotionPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import Policy from "./pages/Policy";
+import Requisites from "./pages/Requisites";
 import WizardYandex from "./pages/WizardYandex";
 import Sprint from "./pages/Sprint";
 import ServicePhrases from "./pages/ServicePhrases";
@@ -51,6 +52,7 @@ const AppContent = () => {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/policy" element={<Policy />} />
+          <Route path="/requisites" element={<Requisites />} />
           <Route path="/login" element={<Login />} />
 
           <Route path="/dashboard" element={<DashboardLayout />}>

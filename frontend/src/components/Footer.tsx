@@ -24,6 +24,7 @@ const Footer = () => {
     company: [
       { name: t.footer.whoWeAre, href: '/about' },
       { name: t.footer.contacts, href: '/contact' },
+      { name: 'Реквизиты', href: '/requisites' },
     ],
   };
 

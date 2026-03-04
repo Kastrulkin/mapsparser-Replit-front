@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from progress_calculator import calculate_business_progress
+from core.card_audit import build_card_audit_snapshot
 
 progress_bp = Blueprint('progress_api', __name__)
 
@@ -50,6 +51,43 @@ def get_business_progress(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка получения прогресса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@progress_bp.route('/api/business/<business_id>/card-audit', methods=['GET'])
+def get_business_card_audit(business_id):
+    """Получить аудит карточки бизнеса."""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
+        business = cursor.fetchone()
+
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = business[0] if not hasattr(business, "keys") else business.get("owner_id")
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        db.close()
+
+        audit = build_card_audit_snapshot(business_id)
+        return jsonify({
+            "success": True,
+            "audit": audit,
+        })
+    except Exception as e:
+        print(f"❌ Ошибка получения аудита карточки: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
