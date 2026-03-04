@@ -12,6 +12,7 @@ from psycopg2.extras import Json
 
 from auth_system import verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
+from core.card_audit import build_lead_card_preview_snapshot
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
@@ -139,6 +140,57 @@ def _to_bool_filter(value: str | None):
     if normalized in {"0", "false", "no"}:
         return False
     return None
+
+
+def _is_placeholder_like(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip().lower()
+    return text in {
+        "",
+        "name",
+        "title",
+        "category",
+        "source",
+        "address",
+        "location",
+        "phone",
+        "email",
+        "website",
+        "rating",
+        "reviews_count",
+        "status",
+    }
+
+
+def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
+    normalized = dict(lead)
+    for field in (
+        "name",
+        "category",
+        "address",
+        "location",
+        "phone",
+        "email",
+        "website",
+        "source",
+        "status",
+    ):
+        if _is_placeholder_like(normalized.get(field)):
+            normalized[field] = None
+
+    for field in ("rating", "reviews_count"):
+        if _is_placeholder_like(normalized.get(field)):
+            normalized[field] = None
+
+    has_identity = any(
+        normalized.get(field)
+        for field in ("name", "address", "website", "phone", "source_url")
+    )
+    if not has_identity:
+        return None
+
+    return normalized
 
 
 def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool:
@@ -451,6 +503,17 @@ def _serialize_batch_row(row: dict[str, Any]) -> dict[str, Any]:
     payload = dict(row)
     payload["items"] = []
     return payload
+
+
+def _load_prospecting_lead(lead_id: str) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
@@ -1259,7 +1322,13 @@ def get_leads():
         }
         with DatabaseManager() as db:
             leads = db.get_all_leads()
-        filtered = [lead for lead in leads if _lead_matches_filters(lead, filters)]
+        normalized = []
+        for lead in leads:
+            display_lead = _normalize_lead_for_display(lead)
+            if not display_lead:
+                continue
+            normalized.append(display_lead)
+        filtered = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
         return jsonify({"leads": filtered, "count": len(filtered)})
     except Exception as e:
         print(f"Error getting leads: {e}")
