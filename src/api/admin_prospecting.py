@@ -165,8 +165,17 @@ def _is_placeholder_like(value: Any) -> bool:
 
 def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
     normalized = dict(lead)
+    if _is_placeholder_like(normalized.get("name")):
+        normalized["name"] = None
+
+    if not normalized.get("name"):
+        for fallback_field in ("title", "company_name", "company"):
+            fallback_value = normalized.get(fallback_field)
+            if fallback_value and not _is_placeholder_like(fallback_value):
+                normalized["name"] = str(fallback_value).strip()
+                break
+
     for field in (
-        "name",
         "category",
         "address",
         "location",
@@ -182,6 +191,9 @@ def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
     for field in ("rating", "reviews_count"):
         if _is_placeholder_like(normalized.get(field)):
             normalized[field] = None
+
+    if not normalized.get("name"):
+        return None
 
     has_identity = any(
         normalized.get(field)
