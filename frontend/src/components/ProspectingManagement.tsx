@@ -239,6 +239,39 @@ const formatLeadChannel = (channel?: string) => {
     }
 };
 
+const PLACEHOLDER_LEAD_VALUES = new Set([
+    'name',
+    'company',
+    'company name',
+    'title',
+    'address',
+    'phone',
+    'email',
+    'website',
+    'rating',
+    'reviews_count',
+    'reviews',
+    'status',
+    'source',
+    'category',
+]);
+
+const isPlaceholderLike = (value?: string | number | null) => {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (!normalized) {
+        return false;
+    }
+    return PLACEHOLDER_LEAD_VALUES.has(normalized);
+};
+
+const isDisplayableLead = (lead: Lead) => {
+    if (!lead || isPlaceholderLike(lead.name)) {
+        return false;
+    }
+    const meaningful = [lead.address, lead.phone, lead.website, lead.email, lead.source_url, lead.source_external_id];
+    return meaningful.some((value) => value && !isPlaceholderLike(value));
+};
+
 const extractHasMessengers = (lead: Lead) => {
     const rawLinks = lead.messenger_links_json;
     const parsedLinks = Array.isArray(rawLinks)
@@ -859,7 +892,9 @@ export const ProspectingManagement: React.FC = () => {
     const resetFilters = () => setFilters(emptyFilters);
 
     const sourceFilteredLeads = useMemo(
-        () => savedLeads.filter((lead) => !filters.source || (lead.source || '') === filters.source),
+        () => savedLeads
+            .filter(isDisplayableLead)
+            .filter((lead) => !filters.source || (lead.source || '') === filters.source),
         [savedLeads, filters.source]
     );
     const shortlistLeads = useMemo(

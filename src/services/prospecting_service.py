@@ -53,6 +53,59 @@ class ProspectingService:
                 return item.get(key)
         return None
 
+    @staticmethod
+    def _normalize_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @classmethod
+    def _is_placeholder_value(cls, value: Any, placeholders: set[str]) -> bool:
+        normalized = cls._normalize_text(value).lower()
+        return bool(normalized) and normalized in placeholders
+
+    @classmethod
+    def _is_meaningful_lead(cls, lead: Dict[str, Any]) -> bool:
+        """
+        Ignore sample/example rows accidentally imported from UI placeholder JSON.
+        """
+        placeholder_values = {
+            "name",
+            "company",
+            "company name",
+            "title",
+            "address",
+            "phone",
+            "email",
+            "website",
+            "rating",
+            "reviews_count",
+            "reviews",
+            "status",
+            "source",
+            "category",
+        }
+        name = lead.get("name")
+        if cls._is_placeholder_value(name, placeholder_values):
+            return False
+        if not cls._normalize_text(name):
+            return False
+
+        meaningful_fields = (
+            lead.get("address"),
+            lead.get("phone"),
+            lead.get("website"),
+            lead.get("email"),
+            lead.get("source_url"),
+            lead.get("source_external_id"),
+        )
+        if not any(
+            cls._normalize_text(value) and not cls._is_placeholder_value(value, placeholder_values)
+            for value in meaningful_fields
+        ):
+            return False
+        return True
+
     def _normalize_result(self, item: Dict[str, Any]) -> Dict[str, Any]:
         messenger_links = self._pick(item, "messengerLinks", "messengers", "socialLinks") or []
         if isinstance(messenger_links, dict):
@@ -111,7 +164,9 @@ class ProspectingService:
         normalized: List[Dict[str, Any]] = []
         for item in items:
             if isinstance(item, dict):
-                normalized.append(self._normalize_result(item))
+                normalized_item = self._normalize_result(item)
+                if self._is_meaningful_lead(normalized_item):
+                    normalized.append(normalized_item)
         return normalized
 
     def _build_run_input(self, query: str, location: str, limit: int) -> Dict[str, Any]:

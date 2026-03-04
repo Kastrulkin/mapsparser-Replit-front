@@ -1266,6 +1266,7 @@ def import_leads():
         return jsonify({
             "success": True,
             "imported_count": len(imported_ids),
+            "skipped_count": max(0, len(raw_items) - len(normalized)),
             "lead_ids": imported_ids,
         })
     except Exception as e:
