@@ -337,12 +337,14 @@ export const ProspectingManagement: React.FC = () => {
     const [importBusy, setImportBusy] = useState(false);
     const [importResult, setImportResult] = useState<string | null>(null);
     const [draftChannelFilter, setDraftChannelFilter] = useState('');
+    const [draftStatusFilter, setDraftStatusFilter] = useState('');
     const [queueChannelFilter, setQueueChannelFilter] = useState('');
     const [queueViewFilter, setQueueViewFilter] = useState<'all' | 'today' | 'attention'>('all');
     const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
     const [selectedSendReadyDraftIds, setSelectedSendReadyDraftIds] = useState<string[]>([]);
     const [selectedShortlistLeadIds, setSelectedShortlistLeadIds] = useState<string[]>([]);
     const [selectedOutreachLeadIds, setSelectedOutreachLeadIds] = useState<string[]>([]);
+    const [selectedQueueItemIds, setSelectedQueueItemIds] = useState<string[]>([]);
     const [bulkOutreachChannel, setBulkOutreachChannel] = useState<'telegram' | 'whatsapp' | 'email' | 'manual'>('telegram');
 
     const activeFilters = useMemo(() => {
@@ -711,6 +713,26 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const rejectSelectedDrafts = async () => {
+        const draftIds = filteredDrafts.filter((draft) => selectedDraftIds.includes(draft.id)).map((draft) => draft.id);
+        if (draftIds.length === 0) return;
+
+        setDraftBusy((prev) => ({ ...prev, bulkReject: 'reject' }));
+        try {
+            await Promise.all(draftIds.map((draftId) => api.post(`/admin/prospecting/drafts/${draftId}/reject`)));
+            setSelectedDraftIds([]);
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error rejecting selected drafts:', error);
+        } finally {
+            setDraftBusy((prev) => {
+                const next = { ...prev };
+                delete next.bulkReject;
+                return next;
+            });
+        }
+    };
+
     const createSendBatch = async (draftIds?: string[]) => {
         setSendQueueBusy(prev => ({ ...prev, create: 'create' }));
         try {
@@ -768,6 +790,33 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const bulkMarkDelivery = async (deliveryStatus: 'sent' | 'failed') => {
+        const queueIds = visibleQueueItems.filter((item) => selectedQueueItemIds.includes(item.id)).map((item) => item.id);
+        if (queueIds.length === 0) return;
+
+        setSendQueueBusy((prev) => ({ ...prev, bulkDelivery: deliveryStatus }));
+        try {
+            await Promise.all(
+                queueIds.map((queueId) =>
+                    api.post(`/admin/prospecting/send-queue/${queueId}/delivery`, {
+                        delivery_status: deliveryStatus,
+                        error_text: deliveryStatus === 'failed' ? 'Manual bulk delivery failure' : undefined,
+                    })
+                )
+            );
+            setSelectedQueueItemIds([]);
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error bulk updating delivery status:', error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next.bulkDelivery;
+                return next;
+            });
+        }
+    };
+
     const recordReaction = async (queueId: string, outcome?: 'positive' | 'question' | 'no_response' | 'hard_no') => {
         setSendQueueBusy(prev => ({ ...prev, [queueId]: `reaction:${outcome || 'auto'}` }));
         try {
@@ -818,8 +867,13 @@ export const ProspectingManagement: React.FC = () => {
         [draftReadyLeads, draftChannelFilter]
     );
     const filteredDrafts = useMemo(
-        () => drafts.filter((draft) => !draftChannelFilter || draft.channel === draftChannelFilter),
-        [drafts, draftChannelFilter]
+        () =>
+            drafts.filter(
+                (draft) =>
+                    (!draftChannelFilter || draft.channel === draftChannelFilter) &&
+                    (!draftStatusFilter || draft.status === draftStatusFilter)
+            ),
+        [drafts, draftChannelFilter, draftStatusFilter]
     );
     const filteredSendReadyDrafts = useMemo(
         () => sendReadyDrafts.filter((draft) => !queueChannelFilter || draft.channel === queueChannelFilter),
@@ -859,6 +913,13 @@ export const ProspectingManagement: React.FC = () => {
         }
         return Array.from(groups.values()).sort((a, b) => b.batchDate.localeCompare(a.batchDate));
     }, [filteredSendBatches]);
+    const visibleQueueItems = useMemo(
+        () =>
+            filteredSendBatches.flatMap((batch) =>
+                (batch.items || []).filter((item) => !queueChannelFilter || item.channel === queueChannelFilter)
+            ),
+        [filteredSendBatches, queueChannelFilter]
+    );
     const todaySendBatches = useMemo(
         () => filteredSendBatches.filter((batch) => batch.batch_date === todayBatchDate),
         [filteredSendBatches, todayBatchDate]
@@ -908,6 +969,10 @@ export const ProspectingManagement: React.FC = () => {
     useEffect(() => {
         setSelectedOutreachLeadIds((prev) => prev.filter((id) => outreachLeads.some((lead) => lead.id === id)));
     }, [outreachLeads]);
+
+    useEffect(() => {
+        setSelectedQueueItemIds((prev) => prev.filter((id) => visibleQueueItems.some((item) => item.id === id)));
+    }, [visibleQueueItems]);
 
     const visibleLeads = leadTab === 'shortlist'
         ? shortlistLeads
@@ -1516,6 +1581,13 @@ export const ProspectingManagement: React.FC = () => {
                                     <option value="email">Email</option>
                                     <option value="manual">Manual</option>
                                 </select>
+                                <div className="text-sm font-medium">Статус</div>
+                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftStatusFilter} onChange={(e) => setDraftStatusFilter(e.target.value)}>
+                                    <option value="">Все статусы</option>
+                                    <option value="generated">generated</option>
+                                    <option value="approved">approved</option>
+                                    <option value="rejected">rejected</option>
+                                </select>
                                 <Badge variant="secondary">Готовы к генерации: {filteredDraftReadyLeads.length}</Badge>
                                 <Badge variant="outline">Черновики: {filteredDrafts.length}</Badge>
                             </div>
@@ -1573,6 +1645,15 @@ export const ProspectingManagement: React.FC = () => {
                                         >
                                             {draftBusy.bulkApprove === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                             Утвердить выбранные
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={rejectSelectedDrafts}
+                                            disabled={selectedDraftIds.length === 0 || draftBusy.bulkReject === 'reject'}
+                                        >
+                                            {draftBusy.bulkReject === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Отклонить выбранные
                                         </Button>
                                     </div>
                                 </div>
@@ -1681,6 +1762,7 @@ export const ProspectingManagement: React.FC = () => {
                                 </div>
                                 <Badge variant="secondary">Готовы к queue: {filteredSendReadyDrafts.length}</Badge>
                                 <Badge variant="outline">Batch-групп: {groupedSendBatches.length}</Badge>
+                                <Badge variant="outline">Выбрано в очереди: {selectedQueueItemIds.length}</Badge>
                             </div>
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1827,7 +1909,40 @@ export const ProspectingManagement: React.FC = () => {
                                         <h3 className="font-semibold">Сформированные batch</h3>
                                         <p className="text-sm text-muted-foreground">После ручного подтверждения batch можно вручную отмечать доставку и фиксировать входящие реакции.</p>
                                     </div>
-                                    <Badge variant="secondary">{filteredSendBatches.length}</Badge>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="secondary">{filteredSendBatches.length}</Badge>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setSelectedQueueItemIds(
+                                                    selectedQueueItemIds.length === visibleQueueItems.length
+                                                        ? []
+                                                        : visibleQueueItems.map((item) => item.id)
+                                                )
+                                            }
+                                            disabled={visibleQueueItems.length === 0}
+                                        >
+                                            {selectedQueueItemIds.length === visibleQueueItems.length && visibleQueueItems.length > 0 ? 'Снять всё' : 'Выбрать всё'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => bulkMarkDelivery('sent')}
+                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'sent'}
+                                        >
+                                            {sendQueueBusy.bulkDelivery === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                            Отметить выбранные sent
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => bulkMarkDelivery('failed')}
+                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}
+                                        >
+                                            {sendQueueBusy.bulkDelivery === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                            Пометить выбранные failed
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="space-y-4">
                                     {!loadingSendQueue && filteredSendBatches.length === 0 && (
@@ -1876,6 +1991,18 @@ export const ProspectingManagement: React.FC = () => {
                                                             <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm space-y-3">
                                                                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                                                     <div>
+                                                                        <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={selectedQueueItemIds.includes(item.id)}
+                                                                                onChange={(e) =>
+                                                                                    setSelectedQueueItemIds((prev) =>
+                                                                                        e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id)
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                            Выбрать для массовой отметки
+                                                                        </label>
                                                                         <div className="font-medium">{item.lead_name || item.lead_id}</div>
                                                                         <div className="text-muted-foreground">
                                                                             Канал: {formatLeadChannel(item.channel)} · Доставка: {item.delivery_status}
