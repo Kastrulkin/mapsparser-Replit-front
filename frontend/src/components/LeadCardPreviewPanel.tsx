@@ -68,6 +68,19 @@ export type LeadCardPreview = {
     last_parse_status?: string | null;
     no_new_services_found: boolean;
   };
+  services_preview?: Array<{
+    current_name: string;
+    suggested_name: string;
+    note: string;
+  }>;
+  reviews_preview?: Array<{
+    review: string;
+    reply_preview: string;
+  }>;
+  news_preview?: Array<{
+    title: string;
+    body: string;
+  }>;
   preview_meta?: {
     has_phone?: boolean;
     has_email?: boolean;
@@ -322,39 +335,108 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({ lead, previ
                 </div>
               </div>
 
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="mb-4 text-base font-semibold text-slate-900">Текущее состояние</div>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Рейтинг</span>
+                      <span className="font-semibold text-slate-900">
+                        {preview.current_state.rating ?? '—'} / 5
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Отзывы</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.reviews_count}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Без ответа</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.unanswered_reviews_count}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Услуги</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.services_count}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Услуги с ценой</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.services_with_price_count}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Сайт</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.has_website ? 'Есть' : 'Нет'}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                      <span className="text-slate-500">Активность</span>
+                      <span className="font-semibold text-slate-900">{preview.current_state.has_recent_activity ? 'Есть' : 'Низкая'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="mb-4 text-base font-semibold text-slate-900">Текущее состояние</div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Рейтинг</span>
-                    <span className="font-semibold text-slate-900">
-                      {preview.current_state.rating ?? '—'} / 5
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Отзывы</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.reviews_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Без ответа</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.unanswered_reviews_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Услуги</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.services_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Услуги с ценой</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.services_with_price_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Сайт</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.has_website ? 'Есть' : 'Нет'}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
-                    <span className="text-slate-500">Активность</span>
-                    <span className="font-semibold text-slate-900">{preview.current_state.has_recent_activity ? 'Есть' : 'Низкая'}</span>
-                  </div>
+                <div className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <TrendingUp className="h-5 w-5 text-violet-500" />
+                  Услуги: что есть и что улучшить
+                </div>
+                <div className="space-y-3">
+                  {(preview.services_preview || []).map((item, idx) => (
+                    <div key={`${item.suggested_name}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Сейчас</div>
+                      <div className="mt-1 text-sm font-medium text-slate-700">{item.current_name}</div>
+                      <div className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">Можно показать так</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{item.suggested_name}</div>
+                      <p className="mt-2 text-xs leading-5 text-slate-600">{item.note}</p>
+                    </div>
+                  ))}
+                  {(!preview.services_preview || preview.services_preview.length === 0) && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Услуги не заполнены или недоступны. Это одна из главных точек роста карточки.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <MessageSquare className="h-5 w-5 text-emerald-500" />
+                  Отзывы и пример ответа
+                </div>
+                <div className="space-y-3">
+                  {(preview.reviews_preview || []).map((item, idx) => (
+                    <div key={`${item.review}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Пример отзыва</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-800">{item.review}</p>
+                      <div className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">Как можно ответить</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-700">{item.reply_preview}</p>
+                    </div>
+                  ))}
+                  {(!preview.reviews_preview || preview.reviews_preview.length === 0) && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Отзывы пока не подготовлены для превью.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <ReceiptText className="h-5 w-5 text-orange-500" />
+                  Примеры новостей
+                </div>
+                <div className="space-y-3">
+                  {(preview.news_preview || []).map((item, idx) => (
+                    <div key={`${item.title}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{item.body}</p>
+                    </div>
+                  ))}
+                  {(!preview.news_preview || preview.news_preview.length === 0) && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Для этой карточки пока нет подготовленных примеров новостей.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

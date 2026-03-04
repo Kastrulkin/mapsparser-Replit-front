@@ -86,6 +86,102 @@ def _coerce_dt(value: Any) -> Optional[datetime]:
     return None
 
 
+def _lead_demo_services_preview(business_type: str) -> List[Dict[str, Any]]:
+    normalized = business_type.lower()
+    if "school" in normalized or "education" in normalized:
+        return [
+            {
+                "current_name": "Курс / занятие без структуры",
+                "suggested_name": "Пробное занятие для новых учеников",
+                "note": "Лучше вынести понятную точку входа, чтобы карточка конвертировала первый интерес.",
+            },
+            {
+                "current_name": "Общее направление обучения",
+                "suggested_name": "Индивидуальные занятия по ключевому предмету",
+                "note": "Показывайте конкретные направления, а не только общий профиль школы.",
+            },
+            {
+                "current_name": "Без цены или формата",
+                "suggested_name": "Абонемент на месяц / курс с понятным форматом",
+                "note": "Цена и формат повышают доверие и сокращают лишние вопросы.",
+            },
+        ]
+    if any(token in normalized for token in ("beauty", "salon", "nail", "cosmetology", "massage", "barber")):
+        return [
+            {
+                "current_name": "Общая услуга без структуры",
+                "suggested_name": "Базовая услуга с понятным названием и сегментом",
+                "note": "Карточка лучше работает, когда названия услуг сразу отвечают на запрос клиента.",
+            },
+            {
+                "current_name": "Услуга без цены",
+                "suggested_name": "Ключевая процедура с ценой или ценовым диапазоном",
+                "note": "Даже ориентировочная цена снижает трение перед первым контактом.",
+            },
+            {
+                "current_name": "Нет отдельных направлений",
+                "suggested_name": "Выделенные услуги по основным направлениям салона",
+                "note": "Разделите ключевые услуги на отдельные позиции вместо одного общего описания.",
+            },
+        ]
+    if any(token in normalized for token in ("cafe", "coffee", "restaurant")):
+        return [
+            {
+                "current_name": "Общий формат заведения",
+                "suggested_name": "Завтраки / бизнес-ланч / фирменные позиции",
+                "note": "Показывайте поводы прийти, а не только сам факт существования заведения.",
+            },
+            {
+                "current_name": "Меню без акцентов",
+                "suggested_name": "Хиты меню с понятной ценой",
+                "note": "Лучше выделить 3–5 ключевых позиций, чем оставлять абстрактное меню.",
+            },
+        ]
+    return [
+        {
+            "current_name": "Общее описание без структуры",
+            "suggested_name": "Ключевая услуга с понятным названием",
+            "note": "Нужны конкретные точки входа, чтобы карточка отвечала на поисковый запрос.",
+        },
+        {
+            "current_name": "Нет цены или формата",
+            "suggested_name": "Понятный формат услуги с диапазоном цены",
+            "note": "Это повышает доверие и сокращает путь до первого обращения.",
+        },
+    ]
+
+
+def _lead_demo_reviews_preview(lead_name: str, business_type: str, rating: Optional[float], reviews_count: int) -> List[Dict[str, Any]]:
+    trust_line = "Рейтинг уже помогает карточке, но ответы усиливают доверие." if (rating or 0) >= 4.7 else "Даже при хорошем продукте слабая работа с отзывами снижает доверие."
+    return [
+        {
+            "review": f"Нравится формат {business_type.lower() if business_type else 'услуг'}, но хотелось бы больше ясности по условиям и цене.",
+            "reply_preview": f"Спасибо за обратную связь. Мы готовы подробнее объяснить формат, стоимость и подобрать удобный вариант под ваш запрос.",
+        },
+        {
+            "review": f"Интересный вариант, но по карточке не до конца понятно, чем {lead_name} отличается от конкурентов.",
+            "reply_preview": f"Спасибо, это важный комментарий. Мы усиливаем карточку и уточняем ключевые преимущества, чтобы выбор был понятнее уже на этапе просмотра.",
+        },
+        {
+            "review": trust_line,
+            "reply_preview": "Регулярные ответы на отзывы делают карточку живой и помогают перевести интерес в обращение.",
+        },
+    ]
+
+
+def _lead_demo_news_preview(business_type: str) -> List[Dict[str, Any]]:
+    return [
+        {
+            "title": "Пример новости: что нового в карточке",
+            "body": f"Покажите актуальное предложение по направлению «{business_type}», чтобы карточка выглядела живой и помогала принять решение.",
+        },
+        {
+            "title": "Пример новости: повод обратиться сейчас",
+            "body": "Добавьте короткий инфоповод: сезонное предложение, новый формат, удобное время или обновлённую услугу.",
+        },
+    ]
+
+
 def _infer_baseline_revenue(*, business_type: Any, average_check: Optional[float], current_revenue: Optional[float], services_count: int, reviews_count: int) -> Dict[str, Any]:
     if current_revenue and current_revenue > 0:
         return {"value": round(current_revenue), "source": "actual"}
@@ -364,6 +460,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "description": "Проверьте контакты, сайт и базовое наполнение карточки — это быстрые улучшения с ощутимым эффектом.",
         },
     ]
+    services_preview = _lead_demo_services_preview(business_type)
+    reviews_preview = _lead_demo_reviews_preview(lead_name, business_type, rating, reviews_count)
+    news_preview = _lead_demo_news_preview(business_type)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -401,6 +500,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         },
         "revenue_potential": revenue_potential,
         "recommended_actions": recommended_actions,
+        "services_preview": services_preview,
+        "reviews_preview": reviews_preview,
+        "news_preview": news_preview,
         "preview_meta": {
             "has_phone": has_phone,
             "has_email": has_email,
