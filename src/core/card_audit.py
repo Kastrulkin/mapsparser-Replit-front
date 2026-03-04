@@ -160,6 +160,9 @@ def estimate_card_revenue_gap(
     if not reviews_count:
         content_penalty_min += 0.01
         content_penalty_max += 0.02
+    if unanswered_reviews_count >= 5:
+        content_penalty_min += 0.01
+        content_penalty_max += 0.03
     content_penalty_max = min(content_penalty_max, 0.10)
 
     service_penalty_min = 0.0
@@ -173,6 +176,9 @@ def estimate_card_revenue_gap(
     if services_count > 0 and priced_services_count <= 0:
         service_penalty_min += 0.02
         service_penalty_max += 0.05
+    elif services_count > 0 and priced_services_count < max(1, services_count // 2):
+        service_penalty_min += 0.01
+        service_penalty_max += 0.03
     service_penalty_max = min(service_penalty_max, 0.15)
 
     rating_min = round(baseline_value * rating_penalty_min)
@@ -344,6 +350,8 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             service_score -= 22
         if services_count > 0 and priced_services_count <= 0:
             service_score -= 12
+        elif services_count > 0 and priced_services_count < max(1, services_count // 2):
+            service_score -= 6
         service_score = max(0, min(100, service_score))
 
         activity_score = 100
@@ -371,6 +379,14 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             health_label = "Карточка теряет клиентов"
 
         findings: List[Dict[str, Any]] = []
+        if not has_website or not overview:
+            findings.append({
+                "code": "profile_incomplete",
+                "severity": "medium",
+                "title": "Карточка заполнена не полностью",
+                "description": "Не все базовые данные карточки заполнены. Это снижает доверие и качество первого контакта с клиентом.",
+            })
+
         if services_count <= 0:
             findings.append({
                 "code": "services_missing",
@@ -386,6 +402,14 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "description": f"Сейчас активных услуг: {services_count}. Карточка выглядит неполной и теряет коммерческие запросы.",
             })
 
+        if services_count > 0 and priced_services_count <= 0:
+            findings.append({
+                "code": "prices_missing",
+                "severity": "medium",
+                "title": "Услуги без цен",
+                "description": "У активных услуг нет цен. Карточка выглядит менее понятной и хуже конвертирует в обращение.",
+            })
+
         if rating_value is not None and rating_value < 4.4:
             findings.append({
                 "code": "rating_below_target",
@@ -399,6 +423,14 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "severity": "medium",
                 "title": "Рейтинг можно усилить",
                 "description": f"Текущий рейтинг {rating_value:.1f}. До сильной зоны не хватает примерно {4.7 - rating_value:.1f} звезды.",
+            })
+
+        if reviews_count < 20:
+            findings.append({
+                "code": "reviews_too_few",
+                "severity": "medium",
+                "title": "Недостаточно отзывов для сильного доверия",
+                "description": f"Сейчас отзывов: {reviews_count}. Для стабильного social proof карточке нужен более уверенный объём отзывов.",
             })
 
         if unanswered_reviews_count > 0:
@@ -445,6 +477,12 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "title": "Доработать услуги",
                 "description": "Добавьте 5–10 ключевых услуг и приведите названия к понятной коммерческой структуре.",
             })
+        if services_count > 0 and priced_services_count <= 0:
+            recommended_actions.append({
+                "priority": "high",
+                "title": "Добавить цены к основным услугам",
+                "description": "Добавьте цены хотя бы для ключевых услуг, чтобы карточка выглядела понятнее и быстрее вела к обращению.",
+            })
         if unanswered_reviews_count > 0:
             recommended_actions.append({
                 "priority": "high",
@@ -473,9 +511,18 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         severity_rank = {"high": 0, "medium": 1, "low": 2}
         findings.sort(key=lambda item: severity_rank.get(item.get("severity"), 9))
 
+        top_driver = max(
+            [
+                ("рейтинга", revenue_potential["rating_gap"]["max"]),
+                ("неполной карточки", revenue_potential["content_gap"]["max"]),
+                ("структуры услуг", revenue_potential["service_gap"]["max"]),
+            ],
+            key=lambda item: item[1],
+        )[0]
         summary_text = (
             f"{health_label}. "
-            f"Ориентировочный недобор из-за карточки: {revenue_potential['total_min']:,}–{revenue_potential['total_max']:,} ₽ в месяц."
+            f"Ориентировочный недобор из-за карточки: {revenue_potential['total_min']:,}–{revenue_potential['total_max']:,} ₽ в месяц. "
+            f"Главная зона потерь сейчас — из-за {top_driver}."
         ).replace(",", " ")
 
         no_new_services_found = bool(

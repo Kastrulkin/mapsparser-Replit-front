@@ -10,6 +10,12 @@ interface CardAuditPanelProps {
 interface CardAuditResponse {
   success: boolean;
   audit: {
+    business?: {
+      id: string;
+      name: string;
+      business_type?: string | null;
+      city?: string | null;
+    };
     summary_score: number;
     health_level: 'strong' | 'growth' | 'risk';
     health_label: string;
@@ -175,6 +181,11 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
                     <div className="mt-2 text-5xl font-bold tracking-tight text-slate-900">
                       {audit.summary_score}
                     </div>
+                    {(audit.business?.business_type || audit.business?.city) && (
+                      <div className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        {[audit.business?.business_type, audit.business?.city].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
                   </div>
                   <div className={`rounded-full border px-3 py-1 text-sm font-semibold ${healthClasses[audit.health_level] || healthClasses.growth}`}>
                     {audit.health_label}
