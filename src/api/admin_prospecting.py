@@ -1046,12 +1046,7 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
         )
         reaction = dict(cur.fetchone())
 
-        next_lead_status = {
-            "positive": "responded",
-            "question": "responded",
-            "hard_no": "closed_negative",
-            "no_response": "closed_no_response",
-        }.get(final_outcome, "responded")
+        next_lead_status = _lead_status_for_outcome(final_outcome)
         cur.execute(
             """
             UPDATE prospectingleads
@@ -1060,6 +1055,77 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
             WHERE id = %s
             """,
             (next_lead_status, queue_payload["lead_id"]),
+        )
+        conn.commit()
+        return reaction, None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _lead_status_for_outcome(outcome: str | None) -> str:
+    return {
+        "positive": "responded",
+        "question": "responded",
+        "hard_no": "closed_negative",
+        "no_response": "closed_no_response",
+    }.get(outcome or "", "responded")
+
+
+def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id: str):
+    normalized_outcome = (outcome or "").strip().lower()
+    if normalized_outcome not in ALLOWED_REPLY_OUTCOMES:
+        return None, "Outcome must be one of: positive, question, no_response, hard_no"
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT r.id, r.lead_id, r.note
+            FROM outreachreactions r
+            WHERE r.id = %s
+            """,
+            (reaction_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, "Reaction not found"
+
+        payload = dict(row)
+        note_parts = []
+        if payload.get("note"):
+            note_parts.append(str(payload["note"]).strip())
+        note_parts.append(f"human_override={normalized_outcome}")
+        note_parts.append(f"confirmed_by={user_id}")
+        if note:
+            note_parts.append(note)
+        note_value = "; ".join(part for part in note_parts if part)
+
+        cur.execute(
+            """
+            UPDATE outreachreactions
+            SET human_confirmed_outcome = %s,
+                note = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING id, queue_id, lead_id, raw_reply, classified_outcome,
+                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at
+            """,
+            (normalized_outcome, note_value, reaction_id),
+        )
+        reaction = dict(cur.fetchone())
+
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (_lead_status_for_outcome(normalized_outcome), payload["lead_id"]),
         )
         conn.commit()
         return reaction, None
@@ -1536,6 +1602,30 @@ def record_send_queue_reaction(queue_id):
         return jsonify({"success": True, "reaction": reaction})
     except Exception as e:
         print(f"Error recording outreach reaction: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/reactions/<string:reaction_id>/confirm", methods=["POST"])
+def confirm_outreach_reaction(reaction_id):
+    """Override the detected outcome for an existing reaction."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        reaction, reaction_error = _confirm_reaction(
+            reaction_id,
+            data.get("outcome"),
+            (data.get("note") or "").strip() or None,
+            user_data["user_id"],
+        )
+        if reaction_error:
+            status_code = 404 if reaction_error == "Reaction not found" else 400
+            return jsonify({"error": reaction_error}), status_code
+        return jsonify({"success": True, "reaction": reaction})
+    except Exception as e:
+        print(f"Error confirming outreach reaction: {e}")
         return jsonify({"error": str(e)}), 500
 
 

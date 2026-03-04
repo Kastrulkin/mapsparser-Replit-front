@@ -239,6 +239,27 @@ const formatLeadChannel = (channel?: string) => {
     }
 };
 
+const reactionOutcomeOptions: Array<'positive' | 'question' | 'no_response' | 'hard_no'> = ['positive', 'question', 'no_response', 'hard_no'];
+
+const getReactionClassifierSource = (note?: string | null) => {
+    if (!note) {
+        return null;
+    }
+    const match = note.match(/classifier=([a-z_]+)/i);
+    return match?.[1]?.toLowerCase() || null;
+};
+
+const formatReactionClassifierSource = (source?: string | null) => {
+    switch ((source || '').toLowerCase()) {
+        case 'ai':
+            return 'AI';
+        case 'heuristic':
+            return 'Fallback';
+        default:
+            return '—';
+    }
+};
+
 const PLACEHOLDER_LEAD_VALUES = new Set([
     'name',
     'company',
@@ -365,6 +386,7 @@ export const ProspectingManagement: React.FC = () => {
     const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
     const [reactions, setReactions] = useState<OutreachReaction[]>([]);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+    const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
     const [searchPollError, setSearchPollError] = useState<string | null>(null);
     const [importJson, setImportJson] = useState('');
     const [importBusy, setImportBusy] = useState(false);
@@ -884,6 +906,22 @@ export const ProspectingManagement: React.FC = () => {
             setSendQueueBusy(prev => {
                 const next = { ...prev };
                 delete next[queueId];
+                return next;
+            });
+        }
+    };
+
+    const confirmReaction = async (reactionId: string, outcome: 'positive' | 'question' | 'no_response' | 'hard_no') => {
+        setReactionBusy((prev) => ({ ...prev, [reactionId]: outcome }));
+        try {
+            await api.post(`/admin/prospecting/reactions/${reactionId}/confirm`, { outcome });
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error confirming reaction outcome:', error);
+        } finally {
+            setReactionBusy((prev) => {
+                const next = { ...prev };
+                delete next[reactionId];
                 return next;
             });
         }
@@ -2166,18 +2204,43 @@ export const ProspectingManagement: React.FC = () => {
                                         <div key={reaction.id} className="rounded-md border p-3 text-sm">
                                             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                                                 <div className="font-medium">{reaction.lead_name || reaction.lead_id}</div>
-                                                <Badge variant={reaction.human_confirmed_outcome === 'hard_no' ? 'destructive' : 'secondary'}>
-                                                    {reaction.human_confirmed_outcome || reaction.classified_outcome}
-                                                </Badge>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge variant="outline">
+                                                        {formatReactionClassifierSource(getReactionClassifierSource(reaction.note))}
+                                                    </Badge>
+                                                    <Badge variant={reaction.human_confirmed_outcome === 'hard_no' ? 'destructive' : 'secondary'}>
+                                                        {reaction.human_confirmed_outcome || reaction.classified_outcome}
+                                                    </Badge>
+                                                </div>
                                             </div>
                                             <div className="text-muted-foreground">
                                                 Batch: {reaction.batch_id || '—'} · Канал: {reaction.channel || '—'} · Delivery: {reaction.delivery_status || '—'}
                                             </div>
+                                            {reaction.human_confirmed_outcome && reaction.human_confirmed_outcome !== reaction.classified_outcome && (
+                                                <div className="mt-1 text-xs text-muted-foreground">
+                                                    AI: {reaction.classified_outcome} → Подтверждено: {reaction.human_confirmed_outcome}
+                                                </div>
+                                            )}
                                             {reaction.raw_reply && (
                                                 <div className="mt-2 whitespace-pre-wrap">
                                                     {reaction.raw_reply}
                                                 </div>
                                             )}
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {reactionOutcomeOptions.map((outcome) => (
+                                                    <Button
+                                                        key={`${reaction.id}-${outcome}`}
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={(reaction.human_confirmed_outcome || reaction.classified_outcome) === outcome ? 'default' : 'outline'}
+                                                        onClick={() => confirmReaction(reaction.id, outcome)}
+                                                        disabled={Boolean(reactionBusy[reaction.id])}
+                                                    >
+                                                        {reactionBusy[reaction.id] === outcome && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                        {outcome}
+                                                    </Button>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
