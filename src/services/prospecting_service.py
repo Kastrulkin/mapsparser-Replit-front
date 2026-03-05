@@ -54,6 +54,24 @@ class ProspectingService:
         return None
 
     @staticmethod
+    def _collect_nested_strings(value: Any) -> List[str]:
+        out: List[str] = []
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                out.append(text)
+            return out
+        if isinstance(value, dict):
+            for nested in value.values():
+                out.extend(ProspectingService._collect_nested_strings(nested))
+            return out
+        if isinstance(value, list):
+            for nested in value:
+                out.extend(ProspectingService._collect_nested_strings(nested))
+            return out
+        return out
+
+    @staticmethod
     def _normalize_text(value: Any) -> str:
         if value is None:
             return ""
@@ -107,7 +125,7 @@ class ProspectingService:
         return True
 
     def _normalize_result(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        messenger_links = self._pick(item, "messengerLinks", "messengers", "socialLinks") or []
+        messenger_links = self._pick(item, "messengerLinks", "messengers", "socialLinks", "socials", "contacts") or []
         if isinstance(messenger_links, dict):
             messenger_links = [messenger_links]
         if not isinstance(messenger_links, list):
@@ -123,6 +141,10 @@ class ProspectingService:
                     if isinstance(value, str) and value.strip():
                         normalized_messenger_links.append(value.strip())
                         break
+        for candidate in self._collect_nested_strings(item.get("contacts")):
+            if any(token in candidate.lower() for token in ("t.me/", "telegram", "wa.me/", "whatsapp", "vk.com/", "instagram.com/")):
+                normalized_messenger_links.append(candidate.strip())
+        normalized_messenger_links = list(dict.fromkeys([link for link in normalized_messenger_links if link]))
 
         categories_value = self._pick(item, "categories", "category", "categoryName", "rubric")
         category_text = None
@@ -140,13 +162,18 @@ class ProspectingService:
         if not whatsapp_url:
             whatsapp_url = next((link for link in normalized_messenger_links if "wa.me/" in link or "whatsapp" in link.lower()), None)
 
+        email = self._pick(item, "email")
+        if not email:
+            nested_values = self._collect_nested_strings(item.get("contacts"))
+            email = next((v for v in nested_values if "@" in v and "." in v), None)
+
         return {
             "source": "apify_yandex",
             "name": self._pick(item, "title", "name", "companyName"),
             "address": self._pick(item, "address", "fullAddress"),
             "phone": self._pick(item, "phone", "phoneNumber"),
             "website": self._pick(item, "website", "site", "siteUrl"),
-            "email": self._pick(item, "email"),
+            "email": email,
             "rating": self._pick(item, "rating", "totalScore"),
             "reviews_count": self._pick(item, "reviewsCount", "reviews_count", "reviews"),
             "source_url": self._pick(item, "url", "placeUrl", "mapsUrl"),

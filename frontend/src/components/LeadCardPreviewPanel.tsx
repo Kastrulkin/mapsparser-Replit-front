@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle, Camera, Globe, Loader2, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,9 @@ export type LeadPreviewLead = {
   source?: string;
   source_url?: string;
   selected_channel?: string;
+  telegram_url?: string;
+  whatsapp_url?: string;
+  email?: string;
 };
 
 export type LeadCardPreview = {
@@ -82,6 +85,7 @@ export type LeadCardPreview = {
     body: string;
   }>;
   preview_meta?: {
+    business_id?: string;
     has_phone?: boolean;
     has_email?: boolean;
     has_messenger?: boolean;
@@ -96,7 +100,11 @@ interface LeadCardPreviewPanelProps {
   loading?: boolean;
   error?: string | null;
   generateBusy?: boolean;
+  contactsBusy?: boolean;
+  parseBusy?: boolean;
   onGenerateFromAudit?: () => void;
+  onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
+  onRunLiveParse?: () => void;
   onClose: () => void;
 }
 
@@ -152,9 +160,23 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   loading,
   error,
   generateBusy = false,
+  contactsBusy = false,
+  parseBusy = false,
   onGenerateFromAudit,
+  onSaveContacts,
+  onRunLiveParse,
   onClose,
 }) => {
+  const [telegramUrl, setTelegramUrl] = useState('');
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    setTelegramUrl(String(lead.telegram_url || ''));
+    setWhatsappUrl(String(lead.whatsapp_url || ''));
+    setEmail(String(lead.email || ''));
+  }, [lead.id, lead.telegram_url, lead.whatsapp_url, lead.email]);
+
   return (
     <Card>
       <CardHeader>
@@ -174,6 +196,17 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
               >
                 {generateBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                 Сгенерировать письмо из аудита
+              </Button>
+            )}
+            {onRunLiveParse && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRunLiveParse}
+                disabled={loading || parseBusy}
+              >
+                {parseBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Запустить парсинг карточки
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={onClose}>
@@ -461,6 +494,42 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-3 text-base font-semibold text-slate-900">Контакты лида (ручное заполнение)</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <input
+                  className="h-10 rounded-md border px-3 text-sm"
+                  placeholder="Telegram URL, например https://t.me/..."
+                  value={telegramUrl}
+                  onChange={(e) => setTelegramUrl(e.target.value)}
+                />
+                <input
+                  className="h-10 rounded-md border px-3 text-sm"
+                  placeholder="WhatsApp URL, например https://wa.me/..."
+                  value={whatsappUrl}
+                  onChange={(e) => setWhatsappUrl(e.target.value)}
+                />
+                <input
+                  className="h-10 rounded-md border px-3 text-sm"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              {onSaveContacts && (
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => onSaveContacts({ telegram_url: telegramUrl, whatsapp_url: whatsappUrl, email })}
+                    disabled={contactsBusy}
+                  >
+                    {contactsBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    Сохранить контакты
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}

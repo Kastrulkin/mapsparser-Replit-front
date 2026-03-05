@@ -1588,6 +1588,62 @@ def select_outreach_channel(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/contacts", methods=["POST"])
+def update_lead_contacts(lead_id):
+    """Manually update lead contact fields (telegram/whatsapp/email/phone/website)."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        allowed_fields = ("telegram_url", "whatsapp_url", "email", "phone", "website")
+        updates: dict[str, Any] = {}
+        for field in allowed_fields:
+            if field in data:
+                raw_value = data.get(field)
+                if raw_value is None:
+                    updates[field] = None
+                else:
+                    text_value = str(raw_value).strip()
+                    updates[field] = text_value or None
+
+        if not updates:
+            return jsonify({"error": "No contact fields provided"}), 400
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            assignments = []
+            values: list[Any] = []
+            for field, value in updates.items():
+                assignments.append(f"{field} = %s")
+                values.append(value)
+            assignments.append("updated_at = NOW()")
+            values.append(lead_id)
+            cur.execute(
+                f"""
+                UPDATE prospectingleads
+                SET {', '.join(assignments)}
+                WHERE id = %s
+                RETURNING *
+                """,
+                values,
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Lead not found"}), 404
+            conn.commit()
+            lead = dict(row)
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "lead": _normalize_lead_for_display(lead)})
+    except Exception as e:
+        print(f"Error updating lead contacts: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/drafts", methods=["GET"])
 def get_outreach_drafts():
     """List outreach message drafts."""

@@ -44,6 +44,26 @@ _EDITORIAL_SERVICE_PATTERNS = (
 )
 
 
+def _normalize_price_value(value: Any, currency: str = "RUB") -> str:
+    """
+    Normalize numeric price values from Yandex payloads.
+    Some endpoints return minor units (e.g., kopecks) in `value`.
+    """
+    if value is None:
+        return ""
+    try:
+        number = float(value)
+    except Exception:
+        return str(value).strip()
+
+    if currency.upper() in {"RUB", "RUR", "KZT", "BYN"} and number >= 10000 and int(number) % 100 == 0:
+        number = number / 100.0
+
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
 def _extract_org_reference(payload: Any) -> Optional[str]:
     if not isinstance(payload, dict):
         return None
@@ -2476,9 +2496,11 @@ class YandexBusinessParser:
                 )
                 if price_data:
                     if isinstance(price_data, (int, float)):
-                        price = str(price_data)
+                        price = _normalize_price_value(price_data)
                     elif isinstance(price_data, dict):
-                        price = str(price_data.get("value") or price_data.get("amount") or price_data.get("price") or "")
+                        currency = str(price_data.get("currency") or "RUB")
+                        raw_value = price_data.get("value") or price_data.get("amount") or price_data.get("price")
+                        price = _normalize_price_value(raw_value, currency)
                     else:
                         price = str(price_data)
                 
@@ -2677,7 +2699,8 @@ class YandexBusinessParser:
                 if isinstance(price, dict):
                     price_val = price.get("value")
                     currency = price.get("currency", "RUB")
-                    price_str = f"{price_val} {currency}" if price_val else ""
+                    normalized_price = _normalize_price_value(price_val, str(currency))
+                    price_str = f"{normalized_price} {currency}" if normalized_price else ""
                 else:
                     price_str = str(price) if price else ""
                 

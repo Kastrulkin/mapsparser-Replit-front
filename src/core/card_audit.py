@@ -86,6 +86,173 @@ def _coerce_dt(value: Any) -> Optional[datetime]:
     return None
 
 
+def _extract_yandex_org_id_from_url(url: Any) -> Optional[str]:
+    text = str(url or "").strip()
+    if not text:
+        return None
+    match = re.search(r"/org/[^/]+/(\d+)", text)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Try to resolve an existing LocalOS business for a lead and enrich preview metrics.
+    Returns partial snapshot; empty dict means no business match found.
+    """
+    explicit_business_id = str(lead.get("business_id") or "").strip()
+    source_external_id = str(
+        lead.get("source_external_id")
+        or lead.get("google_id")
+        or _extract_yandex_org_id_from_url(lead.get("source_url"))
+        or ""
+    ).strip()
+    source_url = str(lead.get("source_url") or "").strip()
+    lead_name = str(lead.get("name") or "").strip()
+    lead_city = str(lead.get("city") or "").strip()
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        business_columns = set()
+        for row in cursor.fetchall():
+            if hasattr(row, "get"):
+                column_name = row.get("column_name")
+            else:
+                column_name = row[0] if row else None
+            if column_name:
+                business_columns.add(str(column_name))
+
+        business = None
+        if explicit_business_id:
+            cursor.execute(
+                """
+                SELECT *
+                FROM businesses
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (explicit_business_id,),
+            )
+            business = _to_dict(cursor, cursor.fetchone())
+
+        if source_external_id and "yandex_org_id" in business_columns:
+            cursor.execute(
+                """
+                SELECT *
+                FROM businesses
+                WHERE yandex_org_id = %s
+                LIMIT 1
+                """,
+                (source_external_id,),
+            )
+            business = _to_dict(cursor, cursor.fetchone())
+
+        if not business and source_url and "yandex_url" in business_columns:
+            cursor.execute(
+                """
+                SELECT *
+                FROM businesses
+                WHERE yandex_url = %s
+                   OR yandex_url ILIKE %s
+                LIMIT 1
+                """,
+                (source_url, f"%{source_external_id}%"),
+            )
+            business = _to_dict(cursor, cursor.fetchone())
+
+        if not business and lead_name:
+            cursor.execute(
+                """
+                SELECT *
+                FROM businesses
+                WHERE LOWER(name) = LOWER(%s)
+                  AND (%s = '' OR LOWER(COALESCE(city, '')) = LOWER(%s))
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+                """,
+                (lead_name, lead_city, lead_city),
+            )
+            business = _to_dict(cursor, cursor.fetchone())
+
+        if not business:
+            return {}
+
+        business_id = business.get("id")
+        if not business_id:
+            return {}
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE is_active IS TRUE OR is_active IS NULL) AS active_services,
+                COUNT(*) FILTER (
+                    WHERE (is_active IS TRUE OR is_active IS NULL)
+                      AND TRIM(COALESCE(price::text, '')) <> ''
+                ) AS priced_services
+            FROM userservices
+            WHERE business_id = %s
+            """,
+            (business_id,),
+        )
+        services_row = _to_dict(cursor, cursor.fetchone()) or {}
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM cards
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        latest_card = _to_dict(cursor, cursor.fetchone()) or {}
+
+        cursor.execute(
+            """
+            SELECT status, updated_at
+            FROM parsequeue
+            WHERE business_id = %s
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        latest_parse = _to_dict(cursor, cursor.fetchone()) or {}
+
+        photos_payload = _safe_json(latest_card.get("photos"))
+        news_payload = _safe_json(latest_card.get("news"))
+
+        return {
+            "business": business,
+            "services_count": int(services_row.get("active_services") or 0),
+            "priced_services_count": int(services_row.get("priced_services") or 0),
+            "rating": _extract_numeric(latest_card.get("rating")) if latest_card.get("rating") is not None else _extract_numeric(business.get("yandex_rating")),
+            "reviews_count": int(latest_card.get("reviews_count") or business.get("yandex_reviews_total") or 0),
+            "unanswered_reviews_count": int(latest_card.get("unanswered_reviews_count") or 0),
+            "photos_count": len(photos_payload) if isinstance(photos_payload, list) else 0,
+            "news_count": len(news_payload) if isinstance(news_payload, list) else 0,
+            "has_recent_activity": bool(latest_card.get("updated_at") or latest_parse.get("updated_at")),
+            "last_parse_at": latest_parse.get("updated_at") or latest_card.get("updated_at") or business.get("updated_at"),
+            "last_parse_status": latest_parse.get("status") or "completed",
+            "source_url": business.get("yandex_url") or source_url,
+        }
+    except Exception as exc:
+        print(f"lead preview business resolution fallback: {exc}")
+        return {}
+    finally:
+        db.close()
+
+
 def _lead_demo_services_preview(business_type: str) -> List[Dict[str, Any]]:
     normalized = business_type.lower()
     if "school" in normalized or "education" in normalized:
@@ -302,11 +469,14 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     lead_name = str(lead.get("name") or "Лид").strip() or "Лид"
     business_type = str(lead.get("category") or lead.get("business_type") or "").strip() or "Локальный бизнес"
     city = str(lead.get("city") or "").strip()
-    rating_raw = lead.get("rating")
+    snapshot = _resolve_lead_business_snapshot(lead)
+    business = snapshot.get("business") or {}
+
+    rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
     rating = float(rating_raw) if rating_raw is not None else None
-    reviews_count = int(lead.get("reviews_count") or 0)
-    has_website = bool(str(lead.get("website") or "").strip())
-    has_phone = bool(str(lead.get("phone") or "").strip())
+    reviews_count = int(snapshot.get("reviews_count") if snapshot.get("reviews_count") is not None else (lead.get("reviews_count") or 0))
+    has_website = bool(str(lead.get("website") or business.get("website") or "").strip())
+    has_phone = bool(str(lead.get("phone") or business.get("phone") or "").strip())
     has_email = bool(str(lead.get("email") or "").strip())
     has_messenger = bool(
         str(lead.get("telegram_url") or "").strip()
@@ -314,12 +484,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         or _safe_json(lead.get("messenger_links_json"))
     )
 
-    services_count = 0
-    priced_services_count = 0
-    unanswered_reviews_count = 0
-    photos_count = 0
-    news_count = 0
-    has_recent_activity = False
+    services_count = int(snapshot.get("services_count") or 0)
+    priced_services_count = int(snapshot.get("priced_services_count") or 0)
+    unanswered_reviews_count = int(snapshot.get("unanswered_reviews_count") or 0)
+    photos_count = int(snapshot.get("photos_count") or 0)
+    news_count = int(snapshot.get("news_count") or 0)
+    has_recent_activity = bool(snapshot.get("has_recent_activity"))
 
     profile_score = 100
     if not has_website:
@@ -473,8 +643,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "city": city or None,
         },
         "parse_context": {
-            "last_parse_at": lead.get("updated_at") or lead.get("created_at"),
-            "last_parse_status": "lead_preview",
+            "last_parse_at": snapshot.get("last_parse_at") or lead.get("updated_at") or lead.get("created_at"),
+            "last_parse_status": snapshot.get("last_parse_status") or "lead_preview",
             "no_new_services_found": services_count <= 0,
         },
         "summary_score": summary_score,
@@ -504,11 +674,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         "reviews_preview": reviews_preview,
         "news_preview": news_preview,
         "preview_meta": {
+            "business_id": business.get("id"),
             "has_phone": has_phone,
             "has_email": has_email,
             "has_messenger": has_messenger,
             "source": lead.get("source"),
-            "source_url": lead.get("source_url"),
+            "source_url": snapshot.get("source_url") or lead.get("source_url"),
         },
     }
 

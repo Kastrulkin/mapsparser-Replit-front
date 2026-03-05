@@ -408,6 +408,8 @@ export const ProspectingManagement: React.FC = () => {
     const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
+    const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
+    const [previewParseBusy, setPreviewParseBusy] = useState(false);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -1128,6 +1130,44 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const saveLeadContactsFromPreview = async (payload: { telegram_url: string; whatsapp_url: string; email: string }) => {
+        if (!previewLead?.id) {
+            return;
+        }
+        setPreviewContactsBusy(true);
+        setPreviewError(null);
+        try {
+            const response = await api.post(`/admin/prospecting/lead/${previewLead.id}/contacts`, payload);
+            const updatedLead = (response.data?.lead as Lead) || null;
+            if (updatedLead) {
+                setPreviewLead(updatedLead);
+            }
+            await fetchSavedLeads();
+        } catch (error: any) {
+            setPreviewError(error?.message || 'Не удалось сохранить контакты лида');
+        } finally {
+            setPreviewContactsBusy(false);
+        }
+    };
+
+    const runLiveParseFromPreview = async () => {
+        const businessId = previewSnapshot?.preview_meta?.business_id;
+        if (!businessId) {
+            setPreviewError('Для этого лида не найден связанный бизнес в LocalOS');
+            return;
+        }
+        setPreviewParseBusy(true);
+        setPreviewError(null);
+        try {
+            await api.post(`/admin/yandex/sync/business/${businessId}`);
+            await openLeadPreview(previewLead as Lead);
+        } catch (error: any) {
+            setPreviewError(error?.message || 'Не удалось запустить парсинг карточки');
+        } finally {
+            setPreviewParseBusy(false);
+        }
+    };
+
     const renderLeadRow = (lead: Lead) => {
         const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
         const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
@@ -1249,7 +1289,11 @@ export const ProspectingManagement: React.FC = () => {
                     loading={previewLoadingId === previewLead.id}
                     error={previewError}
                     generateBusy={previewGenerateBusy}
+                    contactsBusy={previewContactsBusy}
+                    parseBusy={previewParseBusy}
                     onGenerateFromAudit={generateDraftFromLeadPreview}
+                    onSaveContacts={saveLeadContactsFromPreview}
+                    onRunLiveParse={runLiveParseFromPreview}
                     onClose={closeLeadPreview}
                 />
             )}
