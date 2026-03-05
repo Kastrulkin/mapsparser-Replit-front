@@ -365,6 +365,7 @@ export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
     const [location, setLocation] = useState('');
     const [limit, setLimit] = useState(20);
+    const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'outreach' | 'drafts' | 'queue'>('search');
     const [results, setResults] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -406,6 +407,7 @@ export const ProspectingManagement: React.FC = () => {
     const [previewSnapshot, setPreviewSnapshot] = useState<LeadCardPreview | null>(null);
     const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
+    const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -1109,6 +1111,23 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const generateDraftFromLeadPreview = async () => {
+        if (!previewLead?.id) {
+            return;
+        }
+        setPreviewGenerateBusy(true);
+        setPreviewError(null);
+        try {
+            await api.post(`/admin/prospecting/lead/${previewLead.id}/draft-generate-from-audit`);
+            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
+            setActiveTab('drafts');
+        } catch (error: any) {
+            setPreviewError(error?.message || 'Не удалось сгенерировать письмо из аудита');
+        } finally {
+            setPreviewGenerateBusy(false);
+        }
+    };
+
     const renderLeadRow = (lead: Lead) => {
         const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
         const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
@@ -1229,11 +1248,13 @@ export const ProspectingManagement: React.FC = () => {
                     preview={previewSnapshot}
                     loading={previewLoadingId === previewLead.id}
                     error={previewError}
+                    generateBusy={previewGenerateBusy}
+                    onGenerateFromAudit={generateDraftFromLeadPreview}
                     onClose={closeLeadPreview}
                 />
             )}
 
-            <Tabs defaultValue="search" className="w-full">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'search' | 'leads' | 'outreach' | 'drafts' | 'queue')} className="w-full">
                 <TabsList>
                     <TabsTrigger value="search">Поиск</TabsTrigger>
                     <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>

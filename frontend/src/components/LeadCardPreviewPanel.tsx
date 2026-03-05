@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Camera, Globe, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
+import { AlertCircle, Camera, Globe, Loader2, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,8 @@ interface LeadCardPreviewPanelProps {
   preview: LeadCardPreview | null;
   loading?: boolean;
   error?: string | null;
+  generateBusy?: boolean;
+  onGenerateFromAudit?: () => void;
   onClose: () => void;
 }
 
@@ -144,7 +146,15 @@ const sourceLabel = (value?: string) => {
   }
 };
 
-const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({ lead, preview, loading, error, onClose }) => {
+const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
+  lead,
+  preview,
+  loading,
+  error,
+  generateBusy = false,
+  onGenerateFromAudit,
+  onClose,
+}) => {
   return (
     <Card>
       <CardHeader>
@@ -155,9 +165,21 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({ lead, previ
               Демо-экран для разговора: текущее состояние карточки, потенциал роста и конкретные точки улучшения.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Закрыть
-          </Button>
+          <div className="flex items-center gap-2">
+            {onGenerateFromAudit && (
+              <Button
+                size="sm"
+                onClick={onGenerateFromAudit}
+                disabled={loading || generateBusy}
+              >
+                {generateBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Сгенерировать письмо из аудита
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Закрыть
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

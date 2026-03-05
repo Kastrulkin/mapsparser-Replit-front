@@ -498,6 +498,67 @@ def _generate_first_message_draft(lead: dict[str, Any], channel: str) -> dict[st
     }
 
 
+def _generate_audit_first_message_draft(
+    lead: dict[str, Any],
+    preview: dict[str, Any],
+    channel: str,
+) -> dict[str, str]:
+    company_name = (lead.get("name") or "вашей компании").strip()
+    category = (lead.get("category") or "локального бизнеса").strip()
+    city = (lead.get("city") or "").strip()
+
+    findings = preview.get("findings") or []
+    recommended_actions = preview.get("recommended_actions") or []
+    revenue = preview.get("revenue_potential") or {}
+    total_min = revenue.get("total_min")
+    total_max = revenue.get("total_max")
+
+    top_findings = [str(item.get("title") or "").strip() for item in findings if isinstance(item, dict)]
+    top_findings = [item for item in top_findings if item][:2]
+    key_issue = ", ".join(top_findings) if top_findings else "есть резерв роста карточки"
+
+    top_action = ""
+    for item in recommended_actions:
+        if isinstance(item, dict):
+            top_action = str(item.get("title") or "").strip()
+            if top_action:
+                break
+    if not top_action:
+        top_action = "быстрое усиление карточки по услугам и контенту"
+
+    money_hint = "потери по карте не оценены"
+    if isinstance(total_min, (int, float)) and isinstance(total_max, (int, float)):
+        min_value = int(round(float(total_min)))
+        max_value = int(round(float(total_max)))
+        money_hint = f"потенциал роста оценивается в {min_value:,}–{max_value:,} ₽/мес".replace(",", " ")
+
+    location_line = f"по направлению «{category}»{f' в {city}' if city else ''}"
+    message_core = (
+        f"Посмотрели карточку {company_name} ({location_line}) и видим, что {key_issue}. "
+        f"По нашей модели {money_hint}. "
+        f"Первый шаг, который даст эффект: {top_action.lower()}."
+    )
+
+    if channel == "telegram":
+        opening = "Здравствуйте!"
+        closing = "Если хотите, отправлю краткий аудит с конкретными шагами в ответ."
+    elif channel == "whatsapp":
+        opening = "Здравствуйте!"
+        closing = "Готов отправить короткий аудит и 3 приоритетных шага, если актуально."
+    elif channel == "email":
+        opening = "Здравствуйте."
+        closing = "Если это актуально, направим короткий аудит и план действий на ближайшие 2 недели."
+    else:
+        opening = "Здравствуйте."
+        closing = "Если удобно, отправлю краткий аудит и приоритетные доработки."
+
+    return {
+        "angle_type": "audit_preview",
+        "tone": "professional",
+        "generated_text": f"{opening} {message_core} {closing}".strip(),
+    }
+
+
 def _serialize_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None
@@ -1766,6 +1827,89 @@ def generate_outreach_draft(lead_id):
         return jsonify({"success": True, "draft": _serialize_draft(draft)})
     except Exception as e:
         print(f"Error generating outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/draft-generate-from-audit", methods=["POST"])
+def generate_outreach_draft_from_audit(lead_id):
+    """Generate first-contact draft from lead card preview and move lead to outreach flow."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_channel = str(data.get("channel") or "").strip().lower()
+        channel = requested_channel if requested_channel in ALLOWED_OUTREACH_CHANNELS else "telegram"
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+            lead = cur.fetchone()
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            lead_dict = dict(lead)
+
+            display_lead = _normalize_lead_for_display(dict(lead_dict))
+            if not display_lead:
+                return jsonify({"error": "Lead is not available for preview"}), 404
+            preview = build_lead_card_preview_snapshot(display_lead)
+
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    selected_channel = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (CHANNEL_SELECTED, channel, lead_id),
+            )
+            updated_lead = dict(cur.fetchone())
+
+            draft_payload = _generate_audit_first_message_draft(updated_lead, preview, channel)
+            draft_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachmessagedrafts (
+                    id, lead_id, channel, angle_type, tone, status,
+                    generated_text, edited_text, learning_note_json, created_by
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (
+                    draft_id,
+                    lead_id,
+                    channel,
+                    draft_payload["angle_type"],
+                    draft_payload["tone"],
+                    DRAFT_GENERATED,
+                    draft_payload["generated_text"],
+                    draft_payload["generated_text"],
+                    Json({"source": "lead_preview_audit"}),
+                    user_data["user_id"],
+                ),
+            )
+            draft = dict(cur.fetchone())
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "lead": _normalize_lead_for_display(updated_lead),
+                "draft": _serialize_draft(draft),
+            }
+        )
+    except Exception as e:
+        print(f"Error generating outreach draft from audit: {e}")
         return jsonify({"error": str(e)}), 500
 
 
