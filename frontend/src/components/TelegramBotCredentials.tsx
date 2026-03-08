@@ -18,13 +18,46 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
   const [botToken, setBotToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [maskedToken, setMaskedToken] = useState<string | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (business) {
-      setBotToken(business.telegram_bot_token || '');
-    }
-  }, [business]);
+    setBotToken('');
+    setShowToken(false);
+    setConfigured(Boolean(business?.telegram_bot_token_configured));
+    setMaskedToken(business?.telegram_bot_token_masked || null);
+  }, [business?.id, business?.telegram_bot_token_configured, business?.telegram_bot_token_masked]);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (!businessId) {
+        setConfigured(false);
+        setMaskedToken(null);
+        return;
+      }
+      try {
+        setLoadingStatus(true);
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(businessId)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        const data = await response.json();
+        if (response.ok && data?.success) {
+          setConfigured(Boolean(data.configured));
+          setMaskedToken(data.masked_token || null);
+        }
+      } catch {
+        // no-op: fallback is business payload state
+      } finally {
+        setLoadingStatus(false);
+      }
+    };
+    fetchStatus();
+  }, [businessId]);
 
   const handleSave = async () => {
     if (!businessId) {
@@ -63,6 +96,10 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       const data = await response.json();
 
       if (response.ok) {
+        setBotToken('');
+        setShowToken(false);
+        setConfigured(true);
+        setMaskedToken('Сохранён');
         toast({
           title: t.common.success,
           description: t.dashboard.settings.telegram2.successSave,
@@ -82,6 +119,40 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!businessId) return;
+    try {
+      setLoadingStatus(true);
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(businessId)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (response.ok && data?.success && data.configured) {
+        toast({
+          title: 'Подключение активно',
+          description: `Telegram bot token подключён (${data.masked_token || 'скрыт'})`,
+        });
+      } else {
+        toast({
+          title: t.common.error,
+          description: 'Токен Telegram бота не подключён или недоступен.',
+          variant: 'destructive',
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e?.message || 'Не удалось проверить подключение Telegram бота.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingStatus(false);
     }
   };
 
@@ -106,6 +177,13 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
         <div className="space-y-2">
           <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
+          <div className="text-xs text-gray-500">
+            {loadingStatus
+              ? 'Проверка статуса токена...'
+              : configured
+                ? `Токен подключён (${maskedToken || 'скрыт'})`
+                : 'Токен пока не подключён'}
+          </div>
           <div className="relative">
             <Input
               id="telegram-bot-token"
@@ -144,8 +222,17 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
             t.dashboard.settings.telegram2.saveButton
           )}
         </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleTestConnection}
+          disabled={loadingStatus || !businessId}
+          className="w-full"
+        >
+          {loadingStatus ? 'Проверка...' : 'Проверить подключение'}
+        </Button>
       </CardContent>
     </Card>
   );
 };
-

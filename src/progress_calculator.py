@@ -42,11 +42,22 @@ def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dic
                 photos_count,
                 news_count,
                 (
+                    WITH preferred_source AS (
+                        SELECT CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM externalbusinessreviews r2
+                                WHERE r2.business_id = %s
+                                  AND r2.source = 'yandex_maps'
+                            ) THEN 'yandex_maps'
+                            ELSE 'yandex_business'
+                        END AS source
+                    )
                     SELECT COUNT(*)
-                    FROM externalbusinessreviews
-                    WHERE business_id = %s
-                      AND source IN ('yandex_business', 'yandex_maps')
-                      AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+                    FROM externalbusinessreviews r, preferred_source ps
+                    WHERE r.business_id = %s
+                      AND r.source = ps.source
+                      AND (r.response_text IS NULL OR TRIM(COALESCE(r.response_text, '')) = '')
                 ) AS unanswered
             FROM externalbusinessstats
             WHERE business_id = %s
@@ -54,7 +65,7 @@ def _get_map_metrics(cursor, business_id: str, freshness_hours: int = 24) -> Dic
             ORDER BY date DESC
             LIMIT 1
             """,
-            (business_id, business_id),
+            (business_id, business_id, business_id),
         )
         row = cursor.fetchone()
         reviews_total = _row_val(row, "reviews_total") if isinstance(row, dict) else _row_val(row, 1)

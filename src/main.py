@@ -40,6 +40,7 @@ from init_database_schema import init_database_schema
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
+from yookassa_integration import billing_bp
 from admin_moderation import admin_moderation_bp
 from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
@@ -147,6 +148,7 @@ def rate_limit_if_available(limit_str):
 app.register_blueprint(chatgpt_bp)
 app.register_blueprint(chatgpt_search_bp)
 app.register_blueprint(stripe_bp)
+app.register_blueprint(billing_bp)
 app.register_blueprint(admin_moderation_bp)
 app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
@@ -870,7 +872,8 @@ def get_parsing_tasks():
         cursor.execute(f"""
             SELECT
                 pq.id, pq.url, pq.user_id, pq.business_id, pq.task_type, pq.account_id, pq.source,
-                pq.status, pq.retry_after, pq.error_message, pq.created_at, pq.updated_at,
+                pq.status, pq.retry_after, pq.captcha_url, pq.captcha_session_id, pq.resume_requested,
+                pq.error_message, pq.created_at, pq.updated_at,
                 b.name AS business_name
             FROM parsequeue pq
             LEFT JOIN businesses b ON b.id = pq.business_id
@@ -981,6 +984,204 @@ def restart_parsing_task(task_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/tasks/<task_id>/captcha/open', methods=['POST'])
+def open_parsing_task_captcha(task_id):
+    """Вернуть ссылку/метаданные captcha-сессии для конкретной задачи."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT id, status, business_id, captcha_url, captcha_session_id, retry_after, resume_requested
+            FROM parsequeue
+            WHERE id = %s
+            LIMIT 1
+        """, (task_id,))
+        raw_task = cursor.fetchone()
+        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
+        db.close()
+
+        if not task_row:
+            return jsonify({"success": False, "error": "Задача не найдена"}), 404
+        if normalize_status(task_row.get("status")) != "captcha":
+            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
+        if not task_row.get("captcha_url"):
+            return jsonify({"success": False, "error": "У задачи нет captcha_url"}), 400
+
+        return jsonify({
+            "success": True,
+            "task_id": task_row.get("id"),
+            "business_id": task_row.get("business_id"),
+            "captcha_url": task_row.get("captcha_url"),
+            "captcha_session_id": task_row.get("captcha_session_id"),
+            "retry_after": task_row.get("retry_after"),
+            "resume_requested": bool(task_row.get("resume_requested")),
+            "message": "Откройте ссылку, пройдите captcha и нажмите «Продолжить»"
+        })
+    except Exception as e:
+        print(f"❌ Ошибка открытия captcha-сессии: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/tasks/<task_id>/captcha/resume', methods=['POST'])
+def resume_parsing_task_captcha(task_id):
+    """Запросить продолжение парсинга после ручного прохождения captcha (task-level)."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT id, status, captcha_session_id, captcha_url
+            FROM parsequeue
+            WHERE id = %s
+            LIMIT 1
+        """, (task_id,))
+        raw_task = cursor.fetchone()
+        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
+
+        if not task_row:
+            db.close()
+            return jsonify({"success": False, "error": "Задача не найдена"}), 404
+        if normalize_status(task_row.get("status")) != "captcha":
+            db.close()
+            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
+        if not task_row.get("captcha_session_id"):
+            # Сессия могла истечь/потеряться (перезапуск worker и т.п.). Возвращаем задачу в pending,
+            # чтобы worker создал новую captcha-сессию или продолжил парсинг, если капча уже решена.
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    retry_after = CURRENT_TIMESTAMP,
+                    resume_requested = 0,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = CASE
+                        WHEN error_message IS NULL OR error_message = '' THEN 'captcha session missing; restarted parse cycle'
+                        ELSE error_message || '; captcha session missing; restarted parse cycle'
+                    END
+                WHERE id = %s
+                """,
+                (STATUS_PENDING, task_id),
+            )
+            db.conn.commit()
+            db.close()
+            return jsonify(
+                {
+                    "success": True,
+                    "task_id": task_id,
+                    "captcha_url": task_row.get("captcha_url"),
+                    "message": "Captcha-сессия утеряна, запущен новый цикл парсинга",
+                }
+            )
+
+        cursor.execute("""
+            UPDATE parsequeue
+            SET resume_requested = 1,
+                retry_after = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN error_message IS NULL OR error_message = '' THEN 'resume requested after captcha (admin task-level)'
+                    ELSE error_message || '; resume requested after captcha (admin task-level)'
+                END
+            WHERE id = %s
+        """, (task_id,))
+        db.conn.commit()
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "captcha_url": task_row.get("captcha_url"),
+            "message": "Продолжение парсинга запрошено"
+        })
+    except Exception as e:
+        print(f"❌ Ошибка resume captcha (task-level): {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/tasks/<task_id>/captcha/expire', methods=['POST'])
+def expire_parsing_task_captcha(task_id):
+    """Принудительно завершить captcha-сессию задачи с переводом в error."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, status FROM parsequeue WHERE id = %s LIMIT 1", (task_id,))
+        raw_task = cursor.fetchone()
+        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
+        if not task_row:
+            db.close()
+            return jsonify({"success": False, "error": "Задача не найдена"}), 404
+        if normalize_status(task_row.get("status")) != "captcha":
+            db.close()
+            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
+
+        cursor.execute("""
+            UPDATE parsequeue
+            SET status = %s,
+                retry_after = NULL,
+                captcha_url = NULL,
+                captcha_session_id = NULL,
+                resume_requested = 0,
+                updated_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha session expired by admin'
+                    ELSE error_message || '; captcha session expired by admin'
+                END
+            WHERE id = %s
+        """, (STATUS_ERROR, task_id))
+        db.conn.commit()
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "message": "Captcha-сессия завершена, задача переведена в error"
+        })
+    except Exception as e:
+        print(f"❌ Ошибка expire captcha (task-level): {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/admin/parsing/tasks/<task_id>', methods=['DELETE'])
 def delete_parsing_task(task_id):
@@ -10528,11 +10729,29 @@ def resume_parse_after_captcha(business_id):
             return jsonify({"success": False, "error": "Нет активной captcha-задачи"}), 404
 
         if not task_row.get("captcha_session_id"):
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    retry_after = CURRENT_TIMESTAMP,
+                    resume_requested = 0,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = CASE
+                        WHEN error_message IS NULL OR error_message = '' THEN 'captcha session missing; restarted parse cycle'
+                        ELSE error_message || '; captcha session missing; restarted parse cycle'
+                    END
+                WHERE id = %s
+                """,
+                (STATUS_PENDING, task_row["id"]),
+            )
+            db.conn.commit()
             db.close()
             return jsonify({
-                "success": False,
-                "error": "У задачи нет активной captcha-сессии"
-            }), 400
+                "success": True,
+                "message": "Captcha-сессия утеряна, запущен новый цикл парсинга",
+                "task_id": task_row["id"],
+                "captcha_url": task_row.get("captcha_url"),
+            })
 
         cursor.execute("""
             UPDATE parsequeue

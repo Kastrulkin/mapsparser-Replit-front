@@ -69,6 +69,9 @@ export type LeadCardPreview = {
   parse_context: {
     last_parse_at?: string | null;
     last_parse_status?: string | null;
+    last_parse_task_id?: string | null;
+    last_parse_retry_after?: string | null;
+    last_parse_error?: string | null;
     no_new_services_found: boolean;
   };
   services_preview?: Array<{
@@ -102,9 +105,11 @@ interface LeadCardPreviewPanelProps {
   generateBusy?: boolean;
   contactsBusy?: boolean;
   parseBusy?: boolean;
+  parseAutoRefreshing?: boolean;
   onGenerateFromAudit?: () => void;
   onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
   onRunLiveParse?: () => void;
+  onRefreshPreview?: () => void;
   onClose: () => void;
 }
 
@@ -162,9 +167,11 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   generateBusy = false,
   contactsBusy = false,
   parseBusy = false,
+  parseAutoRefreshing = false,
   onGenerateFromAudit,
   onSaveContacts,
   onRunLiveParse,
+  onRefreshPreview,
   onClose,
 }) => {
   const [telegramUrl, setTelegramUrl] = useState('');
@@ -176,6 +183,45 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
     setWhatsappUrl(String(lead.whatsapp_url || ''));
     setEmail(String(lead.email || ''));
   }, [lead.id, lead.telegram_url, lead.whatsapp_url, lead.email]);
+
+  const parseStatus = (preview?.parse_context?.last_parse_status || 'lead_preview').toLowerCase();
+  const parseStatusLabel = () => {
+    switch (parseStatus) {
+      case 'lead_preview':
+      case 'preview':
+        return 'Превью (без парсинга)';
+      case 'pending':
+      case 'queued':
+        return 'В очереди';
+      case 'processing':
+      case 'running':
+        return 'Идёт парсинг';
+      case 'captcha':
+        return 'Требуется капча';
+      case 'completed':
+      case 'done':
+        return 'Завершён';
+      case 'error':
+      case 'failed':
+        return 'Ошибка';
+      default:
+        return preview?.parse_context?.last_parse_status || 'lead_preview';
+    }
+  };
+  const parseStatusBadgeClass = () => {
+    if (['pending', 'queued', 'processing', 'running'].includes(parseStatus)) {
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+    }
+    if (parseStatus === 'captcha') {
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    }
+    if (['error', 'failed'].includes(parseStatus)) {
+      return 'border-red-200 bg-red-50 text-red-700';
+    }
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  };
+
+  const parseInProgress = ['pending', 'queued', 'processing', 'running'].includes(parseStatus);
 
   return (
     <Card>
@@ -207,6 +253,17 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
               >
                 {parseBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                 Запустить парсинг карточки
+              </Button>
+            )}
+            {onRefreshPreview && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRefreshPreview}
+                disabled={loading || parseBusy || parseAutoRefreshing}
+              >
+                {(parseAutoRefreshing || parseBusy) && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Обновить статус
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={onClose}>
@@ -280,11 +337,40 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                       {formatDate(preview.parse_context.last_parse_at || null)}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      Статус: {preview.parse_context.last_parse_status || 'lead_preview'}
+                      Статус очереди:
                     </div>
+                    <div className={`mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold ${parseStatusBadgeClass()}`}>
+                      {(parseInProgress || parseAutoRefreshing) && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      {parseStatusLabel()}
+                    </div>
+                    {preview.parse_context.last_parse_task_id && (
+                      <div className="mt-2 text-xs text-slate-500">
+                        task_id: <span className="font-mono">{preview.parse_context.last_parse_task_id}</span>
+                      </div>
+                    )}
+                    {preview.parse_context.last_parse_retry_after && (
+                      <div className="mt-1 text-xs text-slate-500">
+                        retry_after: {formatDate(preview.parse_context.last_parse_retry_after)}
+                      </div>
+                    )}
+                    {preview.parse_context.last_parse_error && (
+                      <div className="mt-2 text-xs text-red-700">
+                        Ошибка: {preview.parse_context.last_parse_error}
+                      </div>
+                    )}
+                    {(parseInProgress || parseAutoRefreshing) && (
+                      <div className="mt-2 text-xs text-blue-700">
+                        Автообновление включено до завершения парсинга.
+                      </div>
+                    )}
                     {preview.parse_context.no_new_services_found && (
                       <div className="mt-2 text-xs font-medium text-amber-700">
                         Услуги в карточке не найдены или заполнены слабо.
+                      </div>
+                    )}
+                    {['lead_preview', 'preview'].includes(parseStatus) && (
+                      <div className="mt-2 text-xs font-medium text-slate-600">
+                        Парсинг ещё не запускался. Нажмите «Запустить парсинг карточки», чтобы подтянуть фактические услуги.
                       </div>
                     )}
                   </div>

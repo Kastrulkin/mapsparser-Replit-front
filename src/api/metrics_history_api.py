@@ -316,13 +316,24 @@ def get_metrics_history(business_id):
         unanswered_now = 0
         cursor.execute(
             """
+            WITH preferred_source AS (
+                SELECT CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM externalbusinessreviews r2
+                        WHERE r2.business_id = %s
+                          AND r2.source = 'yandex_maps'
+                    ) THEN 'yandex_maps'
+                    ELSE 'yandex_business'
+                END AS source
+            )
             SELECT COUNT(*) AS cnt
-            FROM externalbusinessreviews
-            WHERE business_id = %s
-              AND source IN ('yandex_business', 'yandex_maps')
-              AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+            FROM externalbusinessreviews r, preferred_source ps
+            WHERE r.business_id = %s
+              AND r.source = ps.source
+              AND (r.response_text IS NULL OR TRIM(COALESCE(r.response_text, '')) = '')
             """,
-            (business_id,),
+            (business_id, business_id),
         )
         cnt_row = _as_dict(cursor.fetchone()) or {}
         unanswered_now = int(cnt_row.get("cnt") or 0)

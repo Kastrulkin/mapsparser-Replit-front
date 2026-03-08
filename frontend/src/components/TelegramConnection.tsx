@@ -113,7 +113,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
 
   const getBotLink = () => {
     if (!bindToken) return '';
-    const botUsername = 'BeautyBotPro_bot'; // Имя бота в Telegram
+    const botUsername = 'LocalOspro_bot'; // Имя бота в Telegram
     return `https://t.me/${botUsername}?start=${bindToken}`;
   };
 
@@ -247,6 +247,9 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         )}
 
         <div className="pt-4 border-t">
+          <Button variant="outline" className="mb-3" onClick={checkStatus} disabled={!currentBusinessId || loading}>
+            Проверить подключение
+          </Button>
           <h4 className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.featuresTitle}</h4>
           <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
             <li>{t.dashboard.settings.telegram.feature1}</li>

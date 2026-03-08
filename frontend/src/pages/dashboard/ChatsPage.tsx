@@ -33,6 +33,18 @@ interface AgentInfo {
   description: string | null;
 }
 
+interface SandboxMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  meta?: {
+    runtime?: string;
+    state?: string;
+    decisionTrace?: any;
+    toolCalls?: any[];
+    bridgeError?: string | null;
+  };
+}
+
 export const ChatsPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<{ currentBusinessId: string }>();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -43,7 +55,7 @@ export const ChatsPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [sandboxMessages, setSandboxMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([]);
+  const [sandboxMessages, setSandboxMessages] = useState<SandboxMessage[]>([]);
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
@@ -275,6 +287,7 @@ export const ChatsPage: React.FC = () => {
           body: JSON.stringify({
             message: sandboxInput,
             conversation_history: conversationHistory,
+            dry_run: true,
           }),
         }
       );
@@ -283,7 +296,20 @@ export const ChatsPage: React.FC = () => {
         const data = await response.json();
         if (data.success) {
           // Добавляем ответ агента в историю
-          setSandboxMessages([...updatedHistory, { role: 'assistant', content: data.response }]);
+          setSandboxMessages([
+            ...updatedHistory,
+            {
+              role: 'assistant',
+              content: data.response,
+              meta: {
+                runtime: data.runtime || 'local',
+                state: data.state || '',
+                decisionTrace: data.decision_trace || {},
+                toolCalls: Array.isArray(data.tool_calls) ? data.tool_calls : [],
+                bridgeError: data.bridge_error || null,
+              },
+            },
+          ]);
         } else {
           throw new Error(data.error || t.dashboard.chats.messages.error);
         }
@@ -423,6 +449,11 @@ export const ChatsPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="mx-4 mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <div className="font-medium">Dry-run режим</div>
+              <div>Из песочницы не выполняется реальная отправка клиентам в Telegram/WhatsApp/Email.</div>
+            </div>
+
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
                 {sandboxMessages.length === 0 ? (
@@ -453,6 +484,24 @@ export const ChatsPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                        {msg.role === 'assistant' && msg.meta && (
+                          <div className="mt-2 rounded border border-green-200 bg-white/70 p-2 text-xs">
+                            <div className="text-[11px] text-gray-600">
+                              runtime: <span className="font-medium text-gray-800">{msg.meta.runtime || 'local'}</span>
+                              {msg.meta.state ? `, state: ${msg.meta.state}` : ''}
+                            </div>
+                            {msg.meta.bridgeError ? (
+                              <div className="mt-1 text-[11px] text-amber-700">
+                                bridge fallback: {msg.meta.bridgeError}
+                              </div>
+                            ) : null}
+                            {msg.meta.toolCalls && msg.meta.toolCalls.length > 0 ? (
+                              <div className="mt-1 text-[11px] text-gray-700">
+                                tool calls: {msg.meta.toolCalls.length}
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -613,4 +662,3 @@ export const ChatsPage: React.FC = () => {
     </div>
   );
 };
-

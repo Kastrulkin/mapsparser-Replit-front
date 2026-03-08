@@ -11,6 +11,7 @@ This document serves as the source of truth for the BeautyBot database schema. I
 - **externalbusinessaccounts** — внешние аккаунты (Яндекс.Бизнес, Google Business, 2ГИС); поле `auth_data_encrypted` не отдаётся в API.
 - **businessmaplinks** — ссылки бизнеса на карты (Яндекс, Google и т.д.).
 - **businesses**, **users**, **userservices** — бизнесы, пользователи, услуги.
+- **subscriptions**, **credit_ledger**, **billing_attempts**, **yookassa_webhook_events** — подписки/кредиты/попытки списаний/идемпотентность webhook YooKassa.
 - **businessmetricshistory** — история метрик (рейтинг, отзывы по датам); **externalbusinessstats**, **externalbusinessreviews** — агрегаты и отзывы из внешних источников.
 
 Таблицы **MapParseResults** и **ParseQueue** в CamelCase — legacy для SQLite; в PG не используются.
@@ -31,6 +32,7 @@ Stores user authentication and profile information.
 - `verification_token` (TEXT): Token for email verification.
 - `reset_token` (TEXT): Token for password reset.
 - `reset_token_expires` (TIMESTAMP): Expiry for reset token.
+- `credits_balance` (INTEGER): Текущий баланс кредитов пользователя.
 - `created_at`, `updated_at`: Timestamps.
 
 ### Networks
@@ -132,6 +134,19 @@ Employees or specialists working at a business.
 - **externalbusinessreviews**: Отзывы из внешних источников; `account_id`, `response_text`, `published_at`.
 - **externalbusinessstats**: Агрегированная статистика по дням (`rating`, `reviews_total`, `photos_count`, `news_count`, `unanswered_reviews_count`, `date`, `source`).
 - **externalbusinessposts**, **externalbusinessphotos**: Публикации и фото из кабинетов.
+
+### Billing Tables (YooKassa)
+- **subscriptions**:
+  - `id` (TEXT, PK), `user_id` (FK -> users), `business_id` (FK -> businesses, nullable)
+  - `tariff_id`, `pending_tariff_id`, `status` (`active|blocked|canceled`)
+  - `period_start`, `next_billing_date`, `payment_method_id`, `last_payment_id`
+  - `retry_count`, `next_retry_at`, `created_at`, `updated_at`
+- **credit_ledger**:
+  - аудит начислений/списаний кредитов (`delta`, `reason`, `period_start/end`, `external_id`)
+- **billing_attempts**:
+  - технический журнал попыток списаний (`first|renewal|retry`), статус, idempotency, ошибка, metadata
+- **yookassa_webhook_events**:
+  - дедуп webhook-событий (`event_name + payment_id`) для идемпотентной обработки
 
 ### Financial Tables
 - **FinancialTransactions**: Records of sales/services rendered.

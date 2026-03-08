@@ -41,6 +41,13 @@ const credits = (value: number | null | undefined) =>
   (Number(value || 0) / TOKENS_PER_CREDIT).toLocaleString('ru-RU', {
     maximumFractionDigits: 2,
   });
+const CREDIT_LIMITS: Record<string, number> = {
+  starter: 240,
+  starter_monthly: 240,
+  professional: 1000,
+  pro: 1000,
+  pro_monthly: 1000,
+};
 
 const formatDateRu = (value?: string | null) => {
   if (!value) return null;
@@ -64,6 +71,9 @@ export const UserTokenUsageSummary = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TokenUsageResponse | null>(null);
+  const [billingNextDate, setBillingNextDate] = useState<string | null>(null);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [billingTariffId, setBillingTariffId] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -84,6 +94,29 @@ export const UserTokenUsageSummary = ({
           throw new Error(payload?.error || 'Ошибка загрузки кредитов');
         }
         setData(payload);
+
+        // Prefer billing next date from billing API for "Кредиты до"
+        const billingParams = new URLSearchParams();
+        if (businessId) billingParams.set('business_id', businessId);
+        const billingResp = await fetch(`/api/billing/status?${billingParams.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const billingPayload = await billingResp.json();
+        if (billingResp.ok && typeof billingPayload?.credits_balance === 'number') {
+          setCreditsBalance(Number(billingPayload.credits_balance));
+        } else {
+          setCreditsBalance(null);
+        }
+        if (billingResp.ok && billingPayload?.subscription?.tariff_id) {
+          setBillingTariffId(String(billingPayload.subscription.tariff_id));
+        } else {
+          setBillingTariffId(null);
+        }
+        if (billingResp.ok && billingPayload?.subscription?.next_billing_date) {
+          setBillingNextDate(billingPayload.subscription.next_billing_date);
+        } else {
+          setBillingNextDate(null);
+        }
       } catch (e: any) {
         setError(e?.message || 'Ошибка загрузки кредитов');
       } finally {
@@ -102,8 +135,23 @@ export const UserTokenUsageSummary = ({
     if ((subscriptionTier || '').toLowerCase() === 'promo') {
       return 'Бессрочно';
     }
-    return formatDateRu(subscriptionEndsAt) || formatDateRu(trialEndsAt) || 'Дата будет привязана к оплате';
-  }, [subscriptionTier, subscriptionEndsAt, trialEndsAt]);
+    return (
+      formatDateRu(billingNextDate) ||
+      formatDateRu(subscriptionEndsAt) ||
+      formatDateRu(trialEndsAt) ||
+      'Дата будет привязана к оплате'
+    );
+  }, [subscriptionTier, billingNextDate, subscriptionEndsAt, trialEndsAt]);
+
+  const periodLimit = useMemo(() => {
+    const key = String((billingTariffId || subscriptionTier || '').toLowerCase());
+    return CREDIT_LIMITS[key] ?? null;
+  }, [billingTariffId, subscriptionTier]);
+
+  const spentCurrentBillingPeriod = useMemo(() => {
+    if (periodLimit == null || creditsBalance == null) return null;
+    return Math.max(0, periodLimit - creditsBalance);
+  }, [periodLimit, creditsBalance]);
 
   return (
     <div className={cn(DESIGN_TOKENS.glass.default, 'rounded-2xl p-8 hover:shadow-2xl transition-all duration-500')}>
@@ -137,8 +185,18 @@ export const UserTokenUsageSummary = ({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+          <div className="text-sm text-emerald-700 mb-1">Осталось в текущем расчётном периоде</div>
+          <div className="text-2xl font-bold text-emerald-900 flex items-center gap-2">
+            <Coins className="w-5 h-5" />
+            {loading ? '...' : num(creditsBalance)}
+          </div>
+          <div className="text-xs text-emerald-700 mt-1">
+            {periodLimit ? `из ${num(periodLimit)} кредитов` : 'доступно в текущем периоде'}
+          </div>
+        </div>
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4">
-          <div className="text-sm text-indigo-700 mb-1">Текущий месяц</div>
+          <div className="text-sm text-indigo-700 mb-1">Потрачено в календарном месяце</div>
           <div className="text-2xl font-bold text-indigo-900 flex items-center gap-2">
             <Coins className="w-5 h-5" />
             {loading ? '...' : credits(data?.month_total?.total_tokens)}
@@ -146,8 +204,15 @@ export const UserTokenUsageSummary = ({
           <div className="text-xs text-indigo-700 mt-1">кредитов</div>
           <div className="text-xs text-indigo-700 mt-1">Запросов: {loading ? '...' : num(data?.month_total?.requests_count)}</div>
         </div>
+        <div className="rounded-xl border border-orange-100 bg-orange-50/70 p-4">
+          <div className="text-sm text-orange-700 mb-1">Потрачено в текущем расчётном периоде</div>
+          <div className="text-2xl font-bold text-orange-900">
+            {loading ? '...' : spentCurrentBillingPeriod == null ? '—' : num(spentCurrentBillingPeriod)}
+          </div>
+          <div className="text-xs text-orange-700 mt-1">кредитов</div>
+        </div>
         <div className="rounded-xl border border-gray-200 bg-white/80 p-4">
-          <div className="text-sm text-gray-600 mb-1">Выбранный период</div>
+          <div className="text-sm text-gray-600 mb-1">Потрачено за выбранный период</div>
           <div className="text-2xl font-bold text-gray-900">{loading ? '...' : credits(data?.period_total?.total_tokens)}</div>
           <div className="text-xs text-gray-500 mt-1">кредитов</div>
           <div className="text-xs text-gray-500 mt-1">Запросов: {loading ? '...' : num(data?.period_total?.requests_count)}</div>

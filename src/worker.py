@@ -34,6 +34,8 @@ from parsed_payload_validation import (
     SOURCE_YANDEX_BUSINESS,
 )
 from core.action_orchestrator import ActionOrchestrator
+from yookassa_integration import run_due_renewals
+from api.admin_prospecting import dispatch_due_outreach_queue
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -45,6 +47,8 @@ _LAST_BILLING_RECONCILE_AT = 0.0
 _LAST_BILLING_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
+_LAST_YOOKASSA_RENEWALS_AT = 0.0
+_LAST_OUTREACH_DISPATCH_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -76,6 +80,60 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _run_yookassa_renewals_if_due() -> None:
+    global _LAST_YOOKASSA_RENEWALS_AT
+    if not _env_bool("YOOKASSA_RENEWALS_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(30, int(os.getenv("YOOKASSA_RENEWALS_INTERVAL_SEC", "300")))
+    if now - _LAST_YOOKASSA_RENEWALS_AT < interval_sec:
+        return
+
+    _LAST_YOOKASSA_RENEWALS_AT = now
+    try:
+        batch_size = max(1, min(int(os.getenv("YOOKASSA_RENEWALS_BATCH_SIZE", "25")), 200))
+        result = run_due_renewals(batch_size=batch_size)
+        if result.get("success") and int(result.get("scheduled") or 0) > 0:
+            print(
+                f"[YOOKASSA_RENEWALS] processed={result.get('processed')} "
+                f"scheduled={result.get('scheduled')} errors={result.get('errors')}",
+                flush=True,
+            )
+        elif not result.get("success"):
+            print(f"[YOOKASSA_RENEWALS] error: {result.get('error')}", flush=True)
+    except Exception as e:
+        print(f"[YOOKASSA_RENEWALS] unexpected error: {e}", flush=True)
+
+
+def _dispatch_outreach_queue_if_due() -> None:
+    global _LAST_OUTREACH_DISPATCH_AT
+    if not _env_bool("OUTREACH_DISPATCH_ENABLED", True):
+        return
+
+    now = time.time()
+    interval_sec = max(5, int(os.getenv("OUTREACH_DISPATCH_INTERVAL_SEC", "30")))
+    if now - _LAST_OUTREACH_DISPATCH_AT < interval_sec:
+        return
+
+    _LAST_OUTREACH_DISPATCH_AT = now
+    try:
+        batch_size = max(1, min(int(os.getenv("OUTREACH_DISPATCH_BATCH_SIZE", "20")), 200))
+        result = dispatch_due_outreach_queue(batch_size=batch_size)
+        picked = int(result.get("picked") or 0)
+        if picked > 0:
+            print(
+                "[OUTREACH_DISPATCH] "
+                f"picked={picked} sent={int(result.get('sent') or 0)} "
+                f"delivered={int(result.get('delivered') or 0)} "
+                f"retry={int(result.get('retry') or 0)} dlq={int(result.get('dlq') or 0)} "
+                f"failed={int(result.get('failed') or 0)}",
+                flush=True,
+            )
+    except Exception as e:
+        print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
 
 
 def _dispatch_openclaw_callback_outbox_if_due() -> None:
@@ -2317,7 +2375,7 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
             continue
 
         # Стандартная структура: dict с category/group/name и items
-        category_name = _extract_service_category(cat_block) or "Общие услуги"
+        category_name = _extract_service_category(cat_block, allow_name_fallback=True) or "Общие услуги"
         items = cat_block.get("items") or cat_block.get("products") or []
         if not isinstance(items, list):
             continue
@@ -2397,7 +2455,7 @@ def _deactivate_parsed_service_source(conn, business_id: str, source: str) -> in
     return int(cursor.rowcount or 0)
 
 
-def _extract_service_category(payload: Dict[str, Any]) -> str:
+def _extract_service_category(payload: Dict[str, Any], *, allow_name_fallback: bool = False) -> str:
     """Извлекает категорию услуги из разных форматов ответа парсера."""
     if not isinstance(payload, dict):
         return ""
@@ -2411,9 +2469,9 @@ def _extract_service_category(payload: Dict[str, Any]) -> str:
         or payload.get("section")
         or payload.get("section_name")
         or payload.get("sectionName")
-        or payload.get("name")  # для контейнеров категории
-        or payload.get("title")
     )
+    if raw in (None, "") and allow_name_fallback:
+        raw = payload.get("name") or payload.get("title")
     if isinstance(raw, dict):
         raw = raw.get("name") or raw.get("title") or raw.get("value")
     if raw is None:
@@ -3107,9 +3165,11 @@ if __name__ == "__main__":
     while True:
         try:
             process_queue()
+            _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()
             _reconcile_openclaw_billing_if_due()
+            _run_yookassa_renewals_if_due()
         except Exception as e:
             print(f"❌ Критическая ошибка worker loop: {e}", flush=True)
             traceback.print_exc(file=sys.stdout)

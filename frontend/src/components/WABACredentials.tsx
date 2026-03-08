@@ -97,6 +97,8 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
         </CardTitle>
         <CardDescription>
           {t.dashboard.settings.whatsapp.description}
+          <br />
+          Подключение WABA выполняется через Maton.ai в разделе Integrations.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -166,4 +168,3 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
     </Card>
   );
 };
-

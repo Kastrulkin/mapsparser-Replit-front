@@ -90,10 +90,63 @@ def _extract_yandex_org_id_from_url(url: Any) -> Optional[str]:
     text = str(url or "").strip()
     if not text:
         return None
-    match = re.search(r"/org/[^/]+/(\d+)", text)
+    match = re.search(r"/org/(?:[^/]+/)?(\d+)", text)
     if match:
         return match.group(1)
     return None
+
+
+def _extract_contact_links(value: Any) -> List[str]:
+    links: List[str] = []
+
+    def _walk(node: Any) -> None:
+        if node is None:
+            return
+        if isinstance(node, str):
+            text = node.strip()
+            if text:
+                links.append(text)
+            return
+        if isinstance(node, dict):
+            for item in node.values():
+                _walk(item)
+            return
+        if isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(value)
+    deduped: List[str] = []
+    seen = set()
+    for item in links:
+        normalized = item.strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+    return deduped
+
+
+def _extract_telegram_whatsapp_email_from_links(links: List[str]) -> Dict[str, Optional[str]]:
+    telegram = None
+    whatsapp = None
+    email = None
+    for raw in links:
+        value = str(raw or "").strip()
+        low = value.lower()
+        if not telegram and ("t.me/" in low or "telegram.me/" in low):
+            telegram = value
+        if not whatsapp and ("wa.me/" in low or "whatsapp.com/" in low or "api.whatsapp.com/" in low):
+            whatsapp = value
+        if not email:
+            if low.startswith("mailto:"):
+                email = value.split(":", 1)[1].strip()
+            elif "@" in value and " " not in value and "/" not in value:
+                email = value
+    return {"telegram_url": telegram, "whatsapp_url": whatsapp, "email": email}
 
 
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
@@ -144,7 +197,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             )
             business = _to_dict(cursor, cursor.fetchone())
 
-        if source_external_id and "yandex_org_id" in business_columns:
+        if not business and source_external_id and "yandex_org_id" in business_columns:
             cursor.execute(
                 """
                 SELECT *
@@ -157,16 +210,29 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             business = _to_dict(cursor, cursor.fetchone())
 
         if not business and source_url and "yandex_url" in business_columns:
-            cursor.execute(
-                """
-                SELECT *
-                FROM businesses
-                WHERE yandex_url = %s
-                   OR yandex_url ILIKE %s
-                LIMIT 1
-                """,
-                (source_url, f"%{source_external_id}%"),
-            )
+            if source_external_id:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM businesses
+                    WHERE yandex_url = %s
+                       OR yandex_url ILIKE %s
+                    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                    LIMIT 1
+                    """,
+                    (source_url, f"%{source_external_id}%"),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM businesses
+                    WHERE yandex_url = %s
+                    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                    LIMIT 1
+                    """,
+                    (source_url,),
+                )
             business = _to_dict(cursor, cursor.fetchone())
 
         if not business and lead_name:
@@ -219,7 +285,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
 
         cursor.execute(
             """
-            SELECT status, updated_at
+            SELECT id, status, updated_at, retry_after, error_message
             FROM parsequeue
             WHERE business_id = %s
             ORDER BY updated_at DESC NULLS LAST, created_at DESC
@@ -231,6 +297,98 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
 
         photos_payload = _safe_json(latest_card.get("photos"))
         news_payload = _safe_json(latest_card.get("news"))
+        overview_payload = _safe_json(latest_card.get("overview")) or {}
+        overview_social_links = overview_payload.get("social_links") if isinstance(overview_payload, dict) else None
+        social_links = _extract_contact_links(overview_social_links)
+        parsed_contacts = _extract_telegram_whatsapp_email_from_links(social_links)
+
+        services_preview: List[Dict[str, Any]] = []
+        cursor.execute(
+            """
+            SELECT name, description, price, source
+            FROM userservices
+            WHERE business_id = %s
+              AND (is_active IS TRUE OR is_active IS NULL)
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 8
+            """,
+            (business_id,),
+        )
+        for row in cursor.fetchall():
+            service_row = _to_dict(cursor, row) or {}
+            name = str(service_row.get("name") or "").strip()
+            if not name:
+                continue
+            description = str(service_row.get("description") or "").strip()
+            price = str(service_row.get("price") or "").strip()
+            source = str(service_row.get("source") or "").strip()
+            note_parts = []
+            if price:
+                note_parts.append(f"Цена: {price}")
+            if source:
+                note_parts.append(f"Источник: {source}")
+            services_preview.append(
+                {
+                    "current_name": name,
+                    "suggested_name": name,
+                    "note": " • ".join(note_parts) if note_parts else "Парсинг карточки",
+                    "description": description or None,
+                }
+            )
+
+        reviews_preview: List[Dict[str, Any]] = []
+        if _table_exists(cursor, "externalbusinessreviews"):
+            cursor.execute(
+                """
+                WITH preferred_source AS (
+                    SELECT CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM externalbusinessreviews r2
+                            WHERE r2.business_id = %s
+                              AND r2.source = 'yandex_maps'
+                        ) THEN 'yandex_maps'
+                        ELSE 'yandex_business'
+                    END AS source
+                )
+                SELECT review_text, response_text, rating
+                FROM externalbusinessreviews r, preferred_source ps
+                WHERE r.business_id = %s
+                  AND r.source = ps.source
+                ORDER BY published_at DESC NULLS LAST, created_at DESC
+                LIMIT 6
+                """,
+                (business_id, business_id),
+            )
+            for row in cursor.fetchall():
+                review_row = _to_dict(cursor, row) or {}
+                review_text = str(review_row.get("review_text") or "").strip()
+                if not review_text:
+                    continue
+                response_text = str(review_row.get("response_text") or "").strip() or "Ответа пока нет"
+                rating = review_row.get("rating")
+                rating_suffix = ""
+                if rating is not None and str(rating).strip() != "":
+                    rating_suffix = f" (оценка: {rating})"
+                reviews_preview.append(
+                    {
+                        "review": f"{review_text}{rating_suffix}",
+                        "reply_preview": response_text,
+                    }
+                )
+
+        news_preview: List[Dict[str, Any]] = []
+        if isinstance(news_payload, list):
+            for item in news_payload[:6]:
+                if isinstance(item, dict):
+                    title = str(item.get("title") or item.get("name") or "").strip() or "Новость"
+                    body = str(item.get("body") or item.get("text") or item.get("description") or "").strip()
+                    if title or body:
+                        news_preview.append({"title": title, "body": body or "Без текста"})
+                elif isinstance(item, str):
+                    text = item.strip()
+                    if text:
+                        news_preview.append({"title": "Новость", "body": text})
 
         return {
             "business": business,
@@ -244,7 +402,21 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "has_recent_activity": bool(latest_card.get("updated_at") or latest_parse.get("updated_at")),
             "last_parse_at": latest_parse.get("updated_at") or latest_card.get("updated_at") or business.get("updated_at"),
             "last_parse_status": latest_parse.get("status") or "completed",
+            "last_parse_task_id": latest_parse.get("id"),
+            "last_parse_retry_after": latest_parse.get("retry_after"),
+            "last_parse_error": latest_parse.get("error_message"),
             "source_url": business.get("yandex_url") or source_url,
+            "parsed_contacts": {
+                "phone": str(latest_card.get("phone") or business.get("phone") or "").strip() or None,
+                "website": str(latest_card.get("site") or business.get("website") or "").strip() or None,
+                "email": parsed_contacts.get("email"),
+                "telegram_url": parsed_contacts.get("telegram_url"),
+                "whatsapp_url": parsed_contacts.get("whatsapp_url"),
+                "social_links": social_links,
+            },
+            "services_preview": services_preview,
+            "reviews_preview": reviews_preview,
+            "news_preview": news_preview,
         }
     except Exception as exc:
         print(f"lead preview business resolution fallback: {exc}")
@@ -450,7 +622,6 @@ def estimate_card_revenue_gap(
     content_max = round(baseline_value * content_penalty_max)
     service_min = round(baseline_value * service_penalty_min)
     service_max = round(baseline_value * service_penalty_max)
-
     return {
         "mode": "estimate_v1",
         "baseline_monthly_revenue": baseline,
@@ -475,13 +646,15 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
     rating = float(rating_raw) if rating_raw is not None else None
     reviews_count = int(snapshot.get("reviews_count") if snapshot.get("reviews_count") is not None else (lead.get("reviews_count") or 0))
-    has_website = bool(str(lead.get("website") or business.get("website") or "").strip())
-    has_phone = bool(str(lead.get("phone") or business.get("phone") or "").strip())
-    has_email = bool(str(lead.get("email") or "").strip())
+    parsed_contacts = snapshot.get("parsed_contacts") or {}
+    has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
+    has_phone = bool(str(lead.get("phone") or parsed_contacts.get("phone") or business.get("phone") or "").strip())
+    has_email = bool(str(lead.get("email") or parsed_contacts.get("email") or business.get("email") or "").strip())
     has_messenger = bool(
-        str(lead.get("telegram_url") or "").strip()
-        or str(lead.get("whatsapp_url") or "").strip()
+        str(lead.get("telegram_url") or parsed_contacts.get("telegram_url") or "").strip()
+        or str(lead.get("whatsapp_url") or parsed_contacts.get("whatsapp_url") or "").strip()
         or _safe_json(lead.get("messenger_links_json"))
+        or parsed_contacts.get("social_links")
     )
 
     services_count = int(snapshot.get("services_count") or 0)
@@ -630,9 +803,13 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "description": "Проверьте контакты, сайт и базовое наполнение карточки — это быстрые улучшения с ощутимым эффектом.",
         },
     ]
-    services_preview = _lead_demo_services_preview(business_type)
-    reviews_preview = _lead_demo_reviews_preview(lead_name, business_type, rating, reviews_count)
-    news_preview = _lead_demo_news_preview(business_type)
+    services_preview = snapshot.get("services_preview") or _lead_demo_services_preview(business_type)
+    reviews_preview = snapshot.get("reviews_preview") or _lead_demo_reviews_preview(lead_name, business_type, rating, reviews_count)
+    news_preview = snapshot.get("news_preview") or _lead_demo_news_preview(business_type)
+    last_parse_status = snapshot.get("last_parse_status") or "lead_preview"
+    no_new_services_found = bool(
+        services_count <= 0 and str(last_parse_status).lower() not in {"lead_preview", "preview"}
+    )
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -644,8 +821,11 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         },
         "parse_context": {
             "last_parse_at": snapshot.get("last_parse_at") or lead.get("updated_at") or lead.get("created_at"),
-            "last_parse_status": snapshot.get("last_parse_status") or "lead_preview",
-            "no_new_services_found": services_count <= 0,
+            "last_parse_status": last_parse_status,
+            "last_parse_task_id": snapshot.get("last_parse_task_id"),
+            "last_parse_retry_after": snapshot.get("last_parse_retry_after"),
+            "last_parse_error": snapshot.get("last_parse_error"),
+            "no_new_services_found": no_new_services_found,
         },
         "summary_score": summary_score,
         "health_level": health_level,
@@ -748,12 +928,24 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         if _table_exists(cursor, "externalbusinessreviews"):
             cursor.execute(
                 """
+                WITH preferred_source AS (
+                    SELECT CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM externalbusinessreviews r2
+                            WHERE r2.business_id = %s
+                              AND r2.source = 'yandex_maps'
+                        ) THEN 'yandex_maps'
+                        ELSE 'yandex_business'
+                    END AS source
+                )
                 SELECT COUNT(*) AS cnt
-                FROM externalbusinessreviews
-                WHERE business_id = %s
-                  AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
+                FROM externalbusinessreviews r, preferred_source ps
+                WHERE r.business_id = %s
+                  AND r.source = ps.source
+                  AND (r.response_text IS NULL OR TRIM(COALESCE(r.response_text, '')) = '')
                 """,
-                (business_id,),
+                (business_id, business_id),
             )
             unanswered_reviews_count = int((_to_dict(cursor, cursor.fetchone()) or {}).get("cnt") or 0)
 

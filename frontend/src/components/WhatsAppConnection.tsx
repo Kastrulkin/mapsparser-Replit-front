@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { Loader2, MessageCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, MessageCircle, CheckCircle2, Clock3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface WhatsAppConnectionProps {
@@ -87,7 +87,13 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
   };
 
   return (
-    <Card>
+    <Card className="relative overflow-hidden">
+      <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/65 backdrop-blur-[2px]">
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-5 py-3 text-orange-800 shadow-sm flex items-center gap-2 font-semibold">
+          <Clock3 className="h-4 w-4" />
+          Скоро
+        </div>
+      </div>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
@@ -120,7 +126,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
             placeholder="+1234567890"
             value={whatsappPhone}
             onChange={(e) => setWhatsappPhone(e.target.value)}
-            disabled={saving || loading}
+            disabled
           />
           <p className="text-xs text-gray-500">
             Введите номер в международном формате (например, +1234567890)
@@ -136,7 +142,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
 
         <Button
           onClick={handleSave}
-          disabled={saving || loading || !whatsappPhone}
+          disabled
           className="w-full"
         >
           {saving ? (
@@ -163,4 +169,3 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
 };
 
 export default WhatsAppConnection;
-

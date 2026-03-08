@@ -8,6 +8,7 @@ import os
 import requests
 import json
 from ai_agent import process_message, get_business_info
+from core.telegram_token_store import decode_telegram_bot_token
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -75,6 +76,36 @@ def find_business_by_waba_phone_id(phone_id: str) -> dict:
                 'waba_access_token': row[2],
                 'ai_agent_enabled': row[3] == 1
             }
+        return None
+    finally:
+        db.close()
+
+
+def find_business_by_telegram_token(bot_token: str) -> dict | None:
+    token = str(bot_token or "").strip()
+    if not token:
+        return None
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, telegram_bot_token, ai_agent_enabled
+            FROM Businesses
+            WHERE ai_agent_enabled = 1
+              AND telegram_bot_token IS NOT NULL
+              AND NULLIF(TRIM(telegram_bot_token), '') IS NOT NULL
+            """
+        )
+        for row in cursor.fetchall() or []:
+            row_dict = dict(row) if hasattr(row, "keys") else {
+                "id": row[0] if len(row) > 0 else None,
+                "telegram_bot_token": row[1] if len(row) > 1 else None,
+                "ai_agent_enabled": row[2] if len(row) > 2 else None,
+            }
+            candidate = decode_telegram_bot_token(row_dict.get("telegram_bot_token"))
+            if candidate and candidate == token:
+                return row_dict
         return None
     finally:
         db.close()
@@ -198,25 +229,15 @@ def telegram_webhook():
         if not bot_token:
             return jsonify({"error": "bot_token required"}), 400
         
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id, telegram_bot_token, ai_agent_enabled
-            FROM Businesses
-            WHERE telegram_bot_token = %s
-            AND ai_agent_enabled = 1
-            LIMIT 1
-        """, (bot_token,))
-        
-        row = cursor.fetchone()
-        db.close()
+        row = find_business_by_telegram_token(bot_token)
         
         if not row:
             print(f"⚠️ Бизнес не найден для токена бота")
             return jsonify({"status": "ok"}), 200
         
-        business_id = row[0]
-        ai_agent_enabled = row[2] == 1
+        business_id = row.get("id") if isinstance(row, dict) else row[0]
+        raw_enabled = row.get("ai_agent_enabled") if isinstance(row, dict) else row[2]
+        ai_agent_enabled = bool(raw_enabled in (1, True, "1", "t", "true", "TRUE"))
         
         if not ai_agent_enabled:
             print(f"⚠️ ИИ агент отключен для бизнеса {business_id}")
@@ -265,4 +286,3 @@ def telegram_webhook_with_token(bot_token: str):
     except Exception as e:
         print(f"❌ Ошибка обработки Telegram webhook с токеном: {e}")
         return jsonify({"error": str(e)}), 500
-

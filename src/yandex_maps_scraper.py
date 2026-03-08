@@ -6,6 +6,7 @@ import time
 import re
 import random
 import os
+from urllib.parse import urljoin
 from random import randint, uniform
 
 def _launch_browser(p):
@@ -214,6 +215,35 @@ def parse_yandex_card(url: str) -> dict:
             # Ждем загрузки контента
             time.sleep(random.uniform(3, 5))
 
+            def _extract_captcha_url() -> str:
+                candidates = []
+                try:
+                    for selector in ("form[action*='showcaptcha']", "form[action*='captcha']"):
+                        el = page.query_selector(selector)
+                        if el:
+                            action = (el.get_attribute("action") or "").strip()
+                            if action:
+                                candidates.append(action)
+                except Exception:
+                    pass
+                try:
+                    iframe = page.query_selector("iframe[src*='captcha'], iframe[src*='showcaptcha'], iframe[src*='smartcaptcha']")
+                    if iframe:
+                        src = (iframe.get_attribute("src") or "").strip()
+                        if src:
+                            candidates.append(src)
+                except Exception:
+                    pass
+                base_url = page.url or url
+                for c in candidates:
+                    try:
+                        abs_url = urljoin(base_url, c)
+                    except Exception:
+                        abs_url = c
+                    if abs_url:
+                        return abs_url
+                return base_url
+
             # Проверяем на captcha сразу после загрузки
             if page.query_selector("form[action*='captcha']") or "captcha" in page.url.lower() or "Подтвердите, что запросы отправляли вы" in page.title():
                 browser.close()
@@ -221,7 +251,7 @@ def parse_yandex_card(url: str) -> dict:
                 print("1. Открыть ссылку в браузере и пройти captcha")
                 print("2. Попробовать позже")
                 print("3. Использовать другую ссылку")
-                return {"error": "captcha_detected", "url": url}
+                return {"error": "captcha_detected", "captcha_url": _extract_captcha_url(), "url": url}
 
             # Переход на вкладку 'Обзор'
             try:
@@ -1513,6 +1543,9 @@ def parse_products(page):
         # 2. Парсинг категорий и товаров
         # Попробуем найти контейнеры категорий
         category_selectors = [
+            # Основная актуальная разметка Яндекс.Карт (группировка)
+            "div.business-full-items-grouped-view__category",
+            # Легаси/альтернативные контейнеры
             "div.business-full-items-view__category",
             "div.related-items-view__category",
             "div.business-prices-view__category"
@@ -1528,29 +1561,56 @@ def parse_products(page):
                 
                 for block in cat_blocks:
                     try:
-                        cat_title_el = block.query_selector("div.business-full-items-view__category-title, div.related-items-view__category-title, h2")
+                        cat_title_el = block.query_selector(
+                            "div.business-full-items-grouped-view__title, "
+                            "div.business-full-items-view__category-title, "
+                            "div.related-items-view__category-title, h2"
+                        )
                         cat_name = cat_title_el.inner_text().strip() if cat_title_el else "Разное"
                         
                         items_in_cat = []
                         # Ищем товары внутри категории
                         item_selectors = [
+                            # Актуальная grouped-разметка
+                            "div.business-full-items-grouped-view__item",
                             "div.business-full-items-view__item",
                             "div.related-item-view",
-                            "div.business-prices-view__item"
+                            "div.business-prices-view__item",
+                            "div.related-product-view",
                         ]
                         
                         for item_sel in item_selectors:
                             item_els = block.query_selector_all(item_sel)
                             for item_el in item_els:
                                 try:
-                                    name_el = item_el.query_selector("div.related-item-view__title, div.business-full-items-view__title, div.business-prices-view__name")
+                                    name_el = item_el.query_selector(
+                                        "div.related-item-photo-view__title, "
+                                        "div.related-item-list-view__title, "
+                                        "div.related-product-view__title, a.related-product-view__title, "
+                                        "div.related-item-view__title, "
+                                        "div.business-full-items-view__title, "
+                                        "div.business-prices-view__name, "
+                                        "div.business-card-price-view__name"
+                                    )
                                     if not name_el: continue
                                     name = name_el.inner_text().strip()
                                     
-                                    price_el = item_el.query_selector("div.related-item-view__price, div.business-full-items-view__price, div.business-prices-view__price")
+                                    price_el = item_el.query_selector(
+                                        "span.related-product-view__price, "
+                                        "div.related-item-list-view__price, "
+                                        "div.related-item-view__price, "
+                                        "div.business-full-items-view__price, "
+                                        "div.business-prices-view__price, "
+                                        "div.business-card-price-view__value"
+                                    )
                                     price = price_el.inner_text().strip() if price_el else ""
                                     
-                                    desc_el = item_el.query_selector("div.related-item-view__description, div.business-full-items-view__description")
+                                    desc_el = item_el.query_selector(
+                                        "div.related-item-photo-view__description, "
+                                        "div.related-item-list-view__subtitle, "
+                                        "div.related-item-view__description, "
+                                        "div.business-full-items-view__description"
+                                    )
                                     desc = desc_el.inner_text().strip() if desc_el else ""
                                     
                                     items_in_cat.append({
@@ -1577,9 +1637,11 @@ def parse_products(page):
             print("Категории не найдены, ищем плоский список товаров...")
             flat_items = []
             item_selectors = [
+                "div.business-full-items-grouped-view__item",
                 "div.business-full-items-view__item",
                 "div.related-item-view",
                 "div.business-prices-view__item",
+                "div.related-product-view",
                 "div.business-card-price-view",
                 "div[class*='related-item-view']",
                 "div[class*='business-items-view__item']"
@@ -1591,14 +1653,34 @@ def parse_products(page):
                     print(f"Найдено {len(item_els)} товаров (flat) по селектору {item_sel}")
                     for item_el in item_els:
                         try:
-                            name_el = item_el.query_selector("div.related-item-view__title, div.business-full-items-view__title, div.business-prices-view__name, div.business-card-price-view__name")
+                            name_el = item_el.query_selector(
+                                "div.related-item-photo-view__title, "
+                                "div.related-item-list-view__title, "
+                                "div.related-product-view__title, a.related-product-view__title, "
+                                "div.related-item-view__title, "
+                                "div.business-full-items-view__title, "
+                                "div.business-prices-view__name, "
+                                "div.business-card-price-view__name"
+                            )
                             if not name_el: continue
                             name = name_el.inner_text().strip()
                             
-                            price_el = item_el.query_selector("div.related-item-view__price, div.business-full-items-view__price, div.business-prices-view__price, div.business-card-price-view__value")
+                            price_el = item_el.query_selector(
+                                "span.related-product-view__price, "
+                                "div.related-item-list-view__price, "
+                                "div.related-item-view__price, "
+                                "div.business-full-items-view__price, "
+                                "div.business-prices-view__price, "
+                                "div.business-card-price-view__value"
+                            )
                             price = price_el.inner_text().strip() if price_el else ""
                             
-                            desc_el = item_el.query_selector("div.related-item-view__description, div.business-full-items-view__description")
+                            desc_el = item_el.query_selector(
+                                "div.related-item-photo-view__description, "
+                                "div.related-item-list-view__subtitle, "
+                                "div.related-item-view__description, "
+                                "div.business-full-items-view__description"
+                            )
                             desc = desc_el.inner_text().strip() if desc_el else ""
                             
                             flat_items.append({
@@ -1615,6 +1697,34 @@ def parse_products(page):
                     "category": "Основные услуги",
                     "items": flat_items
                 })
+
+        # Дополнительный safety-net: если всё ещё пусто, пробуем прямой related-product-view
+        if not products:
+            direct_items = page.query_selector_all("div.related-product-view")
+            if direct_items:
+                parsed_direct = []
+                for item in direct_items:
+                    try:
+                        name_el = item.query_selector("div.related-product-view__title, a.related-product-view__title")
+                        if not name_el:
+                            continue
+                        name = name_el.inner_text().strip()
+                        if not name:
+                            continue
+                        price_el = item.query_selector("span.related-product-view__price")
+                        price = price_el.inner_text().strip() if price_el else ""
+                        parsed_direct.append({
+                            "name": name,
+                            "price": price,
+                            "description": ""
+                        })
+                    except Exception:
+                        continue
+                if parsed_direct:
+                    products.append({
+                        "category": "Услуги",
+                        "items": parsed_direct
+                    })
 
         print(f"Спарсено категорий услуг: {len(products)}")
         return products

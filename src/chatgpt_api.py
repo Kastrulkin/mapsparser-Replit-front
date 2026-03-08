@@ -10,11 +10,26 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import verify_session, create_session
 from timezone_utils import get_timezone_from_address
+from core.telegram_token_store import (
+    encode_telegram_bot_token,
+    mask_telegram_bot_token,
+)
 import uuid
 import json
 from datetime import datetime, timedelta
 
 chatgpt_bp = Blueprint('chatgpt', __name__)
+
+
+def _row_get(row, key, index=0, default=None):
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[index]
+    except Exception:
+        return default
 
 def require_auth():
     """Проверка авторизации"""
@@ -156,7 +171,8 @@ def update_business_profile():
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -221,8 +237,9 @@ def update_business_profile():
         
         # Telegram bot token
         if 'telegram_bot_token' in data:
+            encoded_token = encode_telegram_bot_token(data['telegram_bot_token'])
             update_fields.append('telegram_bot_token = %s')
-            update_values.append(data['telegram_bot_token'])
+            update_values.append(encoded_token or None)
         
         # AI Agent settings
         if 'ai_agent_enabled' in data:
@@ -303,7 +320,8 @@ def connect_telegram():
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id']:
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -321,6 +339,54 @@ def connect_telegram():
         
     except Exception as e:
         print(f"❌ Ошибка подключения Telegram: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@chatgpt_bp.route('/api/business/telegram-bot/status', methods=['GET'])
+def telegram_bot_status():
+    """Проверка статуса пользовательского Telegram бота без возврата сырого токена."""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        business_id = (request.args.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT owner_id, telegram_bot_token, telegram_chat_id
+            FROM Businesses
+            WHERE id = %s
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = _row_get(row, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        token_raw = _row_get(row, 'telegram_bot_token', 1)
+        chat_id = str(_row_get(row, 'telegram_chat_id', 2) or "").strip()
+        db.close()
+        return jsonify(
+            {
+                "success": True,
+                "configured": bool(str(token_raw or "").strip()),
+                "masked_token": mask_telegram_bot_token(token_raw) or None,
+                "telegram_chat_id": chat_id or None,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка статуса Telegram бота: {e}")
         return jsonify({"error": str(e)}), 500
 
 @chatgpt_bp.route('/api/business/whatsapp/verify', methods=['POST'])
@@ -351,7 +417,8 @@ def verify_whatsapp():
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id']:
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
@@ -394,4 +461,3 @@ def verify_whatsapp():
     except Exception as e:
         print(f"❌ Ошибка верификации WhatsApp: {e}")
         return jsonify({"error": str(e)}), 500
-

@@ -24,13 +24,28 @@ interface AgentConfig {
 }
 
 const DEFAULT_AGENT_VALUE = '__default__';
+const EMPTY_AGENT_FORM = {
+  id: '',
+  name: '',
+  type: 'booking',
+  description: '',
+  personality: '',
+  workflow: '',
+  task: '',
+  identity: '',
+  speech_style: '',
+  is_active: true,
+};
 
 export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) => {
   const { language: interfaceLanguage, t } = useLanguage();
   const [agentsConfig, setAgentsConfig] = useState<Record<string, AgentConfig>>({});
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const [editingAgentForm, setEditingAgentForm] = useState<any | null>(null);
+  const [showAgentForm, setShowAgentForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAgentForm, setSavingAgentForm] = useState(false);
   const { toast } = useToast();
 
   // ... (rest of constants)
@@ -137,7 +152,10 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       const token = await newAuth.getToken();
       if (!token) return;
 
-      const response = await fetch('/api/admin/ai-agents', {
+      const url = businessId
+        ? `/api/business/${businessId}/ai-agents/manage`
+        : '/api/admin/ai-agents';
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -147,6 +165,93 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       }
     } catch (error) {
       console.error('Error loading agents:', error);
+    }
+  };
+
+  const resetAgentForm = () => {
+    setEditingAgentForm({ ...EMPTY_AGENT_FORM });
+  };
+
+  const openCreateAgentForm = () => {
+    resetAgentForm();
+    setShowAgentForm(true);
+  };
+
+  const openEditAgentForm = (agent: any) => {
+    setEditingAgentForm({
+      id: agent.id,
+      name: agent.name || '',
+      type: agent.type || 'booking',
+      description: agent.description || '',
+      personality: agent.personality || '',
+      workflow: agent.workflow || '',
+      task: agent.task || '',
+      identity: agent.identity || '',
+      speech_style: agent.speech_style || '',
+      is_active: agent.is_active !== false,
+    });
+    setShowAgentForm(true);
+  };
+
+  const saveAgentForm = async () => {
+    if (!businessId) {
+      toast({ title: t.common.error, description: t.dashboard.settings.telegram.selectBusiness, variant: 'destructive' });
+      return;
+    }
+    if (!editingAgentForm?.name?.trim() || !editingAgentForm?.type?.trim()) {
+      toast({ title: t.common.error, description: 'Название и тип агента обязательны', variant: 'destructive' });
+      return;
+    }
+    setSavingAgentForm(true);
+    try {
+      const token = await newAuth.getToken();
+      if (!token) throw new Error('Требуется авторизация');
+      const isEdit = Boolean(editingAgentForm.id);
+      const url = isEdit
+        ? `/api/business/${businessId}/ai-agents/manage/${editingAgentForm.id}`
+        : `/api/business/${businessId}/ai-agents/manage`;
+      const response = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editingAgentForm),
+      });
+      const data = await response.json();
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || 'Не удалось сохранить агента');
+      }
+      toast({ title: t.common.success, description: isEdit ? 'Агент обновлён' : 'Агент создан' });
+      setShowAgentForm(false);
+      resetAgentForm();
+      await loadAvailableAgents();
+    } catch (e: any) {
+      toast({ title: t.common.error, description: e?.message || 'Не удалось сохранить агента', variant: 'destructive' });
+    } finally {
+      setSavingAgentForm(false);
+    }
+  };
+
+  const deleteOwnAgent = async (agentId: string) => {
+    if (!businessId) return;
+    const ok = window.confirm('Удалить этого агента?');
+    if (!ok) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) throw new Error('Требуется авторизация');
+      const response = await fetch(`/api/business/${businessId}/ai-agents/manage/${agentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || 'Не удалось удалить агента');
+      }
+      toast({ title: t.common.success, description: 'Агент удалён' });
+      await loadAvailableAgents();
+    } catch (e: any) {
+      toast({ title: t.common.error, description: e?.message || 'Не удалось удалить агента', variant: 'destructive' });
     }
   };
 
@@ -436,6 +541,92 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
             t.dashboard.settings.ai.save
           )}
         </Button>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Создание и редактирование агентов</h3>
+            <p className="text-sm text-gray-600">Системные шаблоны доступны для выбора. Редактируются только ваши агенты.</p>
+          </div>
+          <Button onClick={openCreateAgentForm}>Добавить агента</Button>
+        </div>
+
+        {showAgentForm && editingAgentForm && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Название</Label>
+                <Input
+                  value={editingAgentForm.name}
+                  onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Например: Агент записи (мой)"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Тип</Label>
+                <Select
+                  value={editingAgentForm.type}
+                  onValueChange={(value) => setEditingAgentForm((prev: any) => ({ ...prev, type: value }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="booking">booking</SelectItem>
+                    <SelectItem value="marketing">marketing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Описание</Label>
+              <Input
+                value={editingAgentForm.description}
+                onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, description: e.target.value }))}
+                placeholder="Короткое описание роли агента"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Task</Label>
+              <Input
+                value={editingAgentForm.task}
+                onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, task: e.target.value }))}
+                placeholder="Основная задача агента"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowAgentForm(false)} disabled={savingAgentForm}>Отмена</Button>
+              <Button onClick={saveAgentForm} disabled={savingAgentForm}>
+                {savingAgentForm ? 'Сохранение...' : 'Сохранить агента'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {availableAgents.length === 0 && (
+            <div className="text-sm text-gray-500">Агенты не найдены.</div>
+          )}
+          {availableAgents.map((agent) => (
+            <div key={agent.id} className="rounded-lg border border-gray-200 p-3 flex items-center justify-between gap-4">
+              <div>
+                <div className="font-medium text-gray-900">{agent.name}</div>
+                <div className="text-xs text-gray-500">
+                  {agent.type} • {agent.is_template ? 'Шаблон' : 'Пользовательский'}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {agent.can_edit ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openEditAgentForm(agent)}>Редактировать</Button>
+                    <Button size="sm" variant="outline" onClick={() => deleteOwnAgent(agent.id)}>Удалить</Button>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-500">Только для чтения</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

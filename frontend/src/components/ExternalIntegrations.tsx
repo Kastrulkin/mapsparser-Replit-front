@@ -309,9 +309,6 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         <CardDescription>{t.dashboard.settings.external.title}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
-        <ChannelControlCenter businessId={currentBusinessId} />
-
         {/* Maton.ai */}
         <div className="border rounded-lg p-6 bg-gray-50 flex flex-col gap-4">
           <div>
@@ -357,6 +354,9 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             <div className="text-sm text-gray-500">Maton.ai пока не подключён</div>
           )}
         </div>
+
+        <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
+        <ChannelControlCenter businessId={currentBusinessId} />
 
         {/* Кнопка подключения Google */}
         <div className="border rounded-lg p-6 bg-gray-50 flex flex-col items-center text-center space-y-4">

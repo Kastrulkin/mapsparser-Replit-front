@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2 } from 'lucide-react'; // Force rebuild
+import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 import { useLanguage } from '../i18n/LanguageContext';
+
+const TASKS_FETCH_LIMIT = 500;
 
 interface ParsingTask {
   id: string;
@@ -18,6 +20,9 @@ interface ParsingTask {
   source?: string;
   status: 'pending' | 'processing' | 'completed' | 'error' | 'captcha';
   retry_after?: string;
+  captcha_url?: string;
+  captcha_session_id?: string;
+  resume_requested?: boolean;
   error_message?: string;
   created_at: string;
   updated_at?: string;
@@ -41,6 +46,7 @@ interface ParsingStats {
 export const ParsingManagement: React.FC = () => {
   const { t } = useLanguage();
   const [tasks, setTasks] = useState<ParsingTask[]>([]);
+  const [tasksTotal, setTasksTotal] = useState(0);
   const [stats, setStats] = useState<ParsingStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +70,7 @@ export const ParsingManagement: React.FC = () => {
 
       // Parallel data fetching to eliminate waterfall
       const [tasksRes, statsRes] = await Promise.all([
-        fetch(`/api/admin/parsing/tasks?status=${filters.status}&task_type=${filters.task_type}&source=${filters.source}`, { headers }),
+        fetch(`/api/admin/parsing/tasks?status=${filters.status}&task_type=${filters.task_type}&source=${filters.source}&limit=${TASKS_FETCH_LIMIT}&offset=0`, { headers }),
         fetch(`/api/admin/parsing/stats?_t=${timestamp}`, { headers })
       ]);
 
@@ -88,6 +94,7 @@ export const ParsingManagement: React.FC = () => {
       }
 
       if (tasksData.tasks) setTasks(tasksData.tasks);
+      if (typeof tasksData.total === 'number') setTasksTotal(tasksData.total);
       else if ((tasksData as { error?: string }).error) throw new Error((tasksData as { error?: string }).error);
 
       if (statsData.success) setStats(statsData.stats);
@@ -208,11 +215,45 @@ export const ParsingManagement: React.FC = () => {
     }
   };
 
-  const handleResumeCaptcha = async (businessId?: string) => {
-    if (!businessId) {
+  const handleOpenCaptcha = async (task: ParsingTask) => {
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+
+      const res = await fetch(`/api/admin/parsing/tasks/${task.id}/captcha/open`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось открыть CAPTCHA сессию');
+      }
+
+      const url = data.captcha_url || task.captcha_url || task.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+
+      toast({
+        title: t.common.success,
+        description: data.message || 'CAPTCHA открыта. Пройдите её и нажмите Продолжить.',
+      });
+
+      await loadData();
+    } catch (e: any) {
       toast({
         title: t.common.error,
-        description: 'У задачи нет business_id',
+        description: e.message || 'Ошибка открытия CAPTCHA',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleResumeCaptcha = async (taskId?: string) => {
+    if (!taskId) {
+      toast({
+        title: t.common.error,
+        description: 'Не удалось определить задачу',
         variant: 'destructive',
       });
       return;
@@ -224,7 +265,7 @@ export const ParsingManagement: React.FC = () => {
       const token = await newAuth.getToken();
       if (!token) return;
 
-      const res = await fetch(`/api/business/${businessId}/parse-resume`, {
+      const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/resume`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -244,6 +285,33 @@ export const ParsingManagement: React.FC = () => {
       toast({
         title: t.common.error,
         description: e.message || 'Ошибка продолжения после капчи',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleExpireCaptcha = async (taskId: string) => {
+    if (!confirm('Сбросить CAPTCHA-сессию и перевести задачу в ошибку?')) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/expire`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка сброса CAPTCHA-сессии');
+      }
+      toast({
+        title: t.common.success,
+        description: data.message || 'CAPTCHA-сессия сброшена',
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Ошибка сброса CAPTCHA-сессии',
         variant: 'destructive',
       });
     }
@@ -414,6 +482,10 @@ export const ParsingManagement: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle>{t.dashboard.parsing.table.title}</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Показано: {tasks.length} из {tasksTotal || tasks.length}
+            {tasksTotal > TASKS_FETCH_LIMIT ? ` (лимит экрана ${TASKS_FETCH_LIMIT})` : ''}
+          </p>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -476,11 +548,51 @@ export const ParsingManagement: React.FC = () => {
                             {task.url.substring(0, 40)}...
                           </a>
                         ) : '—'}
+                        {task.status === 'captcha' && task.captcha_url && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 border-orange-200 bg-orange-50 px-2 text-xs text-orange-700 hover:bg-orange-100"
+                              onClick={() => handleOpenCaptcha(task)}
+                            >
+                              <ExternalLink className="mr-1 h-3 w-3" />
+                              Открыть CAPTCHA
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => {
+                                navigator.clipboard.writeText(task.captcha_url || '');
+                                toast({ title: "CAPTCHA URL copied", description: task.captcha_url, duration: 2500 });
+                              }}
+                              title="Copy CAPTCHA URL"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                        {task.status === 'captcha' && (
+                          <div className="mt-1 text-xs text-orange-700 space-y-1">
+                            {task.captcha_session_id ? (
+                              <div className="break-all">session: {task.captcha_session_id}</div>
+                            ) : (
+                              <div>session: не создана</div>
+                            )}
+                            <div>resume_requested: {task.resume_requested ? 'yes' : 'no'}</div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {new Date(task.created_at).toLocaleString('ru-RU')}
+                        {task.retry_after && (
+                          <div className="mt-1 text-xs text-amber-700">
+                            retry_after: {new Date(task.retry_after).toLocaleString('ru-RU')}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-destructive max-w-xs truncate" title={task.error_message}>
+                      <td className="px-4 py-3 text-sm text-destructive max-w-md break-all" title={task.error_message}>
                         {task.error_message || '—'}
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -496,15 +608,26 @@ export const ParsingManagement: React.FC = () => {
                                 <Play className="w-4 h-4" />
                               </Button>
                             )}
-                          {task.status === 'captcha' && task.business_id && (
+                          {task.status === 'captcha' && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleResumeCaptcha(task.business_id)}
+                              onClick={() => handleResumeCaptcha(task.id)}
                               className="text-orange-600 hover:text-orange-700"
                               title="Продолжить после капчи"
                             >
                               <Loader2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {task.status === 'captcha' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleExpireCaptcha(task.id)}
+                              className="text-red-600 hover:text-red-700"
+                              title="Сбросить CAPTCHA-сессию"
+                            >
+                              <CircleSlash className="w-4 h-4" />
                             </Button>
                           )}
                           {task.task_type !== 'sync_yandex_business' && task.business_id && (

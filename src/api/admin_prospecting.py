@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import requests
 from flask import Blueprint, jsonify, request
 from psycopg2.extras import Json
 
@@ -33,11 +34,51 @@ QUEUED_FOR_SEND = "queued_for_send"
 BATCH_DRAFT = "draft"
 BATCH_APPROVED = "approved"
 QUEUE_STATUS_QUEUED = "queued"
+QUEUE_STATUS_SENDING = "sending"
 QUEUE_STATUS_SENT = "sent"
+QUEUE_STATUS_DELIVERED = "delivered"
+QUEUE_STATUS_RETRY = "retry"
+QUEUE_STATUS_DLQ = "dlq"
 QUEUE_STATUS_FAILED = "failed"
 MAX_DAILY_OUTREACH_BATCH = 10
 ALLOWED_REPLY_OUTCOMES = {"positive", "question", "no_response", "hard_no"}
 SEARCH_JOB_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
+OUTREACH_SEND_MAX_ATTEMPTS = int(os.environ.get("OUTREACH_SEND_MAX_ATTEMPTS", "3"))
+OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
+LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
+
+
+def _remaining_daily_outreach_slots(conn) -> int:
+    """Hard-cap daily outreach slots based on queued items for today's batches."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM outreachsendqueue q
+        JOIN outreachsendbatches b ON b.id = q.batch_id
+        WHERE b.batch_date = CURRENT_DATE
+        """
+    )
+    row = cur.fetchone()
+    if not row:
+        used = 0
+    elif hasattr(row, "get"):
+        used = int((row.get("cnt") or 0))
+    else:
+        used = int((row[0] if row else 0) or 0)
+    return max(0, MAX_DAILY_OUTREACH_BATCH - used)
+
+
+def _outreach_retry_delay_for_attempt(attempt_no: int) -> timedelta | None:
+    # attempt_no считается уже после инкремента:
+    # 1 => первый fail после D0, retry через 1 день
+    # 2 => второй fail, retry через 2 дня (D3 относительно D0)
+    if attempt_no <= 0:
+        return None
+    idx = attempt_no - 1
+    if idx < len(OUTREACH_RETRY_DELAY_DAYS):
+        return timedelta(days=int(OUTREACH_RETRY_DELAY_DAYS[idx]))
+    return None
 
 
 def _auth_error(message: str, status_code: int):
@@ -589,6 +630,411 @@ def _load_prospecting_lead(lead_id: str) -> dict[str, Any] | None:
         conn.close()
 
 
+def _get_table_columns(table_name: str) -> set[str]:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            """,
+            (table_name,),
+        )
+        cols = set()
+        for row in cur.fetchall():
+            if hasattr(row, "get"):
+                col = row.get("column_name")
+            else:
+                col = row[0] if row else None
+            if col:
+                cols.add(str(col))
+        return cols
+    finally:
+        conn.close()
+
+
+def _extract_yandex_org_id_from_url(url: Any) -> str:
+    import re
+
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    match = re.search(r"/org/(?:[^/]+/)?(\d+)", text)
+    return match.group(1) if match else ""
+
+
+def _extract_links_recursive(value: Any) -> list[str]:
+    links: list[str] = []
+
+    def _walk(node: Any) -> None:
+        if node is None:
+            return
+        if isinstance(node, str):
+            raw = node.strip()
+            if raw:
+                links.append(raw)
+            return
+        if isinstance(node, dict):
+            for item in node.values():
+                _walk(item)
+            return
+        if isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(value)
+    deduped: list[str] = []
+    seen = set()
+    for item in links:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _extract_parsed_contacts(card_overview: Any) -> dict[str, str | list[str] | None]:
+    overview = card_overview if isinstance(card_overview, dict) else {}
+    social_links = _extract_links_recursive(overview.get("social_links"))
+    telegram_url = None
+    whatsapp_url = None
+    email = None
+    for item in social_links:
+        low = item.lower()
+        if not telegram_url and ("t.me/" in low or "telegram.me/" in low):
+            telegram_url = item
+        if not whatsapp_url and ("wa.me/" in low or "whatsapp.com/" in low or "api.whatsapp.com/" in low):
+            whatsapp_url = item
+        if not email:
+            if low.startswith("mailto:"):
+                email = item.split(":", 1)[1].strip()
+            elif "@" in item and " " not in item and "/" not in item:
+                email = item
+    return {
+        "telegram_url": telegram_url,
+        "whatsapp_url": whatsapp_url,
+        "email": email,
+        "social_links": social_links,
+    }
+
+
+def _update_lead_business_link(lead_id: str, business_id: str) -> None:
+    columns = _get_table_columns("prospectingleads")
+    if "business_id" not in columns:
+        return
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET business_id = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (business_id, lead_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | None:
+    source_url = str(lead.get("source_url") or "").strip()
+    source_external_id = str(
+        lead.get("source_external_id")
+        or lead.get("google_id")
+        or _extract_yandex_org_id_from_url(source_url)
+        or ""
+    ).strip()
+    explicit_business_id = str(lead.get("business_id") or "").strip()
+    lead_name = str(lead.get("name") or "").strip()
+    lead_city = str(lead.get("city") or "").strip()
+
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        business_columns = set()
+        for row in cursor.fetchall():
+            if hasattr(row, "get"):
+                col = row.get("column_name")
+            else:
+                col = row[0] if row else None
+            if col:
+                business_columns.add(str(col))
+
+        business = None
+        if explicit_business_id:
+            cursor.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (explicit_business_id,))
+            row = cursor.fetchone()
+            business = dict(row) if row else None
+
+        if not business and source_external_id and "yandex_org_id" in business_columns:
+            cursor.execute("SELECT * FROM businesses WHERE yandex_org_id = %s LIMIT 1", (source_external_id,))
+            row = cursor.fetchone()
+            business = dict(row) if row else None
+
+        if not business and source_url and "yandex_url" in business_columns:
+            if source_external_id:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM businesses
+                    WHERE yandex_url = %s OR yandex_url ILIKE %s
+                    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                    LIMIT 1
+                    """,
+                    (source_url, f"%{source_external_id}%"),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM businesses
+                    WHERE yandex_url = %s
+                    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                    LIMIT 1
+                    """,
+                    (source_url,),
+                )
+            row = cursor.fetchone()
+            business = dict(row) if row else None
+
+        if not business and lead_name:
+            cursor.execute(
+                """
+                SELECT *
+                FROM businesses
+                WHERE LOWER(name) = LOWER(%s)
+                  AND (%s = '' OR LOWER(COALESCE(city, '')) = LOWER(%s))
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+                """,
+                (lead_name, lead_city, lead_city),
+            )
+            row = cursor.fetchone()
+            business = dict(row) if row else None
+
+        if business:
+            return business
+        return None
+    finally:
+        db.close()
+
+
+def _create_shadow_business_for_lead(lead: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Create isolated business entity for lead parsing without mixing it into active client list."""
+    source_url = str(lead.get("source_url") or "").strip()
+    source_external_id = str(
+        lead.get("source_external_id")
+        or lead.get("google_id")
+        or _extract_yandex_org_id_from_url(source_url)
+        or ""
+    ).strip()
+    lead_name = str(lead.get("name") or "Lead without name").strip()[:255]
+    lead_city = str(lead.get("city") or "").strip()[:120] or None
+    lead_address = str(lead.get("address") or "").strip()[:400] or None
+    lead_category = str(lead.get("category") or "").strip()[:120] or None
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        columns = set()
+        for row in cur.fetchall():
+            if hasattr(row, "get"):
+                col = row.get("column_name")
+            else:
+                col = row[0] if row else None
+            if col:
+                columns.add(str(col))
+
+        values: dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "name": lead_name,
+            "owner_id": user_id,
+            "description": f"Lead shadow business for outreach lead {lead.get('id')}",
+            "industry": lead_category,
+            "business_type": lead_category,
+            "address": lead_address,
+            "city": lead_city,
+            "website": (str(lead.get("website") or "").strip() or None),
+            "phone": (str(lead.get("phone") or "").strip() or None),
+            "email": (str(lead.get("email") or "").strip() or None),
+            "yandex_url": source_url or None,
+            "moderation_status": LEAD_OUTREACH_MODERATION_STATUS,
+            "is_active": True,
+        }
+        if source_external_id and "yandex_org_id" in columns:
+            values["yandex_org_id"] = source_external_id
+
+        fields: list[str] = []
+        params: list[Any] = []
+        for key, value in values.items():
+            if key in columns:
+                fields.append(key)
+                params.append(value)
+
+        placeholders = ", ".join(["%s"] * len(fields))
+        cur.execute(
+            f"""
+            INSERT INTO businesses ({", ".join(fields)})
+            VALUES ({placeholders})
+            RETURNING *
+            """,
+            params,
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def _ensure_parse_business_for_lead(lead: dict[str, Any], user_id: str) -> tuple[dict[str, Any], bool]:
+    existing = _find_existing_business_for_lead(lead)
+    if existing:
+        return existing, False
+    created = _create_shadow_business_for_lead(lead, user_id)
+    return created, True
+
+
+def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url: str) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, status, task_type, source, updated_at, retry_after
+            FROM parsequeue
+            WHERE business_id = %s
+              AND task_type IN ('parse_card', 'sync_yandex_business')
+              AND status IN ('pending', 'processing', 'captcha')
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        active = cur.fetchone()
+        if active:
+            payload = dict(active)
+            payload["existing"] = True
+            return payload
+
+        task_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO parsequeue (
+                id, business_id, task_type, source, status, user_id, url, created_at, updated_at
+            )
+            VALUES (%s, %s, 'parse_card', 'yandex_maps', 'pending', %s, %s, NOW(), NOW())
+            RETURNING id, status, task_type, source, updated_at, retry_after
+            """,
+            (task_id, business_id, user_id, source_url),
+        )
+        created = dict(cur.fetchone())
+        created["existing"] = False
+        conn.commit()
+        return created
+    finally:
+        conn.close()
+
+
+def _sync_lead_contacts_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]:
+    business_id = str(lead.get("business_id") or "").strip()
+    if not business_id:
+        return lead
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT phone, site, overview, rating, reviews_count
+            FROM cards
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return lead
+        card = dict(row)
+
+        overview = card.get("overview")
+        if isinstance(overview, str):
+            try:
+                overview = json.loads(overview)
+            except Exception:
+                overview = {}
+        if not isinstance(overview, dict):
+            overview = {}
+        parsed = _extract_parsed_contacts(overview)
+        updates: dict[str, Any] = {}
+        if not str(lead.get("phone") or "").strip() and str(card.get("phone") or "").strip():
+            updates["phone"] = str(card.get("phone")).strip()
+        if not str(lead.get("website") or "").strip() and str(card.get("site") or "").strip():
+            updates["website"] = str(card.get("site")).strip()
+        if not str(lead.get("telegram_url") or "").strip() and parsed.get("telegram_url"):
+            updates["telegram_url"] = parsed.get("telegram_url")
+        if not str(lead.get("whatsapp_url") or "").strip() and parsed.get("whatsapp_url"):
+            updates["whatsapp_url"] = parsed.get("whatsapp_url")
+        if not str(lead.get("email") or "").strip() and parsed.get("email"):
+            updates["email"] = parsed.get("email")
+        if (lead.get("rating") is None or str(lead.get("rating")).strip() == "") and card.get("rating") is not None:
+            updates["rating"] = card.get("rating")
+        if (lead.get("reviews_count") is None or int(lead.get("reviews_count") or 0) == 0) and card.get("reviews_count") is not None:
+            updates["reviews_count"] = int(card.get("reviews_count") or 0)
+        if parsed.get("social_links"):
+            updates["messenger_links_json"] = Json(parsed.get("social_links"))
+
+        if not updates:
+            return lead
+
+        assignments = []
+        values: list[Any] = []
+        for field, value in updates.items():
+            assignments.append(f"{field} = %s")
+            values.append(value)
+        assignments.append("updated_at = NOW()")
+        values.append(lead["id"])
+
+        cur.execute(
+            f"""
+            UPDATE prospectingleads
+            SET {', '.join(assignments)}
+            WHERE id = %s
+            RETURNING *
+            """,
+            values,
+        )
+        updated = cur.fetchone()
+        if updated:
+            conn.commit()
+            return dict(updated)
+        return lead
+    finally:
+        conn.close()
+
+
 def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
     conn = get_db_connection()
     try:
@@ -764,7 +1210,8 @@ def _load_send_queue_snapshot():
                 SELECT
                     q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
                     q.delivery_status, q.provider_message_id, q.error_text,
-                    q.sent_at, q.created_at, q.updated_at,
+                    q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
+                    q.created_at, q.updated_at,
                     l.name AS lead_name,
                     d.approved_text, d.generated_text,
                     r.classified_outcome AS latest_outcome,
@@ -824,6 +1271,10 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        remaining_slots = _remaining_daily_outreach_slots(conn)
+        if remaining_slots <= 0:
+            return None, f"Daily outreach cap reached ({MAX_DAILY_OUTREACH_BATCH}/day)"
+
         query = """
             SELECT
                 d.id, d.lead_id, d.channel,
@@ -842,7 +1293,7 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
             query += " AND d.id = ANY(%s)"
             params.append(draft_ids)
         query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
-        params.append(MAX_DAILY_OUTREACH_BATCH)
+        params.append(remaining_slots)
         cur.execute(query, params)
         selected_rows = [dict(row) for row in cur.fetchall()]
 
@@ -933,66 +1384,217 @@ def _approve_send_batch(batch_id: str, user_id: str):
         cur.execute(
             """
             SELECT
-                q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status,
-                l.name AS lead_name, l.phone, l.email, l.telegram_url, l.whatsapp_url, l.selected_channel,
-                d.approved_text, d.generated_text
+                q.id
             FROM outreachsendqueue q
-            JOIN prospectingleads l ON l.id = q.lead_id
-            JOIN outreachmessagedrafts d ON d.id = q.draft_id
             WHERE q.batch_id = %s
             ORDER BY q.created_at ASC
             """,
             (batch_id,),
         )
         queue_rows = [dict(item) for item in cur.fetchall()]
-        dispatch_summary = {"total": len(queue_rows), "sent": 0, "failed": 0, "results": []}
-        for item in queue_rows:
+        conn.commit()
+        return batch_payload | {"dispatch_summary": {"queued": len(queue_rows), "sent": 0, "failed": 0}}, None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
+    """Фоновый диспетчер outbound-очереди outreach: queued/retry -> sent/retry/dlq."""
+    safe_batch_size = max(1, min(int(batch_size or 20), 200))
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            WITH due AS (
+                SELECT
+                    q.id
+                FROM outreachsendqueue q
+                JOIN outreachsendbatches b ON b.id = q.batch_id
+                WHERE b.status = %s
+                  AND (
+                    q.delivery_status = %s
+                    OR (
+                        q.delivery_status = %s
+                        AND q.next_retry_at IS NOT NULL
+                        AND q.next_retry_at <= NOW()
+                    )
+                  )
+                ORDER BY COALESCE(q.next_retry_at, q.created_at) ASC
+                LIMIT %s
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE outreachsendqueue q
+            SET delivery_status = %s,
+                attempts = COALESCE(q.attempts, 0) + 1,
+                last_attempt_at = NOW(),
+                updated_at = NOW()
+            FROM due
+            WHERE q.id = due.id
+            RETURNING q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status,
+                      q.attempts, q.provider_message_id, q.error_text
+            """,
+            (
+                BATCH_APPROVED,
+                QUEUE_STATUS_QUEUED,
+                QUEUE_STATUS_RETRY,
+                safe_batch_size,
+                QUEUE_STATUS_SENDING,
+            ),
+        )
+        claimed = [dict(row) for row in cur.fetchall()]
+        if claimed:
+            queue_ids = [str(row.get("id") or "") for row in claimed if str(row.get("id") or "")]
+            if queue_ids:
+                placeholders = ",".join(["%s"] * len(queue_ids))
+                cur.execute(
+                    f"""
+                    SELECT
+                        q.id,
+                        l.name AS lead_name,
+                        l.phone,
+                        l.email,
+                        l.telegram_url,
+                        l.whatsapp_url,
+                        l.selected_channel,
+                        d.approved_text,
+                        d.generated_text
+                    FROM outreachsendqueue q
+                    LEFT JOIN outreachmessagedrafts d ON d.id = q.draft_id
+                    LEFT JOIN prospectingleads l ON l.id = q.lead_id
+                    WHERE q.id IN ({placeholders})
+                    """,
+                    tuple(queue_ids),
+                )
+                detail_map = {str(row.get("id") or ""): dict(row) for row in cur.fetchall()}
+                for row in claimed:
+                    row_id = str(row.get("id") or "")
+                    details = detail_map.get(row_id) or {}
+                    row.update(
+                        {
+                            "lead_name": details.get("lead_name"),
+                            "phone": details.get("phone"),
+                            "email": details.get("email"),
+                            "telegram_url": details.get("telegram_url"),
+                            "whatsapp_url": details.get("whatsapp_url"),
+                            "selected_channel": details.get("selected_channel"),
+                            "approved_text": details.get("approved_text"),
+                            "generated_text": details.get("generated_text"),
+                        }
+                    )
+        conn.commit()
+
+        summary = {
+            "success": True,
+            "picked": len(claimed),
+            "sent": 0,
+            "delivered": 0,
+            "retry": 0,
+            "dlq": 0,
+            "failed": 0,
+            "results": [],
+        }
+        if not claimed:
+            return summary
+
+        for item in claimed:
+            queue_id = str(item.get("id") or "")
+            lead_id = str(item.get("lead_id") or "")
+            attempt_no = int(item.get("attempts") or 1)
             dispatch_result = _dispatch_outreach_queue_item(item)
-            delivery_status = dispatch_result["delivery_status"]
+            delivery_status = str(dispatch_result.get("delivery_status") or QUEUE_STATUS_FAILED).strip().lower()
             provider_message_id = dispatch_result.get("provider_message_id")
-            error_text = dispatch_result.get("error_text")
-            sent_at_sql = "NOW()" if delivery_status == QUEUE_STATUS_SENT else "NULL"
-            cur.execute(
-                f"""
-                UPDATE outreachsendqueue
-                SET delivery_status = %s,
-                    provider_message_id = %s,
-                    error_text = %s,
-                    sent_at = {sent_at_sql},
-                    updated_at = NOW()
-                WHERE id = %s
-                """,
-                (delivery_status, provider_message_id, error_text, item["id"]),
-            )
-            cur.execute(
-                """
-                UPDATE prospectingleads
-                SET status = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                """,
-                (
-                    "sent" if delivery_status == QUEUE_STATUS_SENT else CHANNEL_SELECTED,
-                    item["lead_id"],
-                ),
-            )
-            dispatch_summary["sent" if delivery_status == QUEUE_STATUS_SENT else "failed"] += 1
-            dispatch_summary["results"].append(
+            error_text = str(dispatch_result.get("error_text") or "").strip()[:500] or None
+
+            update_conn = get_db_connection()
+            try:
+                update_cur = update_conn.cursor()
+                if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED}:
+                    update_cur.execute(
+                        """
+                        UPDATE outreachsendqueue
+                        SET delivery_status = %s,
+                            provider_message_id = %s,
+                            error_text = NULL,
+                            sent_at = COALESCE(sent_at, NOW()),
+                            next_retry_at = NULL,
+                            dlq_at = NULL,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (delivery_status, provider_message_id, queue_id),
+                    )
+                    update_cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET status = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        ("sent", lead_id),
+                    )
+                    if delivery_status == QUEUE_STATUS_DELIVERED:
+                        summary["delivered"] += 1
+                    else:
+                        summary["sent"] += 1
+                else:
+                    retry_delay = _outreach_retry_delay_for_attempt(attempt_no)
+                    exhausted = attempt_no >= OUTREACH_SEND_MAX_ATTEMPTS or retry_delay is None
+                    if exhausted:
+                        next_status = QUEUE_STATUS_DLQ
+                        next_retry_at = None
+                        dlq_at_sql = "NOW()"
+                        summary["dlq"] += 1
+                    else:
+                        next_status = QUEUE_STATUS_RETRY
+                        next_retry_at = datetime.now(timezone.utc) + retry_delay
+                        dlq_at_sql = "NULL"
+                        summary["retry"] += 1
+                    update_cur.execute(
+                        f"""
+                        UPDATE outreachsendqueue
+                        SET delivery_status = %s,
+                            provider_message_id = %s,
+                            error_text = %s,
+                            next_retry_at = %s,
+                            dlq_at = {dlq_at_sql},
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (next_status, provider_message_id, error_text, next_retry_at, queue_id),
+                    )
+                    update_cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET status = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (CHANNEL_SELECTED, lead_id),
+                    )
+                    summary["failed"] += 1
+                update_conn.commit()
+            except Exception:
+                update_conn.rollback()
+                raise
+            finally:
+                update_conn.close()
+
+            summary["results"].append(
                 {
-                    "queue_id": item["id"],
-                    "lead_id": item["lead_id"],
-                    "lead_name": item.get("lead_name"),
+                    "queue_id": queue_id,
+                    "lead_id": lead_id,
                     "channel": item.get("channel"),
+                    "attempt_no": attempt_no,
                     "delivery_status": delivery_status,
                     "provider_message_id": provider_message_id,
                     "error_text": error_text,
                 }
             )
-        conn.commit()
-        return batch_payload | {"dispatch_summary": dispatch_summary}, None
-    except Exception:
-        conn.rollback()
-        raise
+        return summary
     finally:
         conn.close()
 
@@ -1022,9 +1624,103 @@ def _resolve_outreach_maton_key() -> str:
     )
 
 
+def _resolve_outreach_openclaw_endpoint() -> str:
+    return str(os.getenv("OPENCLAW_OUTREACH_SEND_URL", "") or "").strip()
+
+
+def _resolve_outreach_openclaw_token() -> str:
+    return (
+        str(os.getenv("OPENCLAW_OUTREACH_TOKEN", "") or "").strip()
+        or str(os.getenv("OPENCLAW_LOCALOS_TOKEN", "") or "").strip()
+    )
+
+
+def _is_outreach_openclaw_strict() -> bool:
+    return str(os.getenv("OPENCLAW_OUTREACH_STRICT", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _resolve_outreach_openclaw_health_endpoint() -> str:
+    explicit = str(os.getenv("OPENCLAW_OUTREACH_HEALTH_URL", "") or "").strip()
+    if explicit:
+        return explicit
+    endpoint = _resolve_outreach_openclaw_endpoint()
+    if not endpoint:
+        return ""
+    base = endpoint.split("?", 1)[0].rstrip("/")
+    if "/" in base:
+        base = base.rsplit("/", 1)[0]
+    if base.endswith("/capabilities"):
+        base = base.rsplit("/", 1)[0]
+    return f"{base}/healthz"
+
+
+def _dispatch_via_openclaw(item: dict[str, Any], channel: str, message: str) -> dict[str, Any]:
+    endpoint = _resolve_outreach_openclaw_endpoint()
+    token = _resolve_outreach_openclaw_token()
+    if not endpoint:
+        return {"success": False, "error": "OPENCLAW_OUTREACH_SEND_URL is not configured"}
+    if not token:
+        return {"success": False, "error": "OPENCLAW_OUTREACH_TOKEN is not configured"}
+
+    payload = {
+        "channel": channel,
+        "message": message,
+        "lead": {
+            "id": item.get("lead_id"),
+            "name": item.get("lead_name"),
+            "phone": item.get("phone"),
+            "email": item.get("email"),
+            "telegram_url": item.get("telegram_url"),
+            "whatsapp_url": item.get("whatsapp_url"),
+        },
+        "meta": {
+            "queue_id": item.get("id"),
+            "batch_id": item.get("batch_id"),
+            "draft_id": item.get("draft_id"),
+            "source": "localos_outreach",
+        },
+    }
+
+    try:
+        resp = requests.post(
+            endpoint,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"OpenClaw request failed: {exc}"}
+
+    try:
+        data = resp.json() if resp.content else {}
+    except Exception:
+        data = {}
+
+    if resp.status_code >= 400:
+        return {"success": False, "error": f"OpenClaw HTTP {resp.status_code}: {data or resp.text}"}
+
+    ok = bool(data.get("success") or data.get("ok") or data.get("accepted"))
+    if not ok:
+        return {"success": False, "error": str(data.get('error') or data or 'OpenClaw delivery failed')}
+    provider_id = (
+        str(data.get("message_id") or data.get("delivery_id") or data.get("action_id") or "").strip()
+        or f"openclaw:{channel}:{item.get('id')}"
+    )
+    return {"success": True, "provider_message_id": provider_id}
+
+
 def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
     channel = str(item.get("channel") or item.get("selected_channel") or "").strip().lower()
     message = str(item.get("approved_text") or item.get("generated_text") or "").strip()
+    strict_openclaw = _is_outreach_openclaw_strict()
     if not channel:
         return {"delivery_status": QUEUE_STATUS_FAILED, "error_text": "No channel selected"}
     if not message:
@@ -1032,7 +1728,7 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
 
     if channel == "manual":
         return {
-            "delivery_status": QUEUE_STATUS_SENT,
+            "delivery_status": QUEUE_STATUS_DELIVERED,
             "provider_message_id": f"manual:{item.get('id')}",
             "error_text": None,
         }
@@ -1042,6 +1738,22 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
             "delivery_status": QUEUE_STATUS_FAILED,
             "error_text": "Email provider is not configured for outreach yet",
         }
+
+    # Runtime-first outbound via OpenClaw for supported machine channels.
+    if channel in {"telegram", "whatsapp", "email"}:
+        openclaw_result = _dispatch_via_openclaw(item, channel, message)
+        if openclaw_result.get("success"):
+            return {
+                "delivery_status": QUEUE_STATUS_SENT,
+                "provider_message_id": str(openclaw_result.get("provider_message_id") or "")[:255] or None,
+                "error_text": None,
+            }
+        if strict_openclaw:
+            return {
+                "delivery_status": QUEUE_STATUS_FAILED,
+                "error_text": f"OpenClaw strict mode: {str(openclaw_result.get('error') or 'delivery failed')[:430]}",
+            }
+        # fallback to legacy bridge path below if strict mode is disabled.
 
     maton_key = _resolve_outreach_maton_key()
     if not maton_key:
@@ -1095,11 +1807,68 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/outbound/health", methods=["GET"])
+def get_outbound_health():
+    """Return outbound runtime bridge health for prospecting dispatch."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    endpoint = _resolve_outreach_openclaw_endpoint()
+    health_url = _resolve_outreach_openclaw_health_endpoint()
+    token = _resolve_outreach_openclaw_token()
+    strict_mode = _is_outreach_openclaw_strict()
+
+    payload: dict[str, Any] = {
+        "success": True,
+        "strict_openclaw": strict_mode,
+        "openclaw": {
+            "configured": bool(endpoint and token),
+            "endpoint": endpoint or None,
+            "health_url": health_url or None,
+            "token_configured": bool(token),
+            "status": "not_configured",
+            "http_status": None,
+            "error": None,
+        },
+        "fallback": {
+            "maton_configured": bool(_resolve_outreach_maton_key()),
+            "enabled_when_strict_off": not strict_mode,
+        },
+    }
+
+    if not endpoint or not token:
+        return jsonify(payload)
+
+    if not health_url:
+        payload["openclaw"]["status"] = "unknown"
+        payload["openclaw"]["error"] = "Health URL is not resolvable"
+        return jsonify(payload)
+
+    try:
+        resp = requests.get(
+            health_url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=8,
+        )
+        payload["openclaw"]["http_status"] = resp.status_code
+        if resp.status_code < 400:
+            payload["openclaw"]["status"] = "ready"
+        else:
+            payload["openclaw"]["status"] = "degraded"
+            payload["openclaw"]["error"] = f"HTTP {resp.status_code}"
+    except Exception as exc:
+        payload["openclaw"]["status"] = "down"
+        payload["openclaw"]["error"] = str(exc)
+
+    return jsonify(payload)
+
+
 def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_message_id: str | None, error_text: str | None):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        sent_at_sql = "NOW()" if delivery_status == QUEUE_STATUS_SENT else "NULL"
+        sent_at_sql = "NOW()" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, QUEUE_STATUS_FAILED} else "NULL"
         cur.execute(
             f"""
             UPDATE outreachsendqueue
@@ -1117,8 +1886,19 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
         row = cur.fetchone()
         if not row:
             return None
+        payload = dict(row)
+        lead_status = "sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else CHANNEL_SELECTED
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (lead_status, payload.get("lead_id")),
+        )
         conn.commit()
-        return dict(row)
+        return payload
     except Exception:
         conn.rollback()
         raise
@@ -1194,6 +1974,135 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
         )
         conn.commit()
         return reaction, None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _delete_outreach_draft(draft_id: str) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM outreachmessagedrafts
+            WHERE id = %s
+            RETURNING id, lead_id, channel, angle_type, tone, status,
+                      generated_text, edited_text, approved_text,
+                      learning_note_json, created_at, updated_at
+            """,
+            (draft_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        conn.commit()
+        return dict(row)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _delete_send_queue_item(queue_id: str) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM outreachsendqueue
+            WHERE id = %s
+            RETURNING id, batch_id, lead_id, draft_id, channel, delivery_status,
+                      provider_message_id, error_text, sent_at, created_at, updated_at
+            """,
+            (queue_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        payload = dict(row)
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (CHANNEL_SELECTED, payload.get("lead_id")),
+        )
+        conn.commit()
+        return payload
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _delete_send_batch(batch_id: str) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM outreachsendbatches
+            WHERE id = %s
+            RETURNING id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            """,
+            (batch_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        conn.commit()
+        return dict(row)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _cleanup_test_send_batches() -> dict[str, int]:
+    """Remove batches in draft state and their queue rows (test/abandoned batches)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id
+            FROM outreachsendbatches
+            WHERE status = %s
+            """,
+            (BATCH_DRAFT,),
+        )
+        batch_ids = [str((row.get("id") if hasattr(row, "get") else row[0])) for row in (cur.fetchall() or [])]
+        if not batch_ids:
+            return {"deleted_batches": 0, "deleted_queue_items": 0}
+
+        cur.execute(
+            """
+            DELETE FROM outreachsendqueue
+            WHERE batch_id = ANY(%s)
+            RETURNING id
+            """,
+            (batch_ids,),
+        )
+        deleted_queue = len(cur.fetchall() or [])
+        cur.execute(
+            """
+            DELETE FROM outreachsendbatches
+            WHERE id = ANY(%s)
+            RETURNING id
+            """,
+            (batch_ids,),
+        )
+        deleted_batches = len(cur.fetchall() or [])
+        conn.commit()
+        return {"deleted_batches": deleted_batches, "deleted_queue_items": deleted_queue}
     except Exception:
         conn.rollback()
         raise
@@ -1751,6 +2660,56 @@ def approve_outreach_send_batch(batch_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches/<string:batch_id>", methods=["DELETE"])
+def delete_outreach_send_batch(batch_id):
+    """Delete full outreach batch (queue rows are removed by cascade)."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        deleted = _delete_send_batch(batch_id)
+        if not deleted:
+            # Idempotent delete: treat missing row as already deleted.
+            return jsonify({"success": True, "already_deleted": True, "batch_id": batch_id})
+        return jsonify({"success": True, "batch": deleted})
+    except Exception as e:
+        print(f"Error deleting outreach batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches/cleanup-test", methods=["POST"])
+def cleanup_outreach_test_batches():
+    """Delete draft/test batches to keep queue clean."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        summary = _cleanup_test_send_batches()
+        return jsonify({"success": True, **summary})
+    except Exception as e:
+        print(f"Error cleaning outreach test batches: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-dispatch", methods=["POST"])
+def dispatch_outreach_send_queue():
+    """Run one manual dispatch cycle for due outreach queue items."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        batch_size = max(1, min(int(data.get("batch_size", 20) or 20), 200))
+        summary = dispatch_due_outreach_queue(batch_size=batch_size)
+        return jsonify(summary)
+    except Exception as e:
+        print(f"Error dispatching outreach queue: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/send-queue/<string:queue_id>/delivery", methods=["POST"])
 def update_send_queue_delivery(queue_id):
     """Manually mark delivery result for queued item."""
@@ -1761,8 +2720,8 @@ def update_send_queue_delivery(queue_id):
     try:
         data = request.get_json(silent=True) or {}
         delivery_status = (data.get("delivery_status") or "").strip().lower()
-        if delivery_status not in {QUEUE_STATUS_SENT, QUEUE_STATUS_FAILED}:
-            return jsonify({"error": "delivery_status must be sent or failed"}), 400
+        if delivery_status not in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, QUEUE_STATUS_FAILED}:
+            return jsonify({"error": "delivery_status must be sent, delivered or failed"}), 400
 
         row = _update_send_queue_delivery(
             queue_id,
@@ -1775,6 +2734,24 @@ def update_send_queue_delivery(queue_id):
         return jsonify({"success": True, "item": row})
     except Exception as e:
         print(f"Error updating send queue delivery: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/send-queue/<string:queue_id>", methods=["DELETE"])
+def delete_outreach_send_queue_item(queue_id):
+    """Delete queued/sent item from outreach queue."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        deleted = _delete_send_queue_item(queue_id)
+        if not deleted:
+            # Idempotent delete: treat missing row as already deleted.
+            return jsonify({"success": True, "already_deleted": True, "queue_id": queue_id})
+        return jsonify({"success": True, "item": deleted})
+    except Exception as e:
+        print(f"Error deleting outreach queue item: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1969,6 +2946,150 @@ def generate_outreach_draft_from_audit(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/parse", methods=["POST"])
+def parse_lead_card(lead_id):
+    """Link lead to LocalOS business if needed and enqueue Yandex card parse."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        lead = _load_prospecting_lead(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+
+        display_lead = _normalize_lead_for_display(dict(lead))
+        if not display_lead:
+            return jsonify({"error": "Lead is not available for parsing"}), 400
+
+        business, business_created = _ensure_parse_business_for_lead(display_lead, str(user_data["user_id"]))
+        business_id = str(business.get("id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "Failed to resolve business for lead"}), 500
+
+        _update_lead_business_link(lead_id, business_id)
+        source_url = str(
+            business.get("yandex_url")
+            or display_lead.get("source_url")
+            or ""
+        ).strip()
+        if not source_url:
+            return jsonify({"error": "У лида нет ссылки на Яндекс Карты для запуска парсинга"}), 400
+
+        task = _enqueue_parse_task_for_business(business_id, user_data["user_id"], source_url)
+        refreshed_lead = _load_prospecting_lead(lead_id) or display_lead
+        return jsonify(
+            {
+                "success": True,
+                "lead": _normalize_lead_for_display(refreshed_lead),
+                "business": {
+                    "id": business_id,
+                    "name": business.get("name"),
+                    "created": bool(business_created),
+                    "shadow": str(business.get("moderation_status") or "").strip().lower() == LEAD_OUTREACH_MODERATION_STATUS,
+                },
+                "parse_task": {
+                    "id": task.get("id"),
+                    "status": task.get("status"),
+                    "task_type": task.get("task_type"),
+                    "source": task.get("source"),
+                    "updated_at": task.get("updated_at"),
+                    "retry_after": task.get("retry_after"),
+                    "existing": bool(task.get("existing")),
+                },
+            }
+        )
+    except Exception as e:
+        print(f"Error parsing lead card: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/shortlist/parse", methods=["POST"])
+def parse_shortlist_cards():
+    """Bulk enqueue parsing for shortlist leads."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        lead_ids = payload.get("lead_ids")
+        ids: list[str] = [str(item).strip() for item in (lead_ids or []) if str(item).strip()]
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            if ids:
+                cur.execute("SELECT * FROM prospectingleads WHERE id = ANY(%s)", (ids,))
+            else:
+                cur.execute("SELECT * FROM prospectingleads WHERE status = %s", (SHORTLIST_APPROVED,))
+            leads = [dict(row) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+        if not leads:
+            return jsonify({"error": "No leads found for parsing"}), 404
+
+        results = []
+        enqueued = 0
+        skipped = 0
+        failed = 0
+        for raw_lead in leads:
+            lead = _normalize_lead_for_display(dict(raw_lead))
+            if not lead:
+                skipped += 1
+                results.append({"lead_id": raw_lead.get("id"), "status": "skipped", "error": "invalid_lead_payload"})
+                continue
+            try:
+                business, business_created = _ensure_parse_business_for_lead(lead, str(user_data["user_id"]))
+                business_id = str(business.get("id") or "").strip()
+                if not business_id:
+                    failed += 1
+                    results.append({"lead_id": lead.get("id"), "status": "failed", "error": "business_resolution_failed"})
+                    continue
+                _update_lead_business_link(str(lead.get("id")), business_id)
+                source_url = str(business.get("yandex_url") or lead.get("source_url") or "").strip()
+                if not source_url:
+                    failed += 1
+                    results.append({"lead_id": lead.get("id"), "status": "failed", "error": "missing_source_url"})
+                    continue
+                task = _enqueue_parse_task_for_business(business_id, user_data["user_id"], source_url)
+                if task.get("existing"):
+                    skipped += 1
+                    state = "already_running"
+                else:
+                    enqueued += 1
+                    state = "enqueued"
+                results.append(
+                    {
+                        "lead_id": lead.get("id"),
+                        "business_id": business_id,
+                        "business_created": bool(business_created),
+                        "business_shadow": str(business.get("moderation_status") or "").strip().lower() == LEAD_OUTREACH_MODERATION_STATUS,
+                        "status": state,
+                        "task_id": task.get("id"),
+                        "task_status": task.get("status"),
+                    }
+                )
+            except Exception as exc:
+                failed += 1
+                results.append({"lead_id": lead.get("id"), "status": "failed", "error": str(exc)})
+
+        return jsonify(
+            {
+                "success": True,
+                "total": len(leads),
+                "enqueued": enqueued,
+                "skipped": skipped,
+                "failed": failed,
+                "results": results,
+            }
+        )
+    except Exception as e:
+        print(f"Error bulk parsing shortlist: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/approve", methods=["POST"])
 def approve_outreach_draft(draft_id):
     """Approve outreach draft and persist learning example."""
@@ -2135,6 +3256,24 @@ def reject_outreach_draft(draft_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>", methods=["DELETE"])
+def delete_outreach_draft(draft_id):
+    """Delete outreach draft."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        deleted = _delete_outreach_draft(draft_id)
+        if not deleted:
+            # Idempotent delete: treat missing row as already deleted.
+            return jsonify({"success": True, "already_deleted": True, "draft_id": draft_id})
+        return jsonify({"success": True, "draft": _serialize_draft(deleted)})
+    except Exception as e:
+        print(f"Error deleting outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/preview", methods=["GET"])
 def preview_lead_card(lead_id):
     """Return deterministic preview snapshot for an outreach lead."""
@@ -2149,6 +3288,7 @@ def preview_lead_card(lead_id):
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
 
+        lead = _sync_lead_contacts_from_parsed_data(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return jsonify({"error": "Lead is not available for preview"}), 404

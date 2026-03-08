@@ -103,6 +103,30 @@ def require_superadmin():
         return None
     return user_data
 
+
+def require_auth():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    user_data = verify_session(token)
+    return user_data
+
+
+def _require_business_owner_or_superadmin(db: DatabaseManager, business_id: str):
+    user_data = require_auth()
+    if not user_data:
+        return None, jsonify({"error": "Требуется авторизация"}), 401
+
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT owner_id FROM Businesses WHERE id = %s", (business_id,))
+    business = cursor.fetchone()
+    if not business:
+        return None, jsonify({"error": "Бизнес не найден"}), 404
+
+    owner_id = _row_get(business, "owner_id")
+    if owner_id != user_data.get("user_id") and not user_data.get("is_superadmin"):
+        return None, jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+    return user_data, None, None
+
 @ai_agents_api_bp.route('/api/admin/ai-agents', methods=['GET'])
 def get_ai_agents():
     """Получить список всех агентов"""
@@ -428,6 +452,222 @@ def get_ai_agent(agent_id: str):
         
     except Exception as e:
         print(f"❌ Ошибка получения агента: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@ai_agents_api_bp.route('/api/business/<business_id>/ai-agents/manage', methods=['GET'])
+def get_business_manageable_ai_agents(business_id: str):
+    """Список агентов для управления в настройках бизнеса (суперадмин + владелец)."""
+    try:
+        db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
+        user_data, error_response, error_code = _require_business_owner_or_superadmin(db, business_id)
+        if error_response:
+            db.close()
+            return error_response, error_code
+
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, type, description, personality, workflow, task, identity, speech_style,
+                   restrictions_json, variables_json, is_active, created_by, created_at, updated_at
+            FROM AIAgents
+            WHERE COALESCE(is_active, 1) = 1
+            ORDER BY type, name
+            """
+        )
+        rows = cursor.fetchall()
+        user_id = str(user_data.get("user_id") or "")
+        is_superadmin = bool(user_data.get("is_superadmin"))
+        agents = []
+        for row in rows:
+            created_by = _row_get(row, "created_by")
+            can_edit = is_superadmin or (created_by and str(created_by) == user_id)
+            agents.append({
+                "id": _row_get(row, "id"),
+                "name": _row_get(row, "name"),
+                "type": _row_get(row, "type"),
+                "description": _row_get(row, "description", "") or "",
+                "personality": _row_get(row, "personality", "") or "",
+                "workflow": _row_get(row, "workflow", "") or "",
+                "task": _row_get(row, "task", "") or "",
+                "identity": _row_get(row, "identity", "") or "",
+                "speech_style": _row_get(row, "speech_style", "") or "",
+                "restrictions": _json_loads_safe(_row_get(row, "restrictions_json")),
+                "variables": _json_loads_safe(_row_get(row, "variables_json")),
+                "is_active": _bool_safe(_row_get(row, "is_active"), default=True),
+                "created_by": created_by,
+                "can_edit": bool(can_edit),
+                "is_template": not bool(created_by),
+                "created_at": _row_get(row, "created_at"),
+                "updated_at": _row_get(row, "updated_at"),
+            })
+
+        db.close()
+        return jsonify({"success": True, "agents": agents}), 200
+    except Exception as e:
+        print(f"❌ Ошибка получения управляемых агентов бизнеса: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@ai_agents_api_bp.route('/api/business/<business_id>/ai-agents/manage', methods=['POST'])
+def create_business_ai_agent(business_id: str):
+    """Создать пользовательского агента для бизнеса."""
+    try:
+        db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
+        user_data, error_response, error_code = _require_business_owner_or_superadmin(db, business_id)
+        if error_response:
+            db.close()
+            return error_response, error_code
+
+        data = request.get_json() or {}
+        name = str(data.get('name', '')).strip()
+        agent_type = str(data.get('type', '')).strip()
+        if not name or not agent_type:
+            db.close()
+            return jsonify({"error": "name и type обязательны"}), 400
+
+        workflow = data.get('workflow', '')
+        workflow_value = workflow if isinstance(workflow, str) else json.dumps(workflow, ensure_ascii=False)
+        description = str(data.get('description', '')).strip()
+        personality = str(data.get('personality', '')).strip()
+        task = str(data.get('task', '')).strip()
+        identity = str(data.get('identity', '')).strip()
+        speech_style = str(data.get('speech_style', '')).strip()
+        restrictions = data.get('restrictions', {}) or {}
+        variables = data.get('variables', {}) or {}
+
+        agent_id = str(uuid.uuid4())
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO AIAgents
+            (id, name, type, description, personality, workflow, task, identity, speech_style,
+             restrictions_json, variables_json, is_active, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+            """,
+            (
+                agent_id,
+                name,
+                agent_type,
+                description,
+                personality,
+                workflow_value,
+                task,
+                identity,
+                speech_style,
+                json.dumps(restrictions, ensure_ascii=False),
+                json.dumps(variables, ensure_ascii=False),
+                user_data.get("user_id"),
+            ),
+        )
+        db.conn.commit()
+        db.close()
+        return jsonify({"success": True, "agent_id": agent_id, "message": "Агент создан"}), 201
+    except Exception as e:
+        print(f"❌ Ошибка создания пользовательского агента: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@ai_agents_api_bp.route('/api/business/<business_id>/ai-agents/manage/<agent_id>', methods=['PUT'])
+def update_business_ai_agent(business_id: str, agent_id: str):
+    """Обновить пользовательского агента для бизнеса."""
+    try:
+        db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
+        user_data, error_response, error_code = _require_business_owner_or_superadmin(db, business_id)
+        if error_response:
+            db.close()
+            return error_response, error_code
+
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Агент не найден"}), 404
+
+        created_by = _row_get(row, "created_by")
+        if (not user_data.get("is_superadmin")) and (not created_by or str(created_by) != str(user_data.get("user_id"))):
+            db.close()
+            return jsonify({"error": "Можно редактировать только собственных агентов"}), 403
+
+        data = request.get_json() or {}
+        update_fields = []
+        update_values = []
+        for field in ("name", "description", "personality", "task", "identity", "speech_style"):
+            if field in data:
+                update_fields.append(f"{field} = %s")
+                update_values.append(data.get(field))
+        if "workflow" in data:
+            update_fields.append("workflow = %s")
+            wf = data.get("workflow")
+            update_values.append(wf if isinstance(wf, str) else json.dumps(wf, ensure_ascii=False))
+        if "restrictions" in data:
+            update_fields.append("restrictions_json = %s")
+            update_values.append(json.dumps(data.get("restrictions") or {}, ensure_ascii=False))
+        if "variables" in data:
+            update_fields.append("variables_json = %s")
+            update_values.append(json.dumps(data.get("variables") or {}, ensure_ascii=False))
+        if "is_active" in data:
+            update_fields.append("is_active = %s")
+            update_values.append(1 if bool(data.get("is_active")) else 0)
+
+        if not update_fields:
+            db.close()
+            return jsonify({"success": True, "message": "Нет изменений"}), 200
+
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        update_values.append(agent_id)
+        cursor.execute(
+            f"UPDATE AIAgents SET {', '.join(update_fields)} WHERE id = %s",
+            tuple(update_values),
+        )
+        db.conn.commit()
+        db.close()
+        return jsonify({"success": True, "message": "Агент обновлён"}), 200
+    except Exception as e:
+        print(f"❌ Ошибка обновления пользовательского агента: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@ai_agents_api_bp.route('/api/business/<business_id>/ai-agents/manage/<agent_id>', methods=['DELETE'])
+def delete_business_ai_agent(business_id: str, agent_id: str):
+    """Удалить пользовательского агента для бизнеса."""
+    try:
+        db = DatabaseManager()
+        _ensure_ai_agents_schema(db)
+        user_data, error_response, error_code = _require_business_owner_or_superadmin(db, business_id)
+        if error_response:
+            db.close()
+            return error_response, error_code
+
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Агент не найден"}), 404
+        created_by = _row_get(row, "created_by")
+        if (not user_data.get("is_superadmin")) and (not created_by or str(created_by) != str(user_data.get("user_id"))):
+            db.close()
+            return jsonify({"error": "Можно удалять только собственных агентов"}), 403
+
+        cursor.execute("DELETE FROM AIAgents WHERE id = %s", (agent_id,))
+        db.conn.commit()
+        db.close()
+        return jsonify({"success": True, "message": "Агент удалён"}), 200
+    except Exception as e:
+        print(f"❌ Ошибка удаления пользовательского агента: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

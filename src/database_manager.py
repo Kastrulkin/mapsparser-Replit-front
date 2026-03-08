@@ -9,6 +9,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Any
 from psycopg2.extras import Json
 import psycopg2
+from core.telegram_token_store import (
+    is_telegram_bot_token_configured,
+    mask_telegram_bot_token,
+)
 
 try:
     from parsequeue_status import STATUS_PENDING, normalize_status
@@ -77,6 +81,18 @@ class DatabaseManager:
         """Контекстный менеджер: выход"""
         self.close()
         return False
+
+    def _sanitize_business_payload(self, business: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(business, dict):
+            return business
+        payload = dict(business)
+        raw_telegram_token = payload.get("telegram_bot_token")
+        payload["telegram_bot_token_configured"] = is_telegram_bot_token_configured(raw_telegram_token)
+        payload["telegram_bot_token_masked"] = mask_telegram_bot_token(raw_telegram_token) or None
+        payload["telegram_bot_token"] = ""
+        if "waba_access_token" in payload:
+            payload["waba_access_token"] = ""
+        return payload
     
     # ===== USERS (Пользователи) =====
     
@@ -879,6 +895,32 @@ class DatabaseManager:
         self.conn.commit()
     
     # ===== BUSINESSES =====
+
+    def _businesses_has_column(self, column_name: str) -> bool:
+        """Check businesses table column existence in current DB schema."""
+        cursor = self.conn.cursor()
+        try:
+            if self.db_type == 'postgresql':
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND lower(table_name) = 'businesses'
+                      AND lower(column_name) = lower(%s)
+                    LIMIT 1
+                    """,
+                    (column_name,),
+                )
+                return bool(cursor.fetchone())
+            cursor.execute("PRAGMA table_info(Businesses)")
+            rows = cursor.fetchall() or []
+            for row in rows:
+                if str(row[1]).lower() == str(column_name).lower():
+                    return True
+            return False
+        except Exception:
+            return False
     
     def create_business(self, name: str, description: str = None, industry: str = None, owner_id: str = None, 
                        business_type: str = None, address: str = None, working_hours: str = None,
@@ -974,11 +1016,15 @@ class DatabaseManager:
     def get_all_businesses(self) -> List[Dict[str, Any]]:
         """Получить все бизнесы (только для суперадмина) - только активные"""
         cursor = self.conn.cursor()
-        cursor.execute("""
+        moderation_filter = ""
+        if self._businesses_has_column("moderation_status"):
+            moderation_filter = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
+        cursor.execute(f"""
             SELECT b.*, u.email as owner_email, u.name as owner_name
             FROM businesses b
             LEFT JOIN users u ON b.owner_id = u.id
-            WHERE b.is_active = TRUE OR b.is_active IS NULL
+            WHERE (b.is_active = TRUE OR b.is_active IS NULL)
+            {moderation_filter}
             ORDER BY b.created_at DESC
         """)
         rows = cursor.fetchall()
@@ -987,44 +1033,58 @@ class DatabaseManager:
         for row in rows:
             if hasattr(row, 'keys'):
                 # Это sqlite3.Row
-                result.append({key: row[key] for key in row.keys()})
+                result.append(self._sanitize_business_payload({key: row[key] for key in row.keys()}))
             else:
                 # Это tuple - преобразуем в dict по описанию колонок
                 columns = [desc[0] for desc in cursor.description]
-                result.append(dict(zip(columns, row)))
+                result.append(self._sanitize_business_payload(dict(zip(columns, row))))
         return result
     
     def get_businesses_by_owner(self, owner_id: str) -> List[Dict[str, Any]]:
         """Получить бизнесы конкретного владельца (только прямые, без сетей)"""
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM businesses 
-            WHERE owner_id = %s AND is_active = TRUE
+        moderation_filter = ""
+        if self._businesses_has_column("moderation_status"):
+            moderation_filter = " AND COALESCE(moderation_status, '') <> 'lead_outreach'"
+        cursor.execute(f"""
+            SELECT * FROM businesses
+            WHERE owner_id = %s
+              AND is_active = TRUE
+              {moderation_filter}
             ORDER BY created_at DESC
         """, (owner_id,))
-        return [dict(row) for row in cursor.fetchall()]
+        return [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
     
     def get_businesses_by_network_owner(self, owner_id: str) -> List[Dict[str, Any]]:
         """Получить бизнесы владельца сети: свои личные + бизнесы из сетей - только активные"""
         cursor = self.conn.cursor()
+        moderation_filter_direct = ""
+        moderation_filter_network = ""
+        if self._businesses_has_column("moderation_status"):
+            moderation_filter_direct = " AND COALESCE(moderation_status, '') <> 'lead_outreach'"
+            moderation_filter_network = " AND COALESCE(b.moderation_status, '') <> 'lead_outreach'"
         
         # Получаем бизнесы, которые напрямую принадлежат пользователю
-        cursor.execute("""
-            SELECT * FROM businesses 
-            WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL)
+        cursor.execute(f"""
+            SELECT * FROM businesses
+            WHERE owner_id = %s
+              AND (is_active = TRUE OR is_active IS NULL)
+              {moderation_filter_direct}
             ORDER BY created_at DESC
         """, (owner_id,))
-        direct_businesses = [dict(row) for row in cursor.fetchall()]
+        direct_businesses = [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
         
         # Получаем бизнесы из сетей, которыми владеет пользователь
-        cursor.execute("""
-            SELECT b.* 
+        cursor.execute(f"""
+            SELECT b.*
             FROM businesses b
             INNER JOIN networks n ON b.network_id = n.id
-            WHERE n.owner_id = %s AND (b.is_active = TRUE OR b.is_active IS NULL)
+            WHERE n.owner_id = %s
+              AND (b.is_active = TRUE OR b.is_active IS NULL)
+              {moderation_filter_network}
             ORDER BY b.created_at DESC
         """, (owner_id,))
-        network_businesses = [dict(row) for row in cursor.fetchall()]
+        network_businesses = [self._sanitize_business_payload(dict(row)) for row in cursor.fetchall()]
         
         # Объединяем и убираем дубликаты
         all_businesses = {}
@@ -1098,10 +1158,10 @@ class DatabaseManager:
         rows = cursor.fetchall()
 
         if rows and hasattr(rows[0], "keys"):
-            return [{k: row[k] for k in row.keys()} for row in rows]
+            return [self._sanitize_business_payload({k: row[k] for k in row.keys()}) for row in rows]
 
         cols = [d[0] for d in cursor.description] if cursor.description else []
-        return [dict(zip(cols, row)) for row in rows]
+        return [self._sanitize_business_payload(dict(zip(cols, row))) for row in rows]
     
     def get_all_users_with_businesses(self) -> List[Dict[str, Any]]:
         """Получить всех пользователей с их бизнесами и сетями (для админской страницы)

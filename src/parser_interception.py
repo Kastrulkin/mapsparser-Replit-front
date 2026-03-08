@@ -11,7 +11,7 @@ import re
 import time
 import random
 from typing import Dict, Any, List, Optional
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urljoin
 import os
 from datetime import datetime
 
@@ -602,6 +602,54 @@ class YandexMapsInterceptionParser:
             u = (page_url or "").lower()
             return "showcaptcha" in u or "/captcha" in u
 
+        def _extract_captcha_url() -> str:
+            """Пробуем достать прямую ссылку на captcha challenge, а не URL карточки."""
+            candidates = []
+            try:
+                # Часто action формы указывает на showcaptcha
+                for selector in (
+                    "form[action*='showcaptcha']",
+                    "form[action*='captcha']",
+                ):
+                    loc = page.locator(selector).first
+                    if loc.count() > 0:
+                        href = (loc.get_attribute("action") or "").strip()
+                        if href:
+                            candidates.append(href)
+            except Exception:
+                pass
+
+            try:
+                # Иногда challenge отрисован внутри iframe smart-captcha
+                iframe = page.locator("iframe[src*='captcha'], iframe[src*='showcaptcha'], iframe[src*='smartcaptcha']").first
+                if iframe.count() > 0:
+                    src = (iframe.get_attribute("src") or "").strip()
+                    if src:
+                        candidates.append(src)
+            except Exception:
+                pass
+
+            try:
+                # Fallback: явные ссылки в DOM
+                for selector in ("a[href*='showcaptcha']", "a[href*='/captcha']"):
+                    a = page.locator(selector).first
+                    if a.count() > 0:
+                        href = (a.get_attribute("href") or "").strip()
+                        if href:
+                            candidates.append(href)
+            except Exception:
+                pass
+
+            base_url = page.url or url
+            for c in candidates:
+                try:
+                    abs_url = urljoin(base_url, c)
+                except Exception:
+                    abs_url = c
+                if abs_url:
+                    return abs_url
+            return page.url or url
+
         # Инициализируем bundle-директорию для этого прогона (если ещё не задана в __init__)
         if not self.debug_bundle_id:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -752,7 +800,7 @@ class YandexMapsInterceptionParser:
         if _is_captcha_page(title) or _is_captcha_url(page.url):
             print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
             # Возвращаем специальную ошибку, чтобы воркер знал о капче
-            return {"error": "captcha_detected", "captcha_url": page.url}
+            return {"error": "captcha_detected", "captcha_url": _extract_captcha_url()}
 
         try:
             print("⏳ Ожидание загрузки карточки организации...")
@@ -773,7 +821,7 @@ class YandexMapsInterceptionParser:
 
         if _is_captcha_url(current_url) or _is_captcha_page(title):
             print("❌ Обнаружен редирект на капчу после загрузки карточки.")
-            return {"error": "captcha_detected", "captcha_url": current_url}
+            return {"error": "captcha_detected", "captcha_url": _extract_captcha_url()}
 
         # org-centric: world-view (z<=3) — карта сломалась, возвращаемся на overview
         if _is_world_view(current_url):

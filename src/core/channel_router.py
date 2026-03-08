@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 
 from auth_encryption import decrypt_auth_data
+from core.telegram_token_store import decode_telegram_bot_token
 from core.channel_delivery import (
     mask_phone,
     normalize_phone,
@@ -84,7 +85,7 @@ def load_business_channel_context(cursor, business_id: str, *, global_telegram_b
         ctx = dict(zip(cols, row))
     ctx["global_telegram_bot_token"] = str(global_telegram_bot_token or "").strip()
     ctx["whatsapp_phone"] = normalize_phone(ctx.get("whatsapp_phone"))
-    ctx["telegram_bot_token"] = str(ctx.get("telegram_bot_token") or "").strip()
+    ctx["telegram_bot_token"] = decode_telegram_bot_token(ctx.get("telegram_bot_token"))
     ctx["waba_phone_id"] = str(ctx.get("waba_phone_id") or "").strip()
     ctx["waba_access_token"] = str(ctx.get("waba_access_token") or "").strip()
     ctx["owner_telegram_id"] = str(ctx.get("owner_telegram_id") or "").strip()

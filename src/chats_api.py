@@ -10,7 +10,10 @@ API endpoints для работы с чатами ИИ агента
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from core.telegram_token_store import decode_telegram_bot_token
 import json
+import os
+import requests
 
 chats_bp = Blueprint('chats', __name__)
 
@@ -22,6 +25,81 @@ def require_auth():
     token = auth_header.split(' ')[1]
     user_data = verify_session(token)
     return user_data
+
+
+def _call_openclaw_sandbox_bridge(
+    *,
+    business_id: str,
+    agent_id: str,
+    message: str,
+    conversation_history: list | None,
+    user_data: dict | None,
+):
+    endpoint = str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL", "") or "").strip()
+    if not endpoint:
+        return None
+    token = (
+        str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_TOKEN", "") or "").strip()
+        or str(os.getenv("OPENCLAW_LOCALOS_TOKEN", "") or "").strip()
+    )
+    if not token:
+        return {
+            "success": False,
+            "error": "OPENCLAW_SANDBOX_BRIDGE_TOKEN is not configured",
+            "runtime": "openclaw_bridge",
+        }
+
+    payload = {
+        "business_id": business_id,
+        "agent_id": agent_id,
+        "message": message,
+        "conversation_history": conversation_history or [],
+        "dry_run": True,
+        "actor": {
+            "user_id": str((user_data or {}).get("user_id") or ""),
+            "role": "sandbox_operator",
+        },
+    }
+    try:
+        response = requests.post(
+            endpoint,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=35,
+        )
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"OpenClaw sandbox bridge request failed: {exc}",
+            "runtime": "openclaw_bridge",
+        }
+
+    try:
+        data = response.json() if response.content else {}
+    except Exception:
+        data = {}
+
+    if response.status_code >= 400:
+        return {
+            "success": False,
+            "error": f"OpenClaw sandbox bridge HTTP {response.status_code}: {data or response.text}",
+            "runtime": "openclaw_bridge",
+        }
+
+    return {
+        "success": bool(data.get("success", True)),
+        "response": str(data.get("response") or data.get("message") or "").strip(),
+        "usage": data.get("usage") or {},
+        "state": str(data.get("state") or data.get("decision") or "runtime_bridge").strip(),
+        "runtime": "openclaw_bridge",
+        "dry_run": True,
+        "decision_trace": data.get("decision_trace") or data.get("trace") or {},
+        "tool_calls": data.get("tool_calls") or [],
+        "error": str(data.get("error") or "").strip() or None,
+    }
 
 @chats_bp.route('/api/business/<business_id>/ai-agents', methods=['GET'])
 def get_business_ai_agents(business_id):
@@ -311,7 +389,7 @@ def send_operator_message(conversation_id):
         if business_settings:
             whatsapp_phone_id = business_settings[0]
             whatsapp_token = business_settings[1]
-            telegram_token = business_settings[2]
+            telegram_token = decode_telegram_bot_token(business_settings[2])
             telegram_chat_id = business_settings[3]
             
             # Пытаемся отправить через WhatsApp
@@ -392,10 +470,24 @@ def test_ai_agent(agent_id):
         data = request.get_json()
         message = data.get('message', '').strip()
         business_id = data.get('business_id')  # Опционально, для тестирования с реальным бизнесом
+        dry_run = bool(data.get('dry_run', True))
         
         if not message:
             return jsonify({"error": "Сообщение не может быть пустым"}), 400
+        if not dry_run:
+            return jsonify({"error": "Песочница работает только в dry-run режиме (без реальной отправки)"}), 400
         
+        bridge_result = _call_openclaw_sandbox_bridge(
+            business_id=str(business_id or ""),
+            agent_id=str(agent_id or ""),
+            message=message,
+            conversation_history=[],
+            user_data=user_data,
+        )
+        if bridge_result and bridge_result.get("success") and bridge_result.get("response"):
+            db.close()
+            return jsonify(bridge_result)
+
         # Импортируем функции для работы с агентом
         from ai_agent import build_prompt, get_business_info, get_business_services
         from services.gigachat_client import GigaChatClient
@@ -522,7 +614,12 @@ def test_ai_agent(agent_id):
             "success": True,
             "response": response_text,
             "usage": usage_info,
-            "state": default_state
+            "state": default_state,
+            "dry_run": True,
+            "runtime": "local",
+            "decision_trace": {},
+            "tool_calls": [],
+            "bridge_error": bridge_result.get("error") if bridge_result and bridge_result.get("error") else None,
         })
         
     except Exception as e:
@@ -565,10 +662,24 @@ def test_business_ai_agent(business_id, agent_id):
         data = request.get_json()
         message = data.get('message', '').strip()
         conversation_history = data.get('conversation_history', [])  # История для песочницы
+        dry_run = bool(data.get('dry_run', True))
         
         if not message:
             return jsonify({"error": "Сообщение не может быть пустым"}), 400
+        if not dry_run:
+            return jsonify({"error": "Песочница работает только в dry-run режиме (без реальной отправки)"}), 400
         
+        bridge_result = _call_openclaw_sandbox_bridge(
+            business_id=str(business_id or ""),
+            agent_id=str(agent_id or ""),
+            message=message,
+            conversation_history=conversation_history,
+            user_data=user_data,
+        )
+        if bridge_result and bridge_result.get("success") and bridge_result.get("response"):
+            db.close()
+            return jsonify(bridge_result)
+
         # Импортируем функции для работы с агентом
         from ai_agent import build_prompt, get_business_info, get_business_services
         from services.gigachat_client import GigaChatClient
@@ -658,11 +769,15 @@ def test_business_ai_agent(business_id, agent_id):
             "success": True,
             "response": response_text,
             "usage": usage_info,
-            "state": default_state
+            "state": default_state,
+            "dry_run": True,
+            "runtime": "local",
+            "decision_trace": {},
+            "tool_calls": [],
+            "bridge_error": bridge_result.get("error") if bridge_result and bridge_result.get("error") else None,
         })
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

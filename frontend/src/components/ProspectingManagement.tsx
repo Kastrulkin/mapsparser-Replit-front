@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -11,6 +11,7 @@ import LeadCardPreviewPanel, { type LeadCardPreview } from "./LeadCardPreviewPan
 
 type Lead = {
     id?: string;
+    business_id?: string;
     name: string;
     source?: string;
     address?: string;
@@ -187,6 +188,8 @@ const workflowStatusLabel = (status: string) => {
             return '5. В очереди на отправку';
         case 'sent':
             return '6. Отправлено';
+        case 'delivered':
+            return '6. Доставлено';
         case 'responded':
             return '7. Есть реакция';
         case 'converted':
@@ -377,6 +380,7 @@ export const ProspectingManagement: React.FC = () => {
     const [leadTab, setLeadTab] = useState<'candidates' | 'shortlist' | 'rejected'>('candidates');
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
     const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
+    const [bulkParseBusy, setBulkParseBusy] = useState(false);
     const [drafts, setDrafts] = useState<OutreachDraft[]>([]);
     const [loadingDrafts, setLoadingDrafts] = useState(false);
     const [draftBusy, setDraftBusy] = useState<Record<string, string>>({});
@@ -410,6 +414,7 @@ export const ProspectingManagement: React.FC = () => {
     const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
+    const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -697,6 +702,69 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const deleteLeadEverywhere = async (leadId: string) => {
+        setSelectionLoading((prev) => ({ ...prev, [leadId]: 'delete' }));
+        try {
+            await api.delete(`/admin/prospecting/lead/${leadId}`);
+            setSelectedShortlistLeadIds((prev) => prev.filter((id) => id !== leadId));
+            setSelectedOutreachLeadIds((prev) => prev.filter((id) => id !== leadId));
+            if (previewLead?.id === leadId) {
+                closeLeadPreview();
+            }
+            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error deleting lead:', error);
+        } finally {
+            setSelectionLoading((prev) => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
+        }
+    };
+
+    const bulkDeleteShortlistLeads = async () => {
+        const leadIds = shortlistLeads
+            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
+            .map((lead) => lead.id as string);
+        if (leadIds.length === 0) return;
+        setSelectionLoading((prev) => ({ ...prev, bulkDeleteShortlist: 'delete' }));
+        try {
+            await Promise.all(leadIds.map((leadId) => api.delete(`/admin/prospecting/lead/${leadId}`)));
+            setSelectedShortlistLeadIds([]);
+            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error bulk deleting shortlist leads:', error);
+        } finally {
+            setSelectionLoading((prev) => {
+                const next = { ...prev };
+                delete next.bulkDeleteShortlist;
+                return next;
+            });
+        }
+    };
+
+    const bulkDeleteOutreachLeads = async () => {
+        const leadIds = outreachLeads
+            .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
+            .map((lead) => lead.id as string);
+        if (leadIds.length === 0) return;
+        setSelectionLoading((prev) => ({ ...prev, bulkDeleteOutreach: 'delete' }));
+        try {
+            await Promise.all(leadIds.map((leadId) => api.delete(`/admin/prospecting/lead/${leadId}`)));
+            setSelectedOutreachLeadIds([]);
+            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error bulk deleting outreach leads:', error);
+        } finally {
+            setSelectionLoading((prev) => {
+                const next = { ...prev };
+                delete next.bulkDeleteOutreach;
+                return next;
+            });
+        }
+    };
+
     const generateDraft = async (leadId: string) => {
         setDraftBusy(prev => ({ ...prev, [leadId]: 'generate' }));
         try {
@@ -764,6 +832,42 @@ export const ProspectingManagement: React.FC = () => {
             setDraftBusy(prev => {
                 const next = { ...prev };
                 delete next[draftId];
+                return next;
+            });
+        }
+    };
+
+    const deleteDraft = async (draftId: string) => {
+        setDraftBusy((prev) => ({ ...prev, [draftId]: 'delete' }));
+        try {
+            await api.delete(`/admin/prospecting/drafts/${draftId}`);
+            setSelectedDraftIds((prev) => prev.filter((id) => id !== draftId));
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error deleting draft:', error);
+        } finally {
+            setDraftBusy((prev) => {
+                const next = { ...prev };
+                delete next[draftId];
+                return next;
+            });
+        }
+    };
+
+    const deleteSelectedDrafts = async () => {
+        const draftIds = filteredDrafts.filter((draft) => selectedDraftIds.includes(draft.id)).map((draft) => draft.id);
+        if (draftIds.length === 0) return;
+        setDraftBusy((prev) => ({ ...prev, bulkDelete: 'delete' }));
+        try {
+            await Promise.all(draftIds.map((draftId) => api.delete(`/admin/prospecting/drafts/${draftId}`)));
+            setSelectedDraftIds([]);
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error bulk deleting drafts:', error);
+        } finally {
+            setDraftBusy((prev) => {
+                const next = { ...prev };
+                delete next.bulkDelete;
                 return next;
             });
         }
@@ -855,7 +959,41 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const markDelivery = async (queueId: string, deliveryStatus: 'sent' | 'failed') => {
+    const deleteSendBatch = async (batchId: string) => {
+        setSendQueueBusy((prev) => ({ ...prev, [batchId]: 'delete' }));
+        try {
+            await api.delete(`/admin/prospecting/send-batches/${batchId}`);
+            setSelectedQueueItemIds((prev) => prev.filter((id) => !visibleQueueItems.some((item) => item.id === id && item.batch_id === batchId)));
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error deleting outreach batch:', error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next[batchId];
+                return next;
+            });
+        }
+    };
+
+    const cleanupTestBatches = async () => {
+        setSendQueueBusy((prev) => ({ ...prev, cleanupTest: 'cleanup' }));
+        try {
+            await api.post('/admin/prospecting/send-batches/cleanup-test', {});
+            setSelectedQueueItemIds([]);
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error cleaning test batches:', error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next.cleanupTest;
+                return next;
+            });
+        }
+    };
+
+    const markDelivery = async (queueId: string, deliveryStatus: 'sent' | 'delivered' | 'failed') => {
         setSendQueueBusy(prev => ({ ...prev, [queueId]: deliveryStatus }));
         try {
             await api.post(`/admin/prospecting/send-queue/${queueId}/delivery`, {
@@ -874,7 +1012,43 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const bulkMarkDelivery = async (deliveryStatus: 'sent' | 'failed') => {
+    const deleteQueueItem = async (queueId: string) => {
+        setSendQueueBusy((prev) => ({ ...prev, [queueId]: 'delete' }));
+        try {
+            await api.delete(`/admin/prospecting/send-queue/${queueId}`);
+            setSelectedQueueItemIds((prev) => prev.filter((id) => id !== queueId));
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error deleting queue item:', error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next[queueId];
+                return next;
+            });
+        }
+    };
+
+    const bulkDeleteQueueItems = async () => {
+        const queueIds = visibleQueueItems.filter((item) => selectedQueueItemIds.includes(item.id)).map((item) => item.id);
+        if (queueIds.length === 0) return;
+        setSendQueueBusy((prev) => ({ ...prev, bulkDeleteQueue: 'delete' }));
+        try {
+            await Promise.all(queueIds.map((queueId) => api.delete(`/admin/prospecting/send-queue/${queueId}`)));
+            setSelectedQueueItemIds([]);
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+        } catch (error) {
+            console.error('Error bulk deleting queue items:', error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next.bulkDeleteQueue;
+                return next;
+            });
+        }
+    };
+
+    const bulkMarkDelivery = async (deliveryStatus: 'sent' | 'delivered' | 'failed') => {
         const queueIds = visibleQueueItems.filter((item) => selectedQueueItemIds.includes(item.id)).map((item) => item.id);
         if (queueIds.length === 0) return;
 
@@ -1036,12 +1210,15 @@ export const ProspectingManagement: React.FC = () => {
     const todayQueueSummary = useMemo(() => {
         let queued = 0;
         let sent = 0;
+        let delivered = 0;
         let failed = 0;
         let withReaction = 0;
 
         for (const item of todayQueueItems) {
             if (item.delivery_status === 'sent') {
                 sent += 1;
+            } else if (item.delivery_status === 'delivered') {
+                delivered += 1;
             } else if (item.delivery_status === 'failed') {
                 failed += 1;
             } else {
@@ -1053,7 +1230,7 @@ export const ProspectingManagement: React.FC = () => {
             }
         }
 
-        return { queued, sent, failed, withReaction };
+        return { queued, sent, delivered, failed, withReaction };
     }, [todayQueueItems]);
 
     useEffect(() => {
@@ -1089,6 +1266,33 @@ export const ProspectingManagement: React.FC = () => {
         setPreviewLoadingId(null);
     };
 
+    const fetchLeadPreview = useCallback(async (leadId: string, options?: { silent?: boolean }) => {
+        if (!leadId) {
+            return;
+        }
+
+        if (!options?.silent) {
+            setPreviewError(null);
+            setPreviewLoadingId(leadId);
+        }
+        try {
+            const response = await api.get(`/admin/prospecting/lead/${leadId}/preview`);
+            const payload = response.data || {};
+            if (payload.lead) {
+                setPreviewLead(payload.lead as Lead);
+            }
+            setPreviewSnapshot((payload.preview as LeadCardPreview) || null);
+        } catch (error: any) {
+            if (!options?.silent) {
+                setPreviewError(error?.message || 'Не удалось загрузить аудит карточки лида');
+            }
+        } finally {
+            if (!options?.silent) {
+                setPreviewLoadingId(null);
+            }
+        }
+    }, []);
+
     const openLeadPreview = async (lead: Lead) => {
         if (!lead.id) {
             return;
@@ -1097,20 +1301,7 @@ export const ProspectingManagement: React.FC = () => {
         setPreviewLead(lead);
         setPreviewSnapshot(null);
         setPreviewError(null);
-        setPreviewLoadingId(lead.id);
-
-        try {
-            const response = await api.get(`/admin/prospecting/lead/${lead.id}/preview`);
-            const payload = response.data || {};
-            if (payload.lead) {
-                setPreviewLead(payload.lead as Lead);
-            }
-            setPreviewSnapshot((payload.preview as LeadCardPreview) || null);
-        } catch (error: any) {
-            setPreviewError(error?.message || 'Не удалось загрузить аудит карточки лида');
-        } finally {
-            setPreviewLoadingId(null);
-        }
+        await fetchLeadPreview(lead.id);
     };
 
     const generateDraftFromLeadPreview = async () => {
@@ -1151,20 +1342,67 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const runLiveParseFromPreview = async () => {
-        const businessId = previewSnapshot?.preview_meta?.business_id;
-        if (!businessId) {
-            setPreviewError('Для этого лида не найден связанный бизнес в LocalOS');
+        if (!previewLead?.id) {
             return;
         }
         setPreviewParseBusy(true);
         setPreviewError(null);
         try {
-            await api.post(`/admin/yandex/sync/business/${businessId}`);
-            await openLeadPreview(previewLead as Lead);
+            await api.post(`/admin/prospecting/lead/${previewLead.id}/parse`);
+            await fetchLeadPreview(previewLead.id);
+            await fetchSavedLeads();
         } catch (error: any) {
             setPreviewError(error?.message || 'Не удалось запустить парсинг карточки');
         } finally {
             setPreviewParseBusy(false);
+        }
+    };
+
+    const refreshPreviewStatus = async () => {
+        if (!previewLead?.id) {
+            return;
+        }
+        await fetchLeadPreview(previewLead.id, { silent: true });
+    };
+
+    useEffect(() => {
+        const leadId = previewLead?.id;
+        const status = String(previewSnapshot?.parse_context?.last_parse_status || '').toLowerCase();
+        const shouldPoll = Boolean(leadId && ['pending', 'queued', 'processing', 'running'].includes(status));
+
+        if (!shouldPoll) {
+            setPreviewAutoRefreshing(false);
+            return;
+        }
+
+        setPreviewAutoRefreshing(true);
+        const timerId = window.setInterval(() => {
+            if (leadId) {
+                fetchLeadPreview(leadId, { silent: true });
+            }
+        }, 4000);
+
+        return () => {
+            window.clearInterval(timerId);
+            setPreviewAutoRefreshing(false);
+        };
+    }, [previewLead?.id, previewSnapshot?.parse_context?.last_parse_status, fetchLeadPreview]);
+
+    const bulkParseShortlist = async () => {
+        const leadIds = shortlistLeads
+            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
+            .map((lead) => lead.id as string);
+        if (leadIds.length === 0) {
+            return;
+        }
+        setBulkParseBusy(true);
+        try {
+            await api.post('/admin/prospecting/shortlist/parse', { lead_ids: leadIds });
+            await fetchSavedLeads();
+        } catch (error: any) {
+            setSearchError(error?.message || 'Не удалось запустить парсинг shortlist');
+        } finally {
+            setBulkParseBusy(false);
         }
     };
 
@@ -1265,6 +1503,17 @@ export const ProspectingManagement: React.FC = () => {
                                 Вернуть
                             </Button>
                         )}
+                        {lead.id && (
+                            <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => deleteLeadEverywhere(lead.id!)}
+                                disabled={busyDecision === 'delete'}
+                            >
+                                {busyDecision === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                Удалить
+                            </Button>
+                        )}
                     </div>
                 </TableCell>
             </TableRow>
@@ -1291,9 +1540,11 @@ export const ProspectingManagement: React.FC = () => {
                     generateBusy={previewGenerateBusy}
                     contactsBusy={previewContactsBusy}
                     parseBusy={previewParseBusy}
+                    parseAutoRefreshing={previewAutoRefreshing}
                     onGenerateFromAudit={generateDraftFromLeadPreview}
                     onSaveContacts={saveLeadContactsFromPreview}
                     onRunLiveParse={runLiveParseFromPreview}
+                    onRefreshPreview={refreshPreviewStatus}
                     onClose={closeLeadPreview}
                 />
             )}
@@ -1644,6 +1895,24 @@ export const ProspectingManagement: React.FC = () => {
                                             {selectionLoading.bulkSelect === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                             Выбрать отмеченные
                                         </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={bulkParseShortlist}
+                                            disabled={selectedShortlistLeadIds.length === 0 || bulkParseBusy}
+                                        >
+                                            {bulkParseBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Парсить отмеченные
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={bulkDeleteShortlistLeads}
+                                            disabled={selectedShortlistLeadIds.length === 0 || selectionLoading.bulkDeleteShortlist === 'delete'}
+                                        >
+                                            {selectionLoading.bulkDeleteShortlist === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Удалить отмеченные
+                                        </Button>
                                     </div>
                                 </div>
                                 <div className="space-y-3">
@@ -1685,6 +1954,14 @@ export const ProspectingManagement: React.FC = () => {
                                                     <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
                                                         {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                                         Выбрать для контакта
+                                                    </Button>
+                                                    <Button
+                                                        variant="destructive"
+                                                        onClick={() => lead.id && deleteLeadEverywhere(lead.id)}
+                                                        disabled={!lead.id || pending === 'delete'}
+                                                    >
+                                                        {pending === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Удалить
                                                     </Button>
                                                 </div>
                                             </div>
@@ -1733,6 +2010,15 @@ export const ProspectingManagement: React.FC = () => {
                                         >
                                             {selectionLoading.bulkChannel === bulkOutreachChannel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                             Назначить канал выбранным
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={bulkDeleteOutreachLeads}
+                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkDeleteOutreach === 'delete'}
+                                        >
+                                            {selectionLoading.bulkDeleteOutreach === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Удалить выбранные
                                         </Button>
                                     </div>
                                 </div>
@@ -1791,6 +2077,15 @@ export const ProspectingManagement: React.FC = () => {
                                                             {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
                                                         </Button>
                                                     ))}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => lead.id && deleteLeadEverywhere(lead.id)}
+                                                        disabled={!lead.id || pending === 'delete'}
+                                                    >
+                                                        {pending === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                        Удалить
+                                                    </Button>
                                                 </div>
                                             </div>
                                         );
@@ -1806,7 +2101,7 @@ export const ProspectingManagement: React.FC = () => {
                         <CardHeader>
                             <CardTitle>Черновики первого сообщения</CardTitle>
                             <CardDescription>
-                                Для лидов в `channel_selected` генерируйте первый текст, редактируйте его и вручную утверждайте.
+                                Здесь отображаются письма, уже сгенерированные из аудита карточки лида. Можно редактировать, утверждать и отклонять.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
@@ -1826,51 +2121,8 @@ export const ProspectingManagement: React.FC = () => {
                                     <option value="approved">approved</option>
                                     <option value="rejected">rejected</option>
                                 </select>
-                                <Badge variant="secondary">Готовы к генерации: {filteredDraftReadyLeads.length}</Badge>
                                 <Badge variant="outline">Черновики: {filteredDrafts.length}</Badge>
                             </div>
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Готовые к генерации</h3>
-                                        <p className="text-sm text-muted-foreground">Только лиды с подтверждённым каналом.</p>
-                                    </div>
-                                    <Badge variant="secondary">{filteredDraftReadyLeads.length}</Badge>
-                                </div>
-                                <div className="space-y-3">
-                                    {filteredDraftReadyLeads.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Пока нет лидов со статусом channel_selected.</div>
-                                    )}
-                                    {filteredDraftReadyLeads.map((lead) => {
-                                        const pending = draftBusy[lead.id || ''];
-                                        return (
-                                            <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
-                                                <div className="space-y-2">
-                                                    <div className="font-medium">{lead.name}</div>
-                                                    <LeadMetaSummary lead={lead} showChannel />
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {lead.id && (
-                                                        <Button
-                                                            variant="secondary"
-                                                            onClick={() => openLeadPreview(lead)}
-                                                            disabled={previewLoadingId === lead.id}
-                                                        >
-                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                            Аудит карточки
-                                                        </Button>
-                                                    )}
-                                                    <Button onClick={() => lead.id && generateDraft(lead.id)} disabled={!lead.id || Boolean(pending)}>
-                                                        {pending === 'generate' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Сгенерировать черновик
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
@@ -1904,6 +2156,15 @@ export const ProspectingManagement: React.FC = () => {
                                         >
                                             {draftBusy.bulkReject === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                             Отклонить выбранные
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={deleteSelectedDrafts}
+                                            disabled={selectedDraftIds.length === 0 || draftBusy.bulkDelete === 'delete'}
+                                        >
+                                            {draftBusy.bulkDelete === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Удалить выбранные
                                         </Button>
                                     </div>
                                 </div>
@@ -1990,6 +2251,10 @@ export const ProspectingManagement: React.FC = () => {
                                                     <Button variant="outline" onClick={() => rejectDraft(draft.id)} disabled={Boolean(pending)}>
                                                         {pending === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                                         Отклонить
+                                                    </Button>
+                                                    <Button variant="destructive" onClick={() => deleteDraft(draft.id)} disabled={Boolean(pending)}>
+                                                        {pending === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                        Удалить
                                                     </Button>
                                                 </div>
                                             </div>
@@ -2143,6 +2408,7 @@ export const ProspectingManagement: React.FC = () => {
                                         <div className="flex flex-wrap gap-2">
                                             <Badge variant="outline">В очереди: {todayQueueSummary.queued}</Badge>
                                             <Badge variant="default">Sent: {todayQueueSummary.sent}</Badge>
+                                            <Badge variant="secondary">Delivered: {todayQueueSummary.delivered}</Badge>
                                             <Badge variant={todayQueueSummary.failed > 0 ? 'destructive' : 'outline'}>
                                                 Failed: {todayQueueSummary.failed}
                                             </Badge>
@@ -2207,11 +2473,38 @@ export const ProspectingManagement: React.FC = () => {
                                         <Button
                                             size="sm"
                                             variant="outline"
+                                            onClick={() => bulkMarkDelivery('delivered')}
+                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'delivered'}
+                                        >
+                                            {sendQueueBusy.bulkDelivery === 'delivered' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                            Отметить выбранные delivered
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
                                             onClick={() => bulkMarkDelivery('failed')}
                                             disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}
                                         >
                                             {sendQueueBusy.bulkDelivery === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                                             Пометить выбранные failed
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={bulkDeleteQueueItems}
+                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDeleteQueue === 'delete'}
+                                        >
+                                            {sendQueueBusy.bulkDeleteQueue === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                            Удалить выбранные
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={cleanupTestBatches}
+                                            disabled={sendQueueBusy.cleanupTest === 'cleanup'}
+                                        >
+                                            {sendQueueBusy.cleanupTest === 'cleanup' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                            Очистить тестовые batch
                                         </Button>
                                     </div>
                                 </div>
@@ -2253,6 +2546,15 @@ export const ProspectingManagement: React.FC = () => {
                                                                     Подтвердить и отправить
                                                                 </Button>
                                                             )}
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => deleteSendBatch(batch.id)}
+                                                                disabled={Boolean(sendQueueBusy[batch.id])}
+                                                            >
+                                                                {sendQueueBusy[batch.id] === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                Удалить batch
+                                                            </Button>
                                                         </div>
                                                     </div>
                                                     <div className="space-y-2">
@@ -2283,7 +2585,7 @@ export const ProspectingManagement: React.FC = () => {
                                                                                 {workflowStatusLabel(
                                                                                     item.latest_human_outcome || item.latest_outcome
                                                                                         ? 'responded'
-                                                                                        : item.delivery_status === 'sent'
+                                                                                        : item.delivery_status === 'sent' || item.delivery_status === 'delivered'
                                                                                             ? 'sent'
                                                                                             : 'queued_for_send'
                                                                                 )}
@@ -2298,12 +2600,21 @@ export const ProspectingManagement: React.FC = () => {
                                                                     <div className="flex flex-wrap gap-2">
                                                                         <Button
                                                                             size="sm"
-                                                                            variant={item.delivery_status === 'sent' ? 'default' : 'outline'}
+                                                                            variant={item.delivery_status === 'sent' || item.delivery_status === 'delivered' ? 'default' : 'outline'}
                                                                             onClick={() => markDelivery(item.id, 'sent')}
                                                                             disabled={Boolean(sendQueueBusy[item.id])}
                                                                         >
                                                                             {sendQueueBusy[item.id] === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                                                                             Отмечено как sent
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant={item.delivery_status === 'delivered' ? 'default' : 'outline'}
+                                                                            onClick={() => markDelivery(item.id, 'delivered')}
+                                                                            disabled={Boolean(sendQueueBusy[item.id])}
+                                                                        >
+                                                                            {sendQueueBusy[item.id] === 'delivered' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                            Отмечено как delivered
                                                                         </Button>
                                                                         <Button
                                                                             size="sm"
@@ -2313,6 +2624,15 @@ export const ProspectingManagement: React.FC = () => {
                                                                         >
                                                                             {sendQueueBusy[item.id] === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                                                                             Пометить failed
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="destructive"
+                                                                            onClick={() => deleteQueueItem(item.id)}
+                                                                            disabled={Boolean(sendQueueBusy[item.id])}
+                                                                        >
+                                                                            {sendQueueBusy[item.id] === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                                            Удалить
                                                                         </Button>
                                                                     </div>
                                                                 </div>

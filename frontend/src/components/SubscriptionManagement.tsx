@@ -158,6 +158,49 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
   }, [paymentStatus, toast, language]);
 
   useEffect(() => {
+    const isReturnPage = window.location.pathname.endsWith('/billing/return') || searchParams.get('yookassa_return') === '1';
+    if (!isReturnPage || !businessId) return;
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    let aborted = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ business_id: businessId });
+        const response = await fetch(`/api/billing/status?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (!response.ok || aborted) return;
+
+        const status = data?.subscription?.status;
+        if (status === 'active') {
+          toast({
+            title: language === 'ru' ? 'Оплата успешна!' : 'Payment successful!',
+            description: language === 'ru' ? 'Подписка активирована.' : 'Subscription activated.',
+          });
+        } else if (status === 'blocked') {
+          toast({
+            title: language === 'ru' ? 'Оплата не завершена' : 'Payment not completed',
+            description: language === 'ru' ? 'Подписка заблокирована до успешной оплаты.' : 'Subscription is blocked until payment succeeds.',
+            variant: 'destructive',
+          });
+        }
+      } catch {
+        // ignore return status fetch errors
+      } finally {
+        if (!aborted) {
+          window.history.replaceState({}, '', '/dashboard/profile');
+        }
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [businessId, language, toast, searchParams]);
+
+  useEffect(() => {
     if (business) {
       setSubscription({
         tier: business.subscription_tier || 'trial',
@@ -199,7 +242,7 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     setProcessing(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/stripe/create-checkout', {
+      const response = await fetch('/api/billing/checkout/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,14 +250,15 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
         },
         body: JSON.stringify({
           business_id: businessId,
-          tier: tierId
+          tariff_id: tierId
         })
       });
 
       const data = await response.json();
 
-      if (response.ok && data.url) {
-        window.location.href = data.url;
+      const redirectUrl = data.confirmation_url || data.url;
+      if (response.ok && redirectUrl) {
+        window.location.href = redirectUrl;
       } else {
         toast({
           title: t.common.error,
