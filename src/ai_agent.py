@@ -10,14 +10,75 @@ from datetime import datetime
 from database_manager import DatabaseManager
 from services.gigachat_client import get_gigachat_client
 
+def _row_get(row, key, idx=0, default=None):
+    if row is None:
+        return default
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    try:
+        return row[idx]
+    except Exception:
+        return default
+
+
+def _table_columns(cursor, table_name: str) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = %s
+        """,
+        (str(table_name).lower(),),
+    )
+    cols = set()
+    for row in cursor.fetchall() or []:
+        value = _row_get(row, "column_name", 0)
+        if value:
+            cols.add(str(value).lower())
+    return cols
+
+
+def _column_data_type(cursor, table_name: str, column_name: str) -> str:
+    cursor.execute(
+        """
+        SELECT data_type
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = %s
+          AND column_name = %s
+        LIMIT 1
+        """,
+        (str(table_name).lower(), str(column_name).lower()),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return ""
+    value = _row_get(row, "data_type", 0, "")
+    return str(value or "").lower()
+
+
+def _active_predicate(cursor, table_name: str = "userservices", column_name: str = "is_active") -> str:
+    data_type = _column_data_type(cursor, table_name, column_name)
+    if data_type in {"boolean"}:
+        return "(is_active IS TRUE OR is_active IS NULL)"
+    return "COALESCE(is_active, 1) = 1"
+
 def get_agent_config(business_id: str) -> dict:
     """Получить конфигурацию агента для бизнеса"""
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        # Получаем тип агента и ID агента из бизнеса
-        cursor.execute("""
-            SELECT ai_agent_type, ai_agent_id, ai_agent_tone, ai_agent_restrictions, ai_agent_language
+        # Получаем тип агента и ID агента из бизнеса (совместимо с БД без ai_agent_id)
+        business_cols = _table_columns(cursor, "businesses")
+        select_parts = [
+            ("ai_agent_type" if "ai_agent_type" in business_cols else "NULL AS ai_agent_type"),
+            ("ai_agent_id" if "ai_agent_id" in business_cols else "NULL AS ai_agent_id"),
+            ("ai_agent_tone" if "ai_agent_tone" in business_cols else "NULL AS ai_agent_tone"),
+            ("ai_agent_restrictions" if "ai_agent_restrictions" in business_cols else "NULL AS ai_agent_restrictions"),
+            ("ai_agent_language" if "ai_agent_language" in business_cols else "NULL AS ai_agent_language"),
+        ]
+        cursor.execute(f"""
+            SELECT {", ".join(select_parts)}
             FROM Businesses
             WHERE id = %s
         """, (business_id,))
@@ -26,22 +87,24 @@ def get_agent_config(business_id: str) -> dict:
         if not row:
             return {}
         
-        agent_type = row[0] or 'booking'
-        agent_id = row[1]
-        tone = row[2] or 'professional'
-        restrictions_raw = row[3] or '{}'
-        language = row[4] or 'ru'  # По умолчанию русский
+        agent_type = _row_get(row, 'ai_agent_type', 0) or 'booking'
+        agent_id = _row_get(row, 'ai_agent_id', 1)
+        tone = _row_get(row, 'ai_agent_tone', 2) or 'professional'
+        restrictions_raw = _row_get(row, 'ai_agent_restrictions', 3) or '{}'
+        language = _row_get(row, 'ai_agent_language', 4) or 'ru'  # По умолчанию русский
         try:
             business_restrictions = json.loads(restrictions_raw) if restrictions_raw else {}
         except Exception:
             business_restrictions = {}
         
+        agents_active_predicate = _active_predicate(cursor, "aiagents", "is_active")
+
         # Если указан конкретный агент, получаем его конфигурацию
         if agent_id:
             cursor.execute("""
                 SELECT workflow, task, identity, speech_style, restrictions_json
                 FROM AIAgents
-                WHERE id = %s AND is_active = 1
+                WHERE id = %s AND """ + agents_active_predicate + """
             """, (agent_id,))
             agent_row = cursor.fetchone()
             
@@ -77,7 +140,7 @@ def get_agent_config(business_id: str) -> dict:
         cursor.execute("""
             SELECT workflow, task, identity, speech_style, restrictions_json
             FROM AIAgents
-            WHERE type = %s AND is_active = 1
+            WHERE type = %s AND """ + agents_active_predicate + """
             ORDER BY created_at DESC
             LIMIT 1
         """, (agent_type,))
@@ -137,18 +200,44 @@ def get_business_services(business_id: str) -> list:
         columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
         has_duration = 'duration' in columns
         
+        active_predicate = _active_predicate(cursor, "userservices", "is_active")
+
+        def _fetch_rows(include_all: bool = False):
+            where_active = "1=1" if include_all else active_predicate
+            if has_duration:
+                cursor.execute(
+                    """
+                    SELECT id, name, price, duration, description
+                    FROM UserServices
+                    WHERE business_id = %s AND """
+                    + where_active
+                    + """
+                    ORDER BY name
+                    """,
+                    (business_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, name, price, description
+                    FROM UserServices
+                    WHERE business_id = %s AND """
+                    + where_active
+                    + """
+                    ORDER BY name
+                    """,
+                    (business_id,),
+                )
+            return cursor.fetchall()
+
         if has_duration:
-            cursor.execute("""
-                SELECT id, name, price, duration, description
-                FROM UserServices
-                WHERE business_id = %s AND is_active = 1
-                ORDER BY name
-            """, (business_id,))
-            rows = cursor.fetchall()
+            rows = _fetch_rows(include_all=False)
+            if not rows:
+                rows = _fetch_rows(include_all=True)
             services = []
             for row in rows:
                 # Парсим price из строки или числа
-                price_value = row[2]
+                price_value = _row_get(row, 'price', 2)
                 if isinstance(price_value, str):
                     try:
                         price_value = float(price_value) / 100 if price_value else None
@@ -160,24 +249,20 @@ def get_business_services(business_id: str) -> list:
                     price_value = None
                 
                 services.append({
-                    'id': row[0],
-                    'name': row[1],
+                    'id': _row_get(row, 'id', 0),
+                    'name': _row_get(row, 'name', 1),
                     'price': price_value,
-                    'duration': row[3],
-                    'description': row[4]
+                    'duration': _row_get(row, 'duration', 3),
+                    'description': _row_get(row, 'description', 4)
                 })
         else:
-            cursor.execute("""
-                SELECT id, name, price, description
-                FROM UserServices
-                WHERE business_id = %s AND is_active = 1
-                ORDER BY name
-            """, (business_id,))
-            rows = cursor.fetchall()
+            rows = _fetch_rows(include_all=False)
+            if not rows:
+                rows = _fetch_rows(include_all=True)
             services = []
             for row in rows:
                 # Парсим price из строки или числа
-                price_value = row[2]
+                price_value = _row_get(row, 'price', 2)
                 if isinstance(price_value, str):
                     try:
                         price_value = float(price_value) / 100 if price_value else None
@@ -189,11 +274,11 @@ def get_business_services(business_id: str) -> list:
                     price_value = None
                 
                 services.append({
-                    'id': row[0],
-                    'name': row[1],
+                    'id': _row_get(row, 'id', 0),
+                    'name': _row_get(row, 'name', 1),
                     'price': price_value,
                     'duration': None,
-                    'description': row[3]
+                    'description': _row_get(row, 'description', 3)
                 })
         return services
     finally:
@@ -204,8 +289,20 @@ def get_business_info(business_id: str) -> dict:
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT name, address, city, phone, email, ai_agent_type, ai_agent_tone, ai_agent_restrictions, ai_agent_language
+        business_cols = _table_columns(cursor, "businesses")
+        select_parts = [
+            "name",
+            "address",
+            "city",
+            "phone",
+            "email",
+            ("ai_agent_type" if "ai_agent_type" in business_cols else "NULL AS ai_agent_type"),
+            ("ai_agent_tone" if "ai_agent_tone" in business_cols else "NULL AS ai_agent_tone"),
+            ("ai_agent_restrictions" if "ai_agent_restrictions" in business_cols else "NULL AS ai_agent_restrictions"),
+            ("ai_agent_language" if "ai_agent_language" in business_cols else "NULL AS ai_agent_language"),
+        ]
+        cursor.execute(f"""
+            SELECT {", ".join(select_parts)}
             FROM Businesses
             WHERE id = %s
         """, (business_id,))
@@ -214,22 +311,23 @@ def get_business_info(business_id: str) -> dict:
             return {}
         
         restrictions = {}
-        if row[7]:
+        restrictions_raw = _row_get(row, 'ai_agent_restrictions', 7)
+        if restrictions_raw:
             try:
-                restrictions = json.loads(row[7])
+                restrictions = json.loads(restrictions_raw)
             except:
-                restrictions = {'text': row[7]}
+                restrictions = {'text': restrictions_raw}
         
         return {
-            'name': row[0],
-            'address': row[1],
-            'city': row[2],
-            'phone': row[3],
-            'email': row[4],
-            'ai_agent_type': row[5] or 'booking',
-            'tone': row[6] or 'professional',
+            'name': _row_get(row, 'name', 0),
+            'address': _row_get(row, 'address', 1),
+            'city': _row_get(row, 'city', 2),
+            'phone': _row_get(row, 'phone', 3),
+            'email': _row_get(row, 'email', 4),
+            'ai_agent_type': _row_get(row, 'ai_agent_type', 5) or 'booking',
+            'tone': _row_get(row, 'ai_agent_tone', 6) or 'professional',
             'restrictions': restrictions.get('text', ''),
-            'language': row[8] or 'ru'  # По умолчанию русский
+            'language': _row_get(row, 'ai_agent_language', 8) or 'ru'  # По умолчанию русский
         }
     finally:
         db.close()
@@ -743,4 +841,3 @@ def determine_next_state(current_state: str, client_message: str, agent_response
             return 'goodbye'
     
     return current_state  # Остаёмся в текущем стейте, если не определили переход
-

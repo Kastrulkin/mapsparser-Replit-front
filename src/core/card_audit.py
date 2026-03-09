@@ -259,6 +259,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         cursor.execute(
             """
             SELECT
+                COUNT(*) AS total_services,
                 COUNT(*) FILTER (WHERE is_active IS TRUE OR is_active IS NULL) AS active_services,
                 COUNT(*) FILTER (
                     WHERE (is_active IS TRUE OR is_active IS NULL)
@@ -270,6 +271,10 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             (business_id,),
         )
         services_row = _to_dict(cursor, cursor.fetchone()) or {}
+        total_services = int(services_row.get("total_services") or 0)
+        active_services = int(services_row.get("active_services") or 0)
+        if active_services <= 0 and total_services > 0:
+            active_services = total_services
 
         cursor.execute(
             """
@@ -351,7 +356,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                         ELSE 'yandex_business'
                     END AS source
                 )
-                SELECT review_text, response_text, rating
+                SELECT text AS review_text, response_text, rating
                 FROM externalbusinessreviews r, preferred_source ps
                 WHERE r.business_id = %s
                   AND r.source = ps.source
@@ -392,7 +397,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
 
         return {
             "business": business,
-            "services_count": int(services_row.get("active_services") or 0),
+            "services_count": active_services,
             "priced_services_count": int(services_row.get("priced_services") or 0),
             "rating": _extract_numeric(latest_card.get("rating")) if latest_card.get("rating") is not None else _extract_numeric(business.get("yandex_rating")),
             "reviews_count": int(latest_card.get("reviews_count") or business.get("yandex_reviews_total") or 0),
@@ -907,6 +912,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         cursor.execute(
             """
             SELECT
+                COUNT(*) AS total_services,
                 COUNT(*) FILTER (WHERE is_active IS TRUE OR is_active IS NULL) AS active_services,
                 COUNT(*) FILTER (
                     WHERE (is_active IS TRUE OR is_active IS NULL)
@@ -977,7 +983,13 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         rating = latest_card.get("rating")
         rating_value = float(rating) if rating is not None else None
         reviews_count = int(latest_card.get("reviews_count") or 0)
+        total_services = int(services_row.get("total_services") or 0)
         services_count = int(services_row.get("active_services") or 0)
+        if services_count <= 0 and total_services > 0:
+            # В части проектов данные уже записаны, но флаг активности не выставлен.
+            # Для аудита считаем такие услуги как доступные, чтобы не давать ложное
+            # "услуги не заполнены".
+            services_count = total_services
         priced_services_count = int(services_row.get("priced_services") or 0)
         active_yandex_services = int(services_row.get("active_yandex_services") or 0)
 

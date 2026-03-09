@@ -17,6 +17,16 @@ import requests
 
 chats_bp = Blueprint('chats', __name__)
 
+def _row_get(row, key, idx=0, default=None):
+    if row is None:
+        return default
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    try:
+        return row[idx]
+    except Exception:
+        return default
+
 def require_auth():
     """Проверка авторизации"""
     auth_header = request.headers.get('Authorization')
@@ -120,14 +130,28 @@ def get_business_ai_agents(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Получаем конфигурацию агентов (новый формат)
+        # Получаем конфигурацию агентов (новый формат + fallback на legacy поля)
         cursor.execute("""
-            SELECT ai_agents_config 
-            FROM Businesses 
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'businesses'
+        """)
+        business_cols = {str(_row_get(r, 'column_name', 0, '') or '').lower() for r in (cursor.fetchall() or [])}
+        has_ai_agents_config = 'ai_agents_config' in business_cols
+        select_fields = [
+            ("ai_agents_config" if has_ai_agents_config else "NULL AS ai_agents_config"),
+            ("ai_agent_enabled" if "ai_agent_enabled" in business_cols else "NULL AS ai_agent_enabled"),
+            ("ai_agent_type" if "ai_agent_type" in business_cols else "NULL AS ai_agent_type"),
+            ("ai_agent_id" if "ai_agent_id" in business_cols else "NULL AS ai_agent_id"),
+        ]
+        cursor.execute(f"""
+            SELECT {", ".join(select_fields)}
+            FROM Businesses
             WHERE id = %s
         """, (business_id,))
         business_data = cursor.fetchone()
@@ -135,13 +159,50 @@ def get_business_ai_agents(business_id):
         agents = []
         
         # Пытаемся загрузить из нового формата
-        if business_data and business_data[0]:
+        ai_agents_config_raw = _row_get(business_data, 'ai_agents_config', 0)
+        added_agent_ids = set()
+
+        def _append_agent_row(agent_row):
+            if not agent_row:
+                return
+            agent_id = _row_get(agent_row, 'id', 0)
+            if not agent_id or agent_id in added_agent_ids:
+                return
+            added_agent_ids.add(agent_id)
+            agents.append({
+                'id': agent_id,
+                'name': _row_get(agent_row, 'name', 1),
+                'type': _row_get(agent_row, 'type', 2),
+                'description': _row_get(agent_row, 'description', 3)
+            })
+
+        def _resolve_default_agent(agent_type_raw: str):
+            normalized = str(agent_type_raw or '').strip().lower()
+            if not normalized:
+                normalized = 'booking'
+            if 'book' in normalized or 'запис' in normalized:
+                normalized = 'booking'
+            elif 'mark' in normalized or 'маркет' in normalized:
+                normalized = 'marketing'
+            cursor.execute("""
+                SELECT id, name, type, description
+                FROM AIAgents
+                WHERE type = %s
+                  AND COALESCE(is_active::text, '1') IN ('1', 'true', 't')
+                ORDER BY id
+                LIMIT 1
+            """, (normalized,))
+            return cursor.fetchone()
+
+        if ai_agents_config_raw:
             try:
-                agents_config = json.loads(business_data[0])
+                agents_config = json.loads(ai_agents_config_raw) if isinstance(ai_agents_config_raw, str) else ai_agents_config_raw
+                if not isinstance(agents_config, dict):
+                    agents_config = {}
                 
                 # Для каждого включенного агента получаем его данные
                 for agent_key, config in agents_config.items():
-                    if config.get('enabled'):
+                    if isinstance(config, dict) and config.get('enabled'):
                         # Определяем тип агента из ключа (booking_agent -> booking)
                         agent_type = agent_key.replace('_agent', '')
                         
@@ -152,35 +213,45 @@ def get_business_ai_agents(business_id):
                                 FROM AIAgents
                                 WHERE id = %s
                             """, (config['agent_id'],))
-                            agent = cursor.fetchone()
-                            
-                            if agent:
-                                agents.append({
-                                    'id': agent[0],
-                                    'name': agent[1],
-                                    'type': agent[2],
-                                    'description': agent[3]
-                                })
+                            _append_agent_row(cursor.fetchone())
                         else:
                             # Используем дефолтного агента для типа
-                            cursor.execute("""
-                                SELECT id, name, type, description
-                                FROM AIAgents
-                                WHERE type = %s AND is_active = 1
-                                ORDER BY id
-                                LIMIT 1
-                            """, (agent_type,))
-                            agent = cursor.fetchone()
-                            
-                            if agent:
-                                agents.append({
-                                    'id': agent[0],
-                                    'name': agent[1],
-                                    'type': agent[2],
-                                    'description': agent[3]
-                                })
+                            _append_agent_row(_resolve_default_agent(agent_type))
             except (json.JSONDecodeError, TypeError) as e:
                 print(f"⚠️ Ошибка парсинга ai_agents_config: {e}")
+
+        # Legacy fallback (если новый формат не заполнен)
+        if not agents and _row_get(business_data, 'ai_agent_enabled', 1):
+            legacy_agent_id = _row_get(business_data, 'ai_agent_id', 3)
+            if legacy_agent_id:
+                cursor.execute("""
+                    SELECT id, name, type, description
+                    FROM AIAgents
+                    WHERE id = %s
+                """, (legacy_agent_id,))
+                _append_agent_row(cursor.fetchone())
+            else:
+                _append_agent_row(_resolve_default_agent(_row_get(business_data, 'ai_agent_type', 2) or 'booking'))
+
+        # Дополняем список активными агентами, чтобы новый пользовательский агент
+        # был доступен в чатах даже до явной привязки в ai_agents_config.
+        cursor.execute("""
+            SELECT id, name, type, description
+            FROM AIAgents
+            WHERE COALESCE(is_active::text, '1') IN ('1', 'true', 't')
+              AND (
+                    created_by = %s
+                    OR created_by IS NULL
+                    OR created_by = ''
+                    OR id IN ('booking_agent_default', 'marketing_agent_default')
+                  )
+            ORDER BY
+              CASE WHEN created_by = %s THEN 0 ELSE 1 END,
+              created_at DESC NULLS LAST,
+              id
+        """, (user_data['user_id'], user_data['user_id']))
+        for agent_row in cursor.fetchall() or []:
+            _append_agent_row(agent_row)
         
         db.close()
         return jsonify({"success": True, "agents": agents})
@@ -214,19 +285,32 @@ def get_business_conversations(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Получаем чаты для этого бизнеса и агента
+        # Получаем схему таблицы чатов для совместимости с разными миграциями
         cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'aiagentconversations'
+        """)
+        conv_cols = {str(_row_get(r, 'column_name', 0, '') or '').lower() for r in (cursor.fetchall() or [])}
+        if not conv_cols:
+            db.close()
+            return jsonify({"success": True, "conversations": []})
+        is_agent_paused_expr = "COALESCE(c.is_agent_paused, 0)" if 'is_agent_paused' in conv_cols else "0"
+
+        # Получаем чаты для этого бизнеса и агента
+        cursor.execute(f"""
             SELECT 
                 c.id,
                 c.client_phone,
                 c.client_name,
                 c.current_state,
                 c.last_message_at,
-                COALESCE(c.is_agent_paused, 0) as is_agent_paused,
+                {is_agent_paused_expr} as is_agent_paused,
                 (SELECT COUNT(*) 
                  FROM AIAgentMessages m 
                  WHERE m.conversation_id = c.id 
@@ -248,19 +332,21 @@ def get_business_conversations(business_id):
         
         for row in rows:
             conversations.append({
-                'id': row[0],
-                'client_phone': row[1],
-                'client_name': row[2],
-                'current_state': row[3],
-                'last_message_at': row[4],
-                'is_agent_paused': row[5],
-                'unread_count': row[6] or 0
+                'id': _row_get(row, 'id', 0),
+                'client_phone': _row_get(row, 'client_phone', 1),
+                'client_name': _row_get(row, 'client_name', 2),
+                'current_state': _row_get(row, 'current_state', 3),
+                'last_message_at': _row_get(row, 'last_message_at', 4),
+                'is_agent_paused': _row_get(row, 'is_agent_paused', 5),
+                'unread_count': _row_get(row, 'unread_count', 6) or 0
             })
         
         db.close()
         return jsonify({"success": True, "conversations": conversations})
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @chats_bp.route('/api/conversations/<conversation_id>/messages', methods=['GET'])
@@ -287,7 +373,8 @@ def get_conversation_messages(conversation_id):
             db.close()
             return jsonify({"error": "Чат не найден"}), 404
         
-        if conv[1] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        conv_owner_id = _row_get(conv, 'owner_id', 1)
+        if conv_owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
@@ -304,11 +391,11 @@ def get_conversation_messages(conversation_id):
         
         for row in rows:
             messages.append({
-                'id': row[0],
-                'content': row[1],
-                'sender': row[2],
-                'message_type': row[3],
-                'created_at': row[4]
+                'id': _row_get(row, 'id', 0),
+                'content': _row_get(row, 'content', 1),
+                'sender': _row_get(row, 'sender', 2),
+                'message_type': _row_get(row, 'message_type', 3),
+                'created_at': _row_get(row, 'created_at', 4)
             })
         
         db.close()
@@ -348,7 +435,8 @@ def send_operator_message(conversation_id):
             db.close()
             return jsonify({"error": "Чат не найден"}), 404
         
-        if conv[3] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        conv_owner_id = _row_get(conv, 'owner_id', 3)
+        if conv_owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
@@ -369,8 +457,8 @@ def send_operator_message(conversation_id):
         """, (conversation_id,))
         
         # Отправляем сообщение клиенту через WhatsApp или Telegram
-        business_id = conv[0]
-        client_phone = conv[1]
+        business_id = _row_get(conv, 'business_id', 0)
+        client_phone = _row_get(conv, 'client_phone', 1)
         
         # Получаем настройки бизнеса для отправки
         cursor.execute("""
@@ -387,10 +475,10 @@ def send_operator_message(conversation_id):
         
         # Отправляем сообщение (если настроены каналы)
         if business_settings:
-            whatsapp_phone_id = business_settings[0]
-            whatsapp_token = business_settings[1]
-            telegram_token = decode_telegram_bot_token(business_settings[2])
-            telegram_chat_id = business_settings[3]
+            whatsapp_phone_id = _row_get(business_settings, 'whatsapp_phone_id', 0)
+            whatsapp_token = _row_get(business_settings, 'whatsapp_access_token', 1)
+            telegram_token = decode_telegram_bot_token(_row_get(business_settings, 'telegram_bot_token', 2))
+            telegram_chat_id = _row_get(business_settings, 'telegram_chat_id', 3)
             
             # Пытаемся отправить через WhatsApp
             if whatsapp_phone_id and whatsapp_token:
@@ -440,7 +528,8 @@ def toggle_agent(conversation_id):
             db.close()
             return jsonify({"error": "Чат не найден"}), 404
         
-        if conv[1] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        conv_owner_id = _row_get(conv, 'owner_id', 1)
+        if conv_owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому чату"}), 403
         
@@ -485,7 +574,6 @@ def test_ai_agent(agent_id):
             user_data=user_data,
         )
         if bridge_result and bridge_result.get("success") and bridge_result.get("response"):
-            db.close()
             return jsonify(bridge_result)
 
         # Импортируем функции для работы с агентом
@@ -645,17 +733,26 @@ def test_business_ai_agent(business_id, agent_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        if business[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        owner_id = _row_get(business, 'owner_id', 0)
+        if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
         
-        # Проверяем, что агент принадлежит бизнесу или доступен
+        # Проверяем, что агент принадлежит бизнесу или доступен (legacy-safe)
         cursor.execute("""
-            SELECT ai_agent_id FROM Businesses WHERE id = %s
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'businesses'
+        """)
+        business_cols = {str(_row_get(r, 'column_name', 0, '') or '').lower() for r in (cursor.fetchall() or [])}
+        ai_agent_id_expr = "ai_agent_id" if 'ai_agent_id' in business_cols else "NULL AS ai_agent_id"
+        cursor.execute(f"""
+            SELECT {ai_agent_id_expr} FROM Businesses WHERE id = %s
         """, (business_id,))
         business_agent = cursor.fetchone()
         
-        if business_agent and business_agent[0] != agent_id:
+        business_agent_id = _row_get(business_agent, 'ai_agent_id', 0) if business_agent else None
+        if business_agent_id and business_agent_id != agent_id:
             db.close()
             return jsonify({"error": "Агент не принадлежит этому бизнесу"}), 403
         
@@ -703,7 +800,7 @@ def test_business_ai_agent(business_id, agent_id):
         services = get_business_services(business_id)
         
         # Формируем конфигурацию агента
-        workflow_data = agent_row[3]
+        workflow_data = _row_get(agent_row, 'workflow', 3)
         workflow = workflow_data if workflow_data else ''
         if isinstance(workflow_data, str) and workflow_data.strip():
             try:
@@ -715,11 +812,11 @@ def test_business_ai_agent(business_id, agent_id):
         
         agent_config = {
             'workflow': workflow,
-            'task': agent_row[4] or '',
-            'identity': agent_row[5] or '',
-            'speech_style': agent_row[6] or '',
-            'restrictions': json.loads(agent_row[7]) if agent_row[7] else {},
-            'variables': json.loads(agent_row[8]) if agent_row[8] else {}
+            'task': _row_get(agent_row, 'task', 4) or '',
+            'identity': _row_get(agent_row, 'identity', 5) or '',
+            'speech_style': _row_get(agent_row, 'speech_style', 6) or '',
+            'restrictions': json.loads(_row_get(agent_row, 'restrictions_json', 7)) if _row_get(agent_row, 'restrictions_json', 7) else {},
+            'variables': json.loads(_row_get(agent_row, 'variables_json', 8)) if _row_get(agent_row, 'variables_json', 8) else {}
         }
         
         # Определяем начальный стейт
@@ -750,7 +847,7 @@ def test_business_ai_agent(business_id, agent_id):
         client = GigaChatClient()
         functions = get_ai_agent_functions()
         
-        task_type = 'ai_agent_marketing' if agent_row[1] == 'marketing' else 'ai_agent_booking'
+        task_type = 'ai_agent_marketing' if _row_get(agent_row, 'type', 1) == 'marketing' else 'ai_agent_booking'
         
         response_text, usage_info = client.analyze_text(
             prompt=prompt,
