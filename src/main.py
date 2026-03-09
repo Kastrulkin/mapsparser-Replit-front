@@ -34,10 +34,10 @@ from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
-from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
+from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, STATUS_PAUSED, normalize_status
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
-from chatgpt_api import chatgpt_bp
+from messengers_api import messengers_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
 from yookassa_integration import billing_bp
@@ -145,7 +145,7 @@ def rate_limit_if_available(limit_str):
     return decorator
 
 # Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
-app.register_blueprint(chatgpt_bp)
+app.register_blueprint(messengers_bp)
 app.register_blueprint(chatgpt_search_bp)
 app.register_blueprint(stripe_bp)
 app.register_blueprint(billing_bp)
@@ -465,6 +465,30 @@ def get_token_usage_stats():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
         
         def _cell(row, key: str, idx: int, default=0):
             if row is None:
@@ -869,11 +893,20 @@ def get_parsing_tasks():
         
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
+        optional_selects = []
+        for col in ("batch_id", "batch_kind", "network_id", "batch_seq", "paused_reason"):
+            if col in parsequeue_columns:
+                optional_selects.append(f"pq.{col}")
+            else:
+                optional_selects.append(f"NULL AS {col}")
+        optional_sql = ",\n                ".join(optional_selects)
+
         cursor.execute(f"""
             SELECT
                 pq.id, pq.url, pq.user_id, pq.business_id, pq.task_type, pq.account_id, pq.source,
                 pq.status, pq.retry_after, pq.captcha_url, pq.captcha_session_id, pq.resume_requested,
                 pq.error_message, pq.created_at, pq.updated_at,
+                {optional_sql},
                 b.name AS business_name
             FROM parsequeue pq
             LEFT JOIN businesses b ON b.id = pq.business_id
@@ -983,6 +1016,104 @@ def restart_parsing_task(task_id):
         print(f"❌ Ошибка перезапуска задачи: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/network-batches/<string:batch_id>/resume', methods=['POST'])
+def resume_network_parsing_batch(batch_id):
+    """Возобновить сетевой batch парсинга с места первой ошибки."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
+        required = {"batch_id", "batch_kind", "batch_seq", "paused_reason"}
+        if not required.issubset(parsequeue_columns):
+            db.close()
+            return jsonify({"success": False, "error": "Schema not ready for network batch resume"}), 409
+
+        cursor.execute(
+            """
+            SELECT
+                MIN(batch_seq) FILTER (WHERE status = 'error') AS first_error_seq,
+                MIN(batch_seq) FILTER (WHERE status = %s) AS first_paused_seq,
+                COUNT(*) FILTER (WHERE status = 'error') AS error_count,
+                COUNT(*) FILTER (WHERE status = %s) AS paused_count
+            FROM parsequeue
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+            """,
+            (STATUS_PAUSED, STATUS_PAUSED, batch_id),
+        )
+        state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
+        paused_count = int(state_row.get("paused_count") or 0)
+        error_count = int(state_row.get("error_count") or 0)
+        start_seq = state_row.get("first_error_seq") or state_row.get("first_paused_seq")
+
+        if paused_count <= 0 and error_count <= 0:
+            db.close()
+            return jsonify({"success": False, "error": "Для batch нет задач для возобновления"}), 404
+
+        if start_seq is None:
+            start_seq = 0
+
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = 'pending',
+                retry_after = NULL,
+                resume_requested = 0,
+                captcha_required = 0,
+                captcha_url = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_status = NULL,
+                paused_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status IN (%s, 'error')
+              AND COALESCE(batch_seq, 0) >= %s
+            """,
+            (batch_id, STATUS_PAUSED, int(start_seq)),
+        )
+        resumed_count = int(cursor.rowcount or 0)
+        db.conn.commit()
+        db.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Возобновлено задач: {resumed_count}",
+                "batch_id": batch_id,
+                "start_seq": int(start_seq),
+                "resumed_count": resumed_count,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка возобновления сетевого batch {batch_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1359,6 +1490,44 @@ def get_parsing_stats():
             rd = _row_to_dict(cursor, row)
             if rd and rd.get("source") is not None:
                 by_source[rd["source"]] = rd.get("cnt") or 0
+
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
+
+        paused_batches = []
+        if {"batch_id", "batch_kind"}.issubset(parsequeue_columns):
+            cursor.execute(
+                """
+                SELECT batch_id, COUNT(*) AS cnt
+                FROM parsequeue
+                WHERE status = %s
+                  AND batch_id IS NOT NULL
+                  AND batch_kind = 'network_sync'
+                GROUP BY batch_id
+                ORDER BY cnt DESC
+                LIMIT 10
+                """,
+                (STATUS_PAUSED,),
+            )
+            for row in cursor.fetchall():
+                rd = _row_to_dict(cursor, row)
+                if rd and rd.get("batch_id"):
+                    paused_batches.append(
+                        {
+                            "batch_id": rd.get("batch_id"),
+                            "tasks_count": int(rd.get("cnt") or 0),
+                        }
+                    )
         
         cursor.execute("""
             SELECT id, business_id, task_type, created_at, updated_at
@@ -1388,7 +1557,9 @@ def get_parsing_stats():
                 "by_task_type": by_task_type or {},
                 "by_source": by_source or {},
                 "stuck_tasks_count": len(stuck_tasks),
-                "stuck_tasks": stuck_tasks or []
+                "stuck_tasks": stuck_tasks or [],
+                "paused_batches_count": len(paused_batches),
+                "paused_batches": paused_batches,
             }
         })
     except Exception as e:
@@ -12752,6 +12923,20 @@ def admin_sync_business_yandex(business_id):
         skipped_no_source = []
         skipped_has_active = []
         now = datetime.now()
+        network_batch_id = str(uuid.uuid4()) if scope == "network" else None
+
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
 
         for idx, biz in enumerate(target_businesses):
             target_business_id = biz.get("id")
@@ -12827,16 +13012,42 @@ def admin_sync_business_yandex(business_id):
             delay = delay_seconds * len(enqueued) if scope == "network" else 0
             retry_after = (now + timedelta(seconds=delay)).isoformat() if delay > 0 else None
 
+            insert_fields = [
+                "id", "business_id", "account_id", "task_type", "source",
+                "status", "user_id", "url", "retry_after", "created_at", "updated_at",
+            ]
+            insert_values = [
+                task_id, target_business_id, account_id, task_type, source,
+                "pending", user_id, target_url, retry_after, None, None,
+            ]
+            if "batch_id" in parsequeue_columns:
+                insert_fields.append("batch_id")
+                insert_values.append(network_batch_id)
+            if "batch_kind" in parsequeue_columns:
+                insert_fields.append("batch_kind")
+                insert_values.append("network_sync" if scope == "network" else None)
+            if "network_id" in parsequeue_columns:
+                insert_fields.append("network_id")
+                insert_values.append(resolved_network_id if scope == "network" else None)
+            if "batch_seq" in parsequeue_columns:
+                insert_fields.append("batch_seq")
+                insert_values.append(idx + 1)
+
+            value_expr = []
+            params = []
+            for field, value in zip(insert_fields, insert_values):
+                if field in ("created_at", "updated_at"):
+                    value_expr.append("CURRENT_TIMESTAMP")
+                else:
+                    value_expr.append("%s")
+                    params.append(value)
+
             cursor.execute(
-                """
-                INSERT INTO parsequeue (
-                    id, business_id, account_id, task_type, source,
-                    status, user_id, url, retry_after, created_at, updated_at
-                )
-                VALUES (%s, %s, %s, %s, %s,
-                        'pending', %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                f"""
+                INSERT INTO parsequeue ({", ".join(insert_fields)})
+                VALUES ({", ".join(value_expr)})
                 """,
-                (task_id, target_business_id, account_id, task_type, source, user_id, target_url, retry_after),
+                params,
             )
             enqueued.append(
                 {
@@ -12845,6 +13056,8 @@ def admin_sync_business_yandex(business_id):
                     "business_name": target_business_name,
                     "task_type": task_type,
                     "retry_after": retry_after,
+                    "batch_id": network_batch_id,
+                    "batch_seq": idx + 1,
                 }
             )
 
@@ -12883,6 +13096,7 @@ def admin_sync_business_yandex(business_id):
                 "success": True,
                 "message": f"Поставлено в очередь: {len(enqueued)} точек сети. Капча, если появится, будет в статусе задачи.",
                 "network_id": resolved_network_id,
+                "batch_id": network_batch_id,
                 "scope": scope,
                 "delay_seconds": delay_seconds,
                 "enqueued_count": len(enqueued),
@@ -13277,10 +13491,11 @@ def get_user_networks():
         cursor = db.conn.cursor()
         
         # Проверяем наличие таблицы networks (Postgres)
-        cursor.execute("SELECT to_regclass('public.networks')")
-        networks_table_exists = cursor.fetchone()
-        
-        if not networks_table_exists:
+        cursor.execute("SELECT to_regclass('public.networks') as reg")
+        reg_row = cursor.fetchone()
+        reg_val = (reg_row.get('reg') if isinstance(reg_row, dict) else reg_row[0]) if reg_row else None
+
+        if not reg_val:
             db.close()
             return jsonify({
                 "success": True,
@@ -13298,9 +13513,9 @@ def get_user_networks():
         networks = []
         for row in cursor.fetchall():
             networks.append({
-                "id": row[0],
-                "name": row[1],
-                "description": row[2]
+                "id": row.get("id") if isinstance(row, dict) else row[0],
+                "name": row.get("name") if isinstance(row, dict) else row[1],
+                "description": row.get("description") if isinstance(row, dict) else row[2]
             })
         
         db.close()
@@ -16358,6 +16573,19 @@ def generate_telegram_bind_token():
         bind_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
         
+        # Гарантируем существование таблицы TelegramBindTokens
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS TelegramBindTokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        db.conn.commit()
+
         # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
         cursor.execute("""
             SELECT column_name FROM information_schema.columns
@@ -16404,7 +16632,7 @@ def generate_telegram_bind_token():
             "success": True,
             "token": bind_token,
             "expires_at": expires_at.isoformat(),
-            "qr_data": f"https://t.me/BeautyBotPro_bot?start={bind_token}"
+            "qr_data": f"https://t.me/LocalOspro_bot?start={bind_token}"
         }), 200
         
     except Exception as e:
@@ -16441,6 +16669,19 @@ def get_telegram_bind_status():
             db.close()
             return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
         
+        # Гарантируем существование таблицы TelegramBindTokens
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS TelegramBindTokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        db.conn.commit()
+
         # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
         cursor.execute("""
             SELECT column_name FROM information_schema.columns
@@ -16448,6 +16689,18 @@ def get_telegram_bind_status():
         """)
         columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
         has_business_id = 'business_id' in columns
+
+        # Проверяем наличие поля telegram_id в users
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'users'
+        """)
+        user_columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        has_user_telegram_id = 'telegram_id' in user_columns
+        if not has_user_telegram_id:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
+            db.conn.commit()
+            has_user_telegram_id = True
 
         # Проверяем, привязан ли Telegram для этого бизнеса
         is_linked = False
@@ -16462,7 +16715,11 @@ def get_telegram_bind_status():
                 WHERE business_id = %s AND used = 1 AND user_id = %s
             """, (business_id, user_data['user_id']))
             result = cursor.fetchone()
-            has_used_token_for_this_business = result[0] > 0 if result else False
+            count_val = (
+                result.get("count") if isinstance(result, dict)
+                else (result[0] if result else 0)
+            )
+            has_used_token_for_this_business = int(count_val or 0) > 0
             
             print(f"🔍 Проверка статуса Telegram для бизнеса {business_id}: has_used_token_for_this_business={has_used_token_for_this_business}")
             
@@ -16470,8 +16727,12 @@ def get_telegram_bind_status():
                 # Проверяем, что у пользователя есть telegram_id
                 cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (user_data['user_id'],))
                 user_row = cursor.fetchone()
-                is_linked = user_row and user_row[0] is not None and user_row[0] != 'None' and user_row[0] != ''
-                print(f"🔍 Telegram ID пользователя: {user_row[0] if user_row else None}, is_linked={is_linked}")
+                telegram_id_val = (
+                    user_row.get("telegram_id") if isinstance(user_row, dict)
+                    else (user_row[0] if user_row else None)
+                )
+                is_linked = bool(telegram_id_val and str(telegram_id_val) != 'None')
+                print(f"🔍 Telegram ID пользователя: {telegram_id_val}, is_linked={is_linked}")
             else:
                 # Нет использованного токена для этого бизнеса - не подключен
                 is_linked = False
@@ -16481,14 +16742,21 @@ def get_telegram_bind_status():
             # Старая логика: проверяем только привязку к пользователю
             cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (user_data['user_id'],))
             user_row = cursor.fetchone()
-            is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
+            telegram_id_val = (
+                user_row.get("telegram_id") if isinstance(user_row, dict)
+                else (user_row[0] if user_row else None)
+            )
+            is_linked = bool(telegram_id_val and str(telegram_id_val) != 'None')
         
         db.close()
         
         return jsonify({
             "success": True,
             "is_linked": is_linked,
-            "telegram_id": user_row[0] if is_linked and user_row else None
+            "telegram_id": (
+                user_row.get("telegram_id") if (is_linked and isinstance(user_row, dict))
+                else (user_row[0] if (is_linked and user_row) else None)
+            )
         }), 200
         
     except Exception as e:
@@ -16512,6 +16780,16 @@ def verify_telegram_bind_token():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
+        # Проверяем наличие telegram_id в users
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'users'
+        """)
+        user_columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        if 'telegram_id' not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
+            db.conn.commit()
+
         # Проверяем токен (включая business_id) (PostgreSQL)
         cursor.execute("""
             SELECT column_name FROM information_schema.columns
@@ -16528,7 +16806,11 @@ def verify_telegram_bind_token():
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
-                token_id, user_id, business_id_from_token, expires_at, used = token_row
+                token_id = token_row.get('id') if isinstance(token_row, dict) else token_row[0]
+                user_id = token_row.get('user_id') if isinstance(token_row, dict) else token_row[1]
+                business_id_from_token = token_row.get('business_id') if isinstance(token_row, dict) else token_row[2]
+                expires_at = token_row.get('expires_at') if isinstance(token_row, dict) else token_row[3]
+                used = token_row.get('used') if isinstance(token_row, dict) else token_row[4]
             else:
                 token_row = None
         else:
@@ -16539,7 +16821,10 @@ def verify_telegram_bind_token():
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
-                token_id, user_id, expires_at, used = token_row
+                token_id = token_row.get('id') if isinstance(token_row, dict) else token_row[0]
+                user_id = token_row.get('user_id') if isinstance(token_row, dict) else token_row[1]
+                expires_at = token_row.get('expires_at') if isinstance(token_row, dict) else token_row[2]
+                used = token_row.get('used') if isinstance(token_row, dict) else token_row[3]
                 business_id_from_token = None
             else:
                 token_row = None
@@ -16550,7 +16835,10 @@ def verify_telegram_bind_token():
         
         # Проверяем срок действия
         from datetime import datetime
-        if datetime.fromisoformat(expires_at) < datetime.now():
+        expires_at_dt = expires_at
+        if isinstance(expires_at, str):
+            expires_at_dt = datetime.fromisoformat(expires_at)
+        if expires_at_dt < datetime.now():
             db.close()
             return jsonify({"error": "Токен истек"}), 400
         
@@ -16600,8 +16888,8 @@ def verify_telegram_bind_token():
             "success": True,
             "user": {
                 "id": user_id,
-                "email": user_info[0] if user_info else None,
-                "name": user_info[1] if user_info else None
+                "email": (user_info.get('email') if isinstance(user_info, dict) else (user_info[0] if user_info else None)),
+                "name": (user_info.get('name') if isinstance(user_info, dict) else (user_info[1] if user_info else None))
             }
         }), 200
         

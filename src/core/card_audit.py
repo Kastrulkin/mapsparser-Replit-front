@@ -29,6 +29,37 @@ CATEGORY_BASELINE_REVENUE = {
 }
 
 YMAP_SOURCES = ("yandex_maps", "yandex_business_goods", "yandex_business_services")
+EDITORIAL_SERVICE_PATTERNS = (
+    "хорошее место",
+    "где можно",
+    "выбрали места",
+    "рассказываем про",
+    "собрали в одном месте",
+    "подборка",
+    "салоны красоты на ",
+    "салоны красоты в ",
+    "салоны красоты около ",
+    "салоны красоты у ",
+    "салоны красоты с наградой",
+    "крафтовые бары",
+    "бары для ",
+    "бары, в которых ",
+    "бары и пабы в ",
+    "в районе ",
+    "на улице ",
+    "рядом с ",
+    "музеи",
+    "в петербурге",
+    "на что обратить внимание",
+    "лучшие ",
+    "необычные ",
+    "где есть ",
+    "eat market",
+    "день влюбл",
+    "в галерее",
+    "петергоф",
+    "пушкинской карте",
+)
 
 
 def _safe_json(value: Any) -> Any:
@@ -147,6 +178,20 @@ def _extract_telegram_whatsapp_email_from_links(links: List[str]) -> Dict[str, O
             elif "@" in value and " " not in value and "/" not in value:
                 email = value
     return {"telegram_url": telegram, "whatsapp_url": whatsapp, "email": email}
+
+
+def _is_editorial_service_entry(name: str, description: str | None) -> bool:
+    combined = f"{name or ''} {description or ''}".strip().lower()
+    if not combined:
+        return False
+    if any(pattern in combined for pattern in EDITORIAL_SERVICE_PATTERNS):
+        return True
+    desc = (description or "").strip().lower()
+    if desc.startswith("рассказываем") or desc.startswith("выбрали") or desc.startswith("собрали"):
+        return True
+    if ":" in (name or "") or len((name or "").split()) >= 7:
+        return True
+    return False
 
 
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
@@ -325,6 +370,8 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             if not name:
                 continue
             description = str(service_row.get("description") or "").strip()
+            if _is_editorial_service_entry(name, description):
+                continue
             price = str(service_row.get("price") or "").strip()
             source = str(service_row.get("source") or "").strip()
             note_parts = []
@@ -395,10 +442,18 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                     if text:
                         news_preview.append({"title": "Новость", "body": text})
 
+        active_services = int(services_row.get("active_services") or 0)
+        if active_services <= 0 and total_services > 0:
+            active_services = total_services
+        priced_services = int(services_row.get("priced_services") or 0)
+        if active_services > 0 and not services_preview:
+            active_services = 0
+            priced_services = 0
+
         return {
             "business": business,
             "services_count": active_services,
-            "priced_services_count": int(services_row.get("priced_services") or 0),
+            "priced_services_count": priced_services,
             "rating": _extract_numeric(latest_card.get("rating")) if latest_card.get("rating") is not None else _extract_numeric(business.get("yandex_rating")),
             "reviews_count": int(latest_card.get("reviews_count") or business.get("yandex_reviews_total") or 0),
             "unanswered_reviews_count": int(latest_card.get("unanswered_reviews_count") or 0),

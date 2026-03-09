@@ -20,7 +20,7 @@ export const ru = {
   },
 
   // Page title
-  pageTitle: "ЛокалОС.pro - Локальное продвижение локального бизнеса",
+  pageTitle: "ЛокалОС - Локальное продвижение локального бизнеса",
 
   // Header
   header: {
@@ -40,7 +40,7 @@ export const ru = {
     company: "Компания",
     whoWeAre: "Кто мы?",
     contacts: "Контакты",
-    copyright: "© 2026 ЛокалОС.pro. Все права защищены.",
+    copyright: "© 2026 ЛокалОС. Все права защищены.",
   },
 
   // Stats

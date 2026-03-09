@@ -20,7 +20,7 @@ export const en = {
   },
 
   // Page title
-  pageTitle: "LocalOS.pro - Local promotion for local business",
+  pageTitle: "LocalOS - Local promotion for local business",
 
   // Header
   header: {

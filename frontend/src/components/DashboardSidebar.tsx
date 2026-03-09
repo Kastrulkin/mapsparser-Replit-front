@@ -28,7 +28,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onClose
 }) => {
   const location = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
@@ -108,12 +108,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
             <img
               src={logo}
-              alt="LocalOS"
+              alt={language === 'ru' ? 'ЛокалОС' : 'LocalOS'}
               className="h-10 w-auto relative z-10 drop-shadow-sm transition-transform hover:scale-105 duration-300"
             />
           </div>
           <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden lg:block">
-            LocalOS
+            {language === 'ru' ? 'ЛокалОС' : 'LocalOS'}
           </span>
         </div>
       </div>

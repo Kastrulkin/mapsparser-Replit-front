@@ -23,6 +23,7 @@ from parsequeue_status import (
     STATUS_COMPLETED,
     STATUS_ERROR,
     STATUS_PENDING,
+    STATUS_PAUSED,
     STATUS_PROCESSING,
 )
 from yandex_business_sync_worker import YandexBusinessSyncWorker
@@ -72,6 +73,17 @@ _EDITORIAL_SERVICE_PATTERNS = (
     "в районе ",
     "на улице ",
     "рядом с ",
+    "музеи",
+    "в петербурге",
+    "на что обратить внимание",
+    "лучшие ",
+    "необычные ",
+    "где есть ",
+    "eat market",
+    "день влюбл",
+    "в галерее",
+    "петергоф",
+    "пушкинской карте",
 )
 
 
@@ -822,6 +834,47 @@ def _handle_worker_error(queue_id: str, error_msg: str):
             """,
             (STATUS_ERROR, error_msg, queue_id),
         )
+        try:
+            cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'parsequeue'
+                """
+            )
+            parsequeue_columns = {
+                str(row.get("column_name") if hasattr(row, "get") else row[0])
+                for row in (cursor.fetchall() or [])
+                if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+            }
+            if {"batch_id", "batch_kind", "paused_reason"}.issubset(parsequeue_columns):
+                cursor.execute(
+                    """
+                    SELECT batch_id
+                    FROM parsequeue
+                    WHERE id = %s
+                    LIMIT 1
+                    """,
+                    (queue_id,),
+                )
+                row = cursor.fetchone()
+                batch_id = str((row.get("batch_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
+                if batch_id:
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET status = %s,
+                            paused_reason = %s,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE batch_id = %s
+                          AND batch_kind = 'network_sync'
+                          AND status IN (%s, %s)
+                          AND id <> %s
+                        """,
+                        (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, STATUS_CAPTCHA, queue_id),
+                    )
+        except Exception as pause_ex:
+            print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
         conn.commit()
         cursor.close()
         conn.close()
@@ -1407,21 +1460,7 @@ def process_queue():
     elif task_type == "sync_google_business":
         # Другие источники (будущее)
         print(f"⚠️ Тип задачи {task_type} пока не реализован")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE parsequeue
-            SET status = 'error',
-                error_message = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-            """,
-            (f"Тип задачи {task_type} пока не реализован", queue_dict["id"]),
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        _handle_worker_error(queue_dict["id"], f"Тип задачи {task_type} пока не реализован")
         return
     
     # Обычный парсинг карт (task_type = 'parse_card' или NULL)
@@ -2288,19 +2327,8 @@ def process_queue():
         print(f"❌ Ошибка при обработке заявки {queue_id}: {e}")
         traceback.print_exc()
         
-        # Обновляем статус ошибки
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("UPDATE parsequeue SET status = %s, error_message = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                         (STATUS_ERROR, str(e), queue_id))
-            conn.commit()
-            print(f"⚠️ Заявка {queue_id} помечена как ошибка.")
-        except Exception as update_error:
-            print(f"❌ Не удалось обновить статус заявки {queue_id}: {update_error}")
-        finally:
-            cursor.close()
-            conn.close()
+        _handle_worker_error(queue_id, str(e))
+        print(f"⚠️ Заявка {queue_id} помечена как ошибка.")
         
         # Отправляем email (ошибка не критична)
         try:
@@ -2423,6 +2451,12 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         external_id = str(external_id).strip() or None
     raw_price = item.get("price") or item.get("price_from") or ""
     price_from, price_to = _parse_service_price(raw_price)
+    if not price_from and not price_to:
+        # Доп. защита от редакционных подборок, которые иногда попадают в products API
+        # и не являются услугами конкретного бизнеса.
+        if ":" in name or len(name.split()) >= 7:
+            print(f"⚠️ [map_card_services] Skip long editorial-like title without price: {name}")
+            return {}
     return {
         "business_id": business_id,
         "user_id": user_id,
@@ -2644,18 +2678,7 @@ def _process_sync_yandex_business_task(queue_dict):
         
         if not business_id or not account_id:
             print(f"❌ Отсутствует business_id или account_id для задачи {queue_dict.get('id')}", flush=True)
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE parsequeue
-                SET status = 'error',
-                    error_message = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """, ("Отсутствует business_id или account_id", queue_dict["id"]))
-            conn.commit()
-            cursor.close()
-            conn.close()
+            _handle_worker_error(queue_dict["id"], "Отсутствует business_id или account_id")
             signal.alarm(0)  # Отменяем таймаут
             return
         
@@ -2904,27 +2927,7 @@ def _process_sync_yandex_business_task(queue_dict):
         except TimeoutError as e:
             print(f"⏱️ Таймаут синхронизации: {e}", flush=True)
             signal.alarm(0)
-            # Обновляем статус ошибки
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE parsequeue
-                SET status = 'error',
-                    error_message = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """, (str(e), queue_dict["id"]))
-            conn.commit()
-            try:
-                if cursor:
-                    cursor.close()
-            except:
-                pass
-            try:
-                if conn:
-                    conn.close()
-            except:
-                pass
+            _handle_worker_error(queue_dict["id"], str(e))
             
         except Exception as e:
             print(f"❌ Ошибка синхронизации: {e}", flush=True)
@@ -2938,52 +2941,13 @@ def _process_sync_yandex_business_task(queue_dict):
             except:
                 pass
             
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE parsequeue
-                SET status = 'error',
-                    error_message = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """, (str(e), queue_dict["id"]))
-            conn.commit()
-            try:
-                if cursor:
-                    cursor.close()
-            except:
-                pass
-            try:
-                if conn:
-                    conn.close()
-            except:
-                pass
+            _handle_worker_error(queue_dict["id"], str(e))
             
     except Exception as e:
         print(f"❌ Критическая ошибка синхронизации: {e}")
         traceback.print_exc()
         
-        # Обновляем статус ошибки
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE parsequeue
-            SET status = 'error',
-                error_message = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        """, (str(e), queue_dict["id"]))
-        conn.commit()
-        try:
-            if cursor:
-                cursor.close()
-        except:
-            pass
-        try:
-            if conn:
-                conn.close()
-        except:
-            pass
+        _handle_worker_error(queue_dict["id"], str(e))
 
 def _process_cabinet_fallback_task(queue_dict):
     """Обработка fallback парсинга через кабинет"""
