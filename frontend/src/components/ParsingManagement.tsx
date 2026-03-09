@@ -18,12 +18,22 @@ interface ParsingTask {
   task_type: string;
   account_id?: string;
   source?: string;
-  status: 'pending' | 'processing' | 'completed' | 'error' | 'captcha';
+  status: 'pending' | 'processing' | 'completed' | 'error' | 'captcha' | 'paused';
   retry_after?: string;
   captcha_url?: string;
   captcha_session_id?: string;
   resume_requested?: boolean;
   error_message?: string;
+  batch_id?: string;
+  batch_kind?: string;
+  network_id?: string;
+  batch_seq?: number;
+  paused_reason?: string;
+  short_error_code?: string;
+  short_error_message?: string;
+  can_resume_batch?: boolean;
+  can_open_captcha?: boolean;
+  can_restart_task?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -40,6 +50,74 @@ interface ParsingStats {
     task_type: string;
     created_at: string;
     updated_at: string;
+  }>;
+  paused_batches_count?: number;
+  paused_batches?: Array<{
+    batch_id: string;
+    tasks_count: number;
+  }>;
+  operator_summary?: {
+    active_runs: number;
+    action_required_count: number;
+    captcha_waiting_count: number;
+    error_count: number;
+    completed_today: number;
+  };
+  captcha_queue?: Array<{
+    task_id: string;
+    business_id?: string;
+    business_name?: string;
+    url?: string;
+    captcha_url?: string;
+    captcha_session_id?: string;
+    captcha_started_at?: string;
+    retry_after?: string;
+    resume_requested?: boolean;
+    created_at?: string;
+    is_expired?: boolean;
+    short_error_message?: string;
+  }>;
+  recoverable_batches_count?: number;
+  recoverable_batches?: Array<{
+    batch_id: string;
+    business_id?: string;
+    business_name?: string;
+    source?: string;
+    tasks_count: number;
+    paused_count: number;
+    error_count: number;
+    completed_count: number;
+    pending_count: number;
+    processing_count: number;
+    captcha_count: number;
+    current_seq?: number;
+    first_failed_seq?: number;
+    last_activity_at?: string;
+    last_error_short?: string;
+    last_error_code?: string;
+    resume_available?: boolean;
+  }>;
+  network_batches?: Array<{
+    batch_id: string;
+    business_id?: string;
+    business_name?: string;
+    source?: string;
+    tasks_count: number;
+    completed_count: number;
+    pending_count: number;
+    processing_count: number;
+    paused_count: number;
+    error_count: number;
+    captcha_count: number;
+    current_seq?: number;
+    first_failed_seq?: number;
+    last_activity_at?: string;
+    last_error_short?: string;
+    last_error_code?: string;
+    resume_available?: boolean;
+    status: 'pending' | 'processing' | 'completed' | 'paused' | 'error' | 'captcha' | 'partial';
+    status_label: string;
+    progress_percent: number;
   }>;
 }
 
@@ -317,13 +395,42 @@ export const ParsingManagement: React.FC = () => {
     }
   };
 
+  const handleResumeNetworkBatch = async (batchId?: string) => {
+    if (!batchId) return;
+    if (!confirm('Возобновить сетевой парсинг с места ошибки?')) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/resume`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка возобновления сетевого batch');
+      }
+      toast({
+        title: t.common.success,
+        description: data.message || 'Сетевой парсинг возобновлён',
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось возобновить сетевой парсинг',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       'pending': { label: t.dashboard.parsing.status.pending, className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
       'processing': { label: t.dashboard.parsing.status.processing, className: 'bg-blue-50 text-blue-800 border-blue-200' },
       'completed': { label: t.dashboard.parsing.status.completed, className: 'bg-green-50 text-green-800 border-green-200' },
       'error': { label: t.dashboard.parsing.status.error, className: 'bg-red-50 text-red-800 border-red-200' },
-      'captcha': { label: t.dashboard.parsing.status.captcha, className: 'bg-orange-50 text-orange-800 border-orange-200' }
+      'captcha': { label: t.dashboard.parsing.status.captcha, className: 'bg-orange-50 text-orange-800 border-orange-200' },
+      'paused': { label: 'Пауза (ошибка в сети)', className: 'bg-amber-50 text-amber-800 border-amber-200' },
     };
 
     const config = statusConfig[status] || { label: status, className: 'bg-gray-50 text-gray-800 border-gray-200' };
@@ -345,6 +452,60 @@ export const ParsingManagement: React.FC = () => {
     return labels[taskType] || taskType;
   };
 
+  const getBatchStatusBadge = (status: string, label: string) => {
+    const statusConfig: Record<string, string> = {
+      pending: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+      processing: 'bg-blue-50 text-blue-800 border-blue-200',
+      completed: 'bg-green-50 text-green-800 border-green-200',
+      partial: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+      paused: 'bg-amber-50 text-amber-800 border-amber-200',
+      captcha: 'bg-orange-50 text-orange-800 border-orange-200',
+      error: 'bg-red-50 text-red-800 border-red-200',
+    };
+
+    return (
+      <Badge variant="outline" className={statusConfig[status] || 'bg-gray-50 text-gray-800 border-gray-200'}>
+        {label}
+      </Badge>
+    );
+  };
+
+  const summaryCards = stats?.operator_summary ? [
+    { key: 'active', label: 'Активные запуски', value: stats.operator_summary.active_runs, filter: 'processing', className: 'text-blue-600' },
+    { key: 'action', label: 'Требует действия', value: stats.operator_summary.action_required_count, className: 'text-amber-700' },
+    { key: 'captcha', label: 'CAPTCHA', value: stats.operator_summary.captcha_waiting_count, filter: 'captcha', className: 'text-orange-600' },
+    { key: 'error', label: 'Ошибки', value: stats.operator_summary.error_count, filter: 'error', className: 'text-red-600' },
+    { key: 'done', label: 'Успешно сегодня', value: stats.operator_summary.completed_today, filter: 'completed', className: 'text-green-600' },
+  ] : [];
+
+  const actionItems = [
+    ...((stats?.recoverable_batches || []).map((batch) => ({
+      key: `batch-${batch.batch_id}`,
+      title: batch.business_name || `Batch ${batch.batch_id.slice(0, 8)}`,
+      subtitle: `Сетевой запуск • ${batch.source || 'источник не указан'}`,
+      description: batch.last_error_short || 'Сеть можно продолжить с места сбоя',
+      meta: `Прогресс: ${batch.completed_count}/${batch.tasks_count} • paused: ${batch.paused_count} • error: ${batch.error_count}`,
+      actionLabel: 'Возобновить с места сбоя',
+      onAction: () => handleResumeNetworkBatch(batch.batch_id),
+    }))),
+    ...((stats?.captcha_queue || []).map((captchaTask) => ({
+      key: `captcha-${captchaTask.task_id}`,
+      title: captchaTask.business_name || `Задача ${captchaTask.task_id.slice(0, 8)}`,
+      subtitle: 'Нужна CAPTCHA',
+      description: captchaTask.is_expired
+        ? 'Сессия истекла. Откройте новую CAPTCHA и затем продолжите.'
+        : (captchaTask.short_error_message || 'Пройдите CAPTCHA и продолжите парсинг'),
+      meta: captchaTask.retry_after ? `Дедлайн: ${new Date(captchaTask.retry_after).toLocaleString('ru-RU')}` : 'Ожидает действия человека',
+      actionLabel: 'Открыть CAPTCHA',
+      onAction: () => {
+        const linkedTask = tasks.find((task) => task.id === captchaTask.task_id);
+        if (linkedTask) {
+          void handleOpenCaptcha(linkedTask);
+        }
+      },
+    }))),
+  ];
+
   return (
     <div className="space-y-6">
       {/* Заголовок с кнопкой обновления */}
@@ -360,9 +521,54 @@ export const ParsingManagement: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {error}
         </div>
+      )}
+
+      {stats && summaryCards.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {summaryCards.map((item) => (
+            <Card
+              key={item.key}
+              className={item.filter ? 'cursor-pointer transition hover:border-primary/40 hover:shadow-sm' : ''}
+              onClick={item.filter ? () => setFilters((prev) => ({ ...prev, status: item.filter || '' })) : undefined}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{item.label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${item.className}`}>{item.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {actionItems.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/70">
+          <CardHeader>
+            <CardTitle>Требует действия</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Сначала решите эти задачи: они блокируют продолжение парсинга или требуют human-in-the-loop.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {actionItems.map((item) => (
+              <div key={item.key} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-foreground">{item.title}</div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{item.subtitle}</div>
+                  <div className="text-sm text-foreground">{item.description}</div>
+                  <div className="text-xs text-muted-foreground">{item.meta}</div>
+                </div>
+                <Button onClick={item.onAction} variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100">
+                  {item.actionLabel}
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {/* Статистика */}
@@ -423,6 +629,97 @@ export const ParsingManagement: React.FC = () => {
         </div>
       )}
 
+      {stats && (stats.network_batches || []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Сетевые запуски</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Основной слой для управления сетевым парсингом: прогресс, точка сбоя и возобновление с места ошибки.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(stats.network_batches || []).map((batch) => (
+              <div key={batch.batch_id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-base font-semibold text-foreground">
+                        {batch.business_name || `Batch ${batch.batch_id.slice(0, 8)}`}
+                      </div>
+                      {getBatchStatusBadge(batch.status, batch.status_label)}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div className="font-mono break-all">batch_id: {batch.batch_id}</div>
+                      <div>
+                        Источник: {batch.source || 'не указан'}
+                        {batch.last_activity_at ? ` • Последняя активность: ${new Date(batch.last_activity_at).toLocaleString('ru-RU')}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {batch.resume_available ? (
+                      <Button
+                        variant="outline"
+                        className="border-amber-300 text-amber-900 hover:bg-amber-50"
+                        onClick={() => handleResumeNetworkBatch(batch.batch_id)}
+                      >
+                        Возобновить с места сбоя
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Прогресс: {batch.completed_count}/{batch.tasks_count}
+                      {typeof batch.current_seq === 'number' ? ` • текущая точка ${batch.current_seq}` : ''}
+                      {typeof batch.first_failed_seq === 'number' ? ` • сбой на ${batch.first_failed_seq}` : ''}
+                    </span>
+                    <span className="font-medium text-foreground">{batch.progress_percent}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.max(0, Math.min(100, batch.progress_percent))}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-6">
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">Завершено</div>
+                      <div className="font-semibold text-foreground">{batch.completed_count}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">В очереди</div>
+                      <div className="font-semibold text-foreground">{batch.pending_count}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">В работе</div>
+                      <div className="font-semibold text-foreground">{batch.processing_count}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">Пауза</div>
+                      <div className="font-semibold text-foreground">{batch.paused_count}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">CAPTCHA</div>
+                      <div className="font-semibold text-foreground">{batch.captcha_count}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-3 py-2">
+                      <div className="text-xs text-muted-foreground">Ошибки</div>
+                      <div className="font-semibold text-foreground">{batch.error_count}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                    {batch.last_error_short || 'Последняя ошибка не зафиксирована. Если запуск встал, откройте задачи ниже для точечной диагностики.'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Фильтры */}
       <Card>
         <CardHeader>
@@ -443,6 +740,7 @@ export const ParsingManagement: React.FC = () => {
                 <option value="completed">{t.dashboard.parsing.status.completed}</option>
                 <option value="error">{t.dashboard.parsing.status.error}</option>
                 <option value="captcha">{t.dashboard.parsing.status.captcha}</option>
+                <option value="paused">Пауза (ошибка в сети)</option>
               </select>
             </div>
 
@@ -529,6 +827,14 @@ export const ParsingManagement: React.FC = () => {
                             <Copy className="h-3 w-3" />
                           </Button>
                         </div>
+                        {task.batch_id ? (
+                          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            <div className="font-mono break-all">batch: {task.batch_id}</div>
+                            {typeof task.batch_seq === 'number' ? (
+                              <div>seq: {task.batch_seq}</div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-sm text-foreground">
                         {task.business_name || task.business_id || '—'}
@@ -592,12 +898,21 @@ export const ParsingManagement: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-destructive max-w-md break-all" title={task.error_message}>
-                        {task.error_message || '—'}
+                      <td className="px-4 py-3 text-sm max-w-md" title={task.error_message}>
+                        {task.short_error_message ? (
+                          <div className="space-y-1">
+                            <div className="font-medium text-foreground">{task.short_error_message}</div>
+                            {task.short_error_code ? (
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">{task.short_error_code}</div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
-                          {(task.status === 'error' || task.status === 'captcha' ||
+                          {((task.can_restart_task ?? (task.status === 'error' || task.status === 'captcha' || task.status === 'paused')) ||
                             (task.status === 'processing' && stats?.stuck_tasks.some(st => st.id === task.id))) && (
                               <Button
                                 size="sm"
@@ -608,7 +923,7 @@ export const ParsingManagement: React.FC = () => {
                                 <Play className="w-4 h-4" />
                               </Button>
                             )}
-                          {task.status === 'captcha' && (
+                          {(task.can_open_captcha ?? task.status === 'captcha') && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -617,6 +932,17 @@ export const ParsingManagement: React.FC = () => {
                               title="Продолжить после капчи"
                             >
                               <Loader2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {(task.can_resume_batch ?? ((task.status === 'paused' || task.status === 'error') && !!task.batch_id)) && task.batch_id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResumeNetworkBatch(task.batch_id)}
+                              className="text-amber-700 hover:text-amber-800"
+                              title="Возобновить сеть с места сбоя"
+                            >
+                              <Play className="w-4 h-4" />
                             </Button>
                           )}
                           {task.status === 'captcha' && (

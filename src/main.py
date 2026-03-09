@@ -34,7 +34,15 @@ from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
-from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, STATUS_PAUSED, normalize_status
+from parsequeue_status import (
+    STATUS_CAPTCHA,
+    STATUS_COMPLETED,
+    STATUS_ERROR,
+    STATUS_PAUSED,
+    STATUS_PENDING,
+    STATUS_PROCESSING,
+    normalize_status,
+)
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
 from messengers_api import messengers_bp
@@ -843,6 +851,33 @@ def _count_from_row(cursor, row):
     return int(list(rd.values())[0]) if rd else 0
 
 
+def _classify_parsing_error(error_message: str | None, status: str | None = None) -> tuple[str | None, str | None]:
+    raw = str(error_message or "").strip()
+    status_norm = normalize_status(status)
+    if status_norm == STATUS_CAPTCHA:
+        return "captcha_required", "Нужна CAPTCHA"
+    if not raw:
+        if status_norm == STATUS_PAUSED:
+            return "network_paused", "Сеть остановлена после ошибки"
+        return None, None
+
+    lowered = raw.lower()
+    rules = (
+        ("captcha_required", ("captcha_required", "captcha_detected"), "Нужна CAPTCHA"),
+        ("playwright_crash", ("playwright_sync_in_async_loop", "playwright sync api inside the asyncio loop"), "Сбой Playwright"),
+        ("db_write_error", ("datatypemismatch", "operator does not exist", "duplicate key", "relation ", "column "), "Ошибка записи в БД"),
+        ("timeout", ("timed out", "sleep interrupted", "timeout"), "Таймаут парсинга"),
+        ("validation_failed", ("low_quality_payload", "validation", "quality_score"), "Низкое качество данных"),
+        ("auth_error", ("403", "auth failed", "token"), "Ошибка авторизации внешнего сервиса"),
+        ("network_paused", ("network_batch_paused_after_error",), "Сеть остановлена после ошибки"),
+    )
+    for code, needles, label in rules:
+        if any(needle in lowered for needle in needles):
+            return code, label
+    short = raw.splitlines()[0].strip()
+    return "technical_error", short[:120] if short else "Техническая ошибка"
+
+
 @app.route('/api/admin/parsing/tasks', methods=['GET'])
 def get_parsing_tasks():
     """Получить список задач парсинга для администратора"""
@@ -869,6 +904,18 @@ def get_parsing_tasks():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
         
         # Формируем WHERE условия
         where_conditions = []
@@ -941,6 +988,15 @@ def get_parsing_tasks():
             task_dict.setdefault("task_type", "parse_card")
             task_dict["status"] = normalize_status(task_dict.get("status"))
             task_dict["business_name"] = (task_dict.get("business_name") or "").strip() or None
+            short_error_code, short_error_message = _classify_parsing_error(
+                task_dict.get("error_message"),
+                task_dict.get("status"),
+            )
+            task_dict["short_error_code"] = short_error_code
+            task_dict["short_error_message"] = short_error_message
+            task_dict["can_resume_batch"] = bool(task_dict.get("batch_id")) and task_dict.get("status") in (STATUS_PAUSED, STATUS_ERROR)
+            task_dict["can_open_captcha"] = task_dict.get("status") == STATUS_CAPTCHA and bool(task_dict.get("captcha_url") or task_dict.get("url"))
+            task_dict["can_restart_task"] = task_dict.get("status") in (STATUS_ERROR, STATUS_CAPTCHA, STATUS_PAUSED)
             tasks.append(task_dict)
         
         db.close()
@@ -1504,30 +1560,243 @@ def get_parsing_stats():
             if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
         }
 
-        paused_batches = []
+        recoverable_batches = []
+        network_batches = []
         if {"batch_id", "batch_kind"}.issubset(parsequeue_columns):
             cursor.execute(
                 """
-                SELECT batch_id, COUNT(*) AS cnt
-                FROM parsequeue
-                WHERE status = %s
-                  AND batch_id IS NOT NULL
-                  AND batch_kind = 'network_sync'
-                GROUP BY batch_id
+                SELECT
+                    pq.batch_id,
+                    MAX(COALESCE(b.name, '')) AS business_name,
+                    MAX(COALESCE(pq.source, '')) AS source,
+                    MAX(COALESCE(pq.business_id::text, '')) AS business_id,
+                    MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS paused_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS captcha_cnt,
+                    MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
+                    MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
+                    MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
+                    COUNT(*) AS cnt
+                FROM parsequeue pq
+                LEFT JOIN businesses b ON b.id = pq.business_id
+                WHERE pq.batch_id IS NOT NULL
+                  AND pq.batch_kind = 'network_sync'
+                GROUP BY pq.batch_id
+                ORDER BY MAX(COALESCE(pq.updated_at, pq.created_at)) DESC
+                LIMIT 20
+                """,
+                (
+                    STATUS_PAUSED,
+                    STATUS_ERROR,
+                    STATUS_COMPLETED,
+                    STATUS_PENDING,
+                    STATUS_PROCESSING,
+                    STATUS_CAPTCHA,
+                    STATUS_ERROR,
+                    STATUS_PAUSED,
+                    STATUS_CAPTCHA,
+                    STATUS_PROCESSING,
+                    STATUS_ERROR,
+                ),
+            )
+            for row in cursor.fetchall():
+                rd = _row_to_dict(cursor, row)
+                if not rd or not rd.get("batch_id"):
+                    continue
+                tasks_count = int(rd.get("cnt") or 0)
+                completed_count = int(rd.get("completed_cnt") or 0)
+                pending_count = int(rd.get("pending_cnt") or 0)
+                processing_count = int(rd.get("processing_cnt") or 0)
+                paused_count = int(rd.get("paused_cnt") or 0)
+                error_count = int(rd.get("error_cnt") or 0)
+                captcha_count = int(rd.get("captcha_cnt") or 0)
+                latest_error = rd.get("latest_error")
+                short_error_code, short_error_message = _classify_parsing_error(
+                    latest_error,
+                    STATUS_ERROR if error_count else (
+                        STATUS_CAPTCHA if captcha_count else (
+                            STATUS_PAUSED if paused_count else (
+                                STATUS_PROCESSING if processing_count else (
+                                    STATUS_PENDING if pending_count else STATUS_COMPLETED
+                                )
+                            )
+                        )
+                    ),
+                )
+
+                if captcha_count:
+                    batch_status = "captcha"
+                    batch_status_label = "Ждёт CAPTCHA"
+                elif paused_count:
+                    batch_status = "paused"
+                    batch_status_label = "На паузе"
+                elif error_count:
+                    batch_status = "error"
+                    batch_status_label = "Ошибка"
+                elif processing_count:
+                    batch_status = "processing"
+                    batch_status_label = "В работе"
+                elif pending_count and completed_count == 0:
+                    batch_status = "pending"
+                    batch_status_label = "В очереди"
+                elif completed_count == tasks_count and tasks_count > 0:
+                    batch_status = "completed"
+                    batch_status_label = "Завершён"
+                else:
+                    batch_status = "partial"
+                    batch_status_label = "Завершён частично"
+
+                progress_percent = int(round((completed_count / tasks_count) * 100)) if tasks_count else 0
+                network_batches.append(
+                    {
+                        "batch_id": rd.get("batch_id"),
+                        "business_id": rd.get("business_id") or None,
+                        "business_name": (rd.get("business_name") or "").strip() or None,
+                        "source": (rd.get("source") or "").strip() or None,
+                        "tasks_count": tasks_count,
+                        "completed_count": completed_count,
+                        "pending_count": pending_count,
+                        "processing_count": processing_count,
+                        "paused_count": paused_count,
+                        "error_count": error_count,
+                        "captcha_count": captcha_count,
+                        "current_seq": rd.get("current_seq"),
+                        "first_failed_seq": rd.get("first_failed_seq"),
+                        "last_activity_at": rd.get("last_activity_at"),
+                        "last_error_short": short_error_message,
+                        "last_error_code": short_error_code,
+                        "resume_available": bool(paused_count or error_count or captcha_count),
+                        "status": batch_status,
+                        "status_label": batch_status_label,
+                        "progress_percent": progress_percent,
+                    }
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    pq.batch_id,
+                    MAX(COALESCE(b.name, '')) AS business_name,
+                    MAX(COALESCE(pq.source, '')) AS source,
+                    MAX(COALESCE(pq.business_id::text, '')) AS business_id,
+                    MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS paused_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
+                    COUNT(*) FILTER (WHERE pq.status = %s) AS captcha_cnt,
+                    MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
+                    MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
+                    MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
+                    COUNT(*) AS cnt
+                FROM parsequeue pq
+                LEFT JOIN businesses b ON b.id = pq.business_id
+                WHERE pq.batch_id IS NOT NULL
+                  AND pq.batch_kind = 'network_sync'
+                  AND pq.status IN (%s, %s)
+                GROUP BY pq.batch_id
                 ORDER BY cnt DESC
                 LIMIT 10
                 """,
-                (STATUS_PAUSED,),
+                (
+                    STATUS_PAUSED,
+                    STATUS_ERROR,
+                    STATUS_COMPLETED,
+                    STATUS_PENDING,
+                    STATUS_PROCESSING,
+                    STATUS_CAPTCHA,
+                    STATUS_ERROR,
+                    STATUS_PAUSED,
+                    STATUS_CAPTCHA,
+                    STATUS_PROCESSING,
+                    STATUS_ERROR,
+                    STATUS_PAUSED,
+                    STATUS_ERROR,
+                ),
             )
             for row in cursor.fetchall():
                 rd = _row_to_dict(cursor, row)
                 if rd and rd.get("batch_id"):
-                    paused_batches.append(
+                    latest_error = rd.get("latest_error")
+                    short_error_code, short_error_message = _classify_parsing_error(latest_error, STATUS_ERROR if rd.get("error_cnt") else STATUS_PAUSED)
+                    recoverable_batches.append(
                         {
                             "batch_id": rd.get("batch_id"),
+                            "business_id": rd.get("business_id") or None,
+                            "business_name": (rd.get("business_name") or "").strip() or None,
+                            "source": (rd.get("source") or "").strip() or None,
                             "tasks_count": int(rd.get("cnt") or 0),
+                            "paused_count": int(rd.get("paused_cnt") or 0),
+                            "error_count": int(rd.get("error_cnt") or 0),
+                            "completed_count": int(rd.get("completed_cnt") or 0),
+                            "pending_count": int(rd.get("pending_cnt") or 0),
+                            "processing_count": int(rd.get("processing_cnt") or 0),
+                            "captcha_count": int(rd.get("captcha_cnt") or 0),
+                            "current_seq": rd.get("current_seq"),
+                            "first_failed_seq": rd.get("first_failed_seq"),
+                            "last_activity_at": rd.get("last_activity_at"),
+                            "last_error_short": short_error_message,
+                            "last_error_code": short_error_code,
+                            "resume_available": True,
                         }
                     )
+
+        captcha_queue = []
+        cursor.execute(
+            """
+            SELECT
+                pq.id,
+                pq.business_id,
+                COALESCE(b.name, '') AS business_name,
+                pq.url,
+                pq.captcha_url,
+                pq.captcha_session_id,
+                pq.captcha_started_at,
+                pq.retry_after,
+                pq.resume_requested,
+                pq.created_at,
+                pq.error_message
+            FROM parsequeue pq
+            LEFT JOIN businesses b ON b.id = pq.business_id
+            WHERE pq.status = %s
+            ORDER BY COALESCE(pq.retry_after, pq.updated_at, pq.created_at) ASC
+            LIMIT 20
+            """,
+            (STATUS_CAPTCHA,),
+        )
+        for row in cursor.fetchall():
+            rd = _row_to_dict(cursor, row)
+            if not rd:
+                continue
+            retry_after = rd.get("retry_after")
+            is_expired = False
+            try:
+                if retry_after:
+                    retry_dt = retry_after if isinstance(retry_after, datetime) else datetime.fromisoformat(str(retry_after))
+                    is_expired = retry_dt < datetime.now(retry_dt.tzinfo) if retry_dt.tzinfo else retry_dt < datetime.now()
+            except Exception:
+                is_expired = False
+            captcha_queue.append(
+                {
+                    "task_id": rd.get("id"),
+                    "business_id": rd.get("business_id"),
+                    "business_name": (rd.get("business_name") or "").strip() or None,
+                    "url": rd.get("url"),
+                    "captcha_url": rd.get("captcha_url"),
+                    "captcha_session_id": rd.get("captcha_session_id"),
+                    "captcha_started_at": rd.get("captcha_started_at"),
+                    "retry_after": retry_after,
+                    "resume_requested": bool(rd.get("resume_requested")),
+                    "created_at": rd.get("created_at"),
+                    "is_expired": is_expired,
+                    "short_error_message": _classify_parsing_error(rd.get("error_message"), STATUS_CAPTCHA)[1],
+                }
+            )
         
         cursor.execute("""
             SELECT id, business_id, task_type, created_at, updated_at
@@ -1547,6 +1816,25 @@ def get_parsing_stats():
                     'updated_at': rd.get('updated_at') or rd.get('created_at')
                 })
         
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM parsequeue
+            WHERE status = %s
+              AND created_at >= date_trunc('day', NOW())
+            """,
+            (STATUS_COMPLETED,),
+        )
+        completed_today = _count_from_row(cursor, cursor.fetchone())
+
+        operator_summary = {
+            "active_runs": int((by_status or {}).get(STATUS_PENDING, 0) + (by_status or {}).get(STATUS_PROCESSING, 0)),
+            "action_required_count": int(len(recoverable_batches) + len(captcha_queue) + len(stuck_tasks)),
+            "captcha_waiting_count": int((by_status or {}).get(STATUS_CAPTCHA, 0)),
+            "error_count": int((by_status or {}).get(STATUS_ERROR, 0)),
+            "completed_today": int(completed_today),
+        }
+
         db.close()
         
         return jsonify({
@@ -1558,8 +1846,13 @@ def get_parsing_stats():
                 "by_source": by_source or {},
                 "stuck_tasks_count": len(stuck_tasks),
                 "stuck_tasks": stuck_tasks or [],
-                "paused_batches_count": len(paused_batches),
-                "paused_batches": paused_batches,
+                "operator_summary": operator_summary,
+                "captcha_queue": captcha_queue,
+                "network_batches": network_batches,
+                "paused_batches_count": len([b for b in recoverable_batches if b.get("paused_count")]),
+                "paused_batches": [b for b in recoverable_batches if b.get("paused_count")],
+                "recoverable_batches_count": len(recoverable_batches),
+                "recoverable_batches": recoverable_batches,
             }
         })
     except Exception as e:
