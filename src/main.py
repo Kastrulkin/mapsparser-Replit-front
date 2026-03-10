@@ -1173,6 +1173,121 @@ def resume_network_parsing_batch(batch_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/admin/parsing/network-batches/<string:batch_id>/pause', methods=['POST'])
+def pause_network_parsing_batch(batch_id):
+    """Поставить сетевой batch на паузу, не трогая уже обрабатываемую задачу."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = %s,
+                paused_reason = 'manual_pause',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status = %s
+            """,
+            (STATUS_PAUSED, batch_id, STATUS_PENDING),
+        )
+        paused_count = int(cursor.rowcount or 0)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM parsequeue
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status = %s
+            """,
+            (batch_id, STATUS_PROCESSING),
+        )
+        processing_count = _count_from_row(cursor, cursor.fetchone())
+        db.conn.commit()
+        db.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Batch поставлен на паузу. Остановлено в очереди: {paused_count}",
+                "batch_id": batch_id,
+                "paused_count": paused_count,
+                "processing_count": int(processing_count),
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка паузы сетевого batch {batch_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/network-batches/<string:batch_id>/retry-errors', methods=['POST'])
+def retry_network_parsing_batch_errors(batch_id):
+    """Повторить только ошибочные задачи внутри batch, не затрагивая завершённые."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = %s,
+                error_message = NULL,
+                retry_after = NULL,
+                resume_requested = 0,
+                captcha_required = 0,
+                captcha_url = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_status = NULL,
+                paused_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status = %s
+            """,
+            (STATUS_PENDING, batch_id, STATUS_ERROR),
+        )
+        retried_count = int(cursor.rowcount or 0)
+        db.conn.commit()
+        db.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Ошибочные задачи возвращены в очередь: {retried_count}",
+                "batch_id": batch_id,
+                "retried_count": retried_count,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка retry ошибочных задач batch {batch_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/admin/parsing/tasks/<task_id>/captcha/open', methods=['POST'])
 def open_parsing_task_captcha(task_id):
     """Вернуть ссылку/метаданные captcha-сессии для конкретной задачи."""
@@ -1570,6 +1685,7 @@ def get_parsing_stats():
                     MAX(COALESCE(b.name, '')) AS business_name,
                     MAX(COALESCE(pq.source, '')) AS source,
                     MAX(COALESCE(pq.business_id::text, '')) AS business_id,
+                    MAX(COALESCE(pq.paused_reason, '')) AS paused_reason,
                     MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS paused_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
@@ -1615,6 +1731,7 @@ def get_parsing_stats():
                 error_count = int(rd.get("error_cnt") or 0)
                 captcha_count = int(rd.get("captcha_cnt") or 0)
                 latest_error = rd.get("latest_error")
+                paused_reason = (rd.get("paused_reason") or "").strip() or None
                 short_error_code, short_error_message = _classify_parsing_error(
                     latest_error,
                     STATUS_ERROR if error_count else (
@@ -1631,9 +1748,12 @@ def get_parsing_stats():
                 if captcha_count:
                     batch_status = "captcha"
                     batch_status_label = "Ждёт CAPTCHA"
+                elif paused_count and paused_reason == "manual_pause" and error_count == 0:
+                    batch_status = "manual_paused"
+                    batch_status_label = "Остановлен вручную"
                 elif paused_count:
                     batch_status = "paused"
-                    batch_status_label = "На паузе"
+                    batch_status_label = "Остановлен из-за ошибки"
                 elif error_count:
                     batch_status = "error"
                     batch_status_label = "Ошибка"
@@ -1670,6 +1790,7 @@ def get_parsing_stats():
                         "last_error_short": short_error_message,
                         "last_error_code": short_error_code,
                         "resume_available": bool(paused_count or error_count or captcha_count),
+                        "paused_reason": paused_reason,
                         "status": batch_status,
                         "status_label": batch_status_label,
                         "progress_percent": progress_percent,

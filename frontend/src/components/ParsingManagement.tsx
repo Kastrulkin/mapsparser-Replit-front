@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
@@ -115,9 +116,10 @@ interface ParsingStats {
     last_error_short?: string;
     last_error_code?: string;
     resume_available?: boolean;
-    status: 'pending' | 'processing' | 'completed' | 'paused' | 'error' | 'captcha' | 'partial';
+    status: 'pending' | 'processing' | 'completed' | 'paused' | 'manual_paused' | 'error' | 'captcha' | 'partial';
     status_label: string;
     progress_percent: number;
+    paused_reason?: string;
   }>;
 }
 
@@ -128,6 +130,11 @@ export const ParsingManagement: React.FC = () => {
   const [stats, setStats] = useState<ParsingStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'operator' | 'technical'>('operator');
+  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const [showRawTasks, setShowRawTasks] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<ParsingTask | null>(null);
+  const [onlyActionRequired, setOnlyActionRequired] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     task_type: '',
@@ -423,6 +430,62 @@ export const ParsingManagement: React.FC = () => {
     }
   };
 
+  const handlePauseNetworkBatch = async (batchId?: string) => {
+    if (!batchId) return;
+    if (!confirm('Поставить batch на паузу? Уже обрабатываемая задача не будет убита, но оставшиеся не стартуют.')) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/pause`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка паузы сетевого batch');
+      }
+      toast({
+        title: t.common.success,
+        description: data.message || 'Batch поставлен на паузу',
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось поставить batch на паузу',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRetryBatchErrors = async (batchId?: string) => {
+    if (!batchId) return;
+    if (!confirm('Вернуть в очередь только ошибочные задачи этого batch?')) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/retry-errors`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка повторного запуска ошибочных задач');
+      }
+      toast({
+        title: t.common.success,
+        description: data.message || 'Ошибочные задачи возвращены в очередь',
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось вернуть ошибочные задачи в очередь',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
       'pending': { label: t.dashboard.parsing.status.pending, className: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
@@ -459,6 +522,7 @@ export const ParsingManagement: React.FC = () => {
       completed: 'bg-green-50 text-green-800 border-green-200',
       partial: 'bg-emerald-50 text-emerald-800 border-emerald-200',
       paused: 'bg-amber-50 text-amber-800 border-amber-200',
+      manual_paused: 'bg-slate-100 text-slate-800 border-slate-300',
       captcha: 'bg-orange-50 text-orange-800 border-orange-200',
       error: 'bg-red-50 text-red-800 border-red-200',
     };
@@ -469,6 +533,15 @@ export const ParsingManagement: React.FC = () => {
       </Badge>
     );
   };
+
+  const getBatchTasks = (batchId: string) => tasks.filter((task) => task.batch_id === batchId);
+  const isRawTableVisible = viewMode === 'technical' || showRawTasks;
+  const filteredTasks = onlyActionRequired
+    ? tasks.filter((task) => task.status === 'error' || task.status === 'captcha' || task.status === 'paused' || Boolean(task.can_resume_batch) || Boolean(task.can_open_captcha))
+    : tasks;
+  const filteredNetworkBatches = onlyActionRequired
+    ? (stats?.network_batches || []).filter((batch) => batch.resume_available || batch.status === 'manual_paused')
+    : (stats?.network_batches || []);
 
   const summaryCards = stats?.operator_summary ? [
     { key: 'active', label: 'Активные запуски', value: stats.operator_summary.active_runs, filter: 'processing', className: 'text-blue-600' },
@@ -505,6 +578,7 @@ export const ParsingManagement: React.FC = () => {
       },
     }))),
   ];
+  const filteredActionItems = onlyActionRequired ? actionItems : actionItems;
 
   return (
     <div className="space-y-6">
@@ -514,10 +588,34 @@ export const ParsingManagement: React.FC = () => {
           <h2 className="text-2xl font-bold text-foreground">{t.dashboard.parsing.title}</h2>
           <p className="text-muted-foreground mt-1">{t.dashboard.parsing.subtitle}</p>
         </div>
-        <Button onClick={() => { loadTasks(); loadStats(); }} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          {t.dashboard.parsing.refresh}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant={onlyActionRequired ? 'default' : 'outline'}
+            onClick={() => setOnlyActionRequired((current) => !current)}
+          >
+            Только требует действия
+          </Button>
+          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('operator')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${viewMode === 'operator' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Оператор
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('technical')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${viewMode === 'technical' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Тех. режим
+            </button>
+          </div>
+          <Button onClick={() => { loadTasks(); loadStats(); }} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {t.dashboard.parsing.refresh}
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -545,7 +643,7 @@ export const ParsingManagement: React.FC = () => {
         </div>
       )}
 
-      {actionItems.length > 0 && (
+      {filteredActionItems.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/70">
           <CardHeader>
             <CardTitle>Требует действия</CardTitle>
@@ -554,7 +652,7 @@ export const ParsingManagement: React.FC = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            {actionItems.map((item) => (
+            {filteredActionItems.map((item) => (
               <div key={item.key} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">{item.title}</div>
@@ -629,7 +727,7 @@ export const ParsingManagement: React.FC = () => {
         </div>
       )}
 
-      {stats && (stats.network_batches || []).length > 0 && (
+      {stats && filteredNetworkBatches.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Сетевые запуски</CardTitle>
@@ -638,7 +736,7 @@ export const ParsingManagement: React.FC = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {(stats.network_batches || []).map((batch) => (
+            {filteredNetworkBatches.map((batch) => (
               <div key={batch.batch_id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-2">
@@ -657,6 +755,13 @@ export const ParsingManagement: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="ghost"
+                      className="text-foreground"
+                      onClick={() => setExpandedBatchId((current) => current === batch.batch_id ? null : batch.batch_id)}
+                    >
+                      {expandedBatchId === batch.batch_id ? 'Скрыть детали' : 'Открыть детали'}
+                    </Button>
                     {batch.resume_available ? (
                       <Button
                         variant="outline"
@@ -664,6 +769,23 @@ export const ParsingManagement: React.FC = () => {
                         onClick={() => handleResumeNetworkBatch(batch.batch_id)}
                       >
                         Возобновить с места сбоя
+                      </Button>
+                    ) : null}
+                    {batch.error_count > 0 ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleRetryBatchErrors(batch.batch_id)}
+                      >
+                        Повторить только ошибочные
+                      </Button>
+                    ) : null}
+                    {(batch.pending_count > 0 || batch.processing_count > 0) ? (
+                      <Button
+                        variant="outline"
+                        className="text-red-700"
+                        onClick={() => handlePauseNetworkBatch(batch.batch_id)}
+                      >
+                        Остановить batch
                       </Button>
                     ) : null}
                   </div>
@@ -713,9 +835,128 @@ export const ParsingManagement: React.FC = () => {
                   <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
                     {batch.last_error_short || 'Последняя ошибка не зафиксирована. Если запуск встал, откройте задачи ниже для точечной диагностики.'}
                   </div>
+                  {expandedBatchId === batch.batch_id ? (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">Детали запуска</div>
+                          <div className="text-xs text-muted-foreground">
+                            Таймлайн состояния и проблемных точек внутри batch.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {getBatchTasks(batch.batch_id)
+                          .slice()
+                          .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+                          .slice(0, 12)
+                          .map((task) => (
+                            <div key={task.id} className="flex gap-3 rounded-lg border border-border bg-background px-3 py-3">
+                              <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
+                              <div className="flex-1 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                                  <span>
+                                    {task.status === 'completed' ? 'Задача завершена' :
+                                      task.status === 'processing' ? 'Задача в работе' :
+                                      task.status === 'pending' ? 'Задача в очереди' :
+                                      task.status === 'captcha' ? 'Задача ждёт CAPTCHA' :
+                                      task.status === 'paused' ? 'Задача поставлена на паузу' :
+                                      'Задача завершилась ошибкой'}
+                                  </span>
+                                  {typeof task.batch_seq === 'number' ? <span className="text-muted-foreground">• точка {task.batch_seq}</span> : null}
+                                  {getStatusBadge(task.status)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {new Date(task.updated_at || task.created_at).toLocaleString('ru-RU')}
+                                </div>
+                                <div className="text-xs text-muted-foreground break-all">
+                                  {task.url || task.business_name || task.business_id || task.id}
+                                </div>
+                                {task.short_error_message ? (
+                                  <div className="text-sm text-foreground">{task.short_error_message}</div>
+                                ) : null}
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  <Button size="sm" variant="outline" onClick={() => setSelectedTask(task)}>
+                                    Детали задачи
+                                  </Button>
+                                  {task.can_open_captcha ? (
+                                    <Button size="sm" variant="outline" onClick={() => handleOpenCaptcha(task)}>
+                                      Открыть CAPTCHA
+                                    </Button>
+                                  ) : null}
+                                  {task.can_restart_task ? (
+                                    <Button size="sm" variant="outline" onClick={() => handleRestart(task.id)}>
+                                      Перезапустить
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {getBatchTasks(batch.batch_id).length > 12 ? (
+                          <div className="text-xs text-muted-foreground">
+                            Показаны последние 12 событий batch. Полный список задач остаётся в техтаблице ниже.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {stats && (stats.captcha_queue || []).length > 0 && (
+        <Card className="border-orange-200 bg-orange-50/40">
+          <CardHeader>
+            <CardTitle>CAPTCHA</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Отдельная human-in-the-loop очередь. Сначала откройте CAPTCHA, затем подтвердите продолжение парсинга.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(stats.captcha_queue || []).map((captchaTask) => {
+              const linkedTask = tasks.find((task) => task.id === captchaTask.task_id);
+              return (
+                <div key={captchaTask.task_id} className="rounded-xl border border-orange-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-foreground">
+                          {captchaTask.business_name || `Задача ${captchaTask.task_id.slice(0, 8)}`}
+                        </div>
+                        <Badge variant="outline" className={captchaTask.is_expired ? 'bg-red-50 text-red-800 border-red-200' : 'bg-orange-50 text-orange-800 border-orange-200'}>
+                          {captchaTask.is_expired ? 'Сессия истекла' : (captchaTask.resume_requested ? 'Ожидает продолжения' : 'Нужна CAPTCHA')}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-foreground">
+                        {captchaTask.short_error_message || 'Пройдите CAPTCHA и подтвердите продолжение парсинга.'}
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <div>task_id: <span className="font-mono">{captchaTask.task_id}</span></div>
+                        {captchaTask.captcha_session_id ? <div>session: <span className="font-mono break-all">{captchaTask.captcha_session_id}</span></div> : null}
+                        {captchaTask.retry_after ? <div>retry_after: {new Date(captchaTask.retry_after).toLocaleString('ru-RU')}</div> : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {linkedTask ? (
+                        <Button variant="outline" className="border-orange-300 text-orange-900 hover:bg-orange-100" onClick={() => handleOpenCaptcha(linkedTask)}>
+                          Открыть CAPTCHA
+                        </Button>
+                      ) : null}
+                      <Button variant="outline" onClick={() => handleResumeCaptcha(captchaTask.task_id)}>
+                        Продолжить
+                      </Button>
+                      <Button variant="outline" className="text-red-700" onClick={() => handleExpireCaptcha(captchaTask.task_id)}>
+                        Сбросить сессию
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -726,6 +967,11 @@ export const ParsingManagement: React.FC = () => {
           <CardTitle>{t.dashboard.parsing.filters.title}</CardTitle>
         </CardHeader>
         <CardContent>
+          {onlyActionRequired ? (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Режим “Только требует действия” скрывает спокойные batch и обычные задачи, чтобы оператор видел только проблемные точки.
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">{t.dashboard.parsing.filters.status}</label>
@@ -776,19 +1022,47 @@ export const ParsingManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Список задач */}
+      {viewMode === 'operator' && !showRawTasks ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Технический список задач</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Скрыт по умолчанию, чтобы не перегружать операторский режим. Откройте его только для точечной диагностики.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => setShowRawTasks(true)}>
+              Показать техтаблицу
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isRawTableVisible ? (
       <Card>
         <CardHeader>
-          <CardTitle>{t.dashboard.parsing.table.title}</CardTitle>
+          <CardTitle>{viewMode === 'technical' ? `${t.dashboard.parsing.table.title} (тех. режим)` : `${t.dashboard.parsing.table.title} (сырой список)`}</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Показано: {tasks.length} из {tasksTotal || tasks.length}
+            {viewMode === 'technical'
+              ? 'Полный список задач и технических статусов для диагностики.'
+              : 'Это нижний технический слой. Для повседневной работы используйте блоки выше: сетевые запуски и CAPTCHA.'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Показано: {filteredTasks.length} из {tasksTotal || tasks.length}
             {tasksTotal > TASKS_FETCH_LIMIT ? ` (лимит экрана ${TASKS_FETCH_LIMIT})` : ''}
           </p>
+          {viewMode === 'operator' ? (
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => setShowRawTasks(false)}>
+                Скрыть техтаблицу
+              </Button>
+            </div>
+          ) : null}
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">{t.dashboard.parsing.table.loading}</div>
-          ) : tasks.length === 0 ? (
+          ) : filteredTasks.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">{t.dashboard.parsing.table.noTasks}</div>
           ) : (
             <div className="overflow-x-auto">
@@ -807,7 +1081,7 @@ export const ParsingManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-card divide-y divide-border">
-                  {tasks.map((task) => (
+                  {filteredTasks.map((task) => (
                     <tr key={task.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm font-mono text-foreground">
                         <div className="flex items-center gap-2 group">
@@ -912,6 +1186,14 @@ export const ParsingManagement: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedTask(task)}
+                            title="Открыть детали задачи"
+                          >
+                            Детали
+                          </Button>
                           {((task.can_restart_task ?? (task.status === 'error' || task.status === 'captcha' || task.status === 'paused')) ||
                             (task.status === 'processing' && stats?.stuck_tasks.some(st => st.id === task.id))) && (
                               <Button
@@ -986,6 +1268,83 @@ export const ParsingManagement: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      ) : null}
+
+      <Sheet open={!!selectedTask} onOpenChange={(open) => { if (!open) setSelectedTask(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+          <SheetHeader>
+            <SheetTitle>Детали задачи парсинга</SheetTitle>
+            <SheetDescription>
+              Техническая карточка задачи для диагностики без перегруза основной таблицы.
+            </SheetDescription>
+          </SheetHeader>
+          {selectedTask ? (
+            <div className="mt-6 space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Task ID</div>
+                  <div className="font-mono break-all text-sm text-foreground">{selectedTask.id}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Статус</div>
+                  <div className="mt-1">{getStatusBadge(selectedTask.status)}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Бизнес</div>
+                  <div className="text-sm text-foreground">{selectedTask.business_name || selectedTask.business_id || '—'}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Тип / источник</div>
+                  <div className="text-sm text-foreground">{getTaskTypeLabel(selectedTask.task_type)} • {selectedTask.source || '—'}</div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Batch</div>
+                  <div className="text-sm text-foreground break-all">
+                    {selectedTask.batch_id || '—'}
+                    {typeof selectedTask.batch_seq === 'number' ? ` • seq ${selectedTask.batch_seq}` : ''}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <div className="text-xs text-muted-foreground">Время</div>
+                  <div className="text-sm text-foreground">
+                    {new Date(selectedTask.created_at).toLocaleString('ru-RU')}
+                    {selectedTask.updated_at ? ` • обновлено ${new Date(selectedTask.updated_at).toLocaleString('ru-RU')}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">URL</div>
+                <div className="mt-1 break-all text-sm text-foreground">{selectedTask.url || '—'}</div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">Краткий диагноз</div>
+                <div className="mt-1 text-sm text-foreground">{selectedTask.short_error_message || '—'}</div>
+                {selectedTask.short_error_code ? (
+                  <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{selectedTask.short_error_code}</div>
+                ) : null}
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">Полная ошибка</div>
+                <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-foreground">{selectedTask.error_message || '—'}</pre>
+              </div>
+
+              {selectedTask.status === 'captcha' ? (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <div className="text-xs text-orange-800">CAPTCHA</div>
+                  <div className="mt-1 space-y-1 text-sm text-orange-900">
+                    <div>session: {selectedTask.captcha_session_id || '—'}</div>
+                    <div>resume_requested: {selectedTask.resume_requested ? 'yes' : 'no'}</div>
+                    <div>retry_after: {selectedTask.retry_after ? new Date(selectedTask.retry_after).toLocaleString('ru-RU') : '—'}</div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
