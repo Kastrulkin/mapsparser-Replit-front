@@ -134,6 +134,7 @@ export const ParsingManagement: React.FC = () => {
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
   const [showRawTasks, setShowRawTasks] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ParsingTask | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [onlyActionRequired, setOnlyActionRequired] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
@@ -535,6 +536,9 @@ export const ParsingManagement: React.FC = () => {
   };
 
   const getBatchTasks = (batchId: string) => tasks.filter((task) => task.batch_id === batchId);
+  const selectedBatch = selectedBatchId
+    ? (stats?.network_batches || []).find((batch) => batch.batch_id === selectedBatchId) || null
+    : null;
   const isRawTableVisible = viewMode === 'technical' || showRawTasks;
   const filteredTasks = onlyActionRequired
     ? tasks.filter((task) => task.status === 'error' || task.status === 'captcha' || task.status === 'paused' || Boolean(task.can_resume_batch) || Boolean(task.can_open_captcha))
@@ -755,6 +759,12 @@ export const ParsingManagement: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedBatchId(batch.batch_id)}
+                    >
+                      Сводка batch
+                    </Button>
                     <Button
                       variant="ghost"
                       className="text-foreground"
@@ -1341,6 +1351,200 @@ export const ParsingManagement: React.FC = () => {
                   </div>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!selectedBatch} onOpenChange={(open) => { if (!open) setSelectedBatchId(null); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+          <SheetHeader>
+            <SheetTitle>Сводка сетевого batch</SheetTitle>
+            <SheetDescription>
+              Полная карточка запуска: статус, причина остановки, прогресс и batch-level действия.
+            </SheetDescription>
+          </SheetHeader>
+          {selectedBatch ? (
+            <div className="mt-6 space-y-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {selectedBatch.business_name || `Batch ${selectedBatch.batch_id.slice(0, 8)}`}
+                    </div>
+                    {getBatchStatusBadge(selectedBatch.status, selectedBatch.status_label)}
+                  </div>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <div className="font-mono break-all">batch_id: {selectedBatch.batch_id}</div>
+                    <div>Источник: {selectedBatch.source || 'не указан'}</div>
+                    {selectedBatch.last_activity_at ? (
+                      <div>Последняя активность: {new Date(selectedBatch.last_activity_at).toLocaleString('ru-RU')}</div>
+                    ) : null}
+                    {selectedBatch.paused_reason ? (
+                      <div>Причина паузы: {selectedBatch.paused_reason === 'manual_pause' ? 'остановлен вручную' : selectedBatch.paused_reason}</div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedBatch.resume_available ? (
+                    <Button
+                      variant="outline"
+                      className="border-amber-300 text-amber-900 hover:bg-amber-50"
+                      onClick={() => handleResumeNetworkBatch(selectedBatch.batch_id)}
+                    >
+                      Возобновить с места сбоя
+                    </Button>
+                  ) : null}
+                  {selectedBatch.error_count > 0 ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRetryBatchErrors(selectedBatch.batch_id)}
+                    >
+                      Повторить только ошибочные
+                    </Button>
+                  ) : null}
+                  {(selectedBatch.pending_count > 0 || selectedBatch.processing_count > 0) ? (
+                    <Button
+                      variant="outline"
+                      className="text-red-700"
+                      onClick={() => handlePauseNetworkBatch(selectedBatch.batch_id)}
+                    >
+                      Остановить batch
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-border p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Прогресс: {selectedBatch.completed_count}/{selectedBatch.tasks_count}
+                    {typeof selectedBatch.current_seq === 'number' ? ` • текущая точка ${selectedBatch.current_seq}` : ''}
+                    {typeof selectedBatch.first_failed_seq === 'number' ? ` • первый сбой на ${selectedBatch.first_failed_seq}` : ''}
+                  </span>
+                  <span className="font-medium text-foreground">{selectedBatch.progress_percent}%</span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${Math.max(0, Math.min(100, selectedBatch.progress_percent))}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">Завершено</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.completed_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">В очереди</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.pending_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">В работе</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.processing_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">Пауза</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.paused_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">CAPTCHA</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.captcha_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/50 px-3 py-3">
+                  <div className="text-xs text-muted-foreground">Ошибки</div>
+                  <div className="font-semibold text-foreground">{selectedBatch.error_count}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-4">
+                  <div className="text-sm font-semibold text-foreground">Причина и рекомендации</div>
+                  <div className="mt-3 space-y-2 text-sm text-foreground">
+                    <div>
+                      <span className="text-muted-foreground">Последняя причина: </span>
+                      {selectedBatch.last_error_short || 'не зафиксирована'}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Код: </span>
+                      {selectedBatch.last_error_code || '—'}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Что делать: </span>
+                      {selectedBatch.captcha_count > 0
+                        ? 'Открыть CAPTCHA, пройти её и затем нажать продолжение.'
+                        : selectedBatch.resume_available
+                          ? 'После исправления причины используйте возобновление с места сбоя.'
+                          : 'Запуск не требует ручного вмешательства.'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border p-4">
+                  <div className="text-sm font-semibold text-foreground">Доступные действия</div>
+                  <div className="mt-3 space-y-2 text-sm text-foreground">
+                    <div>1. Возобновить с места сбоя</div>
+                    <div>2. Повторить только ошибочные задачи</div>
+                    <div>3. Остановить batch без убийства уже идущей задачи</div>
+                    <div>4. Открыть конкретные задачи и перейти в их тех. карточки</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="mb-3 text-sm font-semibold text-foreground">Последние события batch</div>
+                <div className="space-y-2">
+                  {getBatchTasks(selectedBatch.batch_id)
+                    .slice()
+                    .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+                    .slice(0, 20)
+                    .map((task) => (
+                      <div key={task.id} className="flex gap-3 rounded-lg border border-border bg-background px-3 py-3">
+                        <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                            <span>
+                              {task.status === 'completed' ? 'Задача завершена' :
+                                task.status === 'processing' ? 'Задача в работе' :
+                                task.status === 'pending' ? 'Задача в очереди' :
+                                task.status === 'captcha' ? 'Задача ждёт CAPTCHA' :
+                                task.status === 'paused' ? 'Задача поставлена на паузу' :
+                                'Задача завершилась ошибкой'}
+                            </span>
+                            {typeof task.batch_seq === 'number' ? <span className="text-muted-foreground">• точка {task.batch_seq}</span> : null}
+                            {getStatusBadge(task.status)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(task.updated_at || task.created_at).toLocaleString('ru-RU')}
+                          </div>
+                          <div className="text-xs text-muted-foreground break-all">
+                            {task.url || task.business_name || task.business_id || task.id}
+                          </div>
+                          {task.short_error_message ? (
+                            <div className="text-sm text-foreground">{task.short_error_message}</div>
+                          ) : null}
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <Button size="sm" variant="outline" onClick={() => setSelectedTask(task)}>
+                              Детали задачи
+                            </Button>
+                            {task.can_open_captcha ? (
+                              <Button size="sm" variant="outline" onClick={() => handleOpenCaptcha(task)}>
+                                Открыть CAPTCHA
+                              </Button>
+                            ) : null}
+                            {task.can_restart_task ? (
+                              <Button size="sm" variant="outline" onClick={() => handleRestart(task.id)}>
+                                Перезапустить
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
             </div>
           ) : null}
         </SheetContent>
