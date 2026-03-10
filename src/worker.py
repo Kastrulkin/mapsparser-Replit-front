@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import signal
 import sys
 import multiprocessing
+import asyncio
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
@@ -111,6 +112,19 @@ def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dic
         )
 
 
+def _is_playwright_sync_in_async_error(message: str) -> bool:
+    msg = (message or "").strip().lower()
+    return "playwright sync api inside the asyncio loop" in msg
+
+
+def _has_running_asyncio_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
+
+
 def _parse_yandex_card_with_playwright_fallback(
     url: str,
     *,
@@ -126,7 +140,21 @@ def _parse_yandex_card_with_playwright_fallback(
     Если sync Playwright падает из-за активного asyncio loop, повторяем парсинг
     в отдельном процессе. Для subprocess fallback не паркуем живую CAPTCHA-сессию.
     """
+    force_subprocess = False
+    # В процессе с активным asyncio loop sync Playwright нестабилен.
+    # Для устойчивости сразу идем через subprocess fallback.
+    if _has_running_asyncio_loop():
+        force_subprocess = True
+        if keep_open_on_captcha:
+            # parked session нельзя перенести между процессами.
+            # Деградируем в fresh retry flow без сессии.
+            keep_open_on_captcha = False
+            session_registry = None
+            session_id = None
+
     try:
+        if force_subprocess:
+            raise RuntimeError("Playwright Sync API inside the asyncio loop (pre-detected)")
         return parse_yandex_card(
             url,
             keep_open_on_captcha=keep_open_on_captcha,
@@ -136,7 +164,7 @@ def _parse_yandex_card_with_playwright_fallback(
         )
     except Exception as exc:
         msg = str(exc)
-        if "Playwright Sync API inside the asyncio loop" not in msg:
+        if not _is_playwright_sync_in_async_error(msg):
             raise
 
         if session_id:
@@ -1680,7 +1708,7 @@ def process_queue():
                         print("[CRITICAL] Нет источников для title_or_name", flush=True)
         except Exception as e:
             msg = str(e)
-            if "Playwright Sync API inside the asyncio loop" in msg:
+            if _is_playwright_sync_in_async_error(msg):
                 # Специальный кейс: крэш Playwright Sync внутри asyncio loop.
                 # Пишем exception.txt в bundle (если можно) и помечаем задачу как error.
                 bundle_path = None

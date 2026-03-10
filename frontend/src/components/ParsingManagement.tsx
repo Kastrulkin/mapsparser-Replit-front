@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
-import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash } from 'lucide-react';
+import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash, X } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -122,6 +121,49 @@ interface ParsingStats {
     paused_reason?: string;
   }>;
 }
+
+interface SidePanelProps {
+  open: boolean;
+  title: string;
+  description: string;
+  widthClassName?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const SidePanel: React.FC<SidePanelProps> = ({
+  open,
+  title,
+  description,
+  widthClassName = 'sm:max-w-2xl',
+  onClose,
+  children,
+}) => {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        aria-label="Закрыть панель"
+        className="absolute inset-0 bg-black/60"
+        onClick={onClose}
+      />
+      <div className={`absolute right-0 top-0 h-full w-full overflow-y-auto border-l border-border bg-background p-6 shadow-xl ${widthClassName}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Закрыть">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
 
 export const ParsingManagement: React.FC = () => {
   const { t } = useLanguage();
@@ -1365,14 +1407,12 @@ export const ParsingManagement: React.FC = () => {
       </Card>
       ) : null}
 
-      <Sheet open={!!selectedTask} onOpenChange={(open) => { if (!open) setSelectedTask(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-          <SheetHeader>
-            <SheetTitle>Детали задачи парсинга</SheetTitle>
-            <SheetDescription>
-              Техническая карточка задачи для диагностики без перегруза основной таблицы.
-            </SheetDescription>
-          </SheetHeader>
+      <SidePanel
+        open={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        title="Детали задачи парсинга"
+        description="Техническая карточка задачи для диагностики без перегруза основной таблицы."
+      >
           {selectedTask ? (
             <div className="mt-6 space-y-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1438,17 +1478,15 @@ export const ParsingManagement: React.FC = () => {
               ) : null}
             </div>
           ) : null}
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
 
-      <Sheet open={!!selectedBatch} onOpenChange={(open) => { if (!open) setSelectedBatchId(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>Сводка сетевого batch</SheetTitle>
-            <SheetDescription>
-              Полная карточка запуска: статус, причина остановки, прогресс и batch-level действия.
-            </SheetDescription>
-          </SheetHeader>
+      <SidePanel
+        open={!!selectedBatch}
+        onClose={() => setSelectedBatchId(null)}
+        title="Сводка сетевого batch"
+        description="Полная карточка запуска: статус, причина остановки, прогресс и batch-level действия."
+        widthClassName="sm:max-w-3xl"
+      >
           {selectedBatch ? (
             <div className="mt-6 space-y-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1642,8 +1680,7 @@ export const ParsingManagement: React.FC = () => {
               </div>
             </div>
           ) : null}
-        </SheetContent>
-      </Sheet>
+      </SidePanel>
     </div>
   );
 };

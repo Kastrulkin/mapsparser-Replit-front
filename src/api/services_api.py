@@ -39,6 +39,45 @@ def _keywords_to_jsonb_payload(raw_keywords):
 
     return json.dumps([], ensure_ascii=False)
 
+
+def _normalize_parsed_service_category(service_dict):
+    """Sanitize broken parsed categories like `category == name` for flat map payloads."""
+    if not isinstance(service_dict, dict):
+        return
+
+    source = str(service_dict.get('source') or '').strip().lower()
+    if source not in {'yandex_maps', 'yandex_business'}:
+        return
+
+    category = str(service_dict.get('category') or '').strip()
+    name = str(service_dict.get('name') or '').strip()
+    if not category or not name or category != name:
+        return
+
+    raw_obj = service_dict.get('raw')
+    if isinstance(raw_obj, str):
+        try:
+            raw_obj = json.loads(raw_obj)
+        except Exception:
+            raw_obj = None
+
+    raw_category = None
+    if isinstance(raw_obj, dict):
+        raw_category = (
+            raw_obj.get('category')
+            or raw_obj.get('category_name')
+            or raw_obj.get('categoryName')
+            or raw_obj.get('group')
+            or raw_obj.get('group_name')
+            or raw_obj.get('groupName')
+            or raw_obj.get('section')
+            or raw_obj.get('section_name')
+            or raw_obj.get('sectionName')
+        )
+
+    if raw_category in (None, ''):
+        service_dict['category'] = 'Общие услуги'
+
 @services_bp.route('/api/services/add', methods=['POST', 'OPTIONS'])
 def add_service():
     """Добавить услугу"""
@@ -235,6 +274,7 @@ def get_services():
                 service_dict = dict(service)
             else:
                 service_dict = dict(zip(col_names, service)) if col_names else {}
+            _normalize_parsed_service_category(service_dict)
             # Нормализация NULL
             for k in list(service_dict.keys()):
                 if service_dict[k] is None and k in ('description', 'category', 'name', 'price', 'keywords'):

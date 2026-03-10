@@ -55,6 +55,48 @@ def _safe_fromisoformat(value):
         return None
 
 
+def _get_business_subscription_columns(cursor) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'businesses'
+          AND column_name IN ('subscription_tier', 'subscription_status', 'trial_ends_at', 'subscription_ends_at', 'stripe_subscription_id')
+        """
+    )
+    rows = cursor.fetchall() or []
+    columns = set()
+    for row in rows:
+        if hasattr(row, 'keys'):
+            columns.add(str(row.get('column_name') or '').strip())
+        elif row:
+            columns.add(str(row[0] or '').strip())
+    return columns
+
+
+def _fetch_business_subscription_row(cursor, business_id: str):
+    columns = _get_business_subscription_columns(cursor)
+    select_parts = [
+        "b.subscription_tier" if 'subscription_tier' in columns else "'trial' AS subscription_tier",
+        "b.subscription_status" if 'subscription_status' in columns else "'inactive' AS subscription_status",
+        "b.trial_ends_at" if 'trial_ends_at' in columns else "NULL AS trial_ends_at",
+        "b.subscription_ends_at" if 'subscription_ends_at' in columns else "NULL AS subscription_ends_at",
+        "b.stripe_subscription_id" if 'stripe_subscription_id' in columns else "NULL AS stripe_subscription_id",
+        "u.email AS owner_email",
+    ]
+    cursor.execute(
+        f"""
+        SELECT {', '.join(select_parts)}
+        FROM businesses b
+        JOIN users u ON b.owner_id = u.id
+        WHERE b.id = %s
+        """,
+        (business_id,),
+    )
+    return cursor.fetchone()
+
+
 def get_subscription_access(business_id: str) -> dict:
     """
     Возвращает нормализованную информацию о доступе.
@@ -67,16 +109,7 @@ def get_subscription_access(business_id: str) -> dict:
     cursor = db.conn.cursor()
 
     try:
-        cursor.execute(
-            """
-            SELECT b.subscription_tier, b.subscription_status, b.trial_ends_at, b.subscription_ends_at, u.email
-            FROM Businesses b
-            JOIN Users u ON b.owner_id = u.id
-            WHERE b.id = %s
-            """,
-            (business_id,),
-        )
-        result = cursor.fetchone()
+        result = _fetch_business_subscription_row(cursor, business_id)
         if not result:
             return {
                 'exists': False,
@@ -85,11 +118,18 @@ def get_subscription_access(business_id: str) -> dict:
                 'reason': 'Бизнес не найден.',
             }
 
-        tier = _normalize_tier(result[0])
-        status = _normalize_status(result[1])
-        trial_ends_at = _safe_fromisoformat(result[2])
-        subscription_ends_at = _safe_fromisoformat(result[3])
-        owner_email = result[4]
+        if hasattr(result, 'keys'):
+            tier = _normalize_tier(result.get('subscription_tier'))
+            status = _normalize_status(result.get('subscription_status'))
+            trial_ends_at = _safe_fromisoformat(result.get('trial_ends_at'))
+            subscription_ends_at = _safe_fromisoformat(result.get('subscription_ends_at'))
+            owner_email = result.get('owner_email')
+        else:
+            tier = _normalize_tier(result[0])
+            status = _normalize_status(result[1])
+            trial_ends_at = _safe_fromisoformat(result[2])
+            subscription_ends_at = _safe_fromisoformat(result[3])
+            owner_email = result[5]
 
         is_superadmin = owner_email == SUPERADMIN_EMAIL
         now = datetime.now()
@@ -166,25 +206,29 @@ def get_subscription_info(business_id: str) -> dict:
     cursor = db.conn.cursor()
 
     try:
-        cursor.execute(
-            """
-            SELECT subscription_tier, subscription_status, trial_ends_at, subscription_ends_at, stripe_subscription_id
-            FROM Businesses
-            WHERE id = %s
-            """,
-            (business_id,),
-        )
-        result = cursor.fetchone()
+        result = _fetch_business_subscription_row(cursor, business_id)
         if not result:
             return {}
 
         access = get_subscription_access(business_id)
+        if hasattr(result, 'keys'):
+            tier = result.get('subscription_tier')
+            status = result.get('subscription_status')
+            trial_ends_at = result.get('trial_ends_at')
+            subscription_ends_at = result.get('subscription_ends_at')
+            subscription_id = result.get('stripe_subscription_id')
+        else:
+            tier = result[0]
+            status = result[1]
+            trial_ends_at = result[2]
+            subscription_ends_at = result[3]
+            subscription_id = result[4]
         return {
-            'tier': _normalize_tier(result[0]),
-            'status': _normalize_status(result[1]),
-            'trial_ends_at': result[2],
-            'subscription_ends_at': result[3],
-            'subscription_id': result[4],
+            'tier': _normalize_tier(tier),
+            'status': _normalize_status(status),
+            'trial_ends_at': trial_ends_at,
+            'subscription_ends_at': subscription_ends_at,
+            'subscription_id': subscription_id,
             'trial_expired': access.get('trial_expired', False),
             'automation_access': access.get('automation_access', False),
             'manual_access': access.get('manual_access', False),
