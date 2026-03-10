@@ -7,6 +7,7 @@ import traceback
 from datetime import datetime, timedelta
 import signal
 import sys
+import multiprocessing
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
@@ -85,6 +86,96 @@ _EDITORIAL_SERVICE_PATTERNS = (
     "петергоф",
     "пушкинской карте",
 )
+
+
+def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dict[str, Any]) -> None:
+    """Изолированный запуск sync Playwright в отдельном процессе."""
+    try:
+        from parser_config import parse_yandex_card as subprocess_parse_yandex_card
+
+        result = subprocess_parse_yandex_card(url, **kwargs)
+        if result is None:
+            result_queue.put({"error": "parser_returned_none", "url": url})
+        elif not isinstance(result, dict):
+            result_queue.put({"error": f"parser_returned_{type(result).__name__}", "url": url})
+        else:
+            result_queue.put(result)
+    except Exception as exc:
+        result_queue.put(
+            {
+                "error": "parser_subprocess_exception",
+                "message": str(exc),
+                "traceback": traceback.format_exc(),
+                "url": url,
+            }
+        )
+
+
+def _parse_yandex_card_with_playwright_fallback(
+    url: str,
+    *,
+    keep_open_on_captcha: bool,
+    session_registry: Optional[Dict[str, BrowserSession]] = None,
+    session_id: Optional[str] = None,
+    timeout_sec: int = 600,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Основной вызов парсера.
+
+    Если sync Playwright падает из-за активного asyncio loop, повторяем парсинг
+    в отдельном процессе. Для subprocess fallback не паркуем живую CAPTCHA-сессию.
+    """
+    try:
+        return parse_yandex_card(
+            url,
+            keep_open_on_captcha=keep_open_on_captcha,
+            session_registry=session_registry,
+            session_id=session_id,
+            **kwargs,
+        )
+    except Exception as exc:
+        msg = str(exc)
+        if "Playwright Sync API inside the asyncio loop" not in msg:
+            raise
+
+        if session_id:
+            # Resume по существующей parked session должен выполняться в обычном path.
+            # Если сюда дошли — это уже другой сбой, подменять path нельзя.
+            raise
+
+        subprocess_kwargs = dict(kwargs)
+        ctx = multiprocessing.get_context("fork")
+        result_queue = ctx.Queue(maxsize=1)
+        proc = ctx.Process(
+            target=_parse_yandex_card_subprocess_entry,
+            args=(result_queue, url, subprocess_kwargs),
+            daemon=True,
+        )
+        proc.start()
+        proc.join(timeout_sec)
+
+        if proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=5)
+            return {
+                "error": "parser_subprocess_timeout",
+                "message": f"parse_yandex_card subprocess timeout after {timeout_sec}s",
+                "url": url,
+            }
+
+        if result_queue.empty():
+            return {
+                "error": "parser_subprocess_no_result",
+                "message": "parse_yandex_card subprocess finished without payload",
+                "url": url,
+            }
+
+        result = result_queue.get()
+        if isinstance(result, dict):
+            result.setdefault("_playwright_fallback", "subprocess")
+            return result
+        return {"error": "parser_subprocess_invalid_result", "url": url}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -868,10 +959,10 @@ def _handle_worker_error(queue_id: str, error_msg: str):
                             updated_at = CURRENT_TIMESTAMP
                         WHERE batch_id = %s
                           AND batch_kind = 'network_sync'
-                          AND status IN (%s, %s)
+                          AND status IN (%s)
                           AND id <> %s
                         """,
-                        (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, STATUS_CAPTCHA, queue_id),
+                        (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, queue_id),
                     )
         except Exception as pause_ex:
             print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
@@ -1339,14 +1430,21 @@ def process_queue():
             return
 
         # 2) Resume по запросу оператора
-        if resume_requested and captcha_session_id and url:
+        if resume_requested and url:
             print(f"▶️ RESUME CAPTCHA для задачи {task_id}, session_id={captcha_session_id}")
-            card_data = parse_yandex_card(
-                url,
-                keep_open_on_captcha=False,
-                session_registry=ACTIVE_CAPTCHA_SESSIONS,
-                session_id=str(captcha_session_id),
-            )
+            if captcha_session_id:
+                card_data = _parse_yandex_card_with_playwright_fallback(
+                    url,
+                    keep_open_on_captcha=False,
+                    session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                    session_id=str(captcha_session_id),
+                )
+            else:
+                # Для старых/упрощённых CAPTCHA-задач без parked session даём fresh retry.
+                card_data = _parse_yandex_card_with_playwright_fallback(
+                    url,
+                    keep_open_on_captcha=False,
+                )
 
             if card_data.get("error") == "captcha_session_lost":
                 print(f"⚠️ CAPTCHA session lost для задачи {task_id}")
@@ -1529,7 +1627,7 @@ def process_queue():
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
         try:
-            card_data = parse_yandex_card(
+            card_data = _parse_yandex_card_with_playwright_fallback(
                 url,
                 keep_open_on_captcha=True,
                 session_registry=ACTIVE_CAPTCHA_SESSIONS,
@@ -1603,21 +1701,7 @@ def process_queue():
                     err_msg = f"{err_msg} bundle={bundle_path}"
 
                 try:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        UPDATE parsequeue
-                        SET status = %s,
-                            error_message = %s,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                        """,
-                        (STATUS_ERROR, err_msg, queue_dict["id"]),
-                    )
-                    conn.commit()
-                    cursor.close()
-                    conn.close()
+                    _handle_worker_error(queue_dict["id"], err_msg)
                 except Exception as db_ex:
                     print(f"❌ Не удалось обновить parsequeue для playwright-sync ошибки: {db_ex}")
                 return

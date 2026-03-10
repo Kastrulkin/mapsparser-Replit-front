@@ -987,6 +987,8 @@ def get_parsing_tasks():
                 continue
             task_dict.setdefault("task_type", "parse_card")
             task_dict["status"] = normalize_status(task_dict.get("status"))
+            if task_dict["status"] == STATUS_PAUSED and (task_dict.get("captcha_url") or task_dict.get("captcha_session_id")):
+                task_dict["status"] = STATUS_CAPTCHA
             task_dict["business_name"] = (task_dict.get("business_name") or "").strip() or None
             short_error_code, short_error_message = _classify_parsing_error(
                 task_dict.get("error_message"),
@@ -1687,12 +1689,19 @@ def get_parsing_stats():
                     MAX(COALESCE(pq.business_id::text, '')) AS business_id,
                     MAX(COALESCE(pq.paused_reason, '')) AS paused_reason,
                     MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS paused_cnt,
+                    COUNT(*) FILTER (
+                        WHERE pq.status = %s
+                          AND pq.captcha_url IS NULL
+                          AND pq.captcha_session_id IS NULL
+                    ) AS paused_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS captcha_cnt,
+                    COUNT(*) FILTER (
+                        WHERE pq.status = %s
+                           OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
+                    ) AS captcha_cnt,
                     MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
                     MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
                     MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
@@ -1712,6 +1721,7 @@ def get_parsing_stats():
                     STATUS_PENDING,
                     STATUS_PROCESSING,
                     STATUS_CAPTCHA,
+                    STATUS_PAUSED,
                     STATUS_ERROR,
                     STATUS_PAUSED,
                     STATUS_CAPTCHA,
@@ -1805,12 +1815,19 @@ def get_parsing_stats():
                     MAX(COALESCE(pq.source, '')) AS source,
                     MAX(COALESCE(pq.business_id::text, '')) AS business_id,
                     MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS paused_cnt,
+                    COUNT(*) FILTER (
+                        WHERE pq.status = %s
+                          AND pq.captcha_url IS NULL
+                          AND pq.captcha_session_id IS NULL
+                    ) AS paused_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
                     COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS captcha_cnt,
+                    COUNT(*) FILTER (
+                        WHERE pq.status = %s
+                           OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
+                    ) AS captcha_cnt,
                     MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
                     MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
                     MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
@@ -1831,6 +1848,7 @@ def get_parsing_stats():
                     STATUS_PENDING,
                     STATUS_PROCESSING,
                     STATUS_CAPTCHA,
+                    STATUS_PAUSED,
                     STATUS_ERROR,
                     STATUS_PAUSED,
                     STATUS_CAPTCHA,
@@ -1885,10 +1903,11 @@ def get_parsing_stats():
             FROM parsequeue pq
             LEFT JOIN businesses b ON b.id = pq.business_id
             WHERE pq.status = %s
+               OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
             ORDER BY COALESCE(pq.retry_after, pq.updated_at, pq.created_at) ASC
             LIMIT 20
             """,
-            (STATUS_CAPTCHA,),
+            (STATUS_CAPTCHA, STATUS_PAUSED),
         )
         for row in cursor.fetchall():
             rd = _row_to_dict(cursor, row)
