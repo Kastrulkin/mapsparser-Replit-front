@@ -119,5 +119,32 @@ services:
         condition: service_healthy
     command: ["python", "src/worker.py"]
 
+  telegram-bot:
+    image: seo-app-app
+    environment:
+      DEBUG_DIR: /app/debug_data
+      DATABASE_URL: postgresql://${POSTGRES_USER:-local}:${POSTGRES_PASSWORD:-local}@postgres:5432/${POSTGRES_DB:-local}
+      FLASK_APP: src.main:app
+      POSTGRES_USER: ${POSTGRES_USER:-local}
+      POSTGRES_DB: ${POSTGRES_DB:-local}
+      PYTHONPATH: /app:/app/src
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      API_BASE_URL: ${API_BASE_URL:-http://app:8000}
+      OPENCLAW_LOCALOS_TOKEN: ${OPENCLAW_LOCALOS_TOKEN:-}
+      OPENCLAW_CALLBACK_SIGNING_SECRET: ${OPENCLAW_CALLBACK_SIGNING_SECRET:-${OPENCLAW_LOCALOS_TOKEN:-}}
+      OPENCLAW_SUPERADMIN_TELEGRAM_IDS: ${OPENCLAW_SUPERADMIN_TELEGRAM_IDS:-}
+      OPENCLAW_SANDBOX_BRIDGE_URL: ${OPENCLAW_SANDBOX_BRIDGE_URL:-}
+      OPENCLAW_SANDBOX_BRIDGE_TOKEN: ${OPENCLAW_SANDBOX_BRIDGE_TOKEN:-}
+    volumes:
+      - ./debug_data:/app/debug_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    entrypoint:
+      - python
+      - src/localos_owner_bot.py
+
 volumes:
   pgdata:

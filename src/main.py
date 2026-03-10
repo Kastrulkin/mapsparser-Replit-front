@@ -47,6 +47,7 @@ from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
 from messengers_api import messengers_bp
 from chatgpt_search_api import chatgpt_search_bp
+from subscription_manager import get_automation_block_message, has_paid_automation_access
 from stripe_integration import stripe_bp
 from yookassa_integration import billing_bp
 from admin_moderation import admin_moderation_bp
@@ -851,6 +852,21 @@ def _count_from_row(cursor, row):
     return int(list(rd.values())[0]) if rd else 0
 
 
+def _has_captcha_artifacts(task_row: dict | None) -> bool:
+    if not task_row:
+        return False
+    return bool(task_row.get("captcha_url") or task_row.get("captcha_session_id"))
+
+
+def _is_task_in_captcha_state(task_row: dict | None) -> bool:
+    if not task_row:
+        return False
+    status_norm = normalize_status(task_row.get("status"))
+    if status_norm == STATUS_CAPTCHA:
+        return True
+    return status_norm == STATUS_PAUSED and _has_captcha_artifacts(task_row)
+
+
 def _classify_parsing_error(error_message: str | None, status: str | None = None) -> tuple[str | None, str | None]:
     raw = str(error_message or "").strip()
     status_norm = normalize_status(status)
@@ -1175,6 +1191,137 @@ def resume_network_parsing_batch(batch_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/admin/parsing/network-batches/<string:batch_id>/skip-failed', methods=['POST'])
+def skip_failed_network_parsing_batch_item(batch_id):
+    """Оставить текущую проблемную точку в error и продолжить batch со следующей."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cursor.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
+        required = {"batch_id", "batch_kind", "batch_seq", "paused_reason"}
+        if not required.issubset(parsequeue_columns):
+            db.close()
+            return jsonify({"success": False, "error": "Schema not ready for network batch skip"}), 409
+
+        cursor.execute(
+            """
+            SELECT
+                MIN(batch_seq) FILTER (WHERE status = 'error') AS first_error_seq,
+                MIN(batch_seq) FILTER (WHERE status = %s) AS first_paused_seq,
+                COUNT(*) FILTER (WHERE status = 'error') AS error_count,
+                COUNT(*) FILTER (WHERE status = %s) AS paused_count
+            FROM parsequeue
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+            """,
+            (STATUS_PAUSED, STATUS_PAUSED, batch_id),
+        )
+        state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
+        error_count = int(state_row.get("error_count") or 0)
+        paused_count = int(state_row.get("paused_count") or 0)
+        failed_seq = state_row.get("first_error_seq") or state_row.get("first_paused_seq")
+
+        if failed_seq is None or (error_count <= 0 and paused_count <= 0):
+            db.close()
+            return jsonify({"success": False, "error": "Для batch нет точки, которую можно пропустить"}), 404
+
+        failed_seq = int(failed_seq)
+        next_seq = failed_seq + 1
+
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = 'error',
+                paused_reason = 'skipped_by_admin',
+                resume_requested = 0,
+                retry_after = NULL,
+                captcha_required = 0,
+                captcha_url = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_status = NULL,
+                updated_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN error_message IS NULL OR error_message = '' THEN 'skipped by admin; point left in error'
+                    ELSE error_message || '; skipped by admin; point left in error'
+                END
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND COALESCE(batch_seq, 0) = %s
+              AND status = %s
+            """,
+            (batch_id, failed_seq, STATUS_PAUSED),
+        )
+        skipped_from_paused = int(cursor.rowcount or 0)
+
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = 'pending',
+                retry_after = NULL,
+                resume_requested = 0,
+                captcha_required = 0,
+                captcha_url = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_status = NULL,
+                paused_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN paused_reason = 'manual_pause' THEN error_message
+                    WHEN error_message ILIKE '%%skipped by admin%%' THEN error_message
+                    ELSE error_message
+                END
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status IN (%s, 'error')
+              AND COALESCE(batch_seq, 0) >= %s
+            """,
+            (batch_id, STATUS_PAUSED, next_seq),
+        )
+        resumed_count = int(cursor.rowcount or 0)
+        db.conn.commit()
+        db.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Проблемная точка {failed_seq} пропущена. Возобновлено задач: {resumed_count}",
+                "batch_id": batch_id,
+                "skipped_seq": failed_seq,
+                "start_seq": next_seq,
+                "skipped_from_paused": skipped_from_paused,
+                "resumed_count": resumed_count,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка skip-failed для сетевого batch {batch_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/admin/parsing/network-batches/<string:batch_id>/pause', methods=['POST'])
 def pause_network_parsing_batch(batch_id):
     """Поставить сетевой batch на паузу, не трогая уже обрабатываемую задачу."""
@@ -1309,7 +1456,7 @@ def open_parsing_task_captcha(task_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT id, status, business_id, captcha_url, captcha_session_id, retry_after, resume_requested
+            SELECT id, status, business_id, url, captcha_url, captcha_session_id, retry_after, resume_requested
             FROM parsequeue
             WHERE id = %s
             LIMIT 1
@@ -1320,16 +1467,17 @@ def open_parsing_task_captcha(task_id):
 
         if not task_row:
             return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if normalize_status(task_row.get("status")) != "captcha":
+        if not _is_task_in_captcha_state(task_row):
             return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
-        if not task_row.get("captcha_url"):
+        captcha_url = task_row.get("captcha_url") or task_row.get("url")
+        if not captcha_url:
             return jsonify({"success": False, "error": "У задачи нет captcha_url"}), 400
 
         return jsonify({
             "success": True,
             "task_id": task_row.get("id"),
             "business_id": task_row.get("business_id"),
-            "captcha_url": task_row.get("captcha_url"),
+            "captcha_url": captcha_url,
             "captcha_session_id": task_row.get("captcha_session_id"),
             "retry_after": task_row.get("retry_after"),
             "resume_requested": bool(task_row.get("resume_requested")),
@@ -1372,7 +1520,7 @@ def resume_parsing_task_captcha(task_id):
         if not task_row:
             db.close()
             return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if normalize_status(task_row.get("status")) != "captcha":
+        if not _is_task_in_captcha_state(task_row):
             db.close()
             return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
         if not task_row.get("captcha_session_id"):
@@ -1455,7 +1603,7 @@ def expire_parsing_task_captcha(task_id):
         if not task_row:
             db.close()
             return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if normalize_status(task_row.get("status")) != "captcha":
+        if not _is_task_in_captcha_state(task_row):
             db.close()
             return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
 
@@ -8408,6 +8556,8 @@ def services_optimize():
         if not requested_business_id:
             requested_business_id = request.args.get('business_id')
         business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
+        if not has_paid_automation_access(business_id):
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
         business_industry = ""
         business_type_value = ""
         try:
@@ -9406,6 +9556,8 @@ def news_generate():
             user_data['user_id'],
             data.get('business_id') or request.args.get('business_id')
         )
+        if not has_paid_automation_access(business_id):
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
 
         db = DatabaseManager()
         cur = db.conn.cursor()
@@ -10062,6 +10214,11 @@ def reviews_reply():
         language_name = language_names.get(language, 'Russian')
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
+
+        requested_business_id = data.get('business_id') or request.args.get('business_id')
+        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
+        if not has_paid_automation_access(business_id):
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
 
         # Подтянем примеры ответов пользователя (до 5)
         # Сначала проверяем, переданы ли примеры в запросе
@@ -11787,6 +11944,11 @@ def optimize_pricelist():
         user_data = verify_session(token)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
+
+        requested_business_id = request.form.get('business_id') or request.args.get('business_id')
+        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
+        if not has_paid_automation_access(business_id):
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
         
         # Проверяем наличие файла
         if 'file' not in request.files:
@@ -16018,6 +16180,84 @@ def set_promo_tier(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка установки промо тарифа: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/networks/<network_id>/promo', methods=['POST'])
+def set_network_promo_tier(network_id):
+    """Установить/отключить промо тариф для всех точек сети (только для суперадмина)"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Доступ запрещён"}), 403
+
+        data = request.get_json(silent=True) or {}
+        is_promo = data.get('is_promo', True)
+
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, name FROM networks WHERE id = %s", (network_id,))
+        network = cursor.fetchone()
+        if not network:
+            db.close()
+            return jsonify({"error": "Сеть не найдена"}), 404
+
+        cursor.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+
+        if 'subscription_tier' not in columns:
+            cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_tier TEXT DEFAULT 'trial'")
+        if 'subscription_status' not in columns:
+            cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_status TEXT DEFAULT 'active'")
+
+        if is_promo:
+            cursor.execute(
+                """
+                UPDATE Businesses
+                SET subscription_tier = 'promo',
+                    subscription_status = 'active',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE network_id = %s
+                """,
+                (network_id,),
+            )
+            message = "Промо тариф установлен для всей сети"
+        else:
+            cursor.execute(
+                """
+                UPDATE Businesses
+                SET subscription_tier = 'trial',
+                    subscription_status = 'inactive',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE network_id = %s
+                """,
+                (network_id,),
+            )
+            message = "Промо тариф отключен для всей сети"
+
+        updated_count = cursor.rowcount
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "message": message, "updated_count": updated_count})
+    except Exception as e:
+        print(f"❌ Ошибка установки промо тарифа для сети: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

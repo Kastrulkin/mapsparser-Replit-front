@@ -37,7 +37,7 @@ def create_app():
         limiter = None
     
     # Регистрируем Blueprint'ы
-    from chatgpt_api import chatgpt_bp
+    from messengers_api import messengers_bp
     from chatgpt_search_api import chatgpt_search_bp
     from stripe_integration import stripe_bp
     from yookassa_integration import billing_bp
@@ -47,7 +47,7 @@ def create_app():
     from ai_agents_api import ai_agents_api_bp
     from chats_api import chats_bp
     
-    app.register_blueprint(chatgpt_bp)
+    app.register_blueprint(messengers_bp)
     app.register_blueprint(chatgpt_search_bp)
     app.register_blueprint(stripe_bp)
     app.register_blueprint(billing_bp)

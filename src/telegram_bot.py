@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Telegram-бот для управления аккаунтом BeautyBot
+Telegram-бот для управления аккаунтом LocalOS
 Функционал:
 - Привязка аккаунта через токен
 - Добавление транзакций (фото/текст)
@@ -1875,9 +1875,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not db_user_id:
         await update.message.reply_text(
-            "👋 Привет! Для использования бота нужно связать ваш Telegram-аккаунт с аккаунтом на сайте.\n\n"
-            "📱 Перейдите в личный кабинет на сайте и найдите раздел 'Telegram-бот' для получения кода привязки.\n\n"
-            "Или отправьте команду:\n/start <ваш_код_привязки>"
+            "👋 Это бот LocalOS для управления бизнесом и ИИ-функциями.\n\n"
+            "Чтобы начать:\n"
+            "1) В LocalOS откройте Настройки → Интеграции.\n"
+            "2) Сгенерируйте код привязки Telegram владельца.\n"
+            "3) Отправьте сюда команду:\n/start <код_привязки>\n\n"
+            "После привязки вы сможете получать уведомления и управлять действиями LocalOS."
         )
         return
     
@@ -3104,7 +3107,12 @@ async def handle_setting_text(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
     help_text = """
-🤖 *BeautyBot Telegram-бот*
+🤖 *LocalOS Telegram-бот*
+
+Этот бот нужен для:
+- управления возможностями LocalOS из Telegram,
+- подтверждения спорных действий (approval loop),
+- получения уведомлений по бизнесу.
 
 *Команды:*
 /start - Главное меню
@@ -3124,6 +3132,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /reject_action - Отклонить action по ID
 /support_export - Отправить support snapshot суперадмину
 /recovery_report - Выполнить recovery callback-очереди
+
+*Подключение:*
+1. В LocalOS откройте *Настройки → Интеграции*.
+2. Сгенерируйте код привязки владельца.
+3. Отправьте `/start <код>`.
+4. Для общения с клиентами подключите *токен Telegram-бота бизнеса* в том же разделе.
 
 *Функции:*
 💰 Добавление транзакций (фото/текст)

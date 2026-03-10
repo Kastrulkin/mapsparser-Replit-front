@@ -28,11 +28,14 @@ import ReviewReplyAssistant from "@/components/ReviewReplyAssistant";
 import NewsGenerator from "@/components/NewsGenerator";
 import SEOKeywordsTab from "@/components/SEOKeywordsTab";
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
   const { user, currentBusinessId, currentBusiness } = context || {};
   const { t, language } = useLanguage();
+  const automationAccess = getAutomationAccessForBusiness(currentBusiness);
+  const automationLockedMessage = automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.';
 
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
@@ -488,6 +491,12 @@ export const CardOverviewPage = () => {
     serviceId: string,
     options?: { silent?: boolean }
   ): Promise<'ok' | 'rate_limited' | 'error'> => {
+    if (!automationAccess.automationAllowed) {
+      if (!options?.silent) {
+        setError(automationLockedMessage);
+      }
+      return 'error';
+    }
     const service = userServices.find(s => s.id === serviceId);
     if (!service) return 'error';
 
@@ -580,6 +589,10 @@ export const CardOverviewPage = () => {
 
   const optimizeAllServices = async () => {
     if (!userServices.length) return;
+    if (!automationAccess.automationAllowed) {
+      setError(automationLockedMessage);
+      return;
+    }
     setOptimizingAll(true);
     setError(null);
     setSuccess(null);
@@ -1116,21 +1129,28 @@ export const CardOverviewPage = () => {
                       <Button
                         variant="outline"
                         onClick={optimizeAllServices}
-                        disabled={optimizingAll || optimizingServiceId !== null}
+                        disabled={!automationAccess.automationAllowed || optimizingAll || optimizingServiceId !== null}
                         className="bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0"
+                        title={!automationAccess.automationAllowed ? automationLockedMessage : t.dashboard.card.optimizeAll}
                       >
                         <Wand2 className="w-4 h-4 mr-2" />
                         {optimizingAll ? 'Оптимизируем…' : t.dashboard.card.optimizeAll}
                       </Button>
                     )}
                   </div>
-                  <ServiceOptimizer
-                    businessName={currentBusiness?.name}
-                    businessId={currentBusinessId}
-                    language={language === 'ru' ? 'ru' : 'en'}
-                    hideTextInput={true}
-                    onServicesImported={loadUserServices}
-                  />
+                  {!automationAccess.automationAllowed ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      {automationLockedMessage}
+                    </div>
+                  ) : (
+                    <ServiceOptimizer
+                      businessName={currentBusiness?.name}
+                      businessId={currentBusinessId}
+                      language={language === 'ru' ? 'ru' : 'en'}
+                      hideTextInput={true}
+                      onServicesImported={loadUserServices}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1397,9 +1417,9 @@ export const CardOverviewPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => optimizeService(service.id)}
-                                  disabled={optimizingServiceId === service.id}
+                                  disabled={!automationAccess.automationAllowed || optimizingServiceId === service.id}
                                   className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                                  title={t.dashboard.card.optimize}
+                                  title={!automationAccess.automationAllowed ? automationLockedMessage : t.dashboard.card.optimize}
                                 >
                                   {optimizingServiceId === service.id ? (
                                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
@@ -1440,18 +1460,30 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="reviews">
-            <ReviewReplyAssistant
-              businessName={currentBusiness?.name}
-              selectedSource={selectedSource}
-            />
+            {!automationAccess.automationAllowed ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {automationLockedMessage}
+              </div>
+            ) : (
+              <ReviewReplyAssistant
+                businessName={currentBusiness?.name}
+                selectedSource={selectedSource}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="news">
-            <NewsGenerator
-              services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
-              businessId={currentBusinessId}
-              externalPosts={externalPosts.filter(p => selectedSource === 'all' || (p.source && p.source.toLowerCase().includes(selectedSource)))}
-            />
+            {!automationAccess.automationAllowed ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {automationLockedMessage}
+              </div>
+            ) : (
+              <NewsGenerator
+                services={(userServices || []).map(s => ({ id: s.id, name: s.name }))}
+                businessId={currentBusinessId}
+                externalPosts={externalPosts.filter(p => selectedSource === 'all' || (p.source && p.source.toLowerCase().includes(selectedSource)))}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="keywords">

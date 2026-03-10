@@ -9,6 +9,7 @@ API endpoints для ChatGPT интеграции
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import verify_session, create_session
+from subscription_manager import get_automation_block_message, has_paid_automation_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
     encode_telegram_bot_token,
@@ -18,7 +19,7 @@ import uuid
 import json
 from datetime import datetime, timedelta
 
-chatgpt_bp = Blueprint('chatgpt', __name__)
+messengers_bp = Blueprint('messengers', __name__)
 
 
 def _row_get(row, key, index=0, default=None):
@@ -40,7 +41,7 @@ def require_auth():
     user_data = verify_session(token)
     return user_data
 
-@chatgpt_bp.route('/api/auth/register-with-business', methods=['POST'])
+@messengers_bp.route('/api/auth/register-with-business', methods=['POST'])
 def register_with_business():
     """Регистрация пользователя с автоматическим созданием бизнеса"""
     try:
@@ -146,7 +147,7 @@ def register_with_business():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-@chatgpt_bp.route('/api/business/profile', methods=['PUT'])
+@messengers_bp.route('/api/business/profile', methods=['PUT'])
 def update_business_profile():
     """Обновление профиля бизнеса"""
     try:
@@ -175,7 +176,27 @@ def update_business_profile():
         if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        automation_fields = {
+            'ai_agent_enabled',
+            'ai_agent_id',
+            'ai_agent_language',
+            'ai_agent_restrictions',
+            'ai_agent_tone',
+            'ai_agents_config',
+        }
+        if any(field in data for field in automation_fields) and not has_paid_automation_access(business_id):
+            db.close()
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
         
+        # Собираем схему Businesses, чтобы безопасно обновлять только существующие поля
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+        """)
+        business_columns = {(_row_get(r, 'column_name', 0) or '').lower() for r in (cursor.fetchall() or [])}
+
         # Обновляем поля
         update_fields = []
         update_values = []
@@ -267,7 +288,12 @@ def update_business_profile():
             update_values.append(data['ai_agent_language'])
         
         # Multi-agent configuration (new format)
-        if 'ai_agents_config' in data:
+        if 'ai_agents_config' in data and 'ai_agents_config' not in business_columns:
+            cursor.execute("ALTER TABLE Businesses ADD COLUMN IF NOT EXISTS ai_agents_config TEXT")
+            db.conn.commit()
+            business_columns.add('ai_agents_config')
+
+        if 'ai_agents_config' in data and 'ai_agents_config' in business_columns:
             update_fields.append('ai_agents_config = %s')
             update_values.append(data['ai_agents_config'])
         
@@ -295,7 +321,7 @@ def update_business_profile():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-@chatgpt_bp.route('/api/business/telegram/connect', methods=['POST'])
+@messengers_bp.route('/api/business/telegram/connect', methods=['POST'])
 def connect_telegram():
     """Подключение Telegram бота"""
     try:
@@ -342,7 +368,7 @@ def connect_telegram():
         return jsonify({"error": str(e)}), 500
 
 
-@chatgpt_bp.route('/api/business/telegram-bot/status', methods=['GET'])
+@messengers_bp.route('/api/business/telegram-bot/status', methods=['GET'])
 def telegram_bot_status():
     """Проверка статуса пользовательского Telegram бота без возврата сырого токена."""
     try:
@@ -358,12 +384,20 @@ def telegram_bot_status():
         cursor = db.conn.cursor()
         cursor.execute(
             """
-            SELECT owner_id, telegram_bot_token, telegram_chat_id
-            FROM Businesses
-            WHERE id = %s
-            """,
-            (business_id,),
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
         )
+        cols = {(_row_get(r, "column_name", 0) or "").lower() for r in (cursor.fetchall() or [])}
+        has_chat_id = "telegram_chat_id" in cols
+
+        select_sql = (
+            "SELECT owner_id, telegram_bot_token, telegram_chat_id FROM Businesses WHERE id = %s"
+            if has_chat_id
+            else "SELECT owner_id, telegram_bot_token, NULL as telegram_chat_id FROM Businesses WHERE id = %s"
+        )
+        cursor.execute(select_sql, (business_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -389,7 +423,7 @@ def telegram_bot_status():
         print(f"❌ Ошибка статуса Telegram бота: {e}")
         return jsonify({"error": str(e)}), 500
 
-@chatgpt_bp.route('/api/business/whatsapp/verify', methods=['POST'])
+@messengers_bp.route('/api/business/whatsapp/verify', methods=['POST'])
 def verify_whatsapp():
     """Верификация WhatsApp номера"""
     try:

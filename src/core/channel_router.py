@@ -181,13 +181,21 @@ def build_channel_statuses(ctx: dict | None) -> list[dict]:
             "channel_id": "telegram_owner_business_bot",
             "label": "Telegram владельца (бот бизнеса)",
             "provider": "telegram",
-            "configured": bool(telegram_bot_token and owner_telegram_id),
+            "configured": bool(telegram_bot_token),
             "testable": bool(telegram_bot_token and owner_telegram_id),
-            "status": "ready" if (telegram_bot_token and owner_telegram_id) else "not_configured",
+            "status": (
+                "ready"
+                if (telegram_bot_token and owner_telegram_id)
+                else "awaiting_owner_bind"
+                if telegram_bot_token
+                else "not_configured"
+            ),
             "detail": (
                 "Брендированный бот бизнеса может писать владельцу."
                 if (telegram_bot_token and owner_telegram_id)
-                else "Нужны telegram_bot_token бизнеса и telegram_id владельца."
+                else "Токен бота бизнеса сохранён. Для теста привяжите Telegram владельца через @LocalOspro_bot."
+                if telegram_bot_token
+                else "Нужен telegram_bot_token бизнеса."
             ),
             "target": owner_telegram_id or None,
         },

@@ -25,6 +25,9 @@ interface Business {
   created_at?: string;
   is_active?: number;
   subscription_tier?: string;
+  moderation_status?: string;
+  is_lead_business?: boolean;
+  entity_group?: 'lead' | 'company';
 }
 
 interface Network {
@@ -45,6 +48,22 @@ interface UserWithBusinesses {
   direct_businesses: Business[];
   networks: Network[];
 }
+
+interface BusinessListItem {
+  id: string;
+  name: string;
+  type: 'direct' | 'network';
+  networkId?: string;
+  networkName?: string;
+  business: Business;
+}
+
+const LEAD_OUTREACH_STATUS = 'lead_outreach';
+
+const isLeadBusiness = (business?: Business | null) =>
+  business?.is_lead_business === true ||
+  String(business?.entity_group || '').trim().toLowerCase() === 'lead' ||
+  String(business?.moderation_status || '').trim().toLowerCase() === LEAD_OUTREACH_STATUS;
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -395,6 +414,29 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const handleNetworkPromo = async (networkId: string, networkName: string, isPromo: boolean) => {
+    try {
+      const data = await newAuth.makeRequest(`/admin/networks/${networkId}/promo`, {
+        method: 'POST',
+        body: JSON.stringify({ is_promo: !isPromo }),
+      });
+
+      if (data.success) {
+        toast({
+          title: 'Успешно',
+          description: !isPromo ? 'Промо тариф установлен для всей сети' : 'Промо тариф отключен для всей сети',
+        });
+        loadUsers();
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || `Не удалось изменить промо тариф для сети "${networkName}"`,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCreateSuccess = () => {
     loadUsers();
   };
@@ -516,7 +558,7 @@ export const AdminPage: React.FC = () => {
                 </Card>
               ) : (
                 users.map((user) => {
-                  const allBusinesses: Array<{ id: string; name: string; type: 'direct' | 'network'; networkId?: string; networkName?: string; business: Business }> = [];
+                  const allBusinesses: BusinessListItem[] = [];
 
                   // Добавляем прямые бизнесы (включая заблокированные)
                   const directBusinesses = user.direct_businesses || [];
@@ -547,6 +589,106 @@ export const AdminPage: React.FC = () => {
                       });
                     }
                   });
+
+                  const regularBusinesses = allBusinesses.filter((item) => !isLeadBusiness(item.business));
+                  const leadBusinesses = allBusinesses.filter((item) => isLeadBusiness(item.business));
+
+                  const renderBusinessItems = (items: BusinessListItem[]) => items.map((item, index) => (
+                    <div
+                      key={`${item.id}-${index}`}
+                      className="group relative"
+                    >
+                      {item.type === 'network' ? (
+                        <div className="space-y-3">
+                          {(() => {
+                            const networkBusinesses = user.networks.find(n => n.id === item.networkId)?.businesses || [];
+                            const allPromo = networkBusinesses.length > 0 && networkBusinesses.every((business) => business.subscription_tier === 'promo');
+                            return (
+                              <div
+                                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                onClick={() => toggleNetwork(item.networkId!)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 rounded-lg bg-primary/10">
+                                    <Network className="w-4 h-4 text-primary" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="font-semibold text-foreground">{item.networkName}</h4>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleNetworkPromo(item.networkId!, item.networkName!, allPromo)}
+                                        className={`h-7 px-2.5 text-xs ${allPromo ? 'text-primary bg-primary/10 hover:bg-primary/15' : 'text-muted-foreground bg-background/80 hover:bg-background'}`}
+                                        title={allPromo ? 'Отключить Промо для сети' : 'Включить Промо для сети'}
+                                      >
+                                        <Gift className="w-3.5 h-3.5 mr-1.5" />
+                                        {allPromo ? 'Промо сеть' : 'Промо'}
+                                      </Button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    {expandedNetworks.has(item.networkId!) ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {expandedNetworks.has(item.networkId!) && (
+                            <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
+                              {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
+                                <BusinessCard
+                                  key={business.id}
+                                  business={business}
+                                  onSettingsClick={() => setSettingsModal({
+                                    isOpen: true,
+                                    businessId: business.id,
+                                    businessName: business.name,
+                                  })}
+                                  onPromoClick={() => {
+                                    const isPromo = business.subscription_tier === 'promo';
+                                    handlePromo(business.id, business.name, isPromo);
+                                  }}
+                                  onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
+                                  onDeleteClick={() => handleDelete(business.id, business.name)}
+                                  onClick={() => handleBusinessClick(business.id)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <BusinessCard
+                          business={item.business}
+                          onSettingsClick={() => setSettingsModal({
+                            isOpen: true,
+                            businessId: item.business.id,
+                            businessName: item.name,
+                          })}
+                          onPromoClick={() => {
+                            const isPromo = item.business.subscription_tier === 'promo';
+                            handlePromo(item.business.id, item.name, isPromo);
+                          }}
+                          onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
+                          onDeleteClick={() => handleDelete(item.business.id, item.name)}
+                          onClick={() => handleBusinessClick(item.business.id)}
+                        />
+                      )}
+                    </div>
+                  ));
 
                   return (
                     <Card
@@ -617,82 +759,20 @@ export const AdminPage: React.FC = () => {
                       </CardHeader>
                       <CardContent className="pt-6">
                         <div className="space-y-4">
-                          {allBusinesses.map((item, index) => (
-                            <div
-                              key={`${item.id}-${index}`}
-                              className="group relative"
-                            >
-                              {item.type === 'network' ? (
-                                <div className="space-y-3">
-                                  <div
-                                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                                    onClick={() => toggleNetwork(item.networkId!)}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className="p-2 rounded-lg bg-primary/10">
-                                        <Network className="w-4 h-4 text-primary" />
-                                      </div>
-                                      <div>
-                                        <h4 className="font-semibold text-foreground">{item.networkName}</h4>
-                                        <p className="text-xs text-muted-foreground">
-                                          {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      {expandedNetworks.has(item.networkId!) ? (
-                                        <ChevronDown className="h-4 w-4" />
-                                      ) : (
-                                        <ChevronRight className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </div>
-                                  {expandedNetworks.has(item.networkId!) && (
-                                    <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
-                                      {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
-                                        <BusinessCard
-                                          key={business.id}
-                                          business={business}
-                                          onSettingsClick={() => setSettingsModal({
-                                            isOpen: true,
-                                            businessId: business.id,
-                                            businessName: business.name,
-                                          })}
-                                          onPromoClick={() => {
-                                            const isPromo = business.subscription_tier === 'promo';
-                                            handlePromo(business.id, business.name, isPromo);
-                                          }}
-                                          onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
-                                          onDeleteClick={() => handleDelete(business.id, business.name)}
-                                          onClick={() => handleBusinessClick(business.id)}
-                                        />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <BusinessCard
-                                  business={item.business}
-                                  onSettingsClick={() => setSettingsModal({
-                                    isOpen: true,
-                                    businessId: item.business.id,
-                                    businessName: item.name,
-                                  })}
-                                  onPromoClick={() => {
-                                    const isPromo = item.business.subscription_tier === 'promo';
-                                    handlePromo(item.business.id, item.name, isPromo);
-                                  }}
-                                  onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
-                                  onDeleteClick={() => handleDelete(item.business.id, item.name)}
-                                  onClick={() => handleBusinessClick(item.business.id)}
-                                />
-                              )}
+                          {regularBusinesses.length > 0 && renderBusinessItems(regularBusinesses)}
+
+                          {leadBusinesses.length > 0 && (
+                            <div className="space-y-3 pt-2">
+                              <div className="flex items-center gap-2 px-1">
+                                <div className="h-px flex-1 bg-border/70" />
+                                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
+                                  Лиды
+                                </span>
+                                <div className="h-px flex-1 bg-border/70" />
+                              </div>
+                              {renderBusinessItems(leadBusinesses)}
                             </div>
-                          ))}
+                          )}
                         </div>
                       </CardContent>
                     </Card>

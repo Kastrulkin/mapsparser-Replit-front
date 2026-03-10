@@ -136,15 +136,13 @@ export const ParsingManagement: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<ParsingTask | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [onlyActionRequired, setOnlyActionRequired] = useState(false);
+  const [pendingCaptchaResumeTaskId, setPendingCaptchaResumeTaskId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     status: '',
     task_type: '',
     source: ''
   });
   const { toast } = useToast();
-
-
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -194,9 +192,78 @@ export const ParsingManagement: React.FC = () => {
     }
   }, [filters.status, filters.task_type, filters.source]);
 
+  const resumeCaptchaTask = useCallback(async (
+    taskId: string,
+    options?: { confirmFirst?: boolean; silent?: boolean; successDescription?: string }
+  ) => {
+    if (!taskId) return false;
+
+    if (options?.confirmFirst && !confirm('Подтвердите, что капча уже пройдена, и запросите продолжение парсинга.')) {
+      return false;
+    }
+
+    const token = await newAuth.getToken();
+    if (!token) return false;
+
+    const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/resume`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Ошибка продолжения после капчи');
+    }
+
+    if (!options?.silent) {
+      toast({
+        title: t.common.success,
+        description: options?.successDescription || data.message || 'Продолжение парсинга запрошено',
+      });
+    }
+
+    await loadData();
+    return true;
+  }, [loadData, t.common.success, toast]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!pendingCaptchaResumeTaskId) return;
+
+    let cancelled = false;
+    const tryAutoResume = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      const taskId = pendingCaptchaResumeTaskId;
+      setPendingCaptchaResumeTaskId(null);
+      try {
+        await resumeCaptchaTask(taskId, {
+          silent: false,
+          successDescription: 'Возврат из CAPTCHA зафиксирован. Продолжение парсинга запрошено автоматически.',
+        });
+      } catch (e: any) {
+        toast({
+          title: t.common.error,
+          description: e.message || 'Не удалось автоматически продолжить парсинг после CAPTCHA',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    const handleFocus = () => { void tryAutoResume(); };
+    const handleVisibility = () => { void tryAutoResume(); };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [pendingCaptchaResumeTaskId, resumeCaptchaTask, t.common.error, toast]);
 
   // Aliases for backward compatibility
   const loadTasks = loadData;
@@ -317,12 +384,13 @@ export const ParsingManagement: React.FC = () => {
 
       const url = data.captcha_url || task.captcha_url || task.url;
       if (url) {
+        setPendingCaptchaResumeTaskId(task.id);
         window.open(url, '_blank', 'noopener,noreferrer');
       }
 
       toast({
         title: t.common.success,
-        description: data.message || 'CAPTCHA открыта. Пройдите её и нажмите Продолжить.',
+        description: data.message || 'CAPTCHA открыта. После возврата в админку продолжение запустится автоматически.',
       });
 
       await loadData();
@@ -345,28 +413,8 @@ export const ParsingManagement: React.FC = () => {
       return;
     }
 
-    if (!confirm('Подтвердите, что капча уже пройдена, и запросите продолжение парсинга.')) return;
-
     try {
-      const token = await newAuth.getToken();
-      if (!token) return;
-
-      const res = await fetch(`/api/admin/parsing/tasks/${taskId}/captcha/resume`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Ошибка продолжения после капчи');
-      }
-
-      toast({
-        title: t.common.success,
-        description: data.message || 'Продолжение парсинга запрошено',
-      });
-
-      await loadData();
+      await resumeCaptchaTask(taskId, { confirmFirst: true });
     } catch (e: any) {
       toast({
         title: t.common.error,
@@ -482,6 +530,34 @@ export const ParsingManagement: React.FC = () => {
       toast({
         title: t.common.error,
         description: e.message || 'Не удалось вернуть ошибочные задачи в очередь',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSkipFailedBatchItem = async (batchId?: string) => {
+    if (!batchId) return;
+    if (!confirm('Пропустить проблемную точку и продолжить batch со следующей? Эта точка останется в статусе ошибки.')) return;
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/admin/parsing/network-batches/${batchId}/skip-failed`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка пропуска проблемной точки');
+      }
+      toast({
+        title: t.common.success,
+        description: data.message || 'Проблемная точка пропущена, batch продолжен',
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось пропустить проблемную точку',
         variant: 'destructive',
       });
     }
@@ -779,6 +855,15 @@ export const ParsingManagement: React.FC = () => {
                         onClick={() => handleResumeNetworkBatch(batch.batch_id)}
                       >
                         Возобновить с места сбоя
+                      </Button>
+                    ) : null}
+                    {batch.error_count > 0 || batch.paused_count > 0 || batch.captcha_count > 0 ? (
+                      <Button
+                        variant="outline"
+                        className="border-slate-300 text-slate-900 hover:bg-slate-50"
+                        onClick={() => handleSkipFailedBatchItem(batch.batch_id)}
+                      >
+                        Пропустить точку
                       </Button>
                     ) : null}
                     {batch.error_count > 0 ? (
@@ -1395,6 +1480,15 @@ export const ParsingManagement: React.FC = () => {
                       Возобновить с места сбоя
                     </Button>
                   ) : null}
+                  {selectedBatch.error_count > 0 || selectedBatch.paused_count > 0 || selectedBatch.captcha_count > 0 ? (
+                    <Button
+                      variant="outline"
+                      className="border-slate-300 text-slate-900 hover:bg-slate-50"
+                      onClick={() => handleSkipFailedBatchItem(selectedBatch.batch_id)}
+                    >
+                      Пропустить проблемную точку
+                    </Button>
+                  ) : null}
                   {selectedBatch.error_count > 0 ? (
                     <Button
                       variant="outline"
@@ -1486,9 +1580,10 @@ export const ParsingManagement: React.FC = () => {
                   <div className="text-sm font-semibold text-foreground">Доступные действия</div>
                   <div className="mt-3 space-y-2 text-sm text-foreground">
                     <div>1. Возобновить с места сбоя</div>
-                    <div>2. Повторить только ошибочные задачи</div>
-                    <div>3. Остановить batch без убийства уже идущей задачи</div>
-                    <div>4. Открыть конкретные задачи и перейти в их тех. карточки</div>
+                    <div>2. Пропустить проблемную точку и идти дальше</div>
+                    <div>3. Повторить только ошибочные задачи</div>
+                    <div>4. Остановить batch без убийства уже идущей задачи</div>
+                    <div>5. Открыть конкретные задачи и перейти в их тех. карточки</div>
                   </div>
                 </div>
               </div>

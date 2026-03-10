@@ -75,8 +75,13 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
+  const configuredCount = useMemo(
+    () => channels.filter((item) => item.configured).length,
+    [channels],
+  );
+
   const readyCount = useMemo(
-    () => channels.filter((item) => item.status === "ready").length,
+    () => channels.filter((item) => item.status === "ready" || item.status === "awaiting_owner_bind").length,
     [channels],
   );
 
@@ -199,7 +204,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                 {businessName ? `Бизнес: ${businessName}` : "Выберите бизнес"}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                Готово каналов: {readyCount} из {channels.length}
+                Подключено каналов: {configuredCount} из {channels.length} • Готово к тесту: {readyCount}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -264,6 +269,8 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                   <div className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBadgeClass(channel.status)}`}>
                     {channel.status === "ready"
                       ? "Готов"
+                      : channel.configured
+                        ? "Частично"
                       : channel.status === "verification_required"
                         ? "Нужна верификация"
                         : channel.status === "bridge_disabled"

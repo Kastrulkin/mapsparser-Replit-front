@@ -126,7 +126,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                     service_id = row[0]
                     cursor.execute("""
                         UPDATE UserServices 
-                        SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = 1
+                        SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE
                         WHERE id = %s
                     """, (price_cents, description, category_name, service_id))
                     count_updated += 1
@@ -134,7 +134,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                     service_id = str(uuid.uuid4())
                     cursor.execute("""
                         INSERT INTO UserServices (id, business_id, user_id, name, description, category, price, is_active, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 1, CURRENT_TIMESTAMP)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
                     """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
                     count_new += 1
                     

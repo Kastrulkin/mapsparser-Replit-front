@@ -742,6 +742,99 @@ def _update_lead_business_link(lead_id: str, business_id: str) -> None:
         conn.close()
 
 
+def _sync_lead_business_link_from_parse_history(lead: dict[str, Any]) -> dict[str, Any]:
+    """Ensure lead.business_id points to latest parsed business for this lead URL/org."""
+    lead_id = str(lead.get("id") or "").strip()
+    if not lead_id:
+        return lead
+
+    source_url = str(lead.get("source_url") or "").strip()
+    source_external_id = str(
+        lead.get("source_external_id")
+        or lead.get("google_id")
+        or _extract_yandex_org_id_from_url(source_url)
+        or ""
+    ).strip()
+    current_business_id = str(lead.get("business_id") or "").strip()
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'parsequeue'
+            """
+        )
+        parsequeue_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cur.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
+
+        if current_business_id:
+            cur.execute("SELECT 1 FROM businesses WHERE id = %s LIMIT 1", (current_business_id,))
+            if cur.fetchone():
+                return lead
+
+        filters: list[str] = ["pq.business_id IS NOT NULL", "pq.status IN ('completed', 'done')"]
+        params: list[Any] = []
+
+        if source_url:
+            filters.append("(pq.url = %s OR pq.url ILIKE %s)")
+            params.extend([source_url, f"%{source_external_id}%"] if source_external_id else [source_url, source_url])
+
+        if source_external_id and "url" in parsequeue_columns:
+            filters.append("pq.url ILIKE %s")
+            params.append(f"%{source_external_id}%")
+
+        if not source_url and not source_external_id:
+            return lead
+
+        where_sql = " OR ".join(f"({flt})" for flt in filters[2:]) if len(filters) > 2 else ""
+        if where_sql:
+            where_sql = f"({where_sql}) AND " + " AND ".join(filters[:2])
+        else:
+            where_sql = " AND ".join(filters)
+
+        cur.execute(
+            f"""
+            SELECT pq.business_id
+            FROM parsequeue pq
+            WHERE {where_sql}
+            ORDER BY pq.updated_at DESC NULLS LAST, pq.created_at DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        row = cur.fetchone()
+        matched_business_id = str((row.get("business_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
+        if not matched_business_id:
+            return lead
+
+        if matched_business_id == current_business_id:
+            return lead
+
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET business_id = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (matched_business_id, lead_id),
+        )
+        updated = cur.fetchone()
+        if updated:
+            conn.commit()
+            return dict(updated)
+        return lead
+    finally:
+        conn.close()
+
+
 def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | None:
     source_url = str(lead.get("source_url") or "").strip()
     source_external_id = str(
@@ -3288,6 +3381,7 @@ def preview_lead_card(lead_id):
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
 
+        lead = _sync_lead_business_link_from_parse_history(dict(lead))
         lead = _sync_lead_contacts_from_parsed_data(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:

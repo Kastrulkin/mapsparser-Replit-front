@@ -42,9 +42,16 @@ interface AIAgent {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  can_edit?: boolean;
+  is_template?: boolean;
 }
 
-export const AIAgentsManagement = () => {
+interface AIAgentsManagementProps {
+  mode?: 'admin' | 'business';
+  businessId?: string | null;
+}
+
+export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgentsManagementProps) => {
   const { t } = useLanguage();
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,16 +62,18 @@ export const AIAgentsManagement = () => {
   const [sandboxInput, setSandboxInput] = useState('');
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const { toast } = useToast();
+  const isBusinessMode = mode === 'business' && Boolean(businessId);
+  const baseApiUrl = isBusinessMode ? `/api/business/${businessId}/ai-agents/manage` : '/api/admin/ai-agents';
 
   useEffect(() => {
     loadAgents();
-  }, []);
+  }, [baseApiUrl]);
 
   const loadAgents = async () => {
     setLoading(true);
     try {
       const token = await newAuth.getToken();
-      const response = await fetch('/api/admin/ai-agents', {
+      const response = await fetch(baseApiUrl, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -202,8 +211,8 @@ export const AIAgentsManagement = () => {
       const token = await newAuth.getToken();
       const isNew = !editingAgent.id;
       const url = isNew
-        ? '/api/admin/ai-agents'
-        : `/api/admin/ai-agents/${editingAgent.id}`;
+        ? baseApiUrl
+        : `${baseApiUrl}/${editingAgent.id}`;
 
       const method = isNew ? 'POST' : 'PUT';
 
@@ -268,7 +277,10 @@ export const AIAgentsManagement = () => {
         throw new Error('Требуется авторизация');
       }
 
-      const response = await fetch(`/api/admin/ai-agents/${editingAgent.id}/test`, {
+      const testUrl = isBusinessMode
+        ? `/api/business/${businessId}/ai-agents/${editingAgent.id}/test`
+        : `/api/admin/ai-agents/${editingAgent.id}/test`;
+      const response = await fetch(testUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -310,7 +322,7 @@ export const AIAgentsManagement = () => {
 
     try {
       const token = await newAuth.getToken();
-      const response = await fetch(`/api/admin/ai-agents/${agentId}`, {
+      const response = await fetch(`${baseApiUrl}/${agentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -556,22 +568,30 @@ export const AIAgentsManagement = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEdit(agent)}
-                  className="flex-1"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Редактировать
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDelete(agent.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {agent.can_edit === false && isBusinessMode ? (
+                  <Button variant="outline" size="sm" className="flex-1" disabled>
+                    Только чтение
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(agent)}
+                      className="flex-1"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Редактировать
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(agent.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>

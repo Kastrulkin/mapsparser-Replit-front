@@ -148,6 +148,7 @@ export default function ServiceOptimizer({
     setResult(null);
     try {
       const token = localStorage.getItem('auth_token');
+      const currentBusinessId = businessId || localStorage.getItem('selectedBusinessId');
       let response: Response;
       if (mode === 'file') {
         if (!file) {
@@ -163,6 +164,7 @@ export default function ServiceOptimizer({
         if (region) formData.append('region', region);
         formData.append('description_length', String(length));
         formData.append('recognize_only', 'true');
+        if (currentBusinessId) formData.append('business_id', currentBusinessId);
         response = await fetch(`${window.location.origin}/api/services/optimize`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
@@ -182,7 +184,8 @@ export default function ServiceOptimizer({
             instructions,
             region,
             description_length: length,
-            business_name: businessName || ''
+            business_name: businessName || '',
+            business_id: currentBusinessId || undefined,
           })
         });
       }

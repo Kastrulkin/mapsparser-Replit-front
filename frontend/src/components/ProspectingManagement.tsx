@@ -368,6 +368,10 @@ export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
     const [location, setLocation] = useState('');
     const [limit, setLimit] = useState(20);
+    const [manualLeadUrl, setManualLeadUrl] = useState('');
+    const [manualLeadName, setManualLeadName] = useState('');
+    const [manualLeadCategory, setManualLeadCategory] = useState('');
+    const [manualLeadBusy, setManualLeadBusy] = useState(false);
     const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'outreach' | 'drafts' | 'queue'>('search');
     const [results, setResults] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(false);
@@ -605,6 +609,47 @@ export const ProspectingManagement: React.FC = () => {
             console.error('Error saving lead:', error);
         } finally {
             setSaving(prev => ({ ...prev, [key]: false }));
+        }
+    };
+
+    const addLeadByUrl = async () => {
+        const sourceUrl = manualLeadUrl.trim();
+        if (!sourceUrl) return;
+
+        let parsedUrl: URL | null = null;
+        try {
+            parsedUrl = new URL(sourceUrl);
+        } catch {
+            alert('Укажите корректную ссылку');
+            return;
+        }
+
+        const orgIdFromPath = sourceUrl.match(/\/org\/(?:[^/]+\/)?(\d+)/)?.[1];
+        const orgIdFromQuery = parsedUrl.searchParams.get('oid') || undefined;
+        const sourceExternalId = orgIdFromPath || orgIdFromQuery || sourceUrl;
+        const autoName = parsedUrl.hostname.replace(/^www\./, '') + (orgIdFromPath ? ` #${orgIdFromPath}` : '');
+        const payloadLead: Lead = {
+            name: manualLeadName.trim() || autoName || 'Лид из ссылки',
+            source: 'manual',
+            source_url: sourceUrl,
+            source_external_id: sourceExternalId,
+            category: manualLeadCategory.trim() || query.trim() || 'manual',
+            city: location.trim() || undefined,
+            status: 'new',
+        };
+
+        setManualLeadBusy(true);
+        try {
+            await api.post('/admin/prospecting/save', { lead: payloadLead });
+            setManualLeadUrl('');
+            setManualLeadName('');
+            setManualLeadCategory('');
+            await fetchSavedLeads();
+        } catch (error) {
+            console.error('Error saving manual lead by url:', error);
+            alert('Не удалось добавить компанию по ссылке');
+        } finally {
+            setManualLeadBusy(false);
         }
     };
 
@@ -1604,6 +1649,37 @@ export const ProspectingManagement: React.FC = () => {
                                     Запустить поиск
                                 </Button>
                             </form>
+                            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
+                                <div className="mb-2 text-sm font-medium">Добавить компанию вручную по ссылке</div>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                                    <Input
+                                        placeholder="https://yandex.ru/maps/org/..."
+                                        value={manualLeadUrl}
+                                        onChange={(e) => setManualLeadUrl(e.target.value)}
+                                        className="md:col-span-2"
+                                    />
+                                    <Input
+                                        placeholder="Название (необязательно)"
+                                        value={manualLeadName}
+                                        onChange={(e) => setManualLeadName(e.target.value)}
+                                    />
+                                    <Input
+                                        placeholder="Категория (необязательно)"
+                                        value={manualLeadCategory}
+                                        onChange={(e) => setManualLeadCategory(e.target.value)}
+                                    />
+                                </div>
+                                <div className="mt-3 flex justify-end">
+                                    <Button
+                                        type="button"
+                                        onClick={addLeadByUrl}
+                                        disabled={manualLeadBusy || !manualLeadUrl.trim()}
+                                    >
+                                        {manualLeadBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Добавить по ссылке
+                                    </Button>
+                                </div>
+                            </div>
                             {searchJob && (
                                 <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm">
                                     <div className="font-medium">

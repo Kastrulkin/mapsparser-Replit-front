@@ -145,6 +145,7 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
           review: textToGenerate,
           tone,
           business_name: businessName || '',
+          business_id: currentBusinessId,
           language,
           examples: examples.map(e => e.text) // Передаём примеры для генерации
         })

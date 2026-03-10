@@ -93,6 +93,74 @@ class DatabaseManager:
         if "waba_access_token" in payload:
             payload["waba_access_token"] = ""
         return payload
+
+    def _mark_lead_businesses(self, businesses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not businesses:
+            return businesses
+
+        business_ids = [str(item.get("id") or "").strip() for item in businesses if str(item.get("id") or "").strip()]
+        owner_ids = [str(item.get("owner_id") or "").strip() for item in businesses if str(item.get("owner_id") or "").strip()]
+        linked_lead_business_ids: set[str] = set()
+        superadmin_owner_ids: set[str] = set()
+
+        try:
+            cursor = self.conn.cursor()
+            if business_ids:
+                cursor.execute(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'prospectingleads'
+                    """
+                )
+                lead_columns = {
+                    str(row.get("column_name") if hasattr(row, "get") else row[0])
+                    for row in (cursor.fetchall() or [])
+                    if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+                }
+                if "business_id" in lead_columns:
+                    cursor.execute(
+                        """
+                        SELECT DISTINCT business_id
+                        FROM prospectingleads
+                        WHERE business_id = ANY(%s)
+                          AND business_id IS NOT NULL
+                        """,
+                        (business_ids,),
+                    )
+                    for row in cursor.fetchall() or []:
+                        business_id = str(row.get("business_id") if hasattr(row, "get") else row[0] or "").strip()
+                        if business_id:
+                            linked_lead_business_ids.add(business_id)
+
+            if owner_ids:
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM users
+                    WHERE is_superadmin = TRUE
+                      AND id = ANY(%s)
+                    """,
+                    (owner_ids,),
+                )
+                for row in cursor.fetchall() or []:
+                    owner_id = str(row.get("id") if hasattr(row, "get") else row[0] or "").strip()
+                    if owner_id:
+                        superadmin_owner_ids.add(owner_id)
+        except Exception as exc:
+            print(f"⚠️ Не удалось вычислить lead business flags: {exc}")
+
+        for business in businesses:
+            moderation_status = str(business.get("moderation_status") or "").strip().lower()
+            description = str(business.get("description") or "").strip().lower()
+            is_shadow_lead = description.startswith("lead shadow business for outreach lead")
+            business_id = str(business.get("id") or "").strip()
+            owner_id = str(business.get("owner_id") or "").strip()
+            is_superadmin_linked_lead = business_id in linked_lead_business_ids and owner_id in superadmin_owner_ids
+            is_lead = moderation_status == "lead_outreach" or is_shadow_lead or is_superadmin_linked_lead
+            business["is_lead_business"] = is_lead
+            business["entity_group"] = "lead" if is_lead else "company"
+        return businesses
     
     # ===== USERS (Пользователи) =====
     
@@ -1243,6 +1311,9 @@ class DatabaseManager:
                 all_network_businesses.append({k: row[k] for k in row.keys()})
             else:
                 all_network_businesses.append(dict(zip(nbiz_cols, row)))
+
+        self._mark_lead_businesses(all_direct_businesses)
+        self._mark_lead_businesses(all_network_businesses)
         
         # Группируем бизнесы по owner_id
         businesses_by_owner = {}
@@ -1313,6 +1384,7 @@ class DatabaseManager:
             ORDER BY b.created_at DESC
         """)
         orphan_businesses = [dict(row) for row in cursor.fetchall()]
+        self._mark_lead_businesses(orphan_businesses)
         
         # Добавляем специальную запись для бизнесов без владельцев
         if orphan_businesses:

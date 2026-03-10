@@ -4,6 +4,7 @@ API endpoints для управления ИИ агентами (только д
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from subscription_manager import get_automation_block_message, has_paid_automation_access
 import uuid
 import json
 
@@ -126,6 +127,12 @@ def _require_business_owner_or_superadmin(db: DatabaseManager, business_id: str)
         return None, jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
     return user_data, None, None
+
+
+def _ensure_business_automation_access(business_id: str):
+    if has_paid_automation_access(business_id):
+        return None
+    return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
 
 @ai_agents_api_bp.route('/api/admin/ai-agents', methods=['GET'])
 def get_ai_agents():
@@ -524,6 +531,10 @@ def create_business_ai_agent(business_id: str):
         if error_response:
             db.close()
             return error_response, error_code
+        automation_error = _ensure_business_automation_access(business_id)
+        if automation_error:
+            db.close()
+            return automation_error
 
         data = request.get_json() or {}
         name = str(data.get('name', '')).strip()
@@ -586,6 +597,10 @@ def update_business_ai_agent(business_id: str, agent_id: str):
         if error_response:
             db.close()
             return error_response, error_code
+        automation_error = _ensure_business_automation_access(business_id)
+        if automation_error:
+            db.close()
+            return automation_error
 
         cursor = db.conn.cursor()
         cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))
@@ -650,6 +665,10 @@ def delete_business_ai_agent(business_id: str, agent_id: str):
         if error_response:
             db.close()
             return error_response, error_code
+        automation_error = _ensure_business_automation_access(business_id)
+        if automation_error:
+            db.close()
+            return automation_error
 
         cursor = db.conn.cursor()
         cursor.execute("SELECT created_by FROM AIAgents WHERE id = %s", (agent_id,))

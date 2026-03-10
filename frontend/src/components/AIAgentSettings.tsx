@@ -9,6 +9,8 @@ import { Loader2, ChevronDown, ChevronUp, Bot, Zap, Circle } from 'lucide-react'
 import { useLanguage } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 import { cn } from '@/lib/utils';
+import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
+import { AIAgentsManagement } from './AIAgentsManagement';
 
 interface AIAgentSettingsProps {
   businessId: string | null;
@@ -39,6 +41,7 @@ const EMPTY_AGENT_FORM = {
 
 export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) => {
   const { language: interfaceLanguage, t } = useLanguage();
+  const automationAccess = getAutomationAccessForBusiness(business);
   const [agentsConfig, setAgentsConfig] = useState<Record<string, AgentConfig>>({});
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
@@ -338,6 +341,14 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   const activeCount = Object.values(agentsConfig).filter(c => c.enabled).length;
 
+  if (!automationAccess.automationAllowed) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+        {automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.'}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Hero Header */}
@@ -543,91 +554,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
         </Button>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Создание и редактирование агентов</h3>
-            <p className="text-sm text-gray-600">Системные шаблоны доступны для выбора. Редактируются только ваши агенты.</p>
-          </div>
-          <Button onClick={openCreateAgentForm}>Добавить агента</Button>
-        </div>
-
-        {showAgentForm && editingAgentForm && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Название</Label>
-                <Input
-                  value={editingAgentForm.name}
-                  onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Например: Агент записи (мой)"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Тип</Label>
-                <Select
-                  value={editingAgentForm.type}
-                  onValueChange={(value) => setEditingAgentForm((prev: any) => ({ ...prev, type: value }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="booking">booking</SelectItem>
-                    <SelectItem value="marketing">marketing</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Описание</Label>
-              <Input
-                value={editingAgentForm.description}
-                onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, description: e.target.value }))}
-                placeholder="Короткое описание роли агента"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Task</Label>
-              <Input
-                value={editingAgentForm.task}
-                onChange={(e) => setEditingAgentForm((prev: any) => ({ ...prev, task: e.target.value }))}
-                placeholder="Основная задача агента"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAgentForm(false)} disabled={savingAgentForm}>Отмена</Button>
-              <Button onClick={saveAgentForm} disabled={savingAgentForm}>
-                {savingAgentForm ? 'Сохранение...' : 'Сохранить агента'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {availableAgents.length === 0 && (
-            <div className="text-sm text-gray-500">Агенты не найдены.</div>
-          )}
-          {availableAgents.map((agent) => (
-            <div key={agent.id} className="rounded-lg border border-gray-200 p-3 flex items-center justify-between gap-4">
-              <div>
-                <div className="font-medium text-gray-900">{agent.name}</div>
-                <div className="text-xs text-gray-500">
-                  {agent.type} • {agent.is_template ? 'Шаблон' : 'Пользовательский'}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {agent.can_edit ? (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => openEditAgentForm(agent)}>Редактировать</Button>
-                    <Button size="sm" variant="outline" onClick={() => deleteOwnAgent(agent.id)}>Удалить</Button>
-                  </>
-                ) : (
-                  <span className="text-xs text-gray-500">Только для чтения</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <AIAgentsManagement mode="business" businessId={businessId} />
     </div>
   );
 };

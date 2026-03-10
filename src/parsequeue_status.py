@@ -7,6 +7,7 @@ STATUS_PROCESSING = "processing"
 STATUS_COMPLETED = "completed"
 STATUS_ERROR = "error"
 STATUS_CAPTCHA = "captcha"
+STATUS_PAUSED = "paused"
 
 # Все канонические статусы (для валидации/подсказок)
 STATUSES = frozenset({
@@ -15,6 +16,7 @@ STATUSES = frozenset({
     STATUS_COMPLETED,
     STATUS_ERROR,
     STATUS_CAPTCHA,
+    STATUS_PAUSED,
 })
 
 # При чтении: считаем задачу «завершённой», если статус completed или legacy done
