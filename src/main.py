@@ -6094,6 +6094,52 @@ def _service_news_fallback(service_name: str, service_description: str, language
     return f"Представляем услугу «{name}». Запишитесь и узнайте подробности у администратора."
 
 
+SOCIAL_FORMAT_LABELS = {
+    "announce": "анонс",
+    "case": "кейс",
+    "promo": "акция",
+}
+
+
+def _normalize_social_format(raw_value: str | None) -> str | None:
+    value = str(raw_value or "").strip().lower()
+    if not value:
+        return None
+    aliases = {
+        "анонс": "announce",
+        "announcement": "announce",
+        "announce": "announce",
+        "кейс": "case",
+        "case": "case",
+        "акция": "promo",
+        "promo": "promo",
+        "promotion": "promo",
+    }
+    return aliases.get(value)
+
+
+def _ensure_user_news_table(cursor) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS UserNews (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            service_id TEXT,
+            source_text TEXT,
+            generated_text TEXT NOT NULL,
+            approved INTEGER DEFAULT 0,
+            content_mode TEXT DEFAULT 'news',
+            social_format TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS content_mode TEXT DEFAULT 'news'")
+    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS social_format TEXT")
+    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+
+
 def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
     payload = envelope.get("payload") or {}
     tenant_id = str(envelope.get("tenant_id") or "").strip()
@@ -6123,23 +6169,16 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
     content_mode = str(payload.get("content_mode") or "news").strip().lower()
     if content_mode not in {"news", "social"}:
         content_mode = "news"
+    social_format = _normalize_social_format(payload.get("social_format"))
+    if content_mode == "social" and not social_format:
+        social_format = "announce"
+    if content_mode != "social":
+        social_format = None
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+        _ensure_user_news_table(cursor)
 
         service_context = ""
         selected_service_name = ""
@@ -6244,7 +6283,11 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ: {selected_seo_keyword}."
         if content_mode == "social":
-            seo_generation_hint += " Формат результата: короткий пост для соцсетей (1 абзац + CTA, без markdown/JSON)."
+            format_label = SOCIAL_FORMAT_LABELS.get(social_format or "", social_format or "пост")
+            seo_generation_hint += (
+                " Формат результата: короткий пост для соцсетей (1-2 абзаца + CTA, без markdown/JSON)."
+                f" Приоритетный формат: {format_label}."
+            )
 
         prompt_key = "news_generation"
         prompt_template = None
@@ -6290,10 +6333,10 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
         news_id = str(uuid.uuid4())
         cursor.execute(
             """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text, content_mode, social_format)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (news_id, user_data["user_id"], selected_service_id, raw_info, generated_text),
+            (news_id, user_data["user_id"], selected_service_id, raw_info, generated_text, content_mode, social_format),
         )
         db.conn.commit()
     finally:
@@ -6304,6 +6347,7 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
             "news_id": news_id,
             "generated_text": generated_text,
             "content_mode": content_mode,
+            "social_format": social_format,
         },
         "billing": {
             "total_tokens": 0,
@@ -9744,6 +9788,11 @@ def news_generate():
         content_mode = str(data.get('content_mode') or 'news').strip().lower()
         if content_mode not in {'news', 'social'}:
             content_mode = 'news'
+        social_format = _normalize_social_format(data.get("social_format"))
+        if content_mode == "social" and not social_format:
+            social_format = "announce"
+        if content_mode != "social":
+            social_format = None
 
         # Язык новости: получаем из запроса или из профиля пользователя
         requested_language = data.get('language')
@@ -9769,21 +9818,7 @@ def news_generate():
         db = DatabaseManager()
         cur = db.conn.cursor()
         # ensure table
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
-                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
-            )
-            """
-        )
+        _ensure_user_news_table(cur)
 
         service_context = ''
         selected_service_name = ''
@@ -9952,7 +9987,11 @@ def news_generate():
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ для этой новости: {selected_seo_keyword}."
         if content_mode == 'social':
-            seo_generation_hint += " Формат результата: короткий пост для соцсетей (1 абзац + CTA, без markdown/JSON)."
+            format_label = SOCIAL_FORMAT_LABELS.get(social_format or "", social_format or "пост")
+            seo_generation_hint += (
+                " Формат результата: короткий пост для соцсетей (1-2 абзаца + CTA, без markdown/JSON)."
+                f" Приоритетный формат: {format_label}."
+            )
         if use_service and selected_service_name:
             seo_generation_hint += (
                 f" Жесткое ограничение темы: новость должна быть только про услугу '{selected_service_name}'. "
@@ -10094,10 +10133,10 @@ def news_generate():
         news_id = str(uuid.uuid4())
         cur.execute(
             """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text, content_mode, social_format)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text)
+            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text, content_mode, social_format)
         )
         db.conn.commit()
         db.close()
@@ -10117,6 +10156,7 @@ def news_generate():
                     "use_seo_keywords": bool(use_seo_keywords),
                     "language": language,
                     "content_mode": content_mode,
+                    "social_format": social_format,
                 },
                 draft_text=raw_info[:1500],
                 final_text=generated_text[:2000],
@@ -10124,7 +10164,15 @@ def news_generate():
         except Exception as learning_exc:
             print(f"⚠️ news.generate learning skipped: {learning_exc}")
 
-        return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text, "content_mode": content_mode})
+        return jsonify(
+            {
+                "success": True,
+                "news_id": news_id,
+                "generated_text": generated_text,
+                "content_mode": content_mode,
+                "social_format": social_format,
+            }
+        )
     except Exception as e:
         print(f"❌ Ошибка генерации новости: {e}", flush=True)
         import traceback
@@ -10152,27 +10200,24 @@ def news_approve():
         db = DatabaseManager()
         cur = db.conn.cursor()
         # ensure table exists
+        _ensure_user_news_table(cur)
         cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
+            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
+            (news_id, user_data['user_id']),
         )
-        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         news_row = cur.fetchone()
         generated_text = ""
+        content_mode = "news"
+        social_format = None
         if news_row:
             if isinstance(news_row, (list, tuple)):
                 generated_text = str(news_row[0] or "")
+                content_mode = str(news_row[1] or "news")
+                social_format = news_row[2]
             elif hasattr(news_row, "get"):
                 generated_text = str(news_row.get("generated_text") or "")
+                content_mode = str(news_row.get("content_mode") or "news")
+                social_format = news_row.get("social_format")
 
         cur.execute("UPDATE UserNews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
@@ -10191,7 +10236,7 @@ def news_approve():
                 edited_before_accept=False,
                 draft_text=generated_text[:2000],
                 final_text=generated_text[:2000],
-                metadata={"news_id": news_id},
+                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
             )
         except Exception as learning_exc:
             print(f"⚠️ news.approve learning skipped: {learning_exc}")
@@ -10223,12 +10268,26 @@ def news_generate_accept():
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        _ensure_user_news_table(cur)
+        cur.execute(
+            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
+            (news_id, user_data['user_id']),
+        )
         row = cur.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
-        draft_text = str((row[0] if isinstance(row, (tuple, list)) else row.get("generated_text")) or "")
+        draft_text = ""
+        content_mode = "news"
+        social_format = None
+        if isinstance(row, (tuple, list)):
+            draft_text = str(row[0] or "")
+            content_mode = str(row[1] or "news")
+            social_format = row[2]
+        else:
+            draft_text = str(row.get("generated_text") or "")
+            content_mode = str(row.get("content_mode") or "news")
+            social_format = row.get("social_format")
         applied_text = final_text or draft_text
         cur.execute(
             """
@@ -10253,7 +10312,7 @@ def news_generate_accept():
                 edited_before_accept=(draft_text.strip() != applied_text.strip()),
                 draft_text=draft_text[:2000],
                 final_text=applied_text[:2000],
-                metadata={"news_id": news_id},
+                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
             )
         except Exception as learning_exc:
             print(f"⚠️ news.generate.accept learning skipped: {learning_exc}")
@@ -10278,20 +10337,16 @@ def news_list():
 
         db = DatabaseManager()
         cur = db.conn.cursor()
+        _ensure_user_news_table(cur)
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS UserNews (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                service_id TEXT,
-                source_text TEXT,
-                generated_text TEXT NOT NULL,
-                approved INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
+            SELECT id, service_id, source_text, generated_text, approved, content_mode, social_format, created_at
+            FROM UserNews
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_data['user_id'],),
         )
-        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = %s ORDER BY created_at DESC", (user_data['user_id'],))
         rows = cur.fetchall()
         db.close()
         items = []
@@ -10299,12 +10354,13 @@ def news_list():
             if isinstance(row, tuple):
                 items.append({
                     "id": row[0], "service_id": row[1], "source_text": row[2],
-                    "generated_text": row[3], "approved": bool(row[4]), "created_at": row[5]
+                    "generated_text": row[3], "approved": bool(row[4]), "content_mode": row[5], "social_format": row[6], "created_at": row[7]
                 })
             else:
                 items.append({
                     "id": row['id'], "service_id": row['service_id'], "source_text": row['source_text'],
-                    "generated_text": row['generated_text'], "approved": bool(row['approved']), "created_at": row['created_at']
+                    "generated_text": row['generated_text'], "approved": bool(row['approved']),
+                    "content_mode": row.get('content_mode'), "social_format": row.get('social_format'), "created_at": row['created_at']
                 })
         return jsonify({"success": True, "news": items})
     except Exception as e:
@@ -10329,14 +10385,24 @@ def news_update():
         if not news_id or not text:
             return jsonify({"error": "news_id и text обязательны"}), 400
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        _ensure_user_news_table(cur)
+        cur.execute(
+            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
+            (news_id, user_data['user_id']),
+        )
         prev_row = cur.fetchone()
         previous_text = ""
+        content_mode = "news"
+        social_format = None
         if prev_row:
             if isinstance(prev_row, (list, tuple)):
                 previous_text = str(prev_row[0] or "")
+                content_mode = str(prev_row[1] or "news")
+                social_format = prev_row[2]
             elif hasattr(prev_row, "get"):
                 previous_text = str(prev_row.get("generated_text") or "")
+                content_mode = str(prev_row.get("content_mode") or "news")
+                social_format = prev_row.get("social_format")
 
         cur.execute("UPDATE UserNews SET generated_text = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s", (text, news_id, user_data['user_id']))
         if cur.rowcount == 0:
@@ -10352,7 +10418,7 @@ def news_update():
                 edited_before_accept=(previous_text.strip() != text.strip()),
                 draft_text=previous_text[:2000],
                 final_text=text[:2000],
-                metadata={"news_id": news_id},
+                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
             )
         except Exception as learning_exc:
             print(f"⚠️ news.update learning skipped: {learning_exc}")
@@ -16234,9 +16300,29 @@ def get_prompt_recommendations():
             tuple(params),
         )
         content_mode_rows = cursor.fetchall()
+        cursor.execute(
+            f"""
+            SELECT
+                prompt_key,
+                COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown') AS social_format,
+                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
+                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
+                COUNT(*) FILTER (
+                    WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
+                      AND COALESCE(edited_before_accept, FALSE) = FALSE
+                ) AS accepted_raw_count
+            FROM ailearningevents
+            WHERE {' AND '.join(where_sql)}
+              AND prompt_key IN ('news_social_generation')
+            GROUP BY prompt_key, COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown')
+            """,
+            tuple(params),
+        )
+        social_format_rows = cursor.fetchall()
 
         perf_map: dict[str, list[dict]] = {}
         content_mode_map: dict[str, list[dict]] = {}
+        social_format_map: dict[str, list[dict]] = {}
         for row in perf_rows:
             if hasattr(row, "get"):
                 key = str(row.get("prompt_key") or "").strip()
@@ -16297,6 +16383,34 @@ def get_prompt_recommendations():
                 }
             )
 
+        for row in social_format_rows:
+            if hasattr(row, "get"):
+                key = str(row.get("prompt_key") or "").strip()
+                social_format = str(row.get("social_format") or "unknown").strip().lower()
+                generated = int(row.get("generated_count") or 0)
+                accepted = int(row.get("accepted_count") or 0)
+                accepted_raw = int(row.get("accepted_raw_count") or 0)
+            else:
+                key = str(row[0] or "").strip()
+                social_format = str(row[1] or "unknown").strip().lower()
+                generated = int(row[2] or 0)
+                accepted = int(row[3] or 0)
+                accepted_raw = int(row[4] or 0)
+            if not key:
+                continue
+            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
+            accepted_raw_rate = (accepted_raw / generated) if generated > 0 else 0.0
+            social_format_map.setdefault(key, []).append(
+                {
+                    "social_format": social_format,
+                    "generated_count": generated,
+                    "accepted_count": accepted,
+                    "accepted_raw_count": accepted_raw,
+                    "acceptance_rate": round(acceptance_rate, 4),
+                    "accepted_raw_rate": round(accepted_raw_rate, 4),
+                }
+            )
+
         cursor.execute(
             """
             SELECT prompt_key, current_version
@@ -16336,6 +16450,11 @@ def get_prompt_recommendations():
                     "versions": versions[:10],
                     "by_content_mode": sorted(
                         content_mode_map.get(key, []),
+                        key=lambda item: item.get("generated_count", 0),
+                        reverse=True,
+                    ),
+                    "by_social_format": sorted(
+                        social_format_map.get(key, []),
                         key=lambda item: item.get("generated_count", 0),
                         reverse=True,
                     ),

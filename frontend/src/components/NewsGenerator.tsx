@@ -48,6 +48,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const { language: interfaceLanguage, t } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
   const [contentMode, setContentMode] = useState<'news' | 'social'>('news');
+  const [socialFormat, setSocialFormat] = useState<'announce' | 'case' | 'promo'>('announce');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -153,6 +154,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           use_transaction: useTransaction,
           use_seo_keywords: useSeoKeywords,
           content_mode: contentMode,
+          social_format: contentMode === 'social' ? socialFormat : undefined,
           selected_seo_keyword: selectedSeoKeyword || undefined,
           service_id: serviceId || undefined,
           transaction_id: transactionId || undefined,
@@ -374,18 +376,61 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Newspaper className="w-4 h-4 text-gray-500" />
-                  Формат контента
+                  Режим генерации
                 </label>
-                <Select value={contentMode} onValueChange={(value) => setContentMode(value as 'news' | 'social')}>
-                  <SelectTrigger className="w-full rounded-xl bg-white border-gray-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="news">Новость для карточки</SelectItem>
-                    <SelectItem value="social">Пост для соцсетей</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => setContentMode('news')}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      contentMode === 'news' ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Новость
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContentMode('social')}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      contentMode === 'social' ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Соцпост
+                  </button>
+                </div>
               </div>
+
+              {contentMode === 'social' && (
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Шаблон соцпоста
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'announce', label: 'Анонс' },
+                      { key: 'case', label: 'Кейс' },
+                      { key: 'promo', label: 'Акция' },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setSocialFormat(item.key as 'announce' | 'case' | 'promo')}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                          socialFormat === item.key
+                            ? "border-orange-300 bg-orange-50 text-orange-800"
+                            : "border-gray-200 bg-white text-gray-600 hover:text-gray-900"
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">

@@ -89,6 +89,14 @@ interface PromptRecommendation {
     acceptance_rate: number;
     accepted_raw_rate: number;
   }>;
+  by_social_format?: Array<{
+    social_format: string;
+    generated_count: number;
+    accepted_count: number;
+    accepted_raw_count: number;
+    acceptance_rate: number;
+    accepted_raw_rate: number;
+  }>;
 }
 
 
@@ -798,6 +806,22 @@ export const PromptsManagement: React.FC = () => {
                           <span className="ml-2">accept: {mode.accepted_count}</span>
                           <span className="ml-2">accept%: {Math.round((mode.acceptance_rate || 0) * 100)}%</span>
                           <span className="ml-2">raw%: {Math.round((mode.accepted_raw_rate || 0) * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {Array.isArray(item.by_social_format) && item.by_social_format.length > 0 && (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-amber-700">Конверсия по формату соцпоста</div>
+                    <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {item.by_social_format.map((fmt) => (
+                        <div key={`${item.prompt_key}-${fmt.social_format}`} className="text-xs text-amber-900">
+                          <span className="font-medium">{fmt.social_format}</span>
+                          <span className="ml-2">gen: {fmt.generated_count}</span>
+                          <span className="ml-2">accept: {fmt.accepted_count}</span>
+                          <span className="ml-2">accept%: {Math.round((fmt.acceptance_rate || 0) * 100)}%</span>
+                          <span className="ml-2">raw%: {Math.round((fmt.accepted_raw_rate || 0) * 100)}%</span>
                         </div>
                       ))}
                     </div>
