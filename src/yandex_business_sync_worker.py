@@ -123,7 +123,14 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                 row = cursor.fetchone()
                 
                 if row:
-                    service_id = row[0]
+                    if isinstance(row, dict):
+                        service_id = row.get('id')
+                        if service_id is None and row:
+                            service_id = next(iter(row.values()))
+                    else:
+                        service_id = row[0]
+                    if not service_id:
+                        continue
                     cursor.execute("""
                         UPDATE UserServices 
                         SET price = %s, description = %s, category = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE

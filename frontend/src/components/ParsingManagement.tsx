@@ -178,6 +178,7 @@ export const ParsingManagement: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<ParsingTask | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [onlyActionRequired, setOnlyActionRequired] = useState(false);
+  const [onlyStuckTasks, setOnlyStuckTasks] = useState(false);
   const [pendingCaptchaResumeTaskId, setPendingCaptchaResumeTaskId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     status: '',
@@ -658,12 +659,32 @@ export const ParsingManagement: React.FC = () => {
     ? (stats?.network_batches || []).find((batch) => batch.batch_id === selectedBatchId) || null
     : null;
   const isRawTableVisible = viewMode === 'technical' || showRawTasks;
-  const filteredTasks = onlyActionRequired
-    ? tasks.filter((task) => task.status === 'error' || task.status === 'captcha' || task.status === 'paused' || Boolean(task.can_resume_batch) || Boolean(task.can_open_captcha))
-    : tasks;
-  const filteredNetworkBatches = onlyActionRequired
-    ? (stats?.network_batches || []).filter((batch) => batch.resume_available || batch.status === 'manual_paused')
-    : (stats?.network_batches || []);
+  const stuckTaskIdSet = new Set((stats?.stuck_tasks || []).map((task) => task.id));
+  const filteredTasks = tasks.filter((task) => {
+    if (onlyActionRequired) {
+      const actionable =
+        task.status === 'error' ||
+        task.status === 'captcha' ||
+        task.status === 'paused' ||
+        Boolean(task.can_resume_batch) ||
+        Boolean(task.can_open_captcha);
+      if (!actionable) return false;
+    }
+    if (onlyStuckTasks) {
+      return stuckTaskIdSet.has(task.id);
+    }
+    return true;
+  });
+  const stuckBatchIdSet = new Set(filteredTasks.map((task) => task.batch_id).filter(Boolean) as string[]);
+  const filteredNetworkBatches = (stats?.network_batches || []).filter((batch) => {
+    if (onlyActionRequired && !(batch.resume_available || batch.status === 'manual_paused')) {
+      return false;
+    }
+    if (onlyStuckTasks && !stuckBatchIdSet.has(batch.batch_id)) {
+      return false;
+    }
+    return true;
+  });
 
   const summaryCards = stats?.operator_summary ? [
     { key: 'active', label: 'Активные запуски', value: stats.operator_summary.active_runs, filter: 'processing', className: 'text-blue-600' },
@@ -683,22 +704,6 @@ export const ParsingManagement: React.FC = () => {
       actionLabel: 'Возобновить с места сбоя',
       onAction: () => handleResumeNetworkBatch(batch.batch_id),
     }))),
-    ...((stats?.captcha_queue || []).map((captchaTask) => ({
-      key: `captcha-${captchaTask.task_id}`,
-      title: captchaTask.business_name || `Задача ${captchaTask.task_id.slice(0, 8)}`,
-      subtitle: 'Нужна CAPTCHA',
-      description: captchaTask.is_expired
-        ? 'Сессия истекла. Откройте новую CAPTCHA и затем продолжите.'
-        : (captchaTask.short_error_message || 'Пройдите CAPTCHA и продолжите парсинг'),
-      meta: captchaTask.retry_after ? `Дедлайн: ${new Date(captchaTask.retry_after).toLocaleString('ru-RU')}` : 'Ожидает действия человека',
-      actionLabel: 'Открыть CAPTCHA',
-      onAction: () => {
-        const linkedTask = tasks.find((task) => task.id === captchaTask.task_id);
-        if (linkedTask) {
-          void handleOpenCaptcha(linkedTask);
-        }
-      },
-    }))),
   ];
   const filteredActionItems = onlyActionRequired ? actionItems : actionItems;
 
@@ -716,6 +721,17 @@ export const ParsingManagement: React.FC = () => {
             onClick={() => setOnlyActionRequired((current) => !current)}
           >
             Только требует действия
+          </Button>
+          <Button
+            variant={onlyStuckTasks ? 'default' : 'outline'}
+            onClick={() => {
+              setOnlyStuckTasks((current) => !current);
+              if (!onlyStuckTasks) {
+                setFilters((prev) => ({ ...prev, status: 'processing' }));
+              }
+            }}
+          >
+            Только зависшие
           </Button>
           <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
             <button
@@ -1080,7 +1096,7 @@ export const ParsingManagement: React.FC = () => {
                     <div className="flex flex-wrap gap-2">
                       {linkedTask ? (
                         <Button variant="outline" className="border-orange-300 text-orange-900 hover:bg-orange-100" onClick={() => handleOpenCaptcha(linkedTask)}>
-                          Открыть CAPTCHA
+                          {captchaTask.is_expired ? 'Открыть новую CAPTCHA' : 'Открыть CAPTCHA'}
                         </Button>
                       ) : null}
                       <Button variant="outline" onClick={() => handleResumeCaptcha(captchaTask.task_id)}>
@@ -1107,6 +1123,11 @@ export const ParsingManagement: React.FC = () => {
           {onlyActionRequired ? (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Режим “Только требует действия” скрывает спокойные batch и обычные задачи, чтобы оператор видел только проблемные точки.
+            </div>
+          ) : null}
+          {onlyStuckTasks ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+              Режим “Только зависшие” показывает только задачи из `processing`, которые не обновлялись дольше 5 минут.
             </div>
           ) : null}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

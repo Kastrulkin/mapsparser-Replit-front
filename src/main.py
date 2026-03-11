@@ -1131,22 +1131,65 @@ def resume_network_parsing_batch(batch_id):
         cursor.execute(
             """
             SELECT
-                MIN(batch_seq) FILTER (WHERE status = 'error') AS first_error_seq,
-                MIN(batch_seq) FILTER (WHERE status = %s) AS first_paused_seq,
-                COUNT(*) FILTER (WHERE status = 'error') AS error_count,
-                COUNT(*) FILTER (WHERE status = %s) AS paused_count
-            FROM parsequeue
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
+                MIN(pq.batch_seq) FILTER (WHERE pq.status = 'error') AS first_error_seq,
+                MIN(pq.batch_seq) FILTER (WHERE pq.status = %s) AS first_paused_seq,
+                MIN(pq.batch_seq) FILTER (
+                    WHERE pq.status = %s
+                      AND (
+                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM parsequeue pq2
+                            WHERE pq2.batch_id = pq.batch_id
+                              AND pq2.batch_kind = 'network_sync'
+                              AND pq2.status = %s
+                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                        )
+                      )
+                ) AS first_stale_processing_seq,
+                COUNT(*) FILTER (WHERE pq.status = 'error') AS error_count,
+                COUNT(*) FILTER (WHERE pq.status = %s) AS paused_count,
+                COUNT(*) FILTER (
+                    WHERE pq.status = %s
+                      AND (
+                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM parsequeue pq2
+                            WHERE pq2.batch_id = pq.batch_id
+                              AND pq2.batch_kind = 'network_sync'
+                              AND pq2.status = %s
+                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                        )
+                      )
+                ) AS stale_processing_count
+            FROM parsequeue pq
+            WHERE pq.batch_id = %s
+              AND pq.batch_kind = 'network_sync'
             """,
-            (STATUS_PAUSED, STATUS_PAUSED, batch_id),
+            (
+                STATUS_PAUSED,
+                STATUS_PROCESSING,
+                STATUS_PROCESSING,
+                STATUS_PAUSED,
+                STATUS_PROCESSING,
+                STATUS_PROCESSING,
+                batch_id,
+            ),
         )
         state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
         paused_count = int(state_row.get("paused_count") or 0)
         error_count = int(state_row.get("error_count") or 0)
-        start_seq = state_row.get("first_error_seq") or state_row.get("first_paused_seq")
+        stale_processing_count = int(state_row.get("stale_processing_count") or 0)
+        candidate_seqs = [
+            state_row.get("first_error_seq"),
+            state_row.get("first_paused_seq"),
+            state_row.get("first_stale_processing_seq"),
+        ]
+        candidate_seqs = [int(v) for v in candidate_seqs if v is not None]
+        start_seq = min(candidate_seqs) if candidate_seqs else None
 
-        if paused_count <= 0 and error_count <= 0:
+        if paused_count <= 0 and error_count <= 0 and stale_processing_count <= 0:
             db.close()
             return jsonify({"success": False, "error": "Для batch нет задач для возобновления"}), 404
 
@@ -1155,7 +1198,7 @@ def resume_network_parsing_batch(batch_id):
 
         cursor.execute(
             """
-            UPDATE parsequeue
+            UPDATE parsequeue pq
             SET status = 'pending',
                 retry_after = NULL,
                 resume_requested = 0,
@@ -1166,12 +1209,28 @@ def resume_network_parsing_batch(batch_id):
                 captcha_status = NULL,
                 paused_reason = NULL,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND status IN (%s, 'error')
-              AND COALESCE(batch_seq, 0) >= %s
+            WHERE pq.batch_id = %s
+              AND pq.batch_kind = 'network_sync'
+              AND COALESCE(pq.batch_seq, 0) >= %s
+              AND (
+                    pq.status IN (%s, 'error')
+                    OR (
+                        pq.status = %s
+                        AND (
+                            COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM parsequeue pq2
+                                WHERE pq2.batch_id = pq.batch_id
+                                  AND pq2.batch_kind = 'network_sync'
+                                  AND pq2.status = %s
+                                  AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                            )
+                        )
+                    )
+                  )
             """,
-            (batch_id, STATUS_PAUSED, int(start_seq)),
+            (batch_id, int(start_seq), STATUS_PAUSED, STATUS_PROCESSING, STATUS_PROCESSING),
         )
         resumed_count = int(cursor.rowcount or 0)
         db.conn.commit()
@@ -1184,6 +1243,7 @@ def resume_network_parsing_batch(batch_id):
                 "batch_id": batch_id,
                 "start_seq": int(start_seq),
                 "resumed_count": resumed_count,
+                "stale_processing_count": stale_processing_count,
             }
         )
     except Exception as e:
@@ -1229,22 +1289,65 @@ def skip_failed_network_parsing_batch_item(batch_id):
         cursor.execute(
             """
             SELECT
-                MIN(batch_seq) FILTER (WHERE status = 'error') AS first_error_seq,
-                MIN(batch_seq) FILTER (WHERE status = %s) AS first_paused_seq,
-                COUNT(*) FILTER (WHERE status = 'error') AS error_count,
-                COUNT(*) FILTER (WHERE status = %s) AS paused_count
-            FROM parsequeue
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
+                MIN(pq.batch_seq) FILTER (WHERE pq.status = 'error') AS first_error_seq,
+                MIN(pq.batch_seq) FILTER (WHERE pq.status = %s) AS first_paused_seq,
+                MIN(pq.batch_seq) FILTER (
+                    WHERE pq.status = %s
+                      AND (
+                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM parsequeue pq2
+                            WHERE pq2.batch_id = pq.batch_id
+                              AND pq2.batch_kind = 'network_sync'
+                              AND pq2.status = %s
+                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                        )
+                      )
+                ) AS first_stale_processing_seq,
+                COUNT(*) FILTER (WHERE pq.status = 'error') AS error_count,
+                COUNT(*) FILTER (WHERE pq.status = %s) AS paused_count,
+                COUNT(*) FILTER (
+                    WHERE pq.status = %s
+                      AND (
+                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                        OR NOT EXISTS (
+                            SELECT 1
+                            FROM parsequeue pq2
+                            WHERE pq2.batch_id = pq.batch_id
+                              AND pq2.batch_kind = 'network_sync'
+                              AND pq2.status = %s
+                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                        )
+                      )
+                ) AS stale_processing_count
+            FROM parsequeue pq
+            WHERE pq.batch_id = %s
+              AND pq.batch_kind = 'network_sync'
             """,
-            (STATUS_PAUSED, STATUS_PAUSED, batch_id),
+            (
+                STATUS_PAUSED,
+                STATUS_PROCESSING,
+                STATUS_PROCESSING,
+                STATUS_PAUSED,
+                STATUS_PROCESSING,
+                STATUS_PROCESSING,
+                batch_id,
+            ),
         )
         state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
         error_count = int(state_row.get("error_count") or 0)
         paused_count = int(state_row.get("paused_count") or 0)
-        failed_seq = state_row.get("first_error_seq") or state_row.get("first_paused_seq")
+        stale_processing_count = int(state_row.get("stale_processing_count") or 0)
+        candidate_seqs = [
+            state_row.get("first_error_seq"),
+            state_row.get("first_paused_seq"),
+            state_row.get("first_stale_processing_seq"),
+        ]
+        candidate_seqs = [int(v) for v in candidate_seqs if v is not None]
+        failed_seq = min(candidate_seqs) if candidate_seqs else None
 
-        if failed_seq is None or (error_count <= 0 and paused_count <= 0):
+        if failed_seq is None or (error_count <= 0 and paused_count <= 0 and stale_processing_count <= 0):
             db.close()
             return jsonify({"success": False, "error": "Для batch нет точки, которую можно пропустить"}), 404
 
@@ -1279,7 +1382,7 @@ def skip_failed_network_parsing_batch_item(batch_id):
 
         cursor.execute(
             """
-            UPDATE parsequeue
+            UPDATE parsequeue pq
             SET status = 'pending',
                 retry_after = NULL,
                 resume_requested = 0,
@@ -1295,12 +1398,28 @@ def skip_failed_network_parsing_batch_item(batch_id):
                     WHEN error_message ILIKE '%%skipped by admin%%' THEN error_message
                     ELSE error_message
                 END
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND status IN (%s, 'error')
-              AND COALESCE(batch_seq, 0) >= %s
+            WHERE pq.batch_id = %s
+              AND pq.batch_kind = 'network_sync'
+              AND COALESCE(pq.batch_seq, 0) >= %s
+              AND (
+                    pq.status IN (%s, 'error')
+                    OR (
+                        pq.status = %s
+                        AND (
+                            COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM parsequeue pq2
+                                WHERE pq2.batch_id = pq.batch_id
+                                  AND pq2.batch_kind = 'network_sync'
+                                  AND pq2.status = %s
+                                  AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
+                            )
+                        )
+                    )
+                  )
             """,
-            (batch_id, STATUS_PAUSED, next_seq),
+            (batch_id, next_seq, STATUS_PAUSED, STATUS_PROCESSING, STATUS_PROCESSING),
         )
         resumed_count = int(cursor.rowcount or 0)
         db.conn.commit()
@@ -1315,6 +1434,7 @@ def skip_failed_network_parsing_batch_item(batch_id):
                 "start_seq": next_seq,
                 "skipped_from_paused": skipped_from_paused,
                 "resumed_count": resumed_count,
+                "stale_processing_count": stale_processing_count,
             }
         )
     except Exception as e:
@@ -1523,54 +1643,33 @@ def resume_parsing_task_captcha(task_id):
         if not _is_task_in_captcha_state(task_row):
             db.close()
             return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
-        if not task_row.get("captcha_session_id"):
-            # Сессия могла истечь/потеряться (перезапуск worker и т.п.). Возвращаем задачу в pending,
-            # чтобы worker создал новую captcha-сессию или продолжил парсинг, если капча уже решена.
-            cursor.execute(
-                """
-                UPDATE parsequeue
-                SET status = %s,
-                    retry_after = CURRENT_TIMESTAMP,
-                    resume_requested = 0,
-                    updated_at = CURRENT_TIMESTAMP,
-                    error_message = CASE
-                        WHEN error_message IS NULL OR error_message = '' THEN 'captcha session missing; restarted parse cycle'
-                        ELSE error_message || '; captcha session missing; restarted parse cycle'
-                    END
-                WHERE id = %s
-                """,
-                (STATUS_PENDING, task_id),
-            )
-            db.conn.commit()
-            db.close()
-            return jsonify(
-                {
-                    "success": True,
-                    "task_id": task_id,
-                    "captcha_url": task_row.get("captcha_url"),
-                    "message": "Captcha-сессия утеряна, запущен новый цикл парсинга",
-                }
-            )
-
+        # Надежный режим: всегда переводим в fresh parse cycle.
+        # Старую parked captcha-сессию не используем, чтобы избежать зависаний между
+        # разными UI-точками/браузерными контекстами.
         cursor.execute("""
             UPDATE parsequeue
-            SET resume_requested = 1,
+            SET status = %s,
                 retry_after = CURRENT_TIMESTAMP,
+                captcha_required = 0,
+                captcha_status = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_url = NULL,
+                resume_requested = 0,
                 updated_at = CURRENT_TIMESTAMP,
                 error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'resume requested after captcha (admin task-level)'
-                    ELSE error_message || '; resume requested after captcha (admin task-level)'
+                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha resume requested by admin (fresh parse cycle)'
+                    ELSE error_message || '; captcha resume requested by admin (fresh parse cycle)'
                 END
             WHERE id = %s
-        """, (task_id,))
+        """, (STATUS_PENDING, task_id))
         db.conn.commit()
         db.close()
 
         return jsonify({
             "success": True,
             "task_id": task_id,
-            "captcha_url": task_row.get("captcha_url"),
-            "message": "Продолжение парсинга запрошено"
+            "message": "Продолжение парсинга запрошено: задача переведена в новую попытку"
         })
     except Exception as e:
         print(f"❌ Ошибка resume captcha (task-level): {e}")
@@ -11489,50 +11588,30 @@ def resume_parse_after_captcha(business_id):
             db.close()
             return jsonify({"success": False, "error": "Нет активной captcha-задачи"}), 404
 
-        if not task_row.get("captcha_session_id"):
-            cursor.execute(
-                """
-                UPDATE parsequeue
-                SET status = %s,
-                    retry_after = CURRENT_TIMESTAMP,
-                    resume_requested = 0,
-                    updated_at = CURRENT_TIMESTAMP,
-                    error_message = CASE
-                        WHEN error_message IS NULL OR error_message = '' THEN 'captcha session missing; restarted parse cycle'
-                        ELSE error_message || '; captcha session missing; restarted parse cycle'
-                    END
-                WHERE id = %s
-                """,
-                (STATUS_PENDING, task_row["id"]),
-            )
-            db.conn.commit()
-            db.close()
-            return jsonify({
-                "success": True,
-                "message": "Captcha-сессия утеряна, запущен новый цикл парсинга",
-                "task_id": task_row["id"],
-                "captcha_url": task_row.get("captcha_url"),
-            })
-
         cursor.execute("""
             UPDATE parsequeue
-            SET resume_requested = 1,
+            SET status = %s,
                 retry_after = CURRENT_TIMESTAMP,
+                captcha_required = 0,
+                captcha_status = NULL,
+                captcha_session_id = NULL,
+                captcha_started_at = NULL,
+                captcha_url = NULL,
+                resume_requested = 0,
                 updated_at = CURRENT_TIMESTAMP,
                 error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'resume requested after captcha'
-                    ELSE error_message || '; resume requested after captcha'
+                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha resume requested (fresh parse cycle)'
+                    ELSE error_message || '; captcha resume requested (fresh parse cycle)'
                 END
             WHERE id = %s
-        """, (task_row["id"],))
+        """, (STATUS_PENDING, task_row["id"]))
         db.conn.commit()
         db.close()
 
         return jsonify({
             "success": True,
-            "message": "Продолжение парсинга запрошено",
+            "message": "Продолжение парсинга запрошено: задача переведена в новую попытку",
             "task_id": task_row["id"],
-            "captcha_url": task_row.get("captcha_url"),
         })
     except Exception as e:
         import traceback
