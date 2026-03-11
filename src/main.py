@@ -5583,7 +5583,7 @@ def _capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
     if isinstance(examples, list) and examples:
         examples_text = "\n".join([str(x) for x in examples[:5] if str(x).strip()])
 
-    prompt_template = get_prompt_from_db("review_reply", None)
+    prompt_template, prompt_version = get_prompt_record_from_db("review_reply", None)
     if not prompt_template:
         raise ValueError("Промпт review_reply не настроен в админ-панели.")
 
@@ -5653,7 +5653,7 @@ def _capability_services_optimize(envelope: dict, user_data: dict) -> dict:
     language_name = language_names.get(language, "Russian")
 
     tenant_id = envelope.get("tenant_id")
-    prompt_template = get_prompt_from_db("service_optimization", None)
+    prompt_template, prompt_version = get_prompt_record_from_db("service_optimization", None)
     if not prompt_template:
         raise ValueError("Промпт service_optimization не настроен в админ-панели.")
 
@@ -6241,7 +6241,7 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ: {selected_seo_keyword}."
 
-        prompt_template = get_prompt_from_db("news_generation", None)
+        prompt_template, prompt_version = get_prompt_record_from_db("news_generation", None)
         if not prompt_template:
             raise ValueError("Промпт news_generation не настроен в админ-панели.")
 
@@ -9037,7 +9037,7 @@ def services_optimize():
                     good_examples = ""
 
                 # Единственный источник промпта: админка (AIPrompts)
-                prompt_template_db = get_prompt_from_db('service_optimization', None)
+                prompt_template_db, prompt_version = get_prompt_record_from_db('service_optimization', None)
                 if not prompt_template_db:
                     return jsonify({
                         "success": False,
@@ -9595,6 +9595,8 @@ def services_optimize():
                 user_id=user_data.get("user_id"),
                 business_id=business_id,
                 accepted=None,
+                prompt_key="service_optimization",
+                prompt_version=(locals().get("prompt_version")),
                 metadata={
                     "services_count": services_count,
                     "recognize_only": bool(recognize_only),
@@ -9936,7 +9938,7 @@ def news_generate():
                 "Нельзя подменять услугу на другую, даже если у другой услуги частотность выше."
             )
 
-        prompt_template = get_prompt_from_db('news_generation', None)
+        prompt_template, prompt_version = get_prompt_record_from_db('news_generation', None)
         if not prompt_template:
             db.close()
             return jsonify({
@@ -10076,6 +10078,8 @@ def news_generate():
                 intent=_normalize_learning_intent(data.get("intent")),
                 user_id=user_data.get("user_id"),
                 business_id=business_id,
+                prompt_key="news_generation",
+                prompt_version=prompt_version,
                 metadata={
                     "use_service": bool(use_service),
                     "use_transaction": bool(use_transaction),
@@ -10571,7 +10575,7 @@ def reviews_reply():
             except Exception:
                 examples_text = ""
 
-        prompt_template = get_prompt_from_db('review_reply', None)
+        prompt_template, prompt_version = get_prompt_record_from_db('review_reply', None)
         if not prompt_template:
             return jsonify({
                 "error": "Промпт review_reply не настроен в админ-панели."
@@ -10661,6 +10665,8 @@ def reviews_reply():
                 intent=_normalize_learning_intent(data.get("intent")),
                 user_id=user_data.get("user_id"),
                 business_id=business_id,
+                prompt_key="review_reply",
+                prompt_version=prompt_version,
                 metadata={
                     "tone": tone or "профессиональный",
                     "language": language,
@@ -15514,6 +15520,82 @@ def toggle_proxy(proxy_id):
         return jsonify({"error": str(e)}), 500
 
 # ==================== ПРОМПТЫ ДЛЯ AI ====================
+def _ensure_prompt_templates_schema(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS prompttemplates (
+            id TEXT PRIMARY KEY,
+            prompt_key TEXT UNIQUE NOT NULL,
+            description TEXT,
+            current_version INTEGER NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_by TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS prompttemplateversions (
+            id TEXT PRIMARY KEY,
+            template_id TEXT NOT NULL REFERENCES prompttemplates(id) ON DELETE CASCADE,
+            prompt_key TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            prompt_text TEXT NOT NULL,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_by TEXT,
+            UNIQUE (prompt_key, version)
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompttemplateversions_prompt_key ON prompttemplateversions(prompt_key, version DESC)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompttemplates_active ON prompttemplates(is_active)"
+    )
+
+
+def _seed_prompt_versions_from_ai_prompts(cursor):
+    cursor.execute("SELECT prompt_type, prompt_text, description, updated_by FROM AIPrompts")
+    rows = cursor.fetchall()
+    for row in rows:
+        if hasattr(row, "keys"):
+            prompt_key = str(row.get("prompt_type") or "").strip()
+            prompt_text = str(row.get("prompt_text") or "")
+            description = row.get("description")
+            updated_by = row.get("updated_by")
+        else:
+            prompt_key = str(row[0] or "").strip()
+            prompt_text = str(row[1] or "")
+            description = row[2] if len(row) > 2 else None
+            updated_by = row[3] if len(row) > 3 else None
+        if not prompt_key:
+            continue
+        template_id = f"tpl_{prompt_key}"
+        version_id = f"tplv_{prompt_key}_1"
+        cursor.execute(
+            """
+            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
+            VALUES (%s, %s, %s, 1, TRUE, %s)
+            ON CONFLICT (prompt_key) DO NOTHING
+            """,
+            (template_id, prompt_key, description, updated_by),
+        )
+        cursor.execute(
+            """
+            INSERT INTO prompttemplateversions (
+                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
+            ) VALUES (%s, %s, %s, 1, %s, %s, TRUE, %s)
+            ON CONFLICT (prompt_key, version) DO NOTHING
+            """,
+            (version_id, template_id, prompt_key, prompt_text, description, updated_by),
+        )
+
+
 @app.route('/api/admin/prompts', methods=['GET', 'OPTIONS'])
 def get_prompts():
     """Получить все промпты (только для суперадмина)"""
@@ -15547,6 +15629,7 @@ def get_prompts():
             )
         """)
         db.conn.commit()
+        _ensure_prompt_templates_schema(cursor)
         
         default_prompts = get_default_ai_prompts()
         for prompt_type, prompt_text, description in default_prompts:
@@ -15559,8 +15642,23 @@ def get_prompts():
                 (f"prompt_{prompt_type}", prompt_type, prompt_text, description),
             )
         db.conn.commit()
+        _seed_prompt_versions_from_ai_prompts(cursor)
+        db.conn.commit()
 
-        cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+        cursor.execute(
+            """
+            SELECT
+                a.prompt_type,
+                a.prompt_text,
+                a.description,
+                a.updated_at,
+                a.updated_by,
+                pt.current_version
+            FROM AIPrompts a
+            LEFT JOIN prompttemplates pt ON pt.prompt_key = a.prompt_type
+            ORDER BY a.prompt_type
+            """
+        )
         rows = cursor.fetchall()
         
         prompts = []
@@ -15571,24 +15669,28 @@ def get_prompts():
                 row_desc = row.get('description')
                 row_updated_at = row.get('updated_at')
                 row_updated_by = row.get('updated_by')
+                row_current_version = row.get('current_version')
             elif isinstance(row, dict):
                 row_type = row.get('prompt_type')
                 row_text = row.get('prompt_text')
                 row_desc = row.get('description')
                 row_updated_at = row.get('updated_at')
                 row_updated_by = row.get('updated_by')
+                row_current_version = row.get('current_version')
             else:
                 row_type = row[0]
                 row_text = row[1]
                 row_desc = row[2]
                 row_updated_at = row[3]
                 row_updated_by = row[4]
+                row_current_version = row[5] if len(row) > 5 else None
             prompts.append({
                 'type': row_type,
                 'text': row_text,
                 'description': row_desc,
                 'updated_at': row_updated_at,
-                'updated_by': row_updated_by
+                'updated_by': row_updated_by,
+                'current_version': int(row_current_version or 1)
             })
         
         db.close()
@@ -15627,6 +15729,7 @@ def update_prompt(prompt_type):
             return jsonify({"error": "Текст промпта не может быть пустым"}), 400
         
         cursor = db.conn.cursor()
+        _ensure_prompt_templates_schema(cursor)
         cursor.execute("""
             UPDATE AIPrompts 
             SET prompt_text = %s, description = %s, updated_at = CURRENT_TIMESTAMP, updated_by = %s
@@ -15639,6 +15742,54 @@ def update_prompt(prompt_type):
                 INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
                 VALUES (%s, %s, %s, %s, %s)
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description, user_data['user_id']))
+
+        cursor.execute(
+            """
+            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
+            VALUES (%s, %s, %s, 1, TRUE, %s)
+            ON CONFLICT (prompt_key) DO NOTHING
+            """,
+            (f"tpl_{prompt_type}", prompt_type, description, user_data['user_id']),
+        )
+        cursor.execute("SELECT current_version FROM prompttemplates WHERE prompt_key = %s", (prompt_type,))
+        current_row = cursor.fetchone()
+        current_version = (
+            int(current_row.get("current_version") or 1)
+            if hasattr(current_row, "get")
+            else int((current_row[0] if current_row else 1) or 1)
+        )
+        next_version = current_version + 1
+        cursor.execute(
+            """
+            INSERT INTO prompttemplateversions (
+                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
+            ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s)
+            ON CONFLICT (prompt_key, version) DO UPDATE
+            SET prompt_text = EXCLUDED.prompt_text,
+                description = EXCLUDED.description,
+                is_active = TRUE
+            """,
+            (
+                f"tplv_{prompt_type}_{next_version}",
+                f"tpl_{prompt_type}",
+                prompt_type,
+                next_version,
+                prompt_text,
+                description,
+                user_data["user_id"],
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE prompttemplates
+            SET current_version = %s,
+                description = %s,
+                updated_by = %s,
+                updated_at = NOW()
+            WHERE prompt_key = %s
+            """,
+            (next_version, description, user_data["user_id"], prompt_type),
+        )
         
         db.conn.commit()
         db.close()
@@ -15651,60 +15802,235 @@ def update_prompt(prompt_type):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
-    """Получить промпт из БД или использовать fallback"""
+
+@app.route('/api/admin/prompts/<prompt_type>', methods=['GET'])
+def get_prompt_by_key(prompt_type):
+    """Получить конкретный промпт и его версии (только для суперадмина)."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        cursor = db.conn.cursor()
+        _ensure_prompt_templates_schema(cursor)
+        cursor.execute(
+            """
+            SELECT prompt_key, description, current_version, updated_at, updated_by
+            FROM prompttemplates
+            WHERE prompt_key = %s
+            """,
+            (prompt_type,),
+        )
+        template = cursor.fetchone()
+        if not template:
+            db.close()
+            return jsonify({"error": "Промпт не найден"}), 404
+
+        cursor.execute(
+            """
+            SELECT version, prompt_text, description, created_at, created_by
+            FROM prompttemplateversions
+            WHERE prompt_key = %s
+            ORDER BY version DESC
+            LIMIT 50
+            """,
+            (prompt_type,),
+        )
+        versions_rows = cursor.fetchall()
+        db.close()
+
+        template_dict = template if isinstance(template, dict) or hasattr(template, "keys") else {
+            "prompt_key": template[0], "description": template[1], "current_version": template[2], "updated_at": template[3], "updated_by": template[4]
+        }
+        versions = []
+        for row in versions_rows:
+            if hasattr(row, "keys"):
+                versions.append(
+                    {
+                        "version": int(row.get("version") or 0),
+                        "prompt_text": row.get("prompt_text") or "",
+                        "description": row.get("description"),
+                        "created_at": row.get("created_at"),
+                        "created_by": row.get("created_by"),
+                    }
+                )
+            else:
+                versions.append(
+                    {
+                        "version": int(row[0] or 0),
+                        "prompt_text": row[1] or "",
+                        "description": row[2],
+                        "created_at": row[3],
+                        "created_by": row[4],
+                    }
+                )
+
+        return jsonify(
+            {
+                "success": True,
+                "template": {
+                    "prompt_key": template_dict["prompt_key"] if hasattr(template_dict, "__getitem__") else template_dict.get("prompt_key"),
+                    "description": template_dict["description"] if hasattr(template_dict, "__getitem__") else template_dict.get("description"),
+                    "current_version": int((template_dict["current_version"] if hasattr(template_dict, "__getitem__") else template_dict.get("current_version")) or 1),
+                    "updated_at": template_dict["updated_at"] if hasattr(template_dict, "__getitem__") else template_dict.get("updated_at"),
+                    "updated_by": template_dict["updated_by"] if hasattr(template_dict, "__getitem__") else template_dict.get("updated_by"),
+                },
+                "versions": versions,
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка получения версии промпта: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/prompts/<prompt_type>/version', methods=['POST', 'OPTIONS'])
+def create_prompt_version(prompt_type):
+    """Создать новую версию промпта (только для суперадмина)."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        data = request.get_json(silent=True) or {}
+        prompt_text = str(data.get("text") or "").strip()
+        description = str(data.get("description") or "").strip()
+        if not prompt_text:
+            return jsonify({"error": "Текст промпта не может быть пустым"}), 400
+
+        cursor = db.conn.cursor()
+        _ensure_prompt_templates_schema(cursor)
+        cursor.execute(
+            """
+            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
+            VALUES (%s, %s, %s, 1, TRUE, %s)
+            ON CONFLICT (prompt_key) DO NOTHING
+            """,
+            (f"tpl_{prompt_type}", prompt_type, description or None, user_data["user_id"]),
+        )
+        cursor.execute("SELECT current_version FROM prompttemplates WHERE prompt_key = %s", (prompt_type,))
+        current_row = cursor.fetchone()
+        current_version = (
+            int(current_row.get("current_version") or 1)
+            if hasattr(current_row, "get")
+            else int((current_row[0] if current_row else 1) or 1)
+        )
+        next_version = current_version + 1
+        cursor.execute(
+            """
+            INSERT INTO prompttemplateversions (
+                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
+            ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s)
+            """,
+            (
+                f"tplv_{prompt_type}_{next_version}",
+                f"tpl_{prompt_type}",
+                prompt_type,
+                next_version,
+                prompt_text,
+                description or None,
+                user_data["user_id"],
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE prompttemplates
+            SET current_version = %s,
+                description = %s,
+                updated_by = %s,
+                updated_at = NOW()
+            WHERE prompt_key = %s
+            """,
+            (next_version, description or None, user_data["user_id"], prompt_type),
+        )
+        cursor.execute(
+            """
+            INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (prompt_type) DO UPDATE
+            SET prompt_text = EXCLUDED.prompt_text,
+                description = EXCLUDED.description,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = NOW()
+            """,
+            (f"prompt_{prompt_type}", prompt_type, prompt_text, description or None, user_data["user_id"]),
+        )
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "prompt_key": prompt_type, "version": next_version})
+    except Exception as e:
+        print(f"❌ Ошибка создания версии промпта: {e}")
+        return jsonify({"error": str(e)}), 500
+
+def get_prompt_record_from_db(prompt_type: str, fallback: str = None) -> tuple[str, int | None]:
+    """Получить промпт и его версию. Приоритет: versioned tables -> AIPrompts."""
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        try:
+            _ensure_prompt_templates_schema(cursor)
+            cursor.execute(
+                """
+                SELECT v.prompt_text, v.version
+                FROM prompttemplates t
+                JOIN prompttemplateversions v
+                  ON v.prompt_key = t.prompt_key
+                 AND v.version = t.current_version
+                WHERE t.prompt_key = %s
+                LIMIT 1
+                """,
+                (prompt_type,),
+            )
+            row = cursor.fetchone()
+            if row:
+                if hasattr(row, "keys"):
+                    text = str(row.get("prompt_text") or "").strip()
+                    version = int(row.get("version") or 1)
+                else:
+                    text = str((row[0] if len(row) > 0 else "") or "").strip()
+                    version = int((row[1] if len(row) > 1 else 1) or 1)
+                if text:
+                    return text, version
+        except Exception:
+            pass
+
         cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
         row = cursor.fetchone()
         db.close()
-        
         if row:
-            # Правильно извлекаем строку из row (может быть tuple, dict, или sqlite3.Row)
-            prompt_text = None
-            
-            # Если это sqlite3.Row (имеет атрибут keys)
             if hasattr(row, 'keys'):
-                try:
-                    prompt_text = row['prompt_text']
-                except (KeyError, IndexError):
-                    try:
-                        prompt_text = row[0]
-                    except (KeyError, IndexError):
-                        prompt_text = None
-            # Если это dict
+                text = str(row.get('prompt_text') or '').strip()
             elif isinstance(row, dict):
-                prompt_text = row.get('prompt_text', '')
-            # Если это tuple или list
-            elif isinstance(row, (tuple, list)) and len(row) > 0:
-                prompt_text = row[0]
+                text = str(row.get('prompt_text') or '').strip()
             else:
-                prompt_text = None
-            
-            # Убеждаемся, что это строка
-            if prompt_text is not None:
-                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type before conversion = {type(prompt_text)}", flush=True)
-                prompt_text = str(prompt_text) if not isinstance(prompt_text, str) else prompt_text
-                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type after conversion = {type(prompt_text)}", flush=True)
-                if prompt_text.strip():
-                    return prompt_text
-            
-            # Если не удалось извлечь - используем fallback
-            if fallback:
-                print(f"⚠️ Не удалось извлечь промпт из row, используем fallback. Row type: {type(row)}, Row value: {row}", flush=True)
-                return fallback
-            else:
-                return ""
-        elif fallback:
-            return fallback
-        else:
-            return ""
+                text = str((row[0] if row else '') or '').strip()
+            if text:
+                return text, None
+        return (fallback or ""), None
     except Exception as e:
         print(f"⚠️ Ошибка получения промпта из БД: {e}")
-        import traceback
-        traceback.print_exc()
-        return fallback or ""
+        return (fallback or ""), None
+
+
+def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
+    text, _ = get_prompt_record_from_db(prompt_type, fallback)
+    return text
 
 # ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
 def _ensure_default_business_types(cursor):
