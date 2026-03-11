@@ -44,6 +44,12 @@ interface DiffLine {
   changed: boolean;
 }
 
+interface PromptHistoryFilter {
+  changedOnly: boolean;
+  dateFrom: string;
+  dateTo: string;
+}
+
 
 export const PromptsManagement: React.FC = () => {
   const { t } = useLanguage();
@@ -70,6 +76,7 @@ export const PromptsManagement: React.FC = () => {
   const [versionsOpen, setVersionsOpen] = useState<Record<string, boolean>>({});
   const [promptVersions, setPromptVersions] = useState<Record<string, PromptVersion[]>>({});
   const [diffPreview, setDiffPreview] = useState<DiffPreviewState | null>(null);
+  const [historyFilters, setHistoryFilters] = useState<Record<string, PromptHistoryFilter>>({});
   const [editedPrompts, setEditedPrompts] = useState<Record<string, { text: string; description: string }>>({});
   const { toast } = useToast();
 
@@ -173,6 +180,14 @@ export const PromptsManagement: React.FC = () => {
     }
   };
 
+  const ensureHistoryFilter = (promptType: string): PromptHistoryFilter => {
+    return historyFilters[promptType] || {
+      changedOnly: false,
+      dateFrom: '',
+      dateTo: ''
+    };
+  };
+
   const togglePromptVersions = async (promptType: string) => {
     const nextIsOpen = !versionsOpen[promptType];
     setVersionsOpen(prev => ({ ...prev, [promptType]: nextIsOpen }));
@@ -242,6 +257,49 @@ export const PromptsManagement: React.FC = () => {
       });
     }
     return lines;
+  };
+
+  const exportPromptVersion = (promptType: string, version: PromptVersion) => {
+    const dt = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const filename = `${promptType}-v${version.version}-${dt}.txt`;
+    const content = [
+      `Prompt key: ${promptType}`,
+      `Version: ${version.version}`,
+      `Created at: ${version.created_at || ''}`,
+      `Created by: ${version.created_by || ''}`,
+      `Description: ${version.description || ''}`,
+      '',
+      version.prompt_text || ''
+    ].join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const filterPromptVersions = (
+    promptType: string,
+    versions: PromptVersion[],
+    currentVersion: number
+  ): PromptVersion[] => {
+    const filter = ensureHistoryFilter(promptType);
+    const fromTs = filter.dateFrom ? new Date(`${filter.dateFrom}T00:00:00`).getTime() : null;
+    const toTs = filter.dateTo ? new Date(`${filter.dateTo}T23:59:59`).getTime() : null;
+    return versions.filter((version) => {
+      if (filter.changedOnly && version.version === currentVersion) return false;
+      if (!fromTs && !toTs) return true;
+      if (!version.created_at) return false;
+      const createdTs = new Date(version.created_at).getTime();
+      if (Number.isNaN(createdTs)) return false;
+      if (fromTs && createdTs < fromTs) return false;
+      if (toTs && createdTs > toTs) return false;
+      return true;
+    });
   };
 
   if (loading) {
@@ -365,12 +423,81 @@ export const PromptsManagement: React.FC = () => {
 
                 {versionsOpen[type] && (
                   <div className="mt-3 space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={ensureHistoryFilter(type).changedOnly}
+                          onChange={(e) =>
+                            setHistoryFilters((prev) => ({
+                              ...prev,
+                              [type]: {
+                                ...ensureHistoryFilter(type),
+                                changedOnly: e.target.checked
+                              }
+                            }))
+                          }
+                        />
+                        Только отличающиеся
+                      </label>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Дата с</label>
+                        <Input
+                          type="date"
+                          value={ensureHistoryFilter(type).dateFrom}
+                          onChange={(e) =>
+                            setHistoryFilters((prev) => ({
+                              ...prev,
+                              [type]: {
+                                ...ensureHistoryFilter(type),
+                                dateFrom: e.target.value
+                              }
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Дата по</label>
+                        <Input
+                          type="date"
+                          value={ensureHistoryFilter(type).dateTo}
+                          onChange={(e) =>
+                            setHistoryFilters((prev) => ({
+                              ...prev,
+                              [type]: {
+                                ...ensureHistoryFilter(type),
+                                dateTo: e.target.value
+                              }
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setHistoryFilters((prev) => ({
+                              ...prev,
+                              [type]: {
+                                changedOnly: false,
+                                dateFrom: '',
+                                dateTo: ''
+                              }
+                            }))
+                          }
+                        >
+                          Сбросить фильтры
+                        </Button>
+                      </div>
+                    </div>
+
                     {loadingVersions[type] ? (
                       <div className="text-sm text-gray-500">Загрузка истории...</div>
-                    ) : (promptVersions[type] || []).length === 0 ? (
+                    ) : filterPromptVersions(type, promptVersions[type] || [], prompt?.current_version || 1).length === 0 ? (
                       <div className="text-sm text-gray-500">Версии пока не найдены</div>
                     ) : (
-                      promptVersions[type].map((version) => {
+                      filterPromptVersions(type, promptVersions[type] || [], prompt?.current_version || 1).map((version) => {
                         const isCurrent = version.version === (prompt?.current_version || 1);
                         const opKey = `${type}:${version.version}`;
                         return (
@@ -408,6 +535,14 @@ export const PromptsManagement: React.FC = () => {
                               >
                                 <Copy className="w-3 h-3 mr-1" />
                                 Вставить в редактор
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => exportPromptVersion(type, version)}
+                              >
+                                Экспорт .txt
                               </Button>
                               {!isCurrent && (
                                 <Button
