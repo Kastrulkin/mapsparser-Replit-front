@@ -16215,7 +16215,28 @@ def get_prompt_recommendations():
         )
         perf_rows = cursor.fetchall()
 
+        cursor.execute(
+            f"""
+            SELECT
+                prompt_key,
+                COALESCE(metadata_json->>'content_mode', 'news') AS content_mode,
+                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
+                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
+                COUNT(*) FILTER (
+                    WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
+                      AND COALESCE(edited_before_accept, FALSE) = FALSE
+                ) AS accepted_raw_count
+            FROM ailearningevents
+            WHERE {' AND '.join(where_sql)}
+              AND prompt_key IN ('news_generation', 'news_social_generation')
+            GROUP BY prompt_key, COALESCE(metadata_json->>'content_mode', 'news')
+            """,
+            tuple(params),
+        )
+        content_mode_rows = cursor.fetchall()
+
         perf_map: dict[str, list[dict]] = {}
+        content_mode_map: dict[str, list[dict]] = {}
         for row in perf_rows:
             if hasattr(row, "get"):
                 key = str(row.get("prompt_key") or "").strip()
@@ -16245,6 +16266,34 @@ def get_prompt_recommendations():
                     "acceptance_rate": round(acceptance_rate, 4),
                     "edit_rate": round(edit_rate, 4),
                     "score": round(score, 4),
+                }
+            )
+
+        for row in content_mode_rows:
+            if hasattr(row, "get"):
+                key = str(row.get("prompt_key") or "").strip()
+                content_mode = str(row.get("content_mode") or "news").strip().lower()
+                generated = int(row.get("generated_count") or 0)
+                accepted = int(row.get("accepted_count") or 0)
+                accepted_raw = int(row.get("accepted_raw_count") or 0)
+            else:
+                key = str(row[0] or "").strip()
+                content_mode = str(row[1] or "news").strip().lower()
+                generated = int(row[2] or 0)
+                accepted = int(row[3] or 0)
+                accepted_raw = int(row[4] or 0)
+            if not key:
+                continue
+            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
+            accepted_raw_rate = (accepted_raw / generated) if generated > 0 else 0.0
+            content_mode_map.setdefault(key, []).append(
+                {
+                    "content_mode": content_mode,
+                    "generated_count": generated,
+                    "accepted_count": accepted,
+                    "accepted_raw_count": accepted_raw,
+                    "acceptance_rate": round(acceptance_rate, 4),
+                    "accepted_raw_rate": round(accepted_raw_rate, 4),
                 }
             )
 
@@ -16285,6 +16334,11 @@ def get_prompt_recommendations():
                     "is_change_recommended": str(current_version) != str(recommended_version),
                     "window_days": days,
                     "versions": versions[:10],
+                    "by_content_mode": sorted(
+                        content_mode_map.get(key, []),
+                        key=lambda item: item.get("generated_count", 0),
+                        reverse=True,
+                    ),
                 }
             )
 

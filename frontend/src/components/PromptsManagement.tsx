@@ -81,6 +81,14 @@ interface PromptRecommendation {
     edit_rate: number;
     score: number;
   }>;
+  by_content_mode?: Array<{
+    content_mode: string;
+    generated_count: number;
+    accepted_count: number;
+    accepted_raw_count: number;
+    acceptance_rate: number;
+    accepted_raw_rate: number;
+  }>;
 }
 
 
@@ -99,6 +107,10 @@ export const PromptsManagement: React.FC = () => {
     news_generation: {
       label: 'Генерация новостей',
       description: 'Промпт для генерации новостей'
+    },
+    news_social_generation: {
+      label: 'Посты для соцсетей',
+      description: 'Промпт для генерации контента в соцсети'
     }
   };
   const [prompts, setPrompts] = useState<Prompt[]>([]);
@@ -775,6 +787,22 @@ export const PromptsManagement: React.FC = () => {
                     <span className="ml-2 text-green-700 bg-green-100 px-2 py-0.5 rounded-full">ок</span>
                   )}
                 </div>
+                {Array.isArray(item.by_content_mode) && item.by_content_mode.length > 0 && (
+                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                    <div className="text-[11px] uppercase tracking-wide text-slate-600">Конверсия по content mode</div>
+                    <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {item.by_content_mode.map((mode) => (
+                        <div key={`${item.prompt_key}-${mode.content_mode}`} className="text-xs text-slate-700">
+                          <span className="font-medium">{mode.content_mode}</span>
+                          <span className="ml-2">gen: {mode.generated_count}</span>
+                          <span className="ml-2">accept: {mode.accepted_count}</span>
+                          <span className="ml-2">accept%: {Math.round((mode.acceptance_rate || 0) * 100)}%</span>
+                          <span className="ml-2">raw%: {Math.round((mode.accepted_raw_rate || 0) * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
