@@ -6,6 +6,14 @@ import { useToast } from '../hooks/use-toast';
 import { newAuth } from '../lib/auth_new';
 import { Save, Loader2, History, RefreshCcw, Copy } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from './ui/dialog';
 
 interface Prompt {
   type: string;
@@ -22,6 +30,18 @@ interface PromptVersion {
   description?: string;
   created_at?: string;
   created_by?: string;
+}
+
+interface DiffPreviewState {
+  promptType: string;
+  version: PromptVersion;
+}
+
+interface DiffLine {
+  index: number;
+  current: string;
+  selected: string;
+  changed: boolean;
 }
 
 
@@ -49,6 +69,7 @@ export const PromptsManagement: React.FC = () => {
   const [loadingVersions, setLoadingVersions] = useState<Record<string, boolean>>({});
   const [versionsOpen, setVersionsOpen] = useState<Record<string, boolean>>({});
   const [promptVersions, setPromptVersions] = useState<Record<string, PromptVersion[]>>({});
+  const [diffPreview, setDiffPreview] = useState<DiffPreviewState | null>(null);
   const [editedPrompts, setEditedPrompts] = useState<Record<string, { text: string; description: string }>>({});
   const { toast } = useToast();
 
@@ -203,6 +224,24 @@ export const PromptsManagement: React.FC = () => {
     } finally {
       setPublishingVersion(null);
     }
+  };
+
+  const buildLineDiff = (currentText: string, selectedText: string): DiffLine[] => {
+    const currentLines = (currentText || '').split('\n');
+    const selectedLines = (selectedText || '').split('\n');
+    const maxLen = Math.max(currentLines.length, selectedLines.length);
+    const lines: DiffLine[] = [];
+    for (let i = 0; i < maxLen; i += 1) {
+      const current = currentLines[i] ?? '';
+      const selected = selectedLines[i] ?? '';
+      lines.push({
+        index: i + 1,
+        current,
+        selected,
+        changed: current !== selected
+      });
+    }
+    return lines;
   };
 
   if (loading) {
@@ -376,7 +415,7 @@ export const PromptsManagement: React.FC = () => {
                                   size="sm"
                                   variant="secondary"
                                   disabled={publishingVersion === opKey}
-                                  onClick={() => publishVersionAsCurrent(type, version)}
+                                  onClick={() => setDiffPreview({ promptType: type, version })}
                                 >
                                   {publishingVersion === opKey ? (
                                     <>
@@ -384,7 +423,7 @@ export const PromptsManagement: React.FC = () => {
                                       Применение...
                                     </>
                                   ) : (
-                                    'Сделать текущей'
+                                    'Diff и применить'
                                   )}
                                 </Button>
                               )}
@@ -400,6 +439,82 @@ export const PromptsManagement: React.FC = () => {
           </div>
         );
       })}
+
+      <Dialog open={!!diffPreview} onOpenChange={(open) => !open && setDiffPreview(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              Сравнение версий {diffPreview ? `(${diffPreview.promptType})` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Слева текущий промпт, справа выбранная версия. Изменённые строки подсвечены.
+            </DialogDescription>
+          </DialogHeader>
+
+          {diffPreview && (() => {
+            const currentPrompt = prompts.find((p) => p.type === diffPreview.promptType);
+            const diff = buildLineDiff(currentPrompt?.text || '', diffPreview.version.prompt_text || '');
+            const changedCount = diff.filter((d) => d.changed).length;
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-auto">
+                <div>
+                  <div className="text-sm font-semibold mb-2">Текущая версия (v{currentPrompt?.current_version || 1})</div>
+                  <div className="border rounded-md bg-white">
+                    {diff.map((line) => (
+                      <div
+                        key={`current-${line.index}`}
+                        className={`px-2 py-1 text-xs font-mono whitespace-pre-wrap border-b border-gray-100 ${line.changed ? 'bg-red-50' : ''}`}
+                      >
+                        <span className="text-gray-400 mr-2">{line.index}</span>
+                        {line.current || ' '}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold mb-2">
+                    Выбранная версия (v{diffPreview.version.version}) · изменений: {changedCount}
+                  </div>
+                  <div className="border rounded-md bg-white">
+                    {diff.map((line) => (
+                      <div
+                        key={`selected-${line.index}`}
+                        className={`px-2 py-1 text-xs font-mono whitespace-pre-wrap border-b border-gray-100 ${line.changed ? 'bg-green-50' : ''}`}
+                      >
+                        <span className="text-gray-400 mr-2">{line.index}</span>
+                        {line.selected || ' '}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiffPreview(null)}>
+              Отмена
+            </Button>
+            <Button
+              disabled={!diffPreview || publishingVersion === `${diffPreview.promptType}:${diffPreview.version.version}`}
+              onClick={async () => {
+                if (!diffPreview) return;
+                await publishVersionAsCurrent(diffPreview.promptType, diffPreview.version);
+                setDiffPreview(null);
+              }}
+            >
+              {diffPreview && publishingVersion === `${diffPreview.promptType}:${diffPreview.version.version}` ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Применение...
+                </>
+              ) : (
+                'Сделать текущей'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
