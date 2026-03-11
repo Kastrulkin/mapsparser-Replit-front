@@ -3099,6 +3099,376 @@ def partnership_draft_offer(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/drafts", methods=["GET"])
+def partnership_list_drafts():
+    """User-level list of partnership outreach drafts."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        status_filter = str(request.args.get("status") or "").strip().lower() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            query = """
+                SELECT
+                    d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
+                    d.generated_text, d.edited_text, d.approved_text,
+                    d.learning_note_json, d.created_at, d.updated_at,
+                    l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+            """
+            params: list[Any] = [business_id]
+            if status_filter:
+                query += " AND d.status = %s"
+                params.append(status_filter)
+            query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT 200"
+            cur.execute(query, tuple(params))
+            rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+        finally:
+            conn.close()
+        return jsonify({"success": True, "drafts": rows, "count": len(rows)})
+    except Exception as e:
+        print(f"Error listing partnership drafts: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/drafts/<string:draft_id>/approve", methods=["POST"])
+def partnership_approve_draft(draft_id):
+    """User-level approval for partnership draft."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        approved_text = str(data.get("approved_text") or "").strip()
+        if not approved_text:
+            return jsonify({"error": "approved_text is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            ensure_ai_learning_events_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE d.id = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                LIMIT 1
+                """,
+                (draft_id, business_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Draft not found"}), 404
+            draft_row = dict(row) if hasattr(row, "keys") else {
+                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4]
+            }
+
+            edited_text = str(draft_row.get("edited_text") or "")
+            generated_text = str(draft_row.get("generated_text") or "")
+            edited_before_accept = approved_text != generated_text
+
+            cur.execute(
+                """
+                UPDATE outreachmessagedrafts
+                SET approved_text = %s,
+                    status = %s,
+                    learning_note_json = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id, lead_id, channel, angle_type, tone, status,
+                          generated_text, edited_text, approved_text,
+                          learning_note_json, created_at, updated_at
+                """,
+                (
+                    approved_text,
+                    DRAFT_APPROVED,
+                    Json({"intent": "partnership_outreach"}),
+                    draft_id,
+                ),
+            )
+            updated = cur.fetchone()
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    partnership_stage = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (DRAFT_APPROVED, "proposal_approved", draft_row["lead_id"]),
+            )
+            record_ai_learning_event(
+                capability="partnership.draft_offer",
+                event_type="accepted",
+                intent="partnership_outreach",
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                accepted=True,
+                edited_before_accept=edited_before_accept,
+                draft_text=generated_text[:3000] if generated_text else None,
+                final_text=approved_text[:3000],
+                metadata={"draft_id": draft_id, "lead_id": draft_row["lead_id"]},
+                conn=conn,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        payload = dict(updated) if hasattr(updated, "keys") else updated
+        return jsonify({"success": True, "draft": _serialize_draft(payload)})
+    except Exception as e:
+        print(f"Error approving partnership draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                d.id, d.lead_id, d.channel, d.status,
+                d.generated_text, d.edited_text, d.approved_text,
+                d.created_at, d.updated_at,
+                l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+            FROM outreachmessagedrafts d
+            JOIN prospectingleads l ON l.id = d.lead_id
+            WHERE d.status = %s
+              AND l.business_id = %s
+              AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM outreachsendqueue q
+                    WHERE q.draft_id = d.id
+              )
+            ORDER BY d.updated_at DESC, d.created_at DESC
+            """,
+            (DRAFT_APPROVED, business_id),
+        )
+        ready_drafts = [_serialize_draft(dict(row)) for row in cur.fetchall()]
+
+        cur.execute(
+            """
+            SELECT DISTINCT b.id, b.batch_date, b.daily_limit, b.status, b.created_by, b.approved_by, b.created_at, b.updated_at
+            FROM outreachsendbatches b
+            JOIN outreachsendqueue q ON q.batch_id = b.id
+            JOIN prospectingleads l ON l.id = q.lead_id
+            WHERE l.business_id = %s
+              AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+            ORDER BY b.batch_date DESC, b.created_at DESC
+            LIMIT 20
+            """,
+            (business_id,),
+        )
+        batch_rows = [_serialize_batch_row(dict(row)) for row in cur.fetchall()]
+        batches_by_id = {row["id"]: row for row in batch_rows}
+        if batches_by_id:
+            cur.execute(
+                """
+                SELECT
+                    q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
+                    q.delivery_status, q.provider_message_id, q.error_text,
+                    q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
+                    q.created_at, q.updated_at,
+                    l.name AS lead_name,
+                    d.approved_text, d.generated_text
+                FROM outreachsendqueue q
+                JOIN prospectingleads l ON l.id = q.lead_id
+                JOIN outreachmessagedrafts d ON d.id = q.draft_id
+                WHERE q.batch_id = ANY(%s)
+                ORDER BY q.created_at ASC
+                """,
+                (list(batches_by_id.keys()),),
+            )
+            for row in cur.fetchall():
+                payload = dict(row)
+                batches_by_id[payload["batch_id"]]["items"].append(payload)
+        return {"ready_drafts": ready_drafts, "batches": batch_rows}
+    finally:
+        conn.close()
+
+
+@admin_prospecting_bp.route("/api/partnership/send-batches", methods=["GET"])
+def partnership_send_batches():
+    """User-level partnership send queue snapshot."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+        finally:
+            conn.close()
+        snapshot = _load_partnership_send_snapshot(business_id=business_id)
+        return jsonify({"success": True, "daily_cap": MAX_DAILY_OUTREACH_BATCH, **snapshot})
+    except Exception as e:
+        print(f"Error loading partnership send batches: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/send-batches", methods=["POST"])
+def partnership_create_send_batch():
+    """Create partnership send batch from approved drafts of one business."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        draft_ids = data.get("draft_ids") or None
+        if draft_ids is not None and not isinstance(draft_ids, list):
+            return jsonify({"error": "draft_ids must be an array"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+        finally:
+            conn.close()
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            remaining_slots = _remaining_daily_outreach_slots(conn)
+            if remaining_slots <= 0:
+                return jsonify({"error": f"Daily outreach cap reached ({MAX_DAILY_OUTREACH_BATCH}/day)"}), 400
+
+            query = """
+                SELECT d.id, d.lead_id, d.channel
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE d.status = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM outreachsendqueue q
+                        WHERE q.draft_id = d.id
+                  )
+            """
+            params: list[Any] = [DRAFT_APPROVED, business_id]
+            if draft_ids:
+                query += " AND d.id = ANY(%s)"
+                params.append(draft_ids)
+            query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+            params.append(remaining_slots)
+            cur.execute(query, tuple(params))
+            rows = [dict(row) for row in cur.fetchall()]
+            if not rows:
+                return jsonify({"error": "No approved partnership drafts available for queue"}), 400
+
+            batch_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachsendbatches (
+                    id, batch_date, daily_limit, status, created_by
+                ) VALUES (%s, CURRENT_DATE, %s, %s, %s)
+                """,
+                (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_DRAFT, user_data["user_id"]),
+            )
+            for row in rows:
+                cur.execute(
+                    """
+                    INSERT INTO outreachsendqueue (
+                        id, batch_id, lead_id, draft_id, channel, delivery_status
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (str(uuid.uuid4()), batch_id, row["lead_id"], row["id"], row["channel"], QUEUE_STATUS_QUEUED),
+                )
+                cur.execute(
+                    """
+                    UPDATE prospectingleads
+                    SET status = %s,
+                        partnership_stage = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (QUEUED_FOR_SEND, "queued_for_send", row["lead_id"]),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        snapshot = _load_partnership_send_snapshot(business_id=business_id)
+        batch = next((item for item in snapshot["batches"] if item["id"] == batch_id), None)
+        return jsonify({"success": True, "daily_cap": MAX_DAILY_OUTREACH_BATCH, "batch": batch, **snapshot})
+    except Exception as e:
+        print(f"Error creating partnership send batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/send-batches/<string:batch_id>/approve", methods=["POST"])
+def partnership_approve_send_batch(batch_id):
+    """Approve partnership batch for dispatch."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT 1
+                FROM outreachsendqueue q
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE q.batch_id = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                LIMIT 1
+                """,
+                (batch_id, business_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "Batch not found"}), 404
+        finally:
+            conn.close()
+
+        batch, approve_error = _approve_send_batch(batch_id, user_data["user_id"])
+        if approve_error:
+            return jsonify({"error": approve_error}), 400
+        snapshot = _load_partnership_send_snapshot(business_id=business_id)
+        return jsonify({"success": True, "batch": batch, **snapshot})
+    except Exception as e:
+        print(f"Error approving partnership send batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/status", methods=["POST"])
 def update_lead_status(lead_id):
     """Update lead status."""

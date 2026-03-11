@@ -18,6 +18,33 @@ type PartnershipLead = {
   updated_at?: string;
 };
 
+type PartnershipDraft = {
+  id: string;
+  lead_id: string;
+  lead_name?: string;
+  channel?: string;
+  status?: string;
+  generated_text?: string;
+  edited_text?: string;
+  approved_text?: string;
+  updated_at?: string;
+};
+
+type PartnershipBatch = {
+  id: string;
+  status: string;
+  batch_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  items?: Array<{
+    id: string;
+    lead_name?: string;
+    delivery_status?: string;
+    error_text?: string;
+    channel?: string;
+  }>;
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -37,6 +64,9 @@ export const PartnershipSearchPage: React.FC = () => {
   const [auditData, setAuditData] = useState<any>(null);
   const [matchData, setMatchData] = useState<any>(null);
   const [draftText, setDraftText] = useState('');
+  const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
+  const [batches, setBatches] = useState<PartnershipBatch[]>([]);
+  const [queueReadyDrafts, setQueueReadyDrafts] = useState<PartnershipDraft[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,8 +96,27 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadDrafts = async () => {
+    if (!currentBusinessId) return;
+    const data = await newAuth.makeRequest(`/partnership/drafts?business_id=${encodeURIComponent(currentBusinessId)}`, {
+      method: 'GET',
+    });
+    setDrafts(Array.isArray(data.drafts) ? data.drafts : []);
+  };
+
+  const loadBatches = async () => {
+    if (!currentBusinessId) return;
+    const data = await newAuth.makeRequest(`/partnership/send-batches?business_id=${encodeURIComponent(currentBusinessId)}`, {
+      method: 'GET',
+    });
+    setBatches(Array.isArray(data.batches) ? data.batches : []);
+    setQueueReadyDrafts(Array.isArray(data.ready_drafts) ? data.ready_drafts : []);
+  };
+
   useEffect(() => {
     void loadLeads();
+    void loadDrafts();
+    void loadBatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
 
@@ -91,6 +140,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setMessage(`Импортировано: ${data.imported_count || 0}, пропущено: ${data.skipped_count || 0}`);
       setLinksText('');
       await loadLeads();
+      await loadDrafts();
+      await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
     } finally {
@@ -112,6 +163,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setAuditData(data.snapshot || null);
       setSelectedLeadId(leadId);
       await loadLeads();
+      await loadDrafts();
+      await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить аудит');
     } finally {
@@ -132,6 +185,8 @@ export const PartnershipSearchPage: React.FC = () => {
       setMatchData(data.result || null);
       setSelectedLeadId(leadId);
       await loadLeads();
+      await loadDrafts();
+      await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить матчинг');
     } finally {
@@ -151,8 +206,72 @@ export const PartnershipSearchPage: React.FC = () => {
       setDraftText(data.text || '');
       setSelectedLeadId(leadId);
       await loadLeads();
+      await loadDrafts();
+      await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось сгенерировать первое письмо');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const approveDraft = async (draftId: string, text: string) => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/drafts/${draftId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, approved_text: text }),
+      });
+      setMessage('Черновик утверждён');
+      await loadDrafts();
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось утвердить черновик');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createBatch = async () => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/send-batches', {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId }),
+      });
+      if (data.batch?.id) {
+        setMessage(`Batch создан: ${data.batch.id}`);
+      } else {
+        setMessage('Batch создан');
+      }
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось создать batch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const approveBatch = async (batchId: string) => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/send-batches/${batchId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId }),
+      });
+      setMessage(`Batch утверждён: ${batchId}`);
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось утвердить batch');
     } finally {
       setLoading(false);
     }
@@ -291,6 +410,90 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Черновики партнёрского оффера</h2>
+              <Button variant="outline" onClick={() => void loadDrafts()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {drafts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Черновиков пока нет.</p>
+            ) : (
+              drafts.map((draft) => (
+                <div key={draft.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="text-sm font-semibold text-foreground">{draft.lead_name || draft.lead_id}</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    статус: {draft.status || '—'} · канал: {draft.channel || '—'}
+                  </div>
+                  <Textarea
+                    rows={5}
+                    value={draft.approved_text || draft.edited_text || draft.generated_text || ''}
+                    onChange={(e) =>
+                      setDrafts((prev) =>
+                        prev.map((x) => (x.id === draft.id ? { ...x, approved_text: e.target.value } : x))
+                      )
+                    }
+                  />
+                  <div className="flex justify-end mt-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void approveDraft(draft.id, draft.approved_text || draft.edited_text || draft.generated_text || '')}
+                      disabled={loading}
+                    >
+                      Утвердить для отправки
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Очередь отправки партнёрств</h2>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => void loadBatches()} disabled={loading}>
+                  Обновить
+                </Button>
+                <Button onClick={createBatch} disabled={loading || queueReadyDrafts.length === 0}>
+                  Создать batch ({queueReadyDrafts.length})
+                </Button>
+              </div>
+            </div>
+            {batches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Batch пока нет.</p>
+            ) : (
+              batches.map((batch) => (
+                <div key={batch.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-foreground">{batch.id}</div>
+                      <div className="text-xs text-muted-foreground">
+                        статус: {batch.status} · элементов: {(batch.items || []).length}
+                      </div>
+                    </div>
+                    {batch.status === 'draft' && (
+                      <Button size="sm" onClick={() => void approveBatch(batch.id)} disabled={loading}>
+                        Утвердить batch
+                      </Button>
+                    )}
+                  </div>
+                  {(batch.items || []).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {(batch.items || []).slice(0, 6).map((item) => (
+                        <div key={item.id} className="text-xs text-muted-foreground">
+                          {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
+                          {item.error_text ? ` · ${item.error_text}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </>
       )}
 
@@ -307,4 +510,3 @@ export const PartnershipSearchPage: React.FC = () => {
     </div>
   );
 };
-
