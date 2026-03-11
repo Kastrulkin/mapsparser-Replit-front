@@ -15559,6 +15559,80 @@ def _ensure_prompt_templates_schema(cursor):
     )
 
 
+def _ensure_prompt_audit_schema(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS prompttemplateaudits (
+            id TEXT PRIMARY KEY,
+            prompt_key TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            actor_user_id TEXT,
+            actor_is_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
+            prev_version INTEGER,
+            next_version INTEGER,
+            note TEXT,
+            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_prompttemplateaudits_key_created ON prompttemplateaudits(prompt_key, created_at DESC)"
+    )
+
+
+def _record_prompt_audit(
+    cursor,
+    *,
+    prompt_key: str,
+    action_type: str,
+    actor_user_id: str | None = None,
+    actor_is_superadmin: bool = False,
+    prev_version: int | None = None,
+    next_version: int | None = None,
+    note: str | None = None,
+    metadata: dict | None = None,
+):
+    _ensure_prompt_audit_schema(cursor)
+    cursor.execute(
+        """
+        INSERT INTO prompttemplateaudits (
+            id, prompt_key, action_type, actor_user_id, actor_is_superadmin,
+            prev_version, next_version, note, metadata_json
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            f"pta_{uuid.uuid4()}",
+            str(prompt_key or "").strip(),
+            str(action_type or "").strip(),
+            (str(actor_user_id).strip() if actor_user_id else None),
+            bool(actor_is_superadmin),
+            prev_version,
+            next_version,
+            (str(note).strip() if note else None),
+            Json(metadata or {}),
+        ),
+    )
+
+
+def _get_prompts_auth():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None, jsonify({"error": "Требуется авторизация"}), 401
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, jsonify({"error": "Недействительный токен"}), 401
+    return user_data, None, None
+
+
+def _can_publish_prompts(db: DatabaseManager, user_id: str) -> bool:
+    try:
+        return bool(db.is_superadmin(user_id))
+    except Exception:
+        return False
+
+
 def _seed_prompt_versions_from_ai_prompts(cursor):
     cursor.execute("SELECT prompt_type, prompt_text, description, updated_by FROM AIPrompts")
     rows = cursor.fetchall()
@@ -15598,22 +15672,15 @@ def _seed_prompt_versions_from_ai_prompts(cursor):
 
 @app.route('/api/admin/prompts', methods=['GET', 'OPTIONS'])
 def get_prompts():
-    """Получить все промпты (только для суперадмина)"""
+    """Получить все промпты"""
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            return jsonify({"error": "Недостаточно прав"}), 403
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
         
         cursor = db.conn.cursor()
         # Проверяем, существует ли таблица, если нет - создаём
@@ -15694,7 +15761,15 @@ def get_prompts():
             })
         
         db.close()
-        return jsonify({"prompts": prompts})
+        return jsonify(
+            {
+                "prompts": prompts,
+                "permissions": {
+                    "can_view": True,
+                    "can_publish": can_publish,
+                },
+            }
+        )
         
     except Exception as e:
         print(f"❌ Ошибка получения промптов: {e}")
@@ -15708,17 +15783,12 @@ def update_prompt(prompt_type):
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-        
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        if not can_publish:
             return jsonify({"error": "Недостаточно прав"}), 403
         
         data = request.get_json()
@@ -15790,6 +15860,17 @@ def update_prompt(prompt_type):
             """,
             (next_version, description, user_data["user_id"], prompt_type),
         )
+        _record_prompt_audit(
+            cursor,
+            prompt_key=prompt_type,
+            action_type="save_and_publish",
+            actor_user_id=user_data["user_id"],
+            actor_is_superadmin=can_publish,
+            prev_version=current_version,
+            next_version=next_version,
+            note="prompt updated via PUT /api/admin/prompts/<prompt_type>",
+            metadata={"source": "admin_prompts_ui"},
+        )
         
         db.conn.commit()
         db.close()
@@ -15805,18 +15886,13 @@ def update_prompt(prompt_type):
 
 @app.route('/api/admin/prompts/<prompt_type>', methods=['GET'])
 def get_prompt_by_key(prompt_type):
-    """Получить конкретный промпт и его версии (только для суперадмина)."""
+    """Получить конкретный промпт и его версии."""
     try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            return jsonify({"error": "Недостаточно прав"}), 403
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
 
         cursor = db.conn.cursor()
         _ensure_prompt_templates_schema(cursor)
@@ -15883,6 +15959,7 @@ def get_prompt_by_key(prompt_type):
                     "updated_by": template_dict["updated_by"] if hasattr(template_dict, "__getitem__") else template_dict.get("updated_by"),
                 },
                 "versions": versions,
+                "permissions": {"can_view": True, "can_publish": can_publish},
             }
         )
     except Exception as e:
@@ -15896,15 +15973,12 @@ def create_prompt_version(prompt_type):
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
         db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        if not can_publish:
             return jsonify({"error": "Недостаточно прав"}), 403
 
         data = request.get_json(silent=True) or {}
@@ -15958,6 +16032,17 @@ def create_prompt_version(prompt_type):
             """,
             (next_version, description or None, user_data["user_id"], prompt_type),
         )
+        _record_prompt_audit(
+            cursor,
+            prompt_key=prompt_type,
+            action_type="publish_version",
+            actor_user_id=user_data["user_id"],
+            actor_is_superadmin=can_publish,
+            prev_version=current_version,
+            next_version=next_version,
+            note="prompt version published via POST /api/admin/prompts/<prompt_type>/version",
+            metadata={"source": "admin_prompts_ui"},
+        )
         cursor.execute(
             """
             INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
@@ -15976,6 +16061,211 @@ def create_prompt_version(prompt_type):
         return jsonify({"success": True, "prompt_key": prompt_type, "version": next_version})
     except Exception as e:
         print(f"❌ Ошибка создания версии промпта: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/prompts/audit', methods=['GET'])
+def get_prompt_audit_log():
+    """Журнал действий по версиям промптов."""
+    try:
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
+
+        db = DatabaseManager()
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        cursor = db.conn.cursor()
+        _ensure_prompt_audit_schema(cursor)
+
+        prompt_type = str(request.args.get('prompt_type') or '').strip()
+        limit = max(1, min(int(request.args.get('limit') or 100), 500))
+        where_sql = []
+        params = []
+        if prompt_type:
+            where_sql.append("prompt_key = %s")
+            params.append(prompt_type)
+
+        query = """
+            SELECT
+                id, prompt_key, action_type, actor_user_id, actor_is_superadmin,
+                prev_version, next_version, note, metadata_json, created_at
+            FROM prompttemplateaudits
+        """
+        if where_sql:
+            query += f" WHERE {' AND '.join(where_sql)}"
+        query += " ORDER BY created_at DESC LIMIT %s"
+        params.append(limit)
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        db.close()
+
+        items = []
+        for row in rows:
+            if hasattr(row, "get"):
+                items.append(
+                    {
+                        "id": row.get("id"),
+                        "prompt_key": row.get("prompt_key"),
+                        "action_type": row.get("action_type"),
+                        "actor_user_id": row.get("actor_user_id"),
+                        "actor_is_superadmin": bool(row.get("actor_is_superadmin")),
+                        "prev_version": row.get("prev_version"),
+                        "next_version": row.get("next_version"),
+                        "note": row.get("note"),
+                        "metadata_json": row.get("metadata_json") or {},
+                        "created_at": row.get("created_at"),
+                    }
+                )
+            else:
+                items.append(
+                    {
+                        "id": row[0],
+                        "prompt_key": row[1],
+                        "action_type": row[2],
+                        "actor_user_id": row[3],
+                        "actor_is_superadmin": bool(row[4]),
+                        "prev_version": row[5],
+                        "next_version": row[6],
+                        "note": row[7],
+                        "metadata_json": row[8] or {},
+                        "created_at": row[9],
+                    }
+                )
+
+        return jsonify(
+            {
+                "success": True,
+                "items": items,
+                "count": len(items),
+                "permissions": {"can_view": True, "can_publish": can_publish},
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка получения журнала промптов: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/prompts/recommendations', methods=['GET'])
+def get_prompt_recommendations():
+    """Рекомендации по текущей версии промптов на основе learning событий."""
+    try:
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
+
+        db = DatabaseManager()
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        cursor = db.conn.cursor()
+        _ensure_prompt_templates_schema(cursor)
+
+        prompt_type = str(request.args.get('prompt_type') or '').strip()
+        days = max(1, min(int(request.args.get('days') or 30), 365))
+
+        where_sql = ["created_at >= NOW() - (%s || ' days')::interval"]
+        params = [str(days)]
+        if prompt_type:
+            where_sql.append("prompt_key = %s")
+            params.append(prompt_type)
+
+        cursor.execute(
+            f"""
+            SELECT
+                prompt_key,
+                COALESCE(prompt_version, '0') AS prompt_version,
+                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
+                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
+                COUNT(*) FILTER (WHERE edited_before_accept IS TRUE) AS edited_count
+            FROM ailearningevents
+            WHERE {' AND '.join(where_sql)}
+            GROUP BY prompt_key, COALESCE(prompt_version, '0')
+            """,
+            tuple(params),
+        )
+        perf_rows = cursor.fetchall()
+
+        perf_map: dict[str, list[dict]] = {}
+        for row in perf_rows:
+            if hasattr(row, "get"):
+                key = str(row.get("prompt_key") or "").strip()
+                version = str(row.get("prompt_version") or "0").strip()
+                generated = int(row.get("generated_count") or 0)
+                accepted = int(row.get("accepted_count") or 0)
+                edited = int(row.get("edited_count") or 0)
+            else:
+                key = str(row[0] or "").strip()
+                version = str(row[1] or "0").strip()
+                generated = int(row[2] or 0)
+                accepted = int(row[3] or 0)
+                edited = int(row[4] or 0)
+            if not key:
+                continue
+            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
+            edit_rate = (edited / accepted) if accepted > 0 else 0.0
+            # weight acceptance up, edits down; ignore tiny samples
+            confidence = min(1.0, generated / 20.0)
+            score = (acceptance_rate * 0.85 + (1.0 - edit_rate) * 0.15) * confidence
+            perf_map.setdefault(key, []).append(
+                {
+                    "prompt_version": version,
+                    "generated_count": generated,
+                    "accepted_count": accepted,
+                    "edited_count": edited,
+                    "acceptance_rate": round(acceptance_rate, 4),
+                    "edit_rate": round(edit_rate, 4),
+                    "score": round(score, 4),
+                }
+            )
+
+        cursor.execute(
+            """
+            SELECT prompt_key, current_version
+            FROM prompttemplates
+            """
+        )
+        template_rows = cursor.fetchall()
+        db.close()
+
+        items = []
+        for row in template_rows:
+            if hasattr(row, "get"):
+                key = str(row.get("prompt_key") or "").strip()
+                current_version = int(row.get("current_version") or 1)
+            else:
+                key = str(row[0] or "").strip()
+                current_version = int(row[1] or 1)
+            if prompt_type and key != prompt_type:
+                continue
+            versions = sorted(
+                perf_map.get(key, []),
+                key=lambda item: item.get("score", 0.0),
+                reverse=True,
+            )
+            recommended_version = str(current_version)
+            if versions:
+                best = versions[0]
+                if int(best.get("generated_count") or 0) >= 3:
+                    recommended_version = str(best.get("prompt_version") or recommended_version)
+            items.append(
+                {
+                    "prompt_key": key,
+                    "current_version": str(current_version),
+                    "recommended_version": recommended_version,
+                    "is_change_recommended": str(current_version) != str(recommended_version),
+                    "window_days": days,
+                    "versions": versions[:10],
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "items": items,
+                "count": len(items),
+                "permissions": {"can_view": True, "can_publish": can_publish},
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка расчёта рекомендаций по промптам: {e}")
         return jsonify({"error": str(e)}), 500
 
 def get_prompt_record_from_db(prompt_type: str, fallback: str = None) -> tuple[str, int | None]:

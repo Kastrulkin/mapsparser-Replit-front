@@ -9,7 +9,8 @@ import {
   MessageSquare,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  Handshake
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -73,6 +74,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.aiChatPromotion,
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
+    },
+    {
+      id: 'partnerships',
+      label: language === 'ru' ? 'Поиск партнёрств' : 'Partnership Search',
+      icon: Handshake,
+      path: '/dashboard/partnerships',
     },
     {
       id: 'settings',

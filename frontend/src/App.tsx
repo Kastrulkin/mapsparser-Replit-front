@@ -23,6 +23,7 @@ import { AdminPage } from "./pages/dashboard/AdminPage";
 import { BookingsPage } from "./pages/dashboard/BookingsPage";
 import { ChatsPage } from "./pages/dashboard/ChatsPage";
 import { AIChatPromotionPage } from "./pages/dashboard/AIChatPromotionPage";
+import { PartnershipSearchPage } from "./pages/dashboard/PartnershipSearchPage";
 import SetPassword from "./pages/SetPassword";
 import Contact from "./pages/Contact";
 import Policy from "./pages/Policy";
@@ -63,6 +64,7 @@ const AppContent = () => {
             <Route path="finance" element={<FinancePage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="partnerships" element={<PartnershipSearchPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />

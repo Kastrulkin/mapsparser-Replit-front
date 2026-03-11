@@ -50,6 +50,39 @@ interface PromptHistoryFilter {
   dateTo: string;
 }
 
+interface PromptPermissions {
+  can_view: boolean;
+  can_publish: boolean;
+}
+
+interface PromptAuditItem {
+  id: string;
+  prompt_key: string;
+  action_type: string;
+  actor_user_id?: string;
+  prev_version?: number;
+  next_version?: number;
+  note?: string;
+  created_at?: string;
+}
+
+interface PromptRecommendation {
+  prompt_key: string;
+  current_version: string;
+  recommended_version: string;
+  is_change_recommended: boolean;
+  window_days: number;
+  versions: Array<{
+    prompt_version: string;
+    generated_count: number;
+    accepted_count: number;
+    edited_count: number;
+    acceptance_rate: number;
+    edit_rate: number;
+    score: number;
+  }>;
+}
+
 
 export const PromptsManagement: React.FC = () => {
   const { t } = useLanguage();
@@ -77,6 +110,9 @@ export const PromptsManagement: React.FC = () => {
   const [promptVersions, setPromptVersions] = useState<Record<string, PromptVersion[]>>({});
   const [diffPreview, setDiffPreview] = useState<DiffPreviewState | null>(null);
   const [historyFilters, setHistoryFilters] = useState<Record<string, PromptHistoryFilter>>({});
+  const [permissions, setPermissions] = useState<PromptPermissions>({ can_view: true, can_publish: false });
+  const [auditItems, setAuditItems] = useState<PromptAuditItem[]>([]);
+  const [recommendations, setRecommendations] = useState<PromptRecommendation[]>([]);
   const [editedPrompts, setEditedPrompts] = useState<Record<string, { text: string; description: string }>>({});
   const { toast } = useToast();
 
@@ -92,6 +128,10 @@ export const PromptsManagement: React.FC = () => {
       });
 
       setPrompts(data.prompts || []);
+      setPermissions({
+        can_view: data.permissions?.can_view !== false,
+        can_publish: data.permissions?.can_publish === true
+      });
 
       // Инициализируем editedPrompts
       const initial: Record<string, { text: string; description: string }> = {};
@@ -99,6 +139,7 @@ export const PromptsManagement: React.FC = () => {
         initial[p.type] = { text: p.text, description: p.description || '' };
       });
       setEditedPrompts(initial);
+      void loadPromptInsights();
     } catch (error: any) {
       console.error('Ошибка загрузки промптов:', error);
       toast({
@@ -108,6 +149,19 @@ export const PromptsManagement: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPromptInsights = async () => {
+    try {
+      const [auditData, recData] = await Promise.all([
+        newAuth.makeRequest('/admin/prompts/audit?limit=50', { method: 'GET' }),
+        newAuth.makeRequest('/admin/prompts/recommendations?days=30', { method: 'GET' }),
+      ]);
+      setAuditItems(Array.isArray(auditData.items) ? auditData.items : []);
+      setRecommendations(Array.isArray(recData.items) ? recData.items : []);
+    } catch (error) {
+      console.error('Ошибка загрузки prompt insights:', error);
     }
   };
 
@@ -405,7 +459,7 @@ export const PromptsManagement: React.FC = () => {
               <div className="flex justify-end">
                 <Button
                   onClick={() => handleSave(type)}
-                  disabled={!hasChanges || saving === type}
+                  disabled={!permissions.can_publish || !hasChanges || saving === type}
                   variant={hasChanges ? 'default' : 'outline'}
                 >
                   {saving === type ? (
@@ -582,7 +636,7 @@ export const PromptsManagement: React.FC = () => {
                                   type="button"
                                   size="sm"
                                   variant="secondary"
-                                  disabled={publishingVersion === opKey}
+                                  disabled={!permissions.can_publish || publishingVersion === opKey}
                                   onClick={() => setDiffPreview({ promptType: type, version })}
                                 >
                                   {publishingVersion === opKey ? (
@@ -678,7 +732,7 @@ export const PromptsManagement: React.FC = () => {
               Отмена
             </Button>
             <Button
-              disabled={!diffPreview || publishingVersion === `${diffPreview.promptType}:${diffPreview.version.version}`}
+              disabled={!permissions.can_publish || !diffPreview || publishingVersion === `${diffPreview.promptType}:${diffPreview.version.version}`}
               onClick={async () => {
                 if (!diffPreview) return;
                 await publishVersionAsCurrent(diffPreview.promptType, diffPreview.version);
@@ -697,6 +751,58 @@ export const PromptsManagement: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">Рекомендации по версиям (30 дней)</h3>
+          <Button variant="outline" size="sm" onClick={loadPromptInsights}>
+            <RefreshCcw className="w-4 h-4 mr-2" />
+            Обновить
+          </Button>
+        </div>
+        {recommendations.length === 0 ? (
+          <p className="text-sm text-gray-500">Пока недостаточно данных для рекомендаций.</p>
+        ) : (
+          <div className="space-y-2">
+            {recommendations.map((item) => (
+              <div key={`rec-${item.prompt_key}`} className="rounded-md border border-gray-200 p-3">
+                <div className="text-sm font-medium text-gray-900">{item.prompt_key}</div>
+                <div className="text-xs text-gray-600 mt-1">
+                  Текущая: v{item.current_version} · Рекомендованная: v{item.recommended_version}
+                  {item.is_change_recommended ? (
+                    <span className="ml-2 text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">есть рекомендация</span>
+                  ) : (
+                    <span className="ml-2 text-green-700 bg-green-100 px-2 py-0.5 rounded-full">ок</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Журнал действий по промптам</h3>
+        {auditItems.length === 0 ? (
+          <p className="text-sm text-gray-500">Журнал пока пуст.</p>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-auto">
+            {auditItems.map((item) => (
+              <div key={item.id} className="rounded-md border border-gray-200 p-3 bg-gray-50">
+                <div className="text-sm font-medium text-gray-900">
+                  {item.prompt_key} · {item.action_type}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  v{item.prev_version || '—'} → v{item.next_version || '—'} · user: {item.actor_user_id || '—'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
