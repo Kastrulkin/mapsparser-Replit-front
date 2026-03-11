@@ -96,6 +96,7 @@
 ---
 
 ## Sprint P4: UI “Поиск партнёрств” MVP
+Статус: backend API done (11.03.2026), user UI pending
 ### Задачи
 - Добавить пункт меню `Поиск партнёрств`.
 - Экран ручного импорта ссылок компаний.
@@ -115,6 +116,7 @@
 ---
 
 ## Sprint P5: Partnership Pipeline
+Статус: backend API done (11.03.2026), UI orchestration pending
 ### Задачи
 - Стадии:
   - `imported`
@@ -138,6 +140,7 @@
 ---
 
 ## Sprint P6: Partnership Match Agent
+Статус: local backend MVP done (11.03.2026), OpenClaw capability wiring pending
 ### Задачи
 - Ввести capability:
   - `partnership.audit_card`

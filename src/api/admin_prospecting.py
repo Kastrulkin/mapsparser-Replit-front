@@ -2763,6 +2763,342 @@ def partnership_update_lead(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+def _ensure_partnership_artifacts_table(conn) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS partnershipleadartifacts (
+            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            audit_json JSONB,
+            match_json JSONB,
+            offer_draft_json JSONB,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+
+def _load_partnership_lead(cur, *, lead_id: str, business_id: str):
+    cur.execute(
+        """
+        SELECT *
+        FROM prospectingleads
+        WHERE id = %s
+          AND business_id = %s
+          AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+        LIMIT 1
+        """,
+        (lead_id, business_id),
+    )
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else None
+
+
+def _collect_business_service_names(cur, business_id: str) -> list[str]:
+    cur.execute(
+        """
+        SELECT name
+        FROM userservices
+        WHERE business_id = %s
+          AND (is_active IS TRUE OR is_active IS NULL)
+          AND COALESCE(TRIM(name), '') <> ''
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 200
+        """,
+        (business_id,),
+    )
+    rows = cur.fetchall()
+    result: list[str] = []
+    for row in rows:
+        if hasattr(row, "get"):
+            value = row.get("name")
+        else:
+            value = row[0] if row else None
+        text = str(value or "").strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def _tokenize_match_text(text: str) -> set[str]:
+    import re
+    return {t.lower() for t in re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]{4,}", str(text or ""))}
+
+
+def _extract_partner_service_names_from_snapshot(snapshot: dict[str, Any]) -> list[str]:
+    services_preview = snapshot.get("services_preview") if isinstance(snapshot, dict) else []
+    if not isinstance(services_preview, list):
+        return []
+    names: list[str] = []
+    for item in services_preview:
+        if not isinstance(item, dict):
+            continue
+        current_name = str(item.get("current_name") or "").strip()
+        if current_name:
+            names.append(current_name)
+    return names
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/audit", methods=["POST"])
+def partnership_audit_lead(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+
+            snapshot = build_lead_card_preview_snapshot(lead)
+            cur.execute(
+                """
+                INSERT INTO partnershipleadartifacts (lead_id, audit_json, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET audit_json = EXCLUDED.audit_json,
+                    updated_at = NOW()
+                """,
+                (lead_id, Json(snapshot)),
+            )
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET partnership_stage = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                ("audited", "audited", lead_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "snapshot": snapshot})
+    except Exception as e:
+        print(f"Error partnership audit lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/match", methods=["POST"])
+def partnership_match_lead(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+
+            cur.execute("SELECT audit_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
+            artifact_row = cur.fetchone()
+            audit_json = {}
+            if artifact_row:
+                audit_json = artifact_row["audit_json"] if hasattr(artifact_row, "get") else artifact_row[0]
+            if not isinstance(audit_json, dict) or not audit_json:
+                audit_json = build_lead_card_preview_snapshot(lead)
+
+            own_services = _collect_business_service_names(cur, business_id)
+            partner_services = _extract_partner_service_names_from_snapshot(audit_json)
+
+            own_tokens = _tokenize_match_text(" ".join(own_services))
+            partner_tokens = _tokenize_match_text(" ".join(partner_services))
+            overlap_tokens = sorted(list(own_tokens & partner_tokens))
+            own_unique = sorted(list(own_tokens - partner_tokens))
+            partner_unique = sorted(list(partner_tokens - own_tokens))
+
+            denominator = max(1, len(own_tokens | partner_tokens))
+            score = int(round((len(overlap_tokens) / denominator) * 100))
+            match_result = {
+                "match_score": score,
+                "overlap": overlap_tokens[:30],
+                "complement": {
+                    "our_strength_tokens": own_unique[:30],
+                    "partner_strength_tokens": partner_unique[:30],
+                },
+                "risks": [
+                    "Низкая точность, если у партнёра мало структурированных услуг."
+                    if not partner_services
+                    else "Проверьте каннибализацию по пересекающимся услугам."
+                ],
+                "offer_angles": [
+                    "Кросс-рекомендации по непересекающимся услугам",
+                    "Пакетные предложения с взаимной скидкой",
+                    "Совместный контент/новости для карт и соцсетей",
+                ],
+                "source_counts": {
+                    "our_services": len(own_services),
+                    "partner_services": len(partner_services),
+                },
+            }
+
+            cur.execute(
+                """
+                INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET audit_json = EXCLUDED.audit_json,
+                    match_json = EXCLUDED.match_json,
+                    updated_at = NOW()
+                """,
+                (lead_id, Json(audit_json), Json(match_result)),
+            )
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET partnership_stage = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                ("matched", "matched", lead_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "result": match_result})
+    except Exception as e:
+        print(f"Error partnership match lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/draft-offer", methods=["POST"])
+def partnership_draft_offer(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        tone = str(data.get("tone") or "профессиональный").strip()
+        channel = str(data.get("channel") or "telegram").strip().lower()
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+
+            cur.execute("SELECT match_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
+            row = cur.fetchone()
+            match_json = row["match_json"] if row and hasattr(row, "get") else (row[0] if row else {})
+            if not isinstance(match_json, dict):
+                match_json = {}
+
+            lead_name = str(lead.get("name") or "коллеги").strip()
+            city = str(lead.get("city") or "").strip()
+            overlap = match_json.get("overlap") or []
+            complement = ((match_json.get("complement") or {}).get("partner_strength_tokens") or [])
+            opener = f"Здравствуйте! Мы посмотрели вашу карточку на картах и видим потенциал для партнёрства."
+            if city:
+                opener += f" Работаем рядом в {city}."
+            value_line = "Можем предложить кросс-рекомендации и совместные офферы для обмена клиентским потоком."
+            if overlap:
+                value_line += f" Уже есть пересечения по темам: {', '.join(overlap[:5])}."
+            if complement:
+                value_line += f" И есть комплементарные направления: {', '.join(complement[:5])}."
+            draft_text = "\n".join(
+                [
+                    opener,
+                    value_line,
+                    "Если вам интересно, подготовим короткий план пилота на 2 недели с метриками и прозрачной механикой.",
+                    "Готовы обсудить удобный формат созвона/чата?",
+                ]
+            ).strip()
+
+            draft_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO outreachmessagedrafts (
+                    id, lead_id, channel, angle_type, tone, status,
+                    generated_text, edited_text, learning_note_json, created_by, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, NOW(), NOW()
+                )
+                """,
+                (
+                    draft_id,
+                    lead_id,
+                    channel,
+                    "partnership_offer",
+                    tone,
+                    DRAFT_GENERATED,
+                    draft_text,
+                    draft_text,
+                    Json({"intent": "partnership_outreach", "auto_generated": True}),
+                    user_data["user_id"],
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO partnershipleadartifacts (lead_id, offer_draft_json, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET offer_draft_json = EXCLUDED.offer_draft_json,
+                    updated_at = NOW()
+                """,
+                (lead_id, Json({"draft_id": draft_id, "text": draft_text, "channel": channel, "tone": tone})),
+            )
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET partnership_stage = %s,
+                    status = %s,
+                    selected_channel = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                ("proposal_draft_ready", "proposal_draft_ready", channel, lead_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            record_ai_learning_event(
+                capability="partnership.draft_offer",
+                event_type="generated",
+                intent="partnership_outreach",
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                draft_text="",
+                final_text=draft_text[:3000],
+                metadata={"lead_id": lead_id, "draft_id": draft_id, "channel": channel},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ partnership.draft_offer learning skipped: {learning_exc}")
+
+        return jsonify({"success": True, "draft_id": draft_id, "text": draft_text, "channel": channel})
+    except Exception as e:
+        print(f"Error partnership draft offer: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/status", methods=["POST"])
 def update_lead_status(lead_id):
     """Update lead status."""
