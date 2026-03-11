@@ -67,6 +67,7 @@ from api.admin_prospecting import admin_prospecting_bp
 from core.default_ai_prompts import get_default_ai_prompts
 from core.default_business_types import get_default_business_types
 from core.seo_keywords import collect_ranked_keywords
+from core.ai_learning import record_ai_learning_event
 from core.action_orchestrator import ActionOrchestrator
 from core.channel_router import (
     build_channel_statuses,
@@ -152,6 +153,53 @@ def rate_limit_if_available(limit_str):
             return limiter.limit(limit_str)(f)
         return f
     return decorator
+
+
+def _normalize_learning_intent(raw_intent) -> str:
+    value = str(raw_intent or "operations").strip().lower()
+    allowed = {"operations", "client_outreach", "partnership_outreach"}
+    return value if value in allowed else "operations"
+
+
+def _is_valid_internal_learning_request() -> bool:
+    internal_token = (os.getenv("OPENCLAW_LOCALOS_TOKEN") or "").strip()
+    header_token = (request.headers.get("X-Internal-Token") or "").strip()
+    return bool(internal_token and header_token and secrets.compare_digest(header_token, internal_token))
+
+
+@app.route('/api/ai/learning-events', methods=['POST', 'OPTIONS'])
+def ai_learning_events_internal():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    if not _is_valid_internal_learning_request():
+        return jsonify({"error": "Unauthorized internal request"}), 401
+
+    data = request.get_json(silent=True) or {}
+    capability = str(data.get("capability") or "").strip()
+    event_type = str(data.get("event_type") or "").strip()
+    if not capability or not event_type:
+        return jsonify({"error": "capability and event_type are required"}), 400
+
+    ok = record_ai_learning_event(
+        capability=capability,
+        event_type=event_type,
+        intent=_normalize_learning_intent(data.get("intent")),
+        user_id=data.get("user_id"),
+        business_id=data.get("business_id"),
+        accepted=data.get("accepted"),
+        rejected=data.get("rejected"),
+        edited_before_accept=data.get("edited_before_accept"),
+        outcome=data.get("outcome"),
+        action_id=data.get("action_id"),
+        prompt_key=data.get("prompt_key"),
+        prompt_version=data.get("prompt_version"),
+        draft_text=data.get("draft_text"),
+        final_text=data.get("final_text"),
+        metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+    )
+    if not ok:
+        return jsonify({"error": "failed_to_write_learning_event"}), 500
+    return jsonify({"success": True}), 200
 
 # Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
 app.register_blueprint(messengers_bp)
@@ -1640,9 +1688,13 @@ def resume_parsing_task_captcha(task_id):
         if not task_row:
             db.close()
             return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if not _is_task_in_captcha_state(task_row):
+        if not _is_task_in_captcha_state(task_row) and not _has_captcha_artifacts(task_row):
             db.close()
-            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
+            return jsonify({
+                "success": True,
+                "task_id": task_id,
+                "message": "CAPTCHA-сессия уже очищена"
+            })
         # Надежный режим: всегда переводим в fresh parse cycle.
         # Старую parked captcha-сессию не используем, чтобы избежать зависаний между
         # разными UI-точками/браузерными контекстами.
@@ -1696,7 +1748,15 @@ def expire_parsing_task_captcha(task_id):
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id, status FROM parsequeue WHERE id = %s LIMIT 1", (task_id,))
+        cursor.execute(
+            """
+            SELECT id, status, captcha_url, captcha_session_id, captcha_required, captcha_status
+            FROM parsequeue
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (task_id,),
+        )
         raw_task = cursor.fetchone()
         task_row = _row_to_dict(cursor, raw_task) if raw_task else None
         if not task_row:
@@ -1710,6 +1770,8 @@ def expire_parsing_task_captcha(task_id):
             UPDATE parsequeue
             SET status = %s,
                 retry_after = NULL,
+                captcha_required = 0,
+                captcha_status = NULL,
                 captcha_url = NULL,
                 captcha_session_id = NULL,
                 resume_requested = 0,
@@ -9521,6 +9583,31 @@ def services_optimize():
         db.conn.commit()
         db.close()
 
+        try:
+            first_generated = ""
+            if isinstance(result.get("services"), list) and result["services"]:
+                first_service = result["services"][0] if isinstance(result["services"][0], dict) else {}
+                first_generated = str(first_service.get("optimized_name") or first_service.get("original_name") or "").strip()
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="generated",
+                intent=_normalize_learning_intent(payload.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                accepted=None,
+                metadata={
+                    "services_count": services_count,
+                    "recognize_only": bool(recognize_only),
+                    "from_file": bool(file),
+                    "tone": tone or "professional",
+                    "language": language,
+                },
+                draft_text=content[:1500] if isinstance(content, str) else "",
+                final_text=first_generated,
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ services.optimize learning skipped: {learning_exc}")
+
         return jsonify({
             "success": True,
             "optimization_id": optimization_id,
@@ -9982,6 +10069,25 @@ def news_generate():
         db.conn.commit()
         db.close()
 
+        try:
+            record_ai_learning_event(
+                capability="news.generate",
+                event_type="generated",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                metadata={
+                    "use_service": bool(use_service),
+                    "use_transaction": bool(use_transaction),
+                    "use_seo_keywords": bool(use_seo_keywords),
+                    "language": language,
+                },
+                draft_text=raw_info[:1500],
+                final_text=generated_text[:2000],
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ news.generate learning skipped: {learning_exc}")
+
         return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
     except Exception as e:
         print(f"❌ Ошибка генерации новости: {e}", flush=True)
@@ -10023,15 +10129,102 @@ def news_approve():
             )
             """
         )
+        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        news_row = cur.fetchone()
+        generated_text = ""
+        if news_row:
+            if isinstance(news_row, (list, tuple)):
+                generated_text = str(news_row[0] or "")
+            elif hasattr(news_row, "get"):
+                generated_text = str(news_row.get("generated_text") or "")
+
         cur.execute("UPDATE UserNews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit()
         db.close()
+
+        try:
+            record_ai_learning_event(
+                capability="news.generate",
+                event_type="accepted",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                accepted=True,
+                edited_before_accept=False,
+                draft_text=generated_text[:2000],
+                final_text=generated_text[:2000],
+                metadata={"news_id": news_id},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ news.approve learning skipped: {learning_exc}")
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка утверждения новости: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/news/generate/accept', methods=['POST', 'OPTIONS'])
+def news_generate_accept():
+    """Совместимый endpoint принятия новости (alias для /api/news/approve с финальным текстом)."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        news_id = data.get("news_id")
+        final_text = str(data.get("final_text") or "").strip()
+        if not news_id:
+            return jsonify({"error": "news_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cur = db.conn.cursor()
+        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        row = cur.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Новость не найдена"}), 404
+        draft_text = str((row[0] if isinstance(row, (tuple, list)) else row.get("generated_text")) or "")
+        applied_text = final_text or draft_text
+        cur.execute(
+            """
+            UPDATE UserNews
+            SET generated_text = %s,
+                approved = 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND user_id = %s
+            """,
+            (applied_text, news_id, user_data['user_id']),
+        )
+        db.conn.commit()
+        db.close()
+
+        try:
+            record_ai_learning_event(
+                capability="news.generate",
+                event_type="accepted",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                accepted=True,
+                edited_before_accept=(draft_text.strip() != applied_text.strip()),
+                draft_text=draft_text[:2000],
+                final_text=applied_text[:2000],
+                metadata={"news_id": news_id},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ news.generate.accept learning skipped: {learning_exc}")
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка принятия новости: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/news/list', methods=['GET', 'OPTIONS'])
@@ -10100,10 +10293,33 @@ def news_update():
         if not news_id or not text:
             return jsonify({"error": "news_id и text обязательны"}), 400
         db = DatabaseManager(); cur = db.conn.cursor()
+        cur.execute("SELECT generated_text FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        prev_row = cur.fetchone()
+        previous_text = ""
+        if prev_row:
+            if isinstance(prev_row, (list, tuple)):
+                previous_text = str(prev_row[0] or "")
+            elif hasattr(prev_row, "get"):
+                previous_text = str(prev_row.get("generated_text") or "")
+
         cur.execute("UPDATE UserNews SET generated_text = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s", (text, news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close(); return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit(); db.close()
+
+        try:
+            record_ai_learning_event(
+                capability="news.generate",
+                event_type="edited",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                edited_before_accept=(previous_text.strip() != text.strip()),
+                draft_text=previous_text[:2000],
+                final_text=text[:2000],
+                metadata={"news_id": news_id},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ news.update learning skipped: {learning_exc}")
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка обновления новости: {e}")
@@ -10437,6 +10653,24 @@ def reviews_reply():
 
         if not reply_text:
             reply_text = "Ошибка генерации ответа"
+
+        try:
+            record_ai_learning_event(
+                capability="reviews.reply",
+                event_type="generated",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                metadata={
+                    "tone": tone or "профессиональный",
+                    "language": language,
+                    "review_len": len(review_text),
+                },
+                draft_text=review_text[:1500],
+                final_text=reply_text,
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ reviews.reply learning skipped: {learning_exc}")
         
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
@@ -10924,6 +11158,37 @@ def update_service(service_id):
             db.close()
             return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
 
+        try:
+            optimized_candidate = str(optimized_name or "").strip()
+            if not optimized_candidate:
+                optimized_candidate = str(name or "").strip()
+            optimized_desc_candidate = str(optimized_description or "").strip()
+            if not optimized_desc_candidate:
+                optimized_desc_candidate = str(description or "").strip()
+            edited_before_accept = (
+                str(name or "").strip() != optimized_candidate
+                or str(description or "").strip() != optimized_desc_candidate
+            )
+            event_type = "accepted" if (optimized_name or optimized_description) else "edited"
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type=event_type,
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=(row.get("business_id") if hasattr(row, "get") else (row[1] if isinstance(row, (tuple, list)) and len(row) > 1 else None)),
+                accepted=True if event_type == "accepted" else None,
+                edited_before_accept=edited_before_accept if event_type == "accepted" else None,
+                draft_text=f"{optimized_candidate}\n{optimized_desc_candidate}"[:2000],
+                final_text=f"{str(name or '').strip()}\n{str(description or '').strip()}"[:2000],
+                metadata={
+                    "service_id": service_id,
+                    "has_optimized_name": bool(optimized_name),
+                    "has_optimized_description": bool(optimized_description),
+                },
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ services.update learning skipped: {learning_exc}")
+
         db.conn.commit()
         db.close()
         return jsonify({"success": True})
@@ -10932,6 +11197,83 @@ def update_service(service_id):
         print(f"❌ Ошибка обновления услуги: {e}", flush=True)
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/reviews/reply/accept', methods=['POST', 'OPTIONS'])
+def reviews_reply_accept():
+    """Принять (с правкой или без) сгенерированный ответ на отзыв."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        draft_reply = str(data.get("draft_reply") or "").strip()
+        final_reply = str(data.get("final_reply") or "").strip()
+        review_text = str(data.get("review_text") or "").strip()
+        business_id = get_business_id_from_user(user_data['user_id'], data.get('business_id') or request.args.get('business_id'))
+        if not has_paid_automation_access(business_id):
+            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
+        if not final_reply:
+            return jsonify({"error": "final_reply обязателен"}), 400
+
+        reply_id = str(data.get("reply_id") or str(uuid.uuid4()))
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserReviewReplies (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                original_review TEXT,
+                reply_text TEXT NOT NULL,
+                tone TEXT DEFAULT 'профессиональный',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO UserReviewReplies (id, user_id, original_review, reply_text, updated_at)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                original_review = EXCLUDED.original_review,
+                reply_text = EXCLUDED.reply_text,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (reply_id, user_data['user_id'], review_text, final_reply),
+        )
+        db.conn.commit()
+        db.close()
+
+        try:
+            record_ai_learning_event(
+                capability="reviews.reply",
+                event_type="accepted",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=business_id,
+                accepted=True,
+                edited_before_accept=(draft_reply != final_reply) if draft_reply else None,
+                draft_text=draft_reply[:2000],
+                final_text=final_reply[:2000],
+                metadata={"reply_id": reply_id},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ reviews.reply.accept learning skipped: {learning_exc}")
+
+        return jsonify({"success": True, "reply_id": reply_id})
+    except Exception as e:
+        print(f"❌ Ошибка принятия ответа на отзыв: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/services/delete/<string:service_id>', methods=['DELETE', 'OPTIONS'])
@@ -10965,6 +11307,94 @@ def delete_service(service_id):
 
     except Exception as e:
         print(f"❌ Ошибка удаления услуги: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/services/optimize/accept', methods=['POST', 'OPTIONS'])
+def services_optimize_accept():
+    """Принять оптимизацию услуги и применить финальные поля."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) or {}
+        service_id = str(data.get("service_id") or "").strip()
+        final_name = str(data.get("final_name") or "").strip()
+        final_description = str(data.get("final_description") or "").strip()
+        draft_name = str(data.get("draft_name") or "").strip()
+        draft_description = str(data.get("draft_description") or "").strip()
+        if not service_id:
+            return jsonify({"error": "service_id обязателен"}), 400
+        if not final_name:
+            return jsonify({"error": "final_name обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "SELECT user_id, business_id FROM UserServices WHERE id = %s",
+            (service_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Услуга не найдена"}), 404
+        service_user_id = row.get("user_id") if hasattr(row, "get") else row[0]
+        business_id = row.get("business_id") if hasattr(row, "get") else (row[1] if isinstance(row, (tuple, list)) and len(row) > 1 else None)
+        if service_user_id != user_data['user_id'] and not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Нет доступа"}), 403
+
+        if business_id and not has_paid_automation_access(str(business_id)):
+            db.close()
+            return jsonify({"error": get_automation_block_message(str(business_id)), "code": "automation_locked"}), 403
+
+        cursor.execute(
+            """
+            UPDATE UserServices
+            SET name = %s,
+                description = %s,
+                optimized_name = %s,
+                optimized_description = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND user_id = %s
+            """,
+            (final_name, final_description, draft_name or final_name, draft_description or final_description, service_id, user_data['user_id']),
+        )
+        if cursor.rowcount == 0:
+            db.close()
+            return jsonify({"error": "Услуга не найдена или нет прав"}), 404
+        db.conn.commit()
+        db.close()
+
+        try:
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="accepted",
+                intent=_normalize_learning_intent(data.get("intent")),
+                user_id=user_data.get("user_id"),
+                business_id=str(business_id) if business_id else None,
+                accepted=True,
+                edited_before_accept=(
+                    (draft_name and draft_name != final_name)
+                    or (draft_description and draft_description != final_description)
+                ),
+                draft_text=f"{draft_name}\n{draft_description}"[:2000],
+                final_text=f"{final_name}\n{final_description}"[:2000],
+                metadata={"service_id": service_id},
+            )
+        except Exception as learning_exc:
+            print(f"⚠️ services.optimize.accept learning skipped: {learning_exc}")
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"❌ Ошибка принятия оптимизации услуги: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== КЛИЕНТСКАЯ ИНФОРМАЦИЯ (ПРОФИЛЬ БИЗНЕСА) ====================

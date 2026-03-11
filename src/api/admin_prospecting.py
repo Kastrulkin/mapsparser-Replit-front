@@ -14,6 +14,8 @@ from psycopg2.extras import Json
 from auth_system import verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
+from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.helpers import get_business_id_from_user
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
@@ -46,6 +48,27 @@ SEARCH_JOB_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 OUTREACH_SEND_MAX_ATTEMPTS = int(os.environ.get("OUTREACH_SEND_MAX_ATTEMPTS", "3"))
 OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
+
+
+def _normalize_learning_intent(raw_intent: str | None) -> str:
+    value = str(raw_intent or "client_outreach").strip().lower()
+    allowed = {"client_outreach", "partnership_outreach", "operations"}
+    return value if value in allowed else "client_outreach"
+
+
+def _resolve_lead_intent(cur, lead_id: str) -> str:
+    try:
+        cur.execute("SELECT intent FROM prospectingleads WHERE id = %s", (lead_id,))
+        row = cur.fetchone()
+        if not row:
+            return "client_outreach"
+        if hasattr(row, "get"):
+            return _normalize_learning_intent(row.get("intent"))
+        if isinstance(row, (tuple, list)):
+            return _normalize_learning_intent(row[0] if row else None)
+    except Exception:
+        pass
+    return "client_outreach"
 
 
 def _remaining_daily_outreach_slots(conn) -> int:
@@ -97,6 +120,53 @@ def _require_superadmin():
     if not user_data.get("is_superadmin"):
         return None, _auth_error("Superadmin access required", 403)
     return user_data, None
+
+
+def _require_auth():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None, _auth_error("Authorization required", 401)
+
+    token = auth_header.split(" ", 1)[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, _auth_error("Invalid token", 401)
+    return user_data, None
+
+
+def _resolve_business_for_user(cur, user_data: dict, requested_business_id: str | None) -> str | None:
+    is_superadmin = bool(user_data.get("is_superadmin"))
+    user_id = str(user_data.get("user_id") or "")
+    business_id = (requested_business_id or "").strip() or get_business_id_from_user(user_id, None)
+    if not business_id:
+        return None
+    if is_superadmin:
+        return business_id
+    cur.execute(
+        """
+        SELECT id
+        FROM businesses
+        WHERE id = %s AND owner_id = %s
+        LIMIT 1
+        """,
+        (business_id, user_id),
+    )
+    row = cur.fetchone()
+    return (row["id"] if hasattr(row, "get") else row[0]) if row else None
+
+
+def _ensure_partnership_columns(conn) -> None:
+    cur = conn.cursor()
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS intent TEXT DEFAULT 'client_outreach'")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partnership_stage TEXT DEFAULT 'imported'")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS business_id UUID")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS created_by UUID")
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_stage
+        ON prospectingleads (intent, partnership_stage)
+        """
+    )
 
 
 def _create_search_job(
@@ -2484,6 +2554,215 @@ def import_leads():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/leads/import-links", methods=["POST"])
+def partnership_import_links():
+    """User-level import of partnership candidates via direct map links."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        links = data.get("links") or []
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        default_city = str(data.get("city") or "").strip()
+        default_category = str(data.get("category") or "").strip()
+        if not isinstance(links, list) or not links:
+            return jsonify({"error": "links array is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            imported_ids: list[str] = []
+            skipped = 0
+            for raw_link in links:
+                source_url = str(raw_link or "").strip()
+                if not source_url:
+                    continue
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM prospectingleads
+                    WHERE business_id = %s
+                      AND source_url = %s
+                      AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                    LIMIT 1
+                    """,
+                    (business_id, source_url),
+                )
+                existing = cur.fetchone()
+                if existing:
+                    skipped += 1
+                    continue
+
+                lead_id = str(uuid.uuid4())
+                cur.execute(
+                    """
+                    INSERT INTO prospectingleads (
+                        id, name, address, city, source_url, source, category, status,
+                        intent, partnership_stage, business_id, created_by, created_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, NOW(), NOW()
+                    )
+                    """,
+                    (
+                        lead_id,
+                        "Новый партнёр",
+                        "",
+                        default_city or None,
+                        source_url,
+                        "manual_link",
+                        default_category or None,
+                        "imported",
+                        "partnership_outreach",
+                        "imported",
+                        business_id,
+                        user_data["user_id"],
+                    ),
+                )
+                imported_ids.append(lead_id)
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "imported_count": len(imported_ids),
+                "skipped_count": skipped,
+                "lead_ids": imported_ids,
+            }
+        )
+    except Exception as e:
+        print(f"Error importing partnership links: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads", methods=["GET"])
+def partnership_list_leads():
+    """User-level list of partnership leads for one business."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        stage_filter = str(request.args.get("stage") or "").strip().lower() or None
+        q = str(request.args.get("q") or "").strip().lower()
+        limit = max(1, min(int(request.args.get("limit") or 100), 500))
+        offset = max(0, int(request.args.get("offset") or 0))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            where_sql = [
+                "business_id = %s",
+                "COALESCE(intent, 'client_outreach') = 'partnership_outreach'",
+            ]
+            params: list[Any] = [business_id]
+            if stage_filter:
+                where_sql.append("COALESCE(partnership_stage, 'imported') = %s")
+                params.append(stage_filter)
+            if q:
+                where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s)")
+                q_like = f"%{q}%"
+                params.extend([q_like, q_like])
+
+            cur.execute(
+                f"""
+                SELECT id, name, address, city, category, source_url, source, phone, email,
+                       telegram_url, whatsapp_url, website, rating, reviews_count,
+                       status, selected_channel, intent, partnership_stage, updated_at, created_at
+                FROM prospectingleads
+                WHERE {' AND '.join(where_sql)}
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, offset),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        items = [dict(r) if hasattr(r, "keys") else {} for r in rows]
+        return jsonify({"success": True, "count": len(items), "items": items})
+    except Exception as e:
+        print(f"Error listing partnership leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>", methods=["PATCH"])
+def partnership_update_lead(lead_id):
+    """User-level stage update for partnership lead."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        stage = str(data.get("partnership_stage") or "").strip().lower()
+        status = str(data.get("status") or "").strip().lower()
+        selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
+        if not stage and not status and selected_channel is None:
+            return jsonify({"error": "Nothing to update"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            assignments = ["updated_at = NOW()"]
+            params: list[Any] = []
+            if stage:
+                assignments.append("partnership_stage = %s")
+                params.append(stage)
+            if status:
+                assignments.append("status = %s")
+                params.append(status)
+            if selected_channel is not None:
+                assignments.append("selected_channel = %s")
+                params.append(selected_channel)
+
+            params.extend([lead_id, business_id])
+            cur.execute(
+                f"""
+                UPDATE prospectingleads
+                SET {', '.join(assignments)}
+                WHERE id = %s
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING id, name, source_url, status, selected_channel, partnership_stage, updated_at
+                """,
+                tuple(params),
+            )
+            updated = cur.fetchone()
+            if not updated:
+                return jsonify({"error": "Lead not found"}), 404
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "item": dict(updated) if hasattr(updated, "keys") else updated})
+    except Exception as e:
+        print(f"Error updating partnership lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/status", methods=["POST"])
 def update_lead_status(lead_id):
     """Update lead status."""
@@ -3250,6 +3529,27 @@ def approve_outreach_draft(draft_id):
                     user_data["user_id"],
                 ),
             )
+            lead_intent = _resolve_lead_intent(cur, str(draft_dict["lead_id"]))
+            record_ai_learning_event(
+                conn=conn,
+                capability="outreach.draft_first_message",
+                event_type="accepted",
+                intent=lead_intent,
+                user_id=user_data.get("user_id"),
+                accepted=True,
+                edited_before_accept=(
+                    str(draft_dict.get("generated_text") or "").strip() != approved_text
+                ),
+                draft_text=str(draft_dict.get("generated_text") or "")[:3000],
+                final_text=approved_text[:3000],
+                metadata={
+                    "draft_id": draft_id,
+                    "lead_id": str(draft_dict.get("lead_id") or ""),
+                    "channel": draft_dict.get("channel"),
+                    "angle_type": draft_dict.get("angle_type"),
+                    "tone": draft_dict.get("tone"),
+                },
+            )
             conn.commit()
         finally:
             conn.close()
@@ -3301,12 +3601,27 @@ def save_outreach_draft(draft_id):
                     draft_id,
                 ),
             )
-            updated = cur.fetchone()
+            updated = dict(cur.fetchone())
+            lead_intent = _resolve_lead_intent(cur, str(updated.get("lead_id") or ""))
+            record_ai_learning_event(
+                conn=conn,
+                capability="outreach.draft_first_message",
+                event_type="edited",
+                intent=lead_intent,
+                user_id=user_data.get("user_id"),
+                draft_text=str(updated.get("generated_text") or "")[:3000],
+                final_text=str(edited_text or "")[:3000],
+                metadata={
+                    "draft_id": draft_id,
+                    "lead_id": str(updated.get("lead_id") or ""),
+                    "channel": updated.get("channel"),
+                },
+            )
             conn.commit()
         finally:
             conn.close()
 
-        return jsonify({"success": True, "draft": _serialize_draft(dict(updated))})
+        return jsonify({"success": True, "draft": _serialize_draft(updated)})
     except Exception as e:
         print(f"Error saving outreach draft: {e}")
         return jsonify({"error": str(e)}), 500
@@ -3338,14 +3653,87 @@ def reject_outreach_draft(draft_id):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Draft not found"}), 404
-            conn.commit()
             updated = dict(row)
+            lead_intent = _resolve_lead_intent(cur, str(updated.get("lead_id") or ""))
+            record_ai_learning_event(
+                conn=conn,
+                capability="outreach.draft_first_message",
+                event_type="rejected",
+                intent=lead_intent,
+                user_id=user_data.get("user_id"),
+                rejected=True,
+                draft_text=str(updated.get("edited_text") or updated.get("generated_text") or "")[:3000],
+                final_text="",
+                metadata={
+                    "draft_id": draft_id,
+                    "lead_id": str(updated.get("lead_id") or ""),
+                    "channel": updated.get("channel"),
+                },
+            )
+            conn.commit()
         finally:
             conn.close()
 
         return jsonify({"success": True, "draft": _serialize_draft(updated)})
     except Exception as e:
         print(f"Error rejecting outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/ai/learning-metrics", methods=["GET"])
+def ai_learning_metrics():
+    """Basic acceptance/edit metrics for P0 learning visibility."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        intent = _normalize_learning_intent(request.args.get("intent") or "operations")
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            ensure_ai_learning_events_table(conn)
+            cur.execute(
+                """
+                SELECT
+                    capability,
+                    COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                    COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = FALSE) AS accepted_raw_total,
+                    COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = TRUE) AS accepted_edited_total
+                FROM ailearningevents
+                WHERE intent = %s
+                  AND created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY capability
+                ORDER BY capability
+                """,
+                (intent,),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        items = []
+        for row in rows:
+            capability = row["capability"] if hasattr(row, "get") else row[0]
+            accepted_total = int((row["accepted_total"] if hasattr(row, "get") else row[1]) or 0)
+            accepted_raw_total = int((row["accepted_raw_total"] if hasattr(row, "get") else row[2]) or 0)
+            accepted_edited_total = int((row["accepted_edited_total"] if hasattr(row, "get") else row[3]) or 0)
+            accepted_raw_pct = (accepted_raw_total / accepted_total * 100.0) if accepted_total else 0.0
+            edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
+            items.append(
+                {
+                    "capability": capability,
+                    "accepted_total": accepted_total,
+                    "accepted_raw_total": accepted_raw_total,
+                    "accepted_edited_total": accepted_edited_total,
+                    "accepted_raw_pct": round(accepted_raw_pct, 2),
+                    "edited_before_accept_pct": round(edited_before_accept_pct, 2),
+                }
+            )
+
+        return jsonify({"success": True, "intent": intent, "window_days": 30, "items": items})
+    except Exception as e:
+        print(f"Error loading ai learning metrics: {e}")
         return jsonify({"error": str(e)}), 500
 
 
