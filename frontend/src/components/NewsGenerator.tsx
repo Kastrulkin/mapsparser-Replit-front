@@ -47,6 +47,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [examples, setExamples] = useState<{ id: string, text: string }[]>([]);
   const { language: interfaceLanguage, t } = useLanguage();
   const [language, setLanguage] = useState<string>(interfaceLanguage);
+  const [contentMode, setContentMode] = useState<'news' | 'social'>('news');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -151,6 +152,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           use_service: useService,
           use_transaction: useTransaction,
           use_seo_keywords: useSeoKeywords,
+          content_mode: contentMode,
           selected_seo_keyword: selectedSeoKeyword || undefined,
           service_id: serviceId || undefined,
           transaction_id: transactionId || undefined,
@@ -369,6 +371,22 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
             <div className="text-sm font-bold uppercase tracking-wider text-gray-400">Settings</div>
 
             <div className="space-y-4">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                  <Newspaper className="w-4 h-4 text-gray-500" />
+                  Формат контента
+                </label>
+                <Select value={contentMode} onValueChange={(value) => setContentMode(value as 'news' | 'social')}>
+                  <SelectTrigger className="w-full rounded-xl bg-white border-gray-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="news">Новость для карточки</SelectItem>
+                    <SelectItem value="social">Пост для соцсетей</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <Globe className="w-4 h-4 text-gray-500" />

@@ -42,7 +42,23 @@ type PartnershipBatch = {
     delivery_status?: string;
     error_text?: string;
     channel?: string;
+    latest_outcome?: string | null;
+    latest_human_outcome?: string | null;
+    latest_raw_reply?: string | null;
   }>;
+};
+
+type PartnershipReaction = {
+  id: string;
+  queue_id: string;
+  lead_id: string;
+  lead_name?: string;
+  batch_id?: string;
+  channel?: string;
+  delivery_status?: string;
+  raw_reply?: string | null;
+  classified_outcome?: string | null;
+  human_confirmed_outcome?: string | null;
 };
 
 const STAGE_OPTIONS = [
@@ -52,6 +68,7 @@ const STAGE_OPTIONS = [
   { value: 'matched', label: 'Матчинг готов' },
   { value: 'proposal_draft_ready', label: 'Черновик оффера готов' },
 ];
+const OUTCOME_OPTIONS = ['positive', 'question', 'no_response', 'hard_no'] as const;
 
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<any>();
@@ -67,6 +84,9 @@ export const PartnershipSearchPage: React.FC = () => {
   const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
   const [batches, setBatches] = useState<PartnershipBatch[]>([]);
   const [queueReadyDrafts, setQueueReadyDrafts] = useState<PartnershipDraft[]>([]);
+  const [reactions, setReactions] = useState<PartnershipReaction[]>([]);
+  const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
+  const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,6 +131,7 @@ export const PartnershipSearchPage: React.FC = () => {
     });
     setBatches(Array.isArray(data.batches) ? data.batches : []);
     setQueueReadyDrafts(Array.isArray(data.ready_drafts) ? data.ready_drafts : []);
+    setReactions(Array.isArray(data.reactions) ? data.reactions : []);
   };
 
   useEffect(() => {
@@ -274,6 +295,53 @@ export const PartnershipSearchPage: React.FC = () => {
       setError(e.message || 'Не удалось утвердить batch');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const recordReaction = async (
+    queueId: string,
+    outcome?: (typeof OUTCOME_OPTIONS)[number]
+  ) => {
+    if (!currentBusinessId) return;
+    setSendQueueBusy((prev) => ({ ...prev, [queueId]: `reaction:${outcome || 'auto'}` }));
+    try {
+      await newAuth.makeRequest(`/partnership/send-queue/${queueId}/reaction`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, outcome }),
+      });
+      setMessage('Реакция сохранена');
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось сохранить реакцию');
+    } finally {
+      setSendQueueBusy((prev) => {
+        const next = { ...prev };
+        delete next[queueId];
+        return next;
+      });
+    }
+  };
+
+  const confirmReaction = async (reactionId: string, outcome: (typeof OUTCOME_OPTIONS)[number]) => {
+    if (!currentBusinessId) return;
+    setReactionBusy((prev) => ({ ...prev, [reactionId]: outcome }));
+    try {
+      await newAuth.makeRequest(`/partnership/reactions/${reactionId}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId, outcome }),
+      });
+      setMessage('Outcome подтверждён');
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось подтвердить outcome');
+    } finally {
+      setReactionBusy((prev) => {
+        const next = { ...prev };
+        delete next[reactionId];
+        return next;
+      });
     }
   };
 
@@ -481,15 +549,88 @@ export const PartnershipSearchPage: React.FC = () => {
                     )}
                   </div>
                   {(batch.items || []).length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {(batch.items || []).slice(0, 6).map((item) => (
-                        <div key={item.id} className="text-xs text-muted-foreground">
-                          {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
-                          {item.error_text ? ` · ${item.error_text}` : ''}
+                    <div className="mt-2 space-y-2">
+                      {(batch.items || []).slice(0, 8).map((item) => (
+                        <div key={item.id} className="rounded border border-gray-100 p-2 text-xs text-muted-foreground">
+                          <div>
+                            {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
+                            {item.error_text ? ` · ${item.error_text}` : ''}
+                          </div>
+                          {(item.latest_human_outcome || item.latest_outcome) && (
+                            <div className="mt-1 text-emerald-700">
+                              outcome: {item.latest_human_outcome || item.latest_outcome}
+                            </div>
+                          )}
+                          {item.delivery_status === 'sent' && !(item.latest_human_outcome || item.latest_outcome) && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => void recordReaction(item.id)}
+                                disabled={Boolean(sendQueueBusy[item.id])}
+                              >
+                                Авто outcome
+                              </Button>
+                              {OUTCOME_OPTIONS.map((outcome) => (
+                                <Button
+                                  key={`${item.id}-${outcome}`}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2"
+                                  onClick={() => void recordReaction(item.id, outcome)}
+                                  disabled={Boolean(sendQueueBusy[item.id])}
+                                >
+                                  {outcome}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Реакции и outcome</h2>
+              <Button variant="outline" onClick={() => void loadBatches()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {reactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Реакций пока нет.</p>
+            ) : (
+              reactions.slice(0, 20).map((reaction) => (
+                <div key={reaction.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="text-sm font-semibold">{reaction.lead_name || reaction.lead_id}</div>
+                  <div className="text-xs text-muted-foreground">
+                    batch: {reaction.batch_id || '—'} · канал: {reaction.channel || '—'} · delivery: {reaction.delivery_status || '—'}
+                  </div>
+                  {reaction.raw_reply && (
+                    <div className="mt-2 text-sm text-foreground whitespace-pre-wrap">{reaction.raw_reply}</div>
+                  )}
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    AI: {reaction.classified_outcome || '—'} · Подтверждено: {reaction.human_confirmed_outcome || reaction.classified_outcome || '—'}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {OUTCOME_OPTIONS.map((outcome) => (
+                      <Button
+                        key={`${reaction.id}-${outcome}`}
+                        size="sm"
+                        variant={(reaction.human_confirmed_outcome || reaction.classified_outcome) === outcome ? 'default' : 'outline'}
+                        className="h-7 px-2"
+                        onClick={() => void confirmReaction(reaction.id, outcome)}
+                        disabled={Boolean(reactionBusy[reaction.id])}
+                      >
+                        {outcome}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               ))
             )}

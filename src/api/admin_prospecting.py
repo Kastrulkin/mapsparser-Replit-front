@@ -3291,10 +3291,21 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                     q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
                     q.created_at, q.updated_at,
                     l.name AS lead_name,
-                    d.approved_text, d.generated_text
+                    d.approved_text, d.generated_text,
+                    r.classified_outcome AS latest_outcome,
+                    r.human_confirmed_outcome AS latest_human_outcome,
+                    r.raw_reply AS latest_raw_reply,
+                    r.created_at AS latest_reaction_at
                 FROM outreachsendqueue q
                 JOIN prospectingleads l ON l.id = q.lead_id
                 JOIN outreachmessagedrafts d ON d.id = q.draft_id
+                LEFT JOIN LATERAL (
+                    SELECT classified_outcome, human_confirmed_outcome, raw_reply, created_at
+                    FROM outreachreactions rx
+                    WHERE rx.queue_id = q.id
+                    ORDER BY rx.created_at DESC
+                    LIMIT 1
+                ) r ON TRUE
                 WHERE q.batch_id = ANY(%s)
                 ORDER BY q.created_at ASC
                 """,
@@ -3303,7 +3314,27 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
             for row in cur.fetchall():
                 payload = dict(row)
                 batches_by_id[payload["batch_id"]]["items"].append(payload)
-        return {"ready_drafts": ready_drafts, "batches": batch_rows}
+
+        cur.execute(
+            """
+            SELECT
+                r.id, r.queue_id, r.lead_id, r.raw_reply,
+                r.classified_outcome, r.confidence, r.human_confirmed_outcome,
+                r.note, r.created_by, r.created_at, r.updated_at,
+                l.name AS lead_name,
+                q.batch_id, q.channel, q.delivery_status
+            FROM outreachreactions r
+            JOIN outreachsendqueue q ON q.id = r.queue_id
+            JOIN prospectingleads l ON l.id = r.lead_id
+            WHERE l.business_id = %s
+              AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+            ORDER BY r.created_at DESC
+            LIMIT 50
+            """,
+            (business_id,),
+        )
+        reactions = [_serialize_timestamp_fields(dict(row)) for row in cur.fetchall()]
+        return {"ready_drafts": ready_drafts, "batches": batch_rows, "reactions": reactions}
     finally:
         conn.close()
 
@@ -3466,6 +3497,108 @@ def partnership_approve_send_batch(batch_id):
         return jsonify({"success": True, "batch": batch, **snapshot})
     except Exception as e:
         print(f"Error approving partnership send batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def _partnership_queue_access(cur, *, queue_id: str, business_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT q.id AS queue_id, q.lead_id, q.delivery_status
+        FROM outreachsendqueue q
+        JOIN prospectingleads l ON l.id = q.lead_id
+        WHERE q.id = %s
+          AND l.business_id = %s
+          AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+        LIMIT 1
+        """,
+        (queue_id, business_id),
+    )
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
+@admin_prospecting_bp.route("/api/partnership/send-queue/<string:queue_id>/reaction", methods=["POST"])
+def partnership_record_queue_reaction(queue_id):
+    """Record reaction/outcome for partnership queue item (user-level)."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            if not _partnership_queue_access(cur, queue_id=queue_id, business_id=business_id):
+                return jsonify({"error": "Queue item not found"}), 404
+        finally:
+            conn.close()
+
+        reaction, reaction_error = _record_reaction(
+            queue_id,
+            data.get("raw_reply"),
+            data.get("outcome"),
+            (data.get("note") or "").strip() or None,
+            user_data["user_id"],
+        )
+        if reaction_error:
+            status_code = 404 if reaction_error == "Queue item not found" else 400
+            return jsonify({"error": reaction_error}), status_code
+        return jsonify({"success": True, "reaction": reaction})
+    except Exception as e:
+        print(f"Error recording partnership reaction: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/reactions/<string:reaction_id>/confirm", methods=["POST"])
+def partnership_confirm_reaction(reaction_id):
+    """Confirm/override partnership reaction outcome (user-level)."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT 1
+                FROM outreachreactions r
+                JOIN outreachsendqueue q ON q.id = r.queue_id
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE r.id = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                LIMIT 1
+                """,
+                (reaction_id, business_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "Reaction not found"}), 404
+        finally:
+            conn.close()
+
+        reaction, reaction_error = _confirm_reaction(
+            reaction_id,
+            data.get("outcome"),
+            (data.get("note") or "").strip() or None,
+            user_data["user_id"],
+        )
+        if reaction_error:
+            status_code = 404 if reaction_error == "Reaction not found" else 400
+            return jsonify({"error": reaction_error}), status_code
+        return jsonify({"success": True, "reaction": reaction})
+    except Exception as e:
+        print(f"Error confirming partnership reaction: {e}")
         return jsonify({"error": str(e)}), 500
 
 

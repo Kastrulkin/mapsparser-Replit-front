@@ -6120,6 +6120,9 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
     selected_service_id = payload.get("service_id")
     selected_transaction_id = payload.get("transaction_id")
     raw_info = str(payload.get("raw_info") or "").strip()
+    content_mode = str(payload.get("content_mode") or "news").strip().lower()
+    if content_mode not in {"news", "social"}:
+        content_mode = "news"
 
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -6240,8 +6243,20 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
             )
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ: {selected_seo_keyword}."
+        if content_mode == "social":
+            seo_generation_hint += " Формат результата: короткий пост для соцсетей (1 абзац + CTA, без markdown/JSON)."
 
-        prompt_template, prompt_version = get_prompt_record_from_db("news_generation", None)
+        prompt_key = "news_generation"
+        prompt_template = None
+        prompt_version = None
+        prompt_candidates = ["news_generation"]
+        if content_mode == "social":
+            prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
+        for candidate in prompt_candidates:
+            prompt_template, prompt_version = get_prompt_record_from_db(candidate, None)
+            if prompt_template:
+                prompt_key = candidate
+                break
         if not prompt_template:
             raise ValueError("Промпт news_generation не настроен в админ-панели.")
 
@@ -6288,6 +6303,7 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
         "result": {
             "news_id": news_id,
             "generated_text": generated_text,
+            "content_mode": content_mode,
         },
         "billing": {
             "total_tokens": 0,
@@ -9725,6 +9741,9 @@ def news_generate():
         selected_service_id = data.get('service_id')
         selected_transaction_id = data.get('transaction_id')
         raw_info = (data.get('raw_info') or '').strip()
+        content_mode = str(data.get('content_mode') or 'news').strip().lower()
+        if content_mode not in {'news', 'social'}:
+            content_mode = 'news'
 
         # Язык новости: получаем из запроса или из профиля пользователя
         requested_language = data.get('language')
@@ -9932,13 +9951,25 @@ def news_generate():
             )
             if selected_seo_keyword:
                 seo_generation_hint += f" Приоритетный ключ для этой новости: {selected_seo_keyword}."
+        if content_mode == 'social':
+            seo_generation_hint += " Формат результата: короткий пост для соцсетей (1 абзац + CTA, без markdown/JSON)."
         if use_service and selected_service_name:
             seo_generation_hint += (
                 f" Жесткое ограничение темы: новость должна быть только про услугу '{selected_service_name}'. "
                 "Нельзя подменять услугу на другую, даже если у другой услуги частотность выше."
             )
 
-        prompt_template, prompt_version = get_prompt_record_from_db('news_generation', None)
+        prompt_key = "news_generation"
+        prompt_template = None
+        prompt_version = None
+        prompt_candidates = ["news_generation"]
+        if content_mode == "social":
+            prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
+        for candidate in prompt_candidates:
+            prompt_template, prompt_version = get_prompt_record_from_db(candidate, None)
+            if prompt_template:
+                prompt_key = candidate
+                break
         if not prompt_template:
             db.close()
             return jsonify({
@@ -10078,13 +10109,14 @@ def news_generate():
                 intent=_normalize_learning_intent(data.get("intent")),
                 user_id=user_data.get("user_id"),
                 business_id=business_id,
-                prompt_key="news_generation",
+                prompt_key=prompt_key,
                 prompt_version=prompt_version,
                 metadata={
                     "use_service": bool(use_service),
                     "use_transaction": bool(use_transaction),
                     "use_seo_keywords": bool(use_seo_keywords),
                     "language": language,
+                    "content_mode": content_mode,
                 },
                 draft_text=raw_info[:1500],
                 final_text=generated_text[:2000],
@@ -10092,7 +10124,7 @@ def news_generate():
         except Exception as learning_exc:
             print(f"⚠️ news.generate learning skipped: {learning_exc}")
 
-        return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
+        return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text, "content_mode": content_mode})
     except Exception as e:
         print(f"❌ Ошибка генерации новости: {e}", flush=True)
         import traceback
