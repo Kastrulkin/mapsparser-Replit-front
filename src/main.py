@@ -10,6 +10,7 @@ import base64
 import random
 import re
 import secrets
+import hashlib
 import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime, timedelta
@@ -6295,8 +6296,13 @@ def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
         prompt_candidates = ["news_generation"]
         if content_mode == "social":
             prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
+        route_seed = f"{user_data.get('user_id')}:{datetime.utcnow().timestamp()}:{raw_info[:64]}"
         for candidate in prompt_candidates:
-            prompt_template, prompt_version = get_prompt_record_from_db(candidate, None)
+            prompt_template, prompt_version = get_prompt_record_from_db(
+                candidate,
+                None,
+                route_seed if candidate == "news_social_generation" else None,
+            )
             if prompt_template:
                 prompt_key = candidate
                 break
@@ -10004,8 +10010,13 @@ def news_generate():
         prompt_candidates = ["news_generation"]
         if content_mode == "social":
             prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
+        route_seed = f"{user_data.get('user_id')}:{datetime.utcnow().timestamp()}:{raw_info[:64]}"
         for candidate in prompt_candidates:
-            prompt_template, prompt_version = get_prompt_record_from_db(candidate, None)
+            prompt_template, prompt_version = get_prompt_record_from_db(
+                candidate,
+                None,
+                route_seed if candidate == "news_social_generation" else None,
+            )
             if prompt_template:
                 prompt_key = candidate
                 break
@@ -15655,6 +15666,63 @@ def _ensure_prompt_templates_schema(cursor):
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_prompttemplates_active ON prompttemplates(is_active)"
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS promptabtests (
+            prompt_key TEXT PRIMARY KEY,
+            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            version_a INTEGER NOT NULL,
+            version_b INTEGER NOT NULL,
+            traffic_a INTEGER NOT NULL DEFAULT 50,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_by TEXT
+        )
+        """
+    )
+
+
+def _load_prompt_ab_config(cursor, prompt_key: str) -> dict | None:
+    _ensure_prompt_templates_schema(cursor)
+    cursor.execute(
+        """
+        SELECT prompt_key, enabled, version_a, version_b, traffic_a, updated_at, updated_by
+        FROM promptabtests
+        WHERE prompt_key = %s
+        LIMIT 1
+        """,
+        (prompt_key,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    if hasattr(row, "get"):
+        return {
+            "prompt_key": str(row.get("prompt_key") or ""),
+            "enabled": bool(row.get("enabled")),
+            "version_a": int(row.get("version_a") or 1),
+            "version_b": int(row.get("version_b") or 1),
+            "traffic_a": int(row.get("traffic_a") or 50),
+            "updated_at": row.get("updated_at"),
+            "updated_by": row.get("updated_by"),
+        }
+    return {
+        "prompt_key": str(row[0] or ""),
+        "enabled": bool(row[1]),
+        "version_a": int(row[2] or 1),
+        "version_b": int(row[3] or 1),
+        "traffic_a": int(row[4] or 50),
+        "updated_at": row[5],
+        "updated_by": row[6],
+    }
+
+
+def _pick_ab_bucket(route_seed: str, traffic_a: int) -> str:
+    try:
+        bucket_hash = hashlib.sha256(str(route_seed or "").encode("utf-8")).hexdigest()[:8]
+        bucket = int(bucket_hash, 16) % 100
+    except Exception:
+        bucket = random.randint(0, 99)
+    return "a" if bucket < int(max(0, min(100, traffic_a))) else "b"
 
 
 def _ensure_prompt_audit_schema(cursor):
@@ -16065,6 +16133,101 @@ def get_prompt_by_key(prompt_type):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/admin/prompts/<prompt_type>/ab', methods=['GET', 'PUT', 'OPTIONS'])
+def prompt_ab_test_config(prompt_type):
+    """Get/update A/B routing config for prompt key (superadmin publish permissions)."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        user_data, auth_error, auth_status = _get_prompts_auth()
+        if auth_error:
+            return auth_error, auth_status
+        db = DatabaseManager()
+        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        if request.method == 'PUT' and not can_publish:
+            db.close()
+            return jsonify({"error": "Недостаточно прав для публикации промптов"}), 403
+
+        cursor = db.conn.cursor()
+        _ensure_prompt_templates_schema(cursor)
+
+        if request.method == 'GET':
+            cfg = _load_prompt_ab_config(cursor, prompt_type)
+            db.close()
+            return jsonify(
+                {
+                    "success": True,
+                    "prompt_key": prompt_type,
+                    "config": cfg or {
+                        "prompt_key": prompt_type,
+                        "enabled": False,
+                        "version_a": 1,
+                        "version_b": 1,
+                        "traffic_a": 50,
+                    },
+                    "permissions": {"can_view": True, "can_publish": can_publish},
+                }
+            )
+
+        data = request.get_json(silent=True) or {}
+        enabled = bool(data.get("enabled"))
+        version_a = int(data.get("version_a") or 1)
+        version_b = int(data.get("version_b") or 1)
+        traffic_a = int(data.get("traffic_a") or 50)
+        traffic_a = max(0, min(100, traffic_a))
+
+        cursor.execute(
+            """
+            SELECT version
+            FROM prompttemplateversions
+            WHERE prompt_key = %s
+              AND version IN (%s, %s)
+            """,
+            (prompt_type, version_a, version_b),
+        )
+        found = {int((row.get("version") if hasattr(row, "get") else row[0]) or 0) for row in (cursor.fetchall() or [])}
+        required = {version_a, version_b}
+        if not required.issubset(found):
+            db.close()
+            return jsonify({"error": "Одна или обе версии не существуют для этого prompt_key"}), 400
+
+        cursor.execute(
+            """
+            INSERT INTO promptabtests (prompt_key, enabled, version_a, version_b, traffic_a, updated_by)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (prompt_key) DO UPDATE
+            SET enabled = EXCLUDED.enabled,
+                version_a = EXCLUDED.version_a,
+                version_b = EXCLUDED.version_b,
+                traffic_a = EXCLUDED.traffic_a,
+                updated_at = NOW(),
+                updated_by = EXCLUDED.updated_by
+            """,
+            (prompt_type, enabled, version_a, version_b, traffic_a, user_data["user_id"]),
+        )
+        _record_prompt_audit(
+            cursor,
+            prompt_key=prompt_type,
+            action_type="ab_config_updated",
+            actor_user_id=user_data.get("user_id"),
+            actor_is_superadmin=bool(user_data.get("is_superadmin")),
+            note="A/B config updated",
+            metadata={
+                "enabled": enabled,
+                "version_a": version_a,
+                "version_b": version_b,
+                "traffic_a": traffic_a,
+            },
+        )
+        db.conn.commit()
+        cfg = _load_prompt_ab_config(cursor, prompt_type)
+        db.close()
+        return jsonify({"success": True, "prompt_key": prompt_type, "config": cfg})
+    except Exception as e:
+        print(f"❌ Ошибка настройки A/B промпта: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/admin/prompts/<prompt_type>/version', methods=['POST', 'OPTIONS'])
 def create_prompt_version(prompt_type):
     """Создать новую версию промпта (только для суперадмина)."""
@@ -16418,6 +16581,58 @@ def get_prompt_recommendations():
             """
         )
         template_rows = cursor.fetchall()
+
+        social_format_winners: dict[int, dict[str, dict]] = {14: {}, 30: {}}
+        for window_days in (14, 30):
+            cursor.execute(
+                """
+                SELECT
+                    prompt_key,
+                    COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown') AS social_format,
+                    COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
+                    COUNT(*) FILTER (
+                        WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
+                          AND COALESCE(edited_before_accept, FALSE) = FALSE
+                    ) AS accepted_raw_count
+                FROM ailearningevents
+                WHERE created_at >= NOW() - (%s || ' days')::interval
+                  AND prompt_key = 'news_social_generation'
+                GROUP BY prompt_key, COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown')
+                """,
+                (str(window_days),),
+            )
+            rows = cursor.fetchall() or []
+            local_map: dict[str, list[dict]] = {}
+            for row in rows:
+                if hasattr(row, "get"):
+                    key = str(row.get("prompt_key") or "").strip()
+                    fmt = str(row.get("social_format") or "unknown").strip().lower()
+                    generated = int(row.get("generated_count") or 0)
+                    accepted_raw = int(row.get("accepted_raw_count") or 0)
+                else:
+                    key = str(row[0] or "").strip()
+                    fmt = str(row[1] or "unknown").strip().lower()
+                    generated = int(row[2] or 0)
+                    accepted_raw = int(row[3] or 0)
+                if not key or generated <= 0:
+                    continue
+                rate = accepted_raw / generated
+                local_map.setdefault(key, []).append(
+                    {
+                        "social_format": fmt,
+                        "generated_count": generated,
+                        "accepted_raw_count": accepted_raw,
+                        "accepted_raw_rate": round(rate, 4),
+                    }
+                )
+            for key, versions in local_map.items():
+                winner = sorted(
+                    versions,
+                    key=lambda item: (item.get("accepted_raw_rate", 0), item.get("generated_count", 0)),
+                    reverse=True,
+                )[0]
+                social_format_winners[window_days][key] = winner
+
         db.close()
 
         items = []
@@ -16458,6 +16673,8 @@ def get_prompt_recommendations():
                         key=lambda item: item.get("generated_count", 0),
                         reverse=True,
                     ),
+                    "social_format_winner_14d": social_format_winners[14].get(key),
+                    "social_format_winner_30d": social_format_winners[30].get(key),
                 }
             )
 
@@ -16473,13 +16690,40 @@ def get_prompt_recommendations():
         print(f"❌ Ошибка расчёта рекомендаций по промптам: {e}")
         return jsonify({"error": str(e)}), 500
 
-def get_prompt_record_from_db(prompt_type: str, fallback: str = None) -> tuple[str, int | None]:
+def get_prompt_record_from_db(prompt_type: str, fallback: str = None, route_seed: str | None = None) -> tuple[str, int | None]:
     """Получить промпт и его версию. Приоритет: versioned tables -> AIPrompts."""
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
         try:
             _ensure_prompt_templates_schema(cursor)
+            # Optional A/B routing by prompt version
+            if route_seed:
+                cfg = _load_prompt_ab_config(cursor, prompt_type)
+                if cfg and bool(cfg.get("enabled")):
+                    bucket = _pick_ab_bucket(route_seed, int(cfg.get("traffic_a") or 50))
+                    selected_version = int(cfg.get("version_a") if bucket == "a" else cfg.get("version_b") or 1)
+                    cursor.execute(
+                        """
+                        SELECT prompt_text, version
+                        FROM prompttemplateversions
+                        WHERE prompt_key = %s
+                          AND version = %s
+                        LIMIT 1
+                        """,
+                        (prompt_type, selected_version),
+                    )
+                    ab_row = cursor.fetchone()
+                    if ab_row:
+                        if hasattr(ab_row, "keys"):
+                            text = str(ab_row.get("prompt_text") or "").strip()
+                            version = int(ab_row.get("version") or selected_version)
+                        else:
+                            text = str((ab_row[0] if len(ab_row) > 0 else "") or "").strip()
+                            version = int((ab_row[1] if len(ab_row) > 1 else selected_version) or selected_version)
+                        if text:
+                            return text, version
+
             cursor.execute(
                 """
                 SELECT v.prompt_text, v.version

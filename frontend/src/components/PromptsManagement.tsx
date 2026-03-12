@@ -97,6 +97,26 @@ interface PromptRecommendation {
     acceptance_rate: number;
     accepted_raw_rate: number;
   }>;
+  social_format_winner_14d?: {
+    social_format: string;
+    generated_count: number;
+    accepted_raw_count: number;
+    accepted_raw_rate: number;
+  } | null;
+  social_format_winner_30d?: {
+    social_format: string;
+    generated_count: number;
+    accepted_raw_count: number;
+    accepted_raw_rate: number;
+  } | null;
+}
+
+interface PromptAbConfig {
+  prompt_key: string;
+  enabled: boolean;
+  version_a: number;
+  version_b: number;
+  traffic_a: number;
 }
 
 
@@ -133,6 +153,15 @@ export const PromptsManagement: React.FC = () => {
   const [permissions, setPermissions] = useState<PromptPermissions>({ can_view: true, can_publish: false });
   const [auditItems, setAuditItems] = useState<PromptAuditItem[]>([]);
   const [recommendations, setRecommendations] = useState<PromptRecommendation[]>([]);
+  const [abConfig, setAbConfig] = useState<PromptAbConfig>({
+    prompt_key: 'news_social_generation',
+    enabled: false,
+    version_a: 1,
+    version_b: 1,
+    traffic_a: 50,
+  });
+  const [abLoading, setAbLoading] = useState(false);
+  const [abSaving, setAbSaving] = useState(false);
   const [editedPrompts, setEditedPrompts] = useState<Record<string, { text: string; description: string }>>({});
   const { toast } = useToast();
 
@@ -160,6 +189,7 @@ export const PromptsManagement: React.FC = () => {
       });
       setEditedPrompts(initial);
       void loadPromptInsights();
+      void loadAbConfig();
     } catch (error: any) {
       console.error('Ошибка загрузки промптов:', error);
       toast({
@@ -169,6 +199,48 @@ export const PromptsManagement: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAbConfig = async () => {
+    try {
+      setAbLoading(true);
+      const data = await newAuth.makeRequest('/admin/prompts/news_social_generation/ab', { method: 'GET' });
+      if (data?.config) {
+        setAbConfig({
+          prompt_key: 'news_social_generation',
+          enabled: !!data.config.enabled,
+          version_a: Number(data.config.version_a || 1),
+          version_b: Number(data.config.version_b || 1),
+          traffic_a: Number(data.config.traffic_a || 50),
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки A/B конфигурации:', error);
+    } finally {
+      setAbLoading(false);
+    }
+  };
+
+  const saveAbConfig = async () => {
+    try {
+      setAbSaving(true);
+      await newAuth.makeRequest('/admin/prompts/news_social_generation/ab', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(abConfig),
+      });
+      toast({ title: 'Успешно', description: 'A/B конфигурация обновлена' });
+      await loadPromptInsights();
+      await loadAbConfig();
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось сохранить A/B конфигурацию',
+        variant: 'destructive'
+      });
+    } finally {
+      setAbSaving(false);
     }
   };
 
@@ -677,6 +749,76 @@ export const PromptsManagement: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {type === 'news_social_generation' && (
+                <div className="border-t border-amber-100 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-amber-900">A/B routing для соцпостов</h4>
+                    <Button variant="outline" size="sm" onClick={loadAbConfig} disabled={abLoading || abSaving}>
+                      <RefreshCcw className="w-4 h-4 mr-2" />
+                      Обновить
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-amber-900">
+                      <input
+                        type="checkbox"
+                        checked={abConfig.enabled}
+                        onChange={(e) => setAbConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+                        disabled={!permissions.can_publish || abSaving}
+                      />
+                      Включить A/B
+                    </label>
+                    <div>
+                      <label className="block text-xs text-amber-700 mb-1">Версия A</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={abConfig.version_a}
+                        onChange={(e) => setAbConfig((prev) => ({ ...prev, version_a: Number(e.target.value || 1) }))}
+                        disabled={!permissions.can_publish || abSaving}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-amber-700 mb-1">Версия B</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={abConfig.version_b}
+                        onChange={(e) => setAbConfig((prev) => ({ ...prev, version_b: Number(e.target.value || 1) }))}
+                        disabled={!permissions.can_publish || abSaving}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-amber-700 mb-1">Трафик A (%)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={abConfig.traffic_a}
+                        onChange={(e) => setAbConfig((prev) => ({ ...prev, traffic_a: Number(e.target.value || 0) }))}
+                        disabled={!permissions.can_publish || abSaving}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <Button
+                      size="sm"
+                      onClick={saveAbConfig}
+                      disabled={!permissions.can_publish || abSaving}
+                    >
+                      {abSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Сохранение...
+                        </>
+                      ) : (
+                        'Сохранить A/B'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -825,6 +967,24 @@ export const PromptsManagement: React.FC = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+                {(item.social_format_winner_14d || item.social_format_winner_30d) && (
+                  <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                    {item.social_format_winner_14d && (
+                      <div>
+                        Победитель 14 дней: <span className="font-semibold">{item.social_format_winner_14d.social_format}</span>
+                        <span className="ml-2">raw%: {Math.round((item.social_format_winner_14d.accepted_raw_rate || 0) * 100)}%</span>
+                        <span className="ml-2">gen: {item.social_format_winner_14d.generated_count}</span>
+                      </div>
+                    )}
+                    {item.social_format_winner_30d && (
+                      <div>
+                        Победитель 30 дней: <span className="font-semibold">{item.social_format_winner_30d.social_format}</span>
+                        <span className="ml-2">raw%: {Math.round((item.social_format_winner_30d.accepted_raw_rate || 0) * 100)}%</span>
+                        <span className="ml-2">gen: {item.social_format_winner_30d.generated_count}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
