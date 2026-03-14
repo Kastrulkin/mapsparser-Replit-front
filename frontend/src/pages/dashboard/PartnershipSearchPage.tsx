@@ -88,6 +88,11 @@ export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<any>();
   const [loading, setLoading] = useState(false);
   const [linksText, setLinksText] = useState('');
+  const [geoCity, setGeoCity] = useState('');
+  const [geoCategory, setGeoCategory] = useState('');
+  const [geoQuery, setGeoQuery] = useState('');
+  const [geoRadiusKm, setGeoRadiusKm] = useState('5');
+  const [geoLimit, setGeoLimit] = useState('25');
   const [stage, setStage] = useState('all');
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PartnershipLead[]>([]);
@@ -192,6 +197,44 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeoSearch = async () => {
+    if (!currentBusinessId) return;
+    const city = geoCity.trim();
+    const category = geoCategory.trim();
+    const q = geoQuery.trim();
+    const radiusKm = Number.parseInt(geoRadiusKm, 10);
+    const limit = Number.parseInt(geoLimit, 10);
+    if (!city && !q) {
+      setError('Укажите город или поисковый запрос для гео-поиска');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/geo-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          city,
+          category,
+          query: q,
+          radius_km: Number.isFinite(radiusKm) ? radiusKm : 5,
+          limit: Number.isFinite(limit) ? limit : 25,
+        }),
+      });
+      setMessage(
+        `Гео-поиск: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`
+      );
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось выполнить гео-поиск');
     } finally {
       setLoading(false);
     }
@@ -429,6 +472,64 @@ export const PartnershipSearchPage: React.FC = () => {
               </Button>
               <Button variant="outline" onClick={() => void loadLeads()} disabled={loading}>
                 Обновить список
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <h2 className="text-lg font-semibold">Гео-поиск партнёров (OpenClaw)</h2>
+            <p className="text-sm text-muted-foreground">
+              Поиск ближайших компаний по городу/категории/запросу с автоматическим импортом в список партнёрств.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+              <Input
+                value={geoCity}
+                onChange={(e) => setGeoCity(e.target.value)}
+                placeholder="Город (например, Санкт-Петербург)"
+              />
+              <Input
+                value={geoCategory}
+                onChange={(e) => setGeoCategory(e.target.value)}
+                placeholder="Категория (например, салон красоты)"
+              />
+              <Input
+                value={geoQuery}
+                onChange={(e) => setGeoQuery(e.target.value)}
+                placeholder="Запрос (например, маникюр у метро)"
+              />
+              <Input
+                value={geoRadiusKm}
+                onChange={(e) => setGeoRadiusKm(e.target.value)}
+                placeholder="Радиус (км)"
+                type="number"
+                min={1}
+                max={100}
+              />
+              <Input
+                value={geoLimit}
+                onChange={(e) => setGeoLimit(e.target.value)}
+                placeholder="Лимит"
+                type="number"
+                min={1}
+                max={200}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleGeoSearch} disabled={loading}>
+                Запустить гео-поиск
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setGeoCity('');
+                  setGeoCategory('');
+                  setGeoQuery('');
+                  setGeoRadiusKm('5');
+                  setGeoLimit('25');
+                }}
+                disabled={loading}
+              >
+                Сбросить
               </Button>
             </div>
           </div>
